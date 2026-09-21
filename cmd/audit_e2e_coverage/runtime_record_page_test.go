@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // pageFixture is a two-runtime document to draw.
@@ -55,6 +56,51 @@ func TestRenderRecordPage_MatchesTheRecord(t *testing.T) {
 	}
 }
 
+// TestRenderRecordPage_Rows_CopiedFromTheEntry verifies the three tables
+// cell by cell for one runtime whose values all differ: the coverage row's
+// three levels, the provenance row's requirement, status, version, tier
+// confirmation and commit, and the fixture row's four flags, drawn from two
+// packages whose profiles differ on every pair of flags, since a struct of
+// booleans has no single row on which no two agree. The padding the table
+// formatter adds is folded before the comparison.
+func TestRenderRecordPage_Rows_CopiedFromTheEntry(t *testing.T) {
+	doc := &coverageRecord{SchemaVersion: recordSchemaVersion, Note: recordNote, Runtimes: map[string]*recordEntry{"ee": {
+		RetrievedAt: "2026-09-12", Runtime: "enterprise/ultimate", Edition: "enterprise", Tier: "ultimate",
+		Runs: []runRow{
+			{
+				Package: "common", Requirement: "any", Status: e2ecalls.RunStarted, GitLabVersion: "18.4.0-ee",
+				TierConfirmed: true, Commit: "6bd82ea61e0ee0751e28b0a75954b9e4b86a8648",
+				Fixtures: e2ecalls.FixtureProfile{Runner: true, FixtureService: true},
+			},
+			{
+				Package: "ee", Requirement: "licensed", Status: e2ecalls.RunRefused, GitLabVersion: "18.4.1-ee",
+				TierConfirmed: false, Commit: "abc123",
+				Fixtures: e2ecalls.FixtureProfile{Runner: true, Bitbucket: true},
+			},
+		},
+		Summary: summary{CatalogActions: 20, TestCalls: 7, L1: 5, L2: 4, L3: 2},
+	}}}
+	page := renderRecordPage(doc)
+
+	rows := map[string]bool{}
+	for line := range strings.SplitSeq(page, "\n") {
+		rows[strings.Join(strings.Fields(line), " ")] = true
+	}
+	for _, want := range []string{
+		"| `ee` | enterprise/ultimate | 2026-09-12 | 20 | 5 (25.0%) | 4 (20.0%) | 2 (10.0%) | 7 |",
+		"| `ee` | `common` | any | started | 18.4.0-ee | yes | `6bd82ea61e0e` |",
+		"| `ee` | `ee` | licensed | refused | 18.4.1-ee | no | `abc123` |",
+		"| `ee` | `common` | yes | yes | no | no |",
+		"| `ee` | `ee` | yes | no | yes | no |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !rows[want] {
+				t.Errorf("the page carries no row %q:\n%s", want, page)
+			}
+		})
+	}
+}
+
 // TestRenderRecordPage_TablesAreAlreadyFormatted verifies that the page
 // arrives in the form cmd/format_md_tables would put it in. Everything under
 // docs/ is held to that formatter by make audit-docs, so a generated page
@@ -77,6 +123,25 @@ func TestRenderRecordPage_EmptyRecord_StillAPage(t *testing.T) {
 	}
 	if !strings.Contains(page, "## Coverage") || !strings.Contains(page, "## Refreshing this page") {
 		t.Error("the page lost a section when the record held no runtime")
+	}
+}
+
+// TestRenderRecordPage_NoCapabilities_DrawsNoCapabilityTable verifies that a
+// runtime measured before the capability cells existed draws its surface
+// table and nothing under it: a header introducing an empty table would read
+// as a run that watched nothing rather than as a record that says nothing.
+func TestRenderRecordPage_NoCapabilities_DrawsNoCapabilityTable(t *testing.T) {
+	doc := pageFixture(t)
+	for _, entry := range doc.Runtimes {
+		entry.Summary.Capabilities = nil
+	}
+	page := renderRecordPage(doc)
+
+	if strings.Contains(page, "classified on the same terms") {
+		t.Error("the page introduced a capability table for a runtime whose record holds none")
+	}
+	if !strings.Contains(page, "### ce") {
+		t.Error("the page lost the runtime whose capability table it left out")
 	}
 }
 

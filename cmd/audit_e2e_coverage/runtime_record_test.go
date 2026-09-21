@@ -147,6 +147,9 @@ func TestRecordDate_EarliestStamp_Wins(t *testing.T) {
 		{RunID: ""},
 		{RunID: "20260911t235959z-abc"},
 		{RunID: "not-a-stamp"},
+		// A stamp later than the one already held, so the comparison is
+		// asked both ways round and cannot be a "take the last one".
+		{RunID: "20260913t000000z-ghi"},
 	}})
 	if err != nil || got != "2026-09-11" {
 		t.Errorf("recordDate() = %q, %v; want 2026-09-11 and no error", got, err)
@@ -380,6 +383,33 @@ func TestRunRecordWrite_Fixture_WritesBothArtifacts(t *testing.T) {
 	}
 }
 
+// TestRunRecordWrite_SummaryLine_NamesTheLevelsAndTheRecord verifies the
+// line the write prints: the key, the three levels over the catalog, and the
+// path of the record rather than of the page. The report is hand-built with
+// three levels that all differ, since the ce fixture's L1 and L2 agree and
+// could not tell the two figures apart.
+func TestRunRecordWrite_SummaryLine_NamesTheLevelsAndTheRecord(t *testing.T) {
+	dir := t.TempDir()
+	opts := options{
+		dir: dir, results: "log.json", static: true,
+		recordPath: filepath.Join(dir, "e2e-coverage.json"),
+		recordPage: filepath.Join(dir, "e2e-coverage.md"),
+	}
+	rep := &report{
+		Runtime: "community/free", Edition: "community", Tier: "free",
+		Runs:    []runRow{{Package: "common", Status: e2ecalls.RunStarted, RunID: "20260912t100000z-abc"}},
+		Summary: summary{CatalogActions: 12, TestCalls: 5, L1: 3, L2: 2, L3: 1},
+		Levels:  levels{L1: []string{"issue.get", "issue.list", "project.get"}, L2: []string{"issue.list", "project.get"}, L3: []string{"issue.list"}},
+	}
+	var stdout, stderr strings.Builder
+	if code := runRecordWrite(opts, scannedStatic(), []*report{rep}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("runRecordWrite() = %d, stderr %q; want 0", code, stderr.String())
+	}
+	if want := "record: ce: L1 3/12, L2 2, L3 1, written to " + opts.recordPath + "\n"; stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
 // TestRunRecordWrite_UnrecordableRuntime_Reported verifies that a refusal from
 // the build reaches the operator instead of the process: the write is abandoned
 // and its reason is printed, so a run that measured a runtime no Makefile target
@@ -407,8 +437,9 @@ func TestRunRecordWrite_UnrecordableRuntime_Reported(t *testing.T) {
 }
 
 // TestRunRecordRender_MissingRecord_IsAUsageError verifies that the render
-// mode refuses rather than drawing an empty page, and that it redraws when
-// the record is there.
+// mode refuses rather than drawing an empty page, that it redraws when the
+// record is there and says which page it drew from which record, and that a
+// page it cannot write is refused with the reason rather than reported drawn.
 func TestRunRecordRender_MissingRecord_IsAUsageError(t *testing.T) {
 	dir := t.TempDir()
 	opts := options{
@@ -433,6 +464,22 @@ func TestRunRecordRender_MissingRecord_IsAUsageError(t *testing.T) {
 	}
 	if _, err := os.Stat(opts.recordPage); err != nil {
 		t.Errorf("the page was not redrawn: %v", err)
+	}
+	if want := "record: rendered " + opts.recordPage + " from " + opts.recordPath + "\n"; stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
+
+	// The page under a regular file cannot be written on any filesystem.
+	blocker := filepath.Join(dir, "blocker")
+	writeFile(t, blocker, "not a directory\n")
+	opts.recordPage = filepath.Join(blocker, "e2e-coverage.md")
+	stdout.Reset()
+	stderr.Reset()
+	if code := runRecordRender(opts, &stdout, &stderr); code != exitUsage || !strings.HasPrefix(stderr.String(), recordErrPrefix) {
+		t.Errorf("runRecordRender() = %d, stderr %q; want %d with the record prefix", code, stderr.String(), exitUsage)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing said of a page that was not drawn", stdout.String())
 	}
 }
 

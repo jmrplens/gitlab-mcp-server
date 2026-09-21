@@ -45,3 +45,12 @@ func Testhelper(t *testing.T) {
 func TestBoth(t *testing.T) {
 	_ = t
 }
+
+// suiteHelper carries a method whose name go test would run if it were a
+// function. It is not one, so it is not on the map.
+type suiteHelper struct{}
+
+// TestMeta_Method is a method and not a test, whatever its name says.
+func (suiteHelper) TestMeta_Method(t *testing.T) {
+	_ = t
+}

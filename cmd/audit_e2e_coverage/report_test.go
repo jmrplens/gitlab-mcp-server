@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // fixtureReport is the report over the fixture runtime.
@@ -53,6 +54,74 @@ func TestBuildReport_Fixture_LevelsAndRows(t *testing.T) {
 	}
 	if rep.Summary.States[config.ToolSurfaceDynamic][stateAbsent] != 6 {
 		t.Errorf("dynamic absent = %d, want 6", rep.Summary.States[config.ToolSurfaceDynamic][stateAbsent])
+	}
+}
+
+// TestRunRows_SeveralPackages_SortedByPackage verifies that the run rows are
+// published in package order whatever order the shards were read in, which
+// is what lets a reader diff two runs' rows line by line.
+func TestRunRows_SeveralPackages_SortedByPackage(t *testing.T) {
+	rows := runRows(&runtimeRecords{runs: []*e2ecalls.Run{
+		{Package: "ee", Status: e2ecalls.RunStarted},
+		{Package: "ce", Status: e2ecalls.RunStarted},
+		{Package: "common", Status: e2ecalls.RunStarted},
+	}})
+
+	var packages []string
+	for _, row := range rows {
+		packages = append(packages, row.Package)
+	}
+	if want := []string{"ce", "common", "ee"}; !reflect.DeepEqual(packages, want) {
+		t.Errorf("run rows = %q, want %q", packages, want)
+	}
+}
+
+// TestRunRows_Fields_CopiedFromTheRunLine verifies that a run row carries
+// every field of its run line under the name the record publishes it by, on
+// a line where no two values agree: the fixture shards leave half of these
+// empty, so two columns exchanged there would read the same.
+func TestRunRows_Fields_CopiedFromTheRunLine(t *testing.T) {
+	profile := e2ecalls.FixtureProfile{Runner: true, Bitbucket: true}
+	rows := runRows(&runtimeRecords{runs: []*e2ecalls.Run{{
+		Package: "ee", Requirement: "licensed", Status: e2ecalls.RunRefused, Reason: "no license",
+		Filter: "^TestEpic", RunID: "20260912t110000z-def", Commit: "6bd82ea6", GitLabVersion: "18.4.0-ee",
+		TierConfirmed: true, Fixtures: profile,
+	}}})
+
+	want := []runRow{{
+		Package: "ee", Requirement: "licensed", Status: e2ecalls.RunRefused, Reason: "no license",
+		Filter: "^TestEpic", RunID: "20260912t110000z-def", Commit: "6bd82ea6", GitLabVersion: "18.4.0-ee",
+		TierConfirmed: true, Fixtures: profile,
+	}}
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("runRows() = %+v, want %+v", rows, want)
+	}
+}
+
+// TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded verifies the session
+// row of a shape two session lines opened: the lines are counted, each
+// listing is the union of the two, and every count is its own listing's. The
+// listings are sized so that no two counts agree, since a shape serving one
+// resource and one prompt cannot tell the two columns apart.
+func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
+	first := fixtureSession(dynamicDefault, true)
+	first.Tools = []string{"gitlab_execute_action", "gitlab_find_action", "gitlab_issue"}
+	first.Resources = []string{"gitlab://groups", "gitlab://projects"}
+	first.ResourceTemplates = []string{"gitlab://project/{project_id}"}
+	first.Prompts = []string{"summarize_issue"}
+	second := fixtureSession(dynamicDefault, false)
+	second.Tools = []string{"gitlab_issue", "gitlab_project", "gitlab_server"}
+	second.Resources = []string{"gitlab://projects", "gitlab://users", "gitlab://me"}
+	second.ResourceTemplates = []string{"gitlab://project/{project_id}", "gitlab://group/{group_id}", "gitlab://user/{user_id}"}
+	second.Prompts = []string{"summarize_issue"}
+	rows := sessionRows(classify(&runtimeRecords{sessions: []*e2ecalls.Session{first, second}}, fixtureCatalog()))
+
+	want := []sessionRow{{
+		Surface: config.ToolSurfaceDynamic, Mode: modeDefault, Sessions: 2,
+		Tools: 5, Resources: 4, ResourceTemplates: 3, Prompts: 1, DispatchObserved: false,
+	}}
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("sessionRows() = %+v, want %+v", rows, want)
 	}
 }
 
@@ -140,10 +209,18 @@ func TestWriteGapTSV_NoSession_Named(t *testing.T) {
 // The two histogram tables are padded and their keys are in backticks because
 // they are [renderStateTable]'s, the same drawing the committed coverage page
 // carries; the summary used to spell its own unpadded copy of the same columns.
+//
+// The fixture records one mismatch and one unresolved tool, which is two
+// counts that agree, so a second unresolved tool is added to the report before
+// it is drawn: the line names each count, and two that read the same could
+// not tell which was which.
 func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 	rep := fixtureReport()
 	rep.Check = &checkResult{Passed: false, Findings: []string{"no test call was recorded on community/free"}}
 	rep.Baseline = &baselineResult{BaselineReached: 4, Reached: 3, Lost: []string{"meta/default issue.create asserted"}}
+	rep.UnresolvedTools = append(rep.UnresolvedTools, unresolvedTool{
+		Test: "TestRaw", Surface: config.ToolSurfaceMeta, Mode: modeDefault, Tool: "gitlab_nope_either", Outcome: e2ecalls.OutcomeProtocolError,
+	})
 	var out bytes.Buffer
 	writeMarkdownSummary(&out, []*report{rep})
 	want := strings.Join([]string{
@@ -155,7 +232,7 @@ func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 		"- L1 (asserted on any surface): 3 (25.0%)",
 		"- L2 (asserted on dynamic): 2",
 		"- L3 (asserted on all three surfaces): 0",
-		"- Test calls: 25; dispatch mismatches: 1; unresolved tools: 1",
+		"- Test calls: 25; dispatch mismatches: 1; unresolved tools: 2",
 		"",
 		"| Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
 		"| ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |",

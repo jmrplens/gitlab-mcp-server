@@ -136,3 +136,34 @@ func TestPlanted_PointerMethodWithoutNeeds_Reported(t *testing.T) {
 	r := &reader{s: harness.New(t).Session()}
 	r.get()
 }
+
+// TestPlanted_InterfaceMethodOnTheWay_Clean reaches the Ultimate id through a
+// helper and, on the way, calls a method of an interface literal, which the
+// reference walk keys by its bare name and finds no declaration for: the walk
+// passes over it, and the declaration made through ultimateSession still
+// reaches the site.
+func TestPlanted_InterfaceMethodOnTheWay_Clean(t *testing.T) {
+	s := ultimateSession(t)
+	stopAll(stopper{})
+	readVulnerability(s)
+}
+
+// stopper is the one implementation of the interface literal stopAll takes.
+type stopper struct{}
+
+// stop does nothing.
+func (stopper) stop() {}
+
+// stopAll calls the method through the interface literal.
+func stopAll(s interface{ stop() }) { s.stop() }
+
+// runnerNeed is a requirement that is not a tier, built by a helper.
+func runnerNeed() harness.Need { return harness.Need{} }
+
+// TestPlanted_TierAmongOtherNeeds_Clean declares the tier beside a literal
+// requirement and one a helper returns: Needs is read past what is not a Tier
+// call to the one that is.
+func TestPlanted_TierAmongOtherNeeds_Clean(t *testing.T) {
+	s := harness.New(t, harness.Needs(harness.Need{}, runnerNeed(), harness.Tier(edition.Ultimate))).Session()
+	harness.DoVoid(s, "vulnerability.list", nil)
+}

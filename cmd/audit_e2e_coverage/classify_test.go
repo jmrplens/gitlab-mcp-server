@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 
@@ -264,6 +265,25 @@ func TestClassify_Reasons_Explain(t *testing.T) {
 	}
 }
 
+// TestClassify_UnservableReason_DynamicWithoutAMetaTool verifies the one way
+// the dynamic surface's borrowed reason does not apply: it is read off the
+// meta surface's listing, so an action with no meta tool to look up has no
+// reason to give and is reached through the execute tool like every other.
+//
+// Looking up the empty name instead would find it missing from every listing
+// and report the action withheld on a surface that serves it.
+func TestClassify_UnservableReason_DynamicWithoutAMetaTool(t *testing.T) {
+	c := classify(fixtureRuntime(), fixtureCatalog())
+	shape, known := c.shapes[dynamicDefault]
+	if !known {
+		t.Fatal("no shape for dynamic/default")
+	}
+
+	if got := c.unservableReason(shape, catalogAction{id: "orphan.action"}); got != "" {
+		t.Errorf("unservableReason() = %q, want none for an action with no meta tool", got)
+	}
+}
+
 // TestClassify_SkipReason_SettledByName verifies that a cell two skipped
 // tests reached, each with a reason of its own, carries the same reason on
 // every run: the first test in name order. The classification is run many
@@ -401,6 +421,47 @@ func TestClassify_Capabilities_ClassifiedByTarget(t *testing.T) {
 	}
 }
 
+// TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities verifies what
+// folding the session lines settles: a shape opened twice is one shape with
+// both listings unioned, and a shape whose sessions all ran on the minimal
+// capability surface gets no subscription cells, because the server registers
+// no subscribable resources there and an absent cell would read as a kind
+// nothing watched.
+func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
+	minimal := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}
+	second := fixtureSession(dynamicDefault, true)
+	second.Prompts = []string{"triage_issue"}
+	lean := fixtureSession(minimal, true)
+	lean.Capabilities = config.CapabilitySurfaceMinimal
+
+	rt := fixtureRuntime()
+	rt.calls = nil
+	rt.sessions = append(rt.sessions, second, lean)
+	c := classify(rt, fixtureCatalog())
+
+	shape, known := c.shapes[dynamicDefault]
+	if !known {
+		t.Fatal("no shape for dynamic/default")
+	}
+	if shape.sessions != 2 {
+		t.Errorf("sessions = %d, want the two lines folded into one shape", shape.sessions)
+	}
+	if !shape.full {
+		t.Error("full = false on a shape both of whose sessions carried the full capability surface")
+	}
+	if !shape.prompts["summarize_issue"] || !shape.prompts["triage_issue"] {
+		t.Errorf("prompts = %q, want both listings unioned", sortedKeys(shape.prompts))
+	}
+	if leanShape := c.shapes[minimal]; leanShape == nil || leanShape.full {
+		t.Errorf("the minimal shape = %+v, want one that is not full", leanShape)
+	}
+	for key := range c.capabilities[capabilitySubscriptions] {
+		if key.shape == minimal {
+			t.Errorf("subscription cell %q on the minimal shape, which serves no subscribable resource", key.action)
+		}
+	}
+}
+
 // TestClassify_Modes_AbsentWithoutEvidence verifies that a protective shape
 // with no call on it reports both facets absent, and one whose only call
 // failed reports them failed.
@@ -430,15 +491,107 @@ func TestClassify_Modes_AbsentWithoutEvidence(t *testing.T) {
 	}
 }
 
+// TestClassify_Modes_EvidenceFollowsWhetherTheActionMutates verifies the one
+// thing a protective mode's evidence turns on: a read going through is not
+// evidence that a mutation was withheld, and a mutation answering for real is
+// not evidence that reads go through.
+//
+// Both halves are about the run you would be reading the report of. A read
+// that errored in read-only mode must not be filed as a mutation the mode
+// withheld, and a mutation that ran in read-only mode -- which is the failure
+// the mode exists to prevent -- must not be filed as a read going through, or
+// the report would say the protection works because it did not.
+func TestClassify_Modes_EvidenceFollowsWhetherTheActionMutates(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	for _, spec := range []callSpec{
+		// Reads, one per credit the reads facet accepts.
+		{test: "TestRoAsserted", action: "issue.list", dispatched: "issue.list", shape: metaReadOnly},
+		{test: "TestRoUnobserved", action: "project.get", shape: metaReadOnly},
+		{test: "TestRoSweep", purpose: e2ecalls.PurposeSweep, action: "project.list", dispatched: "project.list", shape: metaReadOnly},
+		// Mutations withheld, one refused and one answered as a tool error.
+		{test: "TestRoRefused", expectation: "unknown_action", action: "issue.create", outcome: e2ecalls.RefusedOutcome("unknown_action"), shape: metaReadOnly},
+		{test: "TestRoErrorPath", expectation: "tool_error", action: "issue.delete", dispatched: "issue.delete", outcome: e2ecalls.OutcomeToolError, shape: metaReadOnly},
+		// A read that errored: withheld is about mutations, so this is neither.
+		{test: "TestRoReadErrored", expectation: "tool_error", action: "environment.get", dispatched: "environment.get", outcome: e2ecalls.OutcomeToolError, shape: metaReadOnly},
+		// A mutation the mode let through: not a read going through.
+		{test: "TestRoMutationRan", action: "issue.create", dispatched: "issue.create", shape: metaReadOnly},
+		// Safe mode: a mutation previewed is evidence, a read previewed is not.
+		{test: "TestSafePreviewed", expectation: "safe_mode", action: "issue.create", dispatched: "issue.create", outcome: e2ecalls.OutcomePreview, shape: individualSafe},
+		{test: "TestSafeReadPreviewed", expectation: "safe_mode", action: "issue.list", dispatched: "issue.list", outcome: e2ecalls.OutcomePreview, shape: individualSafe},
+	} {
+		rt.calls = append(rt.calls, fixtureCall(spec))
+	}
+	c := classify(rt, fixtureCatalog())
+
+	cases := []struct {
+		name     string
+		shape    shapeKey
+		reads    []string
+		withheld []string
+		previews []string
+	}{
+		{
+			name:     "read-only",
+			shape:    metaReadOnly,
+			reads:    []string{"TestRoAsserted", "TestRoSweep", "TestRoUnobserved"},
+			withheld: []string{"TestRoErrorPath", "TestRoRefused"},
+		},
+		{name: "safe", shape: individualSafe, previews: []string{"TestSafePreviewed"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			evidence := c.modes[tc.shape]
+			if evidence == nil {
+				t.Fatalf("no mode evidence for %s/%s", tc.shape.surface, tc.shape.mode)
+			}
+			for _, facet := range []struct {
+				name string
+				got  map[string]bool
+				want []string
+			}{
+				{name: facetReads, got: evidence.reads, want: tc.reads},
+				{name: facetWithheld, got: evidence.withheld, want: tc.withheld},
+				{name: facetPreviews, got: evidence.previews, want: tc.previews},
+			} {
+				if got := sortedKeys(facet.got); !slices.Equal(got, facet.want) {
+					t.Errorf("%s = %q, want %q", facet.name, got, facet.want)
+				}
+			}
+		})
+	}
+}
+
+// TestClassify_Diagnostics_CallWithoutAStatusIsCounted verifies the counter
+// the results join exists to clear: a call line whose test carried no verdict
+// is counted, and credited with the failures rather than on trust.
+func TestClassify_Diagnostics_CallWithoutAStatusIsCounted(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	unjudged := fixtureCall(callSpec{test: "TestUnjudged", action: "issue.list", dispatched: "issue.list", shape: dynamicDefault})
+	unjudged.TestStatus = ""
+	rt.calls = append(rt.calls, unjudged)
+	c := classify(rt, fixtureCatalog())
+
+	if c.diagnostics.WithoutStatus != 1 {
+		t.Errorf("WithoutStatus = %d, want 1: the call carries no verdict", c.diagnostics.WithoutStatus)
+	}
+	if got := stateOf(c, dynamicDefault, "issue.list"); got != stateFailed {
+		t.Errorf("state = %s, want failed: a call whose test's verdict is unknown is not proven coverage", got)
+	}
+}
+
 // TestClassify_ApplyStatic_UnassertedAndSkipped verifies what the source
 // adds: an asserted cell whose result every site discards becomes
 // unasserted, and an absent cell named by a test that skipped becomes
-// skipped with the test's reason on every shape.
+// skipped with the test's reason on every shape. A skipped test naming an
+// action the catalog does not hold, which the static gate reports on its own
+// side, has no cell to land on and makes none.
 func TestClassify_ApplyStatic_UnassertedAndSkipped(t *testing.T) {
 	c := classify(fixtureRuntime(), fixtureCatalog())
 	c.applyStatic(&staticResult{
 		unassertedIDs: map[string]bool{"issue.list": true},
-		testIDs:       map[string]map[string]bool{"TestSkipped": {"project.list": true}},
+		testIDs:       map[string]map[string]bool{"TestSkipped": {"project.list": true, "ghost.action": true}},
 	})
 
 	if got := stateOf(c, dynamicDefault, "issue.list"); got != stateUnasserted {
@@ -446,6 +599,9 @@ func TestClassify_ApplyStatic_UnassertedAndSkipped(t *testing.T) {
 	}
 	if got := stateOf(c, individualDefault, "issue.list"); got != stateSweepOnly {
 		t.Errorf("issue.list on individual = %s, want the sweep credit left alone", got)
+	}
+	if got := stateOf(c, dynamicDefault, "ghost.action"); got != "missing" {
+		t.Errorf("ghost.action on dynamic = %s, want no cell for an action the catalog lacks", got)
 	}
 	for _, shape := range []shapeKey{dynamicDefault, metaDefault, individualDefault} {
 		t.Run(shape.surface, func(t *testing.T) {
@@ -502,8 +658,9 @@ func TestClassify_ElicitationCells_OwnTheirCredit(t *testing.T) {
 // TestClassify_Edges_RecordOddities verifies the shapes a shard can hold
 // that the fixture above does not: a call on a shape no session line named,
 // a non-tool call with no target, a subscription to a URI the server would
-// not accept, a tool call naming no tool, and a skipped subtest whose skip
-// line names its parent.
+// not accept, a tool call naming no tool, a skipped subtest whose skip line
+// names its parent, and a call whose method the classification has no cell
+// for, which is counted as a call and credited to nothing.
 func TestClassify_Edges_RecordOddities(t *testing.T) {
 	rt := fixtureRuntime()
 	unlisted := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeSafe}
@@ -514,11 +671,35 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 		fixtureCall(callSpec{test: "TestNotSubscribable", method: methodSubscribe, target: "gitlab://project/1/branches", shape: dynamicDefault}),
 		fixtureCall(callSpec{test: "TestSkipped/sub", action: "project.list", dispatched: "project.list", status: e2ecalls.StatusSkipped, shape: dynamicDefault}),
 		fixtureCall(callSpec{test: "TestSkippedNoLine", action: "merge_train.list", dispatched: "merge_train.list", status: e2ecalls.StatusSkipped, shape: dynamicDefault}),
+		fixtureCall(callSpec{test: "TestListed", method: "tools/list", target: "gitlab_issue", shape: dynamicDefault}),
 	)
 	noTool := fixtureCall(callSpec{test: "TestNoTool", shape: metaDefault, outcome: e2ecalls.OutcomeProtocolError, expectation: e2ecalls.ExpectationAny})
 	noTool.Tool = ""
-	rt.calls = append(rt.calls, noTool)
+	// A prompt the server answered and a notification it delivered, both
+	// inside a test that went on to fail: neither is evidence of anything,
+	// since what the test asserted about them never held.
+	rt.calls = append(rt.calls, noTool,
+		fixtureCall(callSpec{test: "TestFailedElicit", method: methodElicit, target: "Confirm?", expectation: e2ecalls.ExpectationAny, status: e2ecalls.StatusFailed, shape: metaDefault}),
+		fixtureCall(callSpec{test: "TestFailedDelivery", method: methodResourceUpdated, target: "gitlab://project/1/pipeline/9", expectation: e2ecalls.ExpectationAny, status: e2ecalls.StatusFailed, shape: dynamicDefault}),
+		// A dispatch with no action beside it: every call the harness makes
+		// names the action it asked for, so a line without one asked for
+		// nothing that could disagree with what ran.
+		fixtureCall(callSpec{test: "TestOnlyDispatched", dispatched: "server.health_check", shape: dynamicDefault}),
+	)
 	c := classify(rt, fixtureCatalog())
+
+	if c.elicited["TestFailedElicit"] {
+		t.Error("a prompt answered inside a failing test was recorded as an elicitation")
+	}
+	if c.delivered[cellKey{shape: dynamicDefault, action: "pipeline"}] {
+		t.Error("a notification delivered to a failing test was recorded as delivery")
+	}
+	if got := stateOf(c, dynamicDefault, "server.health_check"); got != stateAsserted {
+		t.Errorf("a call carrying only a dispatched action = %s, want asserted against what ran", got)
+	}
+	if len(c.mismatches) != 1 {
+		t.Errorf("mismatches = %+v, want only the fixture's rewritten route", c.mismatches)
+	}
 
 	if got := stateOf(c, unlisted, "issue.list"); got != stateAsserted {
 		t.Errorf("a call on a shape without a session line = %s, want asserted", got)
@@ -542,6 +723,35 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 	if len(c.unresolved) != 1 {
 		t.Errorf("unresolved = %+v, want only the raw call: a call naming no tool resolves nothing", c.unresolved)
 	}
+	if c.diagnostics.Calls != len(rt.calls) {
+		t.Errorf("Calls = %d, want every line counted (%d), the tools/list one included", c.diagnostics.Calls, len(rt.calls))
+	}
+	if credited := testsCredited(c, "TestListed"); len(credited) != 0 {
+		t.Errorf("a tools/list call was credited to %q, want nothing: the fold has no cell for the method", credited)
+	}
+}
+
+// testsCredited names every cell, action or capability, that carries a
+// credit from the test.
+func testsCredited(c *classification, test string) []string {
+	var credited []string
+	note := func(kind string, key cellKey, found *cell) {
+		for _, tests := range found.tests {
+			if tests[test] {
+				credited = append(credited, kind+" "+key.shape.surface+"/"+key.shape.mode+" "+key.action)
+			}
+		}
+	}
+	for key, found := range c.cells {
+		note("action", key, found)
+	}
+	for kind, cells := range c.capabilities {
+		for key, found := range cells {
+			note(kind, key, found)
+		}
+	}
+	sort.Strings(credited)
+	return credited
 }
 
 // TestCreditOf_Outcomes_Credited verifies the credit table call by call, which is the
@@ -634,14 +844,26 @@ func TestCredit_String_NamesEveryCredit(t *testing.T) {
 // TestMatchTemplate_SeveralMatch_MostSpecificWins verifies the template matcher: one
 // segment per simple variable, the rest of the path for a reserved
 // expansion, and the template with the most literal segments when several
-// match.
+// match, whichever of them is listed first. The catch-all under a merge
+// request is listed after the notes template it competes with, so that the
+// more specific one is found before the less specific one is weighed against
+// it.
 func TestMatchTemplate_SeveralMatch_MostSpecificWins(t *testing.T) {
 	templates := []string{
 		"gitlab://project/{project_id}",
 		"gitlab://project/{project_id}/mr/{merge_request_iid}",
 		"gitlab://project/{project_id}/mr/{merge_request_iid}/notes",
+		"gitlab://project/{project_id}/mr/{merge_request_iid}/{+rest}",
 		"gitlab://project/{project_id}/file/{ref}/{+path}",
 		"gitlab://group/{group_id}/{kind}/{value}",
+		// Four shapes a placeholder segment can be spelled wrongly in. The
+		// templates are read off a session line, which is what a server
+		// answered resources/templates/list with, so a malformed one reaches
+		// the matcher without anything here having written it.
+		"gitlab://opened/{unclosed",
+		"gitlab://reserved/{+unclosed",
+		"gitlab://closed/unopened}",
+		"gitlab://middle/{+path}/tail",
 	}
 	cases := []struct {
 		name    string
@@ -651,13 +873,18 @@ func TestMatchTemplate_SeveralMatch_MostSpecificWins(t *testing.T) {
 	}{
 		{name: "one segment per variable", uri: "gitlab://project/42", want: "gitlab://project/{project_id}", matched: true},
 		{name: "the longer template wins", uri: "gitlab://project/42/mr/7/notes", want: "gitlab://project/{project_id}/mr/{merge_request_iid}/notes", matched: true},
+		{name: "the catch-all takes what no longer template does", uri: "gitlab://project/42/mr/7/approvals/1", want: "gitlab://project/{project_id}/mr/{merge_request_iid}/{+rest}", matched: true},
 		{name: "a shorter path takes the shorter template", uri: "gitlab://project/42/mr/7", want: "gitlab://project/{project_id}/mr/{merge_request_iid}", matched: true},
 		{name: "reserved expansion takes the rest", uri: "gitlab://project/42/file/main/src/a/b.go", want: "gitlab://project/{project_id}/file/{ref}/{+path}", matched: true},
 		{name: "reserved expansion needs one segment", uri: "gitlab://project/42/file/main/", matched: false},
 		{name: "an empty simple segment does not match", uri: "gitlab://project//mr/7", matched: false},
 		{name: "two variables in a row", uri: "gitlab://group/3/label/bug", want: "gitlab://group/{group_id}/{kind}/{value}", matched: true},
 		{name: "a literal that differs", uri: "gitlab://project/42/issue/7", matched: false},
-		{name: "extra segments do not match", uri: "gitlab://project/42/mr/7/notes/extra", matched: false},
+		{name: "extra segments do not match", uri: "gitlab://group/3/label/bug/extra", matched: false},
+		{name: "an unclosed placeholder is a literal", uri: "gitlab://opened/xyz", matched: false},
+		{name: "an unclosed reserved expansion is a literal", uri: "gitlab://reserved/a/b", matched: false},
+		{name: "a closing brace alone is a literal", uri: "gitlab://closed/xyz", matched: false},
+		{name: "a reserved expansion that is not last matches nothing", uri: "gitlab://middle/a/tail", matched: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

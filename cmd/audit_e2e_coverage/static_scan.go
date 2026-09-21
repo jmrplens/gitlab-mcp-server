@@ -192,6 +192,14 @@ func methodKey(fn *types.Func) string {
 // collectSites reads every constant of the ActionID type off the type
 // checker's record, which is what sees a literal passed to a helper's
 // ActionID parameter as the constant it was converted to.
+//
+// The sites are left in whatever order the type checker's map hands them
+// back, because nothing reads this list in order: [staticResult.collect]
+// re-sorts the merged list by position and then by id, and the findings
+// [staticResult.judgePlacement] appends while ranging it are re-sorted by
+// position and then by message, which is total here since two sites at one
+// position differ in their id and every message names it. A sort of its own
+// decided nothing and read as though the order were load-bearing.
 func (s *packageScanner) collectSites(pkg *packages.Package, scan *packageScan, decls []*ast.FuncDecl) {
 	seen := map[idSite]bool{}
 	for expr, tv := range pkg.TypesInfo.Types {
@@ -209,12 +217,6 @@ func (s *packageScanner) collectSites(pkg *packages.Package, scan *packageScan, 
 			scan.sites = append(scan.sites, site)
 		}
 	}
-	sort.Slice(scan.sites, func(i, j int) bool {
-		if scan.sites[i].Pos != scan.sites[j].Pos {
-			return scan.sites[i].Pos < scan.sites[j].Pos
-		}
-		return scan.sites[i].ID < scan.sites[j].ID
-	})
 }
 
 // enclosing finds the function declaration a position sits in.

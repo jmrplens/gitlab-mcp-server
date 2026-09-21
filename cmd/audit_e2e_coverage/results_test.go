@@ -167,6 +167,34 @@ func TestJoinResults_SameTestNameInTwoPackages_KeptApart(t *testing.T) {
 	}
 }
 
+// TestJoinResults_IdleTestsInTwoPackages_OrderedByPackageFirst verifies the
+// order the idle list is published in: by package, and only then by test
+// name. The two tests here disagree with each other on the two keys, so a
+// comparator that read the name first, or read the package backwards, would
+// put them the other way round.
+//
+// The list is assembled by ranging a map, so its order before the sort is
+// whatever the runtime hands back; the sort is the only thing that makes the
+// report the same twice, and a reader comparing two runs reads it as a diff.
+func TestJoinResults_IdleTestsInTwoPackages_OrderedByPackageFirst(t *testing.T) {
+	results, err := parseResults(strings.NewReader(strings.Join([]string{
+		`{"Action":"pass","Package":"example.com/m/test/e2e/gitlab/ee","Test":"TestAlpha","Elapsed":2}`,
+		`{"Action":"pass","Package":"example.com/m/test/e2e/gitlab/ce","Test":"TestZulu","Elapsed":1}`,
+	}, "\n")))
+	if err != nil {
+		t.Fatalf("parseResults() error = %v", err)
+	}
+	join := joinResults(&runtimeRecords{}, results)
+
+	want := []idleTest{
+		{Package: "ce", Test: "TestZulu", Elapsed: 1},
+		{Package: "ee", Test: "TestAlpha", Elapsed: 2},
+	}
+	if !reflect.DeepEqual(join.TestsWithoutCalls, want) {
+		t.Errorf("TestsWithoutCalls = %+v, want %+v", join.TestsWithoutCalls, want)
+	}
+}
+
 // TestJoinResults_Ancestors_AllMarkedCalled verifies that a call made from a
 // nested subtest counts for every test above it: a passed middle subtest
 // whose child called is not a test without calls, and neither is the Test

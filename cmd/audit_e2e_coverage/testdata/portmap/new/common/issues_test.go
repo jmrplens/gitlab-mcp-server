@@ -43,3 +43,23 @@ func helper(t *testing.T) {
 func Testhelper(t *testing.T) {
 	_ = t
 }
+
+// newHelper carries a method whose name go test would run if it were a
+// function, so its Replaces line must retire nothing either.
+type newHelper struct{}
+
+// TestIssue_Method claims a successor from a method.
+// Replaces: TestMeta_Unresolved
+func (newHelper) TestIssue_Method(t *testing.T) {
+	_ = t
+}
+
+func TestIssue_Undocumented(t *testing.T) {
+	_ = t
+}
+
+// TestIssue_Documented has a doc comment and no Replaces line in it, which
+// is what almost every test in the new suite looks like.
+func TestIssue_Documented(t *testing.T) {
+	_ = t
+}

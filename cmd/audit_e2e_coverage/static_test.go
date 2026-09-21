@@ -1,7 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"go/ast"
+	"go/constant"
 	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
@@ -84,10 +91,13 @@ func findingLines(result *staticResult, kind string) []string {
 // and that the clean shapes beside them produce none: a typed constant, a
 // constant through a helper parameter, a table of constants, a declaration
 // made through one helper and through two, a helper cycle, a Premium id in
-// ee. The Ultimate findings cover the three ways a test can reach an id
-// without declaring the tier: through one helper, through two, and through
-// a pointer-receiver method, and the one way a Tier call declares nothing,
-// which is outside Needs.
+// ee, a tier declared beside requirements that are not tiers, and a method of
+// an interface literal on the path to an Ultimate site. The Ultimate findings
+// cover the three ways a test can reach an id without declaring the tier:
+// through one helper, through two, and through a pointer-receiver method, and
+// the one way a Tier call declares nothing, which is outside Needs. The
+// discards cover a result thrown away through a helper's parameter, which is
+// a finding that cannot name the id.
 func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
@@ -96,12 +106,15 @@ func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 		want []string
 	}{
 		{kind: findingUnknownID, want: []string{
+			"test/e2e/gitlab/common/planted_test.go alpha.action is not a catalog action",
 			"test/e2e/gitlab/common/planted_test.go nope.action is not a catalog action",
+			"test/e2e/gitlab/common/planted_test.go zeta.action is not a catalog action",
 		}},
 		{kind: findingTierPlacement, want: []string{
 			"test/e2e/gitlab/common/planted_test.go merge_train.list is premium and common runs on every runtime",
 		}},
 		{kind: findingDiscardedResult, want: []string{
+			"test/e2e/gitlab/common/planted_test.go the result of Do(a non-constant id) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(issue.get) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(issue.get) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Eventually(issue.get) is discarded: read it, or call DoVoid",
@@ -117,7 +130,9 @@ func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 		{kind: findingDeadExport, want: nil},
 		{kind: findingUnexercised, want: nil},
 		{kind: findingStaleExemption, want: nil},
-		{kind: findingPlacement, want: nil},
+		{kind: findingPlacement, want: []string{
+			"package example.com/e2efake/test/e2e/gitlab/legacy is under test/e2e/gitlab and is not common, ce or ee",
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.kind, func(t *testing.T) {
@@ -156,6 +171,9 @@ func TestRunStatic_Sites_ReadThroughHelpersAndTables(t *testing.T) {
 		{fn: "reader.list", want: []string{"issue.list"}},
 		{fn: "reader.get", want: []string{"vulnerability.get"}},
 		{fn: "cycleB", want: []string{"vulnerability.get"}},
+		{fn: "TestPlanted_OtherShapes_WalkedPast", want: []string{"issue.list"}},
+		{fn: "TestPlanted_DiscardedThroughHelper_Reported", want: []string{"issue.get"}},
+		{fn: "TestPlanted_TierAmongOtherNeeds_Clean", want: []string{"vulnerability.list"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fn, func(t *testing.T) {
@@ -169,14 +187,136 @@ func TestRunStatic_Sites_ReadThroughHelpersAndTables(t *testing.T) {
 	for _, site := range result.Sites {
 		placements[site.Placement] = true
 	}
-	if want := []string{"common", "ee"}; !reflect.DeepEqual(sortedKeys(placements), want) {
+	if want := []string{"ce", "common", "ee", "legacy"}; !reflect.DeepEqual(sortedKeys(placements), want) {
 		t.Errorf("placements = %q, want %q", sortedKeys(placements), want)
+	}
+}
+
+// TestRunStatic_SiteShapes_OnceAndOnlyFromTheHarnessType verifies two edges of
+// the site collection. One constant named twice on one line is one site: a
+// site is an id at a position, and the type checker records both uses. A
+// constant of a lookalike type is no site at all: the gate reads the type
+// checker's identity of harness.ActionID and never a name, so the fixture's
+// own actionID type, spelling the same name over the same underlying type,
+// contributes nothing, and the unknown action it names is no finding either.
+func TestRunStatic_SiteShapes_OnceAndOnlyFromTheHarnessType(t *testing.T) {
+	result := runFakeStatic(t, fakeStaticConfig(t))
+
+	twice := 0
+	for _, site := range result.Sites {
+		if site.Func == "TestPlanted_SameIDTwiceOnOneLine_CollectedOnce" {
+			twice++
+		}
+		if site.ID == "ghost.lookalike" {
+			t.Errorf("site %+v names the lookalike type's constant", site)
+		}
+	}
+	if twice != 1 {
+		t.Errorf("sites in TestPlanted_SameIDTwiceOnOneLine_CollectedOnce = %d, want the one line's one site", twice)
+	}
+	for _, finding := range result.Findings {
+		if strings.Contains(finding.Message, "ghost.lookalike") {
+			t.Errorf("finding %s is about the lookalike type's constant", finding)
+		}
+	}
+}
+
+// TestRunStatic_Sites_PositionNamesTheLine verifies that a site's position is
+// the line the id sits on, spelled relative to the module root. The line is
+// read off the fixture's own text rather than pinned, so the assertion moves
+// with the fixture; what it holds is that the number is the line and not, say,
+// the column, which nothing else here can tell apart on a site of its own.
+func TestRunStatic_Sites_PositionNamesTheLine(t *testing.T) {
+	result := runFakeStatic(t, fakeStaticConfig(t))
+
+	file := "test/e2e/gitlab/common/planted_test.go"
+	want := idSite{
+		ID: "issue.list", Placement: placementCommon,
+		Pos: fmt.Sprintf("%s:%d", file, fixtureLine(t, file, `const listIssues harness.ActionID = "issue.list"`)),
+	}
+	if !slices.Contains(result.Sites, want) {
+		t.Errorf("sites = %+v, want %+v among them", result.Sites, want)
+	}
+}
+
+// fixtureLine is the line number of the first line of a fixture file that
+// holds text.
+func fixtureLine(t *testing.T, rel, text string) int {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(fakeModuleDir(t), filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatalf("read the fixture: %v", err)
+	}
+	for i, line := range strings.Split(string(data), "\n") {
+		if strings.Contains(line, text) {
+			return i + 1
+		}
+	}
+	t.Fatalf("%s holds no line with %q", rel, text)
+	return 0
+}
+
+// TestRunStatic_Sites_OrderedByPositionThenID verifies the order the site
+// list is published in, which is the order everything downstream reads it in.
+//
+// A site is spelled file:line with no column, so two ids named on one line
+// share a position and the id is what separates them. The fixture's
+// TestPlanted_TwoIDsOnOneLine_BothCollected is that line, and without a pair
+// at one position the second half of the comparison is never reached at all.
+func TestRunStatic_Sites_OrderedByPositionThenID(t *testing.T) {
+	result := runFakeStatic(t, fakeStaticConfig(t))
+
+	var samePos []string
+	// sequential: each step compares one site with the one before it, so the
+	// list is walked in order rather than judged case by case.
+	for i, site := range result.Sites {
+		if i > 0 {
+			previous := result.Sites[i-1]
+			if previous.Pos > site.Pos || (previous.Pos == site.Pos && previous.ID >= site.ID) {
+				t.Errorf("site %d (%s %s) comes after (%s %s), which is not the published order",
+					i, site.Pos, site.ID, previous.Pos, previous.ID)
+			}
+			if previous.Pos == site.Pos {
+				samePos = append(samePos, previous.ID+" "+site.ID)
+			}
+		}
+	}
+	if want := []string{"alpha.action zeta.action"}; !reflect.DeepEqual(samePos, want) {
+		t.Errorf("ids sharing a position = %q, want %q: the one planted line names two", samePos, want)
+	}
+}
+
+// TestCollect_SitesOutOfOrder_SortedByPositionThenID verifies the same order
+// against input that needs reordering, which the loaded fixture cannot
+// provide: each package's sites are sorted before they are merged, so the
+// merge only ever sees groups that are already in order.
+func TestCollect_SitesOutOfOrder_SortedByPositionThenID(t *testing.T) {
+	result := &staticResult{unassertedIDs: map[string]bool{}, testIDs: map[string]map[string]bool{}}
+	result.collect([]*packageScan{{
+		pkgPath: "example.com/e2efake/test/e2e/gitlab/common", placement: placementCommon,
+		sites: []idSite{
+			{ID: "zeta.action", Pos: "common/a_test.go:11", Placement: placementCommon},
+			{ID: "beta.action", Pos: "common/a_test.go:12", Placement: placementCommon},
+			{ID: "alpha.action", Pos: "common/a_test.go:11", Placement: placementCommon},
+		},
+		resultSites: map[string]int{}, discardedSites: map[string]int{}, funcs: map[string]*funcScan{},
+	}})
+
+	want := []idSite{
+		{ID: "alpha.action", Pos: "common/a_test.go:11", Placement: placementCommon},
+		{ID: "zeta.action", Pos: "common/a_test.go:11", Placement: placementCommon},
+		{ID: "beta.action", Pos: "common/a_test.go:12", Placement: placementCommon},
+	}
+	if !reflect.DeepEqual(result.Sites, want) {
+		t.Errorf("collect() sites = %+v, want %+v", result.Sites, want)
 	}
 }
 
 // TestRunStatic_NonConstantSites_Listed verifies that a verb called with a
 // helper parameter or a table field is listed and not failed: both are
-// constants one step away, and listing is what lets a reader check that.
+// constants one step away, and listing is what lets a reader check that. A
+// verb called through a variable is not a verb call at all, so the constant
+// it takes is a site and no note.
 func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
@@ -186,6 +326,8 @@ func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 	}
 	sort.Strings(got)
 	want := []string{
+		"Do is called with the non-constant id id",
+		"DoVoid is called with the non-constant id each",
 		"DoVoid is called with the non-constant id id",
 		"DoVoid is called with the non-constant id tc.id",
 	}
@@ -202,12 +344,37 @@ func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 // in-package Test function, which must not be listed: the scan reads the
 // plain package and not its test variant, or every test of the real harness
 // would be a dead export the ratchet then fails on.
+//
+// Two members have no type to be keyed under: the field of the anonymous
+// struct Anon and the method of the interface literal Stopper. A scenario
+// reads one and calls the other, and each is a use of the variable alone: the
+// package-level Field and Stop that share their names stay dead, since a bare
+// name credited on their account would be a function nothing calls read as
+// called. The constant a command under test/e2e/internal reads is live, since
+// a main package is passed over only when it is the generated test main.
 func TestRunStatic_DeadExports_ListedNotFailedUntilRatchet(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
-	want := []string{"Failure.String", "Label", "Session.Close", "Unused"}
+	want := []string{"Failure.String", "Field", "Label", "Session.Close", "Stop", "Timeout", "Unused"}
 	if !reflect.DeepEqual(result.DeadExports, want) {
 		t.Errorf("DeadExports = %q, want %q", result.DeadExports, want)
+	}
+	for _, used := range []string{"Anon", "Stopper", "Version"} {
+		t.Run(used, func(t *testing.T) {
+			if slices.Contains(result.DeadExports, used) {
+				t.Errorf("DeadExports = %q, want %s read as used", result.DeadExports, used)
+			}
+		})
+	}
+	// The unexported function and method beside them are read by nothing
+	// either, and belong to staticcheck's unused check rather than to this
+	// rule: a harness may keep whatever private helpers it likes.
+	for _, unexported := range []string{"reset", "Session.close", "close"} {
+		t.Run(unexported, func(t *testing.T) {
+			if slices.Contains(result.DeadExports, unexported) {
+				t.Errorf("DeadExports = %q, want the unexported %s left out", result.DeadExports, unexported)
+			}
+		})
 	}
 	if lines := findingLines(result, findingDeadExport); len(lines) != 0 {
 		t.Errorf("dead exports failed the gate with the ratchet off: %q", lines)
@@ -272,8 +439,11 @@ func TestRunStatic_Ratchet_UnexercisedAndStaleExemptions(t *testing.T) {
 		}},
 		{kind: findingDeadExport, want: []string{
 			"Failure.String is exported by the harness and used by nothing",
+			"Field is exported by the harness and used by nothing",
 			"Label is exported by the harness and used by nothing",
 			"Session.Close is exported by the harness and used by nothing",
+			"Stop is exported by the harness and used by nothing",
+			"Timeout is exported by the harness and used by nothing",
 			"Unused is exported by the harness and used by nothing",
 		}},
 	}
@@ -313,7 +483,16 @@ func TestRunStatic_Ratchet_UnexercisedAction_Reported(t *testing.T) {
 // TestRunStatic_UnassertedAndTestIDs_Derived verifies the two things the
 // classification reads off the static result: the ids whose every
 // result-bearing site discards the answer, and the ids each test names,
-// through one helper, through two, through a method and through a cycle.
+// through one helper, through two, through a method, through a cycle, and
+// past a method of an interface literal, which the walk keys by a name no
+// declaration answers to and passes over.
+//
+// A discard whose id arrives through a helper's parameter counts no site
+// against the id, since the helper cannot say which constant it was, so
+// issue.get stays the one unasserted id however many times discardVia runs.
+// A test name two packages declare folds into one entry carrying both
+// packages' ids, since the map is keyed by the name and the skip line read
+// through it names no package.
 func TestRunStatic_UnassertedAndTestIDs_Derived(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
@@ -331,6 +510,9 @@ func TestRunStatic_UnassertedAndTestIDs_Derived(t *testing.T) {
 		{test: "TestPlanted_MethodSite_Listed", want: []string{"issue.list"}},
 		{test: "TestPlanted_PointerMethodWithoutNeeds_Reported", want: []string{"vulnerability.get"}},
 		{test: "TestPlanted_KeptResult_Clean", want: []string{"issue.list"}},
+		{test: "TestPlanted_InterfaceMethodOnTheWay_Clean", want: []string{"vulnerability.get"}},
+		{test: "TestPlanted_DiscardedThroughHelper_Reported", want: []string{"issue.get"}},
+		{test: "TestPlanted_SharedName_FoldsBothPackages", want: []string{"issue.get", "server.status"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.test, func(t *testing.T) {
@@ -509,6 +691,141 @@ func TestStaticFinding_String_NamesPositionWhenKnown(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.finding.String(); got != tc.want {
 				t.Errorf("String() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCollect_ZeroResultCounter_NotUnasserted verifies the guard on the
+// unasserted rule against a scan holding a zero counter for an id: unasserted
+// means every result-bearing site discards the answer, and an id with no such
+// site has nothing to discard. The scanner only ever counts upwards, so a
+// hand-built scan is the one input that reaches the guard.
+func TestCollect_ZeroResultCounter_NotUnasserted(t *testing.T) {
+	result := &staticResult{unassertedIDs: map[string]bool{}, testIDs: map[string]map[string]bool{}}
+	result.collect([]*packageScan{{
+		pkgPath: "example.com/e2efake/test/e2e/gitlab/common", placement: placementCommon,
+		resultSites: map[string]int{"issue.get": 0, "issue.list": 2}, discardedSites: map[string]int{"issue.list": 2},
+		funcs: map[string]*funcScan{},
+	}})
+
+	if want := []string{"issue.list"}; !reflect.DeepEqual(sortedKeys(result.unassertedIDs), want) {
+		t.Errorf("unassertedIDs = %q, want %q: an id with no result-bearing site cannot be unasserted", sortedKeys(result.unassertedIDs), want)
+	}
+}
+
+// TestMarkNamedTypes_Depth_Bounded verifies the bound on the walk into a type's
+// structure, which is what keeps the closure over the harness's types finite
+// whatever a signature nests: a named type at the bound is marked, and one a
+// level past it is not.
+func TestMarkNamedTypes_Depth_Bounded(t *testing.T) {
+	pkg := types.NewPackage("example.com/e2efake/test/e2e/internal/harness", "harness")
+	env := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Env", nil), types.NewStruct(nil, nil), nil)
+	cases := []struct {
+		name  string
+		depth int
+		want  bool
+	}{
+		{name: "at the bound", depth: typeDepth, want: true},
+		{name: "past the bound", depth: typeDepth + 1, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var wrapped types.Type = env
+			for range tc.depth {
+				wrapped = types.NewPointer(wrapped)
+			}
+			marked := map[string]bool{}
+			markNamedTypes(wrapped, pkg, func(key string) { marked[key] = true }, 0)
+			if marked["Env"] != tc.want {
+				t.Errorf("Env marked = %t under %d pointers, want %t", marked["Env"], tc.depth, tc.want)
+			}
+		})
+	}
+}
+
+// TestPackageScanner_Position_OutsideTheModuleStaysAbsolute verifies the two
+// ways a file is not spelled relative to the module root: a scanner with no
+// root, which is what a harness with no files leaves it, and a file outside
+// the root, whose relative spelling would climb through "..". Both keep the
+// absolute name, so a position never names a file that is not where it says.
+func TestPackageScanner_Position_OutsideTheModuleStaysAbsolute(t *testing.T) {
+	if got := moduleDir(&packages.Package{}); got != "" {
+		t.Errorf("moduleDir() of a harness with no files = %q, want no root", got)
+	}
+	fileDir, moduleRoot := t.TempDir(), t.TempDir()
+	name := filepath.Join(fileDir, "planted_test.go")
+	fset := token.NewFileSet()
+	pos := fset.AddFile(name, -1, 8).Pos(0)
+	pkg := &packages.Package{Fset: fset}
+	cases := []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "no module root", dir: "", want: name + ":1"},
+		{name: "outside the module", dir: moduleRoot, want: name + ":1"},
+		{name: "inside the module", dir: fileDir, want: "planted_test.go:1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (&packageScanner{dir: tc.dir}).position(pkg, pos); got != tc.want {
+				t.Errorf("position() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsUltimate_Constants_Judged verifies the reading of a Tier argument: the
+// Ultimate integer is the tier, a lower one is not, and a value that is not an
+// integer constant, or no constant at all, declares nothing.
+func TestIsUltimate_Constants_Judged(t *testing.T) {
+	cases := []struct {
+		name string
+		tv   types.TypeAndValue
+		want bool
+	}{
+		{name: "ultimate", tv: types.TypeAndValue{Value: constant.MakeInt64(int64(edition.Ultimate))}, want: true},
+		{name: "premium", tv: types.TypeAndValue{Value: constant.MakeInt64(int64(edition.Premium))}},
+		{name: "a string constant", tv: types.TypeAndValue{Value: constant.MakeString("ultimate")}},
+		{name: "not a constant"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isUltimate(tc.tv); got != tc.want {
+				t.Errorf("isUltimate() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUnwrapCallee_Shapes_Stripped verifies that parentheses and type
+// arguments come off a callee, one type argument or several, and that a callee
+// that is none of these is handed back as it is.
+func TestUnwrapCallee_Shapes_Stripped(t *testing.T) {
+	cases := []struct {
+		src  string
+		want string
+	}{
+		{src: "Do(s)", want: "Do"},
+		{src: "Do[A](s)", want: "Do"},
+		{src: "Do[A, B](s)", want: "Do"},
+		{src: "(Do)(s)", want: "Do"},
+		{src: "((Do[A]))(s)", want: "Do"},
+		{src: "f()(s)", want: "f()"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.src)
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			call, isCall := expr.(*ast.CallExpr)
+			if !isCall {
+				t.Fatalf("%q parsed as %T, want a call", tc.src, expr)
+			}
+			if got := types.ExprString(unwrapCallee(call.Fun)); got != tc.want {
+				t.Errorf("unwrapCallee(%s) = %q, want %q", tc.src, got, tc.want)
 			}
 		})
 	}

@@ -224,6 +224,27 @@ func TestCheckRecord_StalePage_IsNotItsBusiness(t *testing.T) {
 	}
 }
 
+// TestPrintRecordHeadlines_NilEntry_DrawsTheOthers verifies that a key whose
+// entry is null prints nothing rather than dereferencing it, and that the
+// runtime beside it still gets its line: the headlines print before the
+// findings, so a record with a null entry must reach the check that reports
+// it rather than take the process down on the way.
+func TestPrintRecordHeadlines_NilEntry_DrawsTheOthers(t *testing.T) {
+	_, doc, _ := checkFixture(t)
+	doc.Runtimes["ee"] = nil
+	// The ce fixture's L1 and L2 agree, so the line is drawn from levels that
+	// all differ: the headline names each of the three, and two that read
+	// the same could not tell which was which.
+	doc.Runtimes["ce"].Summary = summary{CatalogActions: 12, L1: 3, L2: 2, L3: 1}
+	var out strings.Builder
+
+	printRecordHeadlines(doc, &out)
+
+	if want := "record: ce (community/free, measured 2026-09-12): L1 3/12 (25.0%), L2 2, L3 1\n"; out.String() != want {
+		t.Errorf("headlines = %q, want %q: the runtime beside the null one, and nothing for the null one", out.String(), want)
+	}
+}
+
 // TestCheckRecord_DateProblems verifies the ways a date stops the record being
 // one a gate can rest on, which of them fail and which only inform, and that
 // the window is this record's own: 179 days is inside provenance.MaxAge and
@@ -234,10 +255,20 @@ func TestCheckRecord_StalePage_IsNotItsBusiness(t *testing.T) {
 // needs two Docker suites and a license CI does not hold, so the day it closes
 // every open pull request goes red over something no contributor can fix; a
 // note that prints beside a zero exit is how the deadline is seen coming.
+//
+// The last three cases stand on each boundary exactly, which is the only place
+// the three comparisons can be told from the ones a day either side of them
+// would allow: a record written this midnight is not a record from the future,
+// a record exactly [recordMaxAge] old is still inside the window, and one
+// exactly [recordNoticeAge] old has not started being announced.
 func TestCheckRecord_DateProblems(t *testing.T) {
+	// midnight is checkClock's own day at 00:00, so a date read as midnight
+	// UTC lands an exact whole number of days away from it.
+	midnight := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
 	cases := []struct {
 		name     string
 		date     string
+		now      time.Time
 		want     string
 		wantNote bool
 	}{
@@ -257,10 +288,23 @@ func TestCheckRecord_DateProblems(t *testing.T) {
 		},
 		{name: "a few days short of the notice", date: "2026-07-01", want: ""},
 		{name: "inside the window", date: "2026-08-14", want: ""},
+		{name: "written this very instant", date: "2026-09-14", now: midnight, want: ""},
+		{
+			name:     "exactly as old as the window",
+			date:     "2026-06-16",
+			now:      midnight,
+			want:     "90 days old and the window is 90: 0 days from now every push here fails on it",
+			wantNote: true,
+		},
+		{name: "exactly as old as the notice", date: "2026-06-30", now: midnight, want: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			findings, notes := recordDateProblems("ce", tc.date, checkClock)
+			now := checkClock
+			if !tc.now.IsZero() {
+				now = tc.now
+			}
+			findings, notes := recordDateProblems("ce", tc.date, now)
 			reported := findings
 			if tc.wantNote {
 				if len(findings) > 0 {
@@ -483,11 +527,8 @@ func TestRunCheckRecord_PageHalfAlone_JudgesThePageOnly(t *testing.T) {
 	if code := runCheckRecord(opts, &stdout, &stderr); code != exitOK {
 		t.Fatalf("runCheckRecord() = %d, stderr %q; want 0", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "renders to") {
-		t.Errorf("stdout = %q, want the line saying the page is the record's rendering", stdout.String())
-	}
-	if strings.Contains(stdout.String(), "record: ce (") {
-		t.Errorf("stdout = %q, want no per-runtime headline from the page half", stdout.String())
+	if want := "record: " + pagePath + " is what " + opts.recordPath + " renders to\n"; stdout.String() != want {
+		t.Errorf("stdout = %q, want %q: the page half names the page first and prints no headline", stdout.String(), want)
 	}
 }
 
