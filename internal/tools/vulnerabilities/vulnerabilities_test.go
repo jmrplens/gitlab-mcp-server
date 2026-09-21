@@ -1020,6 +1020,51 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept verifies the
+// other side of the same decision: a row GitLab sent an address for renders
+// the title as a link to the vulnerability's own page, and the footer then
+// carries the instruction to keep it.
+//
+// The pair matters because the instruction and the link have to move together.
+// webUrl was declared on the output type and selected by no document until
+// issue 876, so the table had no link to keep and said so; the footer is read
+// off the rows now rather than fixed, and this is the case that says the read
+// answers yes. The whole render is compared, so the link landing in the wrong
+// column fails here rather than reading as correct.
+func TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept(t *testing.T) {
+	const webURL = "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/1"
+	out := ListOutput{
+		Vulnerabilities: []Item{
+			{
+				ID:         "gid://gitlab/Vulnerability/1",
+				Title:      "SQL Injection",
+				Severity:   "CRITICAL",
+				State:      "DETECTED",
+				ReportType: "SAST",
+				DetectedAt: "2026-01-15T10:00:00Z",
+				WebURL:     webURL,
+				Scanner:    &ScannerItem{Name: "semgrep"},
+				PrimaryID:  &IdentifierItem{Name: "CWE-89"},
+			},
+		},
+	}
+
+	want := "## Vulnerabilities (1)\n\n" +
+		"| ID | Severity | Title | State | Scanner | Report Type | Detected |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| `gid://gitlab/Vulnerability/1` | 🔴 CRITICAL | [SQL Injection (CWE-89)](" + webURL + ") | DETECTED | semgrep | SAST | 15 Jan 2026 10:00 UTC |\n\n" +
+		"Showing 1 items | no more pages\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'vulnerability.get' to read one vulnerability in full, naming the ID above\n" +
+		"- Use action 'vulnerability.severity_count' to see how many vulnerabilities the project has at each severity\n" +
+		"- Use action 'security_finding.list' to read the findings one pipeline's scanners reported\n"
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestFormatListMarkdown_TitleAndPrimaryIdentifier verifies which identifier
 // earns a place beside the title in a list row.
 //

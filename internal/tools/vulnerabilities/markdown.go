@@ -33,11 +33,22 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListHeading(&b, "Vulnerabilities", len(out.Vulnerabilities),
 		toolutil.PaginationOutput{HasMore: out.Pagination.HasNextPage})
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Severity", "Title", "State", "Scanner", "Report Type", "Detected"))
+	// Whether the footer asks for links to be kept is read off the rows that
+	// were written, not decided in advance. The schema types webUrl non-null,
+	// so in practice every row carries one; a response that sent none would
+	// otherwise be answered with an instruction about links the table does not
+	// have, which is what the table was written without a link to avoid.
+	linked := false
 	for _, v := range out.Vulnerabilities {
+		linked = linked || toolutil.LinkableDestination(v.WebURL)
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdCodeSpanCell(v.ID),
 			toolutil.SeverityBadge(v.Severity),
-			toolutil.EscapeMdTableCell(listTitle(v)),
+			// The title carries the vulnerability's own page, which is what a
+			// reader of a triage list reaches for first. MdTitleLink answers
+			// with the escaped title alone when GitLab sent no address, so a
+			// row is never worse off than it was before the link existed.
+			toolutil.MdTitleLink(listTitle(v), v.WebURL),
 			toolutil.EscapeMdTableCell(v.State),
 			toolutil.EscapeMdTableCell(scannerName(v.Scanner)),
 			toolutil.EscapeMdTableCell(v.ReportType),
@@ -45,9 +56,8 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Vulnerabilities))
-	// The table carries no link, so the footer carries no instruction to keep
-	// the links of a table that has none.
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, linked,
+		toolutil.HintPreserveLinks,
 		toolutil.HintAction(actionVulnGet, "read one vulnerability in full, naming the ID above"),
 		toolutil.HintAction(actionVulnSeverityCount, "see how many vulnerabilities the project has at each severity"),
 		toolutil.HintAction(actionSecurityFindingList, "read the findings one pipeline's scanners reported"),
