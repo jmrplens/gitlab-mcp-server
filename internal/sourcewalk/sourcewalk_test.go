@@ -133,9 +133,14 @@ func TestSkipDirBelowRoot_NestedWorktree_IsExcludedByEitherRule(t *testing.T) {
 }
 
 // TestSkipDirBelowRootFS_SlashPaths_ApplyBothRules verifies the [io/fs] form
-// reaches the same verdicts as the native one over slash-separated names, on
-// both shapes of the marker, and that a name merely containing ".git" is not
-// one.
+// applies both rules over slash-separated names, on both shapes of the marker,
+// and that a name merely containing ".git" is not one.
+//
+// The two nested cases pin which part of the name the rule reads: the name
+// rule judges the directory's own base name, so a dot-directory below an
+// ordinary one is pruned and an ordinary directory below a dot-directory is
+// not. Judging the whole slash-separated path instead reads identically on
+// every other case here, which is how it stayed unobserved.
 func TestSkipDirBelowRootFS_SlashPaths_ApplyBothRules(t *testing.T) {
 	fsys := fstest.MapFS{
 		"internal/tools/tools.go":                &fstest.MapFile{Data: []byte("package tools\n")},
@@ -143,6 +148,7 @@ func TestSkipDirBelowRootFS_SlashPaths_ApplyBothRules(t *testing.T) {
 		"scratch/.git":                           &fstest.MapFile{Data: []byte("gitdir: /elsewhere\n")},
 		"vendored/.git/HEAD":                     &fstest.MapFile{Data: []byte("ref: refs/heads/main\n")},
 		"testdata/gitignore-fixtures/fixture.go": &fstest.MapFile{Data: []byte("package fixture\n")},
+		"site/.astro/content.json":               &fstest.MapFile{Data: []byte("{}\n")},
 	}
 
 	cases := []struct {
@@ -156,6 +162,8 @@ func TestSkipDirBelowRootFS_SlashPaths_ApplyBothRules(t *testing.T) {
 		{name: "a clone whose marker is a directory", path: "vendored", want: true},
 		{name: "this repository's own source", path: "internal/tools", want: false},
 		{name: "a name that merely contains git", path: "testdata/gitignore-fixtures", want: false},
+		{name: "a dot-directory below an ordinary one", path: "site/.astro", want: true},
+		{name: "an ordinary directory below a dot-directory", path: ".claude/worktrees", want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -232,5 +240,81 @@ func TestIsNestedCheckoutFS_AnOSRoot_AnswersLikeTheNativeForm(t *testing.T) {
 				t.Errorf("IsNestedCheckoutFS(%q) = %v but IsNestedCheckout(%q) = %v: the two forms disagree", tc.path, got, tc.native, native)
 			}
 		})
+	}
+}
+
+// TestSkipDirBelowRootFS_AnOSRoot_AgreesWithTheNativeForm verifies that the
+// two whole-rule forms answer alike over one real tree, which is what the
+// [io/fs] form is for: a walk that scoped itself with [os.Root] has to prune
+// exactly what a walk over native paths prunes.
+//
+// It is asserted here rather than claimed beside the in-memory cases, which
+// can compare nothing against a native path. The nested directory is what
+// makes the comparison bite: both forms judge a directory by its own base
+// name, and a form reading the whole slash-separated path would agree with its
+// sibling on every other row.
+func TestSkipDirBelowRootFS_AnOSRoot_AgreesWithTheNativeForm(t *testing.T) {
+	base := t.TempDir()
+	worktree := filepath.Join(base, "scratch")
+	generated := filepath.Join(base, "site", ".astro")
+	source := filepath.Join(base, "internal", "tools")
+	// sequential: setup steps building one tree, asserted by the cases below
+	for _, dir := range []string{worktree, generated, source} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s) error = %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: /elsewhere\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(scratch/.git) error = %v", err)
+	}
+	opened, err := os.OpenRoot(base)
+	if err != nil {
+		t.Fatalf("OpenRoot(%s) error = %v", base, err)
+	}
+	t.Cleanup(func() { _ = opened.Close() })
+	fsys := opened.FS()
+
+	cases := []struct {
+		name   string
+		path   string
+		native string
+		want   bool
+	}{
+		{name: "a worktree under an ordinary name", path: "scratch", native: worktree, want: true},
+		{name: "a dot-directory below an ordinary one", path: "site/.astro", native: generated, want: true},
+		{name: "the ordinary directory holding it", path: "site", native: filepath.Join(base, "site"), want: false},
+		{name: "this repository's own source", path: "internal/tools", native: source, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SkipDirBelowRootFS(fsys, tc.path)
+			if got != tc.want {
+				t.Errorf("SkipDirBelowRootFS(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+			if native := SkipDirBelowRoot(tc.native); native != got {
+				t.Errorf("SkipDirBelowRootFS(%q) = %v but SkipDirBelowRoot(%q) = %v: the two forms disagree", tc.path, got, tc.native, native)
+			}
+		})
+	}
+}
+
+// TestIsNestedCheckout_DanglingMarkerSymlink_IsStillACheckout verifies that
+// the marker probe asks whether the entry is there and never what it resolves
+// to: it stats the link itself, so a .git symlink whose target is gone still
+// marks the directory as another checkout.
+//
+// That is the direction this package exists for. A worktree whose backing git
+// directory was removed while its files stayed behind is exactly the leftover
+// a walk must not read as ours, and a probe that followed the link would
+// answer false and fold it back in. No other case here can tell the two calls
+// apart.
+func TestIsNestedCheckout_DanglingMarkerSymlink_IsStillACheckout(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Symlink(filepath.Join(dir, "gitdir-that-is-gone"), filepath.Join(dir, ".git")); err != nil {
+		t.Skipf("symlinks unavailable on this platform: %v", err)
+	}
+
+	if !IsNestedCheckout(dir) {
+		t.Error("IsNestedCheckout() = false for a dangling .git symlink, want true: the probe asks whether the marker is there, not what it resolves to")
 	}
 }
