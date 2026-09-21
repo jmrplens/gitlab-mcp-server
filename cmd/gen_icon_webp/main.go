@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +22,11 @@ import (
 )
 
 const (
+	// toolName is the command's own name, used as the flag set's name so a
+	// usage message names the command rather than the test binary that drove
+	// it, and as the prefix of every message it writes to stderr.
+	toolName = "gen_icon_webp"
+
 	sourceFile = "internal/toolutil/icons.go"
 	// brandFile carries the generated project mark (cmd/gen_brand); its
 	// svgBrand constant needs the same WebP fallbacks as the domain icons.
@@ -56,16 +63,45 @@ func variants() []variant {
 // exercised without requiring those external tools on PATH.
 type rasterizer func(svg, color string) ([]byte, error)
 
+// osExit is a seam over os.Exit, so a test can observe the exit code runMain
+// returns without terminating the test process.
+var osExit = os.Exit
+
+// main regenerates the WebP icon assets, or with --check verifies the
+// committed ones, and exits non-zero on failure.
 func main() {
-	check := flag.Bool("check", false, "verify the committed WebP assets match icons.go without writing them")
-	flag.Parse()
+	osExit(runMain(os.Args[1:], os.Stderr))
+}
+
+// runMain parses args, the command line with the program name already removed,
+// refuses to start without the two external tools, and returns the process
+// exit code.
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is an exit code this function returns instead of an
+// os.Exit the seam above never sees; -h is the one parse failure that exits
+// clean, as ExitOnError would. Both failures below exit 1 carrying the
+// command's name, which is what the fatal helper they replace did.
+func runMain(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	check := fs.Bool("check", false, "verify the committed WebP assets match icons.go without writing them")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	if err := requireTools("rsvg-convert", "cwebp"); err != nil {
-		fatal(err)
+		fmt.Fprintln(stderr, toolName+":", err)
+		return 1
 	}
 	if err := run(*check, rasterize); err != nil {
-		fatal(err)
+		fmt.Fprintln(stderr, toolName+":", err)
+		return 1
 	}
+	return 0
 }
 
 // run locates the repository root and delegates to runIn with this
@@ -325,9 +361,4 @@ func repoRoot() (string, error) {
 		}
 		dir = parent
 	}
-}
-
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, "gen_icon_webp:", err)
-	os.Exit(1)
 }
