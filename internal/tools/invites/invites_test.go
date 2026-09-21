@@ -50,9 +50,9 @@ func TestListPendingProjectInvitations_Success(t *testing.T) {
 	}
 }
 
-// TestListPendingProjectInvitations_WithQuery verifies the ListPendingProjectInvitations_WithQuery handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestListPendingProjectInvitations_WithQuery verifies that the query filter
+// reaches GitLab as the query parameter of that name, and that the page it
+// answers with is published.
 func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("query") != "alice" {
@@ -72,9 +72,12 @@ func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 	}
 }
 
-// TestListPendingProjectInvitations_ValidationError verifies that ListPendingProjectInvitations_ValidationError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListPendingProjectInvitations_ValidationError verifies that a call with
+// no project_id is refused by the handler itself: the mock is
+// [testutil.ForbiddenHandler], which fails the test if any request reaches it,
+// so the error can only be the handler's own.
+// What the refusal says is asserted by
+// [TestInvites_MissingScope_NamesTheOperationAndTheFieldOfItsOwnHandler].
 func TestListPendingProjectInvitations_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -110,9 +113,9 @@ func TestListPendingGroupInvitations_Success(t *testing.T) {
 	}
 }
 
-// TestListPendingGroupInvitations_ValidationError verifies that ListPendingGroupInvitations_ValidationError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListPendingGroupInvitations_ValidationError verifies that a call with no
+// group_id is refused by the handler itself, on the terms
+// [TestListPendingProjectInvitations_ValidationError] records.
 func TestListPendingGroupInvitations_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -143,9 +146,9 @@ func TestProjectInvites_Success(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_ValidationError_NoProject verifies that ProjectInvites_ValidationError_NoProject returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProjectInvites_ValidationError_NoProject verifies that an invitation with
+// no project_id is refused before anything is sent: the mock fails the test if
+// a request arrives, so no POST was built.
 func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -155,9 +158,10 @@ func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_ValidationError_NoEmailOrUser verifies that ProjectInvites_ValidationError_NoEmailOrUser returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProjectInvites_ValidationError_NoEmailOrUser verifies that an invitation
+// naming neither an email nor a user_id is refused before anything is sent.
+// The message is asserted by the group half,
+// [TestGroupInvites_ValidationErrorNoEmailOrUser], which shares this branch.
 func TestProjectInvites_ValidationError_NoEmailOrUser(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -188,9 +192,9 @@ func TestGroupInvites_Success(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_ValidationError_NoGroup verifies that GroupInvites_ValidationError_NoGroup returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGroupInvites_ValidationError_NoGroup verifies that an invitation with no
+// group_id is refused before anything is sent, on the terms
+// [TestProjectInvites_ValidationError_NoProject] records.
 func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -200,9 +204,9 @@ func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_APIError verifies that GroupInvites returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGroupInvites_APIError verifies that GroupInvites returns an error when
+// the instance refuses the invitation POST with 403. What the refusal tells the
+// caller is asserted by [TestInvites_Refusal_NamesTheScopeItWasCalledOn].
 func TestGroupInvites_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -214,9 +218,9 @@ func TestGroupInvites_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_BadRequest verifies the GroupInvites_BadRequest handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestGroupInvites_BadRequest verifies that a 400 from the invitation POST is
+// answered with the access-level hint rather than the forbidden one, which is
+// the other branch of the same refusal.
 func TestGroupInvites_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"already a member"}`)
@@ -265,9 +269,8 @@ func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	}
 }
 
-// TestFormatListPendingMarkdownString_Empty verifies the ListPendingMarkdownString_Empty Markdown formatter for a representative listpendingstring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListPendingMarkdownString_Empty verifies that a page with no
+// invitations renders the empty message alone, with no table header under it.
 func TestFormatListPendingMarkdownString_Empty(t *testing.T) {
 	out := ListPendingInvitationsOutput{Invitations: []PendingInviteOutput{}}
 	md := FormatListPendingMarkdownString(out)
@@ -328,12 +331,14 @@ const fmtUnexpErr = "unexpected error: %v"
 // ListPendingProjectInvitations — API error
 // ---------------------------------------------------------------------------.
 
-// TestListPendingProjectInvitations_APIError verifies that ListPendingProjectInvitations returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListPendingProjectInvitations_APIError verifies that a 403 from the
+// project invitations endpoint is returned as an error rather than an empty
+// page. The status is not the one the list hint is written for, so the message
+// is the wrapper's; [TestInvites_Refusal_NamesTheScopeItWasCalledOn] asserts
+// the 404 that carries the hint.
 func TestListPendingProjectInvitations_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{ProjectID: "42"})
 	if err == nil {
@@ -345,12 +350,12 @@ func TestListPendingProjectInvitations_APIError(t *testing.T) {
 // ListPendingGroupInvitations — API error
 // ---------------------------------------------------------------------------.
 
-// TestListPendingGroupInvitations_APIError verifies that ListPendingGroupInvitations returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListPendingGroupInvitations_APIError verifies that a 403 from the group
+// invitations endpoint is returned as an error, on the terms
+// [TestListPendingProjectInvitations_APIError] records.
 func TestListPendingGroupInvitations_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := ListPendingGroupInvitations(context.Background(), client, ListPendingGroupInvitationsInput{GroupID: "10"})
 	if err == nil {
@@ -362,9 +367,8 @@ func TestListPendingGroupInvitations_APIError(t *testing.T) {
 // ListPendingGroupInvitations — with query filter
 // ---------------------------------------------------------------------------.
 
-// TestListPendingGroupInvitations_WithQuery verifies the ListPendingGroupInvitations_WithQuery handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestListPendingGroupInvitations_WithQuery verifies that the query filter
+// reaches the group invitations endpoint as the query parameter of that name.
 func TestListPendingGroupInvitations_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("query") != "team" {
@@ -387,12 +391,13 @@ func TestListPendingGroupInvitations_WithQuery(t *testing.T) {
 // ProjectInvites — API error (403)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_APIError verifies that ProjectInvites returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProjectInvites_APIError verifies that ProjectInvites returns an error
+// when the instance refuses the invitation POST with 403. What the refusal
+// tells the caller is asserted by
+// [TestInvites_Refusal_NamesTheScopeItWasCalledOn].
 func TestProjectInvites_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{ProjectID: "42", Email: "a@b.com", AccessLevel: 30})
 	if err == nil {
@@ -400,9 +405,9 @@ func TestProjectInvites_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_BadRequest verifies the ProjectInvites_BadRequest handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestProjectInvites_BadRequest verifies that a 400 from the project
+// invitation POST is answered with the access-level hint, the same branch
+// [TestGroupInvites_BadRequest] reaches from the group side.
 func TestProjectInvites_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"already a member"}`)
@@ -420,9 +425,10 @@ func TestProjectInvites_BadRequest(t *testing.T) {
 // GroupInvites — validation: missing email AND user_id
 // ---------------------------------------------------------------------------.
 
-// TestGroupInvites_ValidationErrorNoEmailOrUser verifies that GroupInvites_ValidationErrorNoEmailOrUser returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGroupInvites_ValidationErrorNoEmailOrUser verifies that an invitation
+// naming neither an email nor a user_id is refused by the handler, with the
+// message that says either will do. The mock fails the test if a request
+// arrives, so the refusal is this server's and not GitLab's.
 func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GroupInvites(context.Background(), client, GroupInvitesInput{GroupID: "10", AccessLevel: 30})
@@ -524,9 +530,17 @@ func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 // toPendingInviteOutput — with dates populated
 // ---------------------------------------------------------------------------.
 
-// TestToPendingInviteOutput_WithDates verifies the ToPendingInviteOutput_WithDates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToPendingInviteOutput_WithDates verifies that every published field of an
+// invitation is filled from the source of its own name, and that the whole
+// output is what the invitation and the captured token say and nothing else.
+//
+// It is asserted as one value against one literal, with no two sources sharing
+// a value, because the conversion is straight-line assignment and a converter
+// that reads the neighboring field has no branch for either gate to flip. The
+// two timestamps were the pair that proved it: the test this replaced checked
+// only that each was non-empty, so created_at and expires_at could be
+// exchanged with the suite still green, and an invitation would have reported
+// itself as expiring on the day it was created.
 func TestToPendingInviteOutput_WithDates(t *testing.T) {
 	created := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -534,12 +548,24 @@ func TestToPendingInviteOutput_WithDates(t *testing.T) {
 		ID:            10,
 		InviteEmail:   "alice@example.com",
 		AccessLevel:   gl.DeveloperPermissions,
-		UserName:      "alice",
-		CreatedByName: "admin",
+		UserName:      "alice-invitee",
+		CreatedByName: "admin-inviter",
 		CreatedAt:     &created,
 		ExpiresAt:     &expires,
 	}
-	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{})
+	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{InviteToken: "tok-alice"})
+	want := PendingInviteOutput{
+		InviteEmail:   "alice@example.com",
+		InviteToken:   "tok-alice",
+		CreatedAt:     "2026-06-01T12:00:00Z",
+		AccessLevel:   30,
+		ExpiresAt:     "2026-12-31T00:00:00Z",
+		UserName:      "alice-invitee",
+		CreatedByName: "admin-inviter",
+	}
+	if out != want {
+		t.Errorf("toPendingInviteOutput = %+v, want %+v", out, want)
+	}
 	// The source above carries an ID and the output must not. client-go's
 	// PendingInvite models one; lib/api/entities/invitation.rb exposes exactly
 	// access_level, created_at, expires_at, invite_email, invite_token,
@@ -556,27 +582,16 @@ func TestToPendingInviteOutput_WithDates(t *testing.T) {
 	if strings.Contains(string(encoded), `"id"`) {
 		t.Errorf("the invitation output carries an id key: %s", encoded)
 	}
-	if out.CreatedAt == "" {
-		t.Error("expected non-empty CreatedAt")
-	}
-	if out.ExpiresAt == "" {
-		t.Error("expected non-empty ExpiresAt")
-	}
-	if out.UserName != "alice" {
-		t.Errorf("UserName = %q, want %q", out.UserName, "alice")
-	}
-	if out.CreatedByName != "admin" {
-		t.Errorf("CreatedByName = %q, want %q", out.CreatedByName, "admin")
-	}
 }
 
 // ---------------------------------------------------------------------------
 // toPendingInviteOutput — with nil dates
 // ---------------------------------------------------------------------------.
 
-// TestToPendingInviteOutput_NilDates verifies the ToPendingInviteOutput_NilDates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToPendingInviteOutput_NilDates verifies that an invitation GitLab sent no
+// timestamps for publishes neither of them, and carries the rest unchanged.
+// Both dates are pointers on the SDK struct, so each guard has to leave its own
+// field alone rather than write a zero time through it.
 func TestToPendingInviteOutput_NilDates(t *testing.T) {
 	inv := &gl.PendingInvite{
 		ID:          20,
@@ -584,11 +599,9 @@ func TestToPendingInviteOutput_NilDates(t *testing.T) {
 		AccessLevel: gl.ReporterPermissions,
 	}
 	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{})
-	if out.CreatedAt != "" {
-		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)
-	}
-	if out.ExpiresAt != "" {
-		t.Errorf("expected empty ExpiresAt, got %q", out.ExpiresAt)
+	want := PendingInviteOutput{InviteEmail: "bob@example.com", AccessLevel: 20}
+	if out != want {
+		t.Errorf("toPendingInviteOutput = %+v, want %+v", out, want)
 	}
 }
 
@@ -596,9 +609,9 @@ func TestToPendingInviteOutput_NilDates(t *testing.T) {
 // toInviteResultOutput — direct coverage with message map
 // ---------------------------------------------------------------------------.
 
-// TestToInviteResultOutput_WithMessages verifies the ToInviteResultOutput_WithMessages handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToInviteResultOutput_WithMessages verifies that the converter carries
+// GitLab's status and its per-address message map through unchanged. No
+// request is made: the conversion is the whole of what is under test.
 func TestToInviteResultOutput_WithMessages(t *testing.T) {
 	r := &gl.InvitesResult{
 		Status: "error",
@@ -623,9 +636,9 @@ func TestToInviteResultOutput_WithMessages(t *testing.T) {
 // FormatInviteResultMarkdownString — empty message map
 // ---------------------------------------------------------------------------.
 
-// TestFormatInviteResultMarkdownString_EmptyMessages verifies the InviteResultMarkdownString_EmptyMessages Markdown formatter for a representative inviteresultstring_emptymessages input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInviteResultMarkdownString_EmptyMessages verifies that a result
+// whose message map is empty renders no Messages heading at all, rather than a
+// heading over a table with no rows.
 func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{}}
 	want := "## Invitation Result\n\n- **Status**: success\n" + inviteResultHints
@@ -638,9 +651,9 @@ func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 // FormatListPendingMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatListPendingMarkdown_ReturnsCallToolResult verifies the ListPendingMarkdown_ReturnsCallToolResult Markdown formatter for a representative listpending_returnscalltoolresult input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListPendingMarkdown_ReturnsCallToolResult verifies that the
+// CallToolResult wrapper carries the same document the string formatter
+// renders, as a single text content.
 func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
@@ -670,9 +683,10 @@ func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 // FormatInviteResultMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatInviteResultMarkdown_ReturnsCallToolResult verifies the InviteResultMarkdown_ReturnsCallToolResult Markdown formatter for a representative inviteresult_returnscalltoolresult input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInviteResultMarkdown_ReturnsCallToolResult verifies that the
+// CallToolResult wrapper carries the rendered card as a single text content,
+// the status included. The whole document is asserted by
+// [TestFormatInviteResultMarkdownString].
 func TestFormatInviteResultMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := InviteResultOutput{Status: "success"}
 	result := FormatInviteResultMarkdown(out)
@@ -695,9 +709,9 @@ func TestFormatInviteResultMarkdown_ReturnsCallToolResult(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_Metadata verifies that the package publishes its four
+// actions, each owned by this package and each projecting an individual tool
+// under a name of its own. No request is made: the specs are metadata.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -713,9 +727,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallRoutes verifies that each of the four actions is
+// reachable through the route the catalog registers, with the arguments a
+// caller sends as JSON, and answers rather than failing to decode them.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, invitesRouteHandler())
 	specs := ActionSpecs(client)
@@ -848,7 +862,14 @@ func TestListPendingGroupInvitations_KeysetAndSort(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestProjectInvites_WithID verifies that the id body parameter is sent on the
-// project invitation request.
+// project invitation request, and that it is the caller's own id rather than
+// the project the route was built from.
+//
+// The two are given different values on purpose. GitLab's add-a-member body
+// takes an id of its own beside the path, "usually equal to project_id" and
+// not always, and while the fixture gave both the same value a handler
+// forwarding the path scope in its place was indistinguishable from one
+// forwarding what the caller asked for.
 func TestProjectInvites_WithID(t *testing.T) {
 	var gotID string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -865,7 +886,7 @@ func TestProjectInvites_WithID(t *testing.T) {
 	}))
 	out, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
 		ProjectID:   "42",
-		ID:          "42",
+		ID:          "77",
 		Email:       "dev@example.com",
 		AccessLevel: 30,
 	})
@@ -875,13 +896,15 @@ func TestProjectInvites_WithID(t *testing.T) {
 	if out.Status != "success" {
 		t.Errorf("got status %q, want %q", out.Status, "success")
 	}
-	if gotID != "42" {
-		t.Errorf("id body param = %q, want %q", gotID, "42")
+	if gotID != "77" {
+		t.Errorf("id body param = %q, want %q", gotID, "77")
 	}
 }
 
 // TestGroupInvites_WithID verifies that the id body parameter is sent on the
-// group invitation request.
+// group invitation request, and that it is the caller's own id rather than the
+// group the route was built from, for the reason [TestProjectInvites_WithID]
+// records.
 func TestGroupInvites_WithID(t *testing.T) {
 	var gotID string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -898,7 +921,7 @@ func TestGroupInvites_WithID(t *testing.T) {
 	}))
 	out, err := GroupInvites(context.Background(), client, GroupInvitesInput{
 		GroupID:     "10",
-		ID:          "10",
+		ID:          "88",
 		UserID:      77,
 		AccessLevel: 40,
 	})
@@ -908,8 +931,8 @@ func TestGroupInvites_WithID(t *testing.T) {
 	if out.Status != "success" {
 		t.Errorf("got status %q, want %q", out.Status, "success")
 	}
-	if gotID != "10" {
-		t.Errorf("id body param = %q, want %q", gotID, "10")
+	if gotID != "88" {
+		t.Errorf("id body param = %q, want %q", gotID, "88")
 	}
 }
 
@@ -1326,6 +1349,150 @@ func TestPendingInvitations_MarkdownLeavesTheTokenOut(t *testing.T) {
 	}
 	if strings.Contains(got, "tok-alice") {
 		t.Errorf("markdown carries the invitation token:\n%s", got)
+	}
+}
+
+// TestPendingInvitations_PaginationComesFromTheResponseHeaders verifies both
+// list handlers publish GitLab's paging headers, each field from the header of
+// its own name, so a caller holding one page can ask for the next.
+//
+// Nothing read the block back until now: every list fixture sent the headers
+// and every assertion looked only at the invitations, so removing the
+// pagination line altogether left the suite green while a model was handed a
+// page with no way to tell it was one. The figures are deliberately all
+// different, since a header read into the wrong field is a straight-line
+// assignment neither gate can see.
+func TestPendingInvitations_PaginationComesFromTheResponseHeaders(t *testing.T) {
+	headers := testutil.PaginationHeaders{
+		Page: "2", PerPage: "20", Total: "57", TotalPages: "3", NextPage: "3", PrevPage: "1",
+	}
+	for _, inviteCall := range pendingInvitationCalls {
+		t.Run(inviteCall.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSONWithPagination(w, http.StatusOK,
+					`[{"id":1,"invite_email":"alice@example.com","access_level":30}]`, headers)
+			}))
+			out, err := inviteCall.call(client)
+			if err != nil {
+				t.Fatalf("%s: %v", inviteCall.name, err)
+			}
+			want := toolutil.PaginationOutput{
+				Page: 2, PerPage: 20, TotalItems: 57, TotalPages: 3,
+				NextPage: 3, PrevPage: 1, HasMore: true,
+			}
+			if out.Pagination != want {
+				t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+			}
+		})
+	}
+}
+
+// TestFormatInviteResultMarkdownString_BothKeyedTables verifies that a result
+// carrying GitLab's per-address messages and its queued usernames renders each
+// map under its own heading and its own key column.
+//
+// Each was only ever rendered alone, and the two are the same Go type written
+// through the same helper, so nothing held either call to its own map: a
+// result would have named the invitees as users waiting for an administrator
+// and the queued users as GitLab's replies to the addresses.
+func TestFormatInviteResultMarkdownString_BothKeyedTables(t *testing.T) {
+	out := InviteResultOutput{
+		Status:      "success",
+		Message:     map[string]string{"alice@example.com": "Invite sent"},
+		QueuedUsers: map[string]string{"bob_user": "Request queued for administrator approval."},
+	}
+	want := "## Invitation Result\n\n" +
+		"- **Status**: success\n" +
+		"\n### Messages\n\n" +
+		"| Invitee | Message |\n| --- | --- |\n" +
+		"| alice@example.com | Invite sent |\n" +
+		"\n### Queued for Administrator Approval\n\n" +
+		"| User | Message |\n| --- | --- |\n" +
+		"| bob_user | Request queued for administrator approval. |\n" +
+		inviteResultHints
+	if got := FormatInviteResultMarkdownString(out); got != want {
+		t.Errorf("FormatInviteResultMarkdownString =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestInvites_MissingScope_NamesTheOperationAndTheFieldOfItsOwnHandler
+// verifies that the refusal for a missing scope identifier is attributed to
+// the operation the caller asked for and names that handler's own required
+// parameter, not the other scope's.
+//
+// Both are strings passed into a shared helper and neither was read back: the
+// four refusals were checked only for being non-nil, so the labels and the
+// field names could be exchanged between the project and group handlers with
+// the suite still green. A model told "group_id is required" by a tool whose
+// schema has no group_id is being sent to a parameter that does not exist, and
+// the operation is what the error prefix and the log attribute the failure to.
+func TestInvites_MissingScope_NamesTheOperationAndTheFieldOfItsOwnHandler(t *testing.T) {
+	cases := []struct {
+		name string
+		// operation is the label the wrapped error is prefixed with, and field
+		// the parameter it has to name; otherField is the sibling scope's,
+		// which the same message must not carry.
+		operation  string
+		field      string
+		otherField string
+		call       func(context.Context, *gitlabclient.Client) error
+	}{
+		{
+			name: "project list", operation: "project_invite_list_pending",
+			field: "project_id", otherField: "group_id",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListPendingProjectInvitations(ctx, c, ListPendingProjectInvitationsInput{})
+				return err
+			},
+		},
+		{
+			name: "group list", operation: "group_invite_list_pending",
+			field: "group_id", otherField: "project_id",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListPendingGroupInvitations(ctx, c, ListPendingGroupInvitationsInput{})
+				return err
+			},
+		},
+		{
+			name: "project invitation", operation: "project_invite",
+			field: "project_id", otherField: "group_id",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ProjectInvites(ctx, c, ProjectInvitesInput{Email: "a@b.com", AccessLevel: 30})
+				return err
+			},
+		},
+		{
+			name: "group invitation", operation: "group_invite",
+			field: "group_id", otherField: "project_id",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := GroupInvites(ctx, c, GroupInvitesInput{Email: "a@b.com", AccessLevel: 30})
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The refusal is the handler's own, so the mock must never be
+			// reached: an error that came back from GitLab would satisfy every
+			// assertion below without the validation existing at all.
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := tc.call(context.Background(), client)
+			if err == nil {
+				t.Fatalf("expected a refusal for the missing %s, got nil", tc.field)
+			}
+			// Prefix rather than substring, because project_invite is itself a
+			// prefix of project_invite_list_pending and a contains test could
+			// not tell the list handler's label from the invitation's.
+			if !strings.HasPrefix(err.Error(), tc.operation+":") {
+				t.Errorf("refusal %q is not attributed to %q", err, tc.operation)
+			}
+			if !strings.Contains(err.Error(), tc.field+" is required") {
+				t.Errorf("refusal %q does not name %q", err, tc.field)
+			}
+			if strings.Contains(err.Error(), tc.otherField) {
+				t.Errorf("refusal %q names %q, which belongs to the other scope", err, tc.otherField)
+			}
+		})
 	}
 }
 
