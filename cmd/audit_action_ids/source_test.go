@@ -192,6 +192,134 @@ func hints() []string {
 	}
 }
 
+// TestCollectSites_Site_IsStampedWithItsOwnFileAndLine holds the sites of one
+// small fixture as whole records. Every other test here reads a site's kind
+// and value and filters on its package, so the file and the line, which are
+// what a reader opens, were asserted by nothing: a site stamped with the
+// column where its line belongs, or with the package where its file belongs,
+// would have passed them all.
+//
+// The fixture also writes a string field this rule does not name, and the
+// whole-list assertion is what says no site came of it: a rule reading every
+// string field as prose would judge a tag line as an invitation to call what
+// it mentions.
+func TestCollectSites_Site_IsStampedWithItsOwnFileAndLine(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+var Spec = toolutil.ActionSpecOptions{
+	RelatedActions: []string{"demo.get"},
+	Usage:          "Chain demo.list after this.",
+	ContentKind:    "demo.not_prose",
+}
+`)
+
+	want := []site{
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Kind: kindRelated, Value: "demo.get", Resolved: true},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 7, Kind: kindUsage, Value: "Chain demo.list after this.", Resolved: true},
+	}
+	if !slices.Equal(sites, want) {
+		t.Errorf("sites = %+v, want %+v", sites, want)
+	}
+}
+
+// TestFoldCall_TwoParameters_AreBoundByPosition holds that a helper's
+// parameters are bound to the arguments in the order the call passes them.
+// Every other folded helper here takes one parameter, so a fold that bound
+// the last argument to the first parameter would have produced the same ID.
+func TestFoldCall_TwoParameters_AreBoundByPosition(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func join(domain, name string) string { return domain + "." + name }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{join("demo", "get")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.get"}) {
+		t.Errorf("related values = %v, want demo.get with the domain in front", got)
+	}
+}
+
+// TestCollectSites_RelatedParameter_IsReadAtItsOwnPosition holds that a
+// parameter is followed to the argument at its own index in every call, and
+// not to the first argument. The one parameter-following fixture elsewhere
+// takes the list as its only parameter, where the two cannot differ.
+func TestCollectSites_RelatedParameter_IsReadAtItsOwnPosition(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func build(usage string, related []string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: usage, RelatedActions: related}
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build("Plain prose.", []string{"demo.from_second_argument"})
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.from_second_argument"}) {
+		t.Errorf("related values = %v, want the list passed as the second argument", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none: the prose argument is not the list", got)
+	}
+}
+
+// TestCollectSites_FieldsNamedRightAndTypedWrong_AreNotRead holds the half of
+// the field rule that reads the type. The names are common, so a related that
+// is a list of something else, a usage that is not text and a description
+// that is a table belong to some other struct, and reading any of them would
+// put whatever they hold in front of a model as an action ID.
+func TestCollectSites_FieldsNamedRightAndTypedWrong_AreNotRead(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+type counters struct {
+	related     []int
+	usage       int
+	description map[string]string
+}
+
+var table = counters{related: []int{1, 2}, usage: 3, description: map[string]string{"a": "demo.get"}}
+`)
+
+	if len(sites) != 0 {
+		t.Errorf("sites = %+v, want none: neither field carries text", sites)
+	}
+}
+
+// TestCollectSites_ACallerThatPassesNoList_ContributesNothing holds the one
+// thing a caller can do that leaves a followed parameter with no argument at
+// all: a variadic list nobody filled. A rule that read the argument at the
+// parameter's position regardless would be reaching past the end of what the
+// call was written with.
+func TestCollectSites_ACallerThatPassesNoList_ContributesNothing(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func spec(related ...string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: related}
+}
+
+func withNone() toolutil.ActionSpecOptions { return spec() }
+
+func withOne() toolutil.ActionSpecOptions {
+	ids := []string{"demo.get"}
+	return spec(ids...)
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.get"}) {
+		t.Errorf("related values = %v, want the one call that passed a list", got)
+	}
+}
+
 // TestCollectSites_AnonymousStructTable_IsRead holds the rule that accepts an
 // anonymous struct. internal/tools/integrations keeps its metadata table as a
 // map to one, and a rule that asked for a named type read neither its lists
@@ -221,6 +349,159 @@ func options() toolutil.ActionSpecOptions {
 	}
 	if got := unresolvedExprs(sites); len(got) != 0 {
 		t.Errorf("unresolved = %v, want none: the copy is a read of a recorded list", got)
+	}
+}
+
+// TestCollectSites_OnlyTheHintHelper_IsReadAsAHint holds both halves of the
+// call rule, which is the package and the name together. A call of another
+// toolutil function is not a hint although the package matches, and a local
+// function of the same name is not one although the name matches: either
+// half alone would read an ordinary string argument as an ID a model is
+// invited to call.
+func TestCollectSites_OnlyTheHintHelper_IsReadAsAHint(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func HintAction(id, purpose string) string { return id + purpose }
+
+func hints() []string {
+	return []string{
+		toolutil.HintAction("demo.real_hint", "read one"),
+		toolutil.EscapeMdTableCell("demo.not_a_hint"),
+		HintAction("demo.local_helper", "not the toolutil one"),
+	}
+}
+`)
+
+	if got := valuesOfKind(sites, kindHint); !slices.Equal(got, []string{"demo.real_hint"}) {
+		t.Errorf("hint values = %v, want only the toolutil helper's argument", got)
+	}
+}
+
+// TestCollectSites_AValueOfNoPackage_IsNotAStructThisModuleWrites holds the
+// guard in front of the module test. A universe type such as error is named
+// and belongs to no package at all, so asking for its path before asking
+// whether it has one is a crash rather than a wrong answer, and the only
+// values reaching that question are whatever a package hands a helper.
+func TestCollectSites_AValueOfNoPackage_IsNotAStructThisModuleWrites(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func published(reason error) []string { return []string{reason.Error()} }
+
+func options(reason error) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: published(reason)}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+		t.Errorf("related values = %v, want nothing read out of a value of no package", got)
+	}
+	if got := unresolvedExprs(sites); len(got) == 0 {
+		t.Error("a list built from a value of no package was passed over silently")
+	}
+}
+
+// TestCollectSites_ValuesNoRuleCanFollow_AreReported walks the shapes that
+// reach a rule and hand it nothing to read: a call through a function value,
+// which names no declared function to follow into, and an identifier declared
+// and never given a value. Each lands in the unresolved bucket, which is the
+// one thing a reporting audit owes a reader about what it could not see.
+//
+// A list built by a function of another module is here too, since this walk
+// has no body for one: what a package outside the walk returns is a hole in
+// the audit rather than a clean answer.
+//
+// The fixture also declares a function under the blank name, which no call
+// can name and which the walk therefore never follows into.
+func TestCollectSites_ValuesNoRuleCanFollow_AreReported(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+func _(name string) string { return name }
+
+var makeID = func() string { return "demo.from_a_function_value" }
+
+var makeList = func() []string { return []string{"demo.from_a_list_value"} }
+
+var unassigned string
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{makeID(), unassigned}}
+}
+
+func more() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: makeList()}
+}
+
+func fromAnotherModule() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: strings.Split("demo.a,demo.b", ",")}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+		t.Errorf("related values = %v, want nothing folded from a value no rule can follow", got)
+	}
+	want := []string{"makeID()", "makeList()", `strings.Split("demo.a,demo.b", ",")`, "unassigned"}
+	if got := unresolvedExprs(sites); !slices.Equal(got, want) {
+		t.Errorf("unresolved = %v, want %v", got, want)
+	}
+}
+
+// TestCollectSites_AHelperReachedTwice_IsReadOnce holds the guard that keeps
+// one helper's literals out of the report twice. Two specs sharing a defaults
+// helper is an ordinary shape here, and the same guard is what stops a helper
+// that calls itself from running forever.
+func TestCollectSites_AHelperReachedTwice_IsReadOnce(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func defaults() []string { return []string{"demo.shared"} }
+
+func first() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: defaults()}
+}
+
+func second() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: defaults()}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.shared"}) {
+		t.Errorf("related values = %v, want the helper's list read once", got)
+	}
+}
+
+// TestCollectSites_AMethodValue_IsNotAFieldRead holds the other half of what
+// makes a selector a read of an ID list: it has to select a field. A method
+// value selects a method, so the call it is handed to is followed like any
+// other rather than passed over as a copy of a list recorded elsewhere.
+func TestCollectSites_AMethodValue_IsNotAFieldRead(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+type entry struct{ Name string }
+
+func (e entry) Related() []string { return []string{"demo.from_a_method"} }
+
+func published(read func() []string) []string { return read() }
+
+func options(e entry) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: published(e.Related)}
+}
+`)
+
+	if got := unresolvedExprs(sites); len(got) == 0 {
+		t.Error("a list built from a method value was passed over silently")
 	}
 }
 
@@ -295,7 +576,10 @@ func options() toolutil.ActionSpecOptions {
 //
 // The negative half is what keeps the rule from being a blanket silence: a
 // call handed a value carrying no ID list has had nothing recorded for it, so
-// the list it returns lands in the unresolved bucket like any other.
+// the list it returns lands in the unresolved bucket like any other. Its
+// struct carries a list of strings under another name and a related under
+// another type, since what makes a field an ID list is the name and the type
+// together and either alone is a field of some other kind.
 func TestCollectSites_AListNarrowedByAProjection_IsPassedOver(t *testing.T) {
 	t.Run("the value carries an ID list", func(t *testing.T) {
 		sites := collectFixture(t, `package fixture
@@ -333,7 +617,9 @@ func options(e entry) toolutil.ActionSpecOptions {
 import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
 type label struct {
-	Name string
+	Name    string
+	Tags    []string
+	related int
 }
 
 func published(l label) []string {
@@ -351,6 +637,51 @@ func options(l label) toolutil.ActionSpecOptions {
 			t.Error("a list built from a value carrying no action IDs was passed over silently")
 		}
 	})
+}
+
+// TestCollectSites_AReadThatIsNoIDList_DoesNotSilenceTheCall holds what makes
+// a call a pass-through: it is handed a list this walk records where it is
+// written. A field named related that holds something else, and a selector
+// that names no field of this module at all, are neither, so the call is
+// followed into its body as any other and what it publishes is read.
+func TestCollectSites_AReadThatIsNoIDList_DoesNotSilenceTheCall(t *testing.T) {
+	for name, source := range map[string]string{
+		"a related field that is not a list of strings": `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+type entry struct {
+	related map[string]string
+}
+
+func published(names map[string]string) []string { return []string{"demo.from_helper"} }
+
+func options(e entry) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: published(e.related)}
+}
+`,
+		"a selector that names no field of this module": `package fixture
+
+import (
+	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+func published(names []string) []string { return []string{"demo.from_helper"} }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: published(os.Args)}
+}
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			sites := collectFixture(t, source)
+			if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.from_helper"}) {
+				t.Errorf("related values = %v, want the helper's own literal read", got)
+			}
+		})
+	}
 }
 
 // TestCollectSites_ShapesWithNoIDInThem_AreHandled walks the shapes that
