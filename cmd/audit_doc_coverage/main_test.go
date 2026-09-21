@@ -7,6 +7,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,12 +17,27 @@ import (
 	"testing"
 )
 
-// TestParseDomainsTable verifies the README table parser extracts the
-// four canonical columns and rejects malformed rows.
+// TestParseDomainsTable verifies the README table parser extracts the four
+// canonical columns, in table order, and skips the header and separator rows.
+//
+// Every row's four values differ from each other and from every other row's,
+// and the whole slice is compared, because the parser assigns four capture
+// groups of one regex positionally: with the domain, the meta-tool column and
+// the document link spelled alike, two of them read out of the wrong group
+// would produce exactly the rows this test wants. The last row is the case
+// that made this necessary: a link whose text is not its target. Every row in
+// the real README writes the file name twice, so the target and the text are
+// the same string there and nothing in the tree can tell the two groups apart.
 func TestParse_DomainsTable(t *testing.T) {
 	tmp := t.TempDir()
 	readme := filepath.Join(tmp, "README.md")
-	content := "## Domains\n\n| Domain | Tools | Meta-tool | Document |\n| --- | ---: | --- | --- |\n| Projects | 50 | `gitlab_project` | [projects.md](projects.md) |\n| Access & Tokens | 68 | various | [access.md](access.md) |\n| Branch Rules | 1 | `gitlab_branch` (routed) | [branch-rules.md](branch-rules.md) |\n"
+	content := "## Domains\n\n" +
+		"| Domain | Tools | Meta-tool | Document |\n" +
+		"| --- | ---: | --- | --- |\n" +
+		"| Projects | 50 | `gitlab_project` | [projects.md](projects.md) |\n" +
+		"| Access & Tokens | 68 | various | [access.md](access.md) |\n" +
+		"| Branch Rules | 1 | `gitlab_branch` (routed) | [branch-rules.md](branch-rules.md) |\n" +
+		"| Merge Requests | 56 | `gitlab_merge_request` | [Merge requests](merge-requests.md) |\n"
 	if err := os.WriteFile(readme, []byte(content), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
@@ -28,17 +45,14 @@ func TestParse_DomainsTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseDomainsTable: %v", err)
 	}
-	if len(rows) != 3 {
-		t.Fatalf("rows = %d, want 3", len(rows))
+	want := []docMappingRow{
+		{Domain: "Projects", ExpectedCount: 50, MetaToolsCSV: "`gitlab_project`", DocLink: "projects.md"},
+		{Domain: "Access & Tokens", ExpectedCount: 68, MetaToolsCSV: "various", DocLink: "access.md"},
+		{Domain: "Branch Rules", ExpectedCount: 1, MetaToolsCSV: "`gitlab_branch` (routed)", DocLink: "branch-rules.md"},
+		{Domain: "Merge Requests", ExpectedCount: 56, MetaToolsCSV: "`gitlab_merge_request`", DocLink: "merge-requests.md"},
 	}
-	if rows[0].Domain != "Projects" || rows[0].ExpectedCount != 50 {
-		t.Errorf("row[0] = %+v, want Projects/50", rows[0])
-	}
-	if rows[1].MetaToolsCSV != "various" {
-		t.Errorf("row[1] MetaToolsCSV = %q, want %q", rows[1].MetaToolsCSV, "various")
-	}
-	if rows[2].ExpectedCount != 1 {
-		t.Errorf("row[2] count = %d, want 1", rows[2].ExpectedCount)
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("parseDomainsTable() = %+v, want %+v", rows, want)
 	}
 }
 
@@ -478,28 +492,55 @@ func TestBuildReport_RoutedTool(t *testing.T) {
 	}
 }
 
-// TestCheck_FailsWhenFindingsPresent locks the -check gate behavior:
-// any missing/orphan/tier_mismatch in the summary produces a non-empty
-// diagnostic; clean reports pass.
+// TestCheck_FailsWhenFindingsPresent locks the -check gate behavior: each of
+// the four blocking totals alone produces a diagnostic, and a report with none
+// of them passes. Unassigned tools (the catalog gained a group before the
+// README Domains table was updated) block too, so the orchestrator routes them
+// explicitly instead of letting them slip past.
+//
+// The populated case gives all six numbers a value no other carries and
+// asserts the whole sentence, because check() interpolates them positionally:
+// with the totals all equal, two of them swapped in the format call would read
+// the same and no assertion about one field could tell.
 func TestCheck_FailsWhenFindingsPresent(t *testing.T) {
-	r := report{
-		Summary: reportSummary{MissingTotal: 1},
+	tests := []struct {
+		name    string
+		summary reportSummary
+		want    string
+	}{
+		{name: "no findings passes", summary: reportSummary{Docs: 4, CleanDocs: 4}},
+		{
+			name:    "missing alone blocks",
+			summary: reportSummary{Docs: 1, DocsWithFindings: 1, MissingTotal: 1},
+			want:    "doc coverage: 1 missing, 0 orphan, 0 tier_mismatch, 0 unassigned across 1/1 docs",
+		},
+		{
+			name:    "orphan alone blocks",
+			summary: reportSummary{Docs: 1, DocsWithFindings: 1, OrphanTotal: 1},
+			want:    "doc coverage: 0 missing, 1 orphan, 0 tier_mismatch, 0 unassigned across 1/1 docs",
+		},
+		{
+			name:    "tier mismatch alone blocks",
+			summary: reportSummary{Docs: 1, DocsWithFindings: 1, TierMismatchTotal: 1},
+			want:    "doc coverage: 0 missing, 0 orphan, 1 tier_mismatch, 0 unassigned across 1/1 docs",
+		},
+		{
+			name:    "unassigned alone blocks",
+			summary: reportSummary{Docs: 1, DocsWithFindings: 1, UnassignedTotal: 1},
+			want:    "doc coverage: 0 missing, 0 orphan, 0 tier_mismatch, 1 unassigned across 1/1 docs",
+		},
+		{
+			name:    "every number lands in its own place",
+			summary: reportSummary{MissingTotal: 1, OrphanTotal: 2, TierMismatchTotal: 3, UnassignedTotal: 4, DocsWithFindings: 5, Docs: 6},
+			want:    "doc coverage: 1 missing, 2 orphan, 3 tier_mismatch, 4 unassigned across 5/6 docs",
+		},
 	}
-	if r.check() == "" {
-		t.Error("check() = empty, want non-empty")
-	}
-	// Unassigned tools (catalog gained a new group before the README
-	// Domains table was updated) must also block -check so the
-	// orchestrator routes them explicitly instead of slipping past.
-	r = report{
-		Summary: reportSummary{UnassignedTotal: 1},
-	}
-	if r.check() == "" {
-		t.Error("check() = empty with UnassignedTotal=1, want non-empty")
-	}
-	r = report{}
-	if r.check() != "" {
-		t.Errorf("check() = %q, want empty", r.check())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (report{Summary: tt.summary}).check(); got != tt.want {
+				t.Errorf("check() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -1060,6 +1101,460 @@ func TestBuildReport_LiveBaseline(t *testing.T) {
 	if branchRules.ExpectedCount == 0 {
 		t.Errorf("branch-rules.md ExpectedCount = 0, want > 0 (override should have assigned gitlab_list_branch_rules)")
 	}
+}
+
+// TestBuildReport_DocOutsideTheDomainsTable_IsReportedAllOrphan verifies a
+// Markdown file in the docs root that no README row claims and no catalog tool
+// routes to is still reported: it expects nothing, so every tool it names is
+// an orphan. Without that entry a doc could be added to the tree, document
+// tools that belong elsewhere, and never be compared with anything.
+func TestBuildReport_DocOutsideTheDomainsTable_IsReportedAllOrphan(t *testing.T) {
+	repoRoot, docsRoot, readme := writeDocFixture(t, docFixture{
+		rows: "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n",
+		docs: map[string]string{
+			"branches.md": "### `gitlab_branch_get`\n",
+			"stray.md":    "### `gitlab_stray_get`\n",
+		},
+	})
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get": {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+	}}
+
+	rep, err := buildReport(repoRoot, docsRoot, readme, catalog)
+	if err != nil {
+		t.Fatalf("buildReport() error = %v", err)
+	}
+	byDoc := map[string]fileFinding{}
+	for _, f := range rep.Files {
+		byDoc[f.DocPath] = f
+	}
+	stray, ok := byDoc["docs/stray.md"]
+	if !ok {
+		t.Fatalf("Files = %+v, want an entry for the unclaimed doc", rep.Files)
+	}
+	if stray.ExpectedCount != 0 || stray.DocumentedCount != 1 || !reflect.DeepEqual(stray.Orphan, []string{"gitlab_stray_get"}) {
+		t.Errorf("stray entry = %+v, want nothing expected and its one tool orphaned", stray)
+	}
+	if len(stray.Missing) != 0 {
+		t.Errorf("stray.Missing = %v, want none", stray.Missing)
+	}
+}
+
+// TestBuildReport_ReadmeRowWithNoToolsAndNoDoc_CountsAgreeWhileReadmeDrifts
+// pins the two count invariants on the branch that runs when a README row's
+// doc file is not on disk. A row claiming a group the catalog does not hold
+// expects nothing, so the doc-versus-catalog counts agree at zero, while the
+// count the README prints does not, which is the drift signal the Domains
+// table exists to give.
+func TestBuildReport_ReadmeRowWithNoToolsAndNoDoc_CountsAgreeWhileReadmeDrifts(t *testing.T) {
+	repoRoot, docsRoot, readme := writeDocFixture(t, docFixture{
+		rows: "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n| Retired | 7 | `gitlab_retired` | [retired.md](retired.md) |\n",
+		docs: map[string]string{"branches.md": "### `gitlab_branch_get`\n"},
+	})
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get": {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+	}}
+
+	rep, err := buildReport(repoRoot, docsRoot, readme, catalog)
+	if err != nil {
+		t.Fatalf("buildReport() error = %v", err)
+	}
+	byDoc := map[string]fileFinding{}
+	for _, f := range rep.Files {
+		byDoc[f.DocPath] = f
+	}
+	retired, ok := byDoc["docs/reference/tools/retired.md"]
+	if !ok {
+		t.Fatalf("Files = %+v, want an entry under the README row's canonical path", rep.Files)
+	}
+	if retired.ExpectedCount != 0 || retired.DocumentedCount != 0 || !retired.CountMatches {
+		t.Errorf("retired counts = %+v, want the doc and catalog counts agreeing at zero", retired)
+	}
+	if retired.ReadmeCount != 7 || retired.ReadmeCountMatches {
+		t.Errorf("retired README check = %+v, want the README's 7 reported as drift", retired)
+	}
+	if len(retired.Missing) != 0 || retired.Orphan != nil {
+		t.Errorf("retired findings = %+v, want none: the row claims a group the catalog does not hold", retired)
+	}
+	if rep.Summary.ReadmeCountDriftDocs != 1 || rep.Summary.CleanDocs != 2 {
+		t.Errorf("summary = %+v, want one drifting README count over two clean docs", rep.Summary)
+	}
+}
+
+// TestComputeTierMismatches_FoundOutOfOrder_ReportsThemSortedByTool verifies
+// the mismatch list is ordered by tool name rather than by the order the tools
+// were met in. Every caller in the command hands it an already-sorted list, so
+// the sort can only be observed by handing it one that is not; a report whose
+// row order followed the doc would churn the backlog on an unrelated edit.
+//
+// The two rows disagree in opposite directions, so a catalog tier written into
+// the documented column, or the reverse, changes what is asserted.
+func TestComputeTierMismatches_FoundOutOfOrder_ReportsThemSortedByTool(t *testing.T) {
+	doc := filepath.Join(t.TempDir(), "tools.md")
+	content := "### `gitlab_zeta_get`\n\n| Tier | **Premium** |\n\n### `gitlab_alpha_get`\n\n| Tier | **Ultimate** |\n"
+	if err := os.WriteFile(doc, []byte(content), 0o600); err != nil {
+		t.Fatalf("write doc: %v", err)
+	}
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_zeta_get":  {Name: "gitlab_zeta_get", Tier: "ultimate"},
+		"gitlab_alpha_get": {Name: "gitlab_alpha_get", Tier: "premium"},
+	}}
+
+	got := computeTierMismatches(doc, []string{"gitlab_zeta_get", "gitlab_alpha_get"}, catalog)
+	want := []tierMismatch{
+		{Tool: "gitlab_alpha_get", Catalog: "Premium", Documented: "Ultimate"},
+		{Tool: "gitlab_zeta_get", Catalog: "Ultimate", Documented: "Premium"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("computeTierMismatches() = %+v, want %+v", got, want)
+	}
+}
+
+// TestBuildReport_OwnershipRules_RouteByPrefixThenByGroupExtension pins the
+// two routings doc-ownership.json supplies, which no synthetic fixture
+// exercised before: a prefix claim takes a tool away from the doc that claimed
+// its group, the longest matching prefix wins between two docs that both match,
+// and a group claim routes a group the README's Meta-tool column never names
+// (the "various" rows). All four tools share one naming stem and three share
+// one owning group, so a rule read out of the wrong field of an ownership
+// entry, or a (doc, prefix) pair built the wrong way round, sends them to the
+// wrong file and the findings say so.
+func TestBuildReport_OwnershipRules_RouteByPrefixThenByGroupExtension(t *testing.T) {
+	repoRoot, docsRoot, readme := writeDocFixture(t, docFixture{
+		rows: "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n" +
+			"| Access & Tokens | 1 | various | [access.md](access.md) |\n" +
+			"| Security | 1 | various | [security.md](security.md) |\n" +
+			"| CI/CD | 1 | various | [ci-cd.md](ci-cd.md) |\n",
+		docs: map[string]string{
+			"branches.md": "### `gitlab_branch_get`\n",
+			"access.md":   "### `gitlab_branch_token_list`\n",
+			"security.md": "### `gitlab_branch_token_scope_list`\n",
+			"ci-cd.md":    "### `gitlab_ci_variable_list`\n",
+		},
+		ownership: `{
+  "access.md":   {"note": "rationale the parser drops", "prefixes": ["gitlab_branch_token_"]},
+  "security.md": {"prefixes": ["gitlab_branch_token_scope_"]},
+  "ci-cd.md":    {"groups": ["gitlab_ci_variable"]}
+}`,
+	})
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get":              {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+		"gitlab_branch_token_list":       {Name: "gitlab_branch_token_list", Group: "gitlab_branch"},
+		"gitlab_branch_token_scope_list": {Name: "gitlab_branch_token_scope_list", Group: "gitlab_branch"},
+		"gitlab_ci_variable_list":        {Name: "gitlab_ci_variable_list", Group: "gitlab_ci_variable"},
+	}}
+
+	rep, err := buildReport(repoRoot, docsRoot, readme, catalog)
+	if err != nil {
+		t.Fatalf("buildReport() error = %v", err)
+	}
+	expected := map[string][]string{}
+	for _, f := range rep.Files {
+		expected[f.DocPath] = append(f.Missing, f.Orphan...)
+	}
+	for doc, findings := range expected {
+		if len(findings) != 0 {
+			t.Errorf("%s = %v, want every tool routed to the doc that documents it", doc, findings)
+		}
+	}
+	want := reportSummary{Docs: 4, CleanDocs: 4}
+	if rep.Summary != want {
+		t.Errorf("summary = %+v, want %+v", rep.Summary, want)
+	}
+}
+
+// writeRepoFixture lays out a throwaway repository root for the runMain tests:
+// a go.mod so cmdutil.RepositoryRoot stops there, and the default
+// docs/reference/tools layout the command reads when no path flag overrides
+// it. The test's working directory is moved into the root, which is what the
+// command resolves every path from.
+func writeRepoFixture(t *testing.T, readmeRows string, docs map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module docfixture\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	toolsDir := filepath.Join(root, filepath.FromSlash(defaultDocsRoot))
+	if err := os.MkdirAll(toolsDir, 0o750); err != nil {
+		t.Fatalf("mkdir docs root: %v", err)
+	}
+	readme := "## Domains\n\n| Domain | Tools | Meta-tool | Document |\n| --- | ---: | --- | --- |\n" + readmeRows
+	if err := os.WriteFile(filepath.Join(toolsDir, "README.md"), []byte(readme), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	for name, body := range docs {
+		if err := os.WriteFile(filepath.Join(toolsDir, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	t.Chdir(root)
+	return root
+}
+
+// stubCatalog points the loadActionCatalog seam at a fixed answer for the
+// duration of one test, so a runMain test states its own catalog instead of
+// building the real one, and can drive the load failure that the compiled-in
+// specs never produce.
+func stubCatalog(t *testing.T, catalog *catalogSnapshot, err error) {
+	t.Helper()
+	previous := loadActionCatalog
+	loadActionCatalog = func() (*catalogSnapshot, error) { return catalog, err }
+	t.Cleanup(func() { loadActionCatalog = previous })
+}
+
+// oneBranchRow is the single-row Domains table the runMain fixtures share, and
+// oneBranchCatalog the catalog that satisfies it.
+const oneBranchRow = "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n"
+
+func oneBranchCatalog() *catalogSnapshot {
+	return &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get": {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+	}}
+}
+
+// TestRunMain_ArgumentErrors_ExitTwoWhileHelpExitsClean verifies the flag set
+// reports through runMain's return value rather than through an os.Exit of its
+// own: an unknown flag is exit 2, and -h is the one parse failure that exits
+// clean, as the package-level ExitOnError flag set would.
+func TestRunMain_ArgumentErrors_ExitTwoWhileHelpExitsClean(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantCode int
+		wantErr  string
+	}{
+		{name: "unknown flag", args: []string{"audit_doc_coverage", "-nope"}, wantCode: 2, wantErr: "flag provided but not defined"},
+		{name: "help", args: []string{"audit_doc_coverage", "-h"}, wantCode: 0, wantErr: "Usage of audit_doc_coverage"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stderr strings.Builder
+			if got := runMain(tt.args, &stderr); got != tt.wantCode {
+				t.Errorf("runMain() = %d, want %d (stderr %q)", got, tt.wantCode, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tt.wantErr) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestRunMain_FailingStage_NamesItOnStderrAndExitsOne walks the four stages
+// that can fail between the flags and the written backlog, and holds each to
+// exit 1 with a message naming the stage. A command that reported them all the
+// same way would leave a CI log saying only that the audit did not run.
+func TestRunMain_FailingStage_NamesItOnStderrAndExitsOne(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) []string
+		wantErr string
+	}{
+		{
+			name: "no repository root above the working directory",
+			setup: func(t *testing.T) []string {
+				t.Helper()
+				t.Chdir(t.TempDir())
+				return []string{"audit_doc_coverage"}
+			},
+			wantErr: "find repository root",
+		},
+		{
+			name: "the action catalog does not build",
+			setup: func(t *testing.T) []string {
+				t.Helper()
+				writeRepoFixture(t, oneBranchRow, map[string]string{"branches.md": "### `gitlab_branch_get`\n"})
+				stubCatalog(t, nil, errors.New("specs refused"))
+				return []string{"audit_doc_coverage"}
+			},
+			wantErr: "load action catalog: specs refused",
+		},
+		{
+			name: "the Domains README the flag names is absent",
+			setup: func(t *testing.T) []string {
+				t.Helper()
+				writeRepoFixture(t, oneBranchRow, map[string]string{"branches.md": "### `gitlab_branch_get`\n"})
+				stubCatalog(t, oneBranchCatalog(), nil)
+				return []string{"audit_doc_coverage", "-readme-path", "docs/reference/tools/absent.md"}
+			},
+			wantErr: "build doc coverage report: load doc mapping from",
+		},
+		{
+			name: "the backlog path cannot be created",
+			setup: func(t *testing.T) []string {
+				t.Helper()
+				root := writeRepoFixture(t, oneBranchRow, map[string]string{"branches.md": "### `gitlab_branch_get`\n"})
+				stubCatalog(t, oneBranchCatalog(), nil)
+				blocker := filepath.Join(root, "blocker")
+				if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
+					t.Fatalf("write blocker: %v", err)
+				}
+				return []string{"audit_doc_coverage", "-output", filepath.Join(blocker, "backlog.json")}
+			},
+			wantErr: "write report",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := tt.setup(t)
+			var stderr strings.Builder
+			if got := runMain(args, &stderr); got != 1 {
+				t.Errorf("runMain() = %d, want 1", got)
+			}
+			if !strings.Contains(stderr.String(), tt.wantErr) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestRunMain_CheckMode_ByFindings verifies the gate: a documented catalog
+// exits 0 and says nothing, while a doc missing one of its tools exits 1 and
+// prints the same sentence check() composes. The gate writes no backlog either
+// way, which is what lets CI run it on a read-only checkout.
+func TestRunMain_CheckMode_ByFindings(t *testing.T) {
+	tests := []struct {
+		name     string
+		branches string
+		wantCode int
+		wantErr  string
+	}{
+		{name: "documented catalog passes", branches: "### `gitlab_branch_get`\n", wantCode: 0},
+		{
+			name:     "undocumented tool blocks",
+			branches: "No tools here.\n",
+			wantCode: 1,
+			wantErr:  "doc coverage: 1 missing, 0 orphan, 0 tier_mismatch, 0 unassigned across 1/1 docs",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeRepoFixture(t, oneBranchRow, map[string]string{"branches.md": tt.branches})
+			stubCatalog(t, oneBranchCatalog(), nil)
+			backlog := filepath.Join(root, "backlog.json")
+
+			var stderr strings.Builder
+			if got := runMain([]string{"audit_doc_coverage", "-check", "-output", backlog}, &stderr); got != tt.wantCode {
+				t.Errorf("runMain() = %d, want %d (stderr %q)", got, tt.wantCode, stderr.String())
+			}
+			if strings.TrimSpace(stderr.String()) != tt.wantErr {
+				t.Errorf("stderr = %q, want %q", stderr.String(), tt.wantErr)
+			}
+			if _, err := os.Stat(backlog); !os.IsNotExist(err) {
+				t.Errorf("os.Stat(backlog) error = %v, want the gate to write nothing", err)
+			}
+		})
+	}
+}
+
+// TestRunMain_WritesTheBacklog_AndGapsOnlyDropsCleanDocs drives the writing
+// half of the command: the default run records every doc, -gaps-only records
+// only those with a finding, and both end in a newline so the file is a
+// well-formed text file rather than a truncated-looking one.
+//
+// The Domains table lists Tags before Branches, which is not their alphabetical
+// order, so the recorded order is the README's rather than the filesystem
+// walk's, which is the property assembleFileList exists for. The keys of the
+// written object are read as well as the parsed struct: a report read back into the
+// type that wrote it agrees with itself whatever its json tags spell, so two
+// tags exchanged would round-trip silently while every reader of the backlog
+// saw the counts the other way round.
+func TestRunMain_WritesTheBacklog_AndGapsOnlyDropsCleanDocs(t *testing.T) {
+	rows := "| Tags | 1 | `gitlab_tag` | [tags.md](tags.md) |\n" + oneBranchRow
+	docs := map[string]string{
+		"branches.md": "### `gitlab_branch_get`\n",
+		"tags.md":     "No tools here.\n",
+	}
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get": {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+		"gitlab_tag_get":    {Name: "gitlab_tag_get", Group: "gitlab_tag"},
+	}}
+
+	tests := []struct {
+		name      string
+		args      []string
+		wantPaths []string
+		wantDocs  int
+		wantClean int
+	}{
+		{
+			name:      "every doc is recorded in the README's own order",
+			wantPaths: []string{"docs/reference/tools/tags.md", "docs/reference/tools/branches.md"},
+			wantDocs:  2,
+			wantClean: 1,
+		},
+		{
+			name:      "gaps-only keeps the doc with the finding",
+			args:      []string{"-gaps-only"},
+			wantPaths: []string{"docs/reference/tools/tags.md"},
+			wantDocs:  1,
+			wantClean: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeRepoFixture(t, rows, docs)
+			stubCatalog(t, catalog, nil)
+			backlog := filepath.Join(root, "backlog.json")
+
+			args := append([]string{"audit_doc_coverage", "-output", backlog}, tt.args...)
+			var stderr strings.Builder
+			if got := runMain(args, &stderr); got != 0 {
+				t.Fatalf("runMain() = %d, want 0 (stderr %q)", got, stderr.String())
+			}
+
+			raw, err := os.ReadFile(backlog) //#nosec G304 -- path built by this test
+			if err != nil {
+				t.Fatalf("read backlog: %v", err)
+			}
+			if !strings.HasSuffix(string(raw), "}\n") {
+				t.Errorf("backlog tail = %q, want a trailing newline", string(raw[max(0, len(raw)-8):]))
+			}
+			var got report
+			if uerr := json.Unmarshal(raw, &got); uerr != nil {
+				t.Fatalf("parse backlog: %v", uerr)
+			}
+			paths := make([]string, 0, len(got.Files))
+			for _, f := range got.Files {
+				paths = append(paths, f.DocPath)
+			}
+			if !reflect.DeepEqual(paths, tt.wantPaths) {
+				t.Errorf("doc paths = %v, want %v", paths, tt.wantPaths)
+			}
+			if got.SchemaVersion != schemaVersion {
+				t.Errorf("SchemaVersion = %d, want %d", got.SchemaVersion, schemaVersion)
+			}
+			want := reportSummary{Docs: tt.wantDocs, DocsWithFindings: 1, MissingTotal: 1, CleanDocs: tt.wantClean}
+			if got.Summary != want {
+				t.Errorf("summary = %+v, want %+v", got.Summary, want)
+			}
+			assertTagsObjectKeys(t, raw)
+		})
+	}
+}
+
+// assertTagsObjectKeys reads the tags.md entry out of the written backlog as
+// plain JSON and checks the two counts under the names they are published
+// under. tags.md expects one tool and documents none, so the pair carries two
+// different numbers and the keys cannot be exchanged without the values
+// following.
+func assertTagsObjectKeys(t *testing.T, raw []byte) {
+	t.Helper()
+	var document struct {
+		Files []map[string]any `json:"files"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("parse backlog as plain JSON: %v", err)
+	}
+	for _, entry := range document.Files {
+		if entry["doc_path"] != "docs/reference/tools/tags.md" {
+			continue
+		}
+		if entry["expected_count"] != float64(1) || entry["documented_count"] != float64(0) {
+			t.Errorf("tags.md object = %v, want expected_count 1 and documented_count 0", entry)
+		}
+		return
+	}
+	t.Errorf("files = %v, want an object under doc_path docs/reference/tools/tags.md", document.Files)
 }
 
 // repoRootFromTest walks upward from the test working directory to

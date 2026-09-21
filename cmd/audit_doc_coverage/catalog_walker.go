@@ -60,12 +60,14 @@ func loadCatalog() (*catalogSnapshot, error) {
 				continue
 			}
 			// Some IndividualTool.Name values collide across groups
-			// (e.g. compatibility aliases). The first registration
-			// wins; surface a stable, deterministic projection by
-			// only overwriting empty-tier entries when a richer
-			// record arrives, or vice-versa, so the auditor's view
-			// does not silently flip on import order.
-			if existing, ok := out.Tools[name]; ok && existing.Group != "" && existing.Group != group.ToolName {
+			// (e.g. compatibility aliases). The first group to
+			// register a name keeps it, so the auditor's view does
+			// not flip with the order Groups() happens to return.
+			//
+			// A stored Group is never empty, so it is not checked
+			// for: a Group reaches the catalog through AddGroup,
+			// which refuses one whose trimmed ToolName is blank.
+			if existing, ok := out.Tools[name]; ok && existing.Group != group.ToolName {
 				continue
 			}
 			out.Tools[name] = catalogTool{
