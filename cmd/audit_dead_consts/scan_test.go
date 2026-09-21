@@ -812,23 +812,71 @@ func TestVariantName_TestDecorations_ResolveToOnePackage(t *testing.T) {
 // one package it is for: the external test package ends in "_test" and is
 // source of this repository, and a package whose last element merely
 // contains "test" is an ordinary package.
+//
+// The last two cases are why the path is not the test. A directory may be
+// named "foo.test", and the package in it then carries a path ending exactly
+// as the synthesized executable does while being source somebody wrote;
+// skipping it would drop every constant it declares and report the package
+// clean. What separates them is whether the same load produced a test variant
+// for the package the suffix claims the executable was built for, which is the
+// fact [packagesUnderTest] reads off ForTest.
 func TestIsTestMain_OnlyTheSynthesizedMain_IsPassedOver(t *testing.T) {
+	// The load these cases are judged against: "example.com/p" is under test,
+	// so its executable is real, and nothing was built for "example.com/tool".
+	underTest := packagesUnderTest([]*packages.Package{
+		{Name: "p", PkgPath: "example.com/p [example.com/p.test]", ForTest: "example.com/p"},
+		{Name: "p_test", PkgPath: "example.com/p_test [example.com/p.test]", ForTest: "example.com/p"},
+	})
 	cases := []struct {
 		name string
-		path string
+		pkg  *packages.Package
 		want bool
 	}{
-		{"plain package", "example.com/p", false},
-		{"external test package", "example.com/p_test", false},
-		{"package named after tests", "example.com/testutil", false},
-		{"synthesized test main", "example.com/p.test", true},
+		{"plain package", &packages.Package{Name: "p", PkgPath: "example.com/p"}, false},
+		{"external test package", &packages.Package{Name: "p_test", PkgPath: "example.com/p_test"}, false},
+		{"package named after tests", &packages.Package{Name: "testutil", PkgPath: "example.com/testutil"}, false},
+		{
+			name: "a real package whose directory is named .test",
+			pkg:  &packages.Package{Name: "harness", PkgPath: "example.com/harness.test"},
+			want: false,
+		},
+		{
+			name: "a main package of its own whose directory is named .test",
+			pkg:  &packages.Package{Name: "main", PkgPath: "example.com/tool.test"},
+			want: false,
+		},
+		{
+			name: "synthesized test executable",
+			pkg:  &packages.Package{Name: "main", PkgPath: "example.com/p.test"},
+			want: true,
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := isTestMain(testCase.path); got != testCase.want {
-				t.Fatalf("isTestMain(%q) = %v, want %v", testCase.path, got, testCase.want)
+			if got := isTestMain(testCase.pkg, underTest); got != testCase.want {
+				t.Fatalf("isTestMain(%q) = %v, want %v", testCase.pkg.PkgPath, got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestPackagesUnderTest_ReadsTheVariantsRatherThanTheExecutable pins where the
+// name of a package under test is legible. `go list` fills ForTest on the
+// variants it reports as "p [q.test]" and leaves it empty on the executable
+// "q.test" itself, so reading it off the executable would collect nothing and
+// every synthesized main would then be counted as a package of this
+// repository.
+func TestPackagesUnderTest_ReadsTheVariantsRatherThanTheExecutable(t *testing.T) {
+	got := packagesUnderTest([]*packages.Package{
+		{Name: "p", PkgPath: "example.com/p"},
+		{Name: "p", PkgPath: "example.com/p [example.com/p.test]", ForTest: "example.com/p"},
+		{Name: "main", PkgPath: "example.com/p.test"},
+	})
+	if len(got) != 1 {
+		t.Fatalf("packagesUnderTest = %v, want the one package a variant names", got)
+	}
+	if _, ok := got["example.com/p"]; !ok {
+		t.Errorf("packagesUnderTest = %v, want it to hold %q", got, "example.com/p")
 	}
 }
 

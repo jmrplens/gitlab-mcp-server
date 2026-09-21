@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"go/token"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -155,8 +156,17 @@ func answeringInstanceRecordingAuthorization(t *testing.T) (endpoint string, aut
 			seen = offered
 			mutex.Unlock()
 		}
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end rather than once into a ContentLength-sized
+		// buffer: a single Read may return fewer bytes than it was given,
+		// and a short one that stopped before "metadata" would route the
+		// version query to the introspection answer.
+		payload, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("reading the request body: %v", readErr)
+			http.Error(w, "unreadable body", http.StatusInternalServerError)
+
+			return
+		}
 		switch {
 		case !strings.Contains(string(payload), "metadata"):
 			_, _ = w.Write([]byte(introspectionAnswer(queryOnly)))
@@ -368,8 +378,15 @@ func TestRun_Verbose_ListsWhatItAccepted(t *testing.T) {
 
 // TestRun_ARelativeDir_StillTrimsTheFindingsToIt verifies the one thing the
 // audit does with `-dir` besides handing it to the loader: findings come out of
-// the loader positioned absolutely, so the root they are trimmed against is
-// made absolute first, whatever the flag was written as.
+// the loader positioned absolutely and with every symlink resolved, so the root
+// they are trimmed against is made both first, whatever the flag was written
+// as.
+//
+// Both halves of that are asserted because absolute alone passes here on Linux
+// and fails on macOS, where a temp directory is reached through /var and read
+// back through /private/var. The absence check names both spellings for the
+// same reason: against the unresolved one alone it would pass on macOS while
+// the finding still carried the resolved one.
 //
 // It is also what pins the branch beside it. `filepath.Abs` fails only when the
 // working directory cannot be resolved, and a relative `-dir` is the only shape
@@ -390,9 +407,26 @@ func TestRun_ARelativeDir_StillTrimsTheFindingsToIt(t *testing.T) {
 	if !strings.Contains(errOut.String(), "(broken/broken.go:") {
 		t.Errorf("the finding is not trimmed to the relative root:\n%s", errOut.String())
 	}
-	if strings.Contains(errOut.String(), root) {
-		t.Errorf("the finding still carries the absolute path %q:\n%s", root, errOut.String())
+	for _, absolute := range rootSpellings(t, root) {
+		if strings.Contains(errOut.String(), absolute) {
+			t.Errorf("the finding still carries the absolute path %q:\n%s", absolute, errOut.String())
+		}
 	}
+}
+
+// rootSpellings returns every absolute path the fixture root can be named by:
+// the one [testing.T.TempDir] handed out and, where they differ, the one every
+// symlink resolves to. macOS is where they differ, /var being a link to
+// /private/var, and asserting against one spelling there says nothing about
+// the other.
+func rootSpellings(t *testing.T, root string) []string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil || resolved == root {
+		return []string{root}
+	}
+
+	return []string{root, resolved}
 }
 
 // TestRun_ADocumentGitLabWouldRefuse_Fails verifies the finding: a non-zero

@@ -106,11 +106,21 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	// Positions come out of the loader absolute, so the root a finding is
-	// trimmed against has to be absolute too, whatever -dir was written as.
+	// Positions come out of the loader absolute and with every symlink
+	// resolved, so the root a finding is trimmed against has to be both,
+	// whatever -dir was written as. Absolute alone is not enough: os.Getwd
+	// answers with the logical path when PWD names the same directory, so on
+	// a macOS temp directory the root reads /var/folders/... while the same
+	// file reads /private/var/folders/... in the finding, and the trim
+	// silently does nothing. EvalSymlinks fails only on a path that is not
+	// there, which the loader has just read, and the absolute form is the
+	// right answer if it ever does.
 	root := cfg.dir
 	if absolute, absErr := filepath.Abs(cfg.dir); absErr == nil {
 		root = absolute
+		if resolved, linkErr := filepath.EvalSymlinks(absolute); linkErr == nil {
+			root = resolved
+		}
 	}
 
 	if cfg.verbose {

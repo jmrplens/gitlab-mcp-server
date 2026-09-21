@@ -87,8 +87,9 @@ func newScanner(root string) *scanner {
 // reads none, and counting it put a package the repository never wrote in
 // the summary of every tested package.
 func (s *scanner) observe(loaded []*packages.Package) {
+	underTest := packagesUnderTest(loaded)
 	for _, pkg := range loaded {
-		if isTestMain(pkg.PkgPath) {
+		if isTestMain(pkg, underTest) {
 			continue
 		}
 		s.packages[trimModulePath(variantName(pkg.PkgPath))] = struct{}{}
@@ -232,11 +233,40 @@ func hasIgnoredGoFile(pkg *packages.Package) bool {
 	return false
 }
 
-// isTestMain reports whether a loaded package path names the test main the
-// go tool synthesizes for a package under test, "p.test", which is neither
-// source of this repository nor a name a second load can be asked for.
-func isTestMain(pkgPath string) bool {
-	return strings.HasSuffix(pkgPath, ".test")
+// packagesUnderTest collects, from one load, the import paths the loader says
+// a test executable was built for. `go list` reports a test variant as
+// "p [q.test]" and fills [packages.Package.ForTest] with q for it; the
+// executable itself arrives as plain "q.test" with ForTest empty, so the
+// variants are where the name of the package under test can be read.
+func packagesUnderTest(loaded []*packages.Package) map[string]struct{} {
+	underTest := make(map[string]struct{})
+	for _, pkg := range loaded {
+		if pkg.ForTest != "" {
+			underTest[pkg.ForTest] = struct{}{}
+		}
+	}
+
+	return underTest
+}
+
+// isTestMain reports whether a loaded package is the test executable the go
+// tool synthesizes for a package under test, "q.test", which is neither source
+// of this repository nor a name a second load can be asked for.
+//
+// The path alone does not answer it. A directory may be named "foo.test", and
+// the package in it then carries a path ending exactly as the synthesized
+// executable does while being source somebody wrote; passing over it would
+// drop every constant it declares and report the package clean. So the path is
+// only believed when the loader also produced a test variant for the package
+// the suffix claims this was built for, which is a fact about the load rather
+// than a guess about a name.
+func isTestMain(pkg *packages.Package, underTest map[string]struct{}) bool {
+	if pkg.Name != "main" || !strings.HasSuffix(pkg.PkgPath, ".test") {
+		return false
+	}
+	_, built := underTest[strings.TrimSuffix(pkg.PkgPath, ".test")]
+
+	return built
 }
 
 // variantName is a package's import path with the test-variant decoration the
