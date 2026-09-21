@@ -91,6 +91,15 @@ type recording struct {
 // describe itself is a race with its own removal.
 var shardInfo = func(entry os.DirEntry) (os.FileInfo, error) { return entry.Info() }
 
+// readDirEntries lists the shard directory. It is a variable for the reason
+// shardInfo is one: the third refusal below, where the path is there, is a
+// directory, and still cannot be read, is a permission or a resource limit,
+// and a test cannot arrange either — the suite runs as root both in CI and on
+// the builder, and root is exempt from the permission half. Leaving that
+// branch unreached would leave the three refusals, which are fixed by three
+// different things, told apart by nothing.
+var readDirEntries = os.ReadDir
+
 // readShards reads every shard in dir.
 //
 // An empty directory is an error rather than an empty inventory: the shards
@@ -98,7 +107,7 @@ var shardInfo = func(entry os.DirEntry) (os.FileInfo, error) { return entry.Info
 // with recording on, and writing the empty result would erase the artifact and
 // call it a change.
 func readShards(dir string) (recording, error) {
-	entries, err := os.ReadDir(dir)
+	entries, err := readDirEntries(dir)
 	if err != nil {
 		// Which of the two refusals this is cannot be read off the error
 		// class, because the two platforms disagree about it. Opening a

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,6 +14,11 @@ import (
 )
 
 const (
+	// toolName is the command's own name, used as the flag set's name so a
+	// usage message names the command rather than the test binary that drove
+	// it.
+	toolName = "gen_request_inventory"
+
 	// defaultShardDir is where `make gen-request-inventory` points the
 	// recorder, under the gitignored build directory: a shard is a byproduct
 	// of one suite run and only the merged result is worth keeping.
@@ -22,22 +28,49 @@ const (
 	defaultOutputPath = requestinventory.Path
 )
 
-// main parses the flags, merges the shards, and either rewrites the committed
-// inventory or reports that it has drifted.
+// osExit is os.Exit behind a variable, so the one line main carries is
+// reachable from a test rather than only from a process.
+var osExit = os.Exit
+
+// main merges the shards and either rewrites the committed inventory or
+// reports that it has drifted.
 func main() {
-	shardDir := flag.String("shards", defaultShardDir, "directory holding the recorded request shards, absolute or relative to the repository root")
-	outputPath := flag.String("out", defaultOutputPath, "committed request inventory path")
-	check := flag.Bool("check", false, "verify the committed inventory is current without writing it")
-	verbose := flag.Bool("v", false, "name every package the catalog owns actions in that recorded no request")
-	flag.Parse()
+	osExit(runMain(os.Args[1:], os.Stderr))
+}
+
+// runMain parses args, the command line with the program name already removed,
+// and returns the process exit code.
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is an exit code this function returns instead of an
+// os.Exit the seam above never sees; -h is the one parse failure that exits
+// clean, as ExitOnError would. The two failures below both exit 1 and are
+// fixed differently, so each names its own stage: one means this is not a
+// checkout, the other that the merge or the comparison refused.
+func runMain(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	shardDir := fs.String("shards", defaultShardDir, "directory holding the recorded request shards, absolute or relative to the repository root")
+	outputPath := fs.String("out", defaultOutputPath, "committed request inventory path")
+	check := fs.Bool("check", false, "verify the committed inventory is current without writing it")
+	verbose := fs.Bool("v", false, "name every package the catalog owns actions in that recorded no request")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+		fmt.Fprintf(stderr, "find repository root: %v\n", err)
+		return 1
 	}
-	if runErr := run(os.Stderr, root, options{shardDir: *shardDir, outputPath: *outputPath, check: *check, verbose: *verbose}); runErr != nil {
-		cmdutil.Fatalf("%v", runErr)
+	if runErr := run(stderr, root, options{shardDir: *shardDir, outputPath: *outputPath, check: *check, verbose: *verbose}); runErr != nil {
+		fmt.Fprintf(stderr, "%v\n", runErr)
+		return 1
 	}
+	return 0
 }
 
 // options carries what the flags decided.

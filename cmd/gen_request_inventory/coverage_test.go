@@ -28,15 +28,28 @@ func makeToolsPackage(t *testing.T, root, name string) {
 // TestSummarize_Rows_CountThePathsAndTheCatalog verifies the line a human
 // reads after a recording run, including that -v names the packages behind the
 // count rather than only scoring them.
+//
+// Every count in the fixture is a different number, which is what makes the
+// assertions about them mean anything: five counts are printed and three of
+// them share one Fprintf, so a fixture where the rows, the distinct paths and
+// the packages all came to one — or where the silent actions, their packages
+// and the unmapped actions did — reads identically whichever of them each hole
+// is filled from.
 func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 	root := t.TempDir()
-	makeToolsPackage(t, root, "issues")
-	makeToolsPackage(t, root, "adminspecs")
+	for _, pkg := range []string{"issues", "tags", "adminspecs", "systemhooks"} {
+		makeToolsPackage(t, root, pkg)
+	}
 	original := catalogActions
 	catalogActions = func() ([]requestinventory.Action, error) {
 		return []requestinventory.Action{
 			{ID: "issue.list", Owner: "issues"},
+			{ID: "issue.get", Owner: "issues"},
+			{ID: "tag.list", Owner: "tags"},
+			{ID: "tag.get", Owner: "tags"},
 			{ID: "topic.list", Owner: "adminspecs"},
+			{ID: "topic.create", Owner: "adminspecs"},
+			{ID: "hook.list", Owner: "systemhooks"},
 			{ID: "ghost.list", Owner: "nowhere"},
 		}, nil
 	}
@@ -44,6 +57,9 @@ func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 	rows := []requestinventory.Row{
 		{Package: "internal/tools/issues", Path: "/projects/:id/issues", Method: "GET"},
 		{Package: "internal/tools/issues", Path: "/projects/:id/issues", Method: "POST"},
+		{Package: "internal/tools/issues", Path: "/projects/:id/issues/:iid", Method: "GET"},
+		{Package: "internal/tools/tags", Path: "/projects/:id/repository/tags", Method: "GET"},
+		{Package: "internal/tools/tags", Path: "/projects/:id/repository/tags", Method: "POST"},
 	}
 
 	written := time.Date(2026, 9, 15, 10, 30, 0, 0, time.UTC)
@@ -51,7 +67,14 @@ func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 	summarize(&quiet, root, rows, written, false)
 	summarize(&verbose, root, rows, written, true)
 
-	for _, want := range []string{"2 rows", "1 distinct paths", "1 packages", "recorded 2026-09-15T10:30:00Z", "1 of 3 catalog actions"} {
+	for _, want := range []string{
+		"5 rows",
+		"3 distinct paths",
+		"2 packages",
+		"recorded 2026-09-15T10:30:00Z",
+		"4 of 8 catalog actions",
+		"3 in 2 package(s) recorded none, and 1 are owned by a name that is no package under internal/tools",
+	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(quiet.String(), want) {
 				t.Errorf("summary = %q, want it to contain %q", quiet.String(), want)
@@ -63,13 +86,22 @@ func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 			t.Errorf("summary names an owner without -v: %q", quiet.String())
 		}
 	})
-	for _, want := range []string{"silent: internal/tools/adminspecs", "no package of that name: nowhere"} {
+	for _, want := range []string{
+		"silent: internal/tools/adminspecs",
+		"silent: internal/tools/systemhooks",
+		"no package of that name: nowhere",
+	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(verbose.String(), want) {
 				t.Errorf("verbose summary = %q, want it to contain %q", verbose.String(), want)
 			}
 		})
 	}
+	t.Run("a silent package is never listed as no package of that name", func(t *testing.T) {
+		if strings.Contains(verbose.String(), "no package of that name: adminspecs") {
+			t.Errorf("verbose summary = %q, want the two owner lists kept apart", verbose.String())
+		}
+	})
 }
 
 // TestSummarize_CatalogFailure_KeepsTheInventory verifies that a catalog that

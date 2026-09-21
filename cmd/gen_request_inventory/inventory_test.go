@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -125,15 +126,6 @@ func TestReadShards_ShardThatCannotBeDescribed_StillMerges(t *testing.T) {
 	}
 }
 
-// TestReadShards_NothingRecorded_IsAnError verifies the mistake that would
-// otherwise be invisible: a merge run without a recorded suite behind it would
-// write an empty inventory and report the whole artifact as a change.
-//
-// A shard directory that is not there says the same thing as an empty one and
-// names the target that would fill it, because nothing but a recorded run
-// creates that directory: a checkout running the gate before recording
-// anything is the ordinary way to arrive here, and it used to be answered with
-// a bare "no such file or directory".
 // TestReadShards_ShardHoldingNoRequest_IsAnError verifies that a shard with no
 // record in it stops the merge instead of contributing nothing to it.
 //
@@ -189,6 +181,15 @@ func TestReadShards_ShardHoldingNoRequest_IsAnError(t *testing.T) {
 	}
 }
 
+// TestReadShards_NothingRecorded_IsAnError verifies the mistake that would
+// otherwise be invisible: a merge run without a recorded suite behind it would
+// write an empty inventory and report the whole artifact as a change.
+//
+// A shard directory that is not there says the same thing as an empty one and
+// names the target that would fill it, because nothing but a recorded run
+// creates that directory: a checkout running the gate before recording
+// anything is the ordinary way to arrive here, and it used to be answered with
+// a bare "no such file or directory".
 func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -229,6 +230,76 @@ func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
 				t.Errorf("error = %q, want it to contain %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// TestReadShards_ADirectoryThatCannotBeRead_IsItsOwnRefusal verifies the third
+// answer readShards can give, and that it reads as neither of the other two.
+//
+// A path that is there, is a directory, and still will not be listed is not
+// "you pointed this at a file" and not "nothing has recorded a run", and the
+// three are fixed by three different things. No test can arrange the permission
+// or the resource limit that produces it, since the suite runs as root both in
+// CI and on the builder and root is exempt from the first, so the listing is
+// replaced for the duration.
+func TestReadShards_ADirectoryThatCannotBeRead_IsItsOwnRefusal(t *testing.T) {
+	dir := t.TempDir()
+	writeShard(t, dir, "requests-1.jsonl", sampleRecord)
+	original := readDirEntries
+	readDirEntries = func(string) ([]os.DirEntry, error) { return nil, errors.New("too many open files") }
+	t.Cleanup(func() { readDirEntries = original })
+
+	_, err := readShards(dir)
+
+	if err == nil {
+		t.Fatal("readShards error = nil, want the directory reported unreadable")
+	}
+	if !strings.Contains(err.Error(), "read shard directory: too many open files") {
+		t.Errorf("error = %q, want it to carry the listing failure", err)
+	}
+	for _, other := range []string{"is not a directory", "nothing has recorded a run here"} {
+		t.Run(other, func(t *testing.T) {
+			if strings.Contains(err.Error(), other) {
+				t.Errorf("error = %q, want it not to read as %q", err, other)
+			}
+		})
+	}
+}
+
+// TestReadShard_RecordFields_AreReadFromTheNamesTheRecorderWrites verifies the
+// contract this type repeats rather than shares: internal/testutil writes these
+// JSON names and this struct reads them, so a name decoded into the wrong field
+// is a straight-line assignment neither gate can see and the artifact would
+// publish a body under `query` with every test still green. Every value in the
+// fixture is distinct so no two fields can agree by accident.
+func TestReadShard_RecordFields_AreReadFromTheNamesTheRecorderWrites(t *testing.T) {
+	dir := t.TempDir()
+	writeShard(t, dir, "requests-1.jsonl", `{"package":"internal/tools/epics","test":"TestEpicCreate","kind":"graphql",`+
+		`"method":"POST","path":"/api/graphql","query":["query_name"],"body":["body_name"],`+
+		`"operation":"mutation createEpic","variables":["variable_name"],"identifiers":{":group_id":2}}`)
+
+	recorded, err := readShards(dir)
+	if err != nil {
+		t.Fatalf("readShards error = %v", err)
+	}
+
+	if len(recorded.records) != 1 {
+		t.Fatalf("read %d record(s), want 1: %+v", len(recorded.records), recorded.records)
+	}
+	want := shardRecord{
+		Package:     "internal/tools/epics",
+		Test:        "TestEpicCreate",
+		Kind:        requestinventory.KindGraphQL,
+		Method:      http.MethodPost,
+		Path:        "/api/graphql",
+		Query:       []string{"query_name"},
+		Body:        []string{"body_name"},
+		Operation:   "mutation createEpic",
+		Variables:   []string{"variable_name"},
+		Identifiers: map[string]int{":group_id": 2},
+	}
+	if !reflect.DeepEqual(recorded.records[0], want) {
+		t.Errorf("record = %+v, want %+v", recorded.records[0], want)
 	}
 }
 
@@ -301,6 +372,47 @@ func TestMerge_SameEndpoint_IsOneRowWithTheUnionOfParameters(t *testing.T) {
 	}
 	if rows[1].Query != nil {
 		t.Errorf("the POST carries %v, want no query names", rows[1].Query)
+	}
+}
+
+// TestMerge_ARecord_LandsEveryFieldOnItsOwnRowField verifies that the fold
+// carries each recorded field to the field of the row that means it, and that
+// the test name is the one thing it drops.
+//
+// None of that is a branch, so neither gate can be wrong about it, and the
+// other merge tests here fill one name list at a time: with only a query, a row
+// publishing the body names under `variables` reads exactly like a correct one.
+// Every value below is distinct for the same reason.
+func TestMerge_ARecord_LandsEveryFieldOnItsOwnRowField(t *testing.T) {
+	rows := merge([]shardRecord{{
+		Package:     "internal/tools/epics",
+		Test:        "TestEpicCreate",
+		Kind:        requestinventory.KindGraphQL,
+		Method:      http.MethodPost,
+		Path:        "/api/graphql",
+		Query:       []string{"query_name"},
+		Body:        []string{"body_name"},
+		Operation:   "mutation createEpic",
+		Variables:   []string{"variable_name"},
+		Identifiers: map[string]int{":group_id": 2},
+	}})
+
+	if len(rows) != 1 {
+		t.Fatalf("merged into %d row(s), want 1: %+v", len(rows), rows)
+	}
+	want := row{
+		Package:     "internal/tools/epics",
+		Kind:        requestinventory.KindGraphQL,
+		Method:      http.MethodPost,
+		Path:        "/api/graphql",
+		Query:       []string{"query_name"},
+		Body:        []string{"body_name"},
+		Operation:   "mutation createEpic",
+		Variables:   []string{"variable_name"},
+		Identifiers: map[string]int{":group_id": 2},
+	}
+	if !reflect.DeepEqual(rows[0], want) {
+		t.Errorf("row = %+v, want %+v", rows[0], want)
 	}
 }
 
@@ -394,37 +506,112 @@ func TestMerge_Rows_AreTotallyOrdered(t *testing.T) {
 	}
 }
 
+// TestLess_KeyFields_DecideInPriorityOrder verifies which field of the key
+// settles the order when an earlier one and a later one disagree.
+//
+// The priority is not a detail that only the comparator knows about: it is the
+// order the committed artifact's rows are written in, and two fields exchanged
+// leaves the order just as total and just as reproducible, so the test above
+// would still pass while the next recording rewrote the whole file. Each case
+// makes the earlier field ask for one order and the later field for the other,
+// and asserts the earlier wins and that the comparison is strict both ways.
+func TestLess_KeyFields_DecideInPriorityOrder(t *testing.T) {
+	tests := []struct {
+		name   string
+		first  row
+		second row
+	}{
+		{
+			name:   "the package decides before the path",
+			first:  row{Package: "internal/tools/aaa", Path: "/zzz"},
+			second: row{Package: "internal/tools/zzz", Path: "/aaa"},
+		},
+		{
+			name:   "the path decides before the method",
+			first:  row{Package: "internal/tools/issues", Path: "/aaa", Method: http.MethodPost},
+			second: row{Package: "internal/tools/issues", Path: "/zzz", Method: http.MethodGet},
+		},
+		{
+			name:   "the method decides before the operation",
+			first:  row{Package: "internal/tools/issues", Path: "/graphql", Method: http.MethodGet, Operation: "query zzz"},
+			second: row{Package: "internal/tools/issues", Path: "/graphql", Method: http.MethodPost, Operation: "query aaa"},
+		},
+		{
+			name:   "the operation decides before the kind",
+			first:  row{Package: "internal/tools/issues", Path: "/graphql", Method: http.MethodPost, Operation: "mutation aaa", Kind: "zzz"},
+			second: row{Package: "internal/tools/issues", Path: "/graphql", Method: http.MethodPost, Operation: "query zzz", Kind: "aaa"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !less(tt.first, tt.second) {
+				t.Errorf("less(%+v, %+v) = false, want the first row to sort first", tt.first, tt.second)
+			}
+			if less(tt.second, tt.first) {
+				t.Errorf("less(%+v, %+v) = true, want the order to be strict", tt.second, tt.first)
+			}
+		})
+	}
+}
+
 // TestDifferences_StaleArtifact_NamesTheRequestsThatMoved verifies what a
 // stale-artifact failure is worth: the point of committing the inventory is
 // that a handler calling a different endpoint stops being invisible, and a
 // gate answering "the file changed" would hand that back.
+//
+// Each line is asserted under the heading it belongs to rather than anywhere in
+// the report, because the two headings differ only in which way round the same
+// comparison was run and a report listing every moved request under the wrong
+// one of them would tell a reader the opposite of what happened. The unchanged
+// row is here for the other half of that: a request both sides agree on appears
+// under neither heading, which is the only case where the membership test says
+// yes.
 func TestDifferences_StaleArtifact_NamesTheRequestsThatMoved(t *testing.T) {
+	const unchanged = "/projects/:id/unchanged"
 	committed := render([]row{
-		{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"state"}},
-		{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodGet, Path: "/projects/:id/old_place"},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"state"}},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/old_place"},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: unchanged},
 	})
 	now := []row{
-		{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"per_page", "state"}},
-		{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodPost, Path: "/projects/:id/issues", Body: []string{"description", "title"}},
-		{Package: "internal/tools/issues", Kind: "graphql", Method: http.MethodPost, Path: "/graphql", Operation: "query project", Variables: []string{"fullPath"}},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"per_page", "state"}},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodPost, Path: "/projects/:id/issues", Body: []string{"description", "title"}},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: unchanged},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindGraphQL, Method: http.MethodPost, Path: "/graphql", Operation: "query project", Variables: []string{"fullPath"}},
 	}
 
 	report := differences(committed, now)
 
-	for _, want := range []string{
-		"now issued and not in the committed inventory (3)",
-		"/graphql query project $fullPath",
-		"/projects/:id/issues ?per_page,state",
-		"POST /projects/:id/issues {description,title}",
-		"in the committed inventory and no longer issued (2)",
-		"/projects/:id/old_place",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(report, want) {
-				t.Errorf("report = %q, want it to contain %q", report, want)
+	// The removed heading is written second, so cutting the report on it hands
+	// back the added section and the removed one in that order.
+	added, removed, split := strings.Cut(report, "in the committed inventory and no longer issued")
+	if !split {
+		t.Fatalf("report = %q, want both headings", report)
+	}
+	tests := []struct {
+		section string
+		want    string
+	}{
+		{section: added, want: "now issued and not in the committed inventory (3)"},
+		{section: added, want: "/graphql query project $fullPath"},
+		{section: added, want: "/projects/:id/issues ?per_page,state"},
+		{section: added, want: "POST /projects/:id/issues {description,title}"},
+		{section: removed, want: "(2)"},
+		{section: removed, want: "/projects/:id/old_place"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if !strings.Contains(tt.section, tt.want) {
+				t.Errorf("section = %q, want it to contain %q", tt.section, tt.want)
 			}
 		})
 	}
+	t.Run("a request both sides agree on is under neither heading", func(t *testing.T) {
+		if strings.Contains(report, unchanged) {
+			t.Errorf("report = %q, want it to leave %q out", report, unchanged)
+		}
+	})
 }
 
 // TestDifferences_ManyOrUnreadable_StaysReadable verifies the two edges of the
