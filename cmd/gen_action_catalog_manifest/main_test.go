@@ -2,14 +2,18 @@
 //
 // Tests verify deterministic builder discovery (sorted output, exclusion of
 // helper functions and _gen/_test.go files), deterministic manifest
-// generation, the stale-manifest detection branch used by --check, and the
-// command entry point: the exit code each outcome returns, what it reports on
-// stderr, and that main spends that code on the exit seam.
+// generation, the package clause the rendered manifest carries, the
+// stale-manifest detection branch used by --check, and the command entry
+// point: which setting each path flag addresses, the exit code each outcome
+// returns, which of the two process streams a report is written to, and that
+// main spends that code on the exit seam.
 package main
 
 import (
 	"bytes"
 	"errors"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,6 +104,26 @@ func TestGenerateManifest_IsDeterministic(t *testing.T) {
 				t.Fatalf("generated manifest missing %q:\n%s", want, first)
 			}
 		})
+	}
+}
+
+// TestGenerateManifest_PackageClause_NamesTheDirectoryItIsWrittenInto verifies
+// the rendered manifest declares the package of the directory the default
+// output path lands in. Nothing joins those two literals otherwise: the clause
+// is written by the renderer and the directory by the output default, so
+// either could move alone and this command would keep writing a file that does
+// not compile where it puts it.
+func TestGenerateManifest_PackageClause_NamesTheDirectoryItIsWrittenInto(t *testing.T) {
+	content, err := generateManifest([]string{"buildAccessActionSpecs"})
+	if err != nil {
+		t.Fatalf("generateManifest() error = %v", err)
+	}
+	file, parseErr := parser.ParseFile(token.NewFileSet(), defaultOutputPath, content, parser.PackageClauseOnly)
+	if parseErr != nil {
+		t.Fatalf("parse generated manifest: %v", parseErr)
+	}
+	if want := filepath.Base(filepath.Dir(defaultOutputPath)); file.Name.Name != want {
+		t.Errorf("generated package = %q, want %q, the package at %s", file.Name.Name, want, defaultOutputPath)
 	}
 }
 
@@ -283,6 +307,53 @@ func TestRunMain_CheckRun_ReportsStalenessWithoutWriting(t *testing.T) {
 	}
 }
 
+// TestRunMain_ExplicitPaths_ScanTheNamedSourceAndWriteTheNamedOutput verifies
+// which setting each path flag addresses: --source names the directory
+// scanned and --output the file written. Every other run here takes both
+// defaults, so the two flags could be declared under each other's name and no
+// run would notice. The fixture leaves a decoy builder at the default source
+// directory and names neither default path, so a run that scanned the wrong
+// one renders the decoy and a run that wrote to the wrong one leaves the file
+// where it was sent missing.
+func TestRunMain_ExplicitPaths_ScanTheNamedSourceAndWriteTheNamedOutput(t *testing.T) {
+	want, err := generateManifest([]string{"buildAlphaActionSpecs", "buildBetaActionSpecs"})
+	if err != nil {
+		t.Fatalf("generateManifest() error = %v", err)
+	}
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module fixture\n")
+	writeBuilderFile(t, filepath.Join(root, defaultSourceDir), "package tools\n\nfunc buildDecoyActionSpecs() {}\n")
+	writeBuilderFile(t, filepath.Join(root, "specs"), "package tools\n\nfunc buildBetaActionSpecs() {}\nfunc buildAlphaActionSpecs() {}\n")
+	t.Chdir(root)
+
+	outputPath := filepath.Join("generated", "manifest_gen.go")
+	args := []string{"gen_action_catalog_manifest", "--source", "specs", "--output", outputPath}
+	var stderr bytes.Buffer
+	if code := runMain(args, &stderr); code != 0 {
+		t.Fatalf("runMain(%v) = %d, want 0 (stderr %q)", args, code, stderr.String())
+	}
+	got, readErr := os.ReadFile(filepath.Join(root, outputPath))
+	if readErr != nil {
+		t.Fatalf("read manifest: %v", readErr)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("manifest = %q, want %q", got, want)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, defaultOutputPath)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("os.Stat(default output) = %v, want nothing written where --output did not send it", statErr)
+	}
+}
+
+// writeBuilderFile stages one builder source file in its own directory,
+// creating the directory when it is not there yet.
+func writeBuilderFile(t *testing.T, dir, source string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	writeTestFile(t, filepath.Join(dir, "action_specs.go"), source)
+}
+
 // TestRunMain_NoRepositoryAbove_ReportsTheRootLookup verifies the failure a
 // run outside a checkout gets: the root lookup is named on stderr and the exit
 // code is 1. The fixture is a temp directory, which the repository's other
@@ -359,6 +430,77 @@ func TestMain_CheckRunOverACurrentManifest_ExitsZeroThroughTheSeam(t *testing.T)
 	if code != 0 {
 		t.Errorf("main() exited %d, want 0", code)
 	}
+}
+
+// TestMain_StaleManifest_ReportsOnStderrAndExitsOne verifies the failing half
+// of the entry point: the staleness report lands on stderr rather than stdout,
+// and the code reaching the exit seam is 1. The stream matters because this
+// command is run from a Makefile target whose output a reader scans for the
+// sentence naming the command to run, and a generator that reported on stdout
+// would fold that sentence into whatever a caller redirected.
+func TestMain_StaleManifest_ReportsOnStderrAndExitsOne(t *testing.T) {
+	target := manifestFixtureRoot(t, "package tools\n")
+	stdoutPath, stderrPath := captureProcessOutput(t)
+	oldArgs := os.Args
+	os.Args = []string{"gen_action_catalog_manifest", "--check"}
+	t.Cleanup(func() { os.Args = oldArgs })
+	code := -1
+	osExit = func(got int) { code = got }
+	t.Cleanup(func() { osExit = os.Exit })
+
+	main()
+
+	if code != 1 {
+		t.Errorf("main() exited %d, want 1", code)
+	}
+	wantErr := "action spec manifest: " + target + " is stale"
+	if got := readCapture(t, stderrPath); !strings.Contains(got, wantErr) {
+		t.Errorf("stderr = %q, want containing %q", got, wantErr)
+	}
+	if got := readCapture(t, stdoutPath); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+}
+
+// captureProcessOutput points os.Stdout and os.Stderr at two files of this
+// test's own, returns their paths, and restores both afterwards. Replacing
+// them works here because main reads the two when it is called rather than at
+// package initialization, so what it writes is what these files receive.
+func captureProcessOutput(t *testing.T) (stdoutPath, stderrPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	stdoutPath = filepath.Join(dir, "stdout")
+	stderrPath = filepath.Join(dir, "stderr")
+	stdoutFile := createCaptureFile(t, stdoutPath)
+	stderrFile := createCaptureFile(t, stderrPath)
+	oldStdout, oldStderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = stdoutFile, stderrFile
+	t.Cleanup(func() {
+		os.Stdout, os.Stderr = oldStdout, oldStderr
+		_ = stdoutFile.Close()
+		_ = stderrFile.Close()
+	})
+	return stdoutPath, stderrPath
+}
+
+// createCaptureFile opens one of the files a captured stream is pointed at.
+func createCaptureFile(t *testing.T, path string) *os.File {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create %s: %v", path, err)
+	}
+	return file
+}
+
+// readCapture reads back everything a captured stream received.
+func readCapture(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(content)
 }
 
 // writeTestFile writes test file fixture data for tests.
