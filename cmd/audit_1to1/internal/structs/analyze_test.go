@@ -298,6 +298,35 @@ func TestBuildReport_Deterministic(t *testing.T) {
 	}
 }
 
+// TestBuildReport_TheCounters_AgreeWithTheGapsTheyCount verifies each
+// package's three totals are the findings under it, counted by class.
+//
+// The totals are what the summary sums, what -gaps-only filters on and what
+// every floor in this file reads, and nothing else compares them with the
+// gaps beside them: a count added to the wrong class keeps the report's total
+// and moves a backlog from one column to another, which is invisible to every
+// assertion that reads one number.
+func TestBuildReport_TheCounters_AgreeWithTheGapsTheyCount(t *testing.T) {
+	rep := cachedBuildReport(t, false)
+
+	for _, pr := range rep.Packages {
+		var missingInput, missingOutput, extraOutput int
+		for _, g := range pr.Gaps {
+			if g.Kind == "input" {
+				missingInput += len(g.MissingFields)
+			} else {
+				missingOutput += len(g.MissingFields)
+			}
+			extraOutput += len(g.ExtraFields)
+		}
+		if pr.MissingInputCount != missingInput || pr.MissingOutputCount != missingOutput || pr.ExtraOutputCount != extraOutput {
+			t.Errorf("%s counts %d/%d/%d (input, output, extra), want %d/%d/%d from its own gaps",
+				pr.Package, pr.MissingInputCount, pr.MissingOutputCount, pr.ExtraOutputCount,
+				missingInput, missingOutput, extraOutput)
+		}
+	}
+}
+
 // TestCollectPairs_Repository_ListsThePairsTheDiffRunsOver verifies the
 // exported pair listing the enum rule builds on: for every package it yields
 // exactly the input pairs analyzePackage keeps (phantoms dropped) followed by
@@ -1624,6 +1653,25 @@ func TestDisjointPhantomInput_TheOverlapEvidence_ComesFromTheSameInputStruct(t *
 	if disjointPhantomInput(solePair, bothDisjoint) {
 		t.Error("a disjoint pairing was dropped on a sibling that does not overlap either")
 	}
+
+	// The overlap is measured on the same side of client-go's dual tagging the
+	// diff reads. A request options struct tags with url alone, so a pairing
+	// that says its SDK side is read by json tags finds no field there; an
+	// overlap rule reaching for the url tag regardless would keep a pairing
+	// the diff compares against nothing.
+	urlOnly := makeStructWithTags(taggedField{name: "Query", tag: `url:"search"`, goType: tString})
+	urlPair := structPair{mcpName: "ListInput", mcpType: listInput, sdkName: "v2.ListOptions", sdkType: urlOnly, sdkURLTags: true}
+	jsonPair := structPair{mcpName: "ListInput", mcpType: listInput, sdkName: "v2.OtherOptions", sdkType: urlOnly}
+	byTagPreference := map[[2]string]structPair{
+		{"ListInput", "ListOptions"}:  urlPair,
+		{"ListInput", "OtherOptions"}: jsonPair,
+	}
+	if disjointPhantomInput(urlPair, byTagPreference) {
+		t.Error("a pairing overlapping on the url tags it is compared by was called a phantom")
+	}
+	if !disjointPhantomInput(jsonPair, byTagPreference) {
+		t.Error("a pairing compared by json tags found its overlap in url tags the diff would never match")
+	}
 }
 
 // TestLocalNamedStruct_OnlyTheHandlersOwnPackage_IsTheMCPSide verifies the
@@ -1785,12 +1833,17 @@ func TestCollectConverter_DeclarationsWithNothingToPair_RecordNoPair(t *testing.
 func TestCollectConverter_TheResultName_DecidesWhetherThePairIsRecorded(t *testing.T) {
 	const pkgPath = "example.com/x/internal/tools/p"
 	local := types.NewPackage(pkgPath, "p")
-	sdkNamed := namedStruct(types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab"), "Branch", makeStruct(structField{"Name", "name", tString}))
+	// The two sides carry different fields so that a pair holding one struct
+	// twice, or holding each on the other's side, is visible: both are
+	// *types.Struct and nothing downstream could tell them apart.
+	sdkStruct := makeStruct(structField{"Name", "name", tString})
+	mcpStruct := makeStruct(structField{"BranchName", "branch_name", tString})
+	sdkNamed := namedStruct(types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab"), "Branch", sdkStruct)
 
 	converter := func(resultName string, withParam bool) (*packages.Package, *ast.FuncDecl) {
 		resultIdent := ast.NewIdent(resultName)
 		paramIdent := ast.NewIdent("src")
-		result := namedStruct(local, resultName, makeStruct(structField{"Name", "name", tString}))
+		result := namedStruct(local, resultName, mcpStruct)
 		pkg := &packages.Package{PkgPath: pkgPath, TypesInfo: &types.Info{
 			Types: map[ast.Expr]types.TypeAndValue{
 				resultIdent: {Type: result},
@@ -1829,8 +1882,9 @@ func TestCollectConverter_TheResultName_DecidesWhetherThePairIsRecorded(t *testi
 				return
 			}
 			got := pairs[[2]string{tc.resultName, "Branch"}]
-			if got.mcpName != tc.resultName || got.sdkName != "v2.Branch" || got.sdkURLTags {
-				t.Errorf("pair = %+v, want the local name on the MCP side and the qualified SDK name on the other", got)
+			if got.mcpName != tc.resultName || got.mcpType != mcpStruct || got.mcpNamed.Obj().Name() != tc.resultName ||
+				got.sdkName != "v2.Branch" || got.sdkType != sdkStruct || got.sdkURLTags {
+				t.Errorf("pair = %+v, want the local name and struct on the MCP side and the qualified SDK ones on the other", got)
 			}
 		})
 	}
