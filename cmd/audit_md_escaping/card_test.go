@@ -16,8 +16,10 @@ import (
 // so the want lists the escaping contexts are pinned by do not move whenever
 // a card shape is added.
 var cardFixture = map[string]string{
-	"mdcard/mdcard.go":         mdcardSource,
-	"mdcardsafe/mdcardsafe.go": mdcardSafeSource,
+	"mdcard/mdcard.go":               mdcardSource,
+	"mdcardsafe/mdcardsafe.go":       mdcardSafeSource,
+	"mdcardclaimed/mdcardclaimed.go": mdcardClaimedSource,
+	"mdcardstale/mdcardstale.go":     mdcardStaleSource,
 }
 
 // mdcardSource holds the rows a formatter writes by hand, each in the shape
@@ -358,5 +360,105 @@ func TestCardScoped_Files_LeavesThePromptsAndCardItselfAlone(t *testing.T) {
 				t.Errorf("cardScoped(%s, %s) = %v, want %v", tc.pkg, tc.file, got, tc.want)
 			}
 		})
+	}
+}
+
+// mdcardClaimedSource writes a hand card row in a function that declares it is
+// not a card, which is the shape the interactive consent prompts have: a
+// question a caller approves, whose values are escaped by a stronger rule than
+// the card's.
+const mdcardClaimedSource = `package mdcardclaimed
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// Consent is what an interactive flow asks a caller to approve.
+type Consent struct {
+	Title string
+}
+
+// FormatConsent writes the question and the field it would act on.
+//
+//gitlab:allow-card FormatConsent: a consent prompt rather than a card, escaped by a rule of its own
+func FormatConsent(c Consent) string {
+	var b strings.Builder
+	b.WriteString("Create this?\n\n")
+	fmt.Fprintf(&b, "- **Title**: %s\n", toolutil.EscapeMdTableCell(c.Title))
+	return b.String()
+}
+`
+
+// mdcardStaleSource declares a function that writes no card row at all, so the
+// declaration excuses nothing and is reported stale once the rule has run.
+const mdcardStaleSource = `package mdcardstale
+
+// FormatNothing writes no Markdown at all.
+//
+//gitlab:allow-card FormatNothing: a declaration that excuses nothing, so that a run can say so
+func FormatNothing() string {
+	return "nothing"
+}
+`
+
+// TestAudit_CardFixture_ADeclaredFunction_IsExcusedRatherThanReported holds the
+// one way out of a card finding, and the one this rule did not have when it was
+// staged: a function that writes something which is not a card.
+//
+// The subject is the function rather than the row, which is what the directive
+// can key on: a hand-written row has no value of its own to name, and its text
+// carries a colon the directive grammar cuts a reason at. The claim is made at
+// that grain too, since what is declared is that this function writes something
+// that is not a card, which is true of its rows together or of none of them.
+func TestAudit_CardFixture_ADeclaredFunction_IsExcusedRatherThanReported(t *testing.T) {
+	report := auditCardFixture(t, "card")
+
+	for _, finding := range report.Findings {
+		if strings.HasSuffix(finding.Package, "/mdcardclaimed") {
+			t.Errorf("a declared function was reported: %s %s", finding.Func, finding.Expression)
+		}
+	}
+	var excused int
+	for _, finding := range report.Excused {
+		if strings.HasSuffix(finding.Package, "/mdcardclaimed") {
+			excused++
+			if finding.Func != "FormatConsent" {
+				t.Errorf("the excused row is attributed to %q, want the function that declared it", finding.Func)
+			}
+		}
+	}
+	if excused != 1 {
+		t.Errorf("excused %d row(s) of the declaring package, want its one row", excused)
+	}
+}
+
+// TestAudit_CardFixture_ADeclarationThatExcusesNothing_IsReportedStale holds
+// the other half of the mechanism, which is what stops a declaration outliving
+// the code it was written for: the rule that excuses has to say when it excused
+// nothing. It is asked of the card rule only once that rule has run, since a
+// run that never put the question cannot say the answer was not needed.
+func TestAudit_CardFixture_ADeclarationThatExcusesNothing_IsReportedStale(t *testing.T) {
+	judged := auditCardFixture(t, "card")
+	var stale int
+	for _, directive := range judged.StaleDirectives {
+		if strings.HasSuffix(directive.Package, "/mdcardstale") {
+			stale++
+			if directive.Kind != kindCard {
+				t.Errorf("the stale directive is of kind %q, want the card kind", directive.Kind)
+			}
+		}
+	}
+	if stale != 1 {
+		t.Errorf("reported %d stale card directive(s), want the one that excuses nothing", stale)
+	}
+
+	notJudged := auditCardFixture(t, allContexts)
+	for _, directive := range notJudged.StaleDirectives {
+		if directive.Kind == kindCard {
+			t.Errorf("a card directive was called stale by a run that never judged the card shape: %s %s", directive.Package, directive.Expression)
+		}
 	}
 }

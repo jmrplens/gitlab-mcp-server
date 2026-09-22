@@ -155,6 +155,14 @@ func newWizardFlow(req *mcp.CallToolRequest) (*elicitation.Flow, error) {
 // confidentiality, then confirms before calling [issues.Create]. On multi
 // round-trip sessions each prompt travels as an input request and the
 // handler is re-invoked with the accumulated answers.
+//
+// The summary is written row by row rather than through [toolutil.Card], and
+// the reason is [toolutil.EscapeConsentValue]: it defangs a URL scheme on top
+// of the code span a card writes, which is what a line asking for approval
+// needs and what a result card does not. See [cardDirective] in
+// cmd/audit_md_escaping.
+//
+//gitlab:allow-card IssueCreate: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
 func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input IssueInput) (issues.Output, error) {
 	if input.ProjectID == "" {
 		return issues.Output{}, toolutil.ErrFieldRequired("project_id")
@@ -391,6 +399,8 @@ type mrSummaryParams struct {
 // merge request creation flow. It includes the project, title, source and target
 // branches, and omits optional sections for empty description, labels, remove
 // source branch, and squash values.
+//
+//gitlab:allow-card buildMRSummary: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
 func buildMRSummary(p mrSummaryParams) string {
 	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s -> **Target**: %s",
 		toolutil.EscapeConsentValue(string(p.ProjectID)), toolutil.EscapeConsentValue(p.Title),
@@ -417,6 +427,8 @@ func buildMRSummary(p mrSummaryParams) string {
 // description, then confirms before calling [releases.Create]. On multi
 // round-trip sessions each prompt travels as an input request and the
 // handler is re-invoked with the accumulated answers.
+//
+//gitlab:allow-card ReleaseCreate: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
 func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input ReleaseInput) (releases.Output, error) {
 	if input.ProjectID == "" {
 		return releases.Output{}, toolutil.ErrFieldRequired("project_id")
@@ -481,6 +493,8 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 // README initialization, and default branch, then confirms before calling
 // [projects.Create]. On multi round-trip sessions each prompt travels as an
 // input request and the handler is re-invoked with the accumulated answers.
+//
+//gitlab:allow-card ProjectCreate: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
 func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, _ ProjectInput) (projects.Output, error) {
 	tracker := progress.FromRequest(req)
 	fl, err := newWizardFlow(req)

@@ -108,29 +108,40 @@ func TestCollectDirectives_Fixture_KeysOnPackageAndExpression(t *testing.T) {
 
 // TestStaleDirectives_Cases_ReportWhatExcusedNothing checks the half of the
 // mechanism that keeps it honest: an exemption nothing used has outlived the
-// reason it was written for. A raw exemption is the exception while its rule
-// is staged: a run that never asked the raw question cannot say the answer
-// was not needed.
+// reason it was written for. A directive answering a staged rule is the
+// exception while that rule is staged: a run that never asked the question
+// cannot say the answer was not needed, and each staged rule is asked for
+// separately, so a run judging one of them may not condemn the other's.
 func TestStaleDirectives_Cases_ReportWhatExcusedNothing(t *testing.T) {
 	declared := map[directiveKey]Directive{
 		{pkg: "a", kind: kindUnescaped, expression: "used"}:   {Package: "a", Expression: "used", File: "a.go", Line: 1},
 		{pkg: "a", kind: kindUnescaped, expression: "unused"}: {Package: "a", Expression: "unused", File: "a.go", Line: 2},
 		{pkg: "a", kind: kindRaw, expression: "raw"}:          {Package: "a", Kind: kindRaw, Expression: "raw", File: "a.go", Line: 3},
+		{pkg: "a", kind: kindCard, expression: "Card"}:        {Package: "a", Kind: kindCard, Expression: "Card", File: "a.go", Line: 4},
 	}
 	used := map[directiveKey]bool{{pkg: "a", kind: kindUnescaped, expression: "used"}: true}
+	selecting := func(chosen ...mdContext) selection {
+		sel := selection{chosen: map[mdContext]bool{}}
+		for _, c := range chosen {
+			sel.chosen[c] = true
+		}
+		return sel
+	}
 	cases := []struct {
-		name      string
-		judgedRaw bool
-		want      []string
+		name string
+		sel  selection
+		want []string
 	}{
-		{name: "the raw verdict did not run", judgedRaw: false, want: []string{"unused"}},
-		{name: "the raw verdict ran", judgedRaw: true, want: []string{"unused", "raw"}},
+		{name: "neither staged verdict ran", sel: selecting(), want: []string{"unused"}},
+		{name: "the raw verdict ran", sel: selecting(ctxRaw), want: []string{"unused", "raw"}},
+		{name: "the card verdict ran", sel: selecting(ctxCard), want: []string{"unused", "Card"}},
+		{name: "both staged verdicts ran", sel: selecting(ctxRaw, ctxCard), want: []string{"unused", "raw", "Card"}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var got []string
-			for _, directive := range staleDirectives(declared, used, tc.judgedRaw) {
+			for _, directive := range staleDirectives(declared, used, tc.sel) {
 				got = append(got, directive.Expression)
 			}
 			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
@@ -142,7 +153,8 @@ func TestStaleDirectives_Cases_ReportWhatExcusedNothing(t *testing.T) {
 		{pkg: "a", kind: kindUnescaped, expression: "used"}:   true,
 		{pkg: "a", kind: kindUnescaped, expression: "unused"}: true,
 		{pkg: "a", kind: kindRaw, expression: "raw"}:          true,
-	}, true)) != 0 {
+		{pkg: "a", kind: kindCard, expression: "Card"}:        true,
+	}, selecting(ctxRaw, ctxCard))) != 0 {
 		t.Error("an exemption that excused something was reported stale")
 	}
 }

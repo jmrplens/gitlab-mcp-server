@@ -63,7 +63,7 @@ These hints are available in both the Markdown and JSON output, so your IDE can 
 
 ### Formatted Data
 
-- **Dates** appear in readable format (`2025-01-15 10:30`) instead of raw ISO timestamps
+- **Dates** appear in readable format (`15 Jan 2025 10:30 UTC`, or `15 Jan 2025` for a value GitLab sends without a time) instead of raw ISO timestamps
 - **Status** values use emoji indicators (✅ success, ❌ failed, ⏳ running)
 - **Pagination** shows "Page 1 of 3 (20 per page)" with hints to request more
 
@@ -172,14 +172,12 @@ When you ask *"Show me merge request `!243`"*:
 ```markdown
 ## Merge Request !243: Fix Login Bug
 
-| Field | Value |
-|-------|-------|
-| Status | open |
-| Author | [alice](https://gitlab.example.com/alice) |
-| Created | 2025-03-15 10:30 |
-| Updated | 2025-03-20 14:15 |
-| Source | feature/fix-login → main |
-| Web URL | [!243](https://gitlab.example.com/project/-/merge_requests/243) |
+- **Status**: open
+- **Author**: [@alice](https://gitlab.example.com/alice)
+- **Created**: 15 Mar 2025 10:30 UTC
+- **Updated**: 20 Mar 2025 14:15 UTC
+- **Source**: feature/fix-login → main
+- **URL**: [!243](https://gitlab.example.com/project/-/merge_requests/243)
 
 ---
 💡 **Next steps:**
@@ -188,6 +186,13 @@ When you ask *"Show me merge request `!243`"*:
 - Approve or merge this MR
 ```
 
+A result about **one** object is a card: a heading and a list of
+`- **Label**: value` rows. A table is for a collection of objects that share
+columns, which is what a list response returns. The shape is not per formatter:
+every card is written by one writer, and a hand-written row fails
+`make check-md-escaping`. See
+[the card contract](../development/markdown-card.md).
+
 ### Mutation Response
 
 When you ask *"Create a new issue titled 'Fix the login page'"*:
@@ -195,12 +200,10 @@ When you ask *"Create a new issue titled 'Fix the login page'"*:
 ```markdown
 ## Issue Created: #42 — Fix the login page
 
-| Field | Value |
-|-------|-------|
-| IID | [#42](https://gitlab.example.com/project/-/issues/42) |
-| State | opened |
-| Author | you |
-| Created | 2025-03-21 09:00 |
+- **IID**: [#42](https://gitlab.example.com/project/-/issues/42)
+- **State**: opened
+- **Author**: you
+- **Created**: 21 Mar 2025 09:00 UTC
 
 ---
 💡 **Next steps:**

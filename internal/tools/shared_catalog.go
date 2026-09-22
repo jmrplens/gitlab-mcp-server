@@ -133,6 +133,15 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 // keys to a cache that never evicts, at the choosing of whoever minted the
 // token. A nil list is still told apart from an empty one, because the scope
 // filter treats the two differently: nil means detection was unavailable.
+//
+// The three flags are printed as true or false because this is a map key and
+// not a card. A cache key is compared and never read, so the glyph a reader
+// would want here would only make two configurations that differ collide less
+// legibly.
+//
+//gitlab:allow-raw cfg.ReadOnly: a cache key component, compared and never read
+//gitlab:allow-raw cfg.ReadOnlyFromTokenScope: a cache key component, compared and never read
+//gitlab:allow-raw cfg.SafeMode: a cache key component, compared and never read
 func CatalogFilterKey(cfg *config.ServerConfig) string {
 	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readonlyFromScope=%t|safe=%t",
 		strings.Join(cfg.ExcludeTools, ","),
@@ -149,6 +158,8 @@ func CatalogFilterKey(cfg *config.ServerConfig) string {
 // stay the same component: the individual surface and the two filtered surfaces
 // now apply the same scope filter, so a key that canonicalized differently
 // would let one of them cache a catalog under a name the other cannot reach.
+//
+//gitlab:allow-raw tokenScopes != nil: a cache key component, compared and never read
 func scopeCatalogKey(tokenScopes []string) string {
 	return fmt.Sprintf("scopes=%s|scopesKnown=%t",
 		strings.Join(catalogRelevantScopes(tokenScopes), ","),

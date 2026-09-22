@@ -31,6 +31,27 @@ const exemptionDirective = "//gitlab:allow-unescaped"
 // two verdicts ask different questions and each is answered on its own.
 const rawDirective = "//gitlab:allow-raw"
 
+// cardDirective is the declaration for the card shape, and the one whose
+// subject is a function rather than a value:
+//
+//	//gitlab:allow-card <function>: <reason>
+//
+// A card finding names the row it read and not an expression, because a
+// hand-written row has no value of its own to name; the row text carries a
+// colon of its own ("**Title**: %s"), which the directive grammar cuts a
+// reason at. So the subject is the function that writes the rows, which is
+// also the grain the claim is made at: what is declared is that this function
+// writes something that is not a card, and that is true of its rows together
+// or of none of them.
+//
+// The case it exists for is the interactive consent prompt. Those lines are a
+// question a caller approves rather than a result they read, and their values
+// go through toolutil.EscapeConsentValue, which defangs a URL scheme on top of
+// the code span [Card] would write. Migrating them onto [toolutil.Card] would
+// therefore take the defanging away from the one place a live link is most
+// worth not having.
+const cardDirective = "//gitlab:allow-card"
+
 // directiveKind names which verdict a directive answers.
 type directiveKind string
 
@@ -39,12 +60,25 @@ const (
 	kindUnescaped directiveKind = "unescaped"
 	// kindRaw excuses the bool-or-time verdict.
 	kindRaw directiveKind = "raw"
+	// kindCard excuses the card shape, keyed by the function that writes the
+	// rows rather than by a value.
+	kindCard directiveKind = "card"
 )
 
 // directivePrefixes maps each directive's spelling to the verdict it answers.
 var directivePrefixes = map[string]directiveKind{
 	exemptionDirective: kindUnescaped,
 	rawDirective:       kindRaw,
+	cardDirective:      kindCard,
+}
+
+// stagedKinds are the verdicts a staged rule answers, mapped to the context
+// whose selection decides whether the rule ran at all. A directive of one of
+// these kinds is judged stale only when its rule was asked, since a run that
+// never put the question has no grounds to say the answer was not needed.
+var stagedKinds = map[directiveKind]mdContext{
+	kindRaw:  ctxRaw,
+	kindCard: ctxCard,
 }
 
 // Directive is one declared exemption, kept with where it was declared so a
@@ -121,16 +155,16 @@ func parseDirective(text string) (kind directiveKind, expression, reason string,
 
 // staleDirectives lists the exemptions that excused nothing this run.
 //
-// A raw directive is judged stale only when the raw verdict ran: the rule it
-// answers is staged, and a run that never asked the question has no grounds
-// to say the answer was not needed.
-func staleDirectives(declared map[directiveKey]Directive, used map[directiveKey]bool, judgedRaw bool) []Directive {
+// A directive answering a staged rule is judged stale only when that rule ran:
+// a run that never asked the question has no grounds to say the answer was not
+// needed.
+func staleDirectives(declared map[directiveKey]Directive, used map[directiveKey]bool, sel selection) []Directive {
 	var stale []Directive
 	for key, directive := range declared {
 		if used[key] {
 			continue
 		}
-		if key.kind == kindRaw && !judgedRaw {
+		if ctx, staged := stagedKinds[key.kind]; staged && !sel.judges(ctx) {
 			continue
 		}
 		stale = append(stale, directive)

@@ -249,7 +249,7 @@ Successful tool calls return a dual-format response:
   "content": [
     {
       "type": "text",
-      "text": "## Issue #42: Fix N+1 query\n\n**State:** opened\n**Author:** @alice\n..."
+      "text": "## Issue #42: Fix N+1 query\n\n- **State**: opened\n- **Author**: @alice\n..."
     }
   ]
 }
@@ -257,6 +257,8 @@ Successful tool calls return a dual-format response:
 
 - **`structuredContent`** — The handler's typed output serialized as JSON (the fields above are a subset of the issue output), for the AI to parse and reason about; it includes `next_steps` hints and conforms to the tool's declared output schema when one is present
 - **`content`** — Formatted Markdown for human display
+
+A result about **one** object is a card: a heading and a list of `- **Label**: value` rows, as above. A table is for a collection of objects sharing columns, which is what a list response returns. The shape is not decided per formatter: one writer produces every card, and a hand-written row fails the [`check-md-escaping`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/markdown-card.md) gate.
 
 This dual format ensures the AI can make follow-up decisions while presenting clean output to the user. Tool execution errors set `isError: true` and can return only Markdown content so clients do not treat the error as a successful structured result.
 

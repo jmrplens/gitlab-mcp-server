@@ -253,7 +253,7 @@ Las llamadas exitosas a herramientas devuelven una respuesta en formato dual:
   "content": [
     {
       "type": "text",
-      "text": "## Issue #42: Fix N+1 query\n\n**Estado:** abierto\n**Autor:** @alice\n..."
+      "text": "## Issue #42: Fix N+1 query\n\n- **Estado**: abierto\n- **Autor**: @alice\n..."
     }
   ]
 }
@@ -261,6 +261,8 @@ Las llamadas exitosas a herramientas devuelven una respuesta en formato dual:
 
 - **`structuredContent`** — La salida tipada del handler serializada como JSON (los campos anteriores son un subconjunto de la salida de issue), para que la IA la analice y razone sobre ella; incluye sugerencias de `next_steps` y cumple el schema de salida declarado de la herramienta cuando existe
 - **`content`** — Markdown formateado para la visualización humana
+
+Un resultado sobre **un solo** objeto es una ficha: un encabezado y una lista de filas `- **Etiqueta**: valor`, como arriba. La tabla queda para una colección de objetos que comparten columnas, que es lo que devuelve una respuesta de listado. La forma no se decide en cada formateador: un único escritor produce todas las fichas, y una fila escrita a mano falla la comprobación [`check-md-escaping`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/markdown-card.md).
 
 Este formato dual asegura que la IA pueda tomar decisiones de seguimiento mientras presenta una salida limpia al usuario. Los errores de ejecución usan `isError: true` y pueden devolver solo Markdown para que los clientes no interpreten el error como un resultado estructurado exitoso.
 

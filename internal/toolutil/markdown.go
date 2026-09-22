@@ -36,59 +36,34 @@ const (
 	TblRowHasFailures = "| Has Failures | %v |\n"
 )
 
-// Headings format string with trailing blank line.
-const (
-	FmtMdH1 = "# %s\n\n"
-	FmtMdH2 = "## %s\n\n"
-	FmtMdH3 = "### %s\n\n"
-	FmtMdH4 = "#### %s\n\n"
-	FmtMdH5 = "##### %s\n\n"
-	FmtMdH6 = "###### %s\n\n"
-)
-
-// Markdown format constants for repeated table separators and field patterns.
+// Markdown format constants for repeated table separators and row patterns.
 //
-// The FmtMd* card rows are superseded by [Card], which writes the same line
-// through one writer and escapes the value at the write; they stay until the
-// formatters that use them have moved.
+// The card rows and the heading formats that used to sit here are gone: [Card]
+// writes both, through one writer that escapes the value at the write and
+// keeps the heading level of the block it is nested in. A format string cannot
+// do either, which is why a caller holding one wrote the escaping itself or
+// forgot to.
 const (
-	FmtMdID          = "- **ID**: %d\n"
-	FmtMdName        = "- **Name**: %s\n"
-	FmtMdTitle       = "- **Title**: %s\n"
-	FmtMdState       = "- **State**: %s\n"
-	FmtMdStatus      = "- **Status**: %s\n"
-	FmtMdDescription = "- **Description**: %s\n"
-	FmtMdPath        = "- **Path**: %s\n"
-	FmtMdVisibility  = "- **Visibility**: %s\n"
-	FmtMdEmail       = "- **Email**: %s\n"
-	FmtMdUsername    = "- **Username**: %s\n"
-	FmtMdTarget      = "- **Target**: %s\n"
-	FmtMdCreated     = "- **Created**: %s\n"
-	FmtMdUpdated     = "- **Updated**: %s\n"
-	FmtMdAuthorAt    = "- **Author**: @%s\n"
-	FmtMdAuthor      = "- **Author**: %s\n"
-	FmtMdSectionText = "\n%s\n"
-	FmtMdH2Count     = "## %s (%d)\n\n"
-	TblSep1Col       = "| --- |\n"
-	TblSep2Col       = "| --- | --- |\n"
-	TblSep3Col       = "| --- | --- | --- |\n"
-	TblSep4Col       = "| --- | --- | --- | --- |\n"
-	TblSep5Col       = "| --- | --- | --- | --- | --- |\n"
-	TblSep6Col       = "| --- | --- | --- | --- | --- | --- |\n"
-	TblSep7Col       = "| --- | --- | --- | --- | --- | --- | --- |\n"
-	TblSep8Col       = "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
-	TblSep9Col       = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
-	TblSep10Col      = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
-	FmtRow1Str       = "| %s |\n"
-	FmtRow2Str       = "| %s | %s |\n"
-	FmtRow3Str       = "| %s | %s | %s |\n"
-	FmtRow4Str       = "| %s | %s | %s | %s |\n"
-	FmtRow5Str       = "| %s | %s | %s | %s | %s |\n"
-	FmtRow6Str       = "| %s | %s | %s | %s | %s | %s |\n"
-	FmtRow7Str       = "| %s | %s | %s | %s | %s | %s | %s |\n"
-	FmtRow8Str       = "| %s | %s | %s | %s | %s | %s | %s | %s |\n"
-	FmtRow9Str       = "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n"
-	FmtRow10Str      = "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n"
+	TblSep1Col  = "| --- |\n"
+	TblSep2Col  = "| --- | --- |\n"
+	TblSep3Col  = "| --- | --- | --- |\n"
+	TblSep4Col  = "| --- | --- | --- | --- |\n"
+	TblSep5Col  = "| --- | --- | --- | --- | --- |\n"
+	TblSep6Col  = "| --- | --- | --- | --- | --- | --- |\n"
+	TblSep7Col  = "| --- | --- | --- | --- | --- | --- | --- |\n"
+	TblSep8Col  = "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+	TblSep9Col  = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+	TblSep10Col = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+	FmtRow1Str  = "| %s |\n"
+	FmtRow2Str  = "| %s | %s |\n"
+	FmtRow3Str  = "| %s | %s | %s |\n"
+	FmtRow4Str  = "| %s | %s | %s | %s |\n"
+	FmtRow5Str  = "| %s | %s | %s | %s | %s |\n"
+	FmtRow6Str  = "| %s | %s | %s | %s | %s | %s |\n"
+	FmtRow7Str  = "| %s | %s | %s | %s | %s | %s | %s |\n"
+	FmtRow8Str  = "| %s | %s | %s | %s | %s | %s | %s | %s |\n"
+	FmtRow9Str  = "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n"
+	FmtRow10Str = "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n"
 )
 
 // Contextual emoji constants for consistent visual indicators across formatters.

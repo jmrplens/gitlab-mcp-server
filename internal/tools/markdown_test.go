@@ -2564,37 +2564,28 @@ func mdGateLog(t *testing.T, title string, findings []mdGateFinding) {
 
 // TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries drives every
 // registered formatter and the renderers outside the registry through the
-// line model and reports what the client would render differently from what
-// the formatter wrote. It reports rather than fails, apart from the two
-// assertions that keep it honest.
+// line model and fails on what the client would render differently from what
+// the formatter wrote.
 //
-// Both are what the fixed formatters are worth. mergetrains and iterationdata
-// are the two the audit proved broken — each opened a table and wrote a list
-// row into it, which ends the table with no body and leaves every later row on
-// the page as literal pipes — and the card migration moved both onto
-// [toolutil.Card], so nothing about either may be reported again. An assertion
-// that one is still broken would have to be deleted by whoever fixed it, which
-// is how a gate stops proving anything; that the rules still see the class is
-// proved directly, on the line model's own inputs, by
-// [testutil.ScanGFM]'s tests.
+// It reported rather than failed while the card migration was in flight, since
+// a gate over a backlog fails on the first push and teaches everyone to ignore
+// it. The migration is finished and the scan reads zero, so the report is now
+// the gate: a formatter that opens a table and writes a list row into it ends
+// the table with no body and leaves every later row on the page as literal
+// pipes, which is what mergetrains and iterationdata did before they moved
+// onto [toolutil.Card].
+//
+// A case kept out is named in [mdGateExceptions] with its reason, which is
+// empty and is meant to stay empty; that the rules still see the class is
+// proved directly, on the line model's own inputs, by [testutil.ScanGFM]'s
+// tests.
 func TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries(t *testing.T) {
 	report := mdGateScan(t)
 
 	mdGateLog(t, "structural scan", report.findings)
 	t.Logf("structural scan: %d case(s), %d render(s), %d silent render(s)", len(report.cases), report.rendered, report.silent)
-	for _, pkg := range []string{"mergetrains", "iterationdata"} {
-		t.Run(pkg+" keeps its table boundaries", func(t *testing.T) {
-			for _, f := range report.findings {
-				if f.kase.pkg == pkg {
-					t.Errorf("%s was migrated onto the card and is reported again: %s", pkg, f)
-				}
-			}
-		})
-	}
 	for _, f := range report.findings {
-		if f.rule == "P0" {
-			t.Errorf("%s", f)
-		}
+		t.Errorf("%s", f)
 	}
 }
 
@@ -2701,6 +2692,9 @@ func TestMarkdownRegistry_AbsentValue_RendersNoGlyph(t *testing.T) {
 	}
 
 	mdGateLog(t, "absent-value differential", findings)
+	for _, f := range findings {
+		t.Errorf("%s", f)
+	}
 }
 
 // mdGateAbsent renders one case with one field zeroed and judges the lines

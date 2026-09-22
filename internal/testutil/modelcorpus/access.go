@@ -197,6 +197,17 @@ const digestLength = 16
 // By hand rather than through encoding/json, because the key is unexported and
 // a marshaler would skip it silently: the digest would then be stable across
 // the one change it is meant to notice, and nothing would say so.
+//
+// Every flag is written as true or false because this is hash input, separated
+// by NUL bytes and read by nothing: a glyph here would fold two corpora that
+// differ into one digest the moment two flags rendered alike.
+//
+//gitlab:allow-raw one.Needs.Admin: hash input, written for a digest rather than for a reader
+//gitlab:allow-raw one.Needs.FixtureService: hash input, written for a digest rather than for a reader
+//gitlab:allow-raw one.Needs.Runner: hash input, written for a digest rather than for a reader
+//gitlab:allow-raw step.Optional: hash input, written for a digest rather than for a reader
+//gitlab:allow-raw arg.Required: hash input, written for a digest rather than for a reader
+//gitlab:allow-raw arg.Truth.Authored: hash input, written for a digest rather than for a reader
 func writeCaseDigest(sum io.Writer, one Case) {
 	_, _ = fmt.Fprintf(sum, "case\x00%s\x00%s\x00%s\x00%s\x00%t\x00%t\x00%t\x00%s\x00%v\n",
 		one.ID, one.Prompt, one.Recipe, one.Needs.MinimumTier(),

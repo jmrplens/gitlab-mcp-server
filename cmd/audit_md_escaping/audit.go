@@ -65,7 +65,7 @@ func audit(prog *program, sel selection, root string) Report {
 		run.report.Summary.Sinks++
 		run.auditSink(s)
 	}
-	run.report.StaleDirectives = staleDirectives(run.directives, run.used, sel.judges(ctxRaw))
+	run.report.StaleDirectives = staleDirectives(run.directives, run.used, sel)
 	finish(&run.report)
 	return run.report
 }
@@ -93,8 +93,7 @@ func (r *auditPass) auditSink(s sink) {
 		judged := false
 		if h.ctx == ctxCard && r.sel.judges(ctxCard) {
 			judged = true
-			r.report.Findings = append(r.report.Findings, newFinding(r.prog, s, h,
-				"a card row written by hand; Card writes the row, escapes the value and keeps the layout", r.root))
+			r.auditCard(s, h)
 		}
 		if h.escapable() && r.sel.judges(h.ctx) {
 			judged = true
@@ -128,6 +127,22 @@ func (r *auditPass) auditEscaping(s sink, h sinkHole) {
 	r.report.Unresolved = append(r.report.Unresolved, finding)
 }
 
+// auditCard applies the card verdict to one hole.
+//
+// The excuse is looked up by the enclosing function rather than by the
+// finding's own expression, which is the row text: a row carries a colon of
+// its own and so cannot be written as a directive expression, and the claim a
+// declaration makes here is about the whole shape a function writes rather
+// than about one of its lines. See [cardDirective].
+func (r *auditPass) auditCard(s sink, h sinkHole) {
+	finding := newFinding(r.prog, s, h,
+		"a card row written by hand; Card writes the row, escapes the value and keeps the layout", r.root)
+	if r.excusedBy(kindCard, finding.Func, finding) {
+		return
+	}
+	r.report.Findings = append(r.report.Findings, finding)
+}
+
 // auditRaw applies the second verdict to one hole. A value that is neither a
 // flag nor an instant is not counted safe here, because the question was not
 // whether it is safe; it is simply not a finding.
@@ -145,9 +160,16 @@ func (r *auditPass) auditRaw(s sink, h sinkHole) {
 }
 
 // excused records a finding a directive of the given kind declares safe, and
-// reports whether it did.
+// reports whether it did. The directive is the one naming the finding's own
+// expression, which is what every verdict but the card shape is keyed by.
 func (r *auditPass) excused(kind directiveKind, finding Finding) bool {
-	key := directiveKey{pkg: finding.Package, kind: kind, expression: finding.Expression}
+	return r.excusedBy(kind, finding.Expression, finding)
+}
+
+// excusedBy is the same lookup against a subject the caller names, for a
+// verdict whose finding is not keyed by the expression it prints.
+func (r *auditPass) excusedBy(kind directiveKind, subject string, finding Finding) bool {
+	key := directiveKey{pkg: finding.Package, kind: kind, expression: subject}
 	if _, declared := r.directives[key]; !declared {
 		return false
 	}
