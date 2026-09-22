@@ -171,6 +171,7 @@ func TestDistinctTokenBudget_ChargesWhileBlocked_DoNotClimbTheLadder(t *testing.
 
 	// Four more distinct tokens arrive while that block is on, which is twice
 	// what the limit asks for and would be two more rungs if they counted.
+	// sequential: one burst accumulating against the block, not four cases
 	for _, token := range []string{"glpat-c", "glpat-d", "glpat-e", "glpat-f"} {
 		if raised := b.Charge(address, token); raised {
 			t.Errorf("Charge(%q) reported a new block while one was already on", token)
