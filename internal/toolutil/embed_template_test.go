@@ -28,6 +28,11 @@ func TestExpandResourceURI_FillsTheTemplateFromTheParameters(t *testing.T) {
 		{name: "an empty variable yields nothing", template: "gitlab://project/{project_id}", params: map[string]any{"project_id": "  "}, ok: false},
 		{name: "an empty template yields nothing", template: "", params: map[string]any{"project_id": "42"}, ok: false},
 		{name: "no variables at all", template: "gitlab://user/current", params: nil, want: "gitlab://user/current", ok: true},
+		// Nothing precedes the first brace, so a step past the variable
+		// computed from the wrong offset lands before the start of what is
+		// left and fails at once, where after a prefix it would re-read the
+		// same variable forever.
+		{name: "a template that opens with a variable", template: "{group}/{project}", params: map[string]any{"group": "a", "project": "b"}, want: "a/b", ok: true},
 		{name: "an unterminated brace yields nothing", template: "gitlab://project/{project_id", params: map[string]any{"project_id": "42"}, ok: false},
 		{name: "an int value", template: "gitlab://snippet/{snippet_id}", params: map[string]any{"snippet_id": 5}, want: "gitlab://snippet/5", ok: true},
 		{name: "a boolean is not an identifier", template: "gitlab://snippet/{snippet_id}", params: map[string]any{"snippet_id": true}, ok: false},
