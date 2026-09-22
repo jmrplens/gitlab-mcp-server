@@ -4,7 +4,7 @@ description: Cómo GitLab MCP Server clasifica los errores de API por estado HTT
 datePublished: "2026-04-21"
 faq:
   - q: "¿Cómo clasifica el servidor los errores de la API de GitLab?"
-    a: "GitLab MCP Server clasifica cada error de API por **código de estado HTTP** en un mensaje accionable: 401 señala un `GITLAB_TOKEN` inválido o expirado, 403 señala permisos faltantes, 404 un recurso inexistente o falta de acceso, 422 un fallo de validación y 429 un límite de velocidad. Los fallos a nivel de red —conexión rechazada, fallo DNS, timeout y errores de handshake TLS— se clasifican por separado. La clasificación determina tanto el mensaje de error envuelto como si el fallo se considera reintentable."
+    a: "GitLab MCP Server clasifica cada error de API por **código de estado HTTP** en un mensaje accionable. Un 401 señala un `GITLAB_TOKEN` inválido o expirado o, en los endpoints que responden 401 a un permiso que falta, un permiso denegado, y un 401 que GitLab marca como token rechazado (el código `invalid_token`, o cualquier 401 de GraphQL) se informa como tal. 403 señala permisos faltantes, 404 un recurso inexistente o falta de acceso, 422 un fallo de validación y 429 un límite de velocidad. Los fallos a nivel de red (conexión rechazada, fallo DNS, timeout y errores de handshake TLS) se clasifican por separado. La clasificación determina tanto el mensaje de error envuelto como si el fallo se considera reintentable."
   - q: "¿Qué función de envoltura de errores se usa para cada operación?"
     a: "Las operaciones de solo lectura (`list`, `get`, `search`) usan `WrapErr`. Las operaciones de escritura (`create`, `update`, `delete`) usan `WrapErrWithMessage`, que incluye el detalle específico extraído de la respuesta de GitLab. Cuando se conoce la acción correctiva, `WrapErrWithHint` añade una sugerencia, y `WrapErrWithStatusHint` limita esa sugerencia a un único código de estado HTTP. Una operación `get` que devuelve 404 usa `NotFoundResult` en lugar de devolver un error."
   - q: "¿Por qué un 404 no aparece como error?"
@@ -22,19 +22,19 @@ GitLab MCP Server proporciona un manejo de errores estructurado que clasifica lo
 
 Cada error de la API de GitLab se clasifica por código de estado HTTP en un mensaje accionable:
 
-| Código de Estado | Clasificación        | Mensaje                                              |
-| ---------------- | -------------------- | ---------------------------------------------------- |
-| 400              | Solicitud incorrecta | Verifica tus parámetros de entrada                   |
-| 401              | Autenticación        | `GITLAB_TOKEN` puede ser inválido o haber expirado   |
-| 403              | Permisos             | Tu token carece de los permisos requeridos           |
-| 404              | No encontrado        | No existe, es inaccesible o supera tu tier de GitLab |
-| 405              | No permitido         | La acción no se aplica al estado actual del recurso  |
-| 409              | Conflicto            | El recurso ya existe o hay un conflicto de estado    |
-| 422              | Validación           | GitLab rechazó la solicitud debido a datos inválidos |
-| 429              | Límite de velocidad  | Demasiadas solicitudes — espera antes de reintentar  |
-| 500              | Error del servidor   | Error interno del servidor de GitLab                 |
-| 502              | Gateway incorrecto   | GitLab está temporalmente no disponible              |
-| 503              | Mantenimiento        | GitLab está en mantenimiento o sobrecargado          |
+| Código de Estado | Clasificación           | Mensaje                                                                               |
+| ---------------- | ----------------------- | ------------------------------------------------------------------------------------- |
+| 400              | Solicitud incorrecta    | Verifica tus parámetros de entrada                                                    |
+| 401              | Autenticación o permiso | `GITLAB_TOKEN` inválido o expirado, o un permiso denegado que GitLab responde con 401 |
+| 403              | Permisos                | Tu token carece de los permisos requeridos                                            |
+| 404              | No encontrado           | No existe, es inaccesible o supera tu tier de GitLab                                  |
+| 405              | No permitido            | La acción no se aplica al estado actual del recurso                                   |
+| 409              | Conflicto               | El recurso ya existe o hay un conflicto de estado                                     |
+| 422              | Validación              | GitLab rechazó la solicitud debido a datos inválidos                                  |
+| 429              | Límite de velocidad     | Demasiadas solicitudes, espera antes de reintentar                                    |
+| 500              | Error del servidor      | Error interno del servidor de GitLab                                                  |
+| 502              | Gateway incorrecto      | GitLab está temporalmente no disponible                                               |
+| 503              | Mantenimiento           | GitLab está en mantenimiento o sobrecargado                                           |
 
 Los errores a nivel de red también se clasifican:
 
@@ -54,7 +54,7 @@ El servidor usa cinco funciones de manejo de errores, elegidas según el tipo de
     Usada para operaciones `list`, `get` y `search`. Clasifica el error y lo envuelve con el nombre de la operación:
 
     ```text
-    list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
+    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
     ```
 
   </TabItem>
@@ -136,8 +136,8 @@ Cuando un handler responde con un resultado de error en lugar de un error de Go,
 ```markdown
 ## ❌ Error: branch/list
 
-**Message**: authentication failed: GITLAB_TOKEN may be invalid or expired
-**HTTP Status**: 401 (authentication failed: GITLAB_TOKEN may be invalid or expired)
+**Message**: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal
+**HTTP Status**: 401 (unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal)
 **Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
 **Request ID**: `abc123def456`
 ```
@@ -170,8 +170,18 @@ El servidor clasifica los errores como **transitorios** (reintentables) o **perm
 ### Token inválido
 
 ```text
-❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
+❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
+```
+
+GitLab lo indica de forma explícita para un token expirado, revocado o de suplantación con la suplantación desactivada, y para cualquier 401 de su endpoint GraphQL, que es cuando el mensaje nombra solo el token.
+
+### Permiso denegado con 401
+
+GitLab responde a algunos permisos denegados con 401 en lugar de 403: aprobar una merge request que abriste en una instancia que impide la aprobación del autor, o fusionar sin acceso de push a la rama de destino. El estado por sí solo no puede decir qué causa aplica, así que el mensaje nombra ambas, y la sugerencia del handler nombra el permiso:
+
+```text
+❌ mrApprove: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal. Suggestion: you may be the MR author (self-approval not allowed) or lack sufficient permissions
 ```
 
 ### Permiso denegado

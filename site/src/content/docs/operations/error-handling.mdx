@@ -4,7 +4,7 @@ description: How GitLab MCP Server classifies API errors by HTTP status, extract
 datePublished: "2026-04-21"
 faq:
   - q: "How does the server classify GitLab API errors?"
-    a: "GitLab MCP Server classifies every API error by **HTTP status code** into an actionable message: 401 signals an invalid or expired `GITLAB_TOKEN`, 403 signals missing permissions, 404 a missing resource or lack of access, 422 a validation failure, and 429 a rate limit. Network-level failures — connection refused, DNS failure, timeout, and TLS handshake errors — are classified separately. The classification drives both the wrapped error message and whether the failure is treated as retryable."
+    a: "GitLab MCP Server classifies every API error by **HTTP status code** into an actionable message. A 401 signals an invalid or expired `GITLAB_TOKEN` or, on the endpoints that answer a missing permission with 401, a permission refusal, and a 401 GitLab marks as a rejected token (the `invalid_token` code, or any 401 from GraphQL) is reported as that. 403 signals missing permissions, 404 a missing resource or lack of access, 422 a validation failure, and 429 a rate limit. Network-level failures (connection refused, DNS failure, timeout, and TLS handshake errors) are classified separately. The classification drives both the wrapped error message and whether the failure is treated as retryable."
   - q: "Which error wrapping function is used for which operation?"
     a: "Read-only operations (`list`, `get`, `search`) use `WrapErr`. Mutating operations (`create`, `update`, `delete`) use `WrapErrWithMessage`, which includes the specific detail extracted from the GitLab response. When a corrective action is known, `WrapErrWithHint` appends a suggestion, and `WrapErrWithStatusHint` scopes that hint to a single HTTP status code. A `get` operation returning 404 uses `NotFoundResult` instead of returning an error."
   - q: "Why does a 404 not appear as an error?"
@@ -22,19 +22,19 @@ GitLab MCP Server provides structured error handling that classifies errors, ext
 
 Every error from the GitLab API is classified by HTTP status code into an actionable message:
 
-| Status Code | Classification | Message                                                   |
-| ----------- | -------------- | --------------------------------------------------------- |
-| 400         | Bad request    | Check your input parameters                               |
-| 401         | Authentication | `GITLAB_TOKEN` may be invalid or expired                  |
-| 403         | Permissions    | Your token lacks the required permissions                 |
-| 404         | Not found      | Missing, inaccessible, or above your GitLab tier          |
-| 405         | Not allowed    | The action does not apply to the resource's current state |
-| 409         | Conflict       | The resource already exists or there is a state conflict  |
-| 422         | Validation     | GitLab rejected the request due to invalid data           |
-| 429         | Rate limit     | Too many requests — wait before retrying                  |
-| 500         | Server error   | GitLab internal server error                              |
-| 502         | Bad gateway    | GitLab is temporarily unavailable                         |
-| 503         | Maintenance    | GitLab is under maintenance or overloaded                 |
+| Status Code | Classification               | Message                                                                      |
+| ----------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| 400         | Bad request                  | Check your input parameters                                                  |
+| 401         | Authentication or permission | Invalid or expired `GITLAB_TOKEN`, or a permission refusal answered with 401 |
+| 403         | Permissions                  | Your token lacks the required permissions                                    |
+| 404         | Not found                    | Missing, inaccessible, or above your GitLab tier                             |
+| 405         | Not allowed                  | The action does not apply to the resource's current state                    |
+| 409         | Conflict                     | The resource already exists or there is a state conflict                     |
+| 422         | Validation                   | GitLab rejected the request due to invalid data                              |
+| 429         | Rate limit                   | Too many requests, wait before retrying                                      |
+| 500         | Server error                 | GitLab internal server error                                                 |
+| 502         | Bad gateway                  | GitLab is temporarily unavailable                                            |
+| 503         | Maintenance                  | GitLab is under maintenance or overloaded                                    |
 
 Network-level errors are also classified:
 
@@ -54,7 +54,7 @@ The server uses five error handling helpers, chosen based on the operation type:
     **Read-only operations** — Used for `list`, `get`, and `search` operations. Classifies the error and wraps it with the operation name:
 
     ```text
-    list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
+    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
     ```
 
   </TabItem>
@@ -136,8 +136,8 @@ When a handler answers with an error result rather than a Go error, the response
 ```markdown
 ## ❌ Error: branch/list
 
-**Message**: authentication failed: GITLAB_TOKEN may be invalid or expired
-**HTTP Status**: 401 (authentication failed: GITLAB_TOKEN may be invalid or expired)
+**Message**: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal
+**HTTP Status**: 401 (unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal)
 **Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
 **Request ID**: `abc123def456`
 ```
@@ -170,8 +170,18 @@ The server classifies errors as **transient** (retryable) or **permanent**:
 ### Invalid token
 
 ```text
-❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
+❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
+```
+
+GitLab says so explicitly for an expired, revoked or impersonation-disabled token, and for any 401 from its GraphQL endpoint, which is when the message names the token alone.
+
+### Permission refused with 401
+
+GitLab answers some permission refusals with 401 rather than 403: approving a merge request you opened on an instance that prevents approval by the author, or merging without push access to the target branch. The status alone cannot say which cause applies, so the message names both, and the handler's suggestion names the permission:
+
+```text
+❌ mrApprove: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal. Suggestion: you may be the MR author (self-approval not allowed) or lack sufficient permissions
 ```
 
 ### Permission denied

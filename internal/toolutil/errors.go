@@ -202,10 +202,9 @@ func ClassifyError(err error) string {
 		return DestinationRefusedMessage
 	}
 
-	// GitLab API returned an HTTP error response
-	var glErr *gl.ErrorResponse
-	if errors.As(err, &glErr) && glErr.Response != nil {
-		return ClassifyHTTPStatus(glErr.Response.StatusCode)
+	// GitLab answered, over REST or over GraphQL.
+	if glErr, ok := gitLabResponseOf(err); ok && glErr.Response != nil {
+		return classifyGitLabResponse(glErr)
 	}
 
 	// Network-level errors (connection refused, DNS, timeout, TLS)
@@ -229,10 +228,110 @@ func ClassifyError(err error) string {
 	return "unexpected error"
 }
 
+// gitLabResponseOf returns the GitLab response err carries, if it carries one.
+//
+// errors.As alone is not enough, because client-go hands back a GraphQL call
+// GitLab refused as *gl.GraphQLResponseError, which keeps the response in its
+// Err field and has no Unwrap method. GitLab answers every GraphQL refusal with
+// a JSON body, and a JSON body is exactly when client-go builds that type, so
+// every one of them was classified as an unexpected error rather than by the
+// status GitLab answered with.
+func gitLabResponseOf(err error) (*gl.ErrorResponse, bool) {
+	if glErr, ok := errors.AsType[*gl.ErrorResponse](err); ok {
+		return glErr, true
+	}
+	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
+		return errors.AsType[*gl.ErrorResponse](gqlErr.Err)
+	}
+	return nil, false
+}
+
+// classifyGitLabResponse describes a response GitLab answered: the status
+// description, except where the response says more than its status does.
+//
+// It says more in one direction only. A 401 whose credential GitLab itself
+// rejected is described as that, because the permission half of
+// [unauthorizedDescription] cannot apply to it. The opposite verdict cannot be
+// read off a response: a token GitLab has no record of is answered with the
+// same body as a permission refusal, so a 401 without the signal keeps the
+// sentence that names both causes.
+func classifyGitLabResponse(glErr *gl.ErrorResponse) string {
+	status := glErr.Response.StatusCode
+	if status == http.StatusUnauthorized && (tokenRejected(glErr) || answeredByGraphQL(glErr)) {
+		return rejectedTokenDescription
+	}
+	return ClassifyHTTPStatus(status)
+}
+
+// invalidTokenCode is the RFC 6750 error code GitLab's REST API guard writes
+// into a 401 about the credential itself.
+const invalidTokenCode = "invalid_token"
+
+// tokenRejected reports whether a REST response says GitLab refused the
+// credential itself, as opposed to refusing a valid credential a permission.
+//
+// GitLab's API guard answers an expired, revoked or impersonation-disabled
+// token with rack-oauth2's body carrying the code invalid_token
+// (lib/api/api_guard.rb, pinned by spec/requests/api/api_guard_spec.rb), and
+// nothing else in the REST API writes it. Grape's unauthorized!, which the
+// permission refusals call, renders {"message":"401 Unauthorized"} instead.
+//
+// The code is a REST signal and nothing more. Its absence decides nothing,
+// since a token GitLab cannot find at all is answered through unauthorized!
+// too, byte for byte like a permission refusal; and a GraphQL 401 never
+// carries it, which [answeredByGraphQL] answers for.
+func tokenRejected(glErr *gl.ErrorResponse) bool {
+	var body struct {
+		Error string `json:"error"`
+	}
+	return json.Unmarshal(glErr.Body, &body) == nil && body.Error == invalidTokenCode
+}
+
+// answeredByGraphQL reports whether the response came from GitLab's GraphQL
+// endpoint, where a 401 is always about the credential.
+//
+// That endpoint answers 401 only from its authentication checks
+// (GraphqlController#authorize_access_api! renders {"errors":[{"message":
+// "Invalid token"}]} for a token it could not use, and the two authentication
+// errors the controller rescues are the others), and it refuses a field the
+// caller may not see with a 200 carrying errors, never with a 401. So the
+// permission refusal a REST 401 can be has no GraphQL counterpart to confuse
+// it with. The suffix rather than the whole path is compared because an
+// instance served under a relative URL root puts its own prefix in front.
+func answeredByGraphQL(glErr *gl.ErrorResponse) bool {
+	req := glErr.Response.Request
+	return req != nil && req.URL != nil && strings.HasSuffix(req.URL.Path, gl.GraphQLAPIEndpoint)
+}
+
+// unauthorizedDescription is what a 401 means when nothing but its status is
+// known.
+//
+// GitLab answers 401 for two different things. Its API guard answers it for a
+// credential it cannot use, and at a family of routes Grape's unauthorized!
+// answers it for a valid credential that lacks a permission: approving a merge
+// request the caller opened where author approval is prevented, merging
+// without push access, reading remote mirrors or access tokens without the
+// role (entry 55 of docs/development/upstream-bugs.md). The status cannot tell
+// the two apart, so the one sentence true of every 401 names both and ends with
+// the test a reader can run to tell which applies. It opens with
+// "unauthorized" rather than "authentication failed", because for the second
+// cause authentication succeeded, and a model told otherwise checked the
+// credential, found nothing wrong with it and stopped.
+const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, " +
+	"or it is valid and lacks a permission this action needs, since some GitLab endpoints answer " +
+	"a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
+
+// rejectedTokenDescription is what a 401 means when GitLab said the credential
+// itself was the problem, which [tokenRejected] and [answeredByGraphQL] decide.
+// The token is named in the parenthesis rather than as the subject because in
+// HTTP mode the credential is the caller's header, not the variable.
+const rejectedTokenDescription = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself " +
+	"as invalid, expired or revoked, so renew or replace it"
+
 // httpStatusDescriptions maps HTTP status codes to semantic descriptions.
 var httpStatusDescriptions = map[int]string{
 	400: "bad request: check your input parameters",
-	401: "authentication failed: GITLAB_TOKEN may be invalid or expired",
+	401: unauthorizedDescription,
 	403: "access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings",
 	404: "not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct",
 	405: "method not allowed: the action cannot be performed on this resource in its current state",
@@ -245,6 +344,8 @@ var httpStatusDescriptions = map[int]string{
 }
 
 // ClassifyHTTPStatus returns a semantic description for common HTTP status codes.
+// It describes the status alone, so a 401 gets the sentence true of both of its
+// causes; [ClassifyError], which holds the whole response, can say which one.
 func ClassifyHTTPStatus(code int) string {
 	if desc, ok := httpStatusDescriptions[code]; ok {
 		return desc
