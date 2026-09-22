@@ -121,6 +121,15 @@ const healthTimeout = 10 * time.Second
 // edition probes.
 const versionAPIPath = "/api/v4/version"
 
+// namespacePlanPageSize bounds the namespace listing the tier probe reads.
+//
+// It asks for one page and judges what it gets. A caller who administers more
+// namespaces than this and holds their only paid plan beyond the first page
+// resolves lower than they should, which the warning and the explicit tier
+// both answer; paging through every namespace of an account that may have
+// thousands, on every credential, to refine a tier is the wrong trade.
+const namespacePlanPageSize = 100
+
 // GitLabDotComHost is the canonical host for GitLab SaaS-only features.
 const GitLabDotComHost = "gitlab.com"
 
@@ -465,31 +474,139 @@ func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	return *versionInfo.Enterprise
 }
 
-// DetectTier resolves the GitLab licensing tier from the instance license and
-// stores it on the client. It calls the License API (GET /license, admin-only
-// on self-managed) and maps the returned plan to a tier via
-// [edition.TierFromPlan].
+// DetectTier resolves the GitLab licensing tier and stores it on the client.
 //
-// When the license cannot be retrieved (non-admin token, CE/Free instance, or
-// any API error) or reports no plan, it falls back to [edition.Free]. The
-// resolved tier is stored and returned.
+// It asks two questions, because neither one answers for every deployment:
+//
+//   - GET /license, which carries the instance's own plan and is **admin-only
+//     on self-managed**. It is the authoritative answer where it is available.
+//   - GET /namespaces, which carries a plan per namespace and is readable by
+//     any token, for the namespaces the caller administers. On GitLab.com that
+//     plan is the subscription; on self-managed it is "default" whatever the
+//     instance is licensed for, since a subscription is a GitLab.com concept.
+//
+// Measured on 2026-09-22 against a licensed EE 19.3.1 and against GitLab.com:
+// a non-admin token is refused /license with 403 on both, /namespaces reports
+// "default" for admin and non-admin alike on self-managed, and reports the real
+// plan on GitLab.com for each namespace the caller administers. So the second
+// question rescues every GitLab.com caller, which is the population that used
+// to fall back to Free unconditionally, and rescues nobody on self-managed.
+//
+// Where neither answers, the tier is [edition.Free] as before. That is right on
+// a CE instance and wrong on a licensed one the caller cannot read the license
+// of, and the two are told apart by the edition rather than guessed at: an
+// enterprise build that could not be resolved gets a warning naming the flag
+// that settles it, and a CE build stays silent because Free is the truth there.
 func (c *Client) DetectTier(ctx context.Context) edition.Tier {
+	if tier, ok := c.tierFromLicense(ctx); ok {
+		c.SetTier(tier)
+		return tier
+	}
+	if tier, ok := c.tierFromNamespaces(ctx); ok {
+		c.SetTier(tier)
+		return tier
+	}
+
+	c.warnUnresolvedTier(ctx)
+	c.SetTier(edition.Free)
+	return edition.Free
+}
+
+// tierFromLicense reads the instance license, which only an administrator may
+// do on a self-managed instance and nobody may do on GitLab.com.
+func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
 	lic, _, err := c.inner.License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
-		slog.DebugContext(ctx, "failed to detect GitLab tier from license, falling back to free",
+		slog.DebugContext(ctx, "the instance license is not readable with this token, trying the namespace plan",
 			"error", err)
-		c.SetTier(edition.Free)
-		return edition.Free
+		return edition.Free, false
 	}
 	if lic == nil || strings.TrimSpace(lic.Plan) == "" {
-		slog.DebugContext(ctx, "GitLab license reported no plan, falling back to free")
-		c.SetTier(edition.Free)
-		return edition.Free
+		slog.DebugContext(ctx, "GitLab license reported no plan, trying the namespace plan")
+		return edition.Free, false
 	}
 	tier := edition.TierFromPlan(lic.Plan)
-	c.SetTier(tier)
-	slog.InfoContext(ctx, "detected GitLab tier", "plan", lic.Plan, "tier", tier.String())
-	return tier
+	slog.InfoContext(ctx, "detected GitLab tier from the instance license", "plan", lic.Plan, "tier", tier.String())
+	return tier, true
+}
+
+// tierFromNamespaces reads the plan of the namespaces the caller administers
+// and answers with the highest paid one.
+//
+// **The highest rather than the caller's own**, and the asymmetry is the same
+// one ADR-0018 records for token scopes: a tier resolved too low silently
+// removes tools, and the caller cannot tell the difference between a capability
+// this deployment lacks and one it was not given, while a tier resolved too
+// high surfaces as GitLab's own refusal on the one call that needed it. A
+// GitLab.com account whose personal namespace is Free and who works in an
+// Ultimate group is the case this exists for.
+//
+// **"default" is the one plan that answers nothing**, and telling it apart from
+// "free" is what keeps the warning honest. Measured on 2026-09-22: GitLab.com
+// reports "free" for a namespace on the free plan, and self-managed reports
+// "default" for every namespace whatever the instance is licensed for. So a
+// namespace saying "free" has answered the question, and its caller is served
+// Free with no warning; a namespace saying "default" has not, and an enterprise
+// build falls through to one. Reading both as Free would warn every GitLab.com
+// account on the free plan, on every startup, about a tier that is correct.
+func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
+	opts := &gl.ListNamespacesOptions{}
+	opts.PerPage = namespacePlanPageSize
+	namespaces, _, err := c.inner.Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
+	if err != nil {
+		slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "error", err)
+		return edition.Free, false
+	}
+
+	best, found := edition.Free, false
+	for _, ns := range namespaces {
+		if ns == nil || !namespacePlanAnswers(ns.Plan) {
+			continue
+		}
+		tier := edition.TierFromPlan(ns.Plan)
+		if !found || tier > best {
+			best, found = tier, true
+			slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
+		}
+	}
+	if found {
+		slog.InfoContext(ctx, "detected GitLab tier from the namespace plan", "tier", best.String())
+	}
+	return best, found
+}
+
+// namespacePlanAnswers reports whether a namespace's plan says anything about
+// the tier.
+//
+// Everything does except the empty string, which a namespace the caller does
+// not administer carries, and "default", which is what self-managed reports for
+// every namespace because a subscription is a GitLab.com concept. Both mean the
+// question went unanswered rather than that the answer is Free.
+func namespacePlanAnswers(plan string) bool {
+	switch strings.ToLower(strings.TrimSpace(plan)) {
+	case "", "default":
+		return false
+	default:
+		return true
+	}
+}
+
+// warnUnresolvedTier says so when falling back to Free may be wrong, and stays
+// quiet when it cannot be.
+//
+// On a CE build Free is the truth and a warning every startup would be noise
+// an operator learns to ignore. On an enterprise build it may well be a
+// licensed instance whose license this token cannot read, and the surface the
+// caller gets is smaller than the one they are paying for, which is worth one
+// line naming the setting that fixes it.
+func (c *Client) warnUnresolvedTier(ctx context.Context) {
+	if !c.DetectEnterprise(ctx, false) {
+		slog.DebugContext(ctx, "no license and no paid namespace plan on a CE instance; the tier is free")
+		return
+	}
+	slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
+		"the license is readable only by an administrator, and a namespace plan is reported only on GitLab.com. "+
+		"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
 }
 
 // gitLabVersionInfo captures the subset of /api/v4/version needed for health
