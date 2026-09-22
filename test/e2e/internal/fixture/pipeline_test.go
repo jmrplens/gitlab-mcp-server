@@ -236,6 +236,99 @@ func TestFindPipelineJob_Answers(t *testing.T) {
 	}
 }
 
+// TestCreatePipeline_Answers_ReadsThePipelineAsCreated checks the creator
+// asks for a pipeline on the ref it was given and hands it back in the status
+// GitLab created it in, without waiting; a refusal comes back as it came.
+func TestCreatePipeline_Answers_ReadsThePipelineAsCreated(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline",
+		stubCreated(map[string]any{"id": 77, "ref": "main", "sha": "abc", "status": "created"}),
+		stubRefusal(http.StatusBadRequest, "Pipeline filtered out by workflow rules."))
+
+	got, err := createPipeline(t.Context(), client, 2, "main")
+	if err != nil {
+		t.Fatalf("createPipeline() error = %v, want nil", err)
+	}
+	if want := (Pipeline{ID: 77, Ref: "main", SHA: "abc", Status: "created"}); got != want {
+		t.Errorf("createPipeline() = %+v, want %+v", got, want)
+	}
+	if sent := stub.recordedRequests()[0].Body["ref"]; sent != "main" {
+		t.Errorf("createPipeline() sent ref %v, want main", sent)
+	}
+
+	got, err = createPipeline(t.Context(), client, 2, "main")
+	if !IsStatus(err, http.StatusBadRequest) || got != (Pipeline{}) {
+		t.Errorf("createPipeline() on a refusal = %+v, %v; want nothing and GitLab's 400", got, err)
+	}
+}
+
+// TestCancelPipeline_Answers_NamesThePipelineItCouldNotCancel checks the
+// cancel reaches the pipeline's cancel endpoint, and that a refusal names the
+// pipeline and keeps GitLab's status.
+func TestCancelPipeline_Answers_NamesThePipelineItCouldNotCancel(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/pipelines/77/cancel",
+		stubOK(map[string]any{"id": 77, "status": "canceling"}),
+		stubRefusal(http.StatusForbidden, "403 Forbidden"))
+
+	if err := cancelPipeline(t.Context(), client, 2, 77); err != nil {
+		t.Fatalf("cancelPipeline() error = %v, want nil", err)
+	}
+	err := cancelPipeline(t.Context(), client, 2, 77)
+	if !IsStatus(err, http.StatusForbidden) || !strings.Contains(err.Error(), "canceling pipeline 77 of project 2") {
+		t.Errorf("cancelPipeline() on a refusal = %v, want GitLab's 403 naming the pipeline", err)
+	}
+}
+
+// TestAwaitPipelineJob_Answers_WaitsForTheJobItWants covers the three endings
+// of the job wait: the job appears after a listing that did not hold it yet,
+// the budget runs out, and GitLab refuses the listing, which ends the wait at
+// once rather than at the budget.
+func TestAwaitPipelineJob_Answers_WaitsForTheJobItWants(t *testing.T) {
+	manual := func(job *gl.Job) bool { return job.Name == ManualJobName }
+	notYet := stubOK([]map[string]any{{"id": 10, "name": "fast-pass", "status": "running"}})
+	cases := []struct {
+		name    string
+		answers []scriptedAnswer
+		wait    time.Duration
+		want    int64
+		wantErr error
+		refused bool
+	}{
+		{
+			name:    "appears on the second listing",
+			answers: []scriptedAnswer{notYet, stubOK([]map[string]any{{"id": 11, "name": ManualJobName, "status": "manual"}})},
+			wait:    30 * time.Second, want: 11,
+		},
+		{name: "never appears", answers: []scriptedAnswer{notYet}, wait: 100 * time.Millisecond, wantErr: harness.ErrPollTimeout},
+		{name: "listing refused", answers: []scriptedAnswer{stubRefusal(http.StatusForbidden, "403 Forbidden")}, wait: 30 * time.Second, refused: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.answers(http.MethodGet, "/api/v4/projects/2/pipelines/5/jobs", tc.answers...)
+
+			started := time.Now()
+			got, err := awaitPipelineJob(t.Context(), client, 2, 5, tc.wait, manual)
+			if got != tc.want {
+				t.Errorf("awaitPipelineJob() = %d, want %d", got, tc.want)
+			}
+			switch {
+			case tc.refused:
+				if !IsStatus(err, http.StatusForbidden) || time.Since(started) > 10*time.Second {
+					t.Errorf("awaitPipelineJob() on a refused listing = %v after %s, want GitLab's 403 at once", err, time.Since(started))
+				}
+			case tc.wantErr != nil:
+				if !errors.Is(err, tc.wantErr) {
+					t.Errorf("awaitPipelineJob() error = %v, want %v", err, tc.wantErr)
+				}
+			case err != nil:
+				t.Errorf("awaitPipelineJob() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
 // TestJobDescription_NamesWhatTheWaitWantedOrSaysAnyJob covers both halves of
 // the message a job wait fails with.
 func TestJobDescription_NamesWhatTheWaitWantedOrSaysAnyJob(t *testing.T) {

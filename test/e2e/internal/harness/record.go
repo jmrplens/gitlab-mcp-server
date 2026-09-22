@@ -63,6 +63,11 @@ const (
 	// subscription capability whether the wire carried resources/subscribe or
 	// its 2026-07-28 replacement, subscriptions/listen.
 	methodSubscribe = "resources/subscribe"
+	// methodSubscriptionsAcknowledged is what the server sends first on a
+	// subscriptions/listen stream, once every subscription the stream asked
+	// for succeeded. It is not recorded as a call of its own: it is the
+	// answer [Session.TrySubscribe] waits for.
+	methodSubscriptionsAcknowledged = "notifications/subscriptions/acknowledged"
 )
 
 // traceParentKey is the _meta key W3C trace context travels in.
@@ -579,11 +584,16 @@ func outcomeOf(method string, result mcp.Result, err error) string {
 // recordReceiving is the client middleware every request the server sends back
 // arrives through.
 //
-// Two of them are worth recording. An elicitation is the server asking the
-// caller something mid-call, and it is the only evidence an interactive flow
-// ran at all. A resource-updated notification is the other end of a
+// A resource-updated notification is worth recording: it is the other end of a
 // subscription, and without it a subscription's coverage would be the
 // subscribe call and nothing about whether anything was ever delivered.
+//
+// A subscription acknowledgement passes through here too, and only here: the
+// SDK dispatches it into this chain and then to a handler of its own that does
+// nothing and that no client option replaces, so this is the one place the
+// answer to a subscribe on protocol 2026-07-28 can be seen. It is handed to
+// whoever is waiting on the URI rather than recorded, because the subscribe it
+// answers is recorded by the verb with what came of it.
 func (c *sessionConn) recordReceiving() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -591,33 +601,51 @@ func (c *sessionConn) recordReceiving() mcp.Middleware {
 			// delivers one to ClientOptions.ElicitationHandler rather than
 			// through this chain, so a case for it would never fire; it is
 			// recorded by [sessionConn.recordingElicitationHandler] instead.
-			if method == methodResourceUpdated {
+			switch method {
+			case methodResourceUpdated:
 				c.recordResourceUpdate(req)
+			case methodSubscriptionsAcknowledged:
+				c.acknowledge(req)
 			}
 			return next(ctx, method, req)
 		}
 	}
 }
 
-// recordSubscribe records one subscribe against the test that made it.
+// acknowledge wakes whoever is waiting on each URI a subscription
+// acknowledgement names.
+//
+// The URIs are the ones the server agreed to watch, which is not always every
+// one the stream asked for, so a URI missing from the list is one nobody is
+// woken for.
+func (c *sessionConn) acknowledge(req mcp.Request) {
+	params, isAck := req.GetParams().(*mcp.SubscriptionsAcknowledgedParams)
+	if !isAck || params == nil {
+		return
+	}
+	for _, uri := range params.Notifications.ResourceSubscriptions {
+		c.acks.deliver(uri)
+	}
+}
+
+// recordSubscribe records one subscribe against the test that made it, with
+// what came of it.
 //
 // The sending middleware cannot: over protocol 2026-07-28 the SDK's Subscribe
 // opens the listen stream on a background context, dropping the attribution the
 // caller put on its own, so the one call the middleware would see carries no
-// test to file it under. The verb records it here instead, as an accepted
-// subscribe; the resource-updated notification that may follow is recorded by
-// [sessionConn.recordResourceUpdate], which is the delivery half.
-func (c *sessionConn) recordSubscribe(rec *envRecorder, uri string) {
-	if rec == nil {
-		return
-	}
+// test to file it under. The verb records it here instead, once it knows the
+// answer, so a subscribe the server declined is recorded as the refusal it was
+// rather than credited; the resource-updated notification that may follow is
+// recorded by [sessionConn.recordResourceUpdate], which is the delivery half.
+func (c *sessionConn) recordSubscribe(rec *envRecorder, uri, expectation, outcome string) {
 	line := &e2ecalls.Call{
 		Test:        rec.env.T.Name(),
 		Purpose:     string(PurposeTest),
-		Expectation: e2ecalls.ExpectationOK,
+		Expectation: expectation,
 		Method:      methodSubscribe,
 		Target:      uri,
-		Outcome:     e2ecalls.OutcomeOK,
+		Outcome:     outcome,
 	}
 	c.describeSession(line)
 	rec.record(&pendingCall{line: line, conn: c})
@@ -672,29 +700,32 @@ func elicitationKeys(schema any) []string {
 	return slices.Sorted(maps.Keys(properties))
 }
 
-// recordResourceUpdate records one notification against every test watching
+// recordResourceUpdate records one notification against the test watching
 // that resource.
 //
-// Every test, rather than one: a session is shared, and two tests subscribed
-// to the same URI both observe the change. The index is what makes this exact,
-// since the notification itself says only which resource changed.
+// The index is what makes this exact, since the notification itself says only
+// which resource changed and a session is shared by many tests. A notification
+// for a URI no test watches any more, which can arrive after the watcher's test
+// has ended, is recorded nowhere.
 func (c *sessionConn) recordResourceUpdate(req mcp.Request) {
 	params, isUpdate := req.GetParams().(*mcp.ResourceUpdatedNotificationParams)
 	if !isUpdate || params == nil {
 		return
 	}
-	for _, rec := range c.subscribers.recordersFor(params.URI) {
-		line := &e2ecalls.Call{
-			Test:        rec.env.T.Name(),
-			Purpose:     string(PurposeTest),
-			Expectation: e2ecalls.ExpectationAny,
-			Method:      methodResourceUpdated,
-			Target:      params.URI,
-			Outcome:     e2ecalls.OutcomeOK,
-		}
-		c.describeSession(line)
-		rec.record(&pendingCall{line: line, conn: c})
+	rec, watched := c.subscribers.recorderFor(params.URI)
+	if !watched {
+		return
 	}
+	line := &e2ecalls.Call{
+		Test:        rec.env.T.Name(),
+		Purpose:     string(PurposeTest),
+		Expectation: e2ecalls.ExpectationAny,
+		Method:      methodResourceUpdated,
+		Target:      params.URI,
+		Outcome:     e2ecalls.OutcomeOK,
+	}
+	c.describeSession(line)
+	rec.record(&pendingCall{line: line, conn: c})
 }
 
 // holdInFlight registers a call as in flight on this session and returns the
@@ -733,60 +764,55 @@ func (c *sessionConn) currentInFlight() (callAttribution, bool) {
 
 // subscriberIndex remembers which test is watching which resource on one
 // session, so a notification that arrives on the SDK's goroutine can be
-// recorded against the tests that asked for it.
+// recorded against the test that asked for it.
 //
 // It is kept apart from the notifier that fans the channels out because the
 // two answer different questions: the notifier wakes whoever is waiting, and
 // this says whose record the notification belongs in. A watcher that has
 // stopped waiting still has a record.
+//
+// It holds one test per URI, because the SDK keeps one subscription per URI
+// and per session: a second test would share the first one's, and could
+// neither learn whether the server agreed nor close it without closing the
+// first. [subscriberIndex.claim] is where the second one is turned away.
 type subscriberIndex struct {
 	mu       sync.Mutex
-	watchers map[string][]*envRecorder
+	watchers map[string]*envRecorder
 }
 
 // newSubscriberIndex returns an index watching nothing.
 func newSubscriberIndex() *subscriberIndex {
-	return &subscriberIndex{watchers: map[string][]*envRecorder{}}
+	return &subscriberIndex{watchers: map[string]*envRecorder{}}
 }
 
-// add registers one test as a watcher of a URI and returns the removal.
-func (i *subscriberIndex) add(uri string, rec *envRecorder) func() {
-	if rec == nil {
-		return func() {}
-	}
-	i.mu.Lock()
-	i.watchers[uri] = append(i.watchers[uri], rec)
-	i.mu.Unlock()
-
-	return func() { i.remove(uri, rec) }
-}
-
-// remove drops one watcher, and the URI with it when it was the last.
-func (i *subscriberIndex) remove(uri string, rec *envRecorder) {
+// claim registers one test as the watcher of a URI and returns the release,
+// unless another test already watches it on this session, in which case it
+// registers nothing and says so. The check and the registration are one step,
+// so two tests racing for a URI cannot both win.
+func (i *subscriberIndex) claim(uri string, rec *envRecorder) (func(), bool) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-
-	remaining := make([]*envRecorder, 0, len(i.watchers[uri]))
-	dropped := false
-	for _, watcher := range i.watchers[uri] {
-		if watcher == rec && !dropped {
-			dropped = true
-			continue
-		}
-		remaining = append(remaining, watcher)
+	if _, taken := i.watchers[uri]; taken {
+		return nil, false
 	}
-	if len(remaining) == 0 {
-		delete(i.watchers, uri)
-		return
-	}
-	i.watchers[uri] = remaining
+	i.watchers[uri] = rec
+	return func() { i.release(uri) }, true
 }
 
-// recordersFor returns the buffers a notification about one URI belongs in.
-func (i *subscriberIndex) recordersFor(uri string) []*envRecorder {
+// release drops the watcher of a URI.
+func (i *subscriberIndex) release(uri string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	return slices.Clone(i.watchers[uri])
+	delete(i.watchers, uri)
+}
+
+// recorderFor returns the buffer a notification about one URI belongs in, and
+// whether any test watches it.
+func (i *subscriberIndex) recorderFor(uri string) (*envRecorder, bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	rec, watched := i.watchers[uri]
+	return rec, watched
 }
 
 // logReporter reports a shard failure at the end of a run, where there is no
@@ -908,6 +934,7 @@ func sessionLines() []e2ecalls.Line {
 			Resources:         slices.Clone(conn.served.resources),
 			ResourceTemplates: slices.Clone(conn.served.templates),
 			Prompts:           slices.Clone(conn.served.prompts),
+			Completions:       completionReferences(conn.served),
 			DispatchObserved:  conn.dispatchObserved.Load(),
 		})
 		return true

@@ -523,13 +523,21 @@ func TestServerProcess_ReaperLostTheWait_ExitStatusNamesTheReason(t *testing.T) 
 	}
 }
 
+// stubRoute is one more endpoint a test's stub GitLab answers, for a test
+// whose subject needs the server to read something: a subscription, whose
+// first read is its authorization check.
+type stubRoute struct {
+	pattern string
+	handler http.HandlerFunc
+}
+
 // startStubGitLab serves the handful of endpoints the server asks at startup,
-// and nothing else.
+// the routes a test adds, and nothing else.
 //
 // It is deliberately minimal: what is under test here is the launcher, and a
 // stub that answered tool calls would invite assertions about tools that
 // belong against a real instance.
-func startStubGitLab(t *testing.T) *httptest.Server {
+func startStubGitLab(t *testing.T, routes ...stubRoute) *httptest.Server {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -539,6 +547,9 @@ func startStubGitLab(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		writeStubJSON(w, map[string]any{"id": 7, "username": "harness", "name": "Harness", "is_admin": true})
 	})
+	for _, route := range routes {
+		mux.HandleFunc(route.pattern, route.handler)
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		// The license and the token's own scopes are both asked for and both
 		// optional: a 404 is what an unlicensed instance and an older GitLab

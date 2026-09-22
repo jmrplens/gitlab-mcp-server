@@ -9,6 +9,8 @@ package fixture
 import (
 	"context"
 	"errors"
+	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -152,6 +154,38 @@ func TestWorldBindings_Parameters_ComeFromTheObjects(t *testing.T) {
 	}
 	if got, want := len(world.Bindings()), len(cases); got != want {
 		t.Errorf("Bindings() has %d entries, want the %d this test names", got, want)
+	}
+}
+
+// TestWorldBindings_Extras_JoinOnlyOnceMade checks the plain bindings the
+// extras add: each of the six names that mean one object across the catalog
+// is bound to that object once the World made it, and absent while it has
+// not, so the read sweep names it unbound rather than calling an action with
+// a zero.
+func TestWorldBindings_Extras_JoinOnlyOnceMade(t *testing.T) {
+	bare := extrasWorld()
+	core := len(bare.Bindings())
+	made := madeWorld()
+	want := map[string]any{
+		"pipeline_id":    stubPipelineID,
+		"job_id":         stubJobID,
+		"tag_name":       "world-tag-run",
+		"environment_id": stubEnvironmentID,
+		"deployment_id":  stubDeploymentID,
+		"deploy_key_id":  stubDeployKeyID,
+	}
+	for name, value := range want {
+		t.Run(name, func(t *testing.T) {
+			if got, bound := made.Bind(name); !bound || got != value {
+				t.Errorf("Bind(%s) on a World that made it = (%v, %t), want %v", name, got, bound, value)
+			}
+			if got, bound := bare.Bind(name); bound {
+				t.Errorf("Bind(%s) on a World that did not make it = %v, want no binding", name, got)
+			}
+		})
+	}
+	if got := len(made.Bindings()); got != core+len(want) {
+		t.Errorf("Bindings() of a World with every extra has %d entries, want the %d of the core and the %d plain extras", got, core, len(want))
 	}
 }
 
@@ -307,6 +341,102 @@ func TestTeardownWorld_Changed_FailsAndStillDeletes(t *testing.T) {
 	}
 	if _, groups := stub.remaining(); len(groups) != 0 {
 		t.Errorf("groups left = %v, want the World deleted even though it changed", groups)
+	}
+}
+
+// TestTeardownWorld_PersonalSnippet_IsDeletedWithTheRest checks the one World
+// object neither the project's deletion nor the group's takes along: the
+// personal snippet belongs to the user, so the teardown deletes it itself, and
+// a refusal there is reported without keeping the project and the group from
+// going.
+func TestTeardownWorld_PersonalSnippet_IsDeletedWithTheRest(t *testing.T) {
+	cases := []struct {
+		name    string
+		answer  scriptedAnswer
+		wantErr string
+	}{
+		{name: "deleted", answer: stubNoContent()},
+		{name: "already gone", answer: stubRefusal(http.StatusNotFound, "404 Snippet Not Found")},
+		{name: "refused", answer: stubRefusal(http.StatusForbidden, "403 Forbidden"), wantErr: "tearing down the World's personal snippet"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.addGroup(1, "World group", "e2e-world-group-run")
+			stub.addProject(2, "World project", "e2e-world-group-run/e2e-world-project-run")
+			stub.answers(http.MethodDelete, "/api/v4/snippets/10", testCase.answer)
+			world := &World{
+				Group:   Group{ID: 1, Path: "e2e-world-group-run"},
+				Project: Project{ID: 2, Path: "e2e-world-group-run/e2e-world-project-run"},
+				Snippet: Snippet{ID: 10},
+			}
+
+			err := teardownWorld(client, world)
+
+			if testCase.wantErr == "" && err != nil {
+				t.Errorf("teardownWorld() error = %v, want nil", err)
+			}
+			if testCase.wantErr != "" && (err == nil || !strings.Contains(err.Error(), testCase.wantErr)) {
+				t.Errorf("teardownWorld() error = %v, want it to name the snippet", err)
+			}
+			if sent := sentPaths(stub); !slices.Equal(sent, []string{"DELETE /api/v4/snippets/10"}) {
+				t.Errorf("the scripted requests were %v, want exactly the snippet's deletion", sent)
+			}
+			if projects, groups := stub.remaining(); len(projects) != 0 || len(groups) != 0 {
+				t.Errorf("left projects %v and groups %v, want both deleted whatever the snippet answered", projects, groups)
+			}
+		})
+	}
+}
+
+// TestTeardownWorld_DeletionRefused_ReportsItAndDeletesTheRest checks the
+// teardown goes on past an object GitLab would not delete: the failure names
+// the object, and the other one is still removed.
+func TestTeardownWorld_DeletionRefused_ReportsItAndDeletesTheRest(t *testing.T) {
+	cases := []struct {
+		name         string
+		refuse       func(*stubGitLab)
+		wantErr      string
+		wantProjects int
+		wantGroups   int
+	}{
+		{
+			name: "project",
+			refuse: func(stub *stubGitLab) {
+				stub.projects[2].permanentRemoveUnsupported = true
+				stub.projects[2].permanentRemoveStatus = http.StatusForbidden
+			},
+			wantErr: "tearing down the World project", wantProjects: 1,
+		},
+		{
+			name: "group",
+			refuse: func(stub *stubGitLab) {
+				stub.groups[1].permanentRemoveUnsupported = true
+				stub.groups[1].permanentRemoveStatus = http.StatusForbidden
+			},
+			wantErr: "tearing down the World:", wantGroups: 1,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.addGroup(1, "World group", "e2e-world-group-run")
+			stub.addProject(2, "World project", "e2e-world-group-run/e2e-world-project-run")
+			stub.configure(func() { testCase.refuse(stub) })
+			world := &World{
+				Group:   Group{ID: 1, Path: "e2e-world-group-run"},
+				Project: Project{ID: 2, Path: "e2e-world-group-run/e2e-world-project-run"},
+			}
+
+			err := teardownWorld(client, world)
+
+			if err == nil || !strings.Contains(err.Error(), testCase.wantErr) {
+				t.Errorf("teardownWorld() error = %v, want it to say %q", err, testCase.wantErr)
+			}
+			if projects, groups := stub.remaining(); len(projects) != testCase.wantProjects || len(groups) != testCase.wantGroups {
+				t.Errorf("left projects %v and groups %v, want %d and %d", projects, groups, testCase.wantProjects, testCase.wantGroups)
+			}
+		})
 	}
 }
 

@@ -1,18 +1,21 @@
 //go:build e2e
 
-// board.go builds a group issue board over GraphQL, because the REST create
-// route is the Premium one: it refuses a first board on an unlicensed
-// instance, while the mutation runs the same service the boards page runs
-// and lets every group have one board on every edition. The board goes with
-// the group, so nothing is registered.
+// board.go builds an issue board over GraphQL, because the REST create route
+// is the Premium one: it refuses a first board on an unlicensed instance,
+// while the mutation runs the same service the boards page runs and lets
+// every group and every project have one board on every edition. A board goes
+// with the group or the project it is in, so nothing is registered.
 
 package fixture
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -26,17 +29,41 @@ type GroupBoard struct {
 	Name string
 }
 
-// boardMutation creates one group issue board.
-const boardMutation = `mutation($groupPath: ID!, $name: String!) {
+// ProjectBoard is a project issue board a builder created.
+type ProjectBoard struct {
+	// ID is the numeric identifier the project board actions and the board
+	// resource take.
+	ID int64
+	// Name is what it was created with.
+	Name string
+}
+
+// The two board mutations, one per scope. They are two documents rather than
+// one naming both paths because the input takes exactly one of them, and a
+// document sending the other as null would leave GitLab to decide whether a
+// null counts as naming it.
+const (
+	groupBoardMutation = `mutation($groupPath: ID!, $name: String!) {
   createBoard(input: { groupPath: $groupPath, name: $name }) {
     board { id }
     errors
   }
 }`
+	projectBoardMutation = `mutation($projectPath: ID!, $name: String!) {
+  createBoard(input: { projectPath: $projectPath, name: $name }) {
+    board { id }
+    errors
+  }
+}`
+)
 
 // boardGIDPrefix is what GitLab puts in front of a board's number in its
 // global ID.
 const boardGIDPrefix = "gid://gitlab/Board/"
+
+// errBoardWithoutID is a board mutation GitLab answered with no board and no
+// refusal, which leaves nothing to address the board by.
+var errBoardWithoutID = errors.New("the board was created with no ID")
 
 // NewGroupBoard creates an issue board in the group, named with the run's
 // own scoping.
@@ -44,6 +71,29 @@ func NewGroupBoard(e *harness.Env, group Group, prefix string) GroupBoard {
 	e.T.Helper()
 
 	name := e.Name(prefix)
+	id, gid, err := createBoard(e.Ctx, e.Client(), groupBoardMutation, map[string]any{"groupPath": group.Path, "name": name})
+	if err != nil {
+		e.T.Fatalf("creating a board in group %s: %v", group.Path, err)
+	}
+	return GroupBoard{ID: id, GID: gid, Name: name}
+}
+
+// createProjectBoard creates an issue board in the project the path names.
+func createProjectBoard(ctx context.Context, client *gitlabclient.Client, projectPath, name string) (ProjectBoard, error) {
+	id, _, err := createBoard(ctx, client, projectBoardMutation, map[string]any{"projectPath": projectPath, "name": name})
+	if err != nil {
+		return ProjectBoard{}, err
+	}
+	return ProjectBoard{ID: id, Name: name}, nil
+}
+
+// createBoard sends one board mutation and reads the board it made, as the
+// number the REST actions take and the global ID it was created as.
+//
+// A refusal GitLab reports inside the payload is an error here, because it
+// arrives as a 200: a caller reading only the transport error would take it
+// for a board with no ID.
+func createBoard(ctx context.Context, client *gitlabclient.Client, mutation string, variables map[string]any) (id int64, gid string, err error) {
 	var created struct {
 		CreateBoard struct {
 			Board *struct {
@@ -52,21 +102,21 @@ func NewGroupBoard(e *harness.Env, group Group, prefix string) GroupBoard {
 			Errors []string `json:"errors"`
 		} `json:"createBoard"`
 	}
-	err := mutate(e, boardMutation, map[string]any{"groupPath": group.Path, "name": name}, &created)
-	if err != nil {
-		e.T.Fatalf("creating a board in group %s: %v", group.Path, err)
+	if sendErr := runGraphQL(ctx, client, mutation, variables, &created); sendErr != nil {
+		return 0, "", sendErr
 	}
 	if errs := created.CreateBoard.Errors; len(errs) > 0 {
-		e.T.Fatalf("GitLab refused a board in group %s: %s", group.Path, strings.Join(errs, "; "))
+		return 0, "", fmt.Errorf("GitLab refused the board: %s", strings.Join(errs, "; "))
 	}
 	if created.CreateBoard.Board == nil || created.CreateBoard.Board.ID == "" {
-		e.T.Fatalf("the board in group %s was created with no ID", group.Path)
+		return 0, "", errBoardWithoutID
 	}
-	id, err := boardIDFromGID(created.CreateBoard.Board.ID)
+	gid = created.CreateBoard.Board.ID
+	id, err = boardIDFromGID(gid)
 	if err != nil {
-		e.T.Fatal(err)
+		return 0, "", err
 	}
-	return GroupBoard{ID: id, GID: created.CreateBoard.Board.ID, Name: name}
+	return id, gid, nil
 }
 
 // boardIDFromGID reads the number out of a board's global ID, which is what

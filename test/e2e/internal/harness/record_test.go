@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -708,37 +709,52 @@ func TestCurrentInFlight_AnswersOnlyWhenOneCallIsInFlight(t *testing.T) {
 	}
 }
 
-// TestSubscriberIndex_RecordsEveryWatcherAndForgetsTheReleasedOne checks the
-// index that says whose record a resource-updated notification belongs in.
-func TestSubscriberIndex_RecordsEveryWatcherAndForgetsTheReleasedOne(t *testing.T) {
+// TestSubscriberIndex_OneWatcherPerURI_TurnsTheSecondAwayUntilReleased checks
+// the index that says whose record a resource-updated notification belongs in,
+// and that it holds one test per URI: the SDK keeps one subscription per URI
+// and per session, so a second test would share the first one's.
+func TestSubscriberIndex_OneWatcherPerURI_TurnsTheSecondAwayUntilReleased(t *testing.T) {
 	env := newEnv(t, offlineInstance())
 	other := newEnvRecorder(env)
 	index := newSubscriberIndex()
 
-	releaseFirst := index.add("gitlab://project/7", env.recorder)
-	releaseSecond := index.add("gitlab://project/7", other)
+	release, claimed := index.claim("gitlab://project/7", env.recorder)
+	if !claimed {
+		t.Fatal("the first claim on a URI nobody watches was turned away")
+	}
+	if _, secondClaimed := index.claim("gitlab://project/7", other); secondClaimed {
+		t.Error("a second test was let watch a URI another test already watches on this session")
+	}
+	if rec, watched := index.recorderFor("gitlab://project/7"); !watched || rec != env.recorder {
+		t.Errorf("recorderFor = (%p, %t), want the first test's recorder, which the refused claim must not replace", rec, watched)
+	}
+	if _, watched := index.recorderFor("gitlab://project/8"); watched {
+		t.Error("a resource nobody watches has a watcher")
+	}
+	otherRelease, otherClaimed := index.claim("gitlab://project/8", other)
+	if !otherClaimed {
+		t.Fatal("a claim on another URI was turned away")
+	}
 
-	if watchers := index.recordersFor("gitlab://project/7"); len(watchers) != 2 {
-		t.Errorf("the index holds %d watchers, want both tests watching one resource", len(watchers))
+	release()
+	if _, watched := index.recorderFor("gitlab://project/7"); watched {
+		t.Error("a released watcher is still recorded")
 	}
-	if watchers := index.recordersFor("gitlab://project/8"); len(watchers) != 0 {
-		t.Errorf("a resource nobody watches has %d watchers", len(watchers))
+	if rec, watched := index.recorderFor("gitlab://project/8"); !watched || rec != other {
+		t.Error("releasing one URI dropped the watcher of another")
 	}
-
-	releaseSecond()
-	if watchers := index.recordersFor("gitlab://project/7"); len(watchers) != 1 || watchers[0] != env.recorder {
-		t.Errorf("the wrong watcher was dropped: %d left", len(watchers))
+	if _, reclaimed := index.claim("gitlab://project/7", other); !reclaimed {
+		t.Error("a URI whose watcher was released cannot be claimed again")
 	}
-	releaseFirst()
-	if watchers := index.recordersFor("gitlab://project/7"); len(watchers) != 0 {
-		t.Errorf("the last watcher was not dropped: %d left", len(watchers))
-	}
+	otherRelease()
 }
 
 // TestRecordSubscribe_CreditsTheSubscribeToItsTest checks that the verb's own
-// record names the resource and the test, since the sending middleware cannot:
-// the SDK opens the subscription on a background context under the current
-// protocol, so the attribution never reaches it.
+// record names the resource, the test and what came of the subscribe, since
+// the sending middleware cannot: the SDK opens the subscription on a
+// background context under the current protocol, so the attribution never
+// reaches it. The outcome is the caller's, which is what lets a refused
+// subscribe be recorded as the refusal it was.
 func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	env := newEnv(t, offlineInstance())
 	conn := &sessionConn{
@@ -747,7 +763,7 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 		cfg:   ServerConfig{Surface: SurfaceDynamic, Mode: ModeDefault, Capabilities: CapabilitiesFull},
 	}
 
-	conn.recordSubscribe(env.recorder, "gitlab://project/7")
+	conn.recordSubscribe(env.recorder, "gitlab://project/7", ExpectationAny, e2ecalls.OutcomeProtocolError)
 
 	lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
 	var found *e2ecalls.Call
@@ -762,10 +778,213 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	if found.Method != methodSubscribe || found.Target != "gitlab://project/7" {
 		t.Errorf("subscribe line = method %q target %q, want %q and gitlab://project/7", found.Method, found.Target, methodSubscribe)
 	}
-	if found.Test != env.T.Name() || found.Outcome != e2ecalls.OutcomeOK || found.TestStatus != e2ecalls.StatusPassed {
-		t.Errorf("subscribe line credited test %q outcome %q status %q, want this test, ok, passed",
-			found.Test, found.Outcome, found.TestStatus)
+	if found.Test != env.T.Name() || found.TestStatus != e2ecalls.StatusPassed || found.Purpose != string(PurposeTest) {
+		t.Errorf("subscribe line credited test %q status %q purpose %q, want this test, passed, test",
+			found.Test, found.TestStatus, found.Purpose)
 	}
+	if found.Outcome != e2ecalls.OutcomeProtocolError || found.Expectation != ExpectationAny {
+		t.Errorf("subscribe line outcome %q expectation %q, want the caller's %q and %q",
+			found.Outcome, found.Expectation, e2ecalls.OutcomeProtocolError, ExpectationAny)
+	}
+	if found.Session != "dynamic-default-full" || found.Surface != string(SurfaceDynamic) {
+		t.Errorf("subscribe line names session %q on %q, want the session it was made on", found.Session, found.Surface)
+	}
+}
+
+// TestRecordReceiving_Acknowledgement_WakesOnlyTheURIsItNames checks the one
+// place a subscribe's answer can be seen on protocol 2026-07-28: an
+// acknowledgement wakes whoever waits on each URI it names and nobody else,
+// the same payload under another method wakes nobody, and a payload of another
+// shape or none is passed over, while the chain goes on to the SDK's own
+// handler every time.
+func TestRecordReceiving_Acknowledgement_WakesOnlyTheURIsItNames(t *testing.T) {
+	conn := &sessionConn{acks: newUpdateNotifier(), notifier: newUpdateNotifier(), subscribers: newSubscriberIndex()}
+	named := conn.acks.watch("gitlab://project/7")
+	other := conn.acks.watch("gitlab://project/8")
+	passed := 0
+	receive := conn.recordReceiving()(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		passed++
+		return nil, nil //nolint:nilnil // a notification has no result, which is what the SDK's own handler answers it with
+	})
+	ack := &mcp.ClientRequest[*mcp.SubscriptionsAcknowledgedParams]{Params: &mcp.SubscriptionsAcknowledgedParams{
+		Notifications: mcp.NotificationSubscriptions{ResourceSubscriptions: []string{"gitlab://project/7"}},
+	}}
+
+	_, _ = receive(t.Context(), methodSubscriptionsAcknowledged, ack)
+	select {
+	case <-named:
+	default:
+		t.Error("the URI the acknowledgement names was not woken")
+	}
+	select {
+	case <-other:
+		t.Error("a URI the acknowledgement does not name was woken")
+	default:
+	}
+
+	quiet := []struct {
+		name   string
+		method string
+		req    mcp.Request
+	}{
+		{name: "another method", method: methodResourceUpdated, req: ack},
+		{
+			name: "another shape", method: methodSubscriptionsAcknowledged,
+			req: &mcp.ClientRequest[*mcp.ResourceUpdatedNotificationParams]{Params: &mcp.ResourceUpdatedNotificationParams{URI: "gitlab://project/7"}},
+		},
+		{name: "no params", method: methodSubscriptionsAcknowledged, req: &mcp.ClientRequest[*mcp.SubscriptionsAcknowledgedParams]{}},
+	}
+	for _, testCase := range quiet {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, _ = receive(t.Context(), testCase.method, testCase.req)
+			select {
+			case <-named:
+				t.Error("the URI was woken by something that is not an acknowledgement of it")
+			default:
+			}
+		})
+	}
+	if passed != 1+len(quiet) {
+		t.Errorf("the chain went on %d times, want every one of the %d notifications passed to the SDK", passed, 1+len(quiet))
+	}
+}
+
+// TestRecordReceiving_ResourceUpdate_IsRecordedAgainstItsWatcher checks the
+// delivery half of a subscription's record: an update for a URI a test watches
+// is written against that test, and one for a URI nobody watches any more, or
+// a payload of another shape, is written nowhere.
+func TestRecordReceiving_ResourceUpdate_IsRecordedAgainstItsWatcher(t *testing.T) {
+	env := newEnv(t, offlineInstance())
+	conn := &sessionConn{
+		label: "dynamic-default-full", inst: env.inst,
+		cfg:      ServerConfig{Surface: SurfaceDynamic, Mode: ModeDefault, Capabilities: CapabilitiesFull},
+		notifier: newUpdateNotifier(), acks: newUpdateNotifier(), subscribers: newSubscriberIndex(),
+	}
+	if _, claimed := conn.subscribers.claim("gitlab://project/7", env.recorder); !claimed {
+		t.Fatal("the claim on an unwatched URI was turned away")
+	}
+	receive := conn.recordReceiving()(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		return nil, nil //nolint:nilnil // a notification has no result, which is what the SDK's own handler answers it with
+	})
+	update := func(uri string) mcp.Request {
+		return &mcp.ClientRequest[*mcp.ResourceUpdatedNotificationParams]{Params: &mcp.ResourceUpdatedNotificationParams{URI: uri}}
+	}
+
+	_, _ = receive(t.Context(), methodResourceUpdated, update("gitlab://project/7"))
+	_, _ = receive(t.Context(), methodResourceUpdated, update("gitlab://project/8"))
+	_, _ = receive(t.Context(), methodResourceUpdated, &mcp.ClientRequest[*mcp.SubscriptionsAcknowledgedParams]{})
+	_, _ = receive(t.Context(), methodResourceUpdated, &mcp.ClientRequest[*mcp.ResourceUpdatedNotificationParams]{})
+
+	var updates []*e2ecalls.Call
+	for _, line := range env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed) {
+		if call, isCall := line.(*e2ecalls.Call); isCall {
+			updates = append(updates, call)
+		}
+	}
+	if len(updates) != 1 {
+		t.Fatalf("recorded %d lines, want the one update of the watched resource", len(updates))
+	}
+	got := updates[0]
+	if got.Method != methodResourceUpdated || got.Target != "gitlab://project/7" || got.Test != env.T.Name() ||
+		got.Outcome != e2ecalls.OutcomeOK || got.Session != "dynamic-default-full" {
+		t.Errorf("update line = %+v, want the watched resource's update credited to this test on its session", got)
+	}
+}
+
+// TestSessionLines_Completions_AreSpelledAsTheCompletionCallsNameThem checks
+// the completion denominator end to end against the real binary: a session
+// line lists a reference for every prompt argument and template variable the
+// session served, spelled exactly as a completion call's record names its
+// target, so the coverage command can find each call in the list it divides
+// by. The minimal surface serves one template and no prompt, so its list is
+// that template's one variable.
+func TestSessionLines_Completions_AreSpelledAsTheCompletionCallsNameThem(t *testing.T) {
+	inst := stubInstance(t)
+
+	t.Run("full", func(t *testing.T) {
+		env := newEnv(t, inst)
+		session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
+		completions := sessionLineCompletions(t, session)
+
+		var want []string
+		for _, spec := range session.PromptSpecs() {
+			for _, argument := range append(append([]string{}, spec.Required...), spec.Optional...) {
+				want = append(want, spec.Name+" "+argument)
+			}
+		}
+		for _, template := range session.ResourceTemplates() {
+			for _, variable := range TemplateVariables(template) {
+				want = append(want, template+" "+variable)
+			}
+		}
+		slices.Sort(want)
+		if !slices.Equal(completions, slices.Compact(want)) {
+			t.Errorf("the session line lists %d completions, want the %d the session's listings name", len(completions), len(want))
+		}
+
+		prompt := firstPromptWithAnArgument(t, session)
+		session.CompletePrompt(prompt.Name, prompt.Required[0], "")
+		session.CompleteResource("gitlab://project/{project_id}", "project_id", "")
+		for _, line := range env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed) {
+			call, isCall := line.(*e2ecalls.Call)
+			if !isCall || call.Method != methodComplete {
+				continue
+			}
+			if !slices.Contains(completions, call.Target) {
+				t.Errorf("a completion was recorded as %q, which the session line's list does not name", call.Target)
+			}
+		}
+	})
+
+	t.Run("minimal", func(t *testing.T) {
+		env := newEnv(t, inst)
+		session := env.Session(ServerConfig{Surface: SurfaceDynamic, Capabilities: CapabilitiesMinimal, Private: true})
+		if got, want := sessionLineCompletions(t, session), []string{"gitlab://tools/{id} id"}; !slices.Equal(got, want) {
+			t.Errorf("the minimal session line lists completions %q, want %q", got, want)
+		}
+	})
+}
+
+// TestSessionLines_SessionThatNeverStarted_WritesNoLine checks that a pool
+// entry whose session never connected writes no session line: it served
+// nothing, and a line for it would add an empty session to the denominator.
+func TestSessionLines_SessionThatNeverStarted_WritesNoLine(t *testing.T) {
+	before := len(sessionLines())
+	sessions.Store("never-started", &sessionEntry{err: errors.New("the child did not start")})
+	sessions.Store("not-an-entry", "a value the pool never stores")
+	t.Cleanup(func() {
+		sessions.Delete("never-started")
+		sessions.Delete("not-an-entry")
+	})
+
+	if got := len(sessionLines()); got != before {
+		t.Errorf("sessionLines() wrote %d lines, want the %d it wrote before a session that never started was pooled", got, before)
+	}
+}
+
+// sessionLineCompletions returns the completion list the session line of one
+// session carries.
+func sessionLineCompletions(t *testing.T, session *Session) []string {
+	t.Helper()
+	for _, line := range sessionLines() {
+		if recorded, isSession := line.(*e2ecalls.Session); isSession && recorded.Label == session.Label() {
+			return recorded.Completions
+		}
+	}
+	t.Fatalf("no session line names %s", session.Label())
+	return nil
+}
+
+// firstPromptWithAnArgument returns a served prompt that requires an argument.
+func firstPromptWithAnArgument(t *testing.T, session *Session) PromptSpec {
+	t.Helper()
+	for _, spec := range session.PromptSpecs() {
+		if len(spec.Required) > 0 {
+			return spec
+		}
+	}
+	t.Fatal("the full capability session serves no prompt with a required argument")
+	return PromptSpec{}
 }
 
 // TestElicitationKeys_NamesTheFieldsAskedFor covers what an elicitation record

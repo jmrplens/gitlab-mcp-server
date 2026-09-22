@@ -190,6 +190,68 @@ func TestPromptSpecOf_SplitsTheArgumentsAndSkipsAHole(t *testing.T) {
 	}
 }
 
+// TestTemplateVariables_Templates_NamesEachVariableInOrder pins what a
+// template variable is, for the completion sweep and the denominator alike: a
+// braced name, the reserved "+" of a path variable dropped, in the order they
+// appear, and nothing read past a brace that is never closed.
+func TestTemplateVariables_Templates_NamesEachVariableInOrder(t *testing.T) {
+	cases := []struct {
+		template string
+		want     []string
+	}{
+		{template: "gitlab://user/current"},
+		{template: "gitlab://project/{project_id}", want: []string{"project_id"}},
+		{template: "gitlab://project/{project_id}/mr/{merge_request_iid}/notes", want: []string{"project_id", "merge_request_iid"}},
+		{template: "gitlab://project/{project_id}/file/{ref}/{+path}", want: []string{"project_id", "ref", "path"}},
+		{template: "gitlab://x/{a}{b}", want: []string{"a", "b"}},
+		{template: "gitlab://x/{a}/{unclosed", want: []string{"a"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.template, func(t *testing.T) {
+			if got := TemplateVariables(testCase.template); !slices.Equal(got, testCase.want) {
+				t.Errorf("TemplateVariables() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCompletionReferences_PromptsAndTemplates_ListEveryArgumentOnce checks
+// the completion denominator a session line carries: every argument of every
+// prompt, required and optional alike, and every variable of every template,
+// each spelled the way a completion call names its target, sorted and listed
+// once however many listings name it.
+func TestCompletionReferences_PromptsAndTemplates_ListEveryArgumentOnce(t *testing.T) {
+	served := servedSets{
+		promptSpecs: []PromptSpec{
+			{Name: "summarize", Required: []string{"project_id"}, Optional: []string{"since"}},
+			{Name: "triage", Optional: []string{"label"}},
+			{Name: "status"},
+		},
+		templates: []string{
+			"gitlab://project/{project_id}/file/{ref}/{+path}",
+			"gitlab://tools/{id}",
+			"gitlab://tools/{id}",
+		},
+		resources: []string{"gitlab://user/current"},
+	}
+
+	want := []string{
+		completionCallTarget("gitlab://project/{project_id}/file/{ref}/{+path}", "path"),
+		completionCallTarget("gitlab://project/{project_id}/file/{ref}/{+path}", "project_id"),
+		completionCallTarget("gitlab://project/{project_id}/file/{ref}/{+path}", "ref"),
+		completionCallTarget("gitlab://tools/{id}", "id"),
+		completionCallTarget("summarize", "project_id"),
+		completionCallTarget("summarize", "since"),
+		completionCallTarget("triage", "label"),
+	}
+	if got := completionReferences(served); !slices.Equal(got, want) {
+		t.Errorf("completionReferences() =\n  %s\nwant\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+	if got := completionReferences(servedSets{}); len(got) != 0 {
+		t.Errorf("completionReferences() of a session serving nothing = %q, want none", got)
+	}
+}
+
 // TestDifference_ReportsOnlyWhatIsMissingAndDeduplicates pins the set helper
 // the report is built on.
 func TestDifference_ReportsOnlyWhatIsMissingAndDeduplicates(t *testing.T) {

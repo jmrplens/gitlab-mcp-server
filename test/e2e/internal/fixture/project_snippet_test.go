@@ -7,10 +7,46 @@
 package fixture
 
 import (
+	"net/http"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
+
+// TestCreateProjectSnippet_Answers_SendsTheOneFilePrivately checks the
+// creator asks for a private snippet carrying the one fixture file under the
+// title and description it was given, reads back what GitLab made, and hands
+// a refusal back as it came.
+func TestCreateProjectSnippet_Answers_SendsTheOneFilePrivately(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/snippets",
+		stubCreated(map[string]any{"id": 9, "title": "snippet-run", "files": []map[string]any{{"path": projectSnippetFilePath}}}),
+		stubRefusal(http.StatusForbidden, "403 Forbidden"))
+
+	got, err := createProjectSnippet(t.Context(), client, 2, "snippet-run", "the World's")
+	if err != nil {
+		t.Fatalf("createProjectSnippet() error = %v, want nil", err)
+	}
+	if want := (ProjectSnippet{ID: 9, ProjectID: 2, Title: "snippet-run", FileName: projectSnippetFilePath}); got != want {
+		t.Errorf("createProjectSnippet() = %+v, want %+v", got, want)
+	}
+	sent := stub.recordedRequests()[0].Body
+	if sent["title"] != "snippet-run" || sent["description"] != "the World's" || sent["visibility"] != "private" {
+		t.Errorf("createProjectSnippet() sent %v, want the title, the description and private", sent)
+	}
+	files, _ := sent["files"].([]any)
+	if len(files) != 1 {
+		t.Fatalf("createProjectSnippet() sent files %v, want the one fixture file", sent["files"])
+	}
+	if file, _ := files[0].(map[string]any); file["file_path"] != projectSnippetFilePath || file["content"] != projectSnippetContent {
+		t.Errorf("createProjectSnippet() sent file %v, want the fixture's path and content", file)
+	}
+
+	got, err = createProjectSnippet(t.Context(), client, 2, "snippet-run", "the World's")
+	if !IsStatus(err, http.StatusForbidden) || got != (ProjectSnippet{}) {
+		t.Errorf("createProjectSnippet() on a refusal = %+v, %v; want nothing and GitLab's 403", got, err)
+	}
+}
 
 // TestProjectSnippetOf_Fields_ReadsWhatATestNeeds checks the conversion
 // with the file name in the legacy field and with it only in the files

@@ -44,6 +44,65 @@ func TestBoardIDFromGID_Answers_ReadsTheNumberOrRefuses(t *testing.T) {
 	}
 }
 
+// TestCreateProjectBoard_Created_NamesTheProjectAndReadsTheNumber checks the
+// project board creator sends the project's document with the project's path,
+// and reads the number the board resource and the REST actions take out of
+// the global ID GitLab answers with.
+func TestCreateProjectBoard_Created_NamesTheProjectAndReadsTheNumber(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.configure(func() {
+		stub.graphqlAnswers = []string{`{"data":{"createBoard":{"board":{"id":"gid://gitlab/Board/12"},"errors":[]}}}`}
+	})
+
+	got, err := createProjectBoard(t.Context(), client, "group/project", "board-run")
+	if err != nil {
+		t.Fatalf("createProjectBoard() error = %v, want nil", err)
+	}
+	if want := (ProjectBoard{ID: 12, Name: "board-run"}); got != want {
+		t.Errorf("createProjectBoard() = %+v, want %+v", got, want)
+	}
+	if len(stub.graphqlDocuments) != 1 || stub.graphqlDocuments[0] != projectBoardMutation {
+		t.Errorf("the stub was sent %q, want exactly the project board mutation", stub.graphqlDocuments)
+	}
+}
+
+// TestCreateBoard_Answers_RefusesWhatNamesNoBoard checks every way a board
+// mutation's answer can fail to name a board: GitLab's refusal inside the
+// payload, a payload with no board, a global ID of something else, and a
+// document GitLab refused outright. Each is an error, since each would
+// otherwise hand a caller a board numbered zero.
+func TestCreateBoard_Answers_RefusesWhatNamesNoBoard(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer string
+		want   string
+	}{
+		{
+			name:   "refused in the payload",
+			answer: `{"data":{"createBoard":{"board":null,"errors":["Multiple boards are not available"]}}}`,
+			want:   "GitLab refused the board: Multiple boards are not available",
+		},
+		{name: "no board", answer: `{"data":{"createBoard":{"board":null,"errors":[]}}}`, want: errBoardWithoutID.Error()},
+		{name: "no id", answer: `{"data":{"createBoard":{"board":{"id":""},"errors":[]}}}`, want: errBoardWithoutID.Error()},
+		{name: "another object", answer: `{"data":{"createBoard":{"board":{"id":"gid://gitlab/Issue/3"},"errors":[]}}}`, want: "does not start with"},
+		{name: "document refused", answer: `{"data":null,"errors":[{"message":"Argument 'projectPath' is invalid"}]}`, want: "GitLab refused the document"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.configure(func() { stub.graphqlAnswers = []string{testCase.answer} })
+
+			got, err := createProjectBoard(t.Context(), client, "group/project", "board-run")
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("createProjectBoard() error = %v, want it to say %q", err, testCase.want)
+			}
+			if got != (ProjectBoard{}) {
+				t.Errorf("createProjectBoard() = %+v on a failure, want nothing", got)
+			}
+		})
+	}
+}
+
 // TestRunGraphQL_BoardMutation_DecodesTheBoard checks the board mutation's
 // answer decodes into the shape the builder reads, through the same sender
 // the iteration builder uses, so a renamed payload field fails here rather
@@ -62,7 +121,7 @@ func TestRunGraphQL_BoardMutation_DecodesTheBoard(t *testing.T) {
 			Errors []string `json:"errors"`
 		} `json:"createBoard"`
 	}
-	err := runGraphQL(t.Context(), client, boardMutation, map[string]any{"groupPath": "g", "name": "b"}, &got)
+	err := runGraphQL(t.Context(), client, groupBoardMutation, map[string]any{"groupPath": "g", "name": "b"}, &got)
 	if err != nil {
 		t.Fatalf("runGraphQL() error = %v, want nil", err)
 	}

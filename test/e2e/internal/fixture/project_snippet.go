@@ -8,8 +8,11 @@
 package fixture
 
 import (
+	"context"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -39,23 +42,29 @@ func NewProjectSnippet(e *harness.Env, project Project) ProjectSnippet {
 
 	title := e.Name("snippet")
 	snippet, err := retryTransient(e, "create project snippet "+title, createRetries, func() (ProjectSnippet, error) {
-		created, _, err := e.Client().GL().ProjectSnippets.CreateSnippet(project.ID, &gl.CreateProjectSnippetOptions{
-			Title:       new(title),
-			Description: new("e2e: " + e.T.Name()),
-			Visibility:  new(gl.PrivateVisibility),
-			Files: &[]*gl.CreateSnippetFileOptions{
-				{FilePath: new(projectSnippetFilePath), Content: new(projectSnippetContent)},
-			},
-		}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return ProjectSnippet{}, err
-		}
-		return projectSnippetOf(created, project.ID), nil
+		return createProjectSnippet(e.Ctx, e.Client(), project.ID, title, "e2e: "+e.T.Name())
 	})
 	if err != nil {
 		e.T.Fatalf("creating project snippet %q in project %d: %v", title, project.ID, err)
 	}
 	return snippet
+}
+
+// createProjectSnippet asks GitLab for a private snippet in the project,
+// carrying the one fixture file.
+func createProjectSnippet(ctx context.Context, client *gitlabclient.Client, projectID int64, title, description string) (ProjectSnippet, error) {
+	created, _, err := client.GL().ProjectSnippets.CreateSnippet(projectID, &gl.CreateProjectSnippetOptions{
+		Title:       new(title),
+		Description: new(description),
+		Visibility:  new(gl.PrivateVisibility),
+		Files: &[]*gl.CreateSnippetFileOptions{
+			{FilePath: new(projectSnippetFilePath), Content: new(projectSnippetContent)},
+		},
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return ProjectSnippet{}, err
+	}
+	return projectSnippetOf(created, projectID), nil
 }
 
 // projectSnippetOf reads what a test needs out of what GitLab returned. The

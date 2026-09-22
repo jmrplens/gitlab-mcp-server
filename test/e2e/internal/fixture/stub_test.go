@@ -448,13 +448,19 @@ func (s *stubGitLab) mergeRequest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"iid": pathID(r, "iid"), "detailed_merge_status": status})
 }
 
-// pipeline answers the configured failures, then the next status.
+// pipeline answers the configured failures, then the next status, or the
+// whole pipeline a test put under the request path when it needs more of one
+// than its status.
 func (s *stubGitLab) pipeline(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.pipelineFailures > 0 {
 		s.pipelineFailures--
 		writeError(w, http.StatusBadGateway, "502 Bad Gateway")
+		return
+	}
+	if answer, ok := s.state[r.URL.Path]; ok {
+		writeJSON(w, http.StatusOK, answer)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": pathID(r, "pipeline"), "status": nextStatus(&s.pipelineStatuses)})

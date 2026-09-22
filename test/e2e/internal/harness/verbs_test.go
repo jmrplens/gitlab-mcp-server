@@ -12,11 +12,140 @@
 package harness
 
 import (
+	"context"
+	"errors"
+	"net/http"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
+
+// The two resources the in-process subscription tests ask for: one the stub
+// server agrees to watch and one it declines.
+const (
+	watchedURI  = "gitlab://project/7"
+	declinedURI = "gitlab://project/8"
+)
+
+// errStubDeclined is what the in-process stub answers a subscription it
+// declines with, standing in for the real server's failed first read.
+var errStubDeclined = errors.New("stub: the first read of the resource failed")
+
+// subscriptionStub is an SDK server in this process that declines a
+// subscription to the URIs it was told to and accepts every other, counting
+// what it was asked. Its handlers run on the SDK's goroutines, so they count
+// with atomics and never touch a test.
+type subscriptionStub struct {
+	server       *mcp.Server
+	declined     map[string]bool
+	subscribes   atomic.Int64
+	unsubscribes atomic.Int64
+}
+
+// newSubscriptionStub builds one that speaks only the given protocol revisions
+// when any are named, and every revision the SDK knows otherwise.
+func newSubscriptionStub(versions []string, declined ...string) *subscriptionStub {
+	stub := &subscriptionStub{declined: map[string]bool{}}
+	for _, uri := range declined {
+		stub.declined[uri] = true
+	}
+	stub.server = mcp.NewServer(&mcp.Implementation{Name: "subscription-stub", Version: "1"}, &mcp.ServerOptions{
+		SupportedProtocolVersions: versions,
+		SubscribeHandler: func(_ context.Context, req *mcp.SubscribeRequest) error {
+			stub.subscribes.Add(1)
+			if stub.declined[req.Params.URI] {
+				return errStubDeclined
+			}
+			return nil
+		},
+		UnsubscribeHandler: func(context.Context, *mcp.UnsubscribeRequest) error {
+			stub.unsubscribes.Add(1)
+			return nil
+		},
+	})
+	// A resource, because a server declares the subscribe capability only
+	// inside the resources capability, and a listen asking for a resource
+	// subscription is acknowledged only by a server that declares it.
+	stub.server.AddResource(&mcp.Resource{URI: watchedURI, Name: "watched"},
+		func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: watchedURI, Text: "{}"}}}, nil
+		})
+	return stub
+}
+
+// inProcessSession connects a harness session to an SDK server in this
+// process, with the recording middleware and the notifiers a started session
+// has, so a subscribe can be answered however a test needs without a binary
+// or a GitLab.
+func inProcessSession(t *testing.T, env *Env, server *mcp.Server) *Session {
+	t.Helper()
+
+	conn := &sessionConn{
+		label:       "dynamic-default-full-in-process",
+		cfg:         ServerConfig{}.normalized(),
+		inst:        env.inst,
+		notifier:    newUpdateNotifier(),
+		acks:        newUpdateNotifier(),
+		progress:    newProgressCollector(),
+		subscribers: newSubscriberIndex(),
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "harness-in-process", Version: "1"}, conn.clientOptions())
+	client.AddSendingMiddleware(conn.recordSending())
+	client.AddReceivingMiddleware(conn.recordReceiving())
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(context.Background(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("connecting the in-process server: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+	session, err := client.Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("connecting to the in-process server: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	conn.session = session
+	return &Session{env: env, conn: conn}
+}
+
+// shortAckWait sets how long a subscribe waits for its acknowledgement for
+// one test.
+func shortAckWait(t *testing.T, wait time.Duration) {
+	t.Helper()
+	saved := subscribeAckTimeout
+	subscribeAckTimeout = wait
+	t.Cleanup(func() { subscribeAckTimeout = saved })
+}
+
+// subscribeLines returns the subscribe lines a test recorded, finishing its
+// record.
+func subscribeLines(env *Env) []*e2ecalls.Call {
+	var lines []*e2ecalls.Call
+	for _, line := range env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed) {
+		if call, isCall := line.(*e2ecalls.Call); isCall && call.Method == methodSubscribe {
+			lines = append(lines, call)
+		}
+	}
+	return lines
+}
+
+// awaitCount waits for an atomic counter a server goroutine moves to reach a
+// value, failing the test when it does not in time.
+func awaitCount(t *testing.T, counter *atomic.Int64, want int64, what string) {
+	t.Helper()
+	err := Poll(t.Context(), 10*time.Millisecond, 5*time.Second, func() (bool, string, error) {
+		got := counter.Load()
+		return got == want, what + " = " + strconv.FormatInt(got, 10), nil
+	})
+	if err != nil {
+		t.Fatalf("waiting for %s to reach %d: %v", what, want, err)
+	}
+}
 
 // TestUpdateNotifier_OneResource_ReachesEveryWatcher checks that two tests
 // watching one resource are both told when it changes.
@@ -187,5 +316,286 @@ func TestSession_Prompts_AreListedOnTheFullCapabilitySurface(t *testing.T) {
 				t.Errorf("the session listed no %s, and the full capability surface serves several", testCase.name)
 			}
 		})
+	}
+}
+
+// TestCompletionCallTarget_JoinsReferenceAndArgument pins the spelling a
+// completion call's record and a session line's completion list share.
+func TestCompletionCallTarget_JoinsReferenceAndArgument(t *testing.T) {
+	if got, want := completionCallTarget("gitlab://project/{project_id}", "project_id"), "gitlab://project/{project_id} project_id"; got != want {
+		t.Errorf("completionCallTarget() = %q, want %q", got, want)
+	}
+}
+
+// TestSession_TrySubscribe_Acknowledged_IsRecordedAsAccepted checks the
+// ordinary case on protocol 2026-07-28: the server acknowledges the URI, the
+// verb hands back a subscription, and the record says the subscribe was
+// answered, which is what the coverage command credits.
+func TestSession_TrySubscribe_Acknowledged_IsRecordedAsAccepted(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	env := newEnv(t, offlineInstance())
+	stub := newSubscriptionStub(nil)
+	session := inProcessSession(t, env, stub.server)
+	if !subscribesByListening(session.conn.client()) {
+		t.Fatal("the in-process session did not negotiate a listening protocol, so this test would not reach the acknowledgement")
+	}
+
+	subscription, err := session.TrySubscribe(watchedURI)
+	if err != nil {
+		t.Fatalf("TrySubscribe() error = %v, want the acknowledged subscription", err)
+	}
+	if subscription.URI() != watchedURI || stub.subscribes.Load() != 1 {
+		t.Errorf("subscription for %q after %d subscribes, want %q after one", subscription.URI(), stub.subscribes.Load(), watchedURI)
+	}
+	lines := subscribeLines(env)
+	if len(lines) != 1 || lines[0].Outcome != e2ecalls.OutcomeOK || lines[0].Expectation != ExpectationAny || lines[0].Target != watchedURI {
+		t.Errorf("subscribe lines = %+v, want one ok line for %s expecting any answer", lines, watchedURI)
+	}
+}
+
+// TestSession_Subscribe_Acknowledged_HandsBackAWatchedSubscription checks the
+// verb that fails the test on a refusal, on the path where there is none: the
+// subscription it hands back is watched on the session until it is closed.
+func TestSession_Subscribe_Acknowledged_HandsBackAWatchedSubscription(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	env := newEnv(t, offlineInstance())
+	session := inProcessSession(t, env, newSubscriptionStub(nil).server)
+
+	subscription := session.Subscribe(watchedURI)
+
+	if rec, watched := session.conn.subscribers.recorderFor(watchedURI); !watched || rec != env.recorder {
+		t.Error("the subscription is not recorded as this test's")
+	}
+	if watching := session.conn.notifier.watching(watchedURI); watching != 1 {
+		t.Errorf("the resource has %d update watchers, want the subscription's one", watching)
+	}
+	if lines := subscribeLines(env); len(lines) != 1 || lines[0].Expectation != ExpectationOK {
+		t.Errorf("subscribe lines = %+v, want one expecting success", lines)
+	}
+	subscription.Close()
+	if _, watched := session.conn.subscribers.recorderFor(watchedURI); watched {
+		t.Error("a closed subscription is still recorded as watched")
+	}
+	if watching := session.conn.notifier.watching(watchedURI); watching != 0 {
+		t.Errorf("a closed subscription still has %d update watchers", watching)
+	}
+}
+
+// TestSession_TrySubscribe_NotAcknowledged_IsReportedAndCanBeAskedAgain checks
+// the case this verb exists for: the server declines, which on protocol
+// 2026-07-28 the client learns only because no acknowledgement comes. The
+// refusal is returned and recorded as one rather than credited, and the URI
+// can be asked for again, which it could not if the SDK still held the listen
+// it opened for the refused one.
+func TestSession_TrySubscribe_NotAcknowledged_IsReportedAndCanBeAskedAgain(t *testing.T) {
+	shortAckWait(t, 300*time.Millisecond)
+	env := newEnv(t, offlineInstance())
+	stub := newSubscriptionStub(nil, declinedURI)
+	session := inProcessSession(t, env, stub.server)
+
+	for attempt := range 2 {
+		subscription, err := session.TrySubscribe(declinedURI)
+		if !errors.Is(err, errNotAcknowledged) || subscription != nil {
+			t.Fatalf("attempt %d: TrySubscribe() = %v, %v; want no subscription and errNotAcknowledged", attempt+1, subscription, err)
+		}
+	}
+	if got := stub.subscribes.Load(); got != 2 {
+		t.Errorf("the server was asked %d times, want the second attempt to reach it too", got)
+	}
+	if _, watched := session.conn.subscribers.recorderFor(declinedURI); watched {
+		t.Error("a declined subscription is still recorded as watched")
+	}
+	if watching := session.conn.notifier.watching(declinedURI); watching != 0 {
+		t.Errorf("a declined subscription left %d update watchers", watching)
+	}
+	lines := subscribeLines(env)
+	if len(lines) != 2 {
+		t.Fatalf("recorded %d subscribe lines, want one per attempt", len(lines))
+	}
+	for _, line := range lines {
+		if line.Outcome != e2ecalls.OutcomeProtocolError {
+			t.Errorf("a declined subscribe was recorded as %q, want %q", line.Outcome, e2ecalls.OutcomeProtocolError)
+		}
+	}
+}
+
+// TestSession_TrySubscribe_OlderProtocol_TakesTheRequestsAnswer checks the
+// protocol where a subscribe is an ordinary request: its error is the refusal
+// and nothing waits for an acknowledgement, which would never come. The wait
+// is set to nothing, so a verb that waited anyway would decline every
+// subscribe here.
+func TestSession_TrySubscribe_OlderProtocol_TakesTheRequestsAnswer(t *testing.T) {
+	shortAckWait(t, time.Nanosecond)
+	env := newEnv(t, offlineInstance())
+	stub := newSubscriptionStub([]string{"2025-11-25"}, declinedURI)
+	session := inProcessSession(t, env, stub.server)
+	if subscribesByListening(session.conn.client()) {
+		t.Fatal("the in-process session negotiated a listening protocol, so this test would not reach the older one")
+	}
+
+	subscription, err := session.TrySubscribe(watchedURI)
+	if err != nil {
+		t.Fatalf("TrySubscribe() error = %v, want the request's own acceptance", err)
+	}
+	_, err = session.TrySubscribe(declinedURI)
+	if err == nil || errors.Is(err, errNotAcknowledged) || !strings.Contains(err.Error(), errStubDeclined.Error()) {
+		t.Errorf("TrySubscribe(declined) error = %v, want the server's own refusal", err)
+	}
+	if got := stub.unsubscribes.Load(); got != 0 {
+		t.Errorf("%d unsubscribes were sent before anything was closed, want none: a refused request subscribed nothing", got)
+	}
+	subscription.Close()
+	if got := stub.unsubscribes.Load(); got != 1 {
+		t.Errorf("closing the subscription sent %d unsubscribes, want one", got)
+	}
+}
+
+// TestSession_TrySubscribe_SecondOnOneSession_IsTurnedAwayBeforeAnythingIsSent
+// checks the one subscription per URI per session: the SDK would answer the
+// second from the first one's listen without asking the server, so the verb
+// refuses it itself, sends nothing and records nothing, and lets the URI be
+// claimed again once the first is closed.
+func TestSession_TrySubscribe_SecondOnOneSession_IsTurnedAwayBeforeAnythingIsSent(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	env := newEnv(t, offlineInstance())
+	stub := newSubscriptionStub(nil)
+	session := inProcessSession(t, env, stub.server)
+
+	first, err := session.TrySubscribe(watchedURI)
+	if err != nil {
+		t.Fatalf("TrySubscribe() error = %v", err)
+	}
+	if _, err = session.TrySubscribe(watchedURI); !errors.Is(err, errSubscribedOnSession) {
+		t.Errorf("a second TrySubscribe() on the session = %v, want errSubscribedOnSession", err)
+	}
+	if got := stub.subscribes.Load(); got != 1 {
+		t.Errorf("the server was asked %d times, want the second subscribe turned away before it", got)
+	}
+	first.Close()
+	again, err := session.TrySubscribe(watchedURI)
+	if err != nil || again == nil {
+		t.Errorf("TrySubscribe() after the first was closed = %v, %v; want a subscription", again, err)
+	}
+	if lines := subscribeLines(env); len(lines) != 2 {
+		t.Errorf("recorded %d subscribe lines, want the two that reached the server", len(lines))
+	}
+}
+
+// TestSubscription_Close_ReleasesBeforeTheTestEnds checks that closing a
+// subscription early tells the server, which is what keeps a sweep that
+// subscribes in turn inside the watcher cap. On protocol 2026-07-28 the server
+// learns it asynchronously, so the release is waited for rather than read at
+// once.
+func TestSubscription_Close_ReleasesBeforeTheTestEnds(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	env := newEnv(t, offlineInstance())
+	stub := newSubscriptionStub(nil)
+	session := inProcessSession(t, env, stub.server)
+
+	subscription, err := session.TrySubscribe(watchedURI)
+	if err != nil {
+		t.Fatalf("TrySubscribe() error = %v", err)
+	}
+	subscription.Close()
+
+	awaitCount(t, &stub.unsubscribes, 1, "server unsubscribes")
+}
+
+// TestSubscription_CloseAndCleanup_UnsubscribeOnce checks that the close a
+// test calls and the one its cleanup runs are the same close: on the older
+// protocol every unsubscribe is a request, so a second one would reach the
+// server.
+func TestSubscription_CloseAndCleanup_UnsubscribeOnce(t *testing.T) {
+	shortAckWait(t, time.Nanosecond)
+	stub := newSubscriptionStub([]string{"2025-11-25"})
+
+	t.Run("closed early", func(t *testing.T) {
+		env := newEnv(t, offlineInstance())
+		session := inProcessSession(t, env, stub.server)
+		subscription, err := session.TrySubscribe(watchedURI)
+		if err != nil {
+			t.Fatalf("TrySubscribe() error = %v", err)
+		}
+		subscription.Close()
+		subscription.Close()
+	})
+
+	if got := stub.unsubscribes.Load(); got != 1 {
+		t.Errorf("two closes and the cleanup sent %d unsubscribes, want one", got)
+	}
+}
+
+// TestSession_TrySubscribe_TestContextEnded_StopsWaiting checks that a
+// subscribe whose test is already over does not sit out the whole
+// acknowledgement wait.
+func TestSession_TrySubscribe_TestContextEnded_StopsWaiting(t *testing.T) {
+	shortAckWait(t, time.Minute)
+	env := newEnv(t, offlineInstance())
+	session := inProcessSession(t, env, newSubscriptionStub(nil, declinedURI).server)
+	ended, cancel := context.WithCancel(context.Background())
+	cancel()
+	env.Ctx = ended
+
+	_, err := session.TrySubscribe(declinedURI)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("TrySubscribe() error = %v, want the test's context ending the wait", err)
+	}
+}
+
+// TestSubscription_Next_ServerReportsAChange_IsDeliveredAndRecorded checks
+// the delivery half end to end in process: nothing is delivered before the
+// resource changes, the change wakes the subscription, and the notification is
+// recorded against the test that subscribed.
+func TestSubscription_Next_ServerReportsAChange_IsDeliveredAndRecorded(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	env := newEnv(t, offlineInstance())
+	stub := newSubscriptionStub(nil)
+	session := inProcessSession(t, env, stub.server)
+	subscription := session.Subscribe(watchedURI)
+
+	if subscription.TryNext(50 * time.Millisecond) {
+		t.Fatal("an update arrived before the resource changed")
+	}
+	if err := stub.server.ResourceUpdated(t.Context(), &mcp.ResourceUpdatedNotificationParams{URI: watchedURI}); err != nil {
+		t.Fatalf("ResourceUpdated() error = %v", err)
+	}
+	subscription.Next(5 * time.Second)
+
+	var updates []*e2ecalls.Call
+	for _, line := range env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed) {
+		if call, isCall := line.(*e2ecalls.Call); isCall && call.Method == methodResourceUpdated {
+			updates = append(updates, call)
+		}
+	}
+	if len(updates) != 1 || updates[0].Target != watchedURI || updates[0].Test != env.T.Name() {
+		t.Errorf("update lines = %+v, want one for %s credited to this test", updates, watchedURI)
+	}
+}
+
+// TestSession_TrySubscribe_RealBinary_AcknowledgesWhatItCanReadAndDeclinesTheRest
+// holds the verb to the real server: a project the stub GitLab serves is
+// acknowledged, and one it answers 404 for is declined, because the server's
+// first read of a watched resource is its authorization check.
+func TestSession_TrySubscribe_RealBinary_AcknowledgesWhatItCanReadAndDeclinesTheRest(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	gitlab := startStubGitLab(t, stubRoute{pattern: "/api/v4/projects/42", handler: func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"id": 42, "name": "watched", "path_with_namespace": "harness/watched", "default_branch": "main"})
+	}})
+	env := newEnv(t, instanceForStub(t, gitlab))
+	session := env.Session(ServerConfig{Private: true})
+
+	watched, err := session.TrySubscribe("gitlab://project/42")
+	if err != nil {
+		t.Fatalf("TrySubscribe() of a project the server can read = %v, want it acknowledged", err)
+	}
+	watched.Close()
+	if _, err = session.TrySubscribe("gitlab://project/43"); !errors.Is(err, errNotAcknowledged) {
+		t.Errorf("TrySubscribe() of a project the server cannot read = %v, want it declined", err)
+	}
+
+	lines := subscribeLines(env)
+	if len(lines) != 2 || lines[0].Outcome != e2ecalls.OutcomeOK || lines[1].Outcome != e2ecalls.OutcomeProtocolError {
+		t.Errorf("subscribe lines = %+v, want the readable one ok and the other a protocol error", lines)
 	}
 }
