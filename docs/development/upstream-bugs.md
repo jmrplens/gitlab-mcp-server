@@ -127,6 +127,7 @@ readable without opening the tracker:
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
+| 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2904,3 +2905,72 @@ eight are the ones we still send through the SDK, not the eight that exist.
 **Effort**: small, and one merge request covers all nine of entries 6, 52 and
 these seven. Every case is a struct tag plus a test that the key is absent
 when the field is nil.
+
+### A permission refusal is answered 401 rather than 403
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The call is correctly refused and nothing is served that
+  should not be. What breaks is the explanation a client can give.
+- **Workaround**: partial. Several handlers pass a per-status hint through
+  `WrapErrWithStatusHint`, so the refusal carries a sentence naming the real
+  cause. The generic description in front of that sentence is still wrong, and
+  fixing it is ours rather than upstream's.
+
+**Where**: `lib/api/merge_request_approvals.rb:105` and 148,
+`lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
+`lib/api/resource_access_tokens.rb:32` and 63,
+`ee/lib/api/status_checks.rb:67`, `ee/lib/api/security_scans.rb:54`,
+`ee/lib/api/project_security_settings.rb:30` and 53,
+`ee/lib/api/group_security_settings.rb:36`, `ee/lib/api/saml_group_links.rb`
+(four sites), `ee/lib/ee/api/helpers.rb:193`, and
+`lib/api/ml/mlflow/api_helpers.rb:15` and 23. Read at 19.4.0-pre
+(`b183f4fad4bd`, 2026-09-22).
+
+**What**: Grape's `unauthorized!` renders 401, and these sites call it to
+refuse an **authenticated** user who lacks a permission. Eighteen of them
+guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
+calls it on a falsy service result, which is the same thing one layer down.
+RFC 9110 gives 401 for a request that lacks valid authentication credentials
+and 403 for one the server understood and refuses to authorize, so every one
+of these is the second answered as the first.
+
+It is not accidental, at least at the approve endpoint, whose own `desc` block
+declares the failure:
+
+```ruby
+failure [
+  { code: 404, message: 'Not found' },
+  { code: 401, message: 'Unauthorized' }
+]
+```
+
+So this is a design complaint rather than a bug report, which is the honest
+way to file it. GitLab's own REST API is not consistent with itself here:
+`forbidden!` appears 221 times against `unauthorized!`'s 94, and the
+neighbouring endpoints of several of these sites use it.
+
+**What it costs a client.** A refusal that says 401 is indistinguishable from
+an expired token unless the reader knows the endpoint, so a generic client
+tells its user to check their credentials when the real answer is "you wrote
+this merge request". Measured here: the licensed end-to-end run approves a
+merge request with the credential that opened it, a licensed instance ships
+"Prevent approval by author" on, and GitLab answers
+
+```text
+POST /api/v4/projects/109/merge_requests/1/approve: 401 {message: 401 Unauthorized}
+```
+
+which this server renders as `authentication failed: GITLAB_TOKEN may be
+invalid or expired` followed by the hint that contradicts it. The list above
+is not a corner: it covers merge, cancel auto-merge, approve, reset approvals,
+project mirrors, access token reads, external status checks, security scans,
+security settings and group SAML links, all of which this server serves.
+
+**Our half of it.** `httpStatusDescriptions` in `internal/toolutil/errors.go`
+maps 401 to a sentence about the token, which is right for a genuine
+authentication failure and wrong for every site above. That is a local fix
+and is tracked in
+[issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905); it does
+not wait for upstream, and it is the half a model actually reads.
