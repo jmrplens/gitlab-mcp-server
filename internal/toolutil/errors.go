@@ -477,9 +477,11 @@ func NewDetailedError(domain, action string, err error) *DetailedError {
 	}
 
 	// The request ID is stored as GitLab sent it: the JSON field carries the
-	// value, and the card escapes it where it renders.
-	var glErr *gl.ErrorResponse
-	if errors.As(err, &glErr) && glErr.Response != nil {
+	// value, and the card escapes it where it renders. The response is found
+	// the way ClassifyError finds it, so a GraphQL refusal carries its status
+	// and request ID too, although client-go wraps it in a type that does not
+	// unwrap to the response.
+	if glErr, ok := gitLabResponseOf(err); ok && glErr.Response != nil {
 		de.GitLabStatus = glErr.Response.StatusCode
 		de.RequestID = glErr.Response.Header.Get("X-Request-Id")
 	}

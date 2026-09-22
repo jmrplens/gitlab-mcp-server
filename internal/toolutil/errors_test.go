@@ -2303,12 +2303,17 @@ const (
 	graphQLInvalidTokenBody   = `{"errors":[{"message":"Invalid token"}]}`
 )
 
+// answeredRequestID is the request ID [answeringServer] answers with, as
+// GitLab answers every request with one.
+const answeredRequestID = "01J9ANSWEREDREQUEST"
+
 // answeringServer starts a server that answers every request with status and
 // body, and stops it when the test ends.
 func answeringServer(t *testing.T, status int, body string) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Request-Id", answeredRequestID)
 		w.WriteHeader(status)
 		_, _ = io.WriteString(w, body)
 	}))
@@ -2624,5 +2629,72 @@ func TestWrapErrWithHint_GraphQLRefusedTheToken_LeadsWithTheVerdict(t *testing.T
 	got := WrapErrWithHint("list_vulnerabilities", err, hint).Error()
 	if want := "list_vulnerabilities: " + rejectedTokenSemantic + ". Suggestion: " + hint + ": "; !strings.HasPrefix(got, want) {
 		t.Errorf("WrapErrWithHint() = %q, want it to open with %q", got, want)
+	}
+}
+
+// TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus verifies the
+// error card for a 401 over both surfaces: the message is the classifier's
+// reading of the whole response, while the HTTP Status row describes the
+// status alone and so names both causes whatever the response said, and the
+// request ID is the one GitLab answered with.
+//
+// The GraphQL rows are the ones the card used to lose. client-go wraps a
+// GraphQL refusal in *gl.GraphQLResponseError, which does not unwrap to the
+// response, so the card read no status and no request ID for it and wrote no
+// HTTP Status row, while its message, read through that type, was already the
+// verdict.
+func TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		answer  gitLabAnswer
+		wrapped bool
+		message string
+	}{
+		{
+			name:    "REST, a permission refusal",
+			answer:  gitLabAnswer{status: http.StatusUnauthorized, body: permissionRefusalBody},
+			message: unauthorizedSemantic,
+		},
+		{
+			name:    "REST, an expired token",
+			answer:  gitLabAnswer{status: http.StatusUnauthorized, body: expiredTokenBody},
+			message: rejectedTokenSemantic,
+		},
+		{
+			name:    "GraphQL",
+			answer:  gitLabAnswer{graphQL: true, status: http.StatusUnauthorized, body: graphQLInvalidTokenBody},
+			message: rejectedTokenSemantic,
+		},
+		{
+			name:    "GraphQL wrapped by a handler",
+			answer:  gitLabAnswer{graphQL: true, status: http.StatusUnauthorized, body: graphQLInvalidTokenBody},
+			wrapped: true,
+			message: rejectedTokenSemantic,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.answer.err(t)
+			if tt.wrapped {
+				err = fmt.Errorf("current user: %w", err)
+			}
+			de := NewDetailedError("users", "current", err)
+			if de.GitLabStatus != http.StatusUnauthorized {
+				t.Errorf("GitLabStatus = %d, want %d", de.GitLabStatus, http.StatusUnauthorized)
+			}
+			if de.RequestID != answeredRequestID {
+				t.Errorf("RequestID = %q, want %q", de.RequestID, answeredRequestID)
+			}
+			if de.Message != tt.message {
+				t.Errorf("Message = %q, want %q", de.Message, tt.message)
+			}
+			md := de.Markdown()
+			if row := "- **HTTP Status**: 401 (" + unauthorizedSemantic + ")\n"; !strings.Contains(md, row) {
+				t.Errorf("Markdown() = %q, want the row %q", md, row)
+			}
+			if row := "- **Request ID**: `" + answeredRequestID + "`\n"; !strings.Contains(md, row) {
+				t.Errorf("Markdown() = %q, want the row %q", md, row)
+			}
+		})
 	}
 }

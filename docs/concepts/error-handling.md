@@ -43,7 +43,7 @@ type DetailedError struct {
 Created via `NewDetailedError(domain, action, err)` which automatically:
 
 - Classifies the error into a human-friendly message
-- Extracts HTTP status and X-Request-Id from GitLab API error responses
+- Extracts HTTP status and X-Request-Id from GitLab API error responses, REST and GraphQL alike
 - Safely handles nil response bodies (the GitLab client can panic on `.Error()`)
 
 ## Error Classification
@@ -91,7 +91,7 @@ The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both an
 - the body carries the RFC 6750 code `invalid_token`, which GitLab's REST API guard writes for an expired, revoked or impersonation-disabled token and nothing else in the REST API writes. The code is a REST signal only.
 - the GraphQL endpoint answered it. That endpoint answers 401 only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}` and no code, and refuses a field the caller may not see with a 200, so a GraphQL 401 has no permission refusal to be confused with. One of those checks is the scope: the endpoint authenticates a token only when it carries `api` or `read_api`, and answers one carrying neither with that same body, where REST answers it 403 `insufficient_scope`, which is why the sentence names the scope. The endpoint is recognised by the request path as sent, escaped, so a REST path parameter that decodes to `api/graphql` does not pass for it. client-go returns such an answer as `*gl.GraphQLResponseError`, which does not unwrap to the response, so `ClassifyError` looks through it to find the status.
 
-The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes. The `DetailedError` card's HTTP Status row is status-only and always carries that sentence.
+The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes. The `DetailedError` card's HTTP Status row describes the status alone, for a REST and a GraphQL 401 alike, so it always carries that sentence, beside a message that may be the narrower verdict.
 
 ## Error Flow in Tool Handlers
 
