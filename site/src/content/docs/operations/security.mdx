@@ -195,10 +195,10 @@ The server maintains a **bounded LRU pool** of per-credential entries:
 
 Two budgets refuse a request before its credential is read, so a blocked caller costs nothing and reaches no GitLab. They ask different questions, and the difference is why only one of them escalates.
 
-| Budget | Default | What it asks | What it does |
-| ------ | ------- | ------------ | ------------ |
-| Failure lockout | 10 failures in 1 minute | How many authentications this address failed | Blocks for the rest of the window |
-| Distinct credentials | 50 in 10 minutes | How many *different* credentials it had refused | Blocks for a minute, then ten, then an hour |
+| Budget               | Default                 | What it asks                                    | What it does                                |
+| -------------------- | ----------------------- | ----------------------------------------------- | ------------------------------------------- |
+| Failure lockout      | 10 failures in 1 minute | How many authentications this address failed    | Blocks for the rest of the window           |
+| Distinct credentials | 50 in 10 minutes        | How many *different* credentials it had refused | Blocks for a minute, then ten, then an hour |
 
 Ten failures in a minute is a stuck client retrying one bad token as much as it is an attack, and a minute's block is the right answer to both. Fifty distinct invalid tokens is only an attack: a person has one token and a fleet behind a NAT has one each, so a legitimate neighbor never reaches that count however badly its client misbehaves.
 

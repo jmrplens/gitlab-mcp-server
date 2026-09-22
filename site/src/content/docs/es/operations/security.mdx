@@ -195,10 +195,10 @@ El servidor mantiene un **pool LRU limitado** de entradas por credencial:
 
 Dos presupuestos rechazan una petición antes de leer su credencial, así que un cliente bloqueado no cuesta nada y no llega a GitLab. Hacen preguntas distintas, y esa diferencia es la razón por la que solo uno de ellos escala.
 
-| Presupuesto | Por defecto | Qué pregunta | Qué hace |
-| ----------- | ----------- | ------------ | -------- |
-| Bloqueo por fallos | 10 fallos en 1 minuto | Cuántas autenticaciones falló esta dirección | Bloquea el resto de la ventana |
-| Credenciales distintas | 50 en 10 minutos | Cuántas credenciales *diferentes* se le rechazaron | Bloquea un minuto, luego diez, luego una hora |
+| Presupuesto            | Por defecto           | Qué pregunta                                       | Qué hace                                      |
+| ---------------------- | --------------------- | -------------------------------------------------- | --------------------------------------------- |
+| Bloqueo por fallos     | 10 fallos en 1 minuto | Cuántas autenticaciones falló esta dirección       | Bloquea el resto de la ventana                |
+| Credenciales distintas | 50 en 10 minutos      | Cuántas credenciales *diferentes* se le rechazaron | Bloquea un minuto, luego diez, luego una hora |
 
 Diez fallos en un minuto es tanto un cliente atascado reintentando un token malo como un ataque, y un minuto de bloqueo es la respuesta correcta a ambos. Cincuenta tokens inválidos distintos solo es un ataque: una persona tiene un token y una flota detrás de un NAT tiene uno cada una, así que un vecino legítimo nunca alcanza esa cuenta por mal que se comporte su cliente.
 
