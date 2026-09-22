@@ -652,12 +652,13 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 // thing recorded about it: an address is who was refused, which a counter must
 // not carry.
 func (g *mcpServerGate) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
+	lockedOut, lockoutFor := false, time.Duration(0)
+	if g.limiter != nil {
+		lockedOut, lockoutFor = g.limiter.BlockedFor(key)
+	}
+	sourceBlocked, sourceFor := g.sourceBudget.blockedFor(source)
 	sprayed, sprayFor := g.spray.Blocked(key)
-	return longestAuthBlock(
-		g.limiter != nil && g.limiter.IsBlocked(key), g.failureWindow,
-		g.sourceBudget.blocked(source), g.sourceBudget.window(),
-		sprayed, sprayFor,
-	)
+	return longestAuthBlock(lockedOut, lockoutFor, sourceBlocked, sourceFor, sprayed, sprayFor)
 }
 
 // longestAuthBlock picks the block a refused request should be told about when
@@ -781,13 +782,14 @@ func (b *transportBudget) rateLimiter() *serverpool.AuthRateLimiter {
 	return b.limiter
 }
 
-// blocked reports whether a transport source has minted more distinct primary
-// keys than its budget allows.
-func (b *transportBudget) blocked(source string) bool {
+// blockedFor reports whether a transport source has minted more distinct
+// primary keys than its budget allows, and how much of its block is left,
+// which is what a refusal answers Retry-After with.
+func (b *transportBudget) blockedFor(source string) (bool, time.Duration) {
 	if b == nil {
-		return false
+		return false, 0
 	}
-	return b.limiter.IsBlocked(source)
+	return b.limiter.BlockedFor(source)
 }
 
 // charge counts one failure against the source, unless this key has already

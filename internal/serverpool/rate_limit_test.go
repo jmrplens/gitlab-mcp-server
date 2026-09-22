@@ -30,6 +30,49 @@ func TestAuthRateLimiter_BlocksAfterMaxFailures(t *testing.T) {
 	}
 }
 
+// TestAuthRateLimiter_BlockedFor_CountsDownFromTheFirstFailure checks what a
+// refusal answers Retry-After with.
+//
+// A block runs from the first failure of the window rather than from the one
+// that reached the limit, so an address blocked late in a window is released
+// sooner than a whole window from now. Reporting the configured window instead
+// held a client back for up to twice as long as the block lasted, and made the
+// figure incomparable with the other budgets' remaining times.
+func TestAuthRateLimiter_BlockedFor_CountsDownFromTheFirstFailure(t *testing.T) {
+	const window = time.Minute
+	limiter := NewAuthRateLimiter(2, window)
+	const ip = "1.2.3.4"
+
+	if blocked, remaining := limiter.BlockedFor(ip); blocked || remaining != 0 {
+		t.Fatalf("BlockedFor on an unseen address = (%v, %v), want (false, 0)", blocked, remaining)
+	}
+
+	limiter.RecordFailure(ip)
+	limiter.RecordFailure(ip)
+
+	blocked, remaining := limiter.BlockedFor(ip)
+	if !blocked {
+		t.Fatal("the address is not blocked after reaching the limit")
+	}
+	if remaining > window || remaining <= 0 {
+		t.Errorf("remaining = %v, want a positive time no longer than the %v window", remaining, window)
+	}
+
+	// Wind the record back so most of the window has passed: what is left must
+	// shrink with it rather than stay at the configured value.
+	limiter.mu.Lock()
+	limiter.failures[ip].firstAt = time.Now().Add(-window + 5*time.Second)
+	limiter.mu.Unlock()
+
+	blocked, remaining = limiter.BlockedFor(ip)
+	if !blocked {
+		t.Fatal("the address stopped being blocked inside its window")
+	}
+	if remaining > 6*time.Second {
+		t.Errorf("remaining = %v near the end of the window, want about 5s: the full window is being reported", remaining)
+	}
+}
+
 // TestAuthRateLimiter_WindowExpiry verifies that the rate limiter resets
 // after the time window expires.
 func TestAuthRateLimiter_WindowExpiry(t *testing.T) {

@@ -86,9 +86,17 @@ type distinctRecord struct {
 	step int
 	// blockedUntil is when the current block lifts. Zero when none is on.
 	blockedUntil time.Time
-	// lastChargeAt is when this address last had a credential refused, which
-	// is what the silence that resets the ladder is measured from.
-	lastChargeAt time.Time
+	// lastSeenAt is when this address was last heard from at all, which is
+	// what the silence that resets the ladder is measured from.
+	//
+	// It is deliberately activity rather than charges. A blocked address is
+	// refused before its credential is read, so it is never charged while the
+	// block is on, and measuring the silence from the last charge meant an
+	// address hammering throughout an hour-long block looked silent for that
+	// hour and had its ladder forgiven the moment the block lifted. Every read
+	// of an active block updates this, so persistence through a block is the
+	// opposite of silence, which is what it is.
+	lastSeenAt time.Time
 }
 
 // NewDistinctTokenBudget returns a budget that blocks an address once limit
@@ -142,6 +150,7 @@ func (b *DistinctTokenBudget) Charge(address, token string) bool {
 	now := time.Now()
 	rec, ok := b.addresses[address]
 	if ok && now.Before(rec.blockedUntil) {
+		rec.lastSeenAt = now
 		// Already blocked, so this charge costs nothing. Both callers check
 		// [DistinctTokenBudget.Blocked] before they authenticate, but that
 		// check and this charge are separate critical sections: a burst that
@@ -163,7 +172,7 @@ func (b *DistinctTokenBudget) Charge(address, token string) bool {
 			windowStartedAt: now,
 		}
 		b.addresses[address] = rec
-	case now.Sub(rec.lastChargeAt) >= b.resetAfter():
+	case now.Sub(rec.lastSeenAt) >= b.resetAfter():
 		// Silence long enough to forget the ladder. The record is reused
 		// rather than replaced so that this path costs the same whether the
 		// table is at its cap or not: nothing new is being inserted.
@@ -175,7 +184,7 @@ func (b *DistinctTokenBudget) Charge(address, token string) bool {
 		clear(rec.digests)
 		rec.windowStartedAt = now
 	}
-	rec.lastChargeAt = now
+	rec.lastSeenAt = now
 
 	rec.digests[digest] = struct{}{}
 	if len(rec.digests) < b.limit {
@@ -206,6 +215,12 @@ func (b *DistinctTokenBudget) blockFor(step int) time.Duration {
 
 // Blocked reports whether the address is currently blocked, and for how much
 // longer, which is what the caller answers Retry-After with.
+//
+// It records the attempt as activity while a block is on, which is the only
+// place that can: a blocked caller is refused before its credential is read,
+// so [DistinctTokenBudget.Charge] never sees it. Without this an address that
+// kept hammering through an hour-long block read as an hour of silence, and
+// the ladder it had climbed was forgiven the moment the block lifted.
 func (b *DistinctTokenBudget) Blocked(address string) (bool, time.Duration) {
 	if b == nil {
 		return false, 0
@@ -226,6 +241,7 @@ func (b *DistinctTokenBudget) Blocked(address string) (bool, time.Duration) {
 		rec.blockedUntil = time.Time{}
 		return false, 0
 	}
+	rec.lastSeenAt = time.Now()
 	return true, remaining
 }
 
@@ -287,7 +303,7 @@ func (b *DistinctTokenBudget) sweepLocked(now time.Time) {
 		if now.Before(rec.blockedUntil) {
 			continue
 		}
-		if now.Sub(rec.lastChargeAt) >= b.resetAfter() {
+		if now.Sub(rec.lastSeenAt) >= b.resetAfter() {
 			delete(b.addresses, address)
 		}
 	}

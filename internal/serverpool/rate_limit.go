@@ -111,18 +111,35 @@ func (l *AuthRateLimiter) roomForNewKeyLocked() bool {
 
 // IsBlocked returns true if the IP has exceeded the failure limit within the window.
 func (l *AuthRateLimiter) IsBlocked(ip string) bool {
+	blocked, _ := l.BlockedFor(ip)
+	return blocked
+}
+
+// BlockedFor reports whether the address is blocked and for how much longer.
+//
+// The remaining time is what a caller answers Retry-After with, and it is not
+// the configured window: a block runs from the first failure of the window, so
+// an address that reaches the limit late in one is released sooner than a
+// whole window from now. Announcing the window instead held a client back for
+// up to twice as long as the block actually lasted, and made a comparison
+// against another budget's remaining time meaningless.
+func (l *AuthRateLimiter) BlockedFor(ip string) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	rec, ok := l.failures[ip]
 	if !ok {
-		return false
+		return false, 0
 	}
-	if time.Since(rec.firstAt) > l.window {
+	elapsed := time.Since(rec.firstAt)
+	if elapsed > l.window {
 		delete(l.failures, ip)
-		return false
+		return false, 0
 	}
-	return rec.count >= l.maxFails
+	if rec.count < l.maxFails {
+		return false, 0
+	}
+	return true, l.window - elapsed
 }
 
 // Cleanup removes expired entries. Call periodically to prevent memory growth.

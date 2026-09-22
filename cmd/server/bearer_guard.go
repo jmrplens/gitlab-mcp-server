@@ -506,12 +506,13 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 // consulting the same three budgets in the same order, and the two must agree:
 // a caller refused here and one refused there was refused by the same rule.
 func (g *bearerGuard) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
+	lockedOut, lockoutFor := false, time.Duration(0)
+	if g.limiter != nil {
+		lockedOut, lockoutFor = g.limiter.BlockedFor(key)
+	}
+	sourceBlocked, sourceFor := g.sourceBudget.blockedFor(source)
 	sprayed, sprayFor := g.spray.Blocked(key)
-	return longestAuthBlock(
-		g.limiter != nil && g.limiter.IsBlocked(key), g.failureWindow,
-		g.sourceBudget.blocked(source), g.sourceBudget.window(),
-		sprayed, sprayFor,
-	)
+	return longestAuthBlock(lockedOut, lockoutFor, sourceBlocked, sourceFor, sprayed, sprayFor)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value

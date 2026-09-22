@@ -1468,12 +1468,12 @@ func TestTransportBudget_ChargesOncePerKeyPerWindow(t *testing.T) {
 	for range 50 {
 		budget.charge(source, "198.51.100.1")
 	}
-	if budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); blocked {
 		t.Error("fifty failures from one client exhausted a budget of two distinct clients")
 	}
 
 	budget.charge(source, "198.51.100.2")
-	if !budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); !blocked {
 		t.Error("a second distinct client did not reach a budget of two")
 	}
 }
@@ -1486,8 +1486,8 @@ func TestTransportBudget_NilBudgetIsInert(t *testing.T) {
 
 	var budget *transportBudget
 	budget.charge("203.0.113.7", "203.0.113.7")
-	if budget.blocked("203.0.113.7") {
-		t.Error("an absent budget blocked a request")
+	if blocked, remaining := budget.blockedFor("203.0.113.7"); blocked || remaining != 0 {
+		t.Errorf("an absent budget answered (%v, %v), want (false, 0)", blocked, remaining)
 	}
 	if budget.rateLimiter() != nil {
 		t.Error("an absent budget handed out a limiter")
@@ -1797,12 +1797,12 @@ func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
 
 	// The kept pair is still counted, so charging it again costs nothing.
 	budget.charge(source, "198.51.100.2")
-	if budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); blocked {
 		t.Fatal("a key still inside its window was charged a second time")
 	}
 	// The forgotten pair is a fresh key again, and it is the third one.
 	budget.charge(source, "198.51.100.1")
-	if !budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); !blocked {
 		t.Error("a key whose window lapsed did not charge the source again after cleanup")
 	}
 }

@@ -187,6 +187,61 @@ func TestDistinctTokenBudget_ChargesWhileBlocked_DoNotClimbTheLadder(t *testing.
 	}
 }
 
+// TestDistinctTokenBudget_HammeringThroughABlock_IsNotSilence covers the gap
+// between the two calls a blocked address makes.
+//
+// A blocked caller is refused before its credential is read, so Charge never
+// sees it and only Blocked does. Measuring the silence that forgives the
+// ladder from the last charge therefore read an address that kept hammering
+// throughout its block as having been silent for the whole of it, and handed
+// back a clean ladder the moment the block lifted. Persistence through a block
+// is the opposite of silence.
+func TestDistinctTokenBudget_HammeringThroughABlock_IsNotSilence(t *testing.T) {
+	const step = time.Minute
+	b := NewDistinctTokenBudget(2, time.Minute, step)
+	const address = "10.0.0.11"
+
+	b.Charge(address, "glpat-a")
+	b.Charge(address, "glpat-b")
+	if blocked, _ := b.Blocked(address); !blocked {
+		t.Fatal("the address was not blocked by the first pair")
+	}
+
+	// Wind the record back so the ladder would be forgiven on silence alone,
+	// then have the address ask once, which is what a blocked caller does.
+	b.mu.Lock()
+	rec := b.addresses[address]
+	rec.lastSeenAt = time.Now().Add(-2 * b.resetAfter())
+	b.mu.Unlock()
+
+	if blocked, _ := b.Blocked(address); !blocked {
+		t.Fatal("the block lifted early")
+	}
+
+	b.mu.Lock()
+	seen := rec.lastSeenAt
+	b.mu.Unlock()
+	if time.Since(seen) > time.Minute {
+		t.Errorf("asking while blocked did not count as activity: last seen %v ago", time.Since(seen))
+	}
+
+	// The block is wound down so the next pair is judged, and the ladder must
+	// have been kept: the second block is ten steps, not another first one.
+	b.mu.Lock()
+	rec.blockedUntil = time.Now().Add(-time.Second)
+	b.mu.Unlock()
+
+	b.Charge(address, "glpat-c")
+	b.Charge(address, "glpat-d")
+	blocked, remaining := b.Blocked(address)
+	if !blocked {
+		t.Fatal("the second pair did not block")
+	}
+	if want := 10 * step; remaining > want || remaining < want-time.Second {
+		t.Errorf("second block = %v, want about %v: the ladder was forgiven despite the hammering", remaining, want)
+	}
+}
+
 // TestDistinctTokenBudget_SilenceResetsTheLadder checks the other end of the
 // escalation: an address that stops is forgiven, so today's block does not
 // make tomorrow's longer for a client that had one bad afternoon.
@@ -205,7 +260,7 @@ func TestDistinctTokenBudget_SilenceResetsTheLadder(t *testing.T) {
 	b.mu.Lock()
 	rec := b.addresses["10.0.0.1"]
 	past := time.Now().Add(-b.resetAfter() - time.Second)
-	rec.lastChargeAt = past
+	rec.lastSeenAt = past
 	rec.windowStartedAt = past
 	rec.blockedUntil = past
 	b.mu.Unlock()
@@ -336,8 +391,8 @@ func TestDistinctTokenBudget_Cleanup_DropsQuietRecordsAndKeepsBlockedOnes(t *tes
 
 	b.mu.Lock()
 	past := time.Now().Add(-b.resetAfter() - time.Second)
-	b.addresses["10.0.0.1"].lastChargeAt = past
-	b.addresses["10.0.0.2"].lastChargeAt = past
+	b.addresses["10.0.0.1"].lastSeenAt = past
+	b.addresses["10.0.0.2"].lastSeenAt = past
 	b.mu.Unlock()
 
 	b.Cleanup()
@@ -377,7 +432,7 @@ func TestDistinctTokenBudget_CapAdmitsNewAddressesOnceRecordsLapse(t *testing.T)
 	// enough that the insert path is allowed to sweep again.
 	past := time.Now().Add(-b.resetAfter() - time.Second)
 	for _, rec := range b.addresses {
-		rec.lastChargeAt = past
+		rec.lastSeenAt = past
 		rec.blockedUntil = time.Time{}
 	}
 	b.lastSweepAt = time.Time{}
