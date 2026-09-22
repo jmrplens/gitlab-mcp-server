@@ -178,16 +178,64 @@ counted, a token bucket where the method is dispatched.
   holding several tokens may do, which is the kind of change the issue puts out of
   scope. It belongs in its own change, with its own measurement.
 
-## Open questions
+## The three questions, answered
 
-1. **Does the busy-skip need the principal at all?** Eviction is about the pool's
-   size, and the pool holds entries rather than principals. It may be the one
-   decision that legitimately stays keyed on the entry.
-2. **What does the module do on a self-managed instance where one user is the only
-   user?** Every limit collapses onto one principal, which is correct and also
-   makes the per-process ceilings the only real bound.
-3. **Is the tier a policy decision at all?** It is a property of the instance, not
-   of the caller, and the module may be the wrong home for it.
+The first draft left these open. They were worked through on 2026-09-22 against
+the code and against the two issues whose reasoning binds this one.
+
+### 1. Eviction keeps the entry, and is the one decision that should
+
+**No, it does not need the principal.** What the pool bounds is memory, and
+memory is held per entry, not per principal. `lruVictimLocked`
+(`internal/serverpool/pool.go:1344`) walks the list from the tail for the first
+entry the caller does not report busy, and takes the tail when every entry is
+busy. Nothing in that needs to know who owns an entry.
+
+A principal would buy one thing only: **fairness between principals**, so an
+address holding a hundred quiet entries would be preferred over a stranger
+holding one. Issue 561 already refused the remedy that would need
+("**Do not add a per-credential or per-busy-entry share**", because it is what
+issue 540 rejected, keyed on the same mintable key), and it refused it on
+evidence rather than taste: with a pool of three and one busy subscriber, fifty
+quiet arrivals produced forty-eight evictions and never touched the subscriber,
+and the entry taken next was the attacker's own freshest quiet one.
+
+A non-mintable key would reopen that door, since the reason for the refusal was
+the key. But **acting on it is a behaviour change** and belongs to its own
+change, not to this one. Eviction stays keyed on the entry.
+
+### 2. A single-user deployment is the argument for keeping this small
+
+Every limit collapses onto one principal, and the per-process ceilings become the
+only real bound: 512 listen streams (`maxListenStreamsPerProcess`) and 512
+watchers (`maxWatchersPerProcess`, added by issue 561's fourth point). Nothing
+breaks.
+
+What it settles is a matter of proportion. Stdio, the default and by far the
+commonest deployment, has one credential and one user, so a per-principal policy
+does nothing there at all. The module has to be worth its weight in the HTTP
+multi-tenant case alone, and a design that complicates the single-user path to
+serve the shared one has the trade backwards.
+
+### 3. The tier is not a policy decision, and it is not a property of the caller either, but today it behaves like one
+
+Conceptually it belongs to the instance. **In practice it varies by token, and by
+accident.** `DetectTier` (`internal/gitlab/client.go:476`) resolves it from
+`GET /license`, which is **admin-only on self-managed**, and falls back to Free on
+any error: a non-admin token, a CE instance, or an API failure. There is no other
+detection path in the tree.
+
+Two consequences follow that nothing documents:
+
+- A non-admin token on a self-managed **Ultimate** instance resolves **Free**, and
+  is served the Free catalogue.
+- On **GitLab.com**, where `/license` is not available to ordinary users at all,
+  detection always falls back to Free, so Premium and Ultimate surfaces are
+  reachable only by setting the tier explicitly.
+
+That is not a policy decision to move into the module. It is a detection defect,
+filed as [issue 899](https://github.com/jmrplens/gitlab-mcp-server/issues/899)
+rather than absorbed here. The tier stays where it is.
 
 ## Not in scope
 
