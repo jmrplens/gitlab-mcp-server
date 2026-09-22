@@ -104,7 +104,7 @@ func TestDistinctTokenBudget_BudgetIsPerAddress(t *testing.T) {
 		t.Fatal("the spraying address was not blocked")
 	}
 	if blocked, _ := b.Blocked("10.0.0.2"); blocked {
-		t.Error("a neighbour was blocked by another address's spray")
+		t.Error("a neighbor was blocked by another address's spray")
 	}
 }
 
@@ -307,5 +307,51 @@ func TestDistinctTokenBudget_Cleanup_DropsQuietRecordsAndKeepsBlockedOnes(t *tes
 	}
 	if !blockedKept {
 		t.Error("a blocked record was swept away, which would end its block early")
+	}
+}
+
+// TestDistinctTokenBudget_CapAdmitsNewAddressesOnceRecordsLapse covers the
+// other half of the cap: it is a ceiling on live records, not on everything
+// ever seen, so a saturated table recovers on its own rather than refusing to
+// count anybody until the process restarts.
+func TestDistinctTokenBudget_CapAdmitsNewAddressesOnceRecordsLapse(t *testing.T) {
+	b := NewDistinctTokenBudget(1000, time.Minute, time.Minute)
+
+	for i := range maxTrackedAuthSources {
+		b.Charge("10.0."+strconv.Itoa(i/256)+"."+strconv.Itoa(i%256), "glpat-"+strconv.Itoa(i))
+	}
+	if b.Len() < maxTrackedAuthSources {
+		t.Fatalf("Len = %d, want the table filled to %d before the cap is tested", b.Len(), maxTrackedAuthSources)
+	}
+
+	// A new address is refused while every record is live.
+	b.Charge("172.16.0.1", "glpat-refused")
+	b.mu.Lock()
+	_, admittedWhileFull := b.addresses["172.16.0.1"]
+	// Wind every record past the reset horizon, and the last sweep back far
+	// enough that the insert path is allowed to sweep again.
+	past := time.Now().Add(-b.resetAfter() - time.Second)
+	for _, rec := range b.addresses {
+		rec.lastChargeAt = past
+		rec.blockedUntil = time.Time{}
+	}
+	b.lastSweepAt = time.Time{}
+	b.mu.Unlock()
+
+	if admittedWhileFull {
+		t.Error("a new address was tracked while the table was full of live records")
+	}
+
+	b.Charge("172.16.0.2", "glpat-admitted")
+	b.mu.Lock()
+	_, admittedAfterSweep := b.addresses["172.16.0.2"]
+	warned := b.warnedAtCap
+	b.mu.Unlock()
+
+	if !admittedAfterSweep {
+		t.Error("a new address was still refused after every record had lapsed; the cap is counting dead records")
+	}
+	if warned {
+		t.Error("the saturation warning is still armed after the table recovered, so a second episode would be silent")
 	}
 }

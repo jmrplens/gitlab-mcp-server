@@ -506,14 +506,14 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 // and which one refused. It is [mcpServerGate.blockedByBudget] at this layer,
 // consulting the same three budgets in the same order, and the two must agree:
 // a caller refused here and one refused there was refused by the same rule.
-func (g *bearerGuard) blockedByBudget(key, source string) (bool, time.Duration, string) {
+func (g *bearerGuard) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
 		return true, g.failureWindow, mcpotel.AuthBlockFailureLockout
 	}
 	if g.sourceBudget.blocked(source) {
 		return true, g.failureWindow, mcpotel.AuthBlockTransportSource
 	}
-	if blocked, remaining := g.spray.Blocked(key); blocked {
+	if sprayed, remaining := g.spray.Blocked(key); sprayed {
 		return true, remaining, mcpotel.AuthBlockDistinctTokens
 	}
 	return false, 0, ""

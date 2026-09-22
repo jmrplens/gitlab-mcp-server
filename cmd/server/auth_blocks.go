@@ -114,7 +114,7 @@ func authFailureLimiter(cfg *config.Config) *serverpool.AuthRateLimiter {
 //
 // The escalation step is the fast window rather than a setting of its own, so
 // the ladder is one window, then ten, then sixty, and a deployment that
-// shortens the window to watch the behaviour shortens the whole ladder with
+// shortens the window to watch the behavior shortens the whole ladder with
 // it. At the defaults that is a minute, ten minutes and an hour.
 func authSprayBudget(cfg *config.Config) *serverpool.DistinctTokenBudget {
 	return serverpool.NewDistinctTokenBudget(cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow, cfg.AuthFailureWindow)

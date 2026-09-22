@@ -651,14 +651,14 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 // The reason is what telemetry records the refusal under, and is the only
 // thing recorded about it: an address is who was refused, which a counter must
 // not carry.
-func (g *mcpServerGate) blockedByBudget(key, source string) (bool, time.Duration, string) {
+func (g *mcpServerGate) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
 		return true, g.failureWindow, mcpotel.AuthBlockFailureLockout
 	}
 	if g.sourceBudget.blocked(source) {
 		return true, g.failureWindow, mcpotel.AuthBlockTransportSource
 	}
-	if blocked, remaining := g.spray.Blocked(key); blocked {
+	if sprayed, remaining := g.spray.Blocked(key); sprayed {
 		return true, remaining, mcpotel.AuthBlockDistinctTokens
 	}
 	return false, 0, ""

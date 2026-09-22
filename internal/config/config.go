@@ -87,7 +87,7 @@ const (
 // The slow one asks how many *distinct* credentials that address had refused
 // over a longer one. Fifty in ten minutes is only an attack: a person has one
 // token and a fleet behind a NAT has one each, so the distinct count is what a
-// legitimate neighbour never produces and a sprayer cannot avoid producing. It
+// legitimate neighbor never produces and a sprayer cannot avoid producing. It
 // is also the earliest signal that the deployment's own standing with GitLab is
 // being spent, since every distinct credential that reaches verification is a
 // request GitLab charges to this server's address.
@@ -96,7 +96,7 @@ const (
 // rather than configured on its own: one window, then ten, then sixty, reset
 // after sixty of silence. At the defaults that is a minute, ten minutes and an
 // hour, which is the ladder the design asked for, and a deployment that shortens
-// the window to test the behaviour shortens the whole ladder with it.
+// the window to test the behavior shortens the whole ladder with it.
 //
 // The maxima are sanity bounds rather than judgements: a window longer than a
 // day makes a block outlive the incident that caused it, and a limit in the

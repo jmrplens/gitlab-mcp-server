@@ -25,7 +25,7 @@ const distinctDigestLen = 16
 // With the default step of one minute this is the minute, the ten minutes and
 // the hour the escalation was specified as. The last entry repeats: an
 // attacker who keeps going after the third block stays on the hour rather than
-// being blocked for a day, because the block is a defence and not a
+// being blocked for a day, because the block is a defense and not a
 // punishment, and a permanent one lands on whoever inherits the address.
 var escalationLadder = [...]int{1, 10, 60}
 
@@ -39,7 +39,7 @@ var escalationLadder = [...]int{1, 10, 60}
 // answer to it is a block that lasts a minute and forgives. Fifty *distinct*
 // invalid tokens from one address inside ten minutes is only an attack: a
 // person has one token, and a fleet behind a NAT has one each, so the distinct
-// count is the one thing a legitimate neighbour never produces and a sprayer
+// count is the one thing a legitimate neighbor never produces and a sprayer
 // cannot avoid producing.
 //
 // What it protects is not really this server, which refuses those requests
