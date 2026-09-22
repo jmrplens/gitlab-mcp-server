@@ -55,11 +55,11 @@ type CallIdentifier interface {
 	// because the shape differs per surface and only the implementation knows
 	// which field to read.
 	//
-	// Returning false is normal rather than exceptional: a standalone tool such
-	// as gitlab_discover_project or an interactive elicitation flow belongs to
-	// no catalog action, and a call naming a tool that does not exist reaches
-	// here before anything rejects it. Neither is worth an error, and both must
-	// leave the attribute unset rather than carry a placeholder.
+	// Returning false is normal rather than exceptional: a call naming a tool
+	// that does not exist reaches here before anything rejects it, and a call
+	// whose arguments name no operation has none to report. Neither is worth
+	// an error, and both must leave the attribute unset rather than carry a
+	// placeholder.
 	Identify(toolName string, arguments any) (Identity, bool)
 }
 
