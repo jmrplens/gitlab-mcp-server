@@ -83,6 +83,9 @@ type bearerGuard struct {
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [mcpServerGate].
 	blocks *authBlockCounters
+	// failureWindow is the configured window the two counting budgets block
+	// for, and so what their Retry-After announces.
+	failureWindow time.Duration
 	// trustedProxyHeader names the header carrying the real client IP, so
 	// the limiter counts per caller rather than per reverse proxy, and
 	// trustedProxies are the peers it is believed from.
@@ -505,10 +508,10 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 // a caller refused here and one refused there was refused by the same rule.
 func (g *bearerGuard) blockedByBudget(key, source string) (bool, time.Duration, string) {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
-		return true, authFailureWindow, mcpotel.AuthBlockFailureLockout
+		return true, g.failureWindow, mcpotel.AuthBlockFailureLockout
 	}
 	if g.sourceBudget.blocked(source) {
-		return true, authFailureWindow, mcpotel.AuthBlockTransportSource
+		return true, g.failureWindow, mcpotel.AuthBlockTransportSource
 	}
 	if blocked, remaining := g.spray.Blocked(key); blocked {
 		return true, remaining, mcpotel.AuthBlockDistinctTokens

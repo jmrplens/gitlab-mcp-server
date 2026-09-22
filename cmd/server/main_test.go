@@ -3100,10 +3100,13 @@ func TestNewDepthLimitedBody_ADisabledLimit_PassesTheBodyThrough(t *testing.T) {
 // it, and nil is what "no second budget" looks like.
 func TestTransportFailureBudget_ExistsOnlyWithATrustedHeader(t *testing.T) {
 	t.Parallel()
-	if budget := transportFailureBudget("  "); budget != nil {
+	if budget := transportFailureBudget(&config.Config{TrustedProxyHeader: "  "}); budget != nil {
 		t.Errorf("transportFailureBudget(blank) = %+v, want nil", budget)
 	}
-	budget := transportFailureBudget("X-Forwarded-For")
+	budget := transportFailureBudget(&config.Config{
+		TrustedProxyHeader: "X-Forwarded-For",
+		AuthFailureWindow:  config.DefaultAuthFailureWindow,
+	})
 	if budget == nil || budget.rateLimiter() == nil {
 		t.Fatal("transportFailureBudget(header) = nil, want a budget with a limiter behind it")
 	}

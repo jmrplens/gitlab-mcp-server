@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
@@ -40,8 +41,11 @@ import (
 // holds means holding a credential GitLab accepts, which is not the state a
 // spray is in.
 const (
-	authFailureLimit  = 10
-	authFailureWindow = 1 * time.Minute
+	// The two figures a deployment gets unless it says otherwise. They live in
+	// internal/config with every other default, and are named here because
+	// the tests below build guards directly rather than through a Config.
+	authFailureLimit  = config.DefaultAuthFailureLimit
+	authFailureWindow = config.DefaultAuthFailureWindow
 	// transportFailureLimit is the secondary budget, charged to the address
 	// the connection actually came from rather than to whatever a trusted
 	// proxy header claims.
@@ -264,7 +268,12 @@ type mcpServerGate struct {
 	spray *serverpool.DistinctTokenBudget
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [bearerGuard], since the two layers share the budgets themselves.
-	blocks             *authBlockCounters
+	blocks *authBlockCounters
+	// failureWindow is how long the two counting budgets block for, which is
+	// what their Retry-After announces. It is the configured window rather
+	// than the default: a deployment that widened it to five minutes must not
+	// tell a caller to come back in one.
+	failureWindow      time.Duration
 	trustedProxyHeader string
 	// trustedProxies are the peers trustedProxyHeader is believed from; from
 	// anybody else the header is ignored and the peer is charged.
@@ -644,10 +653,10 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 // not carry.
 func (g *mcpServerGate) blockedByBudget(key, source string) (bool, time.Duration, string) {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
-		return true, authFailureWindow, mcpotel.AuthBlockFailureLockout
+		return true, g.failureWindow, mcpotel.AuthBlockFailureLockout
 	}
 	if g.sourceBudget.blocked(source) {
-		return true, authFailureWindow, mcpotel.AuthBlockTransportSource
+		return true, g.failureWindow, mcpotel.AuthBlockTransportSource
 	}
 	if blocked, remaining := g.spray.Blocked(key); blocked {
 		return true, remaining, mcpotel.AuthBlockDistinctTokens

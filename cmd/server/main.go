@@ -3299,8 +3299,8 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// the same per-address budget, so a caller cannot get a fresh allowance
 	// by failing at a different layer. The gate reaches it only for the pool
 	// rejections the guard cannot see.
-	authLimiter := serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
-	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
+	authLimiter := authFailureLimiter(cfg)
+	sourceBudget := transportFailureBudget(cfg)
 	sprayBudget := authSprayBudget(cfg)
 	blockCounts := &authBlockCounters{}
 	observeAuthBlocks(blockCounts)
@@ -3311,6 +3311,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
 		blocks:             blockCounts,
+		failureWindow:      cfg.AuthFailureWindow,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessions:           binding.sessions,
@@ -3380,6 +3381,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
 		blocks:             blockCounts,
+		failureWindow:      cfg.AuthFailureWindow,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		metadataURL:        resourceMetadataURL,
@@ -3418,7 +3420,9 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	mountMCPEndpoint(cfg, mux, guard.middleware(authMiddleware(gate.middleware(carriedMCPHandler(mcpHandler)))))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
-	startPeriodicCleanup(ctx, authLimiter.Cleanup)
+	if authLimiter != nil {
+		startPeriodicCleanup(ctx, authLimiter.Cleanup)
+	}
 	if sourceBudget != nil {
 		startPeriodicCleanup(ctx, sourceBudget.cleanup)
 	}
@@ -3450,9 +3454,11 @@ func oauthCacheTTL(configured time.Duration) time.Duration {
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, binding poolBinding, mux *http.ServeMux) {
-	authLimiter := serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
-	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
+	authLimiter := authFailureLimiter(cfg)
+	if authLimiter != nil {
+		startPeriodicCleanup(ctx, authLimiter.Cleanup)
+	}
+	sourceBudget := transportFailureBudget(cfg)
 	if sourceBudget != nil {
 		startPeriodicCleanup(ctx, sourceBudget.cleanup)
 	}
@@ -3469,6 +3475,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
 		blocks:             blockCounts,
+		failureWindow:      cfg.AuthFailureWindow,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessions:           binding.sessions,
@@ -3571,11 +3578,19 @@ func safeTokenSuffix(token string) string {
 // configuration in which the primary budget's key is chosen by the caller.
 // Without one, [clientIP] already returns RemoteAddr and a second limiter over
 // the same string would just halve the budget.
-func transportFailureBudget(trustedProxyHeader string) *transportBudget {
-	if strings.TrimSpace(trustedProxyHeader) == "" {
+func transportFailureBudget(cfg *config.Config) *transportBudget {
+	if strings.TrimSpace(cfg.TrustedProxyHeader) == "" {
 		return nil
 	}
-	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+	window := cfg.AuthFailureWindow
+	if window <= 0 {
+		// The fast budget is off, but this one is not: it catches header
+		// rotation, which is a different question. It keeps the default
+		// window rather than inheriting a zero that would make every record
+		// lapse instantly.
+		window = config.DefaultAuthFailureWindow
+	}
+	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, window))
 }
 
 // applyLocalFilesystemPolicy settles whether tool handlers may name paths on

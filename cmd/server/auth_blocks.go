@@ -93,6 +93,22 @@ func validateAuthBudgetBounds(cfg *config.Config) error {
 	return nil
 }
 
+// authFailureLimiter builds the fast per-address budget, or returns nil when
+// the deployment turned it off.
+//
+// The nil is what "off" has to be. [serverpool.AuthRateLimiter] blocks once a
+// record's count reaches its limit, so a limit of zero blocks an address after
+// a single failure: the most aggressive setting there is, reached by typing the
+// figure that every other budget here reads as "no budget". Every consulting
+// site already tolerates a nil limiter, so refusing to build one is both the
+// smallest change and the only one that cannot be read two ways.
+func authFailureLimiter(cfg *config.Config) *serverpool.AuthRateLimiter {
+	if cfg.AuthFailureLimit <= 0 || cfg.AuthFailureWindow <= 0 {
+		return nil
+	}
+	return serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
+}
+
 // authSprayBudget builds the distinct-token budget from the configuration, or
 // returns nil when the deployment turned it off.
 //
