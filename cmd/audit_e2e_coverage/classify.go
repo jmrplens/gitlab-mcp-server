@@ -242,7 +242,8 @@ type cellKey struct {
 	action       string
 }
 
-// cell is one surface x mode x action with everything the calls said.
+// cell is one action or capability item at its key's grain (see cellKey),
+// with everything the calls said.
 type cell struct {
 	key cellKey
 	// best is the highest credit any call earned.

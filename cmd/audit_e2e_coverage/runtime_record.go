@@ -121,11 +121,14 @@ type recordEntry struct {
 	Runs []runRow `json:"runs"`
 	// Sessions is what each surface and mode served.
 	Sessions []sessionRow `json:"sessions"`
-	// CapabilitySurfaces is what each capability surface served, which is
-	// what the capability histograms are counted against. An entry without
-	// them was recorded before the capability grain, when every capability
-	// kind was counted once per surface x mode; the check says so and the
-	// page states the older grain, and nothing else reads the difference.
+	// CapabilitySurfaces is what each capability surface served: the
+	// denominator of the resources, prompts, completions and subscriptions
+	// histograms, which are counted per capability surface; tool_manifest,
+	// elicitation and modes are counted per shape and have no figure here.
+	// An entry without them was recorded before the capability grain, when
+	// every capability kind was counted once per surface x mode; the check
+	// says so and the page states the older grain, and nothing else reads
+	// the difference.
 	CapabilitySurfaces []capabilitySurfaceRow `json:"capability_surfaces,omitempty"`
 	// Summary is the headline counts.
 	Summary summary `json:"summary"`
