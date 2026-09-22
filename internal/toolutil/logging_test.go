@@ -260,6 +260,40 @@ func TestWasCancelled_SeparatesCallerDepartureFromFailure(t *testing.T) {
 	}
 }
 
+// TestLogToolCallAll_Cancellation_IsLoggedAsCanceledNotFailed verifies the log
+// line a call the caller abandoned gets, anonymous and attributed alike: INFO
+// "tool call canceled" carrying the cause, and never the ERROR "tool call
+// failed" an operator counts as a failure, since nothing failed.
+func TestLogToolCallAll_Cancellation_IsLoggedAsCanceledNotFailed(t *testing.T) {
+	tests := []struct {
+		name string
+		ctx  context.Context
+		err  error
+	}{
+		{name: "anonymous, canceled", ctx: context.Background(), err: fmt.Errorf("listing issues: %w", context.Canceled)},
+		{name: "anonymous, past its deadline", ctx: context.Background(), err: context.DeadlineExceeded},
+		{
+			name: "attributed, canceled",
+			ctx:  IdentityToContext(context.Background(), UserIdentity{UserID: "123", Username: "testuser"}),
+			err:  context.Canceled,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureSlog(t)
+
+			LogToolCallAll(tt.ctx, nil, "issue_list", time.Now(), nil, tt.err)
+
+			out := buf.String()
+			assertContains(t, out, `"msg":"tool call canceled"`)
+			assertContains(t, out, `"level":"INFO"`)
+			assertContains(t, out, `"cause":`)
+			assertNotContains(t, out, "tool call failed")
+			assertNotContains(t, out, `"level":"ERROR"`)
+		})
+	}
+}
+
 // TestLogToolCallAll_ErrorResultIsNotLoggedAsSuccess pins the distinction an
 // operator needs and did not have.
 //

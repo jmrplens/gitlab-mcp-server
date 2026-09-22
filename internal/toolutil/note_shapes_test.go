@@ -255,6 +255,30 @@ func TestNoteOutput_UsernameAccessors_AnswerForAbsentUsers(t *testing.T) {
 	}
 }
 
+// TestDiscussionThreadNoteOutput_UsernameAccessors_AnswerForAbsentUsers is the
+// same pair of guards on the thread note, which keeps its own copies because
+// the discussion card renders from it rather than from [NoteOutput].
+func TestDiscussionThreadNoteOutput_UsernameAccessors_AnswerForAbsentUsers(t *testing.T) {
+	named := DiscussionThreadNoteOutput{
+		Author:     &NoteUserOutput{Username: "alice"},
+		ResolvedBy: &NoteUserOutput{Username: "bob"},
+	}
+	if got := named.AuthorUsername(); got != "alice" {
+		t.Errorf("AuthorUsername() = %q, want alice", got)
+	}
+	if got := named.ResolvedByUsername(); got != "bob" {
+		t.Errorf("ResolvedByUsername() = %q, want bob", got)
+	}
+
+	var absent DiscussionThreadNoteOutput
+	if got := absent.AuthorUsername(); got != "" {
+		t.Errorf("AuthorUsername() with no author = %q, want the empty string", got)
+	}
+	if got := absent.ResolvedByUsername(); got != "" {
+		t.Errorf("ResolvedByUsername() with no resolver = %q, want the empty string", got)
+	}
+}
+
 // TestDiscussionThreadNoteOutputFromGitLab_FieldMapping verifies the thread
 // note converter reads what client-go decoded: the scalars, the timestamps
 // and the two users.

@@ -10,8 +10,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 )
 
 type surfaceToolTestInput struct {
@@ -108,6 +111,55 @@ func TestRegisterSurfaceToolFromSpec_DestructiveConfirmAcceptedRunsRoute(t *test
 	}
 	if result == nil {
 		t.Fatal("expected non-nil success result")
+	}
+}
+
+// TestRegisterSurfaceToolFromSpec_RouteOwnPendingInput_IsReturnedAsResult
+// verifies the multi round-trip branch the standalone dispatcher applies to a
+// route's own elicitation, the counterpart of the meta dispatcher's test of the
+// same name: a route that needs an answer reports it as an
+// *elicitation.InputRequiredError, and the dispatcher must hand the
+// input-required result back to the client rather than surface it as a
+// failure, so the SDK can answer it and retry. The route then runs to
+// completion on the retry with the answer attached.
+func TestRegisterSurfaceToolFromSpec_RouteOwnPendingInput_IsReturnedAsResult(t *testing.T) {
+	var pending, completed atomic.Int32
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	route := RouteFunc(func(ctx context.Context, _ surfaceToolTestInput) (DeleteOutput, error) {
+		flow, err := elicitation.FlowFromRequest(RequestFromContext(ctx))
+		if err != nil {
+			return DeleteOutput{}, err
+		}
+		confirmed, confirmErr := flow.Confirm(ctx, "own-exchange", "Proceed with side effect?")
+		if errors.Is(confirmErr, elicitation.ErrInputPending) {
+			pending.Add(1)
+			return DeleteOutput{}, flow.PendingError()
+		}
+		if confirmErr != nil || !confirmed {
+			return DeleteOutput{}, fmt.Errorf("not confirmed: %w", confirmErr)
+		}
+		completed.Add(1)
+		return DeleteOutput{Status: "success", Message: "proceeded"}, nil
+	})
+	spec := NewActionSpec("proceed", route, ActionSpecOptions{
+		IndividualTool: IndividualToolSpec{Name: "gitlab_test_proceed", Title: "Test Proceed"},
+	})
+	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "Test route-owned pending input."})
+
+	var answered atomic.Int32
+	session := newSurfaceToolSession(t, server, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		answered.Add(1)
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+	})
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_proceed", Arguments: map[string]any{"id": 1}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("result = %+v, want a successful call after the pending round trip", result)
+	}
+	if pending.Load() != 1 || answered.Load() != 1 || completed.Load() != 1 {
+		t.Errorf("pending, answered, completed = %d, %d, %d, want one of each", pending.Load(), answered.Load(), completed.Load())
 	}
 }
 
@@ -315,6 +367,35 @@ func TestRegisterSurfaceToolFromSpec_AProtocolFaultStopsTheRouteAsAnError(t *tes
 	}
 	if called.Load() {
 		t.Error("the destructive route ran despite a confirmation that could not be completed")
+	}
+}
+
+// TestSurfaceToolHandler_ForgedRequestState_IsAProtocolErrorAndTheRouteDoesNotRun
+// is the dispatcher's half of the test above, driven directly: when the
+// confirmation guard answers a requestState this server never issued with a
+// protocol error, the standalone dispatcher returns that error and nothing
+// else, and the destructive route does not run.
+func TestSurfaceToolHandler_ForgedRequestState_IsAProtocolErrorAndTheRouteDoesNotRun(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "false")
+	var called atomic.Bool
+	route := RouteFunc(func(_ context.Context, _ surfaceToolTestInput) (DeleteOutput, error) {
+		called.Store(true)
+		return DeleteOutput{Status: "success", Message: "deleted"}, nil
+	})
+	route.Destructive = true
+	handler := surfaceToolHandler("gitlab_test_delete", route, nil)
+
+	result, out, err := handler(context.Background(), forgedRequestState("gitlab_test_delete"), map[string]any{"id": 1})
+
+	rpcErr, ok := errors.AsType[*jsonrpc.Error](err)
+	if !ok || rpcErr.Code != jsonrpc.CodeInvalidParams {
+		t.Fatalf("handler() error = %v, want a JSON-RPC invalid-params error", err)
+	}
+	if result != nil || out != nil {
+		t.Errorf("handler() = (%+v, %+v), want no tool result beside the protocol error", result, out)
+	}
+	if called.Load() {
+		t.Error("the destructive route ran although its confirmation could not be read")
 	}
 }
 

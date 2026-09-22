@@ -754,6 +754,25 @@ func TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors(t *testing.T) {
 	}
 }
 
+// forgedRequestState returns a tools/call request from a 2026-07-28 client that
+// can prompt, carrying a requestState this server never issued: the input on
+// which the confirmation guard fails as a protocol fault rather than as a tool
+// outcome. The dispatchers are handed it directly, so what is measured is the
+// dispatcher's answer to the guard rather than whatever an SDK session does
+// with the state before a handler sees it.
+func forgedRequestState(name string) *mcp.CallToolRequest {
+	return &mcp.CallToolRequest{Session: &mcp.ServerSession{}, Params: &mcp.CallToolParamsRaw{
+		Name: name,
+		Meta: mcp.Meta{
+			"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+			"io.modelcontextprotocol/clientCapabilities": map[string]any{
+				"elicitation": map[string]any{"form": map[string]any{}},
+			},
+		},
+		RequestState: "not-a-state-this-server-issued",
+	}}
+}
+
 // TestIsYOLOMode_TheFlagOverridesTheInheritedAlias pins the precedence a review
 // caught backwards: with AUTOPILOT=true inherited from the environment,
 // --yolo-mode=false writes GITLAB_MCP_YOLO_MODE=false and that has to win.

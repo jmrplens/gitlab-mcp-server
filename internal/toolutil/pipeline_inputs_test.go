@@ -120,3 +120,30 @@ func TestPipelineInputsSchema_AStructWithoutTheProperty_Panics(t *testing.T) {
 
 	_ = PipelineInputsSchema[withoutInputs]("inputs")
 }
+
+// TestPipelineInputsSchema_AStructNoSchemaCanDescribe_Panics covers the guard
+// in front of the one above: an input struct carrying a field JSON Schema has
+// no form for fails at registration, naming the property whose schema was
+// being built and what to check, rather than registering a tool with no input
+// schema at all.
+func TestPipelineInputsSchema_AStructNoSchemaCanDescribe_Panics(t *testing.T) {
+	t.Parallel()
+
+	type unreflectable struct {
+		Inputs map[string]any `json:"inputs"`
+		Events chan int       `json:"events"`
+	}
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("PipelineInputsSchema accepted a struct no schema can describe")
+		}
+		message, _ := recovered.(string)
+		if !strings.HasPrefix(message, "build input schema for inputs: ") || !strings.Contains(message, "check the input struct tags") {
+			t.Errorf("panic = %v, want the schema build failure for inputs and what to check", recovered)
+		}
+	}()
+
+	_ = PipelineInputsSchema[unreflectable]("inputs")
+}

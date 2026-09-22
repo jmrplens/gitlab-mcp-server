@@ -325,3 +325,44 @@ func TestNewLimitedFileReader_BoundsWhatItYields(t *testing.T) {
 		})
 	}
 }
+
+// TestLimitedFileReader_ReadAfterTheRefusal_IsRefusedAgain verifies that a
+// caller which reads on after the size refusal, rather than stopping at the
+// first error the way io.ReadAll does, is refused again without the source
+// being asked for another byte, so no read order gets past the limit.
+func TestLimitedFileReader_ReadAfterTheRefusal_IsRefusedAgain(t *testing.T) {
+	source := strings.NewReader("abcdefghijkl")
+	reader := newLimitedFileReader("op", source, 4)
+	buf := make([]byte, 16)
+
+	if _, err := reader.Read(buf); err == nil {
+		t.Fatal("first Read() error = nil, want the size refusal for a source past the limit")
+	}
+	remaining := source.Len()
+	n, err := reader.Read(buf)
+	if err == nil || !strings.Contains(err.Error(), "op: file exceeds maximum allowed size of 4 bytes") {
+		t.Errorf("second Read() error = %v, want the size refusal again", err)
+	}
+	if n != 0 {
+		t.Errorf("second Read() = %d bytes, want none", n)
+	}
+	if source.Len() != remaining {
+		t.Errorf("second Read() drew %d more bytes from the source, want none", remaining-source.Len())
+	}
+}
+
+// TestOpenFileOrBase64Source_FileThatCannotBeOpened_IsPrefixedWithTheOperation
+// verifies that a file_path the containment or the filesystem refuses fails
+// with the operation in front, the shape every upload input error takes, and
+// hands back no reader and no cleanup to call.
+func TestOpenFileOrBase64Source_FileThatCannotBeOpened_IsPrefixedWithTheOperation(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "absent.txt")
+
+	reader, size, cleanup, err := OpenFileOrBase64Source("myOp", missing, "")
+	if err == nil || !strings.HasPrefix(err.Error(), "myOp: resolve file path ") {
+		t.Fatalf("OpenFileOrBase64Source() error = %v, want the op-prefixed resolution refusal", err)
+	}
+	if reader != nil || size != 0 || cleanup != nil {
+		t.Errorf("OpenFileOrBase64Source() = (%v, %d, cleanup set %t), want nothing beside the error", reader, size, cleanup != nil)
+	}
+}

@@ -2076,6 +2076,17 @@ func TestSanitizeError_RendersWhatTheResponseCarried(t *testing.T) {
 			want: projectRequestLine + ": 404 {message: Project Not Found}",
 		},
 		{
+			// The shape a handler builds for itself: merge_requests.go makes
+			// one from a response it already holds, with no StatusCode and,
+			// here, no message, so client-go's rendering says 0 and the
+			// response says 404.
+			name: "the status is the response's when there is no message either",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
+			},
+			want: projectRequestLine + ": 404",
+		},
+		{
 			name: "no request line, with a message",
 			err: &gl.ErrorResponse{
 				StatusCode: http.StatusNotFound,

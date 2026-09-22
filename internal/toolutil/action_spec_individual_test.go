@@ -392,6 +392,35 @@ func testActionSpecSchema(properties ...string) map[string]any {
 	return map[string]any{"type": "object", "properties": props}
 }
 
+// TestIndividualToolFromActionSpec_NarrowingReadOnlyOverride_IsApplied is the
+// other half of the test above: a read-only action whose individual tool
+// declares itself not read-only is projected that way, since claiming less
+// safety than the action has narrows the operator's controls rather than
+// widening them.
+func TestIndividualToolFromActionSpec_NarrowingReadOnlyOverride_IsApplied(t *testing.T) {
+	notReadOnly := false
+	spec := NewActionSpec("preview", ActionRoute{
+		InputSchema:  testActionSpecSchema("project_id"),
+		OutputSchema: testActionSpecSchema("id"),
+	}, ActionSpecOptions{
+		ReadOnly:     true,
+		OwnerPackage: "projects",
+		IndividualTool: IndividualToolSpec{
+			Name:                "gitlab_project_preview",
+			Description:         "Preview a GitLab project.",
+			AnnotationOverrides: IndividualToolAnnotationOverrides{ReadOnly: &notReadOnly},
+		},
+	})
+
+	tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if tool.Annotations.ReadOnlyHint {
+		t.Error("readOnlyHint = true, want the narrowing override's false")
+	}
+}
+
 // TestIndividualToolAnnotationOverrides_NarrowingOnly verifies that an
 // individual-tool annotation override may make an action look less safe than
 // the action is, never safer.

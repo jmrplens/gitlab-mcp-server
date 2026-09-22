@@ -39,6 +39,9 @@ func TestNewBasicUserOutputs(t *testing.T) {
 	if got := NewBasicUserOutputs([]*gl.BasicUser{}); got != nil {
 		t.Errorf("empty slice must return nil, got %+v", got)
 	}
+	if got := NewBasicUserOutputs([]*gl.BasicUser{nil, nil}); got != nil {
+		t.Errorf("all-nil slice must return nil, not an empty list, got %+v", got)
+	}
 	got := NewBasicUserOutputs([]*gl.BasicUser{
 		nil,
 		{ID: 1, Username: "a"},
