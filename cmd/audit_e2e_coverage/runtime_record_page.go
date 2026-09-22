@@ -242,8 +242,8 @@ func writeRecordCapabilities(b *strings.Builder, key string, entry *recordEntry)
 			"the grain above.\n\n")
 	} else {
 		b.WriteString("What each capability surface served, which is what the `resources`, `prompts`, `completions` " +
-			"and `subscriptions` rows beneath are counted against (`tool_manifest`, `elicitation` and `modes` " +
-			"are counted per shape and have no figure here):\n\n")
+			"and `subscriptions` rows beneath are counted against (`tool_manifest` is counted per shape and " +
+			"capability surface, `elicitation` and `modes` per shape; none has a figure here):\n\n")
 		b.WriteString(renderCapabilitySurfaceTable(entry.CapabilitySurfaces))
 		b.WriteString("\n")
 	}

@@ -712,7 +712,10 @@ func TestClassify_CallWithoutCapabilities_CountsAsTheDefaultSurface(t *testing.T
 // model: every capability kind the fold writes is in the table, at the grain
 // the server makes it vary along, and each grain keys its cells with exactly
 // the coordinates it names. A kind missing from the table would be keyed at
-// the zero grain without a word, and the page would not list it.
+// the zero grain without a word, and the page would not list it, so the kinds
+// a classification of the fixture actually wrote are held against the table
+// in both directions rather than against the list below, which a new kind
+// would be missing from as well.
 func TestCapabilityGrains_EveryKind_CountedAtTheGrainItVariesAlong(t *testing.T) {
 	shape := shapeKey{surface: config.ToolSurfaceMeta, mode: modeReadOnly}
 	cases := []struct {
@@ -730,6 +733,17 @@ func TestCapabilityGrains_EveryKind_CountedAtTheGrainItVariesAlong(t *testing.T)
 	}
 	if len(capabilityGrains) != len(cases) {
 		t.Errorf("capabilityGrains holds %d kinds, want the %d the fold writes: %q", len(capabilityGrains), len(cases), sortedKeys(capabilityGrains))
+	}
+	written := classify(fixtureRuntime(), fixtureCatalog()).capabilities
+	for _, kind := range sortedKeys(written) {
+		if _, held := capabilityGrains[kind]; !held {
+			t.Errorf("the fold wrote the kind %q, which capabilityGrains does not hold: it is keyed at the zero grain and left off the page", kind)
+		}
+	}
+	for _, kind := range sortedKeys(capabilityGrains) {
+		if _, wrote := written[kind]; !wrote {
+			t.Errorf("capabilityGrains holds the kind %q, which a classification of the fixture never wrote", kind)
+		}
 	}
 	for _, tc := range cases {
 		t.Run(tc.kind, func(t *testing.T) {
@@ -939,7 +953,8 @@ func TestClassify_ElicitationCells_OwnTheirCredit(t *testing.T) {
 
 // TestClassify_Edges_RecordOddities verifies the shapes a shard can hold
 // that the fixture above does not: a call on a shape no session line named,
-// a read on a capability surface no session line named, a non-tool call with
+// a read on a capability surface no session line named, a manifest detail
+// read on such a surface, which is still the manifest, a non-tool call with
 // no target, a subscription to a URI the server would not accept, a tool call
 // naming no tool, a skipped subtest whose skip line names its parent, and a
 // call whose method the classification has no cell for, which is counted as a
@@ -949,10 +964,13 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 	unlisted := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeSafe}
 	onUnlistedSurface := fixtureCall(callSpec{test: "TestUnlistedSurface", method: methodReadResource, target: "gitlab://project/2", shape: dynamicDefault})
 	onUnlistedSurface.Capabilities = minimal
+	detailOnUnlistedSurface := fixtureCall(callSpec{test: "TestUnlistedSurfaceManifest", method: methodReadResource, target: "gitlab://tools/issue.list", shape: dynamicDefault})
+	detailOnUnlistedSurface.Capabilities = minimal
 	rt.calls = append(rt.calls,
 		fixtureCall(callSpec{test: "TestUnlisted", action: "issue.list", dispatched: "issue.list", shape: unlisted}),
 		fixtureCall(callSpec{test: "TestUnlisted", method: methodReadResource, target: "gitlab://project/1", shape: unlisted}),
 		onUnlistedSurface,
+		detailOnUnlistedSurface,
 		fixtureCall(callSpec{test: "TestNoTarget", method: methodGetPrompt, shape: metaDefault}),
 		fixtureCall(callSpec{test: "TestNotSubscribable", method: methodSubscribe, target: "gitlab://project/1/branches", shape: dynamicDefault}),
 		fixtureCall(callSpec{test: "TestSkipped/sub", action: "project.list", dispatched: "project.list", status: e2ecalls.StatusSkipped, shape: dynamicDefault}),
@@ -995,6 +1013,13 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 	}
 	if got := capabilityState(c, capabilityResources, onCapabilities(minimal, "gitlab://project/2")); got != stateAsserted {
 		t.Errorf("a read on a capability surface without a session line = %s, want asserted under its own URI", got)
+	}
+	if got := capabilityState(c, capabilityToolManifest, onShapeAndCapabilities(dynamicDefault, minimal, "gitlab://tools/{id}")); got != stateAsserted {
+		t.Errorf("a manifest detail read on a capability surface without a session line = %s, want asserted under the detail template on its shape", got)
+	}
+	wantManifest := []string{capabilityToolManifest + " " + config.ToolSurfaceDynamic + "/" + modeDefault + "/" + minimal + " gitlab://tools/{id}"}
+	if credited := testsCredited(c, "TestUnlistedSurfaceManifest"); !slices.Equal(credited, wantManifest) {
+		t.Errorf("a manifest detail read on a capability surface without a session line was credited to %q, want %q and no resources cell", credited, wantManifest)
 	}
 	for key := range c.capabilities[capabilityPrompts] {
 		if key.action == "" {

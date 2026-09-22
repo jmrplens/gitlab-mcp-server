@@ -219,7 +219,8 @@ type capabilityShape struct {
 	// resources, templates, prompts, completions and kinds are the union of
 	// what those sessions listed. The resources and templates keep the
 	// tool-manifest pair, because a read of it resolves against them like any
-	// other; the capability cells leave the pair out and count it per shape.
+	// other; the capability cells leave the pair out and count it per shape
+	// and capability surface.
 	resources   map[string]bool
 	templates   []string
 	prompts     map[string]bool
@@ -761,9 +762,18 @@ func (c *classification) foldCapability(kind string, shape shapeKey, capabilitie
 // The capability surface and not the shape is what a read is resolved
 // against, because it is what decides the set: every shape of one capability
 // surface lists the same templates, the manifest pair included.
+//
+// A read on a capability surface no session line named has no set to resolve
+// against, and is still resolved against the manifest pair, which every
+// capability surface serves: without it a read of one manifest detail would
+// be filed under the resources by its own URI while the index read beside it
+// was filed as the manifest.
 func (c *classification) resourceTarget(capabilities, uri string) string {
 	served, known := c.capabilitySurfaces[capabilities]
 	if !known {
+		if template, matched := matchTemplate(resources.ToolSurfaceResourceURIs(), uri); matched {
+			return template
+		}
 		return uri
 	}
 	if served.resources[uri] {
@@ -896,7 +906,7 @@ func (c *classification) fillCapabilityCells() {
 // the report publishes, which are one list so the two cannot disagree.
 //
 // The tool-manifest pair is left out of the resources, being counted per shape
-// as a kind of its own, and the subscribable kinds are listed only on the full
+// and capability surface as a kind of its own, and the subscribable kinds are listed only on the full
 // surface, which is the only one the server accepts a subscription on.
 func (s *capabilityShape) served() map[string][]string {
 	var items []string

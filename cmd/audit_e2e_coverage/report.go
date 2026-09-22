@@ -101,7 +101,8 @@ type sessionRow struct {
 //
 // Resources counts the static resources and the templates together, the
 // tool-manifest pair left out, because that is what the resources cells are:
-// the pair is a kind of its own, counted per shape. SubscribableKinds is zero
+// the pair is a kind of its own, counted per shape and capability surface.
+// SubscribableKinds is zero
 // off the full surface, which accepts no subscription. Each figure is the
 // number of cells its kind gets on the surface, so a histogram row that is
 // larger than the rows beside it holds cells a call made outside them.
