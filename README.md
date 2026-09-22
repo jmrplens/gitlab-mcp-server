@@ -450,9 +450,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,296 |     287,053 |
-| Unit tests (`_test.go`)  |       878 |     562,951 |
+| Unit tests (`_test.go`)  |       878 |     565,023 |
 | End-to-end tests         |       492 |      94,276 |
-| **Total**                | **2,666** | **944,280** |
+| **Total**                | **2,666** | **946,352** |
 
 ### Functions
 
@@ -461,17 +461,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                | 10,059 |
 | . Exported (public)             |  3,179 |
 | . Unexported (private)          |  6,880 |
-| Unit test functions (`TestXxx`) | 17,108 |
-| Subtests (`t.Run(...)`)         |  5,989 |
+| Unit test functions (`TestXxx`) | 17,123 |
+| Subtests (`t.Run(...)`)         |  6,015 |
 | End-to-end test functions       |  1,199 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.96× more tests than code |
+| Test lines vs source lines         | 1.97× more tests than code |
 | Average source file length         |                 ~221 lines |
-| Average test file length           |                 ~641 lines |
+| Average test file length           |                 ~644 lines |
 | Comment lines in source            |  65,197 (~22.7% of source) |
 | Test functions per source function |                       1.7× |
 
@@ -479,7 +479,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,174 |
+| `if err != nil` checks             | 9,175 |
 | `defer` statements                 | 1,108 |
 | `struct` types defined             | 3,299 |
 | `//nolint` suppressions            |   223 |

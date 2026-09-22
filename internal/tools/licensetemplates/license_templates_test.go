@@ -126,6 +126,26 @@ const fmtUnexpErr = "unexpected error: %v"
 // unquoted, so the error detail these fixtures stand for never decoded.
 const badRequestBody = `{"message":"400 Bad Request"}`
 
+// The operation each handler signs its errors with, spelled out here rather
+// than shared with the handler file: the two are interchangeable string
+// literals at two calls of the same function, so a test reading the label out
+// of the code it is judging would agree with the crossing. The label is the
+// only part of the message that says which of the two reads failed, and a log
+// line or a model reading "get_license_template" for a refused listing is sent
+// after a key nobody asked for.
+const (
+	opList = "list_license_templates"
+	opGet  = "get_license_template"
+)
+
+// assertOperation holds the operation label an error opens with.
+func assertOperation(t *testing.T, err error, operation string) {
+	t.Helper()
+	if !strings.HasPrefix(err.Error(), operation+": ") {
+		t.Errorf("error = %q, want it to open with %q", err.Error(), operation+": ")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
@@ -742,6 +762,11 @@ func TestList_PaginationDescribesTheListResponse(t *testing.T) {
 // invisible from outside, so the suggestion it produces is the only evidence of
 // which one it is — asserting merely that the call failed, as this package did
 // before, holds neither half.
+//
+// The operation label is asserted on both statuses, because it is written at
+// the same call as the hint and on neither path does the hint hold it: the two
+// handlers pass interchangeable labels to one function, and the wrong one names
+// a read the caller never made.
 func TestList_ForbiddenSuggestsTheScopeAndOtherFailuresDoNot(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -760,6 +785,7 @@ func TestList_ForbiddenSuggestsTheScopeAndOtherFailuresDoNot(t *testing.T) {
 			if err == nil {
 				t.Fatalf("status %d: expected an error", tt.status)
 			}
+			assertOperation(t, err, opList)
 			got := strings.Contains(err.Error(), "Suggestion: verify your token has read_api scope")
 			if got != tt.wantHint {
 				t.Errorf("status %d: read_api suggestion present = %v, want %v; error was %q", tt.status, got, tt.wantHint, err.Error())
@@ -771,7 +797,8 @@ func TestList_ForbiddenSuggestsTheScopeAndOtherFailuresDoNot(t *testing.T) {
 // TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot verifies the same of the
 // single-template read: the hint pointing a caller back at the listing belongs
 // to the missing-key refusal that it answers, and to no other failure. A key
-// that does not exist is the one thing the listing can fix.
+// that does not exist is the one thing the listing can fix. The operation
+// label is held on both statuses for the reason given on the listing's test.
 func TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -790,6 +817,7 @@ func TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot(t *testing.T) {
 			if err == nil {
 				t.Fatalf("status %d: expected an error", tt.status)
 			}
+			assertOperation(t, err, opGet)
 			got := strings.Contains(err.Error(), "Suggestion: verify key with template.license_list")
 			if got != tt.wantHint {
 				t.Errorf("status %d: list suggestion present = %v, want %v; error was %q", tt.status, got, tt.wantHint, err.Error())

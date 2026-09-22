@@ -16,24 +16,66 @@ import (
 
 // TestActionSpecs_CallAllRoutes drives every issue discussion action through
 // the route the catalog publishes, with the arguments that action's schema
-// takes, and asserts each one reaches its handler and answers a result.
+// takes, and asserts each one reaches its handler, asks GitLab for its own
+// endpoint, and answers a result.
+//
+// The endpoint is asserted because the six handlers are attached to the six
+// specs as six arguments at one call site, and a pair exchanged there still
+// compiles and still answers. Two of the exchanges survive a result-only
+// assertion: the update and delete specs accept each other's arguments, so
+// crossing them publishes a delete that blanks the note's body and an update
+// that removes the note, and both answer non-nil. Only the request says which
+// action ran.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
-	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
-
 	tests := []struct {
-		tool string
-		args map[string]any
+		tool       string
+		args       map[string]any
+		wantMethod string
+		wantPath   string
 	}{
-		{"gitlab_list_issue_discussions", map[string]any{"project_id": "42", "issue_iid": 10}},
-		{"gitlab_get_issue_discussion", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID}},
-		{"gitlab_create_issue_discussion", map[string]any{"project_id": "42", "issue_iid": 10, "body": "New discussion"}},
-		{"gitlab_add_issue_discussion_note", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID, "body": "Reply"}},
-		{"gitlab_update_issue_discussion_note", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID, "note_id": 300, "body": "Updated"}},
-		{"gitlab_delete_issue_discussion_note", map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID, "note_id": 300}},
+		{
+			tool:       "gitlab_list_issue_discussions",
+			args:       map[string]any{"project_id": "42", "issue_iid": 10},
+			wantMethod: http.MethodGet,
+			wantPath:   "/api/v4/projects/42/issues/10/discussions",
+		},
+		{
+			tool:       "gitlab_get_issue_discussion",
+			args:       map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID},
+			wantMethod: http.MethodGet,
+			wantPath:   "/api/v4/projects/42/issues/10/discussions/abc123",
+		},
+		{
+			tool:       "gitlab_create_issue_discussion",
+			args:       map[string]any{"project_id": "42", "issue_iid": 10, "body": "New discussion"},
+			wantMethod: http.MethodPost,
+			wantPath:   "/api/v4/projects/42/issues/10/discussions",
+		},
+		{
+			tool:       "gitlab_add_issue_discussion_note",
+			args:       map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID, "body": "Reply"},
+			wantMethod: http.MethodPost,
+			wantPath:   "/api/v4/projects/42/issues/10/discussions/abc123/notes",
+		},
+		{
+			tool:       "gitlab_update_issue_discussion_note",
+			args:       map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID, "note_id": 300, "body": "Updated"},
+			wantMethod: http.MethodPut,
+			wantPath:   "/api/v4/projects/42/issues/10/discussions/abc123/notes/300",
+		},
+		{
+			tool:       "gitlab_delete_issue_discussion_note",
+			args:       map[string]any{"project_id": "42", "issue_iid": 10, "discussion_id": testDiscussionID, "note_id": 300},
+			wantMethod: http.MethodDelete,
+			wantPath:   "/api/v4/projects/42/issues/10/discussions/abc123/notes/300",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
+			client := testutil.NewTestClient(t, issueDiscussionsRouteHandler(t, tt.wantMethod, tt.wantPath))
+			byTool := issueDiscussionSpecsByTool(t, ActionSpecs(client))
+
 			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
 			if err != nil {
 				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
@@ -43,6 +85,18 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// issueDiscussionsRouteHandler answers like [issueDiscussionsActionHandler] and
+// holds every request it sees to one route, so an action wired to a sibling's
+// handler is named by the endpoint it asked for.
+func issueDiscussionsRouteHandler(t *testing.T, method, path string) http.Handler {
+	t.Helper()
+	inner := issueDiscussionsActionHandler()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRoute(t, r, method, path)
+		inner.ServeHTTP(w, r)
+	})
 }
 
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
@@ -138,41 +192,50 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // parameter guidance, and an IndividualTool.Description with "Returns:" and
 // "See also:" sections.
 //
-// Two of the assertions are about which action the metadata belongs to rather
-// than about its shape, because all of it is written in one switch over the
-// individual tool name and a case body moved to the wrong label is a straight
-// assignment no gate can see. The aliases must name the tool they decorate,
-// which a crossed case body does not, and an action must not link to itself,
-// which a crossed RelatedActions list does: every list here names siblings
-// only, so a self-reference is exactly the fingerprint of a swap.
+// Three of the assertions are about which action the metadata belongs to
+// rather than about its shape, because all of it is written in one switch over
+// the individual tool name and a case body moved to the wrong label is a
+// straight assignment no gate can see. The aliases must name the tool they
+// decorate, which a crossed case body does not; an action must not link to
+// itself, which a crossed RelatedActions list or a crossed "See also:" does,
+// since both name siblings only; and the usage must open with the clause
+// written for this action, which is what tells the update and delete usage
+// lines apart, neither of them naming any tool.
 func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
 
-	tools := []string{
-		"gitlab_list_issue_discussions",
-		"gitlab_get_issue_discussion",
-		"gitlab_create_issue_discussion",
-		"gitlab_add_issue_discussion_note",
-		"gitlab_update_issue_discussion_note",
-		"gitlab_delete_issue_discussion_note",
+	tools := []struct {
+		tool      string
+		usageOpen string
+	}{
+		{"gitlab_list_issue_discussions", "List all discussion threads on one issue"},
+		{"gitlab_get_issue_discussion", "Fetch one discussion thread on an issue"},
+		{"gitlab_create_issue_discussion", "Open a new discussion thread on an issue"},
+		{"gitlab_add_issue_discussion_note", "Reply to an existing issue discussion thread"},
+		{"gitlab_update_issue_discussion_note", "Edit the body of an existing note"},
+		{"gitlab_delete_issue_discussion_note", "Permanently delete a note"},
 	}
 
-	for _, tool := range tools {
-		t.Run(tool, func(t *testing.T) {
-			assertActionText(t, byTool[tool], tool)
-			assertRelatedActions(t, byTool[tool], tool)
+	for _, tc := range tools {
+		t.Run(tc.tool, func(t *testing.T) {
+			assertActionText(t, byTool[tc.tool], tc.tool, tc.usageOpen)
+			assertRelatedActions(t, byTool[tc.tool], tc.tool)
 		})
 	}
 }
 
-// assertActionText holds the prose an action publishes: usage written for this
-// action rather than the package placeholder, aliases that include the tool
-// they decorate, parameter guidance, and a description with both sections a
-// model reads.
-func assertActionText(t *testing.T, spec toolutil.ActionSpec, tool string) {
+// assertActionText holds the prose an action publishes: usage opening with the
+// clause written for this action rather than a sibling's or the package
+// placeholder, aliases that include the tool they decorate, parameter guidance,
+// and a description with both sections a model reads, naming siblings and never
+// itself.
+func assertActionText(t *testing.T, spec toolutil.ActionSpec, tool, usageOpen string) {
 	t.Helper()
 	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute issuediscussions domain action.") {
 		t.Errorf("%s: Usage must be action-specific, got %q", tool, spec.Usage)
+	}
+	if !strings.HasPrefix(spec.Usage, usageOpen) {
+		t.Errorf("%s: Usage must open with %q, got %q", tool, usageOpen, spec.Usage)
 	}
 	if len(spec.Aliases) < 2 {
 		t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
@@ -186,6 +249,9 @@ func assertActionText(t *testing.T, spec toolutil.ActionSpec, tool string) {
 	desc := spec.IndividualTool.Description
 	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
 		t.Errorf("%s: IndividualTool.Description must contain Returns:/See also:, got %q", tool, desc)
+	}
+	if _, seeAlso, found := strings.Cut(desc, "See also:"); found && strings.Contains(seeAlso, tool) {
+		t.Errorf("%s: description points a reader back at the action itself: %q", tool, desc)
 	}
 }
 

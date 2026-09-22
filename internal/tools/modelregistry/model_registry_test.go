@@ -145,7 +145,8 @@ func TestDownload(t *testing.T) {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
 			},
-			wantErr: true,
+			wantErr:   true,
+			errPrefix: wantDownloadOp,
 		},
 		{
 			name: "returns error on 403 forbidden",
@@ -158,7 +159,8 @@ func TestDownload(t *testing.T) {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 			},
-			wantErr: true,
+			wantErr:   true,
+			errPrefix: wantDownloadOp,
 			// The identifier hint belongs to 404 alone: a forbidden read is not
 			// a mistyped path, and telling a caller to check their arguments
 			// sends them to correct something that is already right.
@@ -176,6 +178,7 @@ func TestDownload(t *testing.T) {
 				w.WriteHeader(http.StatusNotFound)
 			},
 			wantErr:    true,
+			errPrefix:  wantDownloadOp,
 			errContain: wantIdentifierHint,
 		},
 		{
@@ -189,8 +192,9 @@ func TestDownload(t *testing.T) {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"internal server error"}`)
 			},
-			wantErr: true,
-			errOmit: wantIdentifierHint,
+			wantErr:   true,
+			errPrefix: wantDownloadOp,
+			errOmit:   wantIdentifierHint,
 		},
 		{
 			name: "cancelled context is refused before any request",
@@ -265,6 +269,21 @@ const wantIdentifierHint = "verify project_id, model_version_id, path, and filen
 // of a file name are left alone.
 const wantNestedEscapedPath = "/api/v4/projects/group%252Fproject/packages/ml_models/candidate:5/files/deep%2Fnested/weights.h5"
 
+// wantDownloadOp is the label every GitLab-side failure of this action opens
+// with, spelled out rather than read from opDownloadModelPackage: a label the
+// assertion takes from the value it is judging can be changed on one side and
+// still satisfy it.
+const wantDownloadOp = "download ml model package: "
+
+// wantOverCeilingRefusal is the whole refusal a file above the ceiling
+// produces, for a fixture whose path is "models" and whose file name is
+// "model.bin". It is spelled out for the reason [wantDownloadOp] is, and
+// because the two names are what a crossing at the wrap site exchanges.
+const wantOverCeilingRefusal = wantDownloadOp + "unexpected error. Suggestion: " +
+	"the file is too large to return in one MCP response; download it from GitLab directly " +
+	"(GET /projects/:id/packages/ml_models/:model_version_id/files/:path/:filename): " +
+	"model.bin exceeds the 32 MiB this action returns"
+
 type downloadCase struct {
 	name  string
 	input DownloadInput
@@ -275,10 +294,14 @@ type downloadCase struct {
 	forbidRequest bool
 	cancelCtx     bool
 	wantErr       bool
-	errContain    string
-	errOmit       string
-	errExactly    error
-	validate      func(t *testing.T, out DownloadOutput)
+	// errPrefix is the operation label the refusal must open with. A case
+	// refused before the request is built carries none, since those errors
+	// belong to the guard rather than to the call.
+	errPrefix  string
+	errContain string
+	errOmit    string
+	errExactly error
+	validate   func(t *testing.T, out DownloadOutput)
 }
 
 func runDownloadCase(t *testing.T, tt downloadCase) {
@@ -313,6 +336,9 @@ func assertDownloadCaseResult(t *testing.T, got DownloadOutput, err error, tt do
 	t.Helper()
 	if (err != nil) != tt.wantErr {
 		t.Fatalf("Download() error = %v, wantErr %v", err, tt.wantErr)
+	}
+	if tt.errPrefix != "" && err != nil && !strings.HasPrefix(err.Error(), tt.errPrefix) {
+		t.Errorf("error = %q, want it to open with %q", err.Error(), tt.errPrefix)
 	}
 	if tt.errContain != "" && err != nil && !strings.Contains(err.Error(), tt.errContain) {
 		t.Errorf("error = %q, want it to contain %q", err.Error(), tt.errContain)
@@ -404,8 +430,14 @@ func TestDownloadOutput_FileOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
 				if err == nil {
 					t.Fatalf("downloadOutput(%d bytes) error = nil, want a refusal", tt.size)
 				}
-				if !strings.Contains(err.Error(), "download it from GitLab directly") {
-					t.Errorf("downloadOutput(%d bytes) error = %v, want it to name the way out", tt.size, err)
+				// The whole sentence rather than the hint alone. Everything
+				// else in it is an argument: the name comes from one of the
+				// input's two strings, the operation from a package constant
+				// and the ceiling from a shift on another. Each can be wrong
+				// on its own while the hint stays exactly as it is, and the
+				// hint is all this case used to read.
+				if err.Error() != wantOverCeilingRefusal {
+					t.Errorf("downloadOutput(%d bytes) error = %q, want %q", tt.size, err.Error(), wantOverCeilingRefusal)
 				}
 				// A refusal must not double as a partial answer: content that
 				// looks like a whole file is worse than no content.
@@ -452,5 +484,11 @@ func TestDownload_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "download it from GitLab directly") {
 		t.Errorf("Download() error = %v, want it to name the way out", err)
+	}
+	// The whole message cannot be pinned here, since its tail is whatever the
+	// transport said about the body it stopped reading, but the label is this
+	// action's own and opens it.
+	if !strings.HasPrefix(err.Error(), wantDownloadOp) {
+		t.Errorf("Download() error = %q, want it to open with %q", err.Error(), wantDownloadOp)
 	}
 }

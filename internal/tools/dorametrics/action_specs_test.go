@@ -5,6 +5,7 @@ package dorametrics
 
 import (
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -70,17 +71,46 @@ func doraMetricSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.Acti
 // scope, and an IndividualTool.Description in the "Returns: … See also: …" form
 // (1:1 audit R-META). It guards against regression back to generic placeholder
 // metadata.
+//
+// The alias list is compared whole rather than probed for one phrase. Only the
+// leading scope word tells the two lists apart, and nothing outside this
+// package holds them (no committed artifact carries aliases), so asserting a
+// single phrase leaves the other five free to trade places between the scopes.
+// They feed gitlab_find_action matching, where a crossed phrase points a model
+// at the tool for the scope it did not ask for.
 func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	specByTool := doraMetricSpecsByTool(ActionSpecs(client))
 
 	cases := []struct {
-		tool        string
-		related     string
-		aliasPhrase string
+		tool    string
+		related string
+		aliases []string
 	}{
-		{"gitlab_get_project_dora_metrics", "dora_metrics.group", "project deployment frequency"},
-		{"gitlab_get_group_dora_metrics", "dora_metrics.project", "group deployment frequency"},
+		{
+			tool:    "gitlab_get_project_dora_metrics",
+			related: "dora_metrics.group",
+			aliases: []string{
+				"gitlab_get_project_dora_metrics",
+				"project deployment frequency",
+				"project lead time for changes",
+				"project change failure rate",
+				"project time to restore service",
+				"project devops performance metrics",
+			},
+		},
+		{
+			tool:    "gitlab_get_group_dora_metrics",
+			related: "dora_metrics.project",
+			aliases: []string{
+				"gitlab_get_group_dora_metrics",
+				"group deployment frequency",
+				"group lead time for changes",
+				"group change failure rate",
+				"group time to restore service",
+				"group devops performance metrics",
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.tool, func(t *testing.T) {
@@ -94,8 +124,8 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 				t.Errorf("%s description missing Returns:/See also: form: %q", tc.tool, desc)
 			}
 
-			if !slices.Contains(spec.Aliases, tc.aliasPhrase) {
-				t.Errorf("%s aliases missing distinctive phrase %q: %v", tc.tool, tc.aliasPhrase, spec.Aliases)
+			if !slices.Equal(spec.Aliases, tc.aliases) {
+				t.Errorf("%s aliases =\n got %q\nwant %q", tc.tool, spec.Aliases, tc.aliases)
 			}
 			if !slices.Contains(spec.RelatedActions, tc.related) {
 				t.Errorf("%s related actions missing sibling scope %q: %v", tc.tool, tc.related, spec.RelatedActions)
@@ -149,6 +179,14 @@ func TestActionSpecs_ScopeProse(t *testing.T) {
 // scope the switch has no case for publishes a tool that is registered and
 // gated correctly and explains nothing, which is the state a third scope added
 // without its case would ship in.
+//
+// The title is compared against the served spelling rather than against
+// toolutil.TitleFromName of either argument: the scope name and the tool name
+// are both strings in scope at that one call, so restating the call would pass
+// with the arguments exchanged, which serves "Instance" as the title of a tool
+// whose purpose the title is the only short statement of. The two enum lists
+// are compared whole for the same reason, since each is a list of strings the
+// other property would accept.
 func TestDoraMetricReadSpec_ScopeDecidesTheProseAndNothingElse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	spec := doraMetricReadSpec("instance", toolutil.RouteAction(client, GetProjectMetrics), "gitlab_get_instance_dora_metrics")
@@ -162,8 +200,22 @@ func TestDoraMetricReadSpec_ScopeDecidesTheProseAndNothingElse(t *testing.T) {
 	if spec.IndividualTool.Name != "gitlab_get_instance_dora_metrics" {
 		t.Errorf("individual tool = %q, want gitlab_get_instance_dora_metrics", spec.IndividualTool.Name)
 	}
+	if want := "Get Instance Dora Metrics"; spec.IndividualTool.Title != want {
+		t.Errorf("individual tool title = %q, want %q", spec.IndividualTool.Title, want)
+	}
 	if !slices.Contains(spec.Tags, "dora") || !slices.Contains(spec.Tags, "analytics") {
 		t.Errorf("tags = %v, want dora and analytics", spec.Tags)
+	}
+	wantOverrides := []toolutil.InputSchemaOverride{
+		{PropertyPath: "metric", Values: map[string]any{
+			"enum": []any{"deployment_frequency", "lead_time_for_changes", "time_to_restore_service", "change_failure_rate"},
+		}},
+		{PropertyPath: "interval", Values: map[string]any{
+			"enum": []any{"daily", "monthly", "all"},
+		}},
+	}
+	if !reflect.DeepEqual(spec.InputSchemaOverrides, wantOverrides) {
+		t.Errorf("input schema overrides =\n got %#v\nwant %#v", spec.InputSchemaOverrides, wantOverrides)
 	}
 	if spec.Usage != "" {
 		t.Errorf("usage = %q, want empty for a scope the switch has no case for", spec.Usage)

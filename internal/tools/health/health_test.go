@@ -5,10 +5,12 @@ package health
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -333,6 +335,90 @@ func TestCheck_CancelledContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("Check() error = %v, want context.Canceled", err)
 	}
+}
+
+// TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName pins the JSON name of
+// every field of Output, and pins the whole document rather than one key.
+//
+// Nothing else in this package ever decodes an Output: the card renders off the
+// Go fields, so two `json` tags of the same type could trade places with every
+// other test here green while a caller reading the JSON result got the version
+// under gitlab_revision and the department under author. Each fixture value
+// below names the field it belongs to, so a crossed tag puts a value somewhere
+// a reader can see it, and the comparison is over the whole decoded document so
+// that no key escapes by being the one nobody looked at.
+//
+// The zero half is the other side of the same tag: it says which fields carry
+// omitempty, which is the part of a tag a populated document cannot show.
+func TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName(t *testing.T) {
+	t.Run("every field populated", func(t *testing.T) {
+		out := Output{
+			NextSteps:        []string{"next step for the caller"},
+			Status:           "status of the check",
+			MCPServerVersion: "3.1.0-mcp-server",
+			Author:           "author of the binary",
+			Department:       "department of the author",
+			Repository:       "https://example.com/repository",
+			GitLabURL:        "https://gitlab.example.com/instance",
+			GitLabVersion:    "17.5.0-gitlab",
+			GitLabRevision:   "revision0",
+			Authenticated:    true,
+			Username:         "username-of-the-credential",
+			UserID:           4242,
+			ResponseTimeMS:   1717,
+			Error:            "error the check reported",
+		}
+
+		got := decodeOutputAsJSON(t, out)
+		want := map[string]any{
+			"next_steps":         []any{"next step for the caller"},
+			"status":             "status of the check",
+			"mcp_server_version": "3.1.0-mcp-server",
+			"author":             "author of the binary",
+			"department":         "department of the author",
+			"repository":         "https://example.com/repository",
+			"gitlab_url":         "https://gitlab.example.com/instance",
+			"gitlab_version":     "17.5.0-gitlab",
+			"gitlab_revision":    "revision0",
+			"authenticated":      true,
+			"username":           "username-of-the-credential",
+			"user_id":            float64(4242),
+			"response_time_ms":   float64(1717),
+			"error":              "error the check reported",
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Output marshaled to %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("nothing filled in", func(t *testing.T) {
+		got := decodeOutputAsJSON(t, Output{})
+		want := map[string]any{
+			"status":           "",
+			"gitlab_url":       "",
+			"authenticated":    false,
+			"response_time_ms": float64(0),
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("zero Output marshaled to %#v, want %#v", got, want)
+		}
+	})
+}
+
+// decodeOutputAsJSON marshals out the way a tool result is marshaled and reads
+// the document back as a map, so a comparison holds the keys rather than the
+// order encoding/json happens to write the struct's fields in.
+func decodeOutputAsJSON(t *testing.T, out Output) map[string]any {
+	t.Helper()
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("json.Marshal(Output) unexpected error: %v", err)
+	}
+	var got map[string]any
+	if decodeErr := json.Unmarshal(encoded, &got); decodeErr != nil {
+		t.Fatalf("json.Unmarshal(%s) unexpected error: %v", encoded, decodeErr)
+	}
+	return got
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.

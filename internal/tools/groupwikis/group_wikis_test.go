@@ -77,15 +77,28 @@ func TestList_WithContent(t *testing.T) {
 	}
 }
 
+// assertNamesMissingField holds one guard's refusal to the field that guard is
+// written for. The field name is the whole of what the message carries, and
+// nothing read it back: a guard naming a sibling sends a caller to fill in a
+// field they already gave, while the one they left out stays unmentioned.
+func assertNamesMissingField(t *testing.T, err error, field string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected an error naming %q, got nil", field)
+	}
+	if want := field + " is required"; err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
 // TestList_MissingGroupID verifies that List refuses a call naming no group
-// before it reaches GitLab. ForbiddenHandler is what makes the second half an
-// assertion rather than a claim: it fails the test if any request arrives.
+// before it reaches GitLab, and refuses it naming that field. ForbiddenHandler
+// is what makes the second half an assertion rather than a claim: it fails the
+// test if any request arrives.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
-	if err == nil {
-		t.Fatal("List() expected error for missing group_id, got nil")
-	}
+	assertNamesMissingField(t, err, "group_id")
 }
 
 // TestList_CancelledContext verifies that a canceled context aborts List
@@ -125,16 +138,23 @@ func TestGet_Success(t *testing.T) {
 
 // TestGet_MissingFields verifies that Get refuses a call missing either
 // required field before it reaches GitLab, one field at a time so each guard
-// is the one refusing. ForbiddenHandler asserts that no request is made.
+// is the one refusing, and that the refusal names the field that was left out.
+// ForbiddenHandler asserts that no request is made.
 func TestGet_MissingFields(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	_, err := Get(context.Background(), client, GetInput{})
-	if err == nil {
-		t.Fatal("Get() expected error for missing group_id, got nil")
+	cases := []struct {
+		name  string
+		input GetInput
+		field string
+	}{
+		{name: "no group named", input: GetInput{}, field: "group_id"},
+		{name: "no slug named", input: GetInput{GroupID: "mygroup"}, field: "slug"},
 	}
-	_, err = Get(context.Background(), client, GetInput{GroupID: "mygroup"})
-	if err == nil {
-		t.Fatal("Get() expected error for missing slug, got nil")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Get(context.Background(), client, c.input)
+			assertNamesMissingField(t, err, c.field)
+		})
 	}
 }
 
@@ -166,20 +186,24 @@ func TestCreate_Success(t *testing.T) {
 
 // TestCreate_MissingFields verifies that Create refuses a call missing any of
 // its three required fields before it reaches GitLab, one field at a time so
-// each guard is the one refusing. ForbiddenHandler asserts no request is made.
+// each guard is the one refusing, and that the refusal names the field that was
+// left out. ForbiddenHandler asserts no request is made.
 func TestCreate_MissingFields(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	_, err := Create(context.Background(), client, CreateInput{})
-	if err == nil {
-		t.Fatal("Create() expected error for missing group_id, got nil")
+	cases := []struct {
+		name  string
+		input CreateInput
+		field string
+	}{
+		{name: "no group named", input: CreateInput{}, field: "group_id"},
+		{name: "no title named", input: CreateInput{GroupID: "mygroup"}, field: "title"},
+		{name: "no content named", input: CreateInput{GroupID: "mygroup", Title: "Home"}, field: "content"},
 	}
-	_, err = Create(context.Background(), client, CreateInput{GroupID: "mygroup"})
-	if err == nil {
-		t.Fatal("Create() expected error for missing title, got nil")
-	}
-	_, err = Create(context.Background(), client, CreateInput{GroupID: "mygroup", Title: "Home"})
-	if err == nil {
-		t.Fatal("Create() expected error for missing content, got nil")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Create(context.Background(), client, c.input)
+			assertNamesMissingField(t, err, c.field)
+		})
 	}
 }
 
@@ -211,16 +235,23 @@ func TestEdit_Success(t *testing.T) {
 
 // TestEdit_MissingFields verifies that Edit refuses a call missing either
 // identifying field before it reaches GitLab, one field at a time so each
-// guard is the one refusing. ForbiddenHandler asserts no request is made.
+// guard is the one refusing, and that the refusal names the field that was left
+// out. ForbiddenHandler asserts no request is made.
 func TestEdit_MissingFields(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	_, err := Edit(context.Background(), client, EditInput{})
-	if err == nil {
-		t.Fatal("Edit() expected error for missing group_id, got nil")
+	cases := []struct {
+		name  string
+		input EditInput
+		field string
+	}{
+		{name: "no group named", input: EditInput{}, field: "group_id"},
+		{name: "no slug named", input: EditInput{GroupID: "mygroup"}, field: "slug"},
 	}
-	_, err = Edit(context.Background(), client, EditInput{GroupID: "mygroup"})
-	if err == nil {
-		t.Fatal("Edit() expected error for missing slug, got nil")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Edit(context.Background(), client, c.input)
+			assertNamesMissingField(t, err, c.field)
+		})
 	}
 }
 
@@ -244,23 +275,31 @@ func TestDelete_Success(t *testing.T) {
 
 // TestDelete_MissingFields verifies that Delete refuses a call missing either
 // identifying field before it reaches GitLab, one field at a time so each
-// guard is the one refusing. ForbiddenHandler asserts no request is made,
-// which matters most here: the call it would make is destructive.
+// guard is the one refusing, and that the refusal names the field that was left
+// out. ForbiddenHandler asserts no request is made, which matters most here:
+// the call it would make is destructive.
 func TestDelete_MissingFields(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	err := Delete(context.Background(), client, DeleteInput{})
-	if err == nil {
-		t.Fatal("Delete() expected error for missing group_id, got nil")
+	cases := []struct {
+		name  string
+		input DeleteInput
+		field string
+	}{
+		{name: "no group named", input: DeleteInput{}, field: "group_id"},
+		{name: "no slug named", input: DeleteInput{GroupID: "mygroup"}, field: "slug"},
 	}
-	err = Delete(context.Background(), client, DeleteInput{GroupID: "mygroup"})
-	if err == nil {
-		t.Fatal("Delete() expected error for missing slug, got nil")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := Delete(context.Background(), client, c.input)
+			assertNamesMissingField(t, err, c.field)
+		})
 	}
 }
 
-// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestList_APIError verifies that List reports a refusal rather than an empty
+// listing when GitLab answers the GET with 403. It asserts that an error comes
+// back and nothing about what the error says; the operation label and the hint
+// are held by TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -287,9 +326,10 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGet_APIError verifies that Get reports a refusal rather than an empty
+// page when GitLab answers the GET with 404. It asserts that an error comes
+// back and nothing about what the error says; the operation label and the hint
+// are held by TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Wiki Not Found"}`)
@@ -355,9 +395,10 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreate_APIError verifies that Create reports a refusal rather than an
+// empty page when GitLab answers the POST with 422. It asserts that an error
+// comes back and nothing about what the error says; the operation label and the
+// hint are held by TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -409,9 +450,11 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEdit_APIError verifies that Edit returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestEdit_APIError verifies that Edit reports a refusal rather than the page
+// it did not change when GitLab answers the PUT with 403. It asserts that an
+// error comes back and nothing about what the error says; the operation label
+// and the hint are held by
+// TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint.
 func TestEdit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -489,9 +532,11 @@ func TestEdit_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDelete_APIError verifies that Delete reports a refusal rather than
+// success when GitLab answers the DELETE with 403, which is the answer a caller
+// must not read as a page that is gone. It asserts that an error comes back and
+// nothing about what the error says; the operation label and the hint are held
+// by TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -507,6 +552,12 @@ func TestDelete_APIError(t *testing.T) {
 // wiki_page_meta_id as something that is not a number. The SDK ignores the key
 // its own Wiki does not model, so the read of the captured response is the only
 // thing that can notice.
+//
+// The shared assertion judges the decode failure and never the label in front
+// of it, so the four operation names on this path were held by nothing and any
+// two of them could have traded places: a create refused for an unreadable body
+// would then report itself as a list. The second half holds each one to the
+// handler that raised it.
 func TestGroupWikis_UnreadableCapturedMetaID(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
@@ -515,28 +566,53 @@ func TestGroupWikis_UnreadableCapturedMetaID(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list", Call: func() error {
+	cases := []struct {
+		name      string
+		operation string
+		call      func() error
+	}{
+		{name: "list", operation: "listGroupWikis", call: func() error {
 			client := poisoned(`[{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}]`)
 			_, err := List(context.Background(), client, ListInput{GroupID: "42"})
 			return err
 		}},
-		{Name: "get", Call: func() error {
+		{name: "get", operation: "getGroupWikiPage", call: func() error {
 			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
 			_, err := Get(context.Background(), client, GetInput{GroupID: "42", Slug: "home"})
 			return err
 		}},
-		{Name: "create", Call: func() error {
+		{name: "create", operation: "createGroupWikiPage", call: func() error {
 			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
 			_, err := Create(context.Background(), client, CreateInput{GroupID: "42", Title: "Home", Content: "hello"})
 			return err
 		}},
-		{Name: "edit", Call: func() error {
+		{name: "edit", operation: "editGroupWikiPage", call: func() error {
 			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
 			_, err := Edit(context.Background(), client, EditInput{GroupID: "42", Slug: "home", Content: "hello again"})
 			return err
 		}},
-	})
+	}
+
+	// Each call's error is kept as the shared assertion drives it, so the label
+	// can be read back without calling the handler a second time.
+	reported := make([]error, len(cases))
+	driven := make([]testutil.CapturedCase, len(cases))
+	for i, c := range cases {
+		driven[i] = testutil.CapturedCase{Name: c.name, Call: func() error {
+			reported[i] = c.call()
+			return reported[i]
+		}}
+	}
+	testutil.AssertCapturedDecodeFailures(t, driven)
+
+	for i, c := range cases {
+		t.Run(c.name+" names its own operation", func(t *testing.T) {
+			if reported[i] == nil {
+				t.Fatalf("%s reported no error", c.name)
+			}
+			assertRefusalOperation(t, reported[i].Error(), c.operation)
+		})
+	}
 }
 
 // writeBody records the JSON object one write handler sent GitLab. The record

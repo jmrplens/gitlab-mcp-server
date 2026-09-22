@@ -240,6 +240,61 @@ func TestInstanceVariableActionSpecs_NoActionLinksToItself(t *testing.T) {
 	}
 }
 
+// TestInstanceVariableActionSpecs_EachActionDescribesItsOwnVerb verifies that
+// the metadata each action serves opens with the verb that action performs,
+// and that its natural-language aliases name that verb too.
+//
+// It closes the one case-label crossing the self-link test above leaves open.
+// Create names list, get and update as its related actions and delete names
+// list and get, so exchanging those two labels has neither action pointing at
+// itself and neither See-also list naming its own tool: every other test here
+// stays satisfied, since both still carry action-specific metadata and both
+// still name real catalog IDs. What ships is the create tool listed with
+// delete's usage, delete's aliases and a description promising "a success
+// confirmation message" for a variable it just created.
+//
+// The verb is the one word that cannot survive the exchange, and the
+// individual tool name is deliberately skipped when reading the aliases: it is
+// passed in beside the action name and carries the right verb whichever case
+// body filled the entry, so it can vouch for nothing.
+func TestInstanceVariableActionSpecs_EachActionDescribesItsOwnVerb(t *testing.T) {
+	verbs := map[string]string{
+		"instance_list":   "List",
+		"instance_get":    "Get",
+		"instance_create": "Create",
+		"instance_update": "Update",
+		"instance_delete": "Delete",
+	}
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	if len(specs) != len(verbs) {
+		t.Fatalf("ActionSpecs returned %d specs, want %d", len(specs), len(verbs))
+	}
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			verb, recorded := verbs[spec.Name]
+			if !recorded {
+				t.Fatalf("action %q has no verb recorded here", spec.Name)
+			}
+			if !strings.HasPrefix(spec.Usage, verb+" ") {
+				t.Errorf("Usage = %q, want it to open with %q", spec.Usage, verb)
+			}
+			if !strings.HasPrefix(spec.IndividualTool.Description, verb+" ") {
+				t.Errorf("Description = %q, want it to open with %q", spec.IndividualTool.Description, verb)
+			}
+			spoken := strings.ToLower(verb)
+			named := false
+			for _, alias := range spec.Aliases {
+				if alias != spec.IndividualTool.Name && strings.Contains(alias, spoken) {
+					named = true
+				}
+			}
+			if !named {
+				t.Errorf("Aliases = %v, want a natural-language one naming %q", spec.Aliases, spoken)
+			}
+		})
+	}
+}
+
 func instanceVariableSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

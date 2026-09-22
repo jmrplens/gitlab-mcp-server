@@ -15,6 +15,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -551,6 +552,12 @@ func TestMemberGet_EachFlagGitLabSet_LandsOnItsOwnField(t *testing.T) {
 // member: GitLab's answer decodes for the SDK and not for the fields read
 // beside it, and the handler reports it rather than swallowing it, on a
 // member alone and on a list of them.
+//
+// The shared assertion judges the decode failure and never the label in front
+// of it, so the five operation names on this path were held by nothing and any
+// two could have traded places: the direct get would report itself as the
+// inherited one, which is the distinction a reader of the failure needs most.
+// The second half holds each label to the handler that raised it.
 func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := `{"id":10,"username":"alice","access_level":30,"locked":"not-a-bool"}`
@@ -559,28 +566,55 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list", Call: func() error {
+	cases := []struct {
+		name      string
+		operation string
+		call      func() error
+	}{
+		{name: "list", operation: "projectMembersList", call: func() error {
 			_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
 			return err
 		}},
-		{Name: "get", Call: func() error {
+		{name: "get", operation: "memberGet", call: func() error {
 			_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
 			return err
 		}},
-		{Name: "get inherited", Call: func() error {
+		{name: "get inherited", operation: "memberGetInherited", call: func() error {
 			_, err := GetInherited(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
 			return err
 		}},
-		{Name: "add", Call: func() error {
+		{name: "add", operation: "memberAdd", call: func() error {
 			_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30})
 			return err
 		}},
-		{Name: "edit", Call: func() error {
+		{name: "edit", operation: "memberEdit", call: func() error {
 			_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30})
 			return err
 		}},
-	})
+	}
+
+	// Each call's error is kept as the shared assertion drives it, so the label
+	// can be read back without calling the handler a second time.
+	reported := make([]error, len(cases))
+	driven := make([]testutil.CapturedCase, len(cases))
+	for i, c := range cases {
+		driven[i] = testutil.CapturedCase{Name: c.name, Call: func() error {
+			reported[i] = c.call()
+			return reported[i]
+		}}
+	}
+	testutil.AssertCapturedDecodeFailures(t, driven)
+
+	for i, c := range cases {
+		t.Run(c.name+" names its own operation", func(t *testing.T) {
+			if reported[i] == nil {
+				t.Fatalf("%s reported no error", c.name)
+			}
+			if want := c.operation + ": "; !strings.HasPrefix(reported[i].Error(), want) {
+				t.Errorf("error %q is not labeled %q", reported[i].Error(), c.operation)
+			}
+		})
+	}
 }
 
 // TestMemberGet_MissingProjectID verifies MemberGet when missing project ID.
@@ -1572,5 +1606,222 @@ func TestFormatListMarkdownString_OneLinkedMember_KeepsTheHintForTheWholePage(t 
 		"- Use action 'project.member_add' to add a member to this project\n"
 	if got := FormatListMarkdownString(lo); got != want {
 		t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What each handler says when it refuses
+// ---------------------------------------------------------------------------.
+
+// memberRefusal is one refusal path of one handler: the status GitLab answers
+// with, the operation the message must be labeled with, and the hint it must
+// carry. An empty hint says the handler writes none for that status.
+type memberRefusal struct {
+	name      string
+	status    int
+	operation string
+	hint      string
+	call      func(client *gitlabclient.Client) error
+}
+
+// memberRefusalMessage drives one handler against a GitLab that refuses with
+// status and returns the message the caller is left holding.
+func memberRefusalMessage(t *testing.T, status int, call func(client *gitlabclient.Client) error) string {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, `{"message":"refused"}`)
+	}))
+	err := call(client)
+	if err == nil {
+		t.Fatalf("expected an error for status %d, got nil", status)
+	}
+	return err.Error()
+}
+
+// TestMembers_RefusalsCarryTheirOwnOperationAndHint pins what each handler says
+// when GitLab refuses it. The operation label, the status a hint is written for
+// and the hint text are three arguments nothing read back, so any two handlers
+// could trade any of them: the direct get would answer with the inherited get's
+// sentence, sending a model to verify a user id when what it needed was the
+// inherited endpoint, and every assertion in this file would still have passed
+// on err != nil alone. The rows carrying no hint are what keep each hint on the
+// status it was written for rather than on every refusal.
+func TestMembers_RefusalsCarryTheirOwnOperationAndHint(t *testing.T) {
+	list := func(client *gitlabclient.Client) error {
+		_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+		return err
+	}
+	get := func(client *gitlabclient.Client) error {
+		_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+		return err
+	}
+	getInherited := func(client *gitlabclient.Client) error {
+		_, err := GetInherited(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+		return err
+	}
+	add := func(client *gitlabclient.Client) error {
+		_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30})
+		return err
+	}
+	edit := func(client *gitlabclient.Client) error {
+		_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40})
+		return err
+	}
+	remove := func(client *gitlabclient.Client) error {
+		return Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, UserID: 10})
+	}
+
+	refusals := []memberRefusal{
+		{
+			name: "list not found", status: http.StatusNotFound, operation: "projectMembersList",
+			hint: "verify project_id with project.get; lists direct + inherited members from parent groups",
+			call: list,
+		},
+		{name: "list refused otherwise", status: http.StatusForbidden, operation: "projectMembersList", call: list},
+		{
+			name: "get not found", status: http.StatusNotFound, operation: "memberGet",
+			hint: "user is not a direct member of this project; use project.member_inherited to include parent-group inheritance, " +
+				"or project.members to enumerate members",
+			call: get,
+		},
+		{name: "get refused otherwise", status: http.StatusForbidden, operation: "memberGet", call: get},
+		{
+			name: "inherited get not found", status: http.StatusNotFound, operation: "memberGetInherited",
+			hint: "user is not a member of this project nor any parent group; verify user_id with user.list",
+			call: getInherited,
+		},
+		{name: "inherited get refused otherwise", status: http.StatusForbidden, operation: "memberGetInherited", call: getInherited},
+		{
+			name: "add conflicts with an existing membership", status: http.StatusConflict, operation: "memberAdd",
+			hint: "user is already a member of this project. Use project.member_edit to change their access level",
+			call: add,
+		},
+		{
+			name: "add names a user that is not there", status: http.StatusNotFound, operation: "memberAdd",
+			hint: "user not found. Use user.list to search for the user",
+			call: add,
+		},
+		{name: "add refused otherwise", status: http.StatusUnprocessableEntity, operation: "memberAdd", call: add},
+		{
+			name: "edit forbidden", status: http.StatusForbidden, operation: "memberEdit",
+			hint: "you need at least the same or higher access level as the target member",
+			call: edit,
+		},
+		{
+			name: "edit rejected as a bad request", status: http.StatusBadRequest, operation: "memberEdit",
+			hint: "access_level must be one of 5/10/15/20/25/30/40/50/60 " +
+				"(Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner/Admin where supported); " +
+				"expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Premium/Ultimate)",
+			call: edit,
+		},
+		{name: "edit refused otherwise", status: http.StatusUnprocessableEntity, operation: "memberEdit", call: edit},
+		{
+			name: "delete forbidden", status: http.StatusForbidden, operation: "memberDelete",
+			hint: "requires Maintainer role; you cannot remove members whose access level equals or exceeds yours; " +
+				"the last Owner of a project cannot be removed",
+			call: remove,
+		},
+		{name: "delete refused otherwise", status: http.StatusNotFound, operation: "memberDelete", call: remove},
+	}
+
+	for _, r := range refusals {
+		t.Run(r.name, func(t *testing.T) {
+			got := memberRefusalMessage(t, r.status, r.call)
+			if !strings.HasPrefix(got, r.operation+": ") {
+				t.Errorf("error %q is not labeled %q", got, r.operation)
+			}
+			if r.hint == "" {
+				if strings.Contains(got, "Suggestion: ") {
+					t.Errorf("error %q suggests something on a status the handler writes no hint for", got)
+				}
+				return
+			}
+			// The trailing colon is the boundary the wrapper writes before the
+			// cause, so a hint that is a prefix of a sibling's cannot pass for it.
+			if want := "Suggestion: " + r.hint + ":"; !strings.Contains(got, want) {
+				t.Errorf("error %q does not carry %q", got, want)
+			}
+		})
+	}
+}
+
+// TestMembers_GuardsNameTheirOwnOperationAndField holds every refusal written
+// before a request is made to the handler that wrote it and to the field it is
+// about. Each message opens with an operation label nothing read back, so
+// memberGet and memberGetInherited could trade theirs and a model would be told
+// the call it did not make is the one that refused; the field half is what
+// keeps a guard from naming a sibling's parameter. ForbiddenHandler is the
+// other half of each row: no request may reach GitLab at all.
+func TestMembers_GuardsNameTheirOwnOperationAndField(t *testing.T) {
+	cases := []struct {
+		name      string
+		operation string
+		field     string
+		call      func(client *gitlabclient.Client) error
+	}{
+		{name: "list without a project", operation: "projectMembersList", field: "project_id", call: func(client *gitlabclient.Client) error {
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{name: "get without a project", operation: "memberGet", field: "project_id", call: func(client *gitlabclient.Client) error {
+			_, err := Get(context.Background(), client, GetInput{UserID: 10})
+			return err
+		}},
+		{name: "get without a user", operation: "memberGet", field: testFieldUserID, call: func(client *gitlabclient.Client) error {
+			_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID})
+			return err
+		}},
+		{name: "inherited get without a project", operation: "memberGetInherited", field: "project_id", call: func(client *gitlabclient.Client) error {
+			_, err := GetInherited(context.Background(), client, GetInput{UserID: 10})
+			return err
+		}},
+		{name: "inherited get without a user", operation: "memberGetInherited", field: testFieldUserID, call: func(client *gitlabclient.Client) error {
+			_, err := GetInherited(context.Background(), client, GetInput{ProjectID: testProjectID})
+			return err
+		}},
+		{name: "add without a project", operation: "memberAdd", field: "project_id", call: func(client *gitlabclient.Client) error {
+			_, err := Add(context.Background(), client, AddInput{UserID: 10, AccessLevel: 30})
+			return err
+		}},
+		{name: "add without an identity", operation: "memberAdd", field: testFieldUserID, call: func(client *gitlabclient.Client) error {
+			_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, AccessLevel: 30})
+			return err
+		}},
+		{name: "add without an access level", operation: "memberAdd", field: "access_level", call: func(client *gitlabclient.Client) error {
+			_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, UserID: 10})
+			return err
+		}},
+		{name: "edit without a project", operation: "memberEdit", field: "project_id", call: func(client *gitlabclient.Client) error {
+			_, err := Edit(context.Background(), client, EditInput{UserID: 10, AccessLevel: 30})
+			return err
+		}},
+		{name: "edit without a user", operation: "memberEdit", field: testFieldUserID, call: func(client *gitlabclient.Client) error {
+			_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, AccessLevel: 30})
+			return err
+		}},
+		{name: "edit without an access level", operation: "memberEdit", field: "access_level", call: func(client *gitlabclient.Client) error {
+			_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, UserID: 10})
+			return err
+		}},
+		{name: "delete without a project", operation: "memberDelete", field: "project_id", call: func(client *gitlabclient.Client) error {
+			return Delete(context.Background(), client, DeleteInput{UserID: 10})
+		}},
+		{name: "delete without a user", operation: "memberDelete", field: testFieldUserID, call: func(client *gitlabclient.Client) error {
+			return Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID})
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := c.call(client)
+			if err == nil {
+				t.Fatalf("expected a refusal naming %q, got nil", c.field)
+			}
+			want := c.operation + ": " + c.field + " is required"
+			if !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("error = %q, want it to open with %q", err.Error(), want)
+			}
+		})
 	}
 }

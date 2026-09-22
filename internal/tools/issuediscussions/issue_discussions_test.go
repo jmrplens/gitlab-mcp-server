@@ -42,6 +42,22 @@ const (
 	opDeleteNote = "issue_discussion_delete_note"
 )
 
+// assertRoute holds the request a handler built to the method and the path
+// GitLab has to receive.
+//
+// The note handlers pass their identifiers positionally into client-go calls
+// whose parameters are pairwise interchangeable: the project is typed `any`
+// beside a `string` discussion id, and the issue iid sits beside the note id
+// as two `int64`s. Exchanging either pair still compiles and still reaches a
+// mock that answers whatever it is asked, so only the path names the note the
+// call went to. It runs on the mock's goroutine, so it reports and never
+// aborts.
+func assertRoute(t *testing.T, r *http.Request, method, path string) {
+	t.Helper()
+	testutil.AssertRequestMethod(t, r, method)
+	testutil.AssertRequestPath(t, r, path)
+}
+
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/projects/1/issues/10/discussions (GET) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
@@ -113,10 +129,15 @@ func TestCreate_Success(t *testing.T) {
 }
 
 // TestAddNote_Success verifies that AddNote succeeds when the GitLab API returns a valid response.
-// The test exercises the POST path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// The mock GitLab API at /api/v4/projects/1/issues/10/discussions/abc123/notes
+// (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields, and that the
+// project and the discussion id reached their own path segments: client-go
+// takes the project as `any`, so passing the discussion id as the project
+// compiles and still finds this mock.
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRoute(t, r, http.MethodPost, "/api/v4/projects/1/issues/10/discussions/abc123/notes")
 		testutil.RespondJSON(w, http.StatusCreated,
 			`{"id":99,"body":"Reply","author":{"username":"admin"},"created_at":"2026-01-01T00:00:00Z"}`)
 	})
@@ -132,13 +153,16 @@ func TestAddNote_Success(t *testing.T) {
 }
 
 // TestUpdateNote_Success verifies that UpdateNote succeeds when the GitLab API returns a valid response.
-// The test exercises the PUT path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// The mock GitLab API at
+// /api/v4/projects/1/issues/10/discussions/abc123/notes/99 (PUT) responds with
+// HTTP OK.
+// It asserts the returned output matches the expected fields, and that all four
+// identifiers reached their own path segments: the issue iid and the note id
+// are both int64 and the project is taken as `any` beside a string discussion
+// id, so either pair could be handed over exchanged and still edit a note.
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("expected PUT, got %s", r.Method)
-		}
+		assertRoute(t, r, http.MethodPut, "/api/v4/projects/1/issues/10/discussions/abc123/notes/99")
 		testutil.RespondJSON(w, http.StatusOK,
 			`{"id":99,"body":"Updated","author":{"username":"admin"},"created_at":"2026-01-01T00:00:00Z"}`)
 	})
@@ -154,10 +178,16 @@ func TestUpdateNote_Success(t *testing.T) {
 }
 
 // TestDeleteNote_Success verifies that DeleteNote succeeds when the GitLab API returns a valid response.
-// The test exercises the DELETE path of the underlying GitLab API call.
-// It asserts that a 204 is reported as success; the handler publishes no output.
+// The mock GitLab API at
+// /api/v4/projects/1/issues/10/discussions/abc123/notes/99 (DELETE) responds
+// with HTTP No Content.
+// It asserts that a 204 is reported as success; the handler publishes no
+// output, so the path is the only record of which note was deleted, and the
+// identifiers are pairwise interchangeable at the call site (issue iid beside
+// note id as int64s, project taken as `any` beside a string discussion id).
 func TestDeleteNote_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRoute(t, r, http.MethodDelete, "/api/v4/projects/1/issues/10/discussions/abc123/notes/99")
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, handler)

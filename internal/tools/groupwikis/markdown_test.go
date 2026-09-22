@@ -19,9 +19,10 @@ const (
 )
 
 // TestFormatOutputMarkdown pins the whole card of a group wiki page, in each
-// of the four shapes GitLab answers with: a Markdown page, a page in another
-// format, a page read without its content, and a page whose every field is
-// empty.
+// of the six shapes GitLab answers with: a Markdown page, a page in another
+// format, a page whose format GitLab left out, a page read without its content,
+// a page carrying the metadata id read beside it, and a page whose every field
+// is empty.
 func TestFormatOutputMarkdown(t *testing.T) {
 	cases := []struct {
 		name  string

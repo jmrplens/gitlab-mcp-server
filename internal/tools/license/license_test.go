@@ -31,6 +31,21 @@ const licensePath = "/api/v4/license"
 // "here is what to do about it" from "here is what happened".
 const suggestionMarker = "Suggestion: "
 
+// operationIn returns the operation label a wrapped error opens with, which
+// every wrapper in toolutil writes as the text in front of the first ": ".
+func operationIn(msg string) string {
+	label, _, _ := strings.Cut(msg, ": ")
+	return label
+}
+
+// answering returns a mock GitLab that gives one status and one body to every
+// request, which is all a failure path needs.
+func answering(status int, body string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, body)
+	})
+}
+
 // suggestionIn returns the corrective advice a wrapped error carries, and
 // whether it carries any at all.
 //
@@ -404,6 +419,99 @@ func TestDelete_TheIDAdviceGoesWithTheNotFound(t *testing.T) {
 			t.Errorf("a 403 carries the id advice %q, and the id was never the problem", advice)
 		}
 	})
+}
+
+// TestHandlers_EachFailureNamesTheOperationItCameFrom asserts the operation
+// label every refusal of this package opens with, one case per literal in
+// license.go.
+//
+// The label is what hintedError writes as the `operation:` prefix, so it is the
+// only thing in the message that says which of the three handlers refused. It
+// is also a constant in a straight-line call: gremlins has no operator to flip
+// and gobco no condition to evaluate, so both gates report this package clean
+// while the three labels rotate freely. Nothing read one either: the tests
+// above cut the message at "Suggestion: " and look only at what follows.
+// Verified by hand, by exchanging "license_get" with "license_add" at all four
+// of their call sites and then "license_get" with "license_delete" at theirs,
+// each of which the suite passed while a failed read reported itself as an
+// install.
+func TestHandlers_EachFailureNamesTheOperationItCameFrom(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+		fail func(t *testing.T) error
+	}{
+		{
+			name: "a read GitLab refuses",
+			want: "license_get",
+			fail: func(t *testing.T) error {
+				t.Helper()
+				client := testutil.NewTestClient(t, answering(http.StatusForbidden, `{"message":"403 Forbidden"}`))
+				_, err := Get(t.Context(), client, GetInput{})
+				return err
+			},
+		},
+		{
+			name: "a read answered with no license",
+			want: "license_get",
+			fail: func(t *testing.T) error {
+				t.Helper()
+				client := testutil.NewTestClient(t, answering(http.StatusOK, `null`))
+				_, err := Get(t.Context(), client, GetInput{})
+				return err
+			},
+		},
+		{
+			name: "an install GitLab rejects",
+			want: "license_add",
+			fail: func(t *testing.T) error {
+				t.Helper()
+				client := testutil.NewTestClient(t, answering(http.StatusBadRequest, `{"message":"invalid license"}`))
+				_, err := Add(t.Context(), client, AddInput{License: "bad"})
+				return err
+			},
+		},
+		{
+			name: "an install answered with no license",
+			want: "license_add",
+			fail: func(t *testing.T) error {
+				t.Helper()
+				client := testutil.NewTestClient(t, answering(http.StatusCreated, `null`))
+				_, err := Add(t.Context(), client, AddInput{License: "good"})
+				return err
+			},
+		},
+		{
+			name: "a delete of an id that names nothing",
+			want: "license_delete",
+			fail: func(t *testing.T) error {
+				t.Helper()
+				client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+				return Delete(t.Context(), client, DeleteInput{ID: 0})
+			},
+		},
+		{
+			name: "a delete of a license that is not there",
+			want: "license_delete",
+			fail: func(t *testing.T) error {
+				t.Helper()
+				client := testutil.NewTestClient(t, answering(http.StatusNotFound, `{"message":"404 License Not Found"}`))
+				return Delete(t.Context(), client, DeleteInput{ID: 999})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.fail(t)
+			if err == nil {
+				t.Fatal("the failure under test returned no error")
+			}
+			if got := operationIn(err.Error()); got != tc.want {
+				t.Errorf("the refusal reports itself as %q, want %q: %v", got, tc.want, err)
+			}
+		})
+	}
 }
 
 // licenseHints is the guidance section every license card ends with.

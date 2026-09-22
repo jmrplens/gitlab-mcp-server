@@ -70,38 +70,68 @@ func TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 // TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
 // failure the captured response adds to both handlers: GitLab's answer
 // decodes for the SDK and not for the fields read beside it, and the
-// handler reports it rather than swallowing it.
+// handler reports it rather than swallowing it, attributed to the call that
+// really ran.
+//
+// The shared assertion is a single substring test over both handlers, so it
+// holds that each reported a decode failure and nothing about which handler
+// the failure is blamed on. That left the two operation labels on this branch
+// free to trade places: both errors would still name the captured response,
+// both cases would still pass, and a caller who asked for a key by ID would be
+// told the fingerprint lookup was the call that could not read GitLab's
+// answer. Each error is therefore kept and held to its own label afterwards.
 func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","usage_type":7,"user":{"id":1}}`)
 	}))
+	reported := make(map[string]error, 2)
 	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
 		{Name: "by id", Call: func() error {
 			_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{KeyID: 42})
+			reported["key_get"] = err
 			return err
 		}},
 		{Name: "by fingerprint", Call: func() error {
 			_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{Fingerprint: "SHA256:abc123"})
+			reported["key_get_by_fingerprint"] = err
 			return err
 		}},
 	})
+	for _, operation := range []string{"key_get", "key_get_by_fingerprint"} {
+		t.Run(operation, func(t *testing.T) {
+			err := reported[operation]
+			if err == nil || !strings.HasPrefix(err.Error(), operation+": ") {
+				t.Errorf("captured decode failure %v is not attributed to %s", err, operation)
+			}
+		})
+	}
 }
 
 // TestGetKeyWithUser_MissingID asserts the handler refuses a key_id it was not
-// given, names the field itself, and never reaches GitLab.
+// given, names the field itself, attributes the refusal to its own operation,
+// and never reaches GitLab.
 //
-// All three halves matter. The mock was a bare 200 with an empty body, so
+// All four halves matter. The mock was a bare 200 with an empty body, so
 // deleting the guard entirely left this green: GET /keys/0 came back
 // undecodable and an error arrived either way. It proved an error existed, not
 // that this handler produced it, and a model would have been answered about a
 // malformed response instead of about the field it omitted.
+//
+// The operation label is asserted at its own position because it is a bare
+// string the two handlers can exchange and still compile: a substring test
+// cannot tell the label apart from the field name, and a caller who asked for
+// a key by ID would be told "key_get_by_fingerprint" about a call it never
+// made.
 func TestGetKeyWithUser_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{})
 	if err == nil {
 		t.Fatal("expected error for missing key_id")
 	}
-	if !strings.Contains(err.Error(), "key_id") {
+	if !strings.HasPrefix(err.Error(), "key_get: ") {
+		t.Errorf("error %q is not attributed to key_get", err)
+	}
+	if !strings.HasSuffix(err.Error(), "key_id is required") {
 		t.Errorf("error %q does not name the missing field", err)
 	}
 }
@@ -138,16 +168,26 @@ func TestGetKeyByFingerprint_Success(t *testing.T) {
 }
 
 // TestGetKeyByFingerprint_MissingFingerprint asserts the same of the other
-// handler: it names the field and sends nothing. Its guard was equally free,
-// and an empty fingerprint is worse than a missing key ID, since GET /keys
-// with no fingerprint is a request GitLab may well answer.
+// handler: it names the field, attributes the refusal to itself, and sends
+// nothing. Its guard was equally free, and an empty fingerprint is worse than
+// a missing key ID, since GET /keys with no fingerprint is a request GitLab
+// may well answer.
+//
+// The field claim is pinned at the end of the message rather than anywhere in
+// it because "key_get_by_fingerprint" contains "fingerprint" itself: a
+// substring test was satisfied by the operation label alone, so a guard that
+// had dropped the field name entirely, or named the other handler's field,
+// still read as naming this one.
 func TestGetKeyByFingerprint_MissingFingerprint(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{})
 	if err == nil {
 		t.Fatal("expected error for missing fingerprint")
 	}
-	if !strings.Contains(err.Error(), "fingerprint") {
+	if !strings.HasPrefix(err.Error(), "key_get_by_fingerprint: ") {
+		t.Errorf("error %q is not attributed to key_get_by_fingerprint", err)
+	}
+	if !strings.HasSuffix(err.Error(), "fingerprint is required") {
 		t.Errorf("error %q does not name the missing field", err)
 	}
 }
