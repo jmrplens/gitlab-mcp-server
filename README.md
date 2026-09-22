@@ -449,10 +449,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,300 |     288,041 |
-| Unit tests (`_test.go`)  |       882 |     566,296 |
+| Source (`.go`, non-test) |     1,300 |     288,054 |
+| Unit tests (`_test.go`)  |       883 |     566,417 |
 | End-to-end tests         |       492 |      94,380 |
-| **Total**                | **2,674** | **948,717** |
+| **Total**                | **2,675** | **948,851** |
 
 ### Functions
 
@@ -461,7 +461,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                | 10,080 |
 | . Exported (public)             |  3,185 |
 | . Unexported (private)          |  6,895 |
-| Unit test functions (`TestXxx`) | 17,167 |
+| Unit test functions (`TestXxx`) | 17,169 |
 | Subtests (`t.Run(...)`)         |  6,030 |
 | End-to-end test functions       |  1,201 |
 
@@ -471,7 +471,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.97× more tests than code |
 | Average source file length         |                 ~222 lines |
-| Average test file length           |                 ~642 lines |
+| Average test file length           |                 ~641 lines |
 | Comment lines in source            |  65,655 (~22.8% of source) |
 | Test functions per source function |                       1.7× |
 
@@ -479,7 +479,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,188 |
+| `if err != nil` checks             | 9,190 |
 | `defer` statements                 | 1,114 |
 | `struct` types defined             | 3,304 |
 | `//nolint` suppressions            |   226 |
@@ -497,7 +497,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,798 lines       |
+| Longest source file | `cmd/server/main.go`. 4,811 lines       |
 | Longest test file   | `cmd/server/main_test.go`. 11,213 lines |
 
 ### Because why not
