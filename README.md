@@ -449,21 +449,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,296 |     287,173 |
-| Unit tests (`_test.go`)  |       878 |     565,396 |
-| End-to-end tests         |       492 |      94,276 |
-| **Total**                | **2,666** | **946,845** |
+| Source (`.go`, non-test) |     1,300 |     288,041 |
+| Unit tests (`_test.go`)  |       882 |     566,296 |
+| End-to-end tests         |       492 |      94,380 |
+| **Total**                | **2,674** | **948,717** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,060 |
-| . Exported (public)             |  3,179 |
-| . Unexported (private)          |  6,881 |
-| Unit test functions (`TestXxx`) | 17,135 |
-| Subtests (`t.Run(...)`)         |  6,016 |
-| End-to-end test functions       |  1,199 |
+| Source functions                | 10,080 |
+| . Exported (public)             |  3,185 |
+| . Unexported (private)          |  6,895 |
+| Unit test functions (`TestXxx`) | 17,167 |
+| Subtests (`t.Run(...)`)         |  6,030 |
+| End-to-end test functions       |  1,201 |
 
 ### Ratios worth noting
 
@@ -471,17 +471,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.97× more tests than code |
 | Average source file length         |                 ~222 lines |
-| Average test file length           |                 ~644 lines |
-| Comment lines in source            |  65,334 (~22.8% of source) |
+| Average test file length           |                 ~642 lines |
+| Comment lines in source            |  65,655 (~22.8% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,177 |
-| `defer` statements                 | 1,110 |
-| `struct` types defined             | 3,299 |
+| `if err != nil` checks             | 9,188 |
+| `defer` statements                 | 1,114 |
+| `struct` types defined             | 3,304 |
 | `//nolint` suppressions            |   226 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
@@ -497,15 +497,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,746 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 11,210 lines |
+| Longest source file | `cmd/server/main.go`. 4,798 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 11,213 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,221 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,954 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,237 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,967 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination` (87 chars) |
 
