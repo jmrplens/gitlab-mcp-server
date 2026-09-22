@@ -256,6 +256,26 @@ func TestFoldRecords_RunLines_Ruled(t *testing.T) {
 	}
 }
 
+// TestFoldRecords_CallAlreadyDispatched_KeepsItsAction verifies the one call
+// the late join leaves alone although a dispatch line matches its trace: the
+// harness joined it with the span already, so a dispatch line naming another
+// action is a second record of one event and does not overwrite what the call
+// carries, nor count as a join.
+func TestFoldRecords_CallAlreadyDispatched_KeepsItsAction(t *testing.T) {
+	rt, err := foldRecords([]e2ecalls.Record{
+		{Schema: 1, Type: e2ecalls.TypeRun, Run: &e2ecalls.Run{Package: "p", Edition: "community", Tier: "free", Status: e2ecalls.RunStarted}},
+		{Schema: 1, Type: e2ecalls.TypeCall, Call: &e2ecalls.Call{Test: "T", Action: "a.b", Dispatched: "a.b", TraceID: "t"}},
+		{Schema: 1, Type: e2ecalls.TypeDispatch, Dispatch: &e2ecalls.Dispatch{TraceID: "t", Action: "a.c"}},
+	})
+	if err != nil {
+		t.Fatalf("foldRecords() error = %v", err)
+	}
+
+	if rt.calls[0].Dispatched != "a.b" || rt.lateJoins != 0 {
+		t.Errorf("dispatched = %q, lateJoins = %d; want the call's own a.b and no join", rt.calls[0].Dispatched, rt.lateJoins)
+	}
+}
+
 // TestFoldRecords_LinesTheReaderCannotPlace verifies the two shapes a shard
 // can hold that name nothing: a run line with no package, whose calls are
 // then placed in none, and a line type this reader has no case for, which is
@@ -298,6 +318,9 @@ func TestMatchesRuntime_Selectors_Matched(t *testing.T) {
 		{name: "ee matches ultimate", key: "enterprise/ultimate", selector: "ee", want: true},
 		{name: "ee matches premium", key: "enterprise/premium", selector: "ee", want: true},
 		{name: "ee does not match an unlicensed image", key: "enterprise/free", selector: "ee", want: false},
+		// A community build run with a paid tier pinned by a setting serves a
+		// catalog its instance cannot back, and is no licensed runtime.
+		{name: "ee does not match a community build at a paid tier", key: "community/premium", selector: "ee", want: false},
 		{name: "ee does not match community", key: "community/free", selector: "ee", want: false},
 		{name: "a key matches itself", key: "enterprise/free", selector: "enterprise/free", want: true},
 		{name: "selectors are trimmed and case-insensitive", key: "community/free", selector: " CE ", want: true},

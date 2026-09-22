@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -220,8 +222,24 @@ func runRows(rt *runtimeRecords) []runRow {
 			TierConfirmed: run.TierConfirmed, Fixtures: run.Fixtures,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Package < rows[j].Package })
+	slices.SortFunc(rows, func(a, b runRow) int { return cmp.Compare(a.Package, b.Package) })
 	return rows
+}
+
+// compareShapes orders two surface x mode pairs the way every table here
+// reads them: the surfaces in level order, the default one first, a surface
+// that is none of the three after them and by name among themselves, and then
+// the modes by name.
+//
+// It is a three-way comparison of the keys in turn rather than a chain of
+// less-than tests under inequality guards, so the order is stated once and
+// each key is compared in one direction only.
+func compareShapes(aSurface, aMode, bSurface, bMode string) int {
+	return cmp.Or(
+		cmp.Compare(surfaceOrder(aSurface), surfaceOrder(bSurface)),
+		cmp.Compare(aSurface, bSurface),
+		cmp.Compare(aMode, bMode),
+	)
 }
 
 // sessionRows publishes the shapes.
@@ -234,20 +252,16 @@ func sessionRows(c *classification) []sessionRow {
 			Prompts: len(shape.prompts), DispatchObserved: shape.observed,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Surface != rows[j].Surface {
-			return surfaceOrder(rows[i].Surface) < surfaceOrder(rows[j].Surface)
-		}
-		return rows[i].Mode < rows[j].Mode
-	})
+	slices.SortFunc(rows, func(a, b sessionRow) int { return compareShapes(a.Surface, a.Mode, b.Surface, b.Mode) })
 	return rows
 }
 
-// capabilitySurfaceRows publishes the capability surfaces, full before
-// minimal.
+// capabilitySurfaceRows publishes the capability surfaces in name order, which
+// puts full before minimal.
 func capabilitySurfaceRows(c *classification) []capabilitySurfaceRow {
 	rows := make([]capabilitySurfaceRow, 0, len(c.capabilitySurfaces))
-	for _, surface := range c.capabilitySurfaces {
+	for _, key := range sortedKeys(c.capabilitySurfaces) {
+		surface := c.capabilitySurfaces[key]
 		served := surface.served()
 		rows = append(rows, capabilitySurfaceRow{
 			Capabilities: surface.key, Sessions: surface.sessions, Shapes: len(surface.shapes),
@@ -255,7 +269,6 @@ func capabilitySurfaceRows(c *classification) []capabilitySurfaceRow {
 			Completions: len(served[capabilityCompletions]), SubscribableKinds: len(served[capabilitySubscriptions]),
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Capabilities < rows[j].Capabilities })
 	return rows
 }
 
@@ -328,17 +341,12 @@ func cellRows(cells map[cellKey]*cell) []cellRow {
 			Target: found.key.action, State: found.state, Reason: found.reason, Tests: found.bestTests(), Calls: calls,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Surface != rows[j].Surface {
-			return surfaceOrder(rows[i].Surface) < surfaceOrder(rows[j].Surface)
-		}
-		if rows[i].Mode != rows[j].Mode {
-			return rows[i].Mode < rows[j].Mode
-		}
-		if rows[i].Capabilities != rows[j].Capabilities {
-			return rows[i].Capabilities < rows[j].Capabilities
-		}
-		return rows[i].Target < rows[j].Target
+	slices.SortFunc(rows, func(a, b cellRow) int {
+		return cmp.Or(
+			compareShapes(a.Surface, a.Mode, b.Surface, b.Mode),
+			cmp.Compare(a.Capabilities, b.Capabilities),
+			cmp.Compare(a.Target, b.Target),
+		)
 	})
 	return rows
 }
@@ -356,12 +364,7 @@ func uncalledRows(c *classification) []uncalledRow {
 		sort.Strings(uncalled)
 		rows = append(rows, uncalledRow{Surface: shape.key.surface, Mode: shape.key.mode, Tools: uncalled})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Surface != rows[j].Surface {
-			return surfaceOrder(rows[i].Surface) < surfaceOrder(rows[j].Surface)
-		}
-		return rows[i].Mode < rows[j].Mode
-	})
+	slices.SortFunc(rows, func(a, b uncalledRow) int { return compareShapes(a.Surface, a.Mode, b.Surface, b.Mode) })
 	return rows
 }
 

@@ -173,6 +173,34 @@ func TestCheckRecord_Failures(t *testing.T) {
 	}
 }
 
+// TestCheckRecordArithmetic_EveryActionAsserted_Holds verifies the edge of
+// the one ceiling the arithmetic applies: a record asserting every action of
+// its catalog is the best a run can do and no hand edit, so it holds, where
+// one asserting one more than the catalog has does not.
+func TestCheckRecordArithmetic_EveryActionAsserted_Holds(t *testing.T) {
+	ids := []string{"issue.get", "issue.list"}
+	cases := []struct {
+		name    string
+		catalog int
+		want    int
+	}{
+		{name: "every action", catalog: 2, want: 0},
+		{name: "more than the catalog", catalog: 1, want: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			verdict := &recordVerdict{}
+			checkRecordArithmetic(verdict, "ce", &recordEntry{
+				Summary: summary{CatalogActions: tc.catalog, L1: 2, L2: 2, L3: 2},
+				Levels:  levels{L1: ids, L2: ids, L3: ids},
+			})
+			if len(verdict.Findings) != tc.want {
+				t.Errorf("findings = %q, want %d", verdict.Findings, tc.want)
+			}
+		})
+	}
+}
+
 // TestCheckRecord_BelowAssertedFloor_Fails verifies that the ratchet the live
 // -check applies is re-applied to the committed evidence, read through the
 // same package-level table.

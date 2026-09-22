@@ -458,7 +458,7 @@ func TestRun_Static_OverTheFixtureModule(t *testing.T) {
 		// model evaluation package and the command beside the harness, the
 		// last two loaded as consumers and scanned for no id sites of their
 		// own.
-		"static: 34 id sites in 7 packages, 4 non-constant sites, 7 unused harness exports, 15 findings",
+		"static: 35 id sites in 7 packages, 6 non-constant sites, 7 unused harness exports, 16 findings",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(stdout, want) {

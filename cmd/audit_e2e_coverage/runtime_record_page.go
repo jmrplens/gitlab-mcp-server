@@ -1,7 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -281,28 +283,19 @@ func renderCapabilitySurfaceTable(surfaces []capabilitySurfaceRow) string {
 // It used to take an order function for that, and the only two arguments ever
 // passed produced identical output.
 func renderStateTable(first string, histogram map[string]map[state]int) string {
-	headers := make([]string, 0, len(markdownStates)+1)
-	headers = append(headers, first)
-	alignments := make([]docgen.Alignment, 0, len(markdownStates)+1)
-	alignments = append(alignments, docgen.AlignLeft)
+	headers := []string{first}
+	alignments := []docgen.Alignment{docgen.AlignLeft}
 	for _, s := range markdownStates {
 		headers = append(headers, string(s))
 		alignments = append(alignments, docgen.AlignRight)
 	}
-	keys := make([]string, 0, len(histogram))
-	for key := range histogram {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if surfaceOrder(keys[i]) != surfaceOrder(keys[j]) {
-			return surfaceOrder(keys[i]) < surfaceOrder(keys[j])
-		}
-		return keys[i] < keys[j]
-	})
+	keys := sortedKeys(histogram)
+	// Stable, so the name order sortedKeys settled survives among the keys
+	// surfaceOrder ranks alike.
+	slices.SortStableFunc(keys, func(a, b string) int { return cmp.Compare(surfaceOrder(a), surfaceOrder(b)) })
 	rows := make([][]string, 0, len(keys))
 	for _, key := range keys {
-		row := make([]string, 0, len(markdownStates)+1)
-		row = append(row, "`"+key+"`")
+		row := []string{"`" + key + "`"}
 		for _, s := range markdownStates {
 			row = append(row, strconv.Itoa(histogram[key][s]))
 		}
@@ -359,8 +352,5 @@ func shortCommit(commit string) string {
 	if commit == "" {
 		return "—"
 	}
-	if len(commit) > 12 {
-		return "`" + commit[:12] + "`"
-	}
-	return "`" + commit + "`"
+	return "`" + commit[:min(len(commit), 12)] + "`"
 }

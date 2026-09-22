@@ -218,21 +218,63 @@ func TestCellRows_CapabilityGrain_CarriesOnlyItsCoordinates(t *testing.T) {
 	}
 }
 
-// TestCellRows_SameTargetOnTwoCapabilitySurfaces_OrderedByTheSurface verifies
-// the tie the capability surface breaks: two cells with one target and no
-// shape are ordered by their capability surface, so a report of the same
-// classification lists them the same way every time.
-func TestCellRows_SameTargetOnTwoCapabilitySurfaces_OrderedByTheSurface(t *testing.T) {
+// TestCellRows_Order_ShapeThenCapabilitySurfaceThenTarget verifies the order
+// the cell rows are published in, which is what lets two reports of one
+// classification be compared line by line: the surfaces in level order, the
+// rows carrying no surface after the three and a surface that is none of them
+// after those, by name; then the mode, the capability surface and the target.
+// The cells come out of a map, so the listing is drawn many times over.
+func TestCellRows_Order_ShapeThenCapabilitySurfaceThenTarget(t *testing.T) {
+	keys := []cellKey{
+		{shape: shapeKey{surface: "zeta", mode: modeDefault}, action: "a"},
+		{capabilities: config.CapabilitySurfaceMinimal, action: "x"},
+		{shape: individualDefault, action: "a"},
+		{shape: shapeKey{surface: config.ToolSurfaceDynamic, mode: modeSafe}, action: "a"},
+		{capabilities: config.CapabilitySurfaceFull, action: "x"},
+		{shape: dynamicDefault, action: "b"},
+		{shape: metaDefault, action: "a"},
+		{capabilities: config.CapabilitySurfaceFull, action: "a"},
+		{shape: dynamicDefault, action: "a"},
+		{shape: shapeKey{surface: "alpha", mode: modeDefault}, action: "a"},
+	}
 	cells := map[cellKey]*cell{}
-	for _, capabilities := range []string{config.CapabilitySurfaceMinimal, config.CapabilitySurfaceFull} {
-		found := newCell(cellKey{capabilities: capabilities, action: "summarize_issue"})
+	for _, key := range keys {
+		found := newCell(key)
 		found.state = stateAsserted
-		cells[found.key] = found
+		cells[key] = found
+	}
+	want := []string{
+		"dynamic/default/ a", "dynamic/default/ b", "dynamic/safe/ a", "meta/default/ a", "individual/default/ a",
+		"//full a", "//full x", "//minimal x", "alpha/default/ a", "zeta/default/ a",
 	}
 	for range 32 {
-		rows := cellRows(cells)
-		if len(rows) != 2 || rows[0].Capabilities != config.CapabilitySurfaceFull || rows[1].Capabilities != config.CapabilitySurfaceMinimal {
-			t.Fatalf("cellRows() = %+v, want full before minimal on every run", rows)
+		var got []string
+		for _, row := range cellRows(cells) {
+			got = append(got, row.Surface+"/"+row.Mode+"/"+row.Capabilities+" "+row.Target)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("cellRows() order = %q, want %q", got, want)
+		}
+	}
+}
+
+// TestBuildReport_ShapeRows_InLevelOrder verifies the order the session rows
+// and the uncalled-tool rows are published in, the default surface first and
+// the modes by name within a surface, whatever order the shapes were folded
+// in.
+func TestBuildReport_ShapeRows_InLevelOrder(t *testing.T) {
+	want := []string{"dynamic/default", "meta/default", "meta/read-only", "individual/default", "individual/safe"}
+	for range 16 {
+		rep := fixtureReport()
+		var sessions, uncalled []string
+		for _, row := range rep.Sessions {
+			sessions = append(sessions, row.Surface+"/"+row.Mode)
+		}
+		for _, row := range rep.UncalledTools {
+			uncalled = append(uncalled, row.Surface+"/"+row.Mode)
+		}
+		if !slices.Equal(sessions, want) || !slices.Equal(uncalled, want) {
+			t.Fatalf("session rows %q and uncalled rows %q, want both %q", sessions, uncalled, want)
 		}
 	}
 }

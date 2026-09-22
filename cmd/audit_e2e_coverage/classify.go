@@ -272,9 +272,7 @@ func (c *cell) add(earned credit, test string) {
 		c.tests[earned] = map[string]bool{}
 	}
 	c.tests[earned][test] = true
-	if earned > c.best {
-		c.best = earned
-	}
+	c.best = max(c.best, earned)
 }
 
 // copyFrom makes this cell say what another does, with maps of its own.
@@ -937,8 +935,19 @@ func subscribableKinds(listed map[string]bool) []string {
 	if len(listed) > 0 {
 		return sortedKeys(listed)
 	}
-	kinds := make([]string, 0, len(subscriptions.Templates()))
-	for _, template := range subscriptions.Templates() {
+	return templateKinds(subscriptions.Templates())
+}
+
+// templateKinds names the kind each template's sample URI classifies as,
+// sorted, and leaves out a template whose sample the server would not accept.
+//
+// The server's own templates all classify, which its drift guards hold it
+// to, so the leaving out is for a template whose variables sampleURI fills
+// in a way the classifier refuses: counting that one as a kind would give the
+// histogram a subscription cell the server has no name for.
+func templateKinds(templates []string) []string {
+	kinds := make([]string, 0, len(templates))
+	for _, template := range templates {
 		kind, ok := subscriptions.Classify(sampleURI(template))
 		if ok {
 			kinds = append(kinds, kind.String())
@@ -955,24 +964,21 @@ func sampleURI(template string) string {
 	var b strings.Builder
 	rest := template
 	for {
-		open := strings.Index(rest, "{")
-		if open < 0 {
+		before, after, opened := strings.Cut(rest, "{")
+		variable, tail, closed := strings.Cut(after, "}")
+		if !opened || !closed {
+			// No placeholder left, or one that never closes: the rest is
+			// literal text, as a URI template reader would take it.
 			b.WriteString(rest)
 			return b.String()
 		}
-		closing := strings.Index(rest[open:], "}")
-		if closing < 0 {
-			b.WriteString(rest)
-			return b.String()
-		}
-		b.WriteString(rest[:open])
-		variable := rest[open+1 : open+closing]
+		b.WriteString(before)
 		if strings.HasSuffix(variable, "_id") || strings.HasSuffix(variable, "_iid") {
 			b.WriteString("1")
 		} else {
 			b.WriteString("sample")
 		}
-		rest = rest[open+closing+1:]
+		rest = tail
 	}
 }
 

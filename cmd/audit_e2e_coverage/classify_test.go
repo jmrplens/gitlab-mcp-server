@@ -1210,6 +1210,67 @@ func TestSubscribableKinds_NoListing_EveryServerKindNamed(t *testing.T) {
 	}
 }
 
+// TestMatchTemplate_TiesAndBareVariables verifies the two edges of the
+// specificity count. Two templates a URI matches with as many literal
+// segments each settle on the one listed first, which is the one the sorted
+// session listing puts first, so the cell a read lands on does not move from
+// one run to the next. And a template with no literal segment at all still
+// matches: zero literals is a match that consumed nothing, not the absence of
+// one.
+func TestMatchTemplate_TiesAndBareVariables(t *testing.T) {
+	cases := []struct {
+		name      string
+		templates []string
+		uri       string
+		want      string
+	}{
+		{name: "a tie goes to the first listed", templates: []string{"gitlab://x/{a}/y", "gitlab://x/{b}/y"}, uri: "gitlab://x/1/y", want: "gitlab://x/{a}/y"},
+		{name: "a template of one variable", templates: []string{"{whole}"}, uri: "anything", want: "{whole}"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, matched := matchTemplate(tc.templates, tc.uri)
+			if !matched || got != tc.want {
+				t.Errorf("matchTemplate(%q) = (%q, %t), want (%q, true)", tc.uri, got, matched, tc.want)
+			}
+		})
+	}
+}
+
+// TestClassify_UnservableReason_DynamicKeepsItsOwnReason verifies that the
+// dynamic surface's own reason stands when it has one: a mutation in read-only
+// mode is withheld by the mode, which the dynamic surface knows without
+// borrowing anything from the meta listing, and the meta sessions of the mode
+// serving the domain tool must not turn it back into a servable cell.
+func TestClassify_UnservableReason_DynamicKeepsItsOwnReason(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	dynamicReadOnly := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}
+	rt.sessions = append(rt.sessions, fixtureSession(dynamicReadOnly, true))
+	c := classify(rt, fixtureCatalog())
+
+	found := mustCell(t, c, dynamicReadOnly, "issue.delete")
+	if found.state != stateUnservable || found.reason != "withheld by read-only mode" {
+		t.Errorf("issue.delete on dynamic/read-only = %s (%q), want unservable, withheld by read-only mode", found.state, found.reason)
+	}
+}
+
+// TestTemplateKinds_UnclassifiableTemplate_LeftOut verifies the fallback
+// universe's one filter: a template whose sample URI the server's classifier
+// refuses names no kind, since a subscription cell under a name the server
+// does not have would be one nothing could ever fill, while the templates
+// beside it are named and sorted.
+func TestTemplateKinds_UnclassifiableTemplate_LeftOut(t *testing.T) {
+	got := templateKinds([]string{
+		"gitlab://project/{project_id}/pipeline/{pipeline_id}",
+		"gitlab://nowhere/{thing}",
+		"gitlab://project/{project_id}/issue/{issue_iid}",
+	})
+	if want := []string{"issue", "pipeline"}; !slices.Equal(got, want) {
+		t.Errorf("templateKinds() = %q, want %q", got, want)
+	}
+}
+
 // TestSampleURI_Variables_Expanded verifies the expansion the kind lookup
 // rests on: numeric for identifiers, a word elsewhere.
 func TestSampleURI_Variables_Expanded(t *testing.T) {
@@ -1222,6 +1283,9 @@ func TestSampleURI_Variables_Expanded(t *testing.T) {
 		{template: "gitlab://project/{project_id}/file/{ref}/{+path}", want: "gitlab://project/1/file/sample/sample"},
 		{template: "gitlab://groups", want: "gitlab://groups"},
 		{template: "gitlab://broken/{", want: "gitlab://broken/{"},
+		// A placeholder at the very start is still a placeholder: the first
+		// character is not text to copy over.
+		{template: "{project_id}/tail", want: "1/tail"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.template, func(t *testing.T) {

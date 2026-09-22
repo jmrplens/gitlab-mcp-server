@@ -1,10 +1,12 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -195,7 +197,7 @@ func selectPackages(loaded []*packages.Package) []*packages.Package {
 	for _, pkg := range best {
 		selected = append(selected, pkg)
 	}
-	sort.Slice(selected, func(i, j int) bool { return selected[i].PkgPath < selected[j].PkgPath })
+	slices.SortFunc(selected, func(a, b *packages.Package) int { return cmp.Compare(a.PkgPath, b.PkgPath) })
 	return selected
 }
 
@@ -270,13 +272,13 @@ func (r *staticResult) collect(scans []*packageScan) {
 			r.unassertedIDs[id] = true
 		}
 	}
-	sort.Slice(r.Sites, func(i, j int) bool {
-		if r.Sites[i].Pos != r.Sites[j].Pos {
-			return r.Sites[i].Pos < r.Sites[j].Pos
-		}
-		return r.Sites[i].ID < r.Sites[j].ID
+	slices.SortFunc(r.Sites, func(a, b idSite) int { return cmp.Or(cmp.Compare(a.Pos, b.Pos), cmp.Compare(a.ID, b.ID)) })
+	// Two notes can share a position, two verb calls on one line, so the text
+	// breaks the tie: sorting on the position alone left their order to
+	// whatever the scans appended first.
+	slices.SortFunc(r.NonConstant, func(a, b staticNote) int {
+		return cmp.Or(cmp.Compare(a.Pos, b.Pos), cmp.Compare(a.Text, b.Text))
 	})
-	sort.Slice(r.NonConstant, func(i, j int) bool { return r.NonConstant[i].Pos < r.NonConstant[j].Pos })
 }
 
 // judge applies the rules to what was collected.
@@ -301,11 +303,8 @@ func (r *staticResult) judge(cfg staticConfig, scans []*packageScan) {
 			r.Findings = append(r.Findings, staticFinding{Kind: findingDeadExport, Message: name + " is exported by the harness and used by nothing"})
 		}
 	}
-	sort.Slice(r.Findings, func(i, j int) bool {
-		if r.Findings[i].Pos != r.Findings[j].Pos {
-			return r.Findings[i].Pos < r.Findings[j].Pos
-		}
-		return r.Findings[i].Message < r.Findings[j].Message
+	slices.SortFunc(r.Findings, func(a, b staticFinding) int {
+		return cmp.Or(cmp.Compare(a.Pos, b.Pos), cmp.Compare(a.Message, b.Message))
 	})
 }
 

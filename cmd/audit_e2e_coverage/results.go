@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
@@ -213,11 +214,12 @@ func joinResults(rt *runtimeRecords, results testResults) resultsJoin {
 			join.TestsWithoutCalls = append(join.TestsWithoutCalls, idleTest{Package: key.pkg, Test: key.test, Elapsed: result.Elapsed})
 		}
 	}
-	sort.Slice(join.TestsWithoutCalls, func(i, j int) bool {
-		if join.TestsWithoutCalls[i].Package != join.TestsWithoutCalls[j].Package {
-			return join.TestsWithoutCalls[i].Package < join.TestsWithoutCalls[j].Package
-		}
-		return join.TestsWithoutCalls[i].Test < join.TestsWithoutCalls[j].Test
+	// A three-way comparison rather than a pair of less-than tests: the list
+	// is built by ranging a map, so which way round any two entries reach the
+	// comparator is chance, and a less-than read under an inequality guard has
+	// a branch no fixed input is sure to take.
+	slices.SortFunc(join.TestsWithoutCalls, func(a, b idleTest) int {
+		return cmp.Or(cmp.Compare(a.Package, b.Package), cmp.Compare(a.Test, b.Test))
 	})
 	return join
 }
@@ -274,8 +276,10 @@ func (results testResults) byName(test string) (resultKey, testResult, bool) {
 func ancestorTests(name string) []string {
 	names := []string{name}
 	for {
+		// A slash at the very start separates nothing from the rest, so the
+		// walk ends there rather than naming the empty string as a test.
 		slash := strings.LastIndex(name, "/")
-		if slash < 0 {
+		if slash <= 0 {
 			return names
 		}
 		name = name[:slash]

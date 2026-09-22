@@ -1,8 +1,10 @@
 package resources
 
 import (
+	"cmp"
 	"context"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -409,9 +411,7 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 	// here, that a reader of aliasCanonicalActionIDs cannot see.
 	snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	snapshot.addUncoveredDirectTools(toolDetails)
-	sort.Slice(snapshot.manifest.Entries, func(i, j int) bool {
-		return snapshot.manifest.Entries[i].ID < snapshot.manifest.Entries[j].ID
-	})
+	slices.SortFunc(snapshot.manifest.Entries, func(a, b ToolSurfaceEntry) int { return cmp.Compare(a.ID, b.ID) })
 	snapshot.manifest.EntryCount = len(snapshot.manifest.Entries)
 	return snapshot
 }
@@ -444,7 +444,7 @@ func visibleToolSnapshots(tools []*mcp.Tool) ([]ToolSurfaceVisibleTool, []toolSn
 			Destructive: tool.Annotations != nil && tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint,
 		})
 	}
-	sort.Slice(details, func(i, j int) bool { return details[i].Name < details[j].Name })
+	slices.SortFunc(details, func(a, b toolSnapshot) int { return cmp.Compare(a.Name, b.Name) })
 	visible := make([]ToolSurfaceVisibleTool, 0, len(details))
 	for _, tool := range details {
 		visible = append(visible, ToolSurfaceVisibleTool{
