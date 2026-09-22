@@ -108,7 +108,7 @@ func TestEpicBoards_FreshGroup_ListsAndRefusesAMissingBoard(t *testing.T) {
 		}
 
 		refused := harness.Refused(s, actionEpicBoardGet, withParams(params, map[string]any{"board_id": missingBoardID}), harness.FailureNotFound)
-		assertMentions(e, "the read of a missing epic board", refused, "epic_board_list", "gitlab_group", "configure an epic board")
+		assertMentions(e, "the read of a missing epic board", refused, "board_id", "group.epic_board_list", "configure an epic board")
 	})
 }
 

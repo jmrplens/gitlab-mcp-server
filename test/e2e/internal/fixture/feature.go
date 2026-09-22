@@ -20,6 +20,7 @@ package fixture
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -101,11 +102,32 @@ func PinFeature(e *harness.Env, name string, value bool) FeatureState {
 
 	e.Defer("feature flag "+name, func(ctx context.Context) error { return restoreFeature(ctx, e, name, before) })
 
-	if _, _, err := e.Client().GL().Features.SetFeatureFlag(name, &gl.SetFeatureFlagOptions{Value: value},
-		gl.WithContext(e.Ctx)); err != nil {
+	if err := setFeature(e.Ctx, e, name, value); err != nil {
 		e.T.Fatalf("setting feature flag %s to %t: %v", name, value, err)
 	}
 	return before
+}
+
+// setFeature sets one flag's instance-global boolean gate.
+//
+// It builds the body itself rather than calling Features.SetFeatureFlag,
+// because client-go's SetFeatureFlagOptions tags none of its scope fields
+// omitempty, so the request carries key, feature_group and user as empty
+// strings and Grape counts a present param as given: GitLab answers 400 "key,
+// feature_group are mutually exclusive, key, user are mutually exclusive" for
+// every call, whatever the caller asked for. internal/tools/features.Set
+// carries the same workaround for the same reason, and
+// docs/development/upstream-bugs.md records it.
+func setFeature(ctx context.Context, e *harness.Env, name string, value bool) error {
+	req, err := e.Client().GL().NewRequest(http.MethodPost, "features/"+gl.PathEscape(name),
+		map[string]any{"value": value}, nil)
+	if err != nil {
+		return fmt.Errorf("building the request for feature flag %s: %w", name, err)
+	}
+	if _, err = e.Client().GL().Do(req.WithContext(ctx), nil); err != nil {
+		return fmt.Errorf("setting feature flag %s to %t: %w", name, value, err)
+	}
+	return nil
 }
 
 // restoreFeature puts one flag back where the test found it: the boolean gate
@@ -118,9 +140,8 @@ func restoreFeature(ctx context.Context, e *harness.Env, name string, before Fea
 		}
 		return nil
 	}
-	if _, _, err := e.Client().GL().Features.SetFeatureFlag(name, &gl.SetFeatureFlagOptions{Value: before.Value},
-		gl.WithContext(ctx)); err != nil {
-		return fmt.Errorf("restoring feature flag %s to %t: %w", name, before.Value, err)
+	if err := setFeature(ctx, e, name, before.Value); err != nil {
+		return fmt.Errorf("restoring feature flag %s: %w", name, err)
 	}
 	return nil
 }

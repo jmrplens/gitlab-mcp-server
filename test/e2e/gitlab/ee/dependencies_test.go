@@ -45,12 +45,12 @@ func TestDependencies_UnscannedProject_ListsNothingAndRefusesMissingExports(t *t
 		}
 
 		refused := harness.Refused(s, actionDependencyExportCreate, map[string]any{"pipeline_id": missingID}, harness.FailureNotFound)
-		assertMentions(e, "the export of a missing pipeline", refused, "pipeline_id", "gitlab_pipeline", "dependency scanning", "SBOM")
+		assertMentions(e, "the export of a missing pipeline", refused, "pipeline_id", "pipeline.list", "dependency scanning", "SBOM")
 
 		refused = harness.Refused(s, actionDependencyExportGet, map[string]any{"export_id": missingID}, harness.FailureNotFound)
-		assertMentions(e, "the read of a missing export", refused, "export_id", "gitlab_create_dependency_list_export", "finished")
+		assertMentions(e, "the read of a missing export", refused, "export_id", "dependency.export_create", "finished")
 
 		refused = harness.Refused(s, actionDependencyExportDownload, map[string]any{"export_id": missingID}, harness.FailureNotFound)
-		assertMentions(e, "the download of a missing export", refused, "export_id", "gitlab_get_dependency_list_export", "CycloneDX")
+		assertMentions(e, "the download of a missing export", refused, "export_id", "dependency.export_get", "CycloneDX")
 	})
 }

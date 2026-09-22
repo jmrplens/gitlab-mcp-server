@@ -69,7 +69,7 @@ func TestDependencyFirewall_Evaluate_RefusesWithTheFlagOffAndAnswersWithItOn(t *
 		t.Run("with the flag off the refusal names the flag", func(t *testing.T) {
 			text := harness.Refused(s, actionDependencyFirewallEvaluate, params, harness.FailureNotFound)
 			assertMentions(e, "the Dependency Firewall refusal", text,
-				dependencyfirewall.FeatureFlag, "Premium", "gitlab_project_get")
+				dependencyfirewall.FeatureFlag, "Premium", "project.get")
 		})
 	}
 

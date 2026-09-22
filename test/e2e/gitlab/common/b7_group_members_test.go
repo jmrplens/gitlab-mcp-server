@@ -83,12 +83,12 @@ func TestGroupMembers_SingleReads_DirectAndInheritedAgreeAndRefuse(t *testing.T)
 		// The subgroup grants nothing of its own, so the direct read of it
 		// does not see the membership the inherited read just answered with.
 		notDirect := harness.Refused(s, actionGroupMemberGet, onChild, harness.FailureNotFound)
-		assertMentions(e, "the direct member read of a subgroup", notDirect, "gitlab_group_member_get_inherited")
+		assertMentions(e, "the direct member read of a subgroup", notDirect, "group.group_member_get_inherited")
 
 		// No group in the unrelated group's tree grants the user anything, so
 		// even the inherited read has nothing to answer with.
 		notInherited := harness.Refused(s, actionGroupMemberGetInherited,
 			map[string]any{"group_id": f.stranger.IDParam(), "user_id": f.user.ID}, harness.FailureNotFound)
-		assertMentions(e, "the inherited member read of an unrelated group", notInherited, "ancestor group", "gitlab_group_members_list")
+		assertMentions(e, "the inherited member read of an unrelated group", notInherited, "ancestor group", "group.members")
 	})
 }

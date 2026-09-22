@@ -21,6 +21,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -91,6 +92,34 @@ func EnableMergeTrains(e *harness.Env, project Project) bool {
 		e.T.Fatalf("reading project %d after enabling merge trains: %v", project.ID, err)
 	}
 	return current.MergePipelinesEnabled && current.MergeTrainsEnabled
+}
+
+// AllowAuthorApproval lets the authors of this project's merge requests
+// approve their own, and reports whether an author may now approve.
+//
+// It is a precondition rather than a subject, and it exists because the run
+// holds one credential: every request a test opens is authored by the same
+// user that then approves it. A licensed instance ships "Prevent approval by
+// author" on, so GitLab answers that approval 401 and the scenario cannot
+// reach the action it is about. An unlicensed instance serves no approval
+// configuration at all, which is the 404 read below: there the precondition
+// is already met, since nothing there prevents an author from approving.
+//
+// The project is disposable, so nothing is restored.
+func AllowAuthorApproval(e *harness.Env, project Project) bool {
+	e.T.Helper()
+
+	approvals, _, err := e.Client().GL().Projects.ChangeApprovalConfiguration(project.ID,
+		&gl.ChangeApprovalConfigurationOptions{MergeRequestsAuthorApproval: new(true)}, gl.WithContext(e.Ctx))
+	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			e.T.Logf("project %d serves no approval configuration, so this instance is unlicensed and "+
+				"an author may approve already", project.ID)
+			return true
+		}
+		e.T.Fatalf("allowing author approval on project %d: %v", project.ID, err)
+	}
+	return approvals.MergeRequestsAuthorApproval
 }
 
 // mergeRequestOf reads what a test needs out of what GitLab returned.

@@ -398,11 +398,20 @@ report names a reproduction rather than a symptom.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes. `internal/tools/features.Set` builds the request body
-  itself.
+- **Workaround**: yes, in two places. `internal/tools/features.Set` builds the
+  request body itself, and so does `fixture.setFeature` in the end-to-end
+  suite, which pins a flag as a scenario's precondition.
 
 **What**: the option struct's fields carry no `omitempty`, so empty strings are
 serialized and GitLab rejects the request with a "mutually exclusive" error.
+
+**Reach**: every call, not a corner. Grape counts a param that is present as
+given, so the body's empty `key`, `feature_group` and `user` collide whatever
+the caller asked for: GitLab answers `400 {error: key, feature_group are
+mutually exclusive, key, user are mutually exclusive}` for a plain
+instance-wide set. The method is therefore unusable as shipped, which is what
+made the second workaround necessary: the fixture called it and the licensed
+suite failed on the flag it was setting rather than on its own subject.
 
 **Effort**: small, struct tags plus a test. A good first contribution.
 

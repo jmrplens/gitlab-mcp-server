@@ -71,6 +71,6 @@ func TestProjectAliases_Lifecycle_CreatesReadsListsAndDeletes(t *testing.T) {
 
 		harness.DoVoid(s, actionProjectAliasDelete, map[string]any{"name": name})
 		refused := harness.Refused(s, actionProjectAliasGet, map[string]any{"name": name}, harness.FailureNotFound)
-		assertMentions(e, "the read of a deleted alias", refused, "alias", "gitlab_list_project_aliases")
+		assertMentions(e, "the read of a deleted alias", refused, "alias", "project_alias.list")
 	})
 }

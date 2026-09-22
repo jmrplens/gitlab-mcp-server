@@ -38,7 +38,15 @@ func TestMergeRequestApproval_Lifecycle_ApproveUnapproveMerge(t *testing.T) {
 	e := harness.New(t)
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
-		return fixture.NewProject(e, fixture.WithNamePrefix("mrapproval"))
+		project := fixture.NewProject(e, fixture.WithNamePrefix("mrapproval"))
+		// The run holds one credential, so every request below is approved
+		// by the user that opened it. A licensed instance refuses that with
+		// 401 unless the project says otherwise, and an unlicensed one
+		// permits it already.
+		if !fixture.AllowAuthorApproval(e, project) {
+			e.T.Fatalf("project %d still prevents approval by the author, so the approve action cannot be reached", project.ID)
+		}
+		return project
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
 		s := e.On(surface)
 		f := newMergeRequestIn(e, project, "approval")
