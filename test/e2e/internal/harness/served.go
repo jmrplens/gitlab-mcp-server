@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -170,12 +171,24 @@ func promptSpecOf(prompt *mcp.Prompt) PromptSpec {
 type surfaceExpectation struct {
 	// tools are the registered names the catalog accounts for, sorted.
 	tools []string
-	// actions are the catalog actions the surface can reach.
+	// actions are the catalog actions the surface can reach, the standalone
+	// utilities among them wherever the surface registers them.
 	actions map[ActionID]struct{}
 	// standalone are the tool names registered outside the catalog, which the
-	// comparison ignores: they are pinned by behavior tests instead.
+	// listing comparison ignores: they are pinned by behavior tests instead.
+	// The actions behind them are in actions all the same.
 	standalone []string
 }
+
+// The three assemblers the expectation is read from. They are variables so a
+// test can make one fail, which nothing a session can be configured with does,
+// and a failure there has to stop the session rather than leave it expecting
+// nothing.
+var (
+	assembleDynamicCatalog    = dynamiccatalog.Build
+	assembleMetaCatalog       = gitlabtools.SharedMetaCatalog
+	assembleIndividualCatalog = gitlabtools.SharedIndividualCatalog
+)
 
 // expectedSurface asks the server's own assemblers what a configuration
 // serves, given the config.ServerConfig the binary built for itself.
@@ -189,7 +202,7 @@ func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerCo
 
 	switch surface {
 	case SurfaceDynamic:
-		catalog, _, err := dynamiccatalog.Build(client, serverCfg)
+		catalog, _, err := assembleDynamicCatalog(client, serverCfg)
 		if err != nil {
 			return surfaceExpectation{}, fmt.Errorf("assemble the dynamic catalog: %w", err)
 		}
@@ -202,7 +215,7 @@ func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerCo
 			standalone: standalone,
 		}, nil
 	case SurfaceMeta:
-		catalog, _, err := gitlabtools.SharedMetaCatalog(client, serverCfg)
+		catalog, _, err := assembleMetaCatalog(client, serverCfg)
 		if err != nil {
 			return surfaceExpectation{}, fmt.Errorf("assemble the meta catalog: %w", err)
 		}
@@ -211,17 +224,68 @@ func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerCo
 			names = append(names, group.ToolName)
 		}
 		slices.Sort(names)
-		return surfaceExpectation{tools: names, actions: catalogActionIDs(catalog), standalone: standalone}, nil
+		actions := catalogActionIDs(catalog)
+		if standaloneErr := addStandaloneActions(actions, inst, serverCfg); standaloneErr != nil {
+			return surfaceExpectation{}, standaloneErr
+		}
+		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, nil
 	case SurfaceIndividual:
-		catalog, _, err := gitlabtools.SharedIndividualCatalog(client, serverCfg)
+		catalog, _, err := assembleIndividualCatalog(client, serverCfg)
 		if err != nil {
 			return surfaceExpectation{}, fmt.Errorf("assemble the individual catalog: %w", err)
 		}
 		names, actions := individualRegistrations(catalog, serverCfg.ReadOnly)
+		if standaloneErr := addStandaloneActions(actions, inst, serverCfg); standaloneErr != nil {
+			return surfaceExpectation{}, standaloneErr
+		}
 		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, nil
 	default:
 		return surfaceExpectation{}, fmt.Errorf("unknown tool surface %q", surface)
 	}
+}
+
+// addStandaloneActions adds the standalone utilities a meta or individual
+// server registers to the actions the surface's catalog accounts for.
+//
+// Those two surfaces register them outside the catalog, so no catalog of theirs
+// names them, and until issue 903 a session on either refused to send a call to
+// one: the projection could spell it, and the served set said it was not there.
+// They are read from the projection, which is built from the assembly that
+// does carry them, at the tier the server serves.
+func addStandaloneActions(actions map[ActionID]struct{}, inst *instance, serverCfg *config.ServerConfig) error {
+	projected, err := newProjection(serverCfg.Tier, inst.client.IsGitLabDotCom())
+	if err != nil {
+		return fmt.Errorf("project the standalone utilities: %w", err)
+	}
+	maps.Copy(actions, standaloneActions(projected, serverCfg))
+	return nil
+}
+
+// standaloneActions replays what the binary does with the standalone utilities
+// on the meta and individual surfaces, which is register every one of them
+// and then run the visibility pass over the tools it registered.
+//
+// That pass removes a tool whose registered name an operator's exclusion names
+// exactly, and in read-only mode every tool that does not read; safe mode
+// wraps the rest in a preview and removes nothing, so it keeps them all here.
+// The exact name is the rule because it is the binary's rule on these two
+// surfaces, even though the dynamic surface also honors the group name: a
+// harness that applied the broader rule would expect a tool gone that the
+// server still serves (issue 911 tracks the difference). The read-only mode is
+// the configuration's own, which already carries the narrowing a credential
+// that cannot write imposes.
+func standaloneActions(projected *projection, serverCfg *config.ServerConfig) map[ActionID]struct{} {
+	actions := make(map[ActionID]struct{})
+	for id, action := range projected.actions {
+		if !action.standalone || slices.Contains(serverCfg.ExcludeTools, action.metaTool) {
+			continue
+		}
+		if serverCfg.ReadOnly && !action.readOnly {
+			continue
+		}
+		actions[id] = struct{}{}
+	}
+	return actions
 }
 
 // credentialFacts is what the binary learns from the credential it starts
@@ -280,10 +344,11 @@ func serverConfigFor(inst *instance, cfg ServerConfig, cred credentialFacts) *co
 // standaloneToolNames lists the tools registered outside the action catalog:
 // gitlab_discover_project and the gitlab_interactive_* flows.
 //
-// They are left out of the comparison rather than checked here because nothing
-// in the catalog accounts for them, so a comparison would be this file
-// restating the spec list to itself. Their presence is pinned by the behavior
-// tests that call them.
+// They are left out of the listing comparison rather than checked there
+// because nothing in the catalog accounts for them, so a comparison would be
+// this file restating the spec list to itself. Their presence is pinned by the
+// behavior tests that call them, and the actions behind them are accounted for
+// by [standaloneActions].
 func standaloneToolNames(client *gitlabclient.Client) []string {
 	specs := gitlabtools.StandaloneSurfaceToolSpecs(client)
 	names := make([]string, 0, len(specs))
@@ -379,10 +444,11 @@ func checkServedTools(surface Surface, served []string, expected surfaceExpectat
 		standalone[name] = struct{}{}
 	}
 
-	// Dropped from both sides, not only from what was served: the individual
-	// surface projects the standalone groups into tools of its own as well as
-	// registering them separately, so a name removed from one side and kept on
-	// the other would be reported as a difference by the filtering itself.
+	// Dropped from both sides, not only from what was served: the standalone
+	// tools come from RegisterMetaStandaloneTools on meta and individual alike,
+	// not from either catalog, so the expectation built from a catalog does not
+	// name them and a listing does. [standaloneActions] is what accounts for the
+	// actions behind them; this comparison is about the catalog-backed names.
 	catalogBacked := withoutNames(served, standalone)
 	wanted := withoutNames(expected.tools, standalone)
 

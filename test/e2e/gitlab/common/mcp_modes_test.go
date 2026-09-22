@@ -10,8 +10,11 @@
 // the two dispatchers do it per action inside a tool that also serves reads.
 // The gitlab_interactive_* flows are the one thing registered outside the
 // catalog on every surface, and so the one thing each mode has to reach by a
-// second mechanism; they are called by name here, through Raw, because that
-// is the only way to name a tool the projection does not know.
+// second mechanism. The projection spells them now, and they are still called
+// by name here, through Raw, on purpose: a credited Withheld would move the
+// read-only cells of the coverage record off unservable, which is the count
+// that says read-only mode withdrew the flows, and the preview check reads the
+// raw card rather than the class a verb would reduce it to.
 
 package common
 
@@ -31,8 +34,8 @@ import (
 
 // The interactive issue flow, spelled as each surface reaches it: the
 // standalone tool the meta and individual surfaces register, and the action
-// gitlab_execute_action runs it as. Both are outside the catalog the
-// projection reads, which is why they are named here and called through Raw.
+// gitlab_execute_action runs it as. They are named here because the calls go
+// through Raw, for the reasons at the top of this file.
 const (
 	interactiveIssueTool   = "gitlab_interactive_issue_create"
 	interactiveIssueAction = "interactive.issue_create"

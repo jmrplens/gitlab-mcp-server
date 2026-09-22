@@ -97,11 +97,14 @@ func sweepCandidates(e *harness.Env, world *fixture.World, readOnly bool) (candi
 		if entry.Kind != manifestKindDynamicAction || entry.ReadOnly != readOnly || entry.AliasOf != "" {
 			continue
 		}
-		// The standalone actions (discover.project, the interactive flows) are
-		// listed in the dynamic manifest but are registered outside the base
-		// catalog, so the harness verbs cannot project them; they are covered
-		// through Raw in the modes test instead. ActionTier answers from that
-		// catalog, so an id it does not know is one to skip here.
+		// The standalone actions are projected like the rest, so the previews
+		// sweep previews the four guided flows, and the reads sweep names
+		// discover_project.resolve as unbound: no World binds a remote URL,
+		// and its own scenario resolves one. Every manifest entry is one the
+		// projection knows, since both read the catalog the dynamic surface
+		// serves; an id it did not know would be refused by every verb before
+		// it was sent, so it is skipped here and left to the tiers test, which
+		// fails on it.
 		tier, known := e.ActionTier(harness.ActionID(entry.ID))
 		if !known {
 			continue

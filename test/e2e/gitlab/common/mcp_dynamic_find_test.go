@@ -8,10 +8,8 @@
 // see: it registers gitlab_find_action and gitlab_execute_action and nothing
 // else, so the catalog actions a test drives are reached through the execute
 // tool by canonical id. The standalone utilities (discover_project.resolve and
-// the interactive flows) are folded into the dynamic catalog but not the base
-// one the harness projection reads, so this file reaches discover_project
-// through [harness.ExecuteStandalone], which spells the same execute call the
-// projecting verbs would and credits it to the action.
+// the interactive flows) are reached the same way, since the dynamic catalog
+// carries them and so does the projection the harness verbs read.
 
 package common
 
@@ -111,14 +109,14 @@ func TestDynamic_FindExecuteReadWorkflow(t *testing.T) {
 		e.T.Errorf("repository.file_get answered file_path=%q with %d bytes of content, want README.md non-empty", readme.FilePath, len(readme.Content))
 	}
 
-	// discover_project.resolve: a standalone utility, reached through the
-	// execute tool but not projected by the base catalog.
+	// discover_project.resolve: a standalone utility, which find lists and
+	// execute runs like any catalog action.
 	discoverResult := findAction(e, s, "discover a project from a git remote url", actionDiscoverProjectResolve)
 	requireFindParam(e, discoverResult, "remote_url")
 	if got.HTTPURLToRepo == "" {
 		e.T.Fatal("project.get returned no http_url_to_repo to resolve")
 	}
-	resolved := harness.ExecuteStandalone[projectdiscovery.ResolveOutput](s, actionDiscoverProjectResolve, map[string]any{"remote_url": got.HTTPURLToRepo})
+	resolved := harness.Do[projectdiscovery.ResolveOutput](s, actionDiscoverProjectResolve, map[string]any{"remote_url": got.HTTPURLToRepo})
 	if resolved.ID != project.ID || resolved.PathWithNamespace != project.Path {
 		e.T.Errorf("discover_project.resolve answered %d (%s), want %d (%s)", resolved.ID, resolved.PathWithNamespace, project.ID, project.Path)
 	}

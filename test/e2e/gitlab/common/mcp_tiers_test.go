@@ -97,9 +97,12 @@ func assertDynamicEntriesAreTheServedSet(e *harness.Env, s *harness.Session, man
 		}
 		tier, known := e.ActionTier(id)
 		if !known {
-			// The standalone actions, discovery and the interactive flows,
-			// live outside the base catalog and carry no tier; the served
-			// set is the check on those.
+			// The projection reads the catalog the dynamic surface serves, at
+			// Ultimate, so every entry this listing names has a tier, the
+			// standalone utilities included. One without would be an action
+			// no verb can call, which is the harness failing to reach
+			// something the server serves.
+			e.T.Errorf("the manifest lists %s, and the harness projection does not know it", id)
 			continue
 		}
 		if !rt.Tier.AtLeast(tier) {

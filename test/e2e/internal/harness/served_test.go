@@ -11,6 +11,8 @@
 package harness
 
 import (
+	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
 // TestDeclaredCapabilities_ReadsWhatTheServerSaid checks the rule that keeps a
@@ -113,9 +116,11 @@ func TestCheckServedTools_Differences_AreReportedBothWays(t *testing.T) {
 // tools registered outside the catalog are left out of the comparison whether
 // they were served, expected, or both.
 //
-// Both sides, because the individual surface projects the standalone groups
-// into tools of its own as well as registering them separately: removing them
-// from one side alone would make the filtering itself the difference.
+// Both sides, because the standalone tools come from
+// RegisterMetaStandaloneTools on meta and individual alike rather than from
+// either catalog: removing them from one side alone would make the filtering
+// itself the difference. The actions behind them are accounted for by
+// standaloneActions, which the tests below pin.
 func TestCheckServedTools_StandaloneNames_AreIgnoredOnBothSides(t *testing.T) {
 	expected := surfaceExpectation{
 		tools:      []string{"gitlab_issue", "gitlab_discover_project"},
@@ -209,6 +214,7 @@ func TestExpectedSurface_EachSurface_NamesWhatItRegisters(t *testing.T) {
 				if slices.Contains(expected.tools, "gitlab_issue_list") {
 					t.Error("the meta surface expects an individual tool name")
 				}
+				assertServesTheStandaloneActions(t, expected)
 			},
 		},
 		{
@@ -225,6 +231,7 @@ func TestExpectedSurface_EachSurface_NamesWhatItRegisters(t *testing.T) {
 				if _, found := expected.actions["repository.file_history"]; found {
 					t.Error("the individual surface expects repository.file_history, whose tool name repository.commit_list owns")
 				}
+				assertServesTheStandaloneActions(t, expected)
 			},
 		},
 	}
@@ -409,5 +416,159 @@ func TestStandaloneToolNames_AreTheOnesRegisteredOutsideTheCatalog(t *testing.T)
 	}
 	if !slices.IsSorted(names) {
 		t.Errorf("the standalone names are not sorted: %v", names)
+	}
+}
+
+// standaloneActionIDs are the five standalone utilities the binary registers,
+// sorted.
+var standaloneActionIDs = []ActionID{
+	"discover_project.resolve",
+	"interactive.issue_create",
+	"interactive.mr_create",
+	"interactive.project_create",
+	"interactive.release_create",
+}
+
+// assertServesTheStandaloneActions checks that a meta or individual
+// expectation serves every standalone utility, which neither catalog names and
+// both surfaces register.
+func assertServesTheStandaloneActions(t *testing.T, expected surfaceExpectation) {
+	t.Helper()
+	for _, id := range standaloneActionIDs {
+		if _, found := expected.actions[id]; !found {
+			t.Errorf("the expectation does not serve %s, which the surface registers as a tool of its own", id)
+		}
+	}
+}
+
+// TestStandaloneActions_FollowTheVisibilityPass replays, one configuration at a
+// time, what the binary's visibility pass leaves of the standalone tools on
+// the meta and individual surfaces.
+//
+// The group name is the case worth reading: the dynamic surface removes the
+// guided flows for gitlab_interactive, and these two surfaces remove nothing
+// for it, since the pass there matches registered names exactly. The harness
+// follows the binary, so a session excluding the group still serves the flows
+// here, which is the behavior issue 911 tracks rather than one this corrects.
+func TestStandaloneActions_FollowTheVisibilityPass(t *testing.T) {
+	made := freeProjection(t)
+	everything := standaloneActionIDs
+
+	cases := []struct {
+		name      string
+		serverCfg config.ServerConfig
+		want      []ActionID
+	}{
+		{name: "default", serverCfg: config.ServerConfig{}, want: everything},
+		{name: "safe mode previews and removes nothing", serverCfg: config.ServerConfig{SafeMode: true}, want: everything},
+		{
+			name: "read-only keeps the one that reads", serverCfg: config.ServerConfig{ReadOnly: true},
+			want: []ActionID{"discover_project.resolve"},
+		},
+		{
+			name: "an excluded tool name goes", serverCfg: config.ServerConfig{ExcludeTools: []string{"gitlab_interactive_mr_create"}},
+			want: []ActionID{"discover_project.resolve", "interactive.issue_create", "interactive.project_create", "interactive.release_create"},
+		},
+		{
+			name: "the group name removes nothing here", serverCfg: config.ServerConfig{ExcludeTools: []string{"gitlab_interactive"}},
+			want: everything,
+		},
+		{
+			name: "the canonical id removes nothing either", serverCfg: config.ServerConfig{ExcludeTools: []string{"interactive.mr_create"}},
+			want: everything,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := slices.Sorted(maps.Keys(standaloneActions(made, &testCase.serverCfg)))
+			if !slices.Equal(got, testCase.want) {
+				t.Errorf("standaloneActions() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestExpectedSurface_AssemblerThatFails_StopsTheExpectation checks that each
+// surface's expectation is refused, naming the catalog, when the assembler it
+// is read from cannot build one, and that a surface nothing serves is refused
+// too. A session built on an empty expectation would refuse every call as not
+// served, which reads as a server that registered nothing.
+func TestExpectedSurface_AssemblerThatFails_StopsTheExpectation(t *testing.T) {
+	inst := stubInstance(t)
+	cause := errors.New("the catalog would not assemble")
+	failing := func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
+		return nil, gitlabtools.WithheldActions{}, cause
+	}
+	previousDynamic, previousMeta, previousIndividual := assembleDynamicCatalog, assembleMetaCatalog, assembleIndividualCatalog
+	t.Cleanup(func() {
+		assembleDynamicCatalog, assembleMetaCatalog, assembleIndividualCatalog = previousDynamic, previousMeta, previousIndividual
+	})
+	assembleDynamicCatalog = failing
+	assembleMetaCatalog = failing
+	assembleIndividualCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
+		return nil, nil, cause
+	}
+
+	for _, surface := range AllSurfaces() {
+		t.Run(string(surface), func(t *testing.T) {
+			serverCfg := serverConfigFor(inst, ServerConfig{Surface: surface}.normalized(), inst.credential())
+
+			_, err := expectedSurface(inst, surface, serverCfg)
+
+			if !errors.Is(err, cause) {
+				t.Fatalf("expectedSurface(%s) error = %v, want the assembler's own", surface, err)
+			}
+			if want := "assemble the " + string(surface) + " catalog"; !strings.Contains(err.Error(), want) {
+				t.Errorf("the error %q does not say %q", err, want)
+			}
+		})
+	}
+
+	t.Run("a surface nothing serves", func(t *testing.T) {
+		_, err := expectedSurface(inst, Surface("carrier pigeon"), &config.ServerConfig{})
+		if err == nil || !strings.Contains(err.Error(), "unknown tool surface") {
+			t.Errorf("expectedSurface(unknown) error = %v, want the surface refused by name", err)
+		}
+	})
+}
+
+// TestExpectedSurface_ProjectionThatCannotBeBuilt_FailsTheExpectation checks
+// that a meta or individual expectation whose standalone half cannot be read
+// is refused rather than returned without it: a session built on the rest
+// would refuse every standalone call as not served, which reads as a server
+// that forgot to register them.
+//
+// The failure is planted under a key no other test of this package builds,
+// Premium on GitLab.com, and put back when the test ends.
+func TestExpectedSurface_ProjectionThatCannotBeBuilt_FailsTheExpectation(t *testing.T) {
+	key := projectionKey{tier: edition.Premium, dotcom: true}
+	failing := &projectionEntry{err: errors.New("the projection would not build")}
+	failing.once.Do(func() {})
+	previous, hadPrevious := projections.Swap(key, failing)
+	t.Cleanup(func() {
+		if hadPrevious {
+			projections.Store(key, previous)
+			return
+		}
+		projections.Delete(key)
+	})
+
+	inst := &instance{
+		client: gitlabclient.NewUnboundClient("https://" + gitlabclient.GitLabDotComHost),
+		facts:  runtimeFacts{URL: "https://" + gitlabclient.GitLabDotComHost, Tier: edition.Premium},
+	}
+	for _, surface := range []Surface{SurfaceMeta, SurfaceIndividual} {
+		t.Run(string(surface), func(t *testing.T) {
+			serverCfg := serverConfigFor(inst, ServerConfig{Surface: surface}.normalized(), inst.credential())
+
+			_, err := expectedSurface(inst, surface, serverCfg)
+
+			if !errors.Is(err, failing.err) {
+				t.Fatalf("expectedSurface(%s) error = %v, want the projection's own", surface, err)
+			}
+			if !strings.Contains(err.Error(), "standalone") {
+				t.Errorf("the error %q does not say which half of the expectation failed", err)
+			}
+		})
 	}
 }

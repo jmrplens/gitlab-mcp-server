@@ -20,10 +20,20 @@ import "github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 const actionProjectListB6 harness.ActionID = "project.list"
 
 // actionDiscoverProjectResolve is the standalone utility that resolves a git
-// remote URL to a project. It is registered outside the base catalog, so the
-// dynamic test reaches it through [harness.ExecuteStandalone] rather than the
-// projecting verbs.
+// remote URL to a project. The meta and individual surfaces register it as a
+// tool of its own and the dynamic surface reaches it through the execute tool;
+// the projection spells all three, so the ordinary verbs reach it everywhere.
 const actionDiscoverProjectResolve harness.ActionID = "discover_project.resolve"
+
+// The four guided creation flows, the standalone utilities that elicit their
+// fields from the client. Like project discovery they are tools of their own
+// on meta and individual, and the verbs reach them on every surface.
+const (
+	actionInteractiveIssueCreate   harness.ActionID = "interactive.issue_create"
+	actionInteractiveMRCreate      harness.ActionID = "interactive.mr_create"
+	actionInteractiveProjectCreate harness.ActionID = "interactive.project_create"
+	actionInteractiveReleaseCreate harness.ActionID = "interactive.release_create"
+)
 
 // The pipeline and job waits, and the job list the wait test reads to find a
 // job to wait on. They need an instance CI runner to reach a terminal state.
