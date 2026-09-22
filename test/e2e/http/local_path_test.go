@@ -180,6 +180,15 @@ func TestLocalPath_HTTPRefusesEveryCallerSuppliedPath(t *testing.T) {
 		},
 	}
 
+	// Settle this credential's pool entry before measuring anything. Building
+	// one is itself a conversation with GitLab: the tier is resolved per entry,
+	// which reads the instance licence and, where that is refused, the plans of
+	// the namespaces the caller administers. That traffic belongs to the first
+	// call through the server rather than to the call under test, and counting
+	// it made the first subtest below report the startup requests as requests
+	// its own refusal had leaked.
+	_ = toolResultsCall(t, srv, tests[0].action, tests[0].params)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			before := len(gitlab.seen())
