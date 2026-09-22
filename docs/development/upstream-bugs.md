@@ -186,8 +186,8 @@ on the same instance, and against gitlab.com with an ordinary account:
 On gitlab.com the namespace plans carry real values for a namespace the caller
 administers, under the `can_admin_namespace || has_gitlab_subscription`
 condition in `ee/lib/ee/api/entities/namespace.rb`. On a self-managed instance
-they read `default` for everyone, because `gitlab_subscription` is a gitlab.com
-concept, so they say nothing about the instance licence there.
+they read `default` for everyone, because a namespace subscription is a
+gitlab.com concept, so they say nothing about the instance licence there.
 
 **Consequence for us**: `DetectTier` resolved Free for every non-administrator
 credential, so a caller on an Ultimate self-managed instance was served the
