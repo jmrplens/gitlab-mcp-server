@@ -2284,7 +2284,7 @@ const (
 		"or it is valid and lacks a permission this action needs, since some GitLab endpoints answer " +
 		"a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
 	rejectedTokenSemantic = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself " +
-		"as invalid, expired or revoked, so renew or replace it"
+		"as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
 )
 
 // The bodies GitLab answers a 401 with, byte for byte, read at b183f4fad4bd.
@@ -2364,11 +2364,12 @@ func graphQLAnswer(t *testing.T, root string, status int, body string) error {
 	return err
 }
 
-// gitLabAnswer is one answer GitLab gives, to a REST GET of the current user
-// or to a GraphQL query, which is where the two credential signals differ.
+// gitLabAnswer is one answer GitLab gives, to a REST GET or to a GraphQL
+// query, which is where the two credential signals differ.
 type gitLabAnswer struct {
 	graphQL bool
 	root    string // the relative URL root the instance is served under
+	path    string // the REST path read, the current user when empty
 	status  int
 	body    string
 }
@@ -2379,7 +2380,11 @@ func (a gitLabAnswer) err(t *testing.T) error {
 	if a.graphQL {
 		return graphQLAnswer(t, a.root, a.status, a.body)
 	}
-	_, err := restAnswer(t, http.MethodGet, "user", a.status, a.body)
+	path := a.path
+	if path == "" {
+		path = "user"
+	}
+	_, err := restAnswer(t, http.MethodGet, path, a.status, a.body)
 	return err
 }
 
@@ -2404,9 +2409,13 @@ func requestLineRefusal(response *http.Response) error {
 // docs/development/upstream-bugs.md lists, for a valid credential refused a
 // permission. Only the first carries a signal, so every other answer has to
 // keep the sentence that names both: Grape's refusal body, which is also what
-// a token GitLab has no record of gets; the API guard's other codes; no body;
-// a body that is not JSON or is not an object. The last two rows are the
-// guards around the request line.
+// a token GitLab has no record of gets, and what a request carrying no token
+// gets; a JSON object whose code is not invalid_token, both the default code
+// the guard's MissingTokenError branch would render (nothing in GitLab raises
+// that error) and another code it does write; no body; a body that is not JSON
+// or is not an object; and a REST route whose last path parameter decodes to
+// api/graphql, which is not the GraphQL endpoint however its decoded path
+// reads. The last two rows are the guards around the request line.
 func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *testing.T) {
 	refused := func(body string) gitLabAnswer {
 		return gitLabAnswer{status: http.StatusUnauthorized, body: body}
@@ -2418,10 +2427,18 @@ func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *
 	}{
 		{name: "no body", answer: refused("")},
 		{name: "Grape's refusal", answer: refused(permissionRefusalBody)},
-		{name: "a missing token", answer: refused(`{"error":"unauthorized"}`)},
+		{name: "the guard's default code, which nothing raises", answer: refused(`{"error":"unauthorized"}`)},
 		{name: "another API guard code", answer: refused(`{"error":"dpop_error","error_description":"DPoP validation error"}`)},
 		{name: "a body that is not JSON", answer: refused("<html><body>401 Authorization Required</body></html>")},
 		{name: "a JSON array", answer: refused(`["invalid_token"]`)},
+		{
+			name: "a REST path parameter that decodes to api/graphql",
+			answer: gitLabAnswer{
+				path:   "projects/1/repository/files/api%2Fgraphql",
+				status: http.StatusUnauthorized,
+				body:   permissionRefusalBody,
+			},
+		},
 		{
 			name:  "a response with no request",
 			built: requestLineRefusal(&http.Response{StatusCode: http.StatusUnauthorized}),
@@ -2462,6 +2479,12 @@ func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *
 // that answer as *gl.GraphQLResponseError, which does not unwrap to the
 // response, and until the classifier looked through it every GraphQL refusal
 // was reported as an unexpected error.
+//
+// A token without the api or read_api scope is one of those checks: the
+// GraphQL endpoint looks the user up with those scopes and answers a token
+// carrying neither with the same "Invalid token" body, where REST answers it
+// 403 insufficient_scope. Its row holds the verdict to naming the scope, so
+// the two surfaces keep describing that cause the same way.
 func TestClassifyError_CredentialRejected_NamesTheTokenAlone(t *testing.T) {
 	rest := func(body string) gitLabAnswer {
 		return gitLabAnswer{status: http.StatusUnauthorized, body: body}
@@ -2473,6 +2496,7 @@ func TestClassifyError_CredentialRejected_NamesTheTokenAlone(t *testing.T) {
 		name    string
 		answer  gitLabAnswer
 		wrapped bool
+		names   string // a cause the verdict must name for this answer
 	}{
 		{name: "an expired token", answer: rest(expiredTokenBody)},
 		{name: "a revoked token", answer: rest(revokedTokenBody)},
@@ -2481,6 +2505,11 @@ func TestClassifyError_CredentialRejected_NamesTheTokenAlone(t *testing.T) {
 		{name: "GraphQL under a relative URL root", answer: graphQL("/gitlab", graphQLInvalidTokenBody)},
 		{name: "GraphQL with no body", answer: graphQL("", "")},
 		{name: "GraphQL wrapped by a handler", answer: graphQL("", graphQLInvalidTokenBody), wrapped: true},
+		{
+			name:   "GraphQL, a token without the api or read_api scope",
+			answer: graphQL("", graphQLInvalidTokenBody),
+			names:  "without the api or read_api scope",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2494,6 +2523,9 @@ func TestClassifyError_CredentialRejected_NamesTheTokenAlone(t *testing.T) {
 			}
 			if strings.Contains(got, "permission") {
 				t.Errorf("ClassifyError() = %q, must not offer a permission refusal GitLab has ruled out", got)
+			}
+			if !strings.Contains(got, tt.names) {
+				t.Errorf("ClassifyError() = %q, want it to name %q", got, tt.names)
 			}
 		})
 	}

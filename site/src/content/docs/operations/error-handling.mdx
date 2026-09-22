@@ -54,7 +54,7 @@ The server uses five error handling helpers, chosen based on the operation type:
     **Read-only operations** — Used for `list`, `get`, and `search` operations. Classifies the error and wraps it with the operation name:
 
     ```text
-    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
+    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it
     ```
 
   </TabItem>
@@ -170,11 +170,11 @@ The server classifies errors as **transient** (retryable) or **permanent**:
 ### Invalid token
 
 ```text
-❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
+❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
 ```
 
-GitLab says so explicitly for an expired, revoked or impersonation-disabled token, and for any 401 from its GraphQL endpoint, which is when the message names the token alone.
+GitLab says so explicitly for an expired, revoked or impersonation-disabled token, and for any 401 from its GraphQL endpoint, a token without the `api` or `read_api` scope included. Those are the cases where the message names the token alone.
 
 ### Permission refused with 401
 

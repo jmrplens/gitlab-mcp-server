@@ -232,10 +232,13 @@ func ClassifyError(err error) string {
 //
 // errors.As alone is not enough, because client-go hands back a GraphQL call
 // GitLab refused as *gl.GraphQLResponseError, which keeps the response in its
-// Err field and has no Unwrap method. GitLab answers every GraphQL refusal with
-// a JSON body, and a JSON body is exactly when client-go builds that type, so
-// every one of them was classified as an unexpected error rather than by the
-// status GitLab answered with.
+// Err field and has no Unwrap method. client-go builds that type when the body
+// decodes into its GenericGraphQLErrors, which a JSON object and the literal
+// null do. GitLab answers every GraphQL refusal with a JSON object, so every
+// one of them was classified as an unexpected error rather than by the status
+// GitLab answered with. Any other body, an empty one included, reaches this
+// function as a *gl.ErrorResponse wrapped by fmt.Errorf, which errors.As
+// already finds.
 func gitLabResponseOf(err error) (*gl.ErrorResponse, bool) {
 	if glErr, ok := errors.AsType[*gl.ErrorResponse](err); ok {
 		return glErr, true
@@ -298,9 +301,16 @@ func tokenRejected(glErr *gl.ErrorResponse) bool {
 // permission refusal a REST 401 can be has no GraphQL counterpart to confuse
 // it with. The suffix rather than the whole path is compared because an
 // instance served under a relative URL root puts its own prefix in front.
+//
+// The path compared is the one sent, escaped, and not the decoded Path.
+// client-go escapes a path parameter, so a REST read of the repository file
+// api/graphql goes out as .../files/api%2Fgraphql, and its decoded Path ends in
+// /api/graphql like the GraphQL endpoint's does. Escaped, a %2F-encoded
+// parameter never matches, while the GraphQL request, whose Path client-go
+// rewrites without an escaped form to disagree with, still does.
 func answeredByGraphQL(glErr *gl.ErrorResponse) bool {
 	req := glErr.Response.Request
-	return req != nil && req.URL != nil && strings.HasSuffix(req.URL.Path, gl.GraphQLAPIEndpoint)
+	return req != nil && req.URL != nil && strings.HasSuffix(req.URL.EscapedPath(), gl.GraphQLAPIEndpoint)
 }
 
 // unauthorizedDescription is what a 401 means when nothing but its status is
@@ -325,8 +335,17 @@ const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) i
 // itself was the problem, which [tokenRejected] and [answeredByGraphQL] decide.
 // The token is named in the parenthesis rather than as the subject because in
 // HTTP mode the credential is the caller's header, not the variable.
+//
+// The scope is named because the GraphQL endpoint authenticates a token only
+// when it carries api or read_api, and answers one without either with the
+// same 401 "Invalid token" as an expired one (request_authenticator.rb looks
+// the user up with those scopes and treats the scope error as no user). Over
+// REST the same token is answered 403 insufficient_scope, which the 403
+// description names as a missing scope, so leaving the scope out here would
+// have the two surfaces describe one cause two ways. Replacing the token is the
+// remedy for all four causes.
 const rejectedTokenDescription = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself " +
-	"as invalid, expired or revoked, so renew or replace it"
+	"as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
 
 // httpStatusDescriptions maps HTTP status codes to semantic descriptions.
 var httpStatusDescriptions = map[int]string{

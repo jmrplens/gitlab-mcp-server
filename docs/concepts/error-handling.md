@@ -82,14 +82,14 @@ Maps HTTP status codes to actionable guidance:
 
 ### Why a 401 names two causes
 
-GitLab answers 401 for two different things. Its API guard answers it for a credential it cannot use, and at a family of REST routes Grape's `unauthorized!` answers it for a **valid** credential that lacks a permission: merging, cancelling auto-merge, approving and resetting approvals, remote mirrors, access token reads, external status checks, security settings and group SAML links. Approving a merge request you opened, on an instance that prevents approval by the author, is the common one. The upstream half is [entry 55 of the upstream bugs register](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403).
+GitLab answers 401 for two different things. Its API guard answers it for a credential it cannot use, and at a family of REST routes Grape's `unauthorized!` answers it for a **valid** credential that lacks a permission: merging, cancelling auto-merge, approving and resetting approvals, remote mirrors, access token reads and rotation, external status checks, security scans, security settings and group SAML links. Approving a merge request you opened, on an instance that prevents approval by the author, is the common one. The upstream half is [entry 55 of the upstream bugs register](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403).
 
 The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both and ends with the test that separates them: if the same token works for other calls, the 401 is a permission refusal. It opens with "unauthorized" rather than "authentication failed", because for a permission refusal authentication succeeded.
 
-`ClassifyError` has the whole response, and narrows the answer in one direction only. It describes a 401 as a rejected credential ("authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it") when:
+`ClassifyError` has the whole response, and narrows the answer in one direction only. It describes a 401 as a rejected credential ("authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it") when:
 
 - the body carries the RFC 6750 code `invalid_token`, which GitLab's REST API guard writes for an expired, revoked or impersonation-disabled token and nothing else in the REST API writes. The code is a REST signal only.
-- the GraphQL endpoint answered it. That endpoint answers 401 only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}` and no code, and refuses a field the caller may not see with a 200, so a GraphQL 401 has no permission refusal to be confused with. client-go returns such an answer as `*gl.GraphQLResponseError`, which does not unwrap to the response, so `ClassifyError` looks through it to find the status.
+- the GraphQL endpoint answered it. That endpoint answers 401 only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}` and no code, and refuses a field the caller may not see with a 200, so a GraphQL 401 has no permission refusal to be confused with. One of those checks is the scope: the endpoint authenticates a token only when it carries `api` or `read_api`, and answers one carrying neither with that same body, where REST answers it 403 `insufficient_scope`, which is why the sentence names the scope. The endpoint is recognised by the request path as sent, escaped, so a REST path parameter that decodes to `api/graphql` does not pass for it. client-go returns such an answer as `*gl.GraphQLResponseError`, which does not unwrap to the response, so `ClassifyError` looks through it to find the status.
 
 The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes. The `DetailedError` card's HTTP Status row is status-only and always carries that sentence.
 
@@ -112,7 +112,7 @@ The basic error enrichment function for **read-only** operations (list, get, sea
 
 ```go
 err := WrapErr("list_issues", originalErr)
-// Result for an expired token: "list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it: <original>"
+// Result for an expired token: "list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it: <original>"
 ```
 
 ### ExtractGitLabMessage

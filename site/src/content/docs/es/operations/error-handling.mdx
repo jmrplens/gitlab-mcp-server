@@ -54,7 +54,7 @@ El servidor usa cinco funciones de manejo de errores, elegidas según el tipo de
     Usada para operaciones `list`, `get` y `search`. Clasifica el error y lo envuelve con el nombre de la operación:
 
     ```text
-    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
+    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it
     ```
 
   </TabItem>
@@ -170,11 +170,11 @@ El servidor clasifica los errores como **transitorios** (reintentables) o **perm
 ### Token inválido
 
 ```text
-❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired or revoked, so renew or replace it
+❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
 ```
 
-GitLab lo indica de forma explícita para un token expirado, revocado o de suplantación con la suplantación desactivada, y para cualquier 401 de su endpoint GraphQL, que es cuando el mensaje nombra solo el token.
+GitLab lo indica de forma explícita para un token expirado, revocado o de suplantación con la suplantación desactivada, y para cualquier 401 de su endpoint GraphQL, incluido el de un token sin el scope `api` ni `read_api`. Son los casos en que el mensaje nombra solo el token.
 
 ### Permiso denegado con 401
 
