@@ -194,12 +194,13 @@ credential, so a caller on an Ultimate self-managed instance was served the
 Free catalogue with nothing in the listing explaining what was withheld. That
 is [issue 899](https://github.com/jmrplens/gitlab-mcp-server/issues/899).
 
-**What was contributed**: a `plan` field on the instance metadata already
-served to every authenticated caller, in its REST and GraphQL forms alike. It
-reports the licence plan, `free` where there is no licence, and nothing where
-subscriptions are held per namespace rather than per instance. Nothing
-commercial moves: the licensee, the seats, the expiry and the subscription
-identifier stay behind the administrator check on `/license`. Two issues have
+**What is proposed**: a `plan` field added to the instance metadata that is
+already served to every authenticated caller, in its REST and GraphQL forms
+alike. It would report the licence plan, `free` where there is no licence, and
+nothing where subscriptions are held per namespace rather than per instance.
+Nothing commercial would move: the licensee, the seats, the expiry and the
+subscription identifier stay behind the administrator check on `/license`.
+The merge request is open and unmerged, so none of this is served yet. Two issues have
 asked for this since 2020,
 [#247915](https://gitlab.com/gitlab-org/gitlab/-/issues/247915) and
 [#219732](https://gitlab.com/gitlab-org/gitlab/-/issues/219732), neither with a

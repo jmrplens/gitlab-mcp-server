@@ -1772,6 +1772,14 @@ func TestTimeoutConstants_AreProtectionsRatherThanZero(t *testing.T) {
 func tierCascadeServer(t *testing.T, licenseStatus int, licensePlan string, namespaces []map[string]any, enterprise bool) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Every endpoint the cascade asks is a read. Answering a write the
+		// same way would let a probe that started sending one pass unnoticed,
+		// so it is refused here and reported on the test goroutine's behalf.
+		if r.Method != http.MethodGet {
+			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		switch r.URL.Path {
 		case "/api/v4/version":
 			w.Header().Set("Content-Type", "application/json")
@@ -1883,6 +1891,132 @@ func TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence(t *testing.T) {
 	}
 	if got := client.DetectTier(context.Background()); got != edition.Free {
 		t.Errorf("DetectTier() = %v, want Free: \"default\" says nothing about the instance license", got)
+	}
+}
+
+// pagedNamespaceServer answers GET /namespaces a page at a time, refusing
+// /license so the cascade reaches the namespace step, and records how many
+// pages were asked for.
+//
+// pages[i] is what page i+1 returns; X-Next-Page is set while a later page
+// exists, which is what the client reads to continue.
+func pagedNamespaceServer(t *testing.T, pages [][]map[string]any, asked *int32) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.3.1-ee", "enterprise": true})
+		case "/api/v4/license":
+			w.WriteHeader(http.StatusForbidden)
+		case "/api/v4/namespaces":
+			page := 1
+			if raw := r.URL.Query().Get("page"); raw != "" {
+				parsed, err := strconv.Atoi(raw)
+				if err != nil {
+					t.Errorf("page parameter %q is not a number", raw)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				page = parsed
+			}
+			if page < 1 || page > len(pages) {
+				t.Errorf("asked for page %d, which this fixture does not have", page)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			atomic.AddInt32(asked, 1)
+			if page < len(pages) {
+				w.Header().Set("X-Next-Page", strconv.Itoa(page+1))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(pages[page-1])
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestDetectTier_NamespacePlan_ReadsPastTheFirstPage covers the defect one page
+// left: a caller whose only paid namespace sits past the hundredth resolved
+// Free, and nothing said so.
+func TestDetectTier_NamespacePlan_ReadsPastTheFirstPage(t *testing.T) {
+	var asked int32
+	srv := pagedNamespaceServer(t, [][]map[string]any{
+		{{"full_path": "free-a", "kind": "user", "plan": "free"}},
+		{{"full_path": "paid-group", "kind": "group", "plan": "premium"}},
+	}, &asked)
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Premium {
+		t.Errorf("DetectTier() = %v, want Premium: the paid namespace is on the second page", got)
+	}
+	if asked != 2 {
+		t.Errorf("pages read = %d, want 2", asked)
+	}
+}
+
+// TestDetectTier_NamespacePlan_StopsAtUltimate checks the early exit: no later
+// namespace can raise the answer past the highest tier there is, so the probe
+// must not keep paying for pages once it has one.
+func TestDetectTier_NamespacePlan_StopsAtUltimate(t *testing.T) {
+	var asked int32
+	srv := pagedNamespaceServer(t, [][]map[string]any{
+		{{"full_path": "top", "kind": "group", "plan": "ultimate"}},
+		{{"full_path": "never-read", "kind": "group", "plan": "premium"}},
+	}, &asked)
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Ultimate {
+		t.Errorf("DetectTier() = %v, want Ultimate", got)
+	}
+	if asked != 1 {
+		t.Errorf("pages read = %d, want 1: Ultimate is the highest answer there is", asked)
+	}
+}
+
+// TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered checks the
+// failure path mid-walk. A page that fails after an earlier one answered must
+// keep that answer: the tier found so far is a fact, and discarding it would
+// resolve lower than the caller has already been shown to hold.
+func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.3.1-ee", "enterprise": true})
+		case "/api/v4/license":
+			w.WriteHeader(http.StatusForbidden)
+		case "/api/v4/namespaces":
+			if r.URL.Query().Get("page") == "2" {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("X-Next-Page", "2")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"full_path": "paid", "kind": "group", "plan": "premium"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Premium {
+		t.Errorf("DetectTier() = %v, want Premium: the first page answered before the second failed", got)
 	}
 }
 

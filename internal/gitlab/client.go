@@ -121,14 +121,22 @@ const healthTimeout = 10 * time.Second
 // edition probes.
 const versionAPIPath = "/api/v4/version"
 
-// namespacePlanPageSize bounds the namespace listing the tier probe reads.
+// namespacePlanPageSize and namespacePlanMaxPages bound the namespace listing
+// the tier probe reads.
 //
-// It asks for one page and judges what it gets. A caller who administers more
-// namespaces than this and holds their only paid plan beyond the first page
-// resolves lower than they should, which the warning and the explicit tier
-// both answer; paging through every namespace of an account that may have
-// thousands, on every credential, to refine a tier is the wrong trade.
-const namespacePlanPageSize = 100
+// One page was not enough: a caller whose only paid namespace sat past the
+// hundredth resolved Free, and nothing said so. The probe now pages, and two
+// things keep that from becoming a cost on every credential. It stops at the
+// first Ultimate, since no later namespace can raise the answer, so the case
+// this exists for is usually settled by the first page. And it stops after
+// namespacePlanMaxPages either way, because an account may administer
+// thousands and refining a tier is not worth walking all of them; a caller
+// past that bound resolves lower than they should, which the warning and the
+// explicit tier both answer.
+const (
+	namespacePlanPageSize = 100
+	namespacePlanMaxPages = 10
+)
 
 // GitLabDotComHost is the canonical host for GitLab SaaS-only features.
 const GitLabDotComHost = "gitlab.com"
@@ -549,26 +557,55 @@ func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
 // Free with no warning; a namespace saying "default" has not, and an enterprise
 // build falls through to one. Reading both as Free would warn every GitLab.com
 // account on the free plan, on every startup, about a tier that is correct.
+//
+// **It pages**, under the two bounds namespacePlanPageSize and
+// namespacePlanMaxPages describe: reading only the first page resolved Free for
+// a caller whose paid namespace sat past the hundredth. A page that fails after
+// an earlier one answered keeps that answer rather than discarding it.
 func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 	opts := &gl.ListNamespacesOptions{}
 	opts.PerPage = namespacePlanPageSize
-	namespaces, _, err := c.inner.Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
-	if err != nil {
-		slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "error", err)
-		return edition.Free, false
-	}
+	opts.Page = 1
 
 	best, found := edition.Free, false
-	for _, ns := range namespaces {
-		if ns == nil || !namespacePlanAnswers(ns.Plan) {
-			continue
+	for page := 1; page <= namespacePlanMaxPages; page++ {
+		namespaces, resp, err := c.inner.Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
+		if err != nil {
+			// A page that fails after an earlier one answered keeps what it
+			// answered: the tier found so far is a fact, and discarding it
+			// would resolve lower than the caller has already been shown to
+			// hold.
+			slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "page", page, "error", err)
+			break
 		}
-		tier := edition.TierFromPlan(ns.Plan)
-		if !found || tier > best {
-			best, found = tier, true
-			slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
+
+		for _, ns := range namespaces {
+			if ns == nil || !namespacePlanAnswers(ns.Plan) {
+				continue
+			}
+			tier := edition.TierFromPlan(ns.Plan)
+			if !found || tier > best {
+				best, found = tier, true
+				slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
+			}
 		}
+
+		// Nothing a later page carries can raise the answer past the highest
+		// tier there is, so stop asking.
+		if best == edition.Ultimate {
+			break
+		}
+		if resp == nil || resp.NextPage <= 0 {
+			break
+		}
+		if page == namespacePlanMaxPages {
+			slog.DebugContext(ctx, "stopped reading namespaces at the page bound; a paid plan past it is not seen",
+				"pages", namespacePlanMaxPages, "per_page", namespacePlanPageSize)
+			break
+		}
+		opts.Page = resp.NextPage
 	}
+
 	if found {
 		slog.InfoContext(ctx, "detected GitLab tier from the namespace plan", "tier", best.String())
 	}
