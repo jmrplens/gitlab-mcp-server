@@ -191,10 +191,36 @@ The server maintains a **bounded LRU pool** of per-credential entries:
 - Idle sessions expire after `--session-timeout` (default: 30 minutes) under `--stateless=false`; the default stateless transport ends each POST's session with its response
 - Pooled entries are bounded by `--max-http-clients` (default: 100), which caps token+URL entries rather than sessions or concurrent requests. Under that bound eviction prefers an entry that is not serving a subscription, and takes a busy one only when every pooled entry is busy; the evicted credential is told rather than left silent
 
+### Authentication budgets
+
+Two budgets refuse a request before its credential is read, so a blocked caller costs nothing and reaches no GitLab. They ask different questions, and the difference is why only one of them escalates.
+
+| Budget | Default | What it asks | What it does |
+| ------ | ------- | ------------ | ------------ |
+| Failure lockout | 10 failures in 1 minute | How many authentications this address failed | Blocks for the rest of the window |
+| Distinct credentials | 50 in 10 minutes | How many *different* credentials it had refused | Blocks for a minute, then ten, then an hour |
+
+Ten failures in a minute is a stuck client retrying one bad token as much as it is an attack, and a minute's block is the right answer to both. Fifty distinct invalid tokens is only an attack: a person has one token and a fleet behind a NAT has one each, so a legitimate neighbor never reaches that count however badly its client misbehaves.
+
+The second budget is worth having even though the server refuses those requests cheaply either way. Every distinct credential that reaches verification is a request to GitLab from **your** deployment's address, and GitLab rate-limits failed authentication per source address, so a token sprayer is spending your standing with GitLab and the throttle it eventually applies lands on all your users.
+
+Credentials are counted as truncated SHA-256 digests and never held in the clear, and a credential the deployment is already serving is admitted from a blocked address, so one noisy client behind a shared address cannot cut off its neighbors.
+
+```bash
+# The defaults, spelled out. Set a limit to 0 to turn that budget off.
+gitlab-mcp-server --http \
+  --auth-failure-limit=10 --auth-failure-window=1m \
+  --auth-distinct-token-limit=50 --auth-distinct-token-window=10m
+```
+
+The escalation ladder is built from `--auth-failure-window`: one window, then ten, then sixty, reset after sixty of silence. It stops there rather than growing without end, because a block is a defense and not a punishment and whoever inherits the address later did nothing to earn it.
+
+With telemetry enabled, refusals are exported as `gitlab_mcp.auth.blocks`, split by which budget refused. The address is deliberately not a dimension of that metric.
+
 ### HTTP mode recommendations
 
 - Terminate TLS on a reverse proxy, or on the server itself with `--tls-cert`/`--tls-key`; when the proxy shares the machine, `--http-addr=/run/…/server.sock` removes the hop rather than encrypting it
-- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) together with `--trusted-proxies`, the addresses or CIDR ranges the proxy connects from, so the authentication-failure limiter (ten failures per address per minute, answered with `429`) charges real client addresses rather than the proxy's; the per-call rate limiter is keyed by token and needs no address. **The header is believed only on a connection from a listed address**; from any other peer it is ignored and the peer itself is charged, so a client that reaches the listener directly cannot choose the address its failures count against. One flag without the other refuses startup. For `X-Forwarded-For`, the server reads from the right, skipping hops that are themselves listed, and charges the first that is not; a hop that is not an address charges the peer.
+- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) together with `--trusted-proxies`, the addresses or CIDR ranges the proxy connects from, so both authentication budgets above charge real client addresses rather than the proxy's; the per-call rate limiter is keyed by token and needs no address. **The header is believed only on a connection from a listed address**; from any other peer it is ignored and the peer itself is charged, so a client that reaches the listener directly cannot choose the address its failures count against. One flag without the other refuses startup. For `X-Forwarded-For`, the server reads from the right, skipping hops that are themselves listed, and charges the first that is not; a hop that is not an address charges the peer.
 - Enable rate limiting at the proxy level
 - Restrict access to trusted networks
 - Monitor session metrics for unusual patterns
@@ -209,7 +235,7 @@ For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`)
 - Granted scopes are introspected from GitLab rather than assumed
 - OAuth mode is **Bearer-only**: `PRIVATE-TOKEN` is rejected with `401`. Clients without OAuth support send a personal access token as `Authorization: Bearer <glpat-...>`, which is verified the same way
 - Admission asks only for `read_api`, the least any action needs; whether a call may write is settled per action, against the surface built for that token. A `read_api` token is therefore accepted by a deployment that can write, and is served the read-only tool surface — the only credential refused at the door is one carrying no GitLab API scope at all. The challenge and `scopes_supported` name the one scope that buys the full surface (`api`, or `read_api` under `--read-only` / `--safe-mode`), never both: a client asks GitLab for every scope listed, and GitLab refuses a request naming a scope the OAuth application does not have. A client that wants a credential which cannot mutate anything names `read_api` itself
-- Rejections are cheap and bounded: ten authentication failures from one address in a minute earn a `429`, and a token GitLab has already refused is refused from memory for five minutes rather than asked about again. Neither an outage nor a `429` from GitLab is ever cached — those say nothing about the credential
+- Rejections are cheap and bounded by the two budgets above, and a token GitLab has already refused is refused from memory for five minutes rather than asked about again. Neither an outage nor a `429` from GitLab is ever cached, since those say nothing about the credential
 - A throttled or unreachable GitLab answers `503` with `Retry-After` and **no** challenge, not `401`. Reporting it as an invalid token would make a well-behaved client discard a good credential and start a fresh authorization flow, adding upstream load exactly when the instance asked for less
 
 See [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full configuration details.

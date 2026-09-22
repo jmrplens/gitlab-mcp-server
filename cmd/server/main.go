@@ -560,6 +560,17 @@ FLAGS
   -rate-limit-rps float     Per-credential rate limit on every call that reaches GitLab, plus tools/list on
                             a bucket of its own refilled a tenth as fast (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
+  -auth-failure-limit int   Failed authentications one address may produce inside -auth-failure-window
+                            before it is blocked for the rest of it (default %d; 0 disables this budget)
+  -auth-failure-window dur  Window the failure budget counts in, and the step the distinct-credential
+                            escalation below is built from: one window, then ten, then sixty (default %s)
+  -auth-distinct-token-limit int
+                            Distinct credentials one address may have refused inside
+                            -auth-distinct-token-window before it is blocked, for longer each time
+                            (default %d; 0 disables this budget). A person has one token and a fleet
+                            behind a NAT has one each, so only a spray produces this count
+  -auth-distinct-token-window dur
+                            Window the distinct-credential budget counts in (default %s)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP); requires -trusted-proxies
   -trusted-proxies str      Addresses or CIDR ranges of the proxies that header is believed from (e.g. 127.0.0.1,10.0.0.0/8)
@@ -701,6 +712,8 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
 		config.DefaultMaxHTTPClients, config.DefaultPoolIdleTimeout,
 		config.DefaultRateLimitBurst,
+		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
+		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
 		config.DefaultGitLabURL)
 }
 
