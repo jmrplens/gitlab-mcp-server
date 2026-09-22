@@ -79,12 +79,41 @@ field away the whole time.
 
 ## What the MCP specification and the SDK allow
 
-The constraint the issue names is real and is the reason a policy module cannot
-simply refuse everywhere:
+Read on 2026-09-22 against revision 2026-07-28, and it settles more than expected.
 
-- **A `tools/list` result carries no error flag.** A caller over its allowance
-  cannot be told so through the listing; the only channels are a smaller listing
-  or a transport-level refusal.
+**Rate limiting is normative.** The Tools page's security considerations say
+servers **MUST** "Rate limit tool invocations", alongside validating inputs,
+implementing access controls and sanitising outputs
+([Tools](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)).
+So a policy here is required rather than merely allowed. What the specification
+does not say is how: **no page of it mentions `429`, `Retry-After` or backoff at
+all**, and the authorization page's error table lists only `401`, `403` and `400`
+([Authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)).
+The transport pages say nothing either. That is not an oversight to work around;
+it means the shape of a refusal is left to HTTP, and the deployment is free to
+use `429` with `Retry-After` as it already does.
+
+**A smaller listing is not an available channel, and that is a rule rather than a
+limitation of the SDK.** The same Tools page requires that the tool set "**MUST
+NOT** vary per-connection or as a side effect of other requests on the
+connection", while permitting it to "vary by the authorization presented on the
+request, for example, returning only the tools the caller's granted scopes
+permit, since credentials are per-request input, not connection state."
+
+So the read-only narrowing this server already does is expressly allowed, because
+its cause is the authorization. **Shrinking a listing because a caller has spent
+its allowance is expressly forbidden**, because the cause is other requests on
+the connection. A policy module must not offer that as an option, and an earlier
+draft of this document listed it as one.
+
+- **A `tools/call` refusal has a channel the listing does not.** A tool execution
+  error (`isError: true`) carries actionable text, and clients **SHOULD** give
+  those to the model so it can self-correct, where protocol errors are described
+  as "less likely to result in successful recovery". A refusal a model should
+  react to belongs there rather than in a JSON-RPC error.
+- **A `tools/list` result carries no error flag**, and per the rule above it must
+  not be narrowed to express one either, which leaves the transport-level refusal
+  as the only way to answer a listing the caller may not have.
 - **A closed stateful session carries nothing at all.** ADR-0015 records that
   ending a watch has to be expressed by cancelling the handler's context so the
   SDK emits the result, because `SubscriptionsListenResult` cannot be constructed
@@ -93,9 +122,11 @@ simply refuse everywhere:
   the HTTP gate and GitLab itself use.
 
 A policy module therefore decides, and the layers keep enforcing, which is what
-the issue already proposed. This specification adds only that the decision has to
-be expressible in the channels above: a policy that can only be applied by closing
-a session is a policy this server cannot state to a client.
+the issue already proposed. This specification adds two constraints on what it may
+decide: the decision has to be expressible in the channels above, so a policy that
+can only be applied by closing a session is one this server cannot state to a
+client; and it may never be expressed by narrowing a listing, because the
+specification reserves that for the authorization presented on the request.
 
 ## What this repository already decided
 
