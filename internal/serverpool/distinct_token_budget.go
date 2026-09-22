@@ -123,6 +123,10 @@ func (b *DistinctTokenBudget) resetAfter() time.Duration {
 // The return value exists for the caller's telemetry: a block is an event
 // worth counting once, and counting it on every later refusal from the same
 // address would report the block's length rather than its occurrence.
+//
+// A charge that arrives while the address is already blocked is ignored and
+// returns false, which is the same answer the caller's own check would have
+// given it a moment earlier.
 func (b *DistinctTokenBudget) Charge(address, token string) bool {
 	if b == nil || address == "" || token == "" {
 		return false
@@ -137,6 +141,18 @@ func (b *DistinctTokenBudget) Charge(address, token string) bool {
 
 	now := time.Now()
 	rec, ok := b.addresses[address]
+	if ok && now.Before(rec.blockedUntil) {
+		// Already blocked, so this charge costs nothing. Both callers check
+		// [DistinctTokenBudget.Blocked] before they authenticate, but that
+		// check and this charge are separate critical sections: a burst that
+		// passes the check together, before any of it has failed, arrives here
+		// afterwards and would otherwise be counted. Each limit reached raises
+		// the next rung, so 3*limit concurrent refusals could climb the whole
+		// ladder to the hour without the sender ever having been told it was
+		// blocked once. The ladder is meant to answer persistence after a
+		// block, which only a charge that arrives while none is on can be.
+		return false
+	}
 	switch {
 	case !ok:
 		if !b.roomForNewKeyLocked(now) {

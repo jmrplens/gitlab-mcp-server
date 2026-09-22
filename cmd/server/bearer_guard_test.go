@@ -1045,7 +1045,7 @@ func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached(t 
 func newProxiedGuard(verify auth.TokenVerifier) *bearerGuard {
 	g := newTestGuard(verify)
 	g.limiter = serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
-	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
 	g.trustedProxyHeader = "X-Forwarded-For"
 	g.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
 	return g
@@ -1151,7 +1151,7 @@ func TestBearerGuard_BlockedByTheFleetBudget_NamesTheTransportSource(t *testing.
 	g := newProxiedGuard(okVerifier(oauth.ScopeAPI))
 	// A tiny fleet budget, so the lockout is reached without five hundred
 	// requests. The accounting under test is which address the line names.
-	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow))
+	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow), authFailureWindow)
 
 	g.check(proxiedRequest(t, "198.51.100.1", ""))
 	failure := g.check(proxiedRequest(t, "198.51.100.2", ""))

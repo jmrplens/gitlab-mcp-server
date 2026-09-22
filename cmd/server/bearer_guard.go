@@ -28,7 +28,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 )
@@ -507,16 +506,12 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 // consulting the same three budgets in the same order, and the two must agree:
 // a caller refused here and one refused there was refused by the same rule.
 func (g *bearerGuard) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
-	if g.limiter != nil && g.limiter.IsBlocked(key) {
-		return true, g.failureWindow, mcpotel.AuthBlockFailureLockout
-	}
-	if g.sourceBudget.blocked(source) {
-		return true, g.failureWindow, mcpotel.AuthBlockTransportSource
-	}
-	if sprayed, remaining := g.spray.Blocked(key); sprayed {
-		return true, remaining, mcpotel.AuthBlockDistinctTokens
-	}
-	return false, 0, ""
+	sprayed, sprayFor := g.spray.Blocked(key)
+	return longestAuthBlock(
+		g.limiter != nil && g.limiter.IsBlocked(key), g.failureWindow,
+		g.sourceBudget.blocked(source), g.sourceBudget.window(),
+		sprayed, sprayFor,
+	)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value

@@ -355,7 +355,7 @@ The [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750) error code in `WWW
 | GitLab rejected the token                                                      | `401`  | `error="invalid_token"` with a description                             |
 | Token lacks the required scope                                                 | `403`  | `error="insufficient_scope"`, `scope="<required>"`                     |
 | Token from an application the deployment does not admit (`--oauth-client-uid`) | `401`  | `error="invalid_token"`, `error_uri` naming the resource documentation |
-| Address over the failure budget                                                | `429`  | none; `Retry-After`                                                    |
+| Address over either authentication budget (failures, or distinct credentials)  | `429`  | none; `Retry-After` carrying the longest active block                  |
 | GitLab throttled or unreachable                                                | `503`  | **none**; `Retry-After`                                                |
 
 The last row matters more than it looks. Reporting a throttled GitLab as `invalid_token` makes a well-behaved MCP client discard a good credential and start a fresh authorization flow — generating more upstream traffic at exactly the moment the instance asked for less, and asking the user to re-approve an application that was never the problem. A `503` carries no challenge, propagates GitLab's own `Retry-After` when it sent one, and says plainly that the token has not been rejected.

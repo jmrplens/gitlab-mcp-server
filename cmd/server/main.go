@@ -664,6 +664,16 @@ ENVIRONMENT VARIABLES (HTTP mode)
   GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
                                     Token re-validation interval (default 15m; 0 stops the periodic
                                     check, an entry older than 1h is still rebuilt)
+  GITLAB_MCP_AUTH_FAILURE_LIMIT     Failed authentications one address may produce inside the failure
+                                    window before it is blocked (default %d; 0 disables this budget)
+  GITLAB_MCP_AUTH_FAILURE_WINDOW    Window the failure budget counts in, and the step the
+                                    distinct-credential escalation is built from (default %s)
+  GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT
+                                    Distinct credentials one address may have refused inside the
+                                    distinct-credential window before it is blocked, for longer each
+                                    time (default %d; 0 disables this budget)
+  GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW
+                                    Window the distinct-credential budget counts in (default %s)
 
 JSON CONFIGURATION EXAMPLES
 
@@ -714,7 +724,12 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultRateLimitBurst,
 		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
 		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
-		config.DefaultGitLabURL)
+		config.DefaultGitLabURL,
+		// The ENVIRONMENT block names the same four budgets again, because a
+		// reader who arrived at a variable rather than at its flag is owed the
+		// default there too.
+		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
+		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow)
 }
 
 // run starts the MCP server with OS signal handling for graceful shutdown.
@@ -3603,7 +3618,7 @@ func transportFailureBudget(cfg *config.Config) *transportBudget {
 		// lapse instantly.
 		window = config.DefaultAuthFailureWindow
 	}
-	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, window))
+	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, window), window)
 }
 
 // applyLocalFilesystemPolicy settles whether tool handlers may name paths on

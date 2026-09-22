@@ -143,6 +143,49 @@ func TestDistinctTokenBudget_EscalationLengthensThenSaturates(t *testing.T) {
 	}
 }
 
+// TestDistinctTokenBudget_ChargesWhileBlocked_DoNotClimbTheLadder covers the
+// race between the caller's own Blocked check and this charge, which are two
+// critical sections with a request's authentication in between.
+//
+// A burst that passes the check together, before any of it has failed, arrives
+// here afterwards. Counting it would let 3*limit concurrent refusals reach the
+// second and third rungs while the first block is still on, so a single burst
+// would earn the hour without the sender ever having been told it was blocked
+// once. The ladder answers persistence after a block, and a charge that lands
+// during one is not that.
+func TestDistinctTokenBudget_ChargesWhileBlocked_DoNotClimbTheLadder(t *testing.T) {
+	const step = time.Minute
+	b := NewDistinctTokenBudget(2, time.Minute, step)
+	const address = "10.0.0.9"
+
+	// The first two distinct tokens raise the first block.
+	b.Charge(address, "glpat-a")
+	b.Charge(address, "glpat-b")
+	blocked, first := b.Blocked(address)
+	if !blocked {
+		t.Fatal("the address was not blocked by the first pair")
+	}
+	if first > step || first < step-time.Second {
+		t.Fatalf("first block = %v, want about %v", first, step)
+	}
+
+	// Four more distinct tokens arrive while that block is on, which is twice
+	// what the limit asks for and would be two more rungs if they counted.
+	for _, token := range []string{"glpat-c", "glpat-d", "glpat-e", "glpat-f"} {
+		if raised := b.Charge(address, token); raised {
+			t.Errorf("Charge(%q) reported a new block while one was already on", token)
+		}
+	}
+
+	blocked, remaining := b.Blocked(address)
+	if !blocked {
+		t.Fatal("the address stopped being blocked while charges were arriving")
+	}
+	if remaining > step {
+		t.Errorf("block = %v after charges made during it, want no longer than the first %v", remaining, step)
+	}
+}
+
 // TestDistinctTokenBudget_SilenceResetsTheLadder checks the other end of the
 // escalation: an address that stops is forgiven, so today's block does not
 // make tomorrow's longer for a client that had one bad afternoon.
