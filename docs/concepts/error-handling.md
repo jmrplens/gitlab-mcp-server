@@ -43,7 +43,7 @@ type DetailedError struct {
 Created via `NewDetailedError(domain, action, err)` which automatically:
 
 - Classifies the error into a human-friendly message
-- Extracts HTTP status and X-Request-Id from GitLab API error responses, REST and GraphQL alike
+- Extracts the HTTP status from GitLab API error responses, REST and GraphQL alike, and the X-Request-Id from each one that carries its response. A 404 carries none: client-go answers every 404 with its `ErrNotFound` sentinel, which records the status alone, so the card for a 404 has the status and no request ID
 - Safely handles nil response bodies (the GitLab client can panic on `.Error()`)
 
 ## Error Classification
@@ -61,6 +61,8 @@ Inspects the error chain and returns a diagnostic message:
 | TLS/SSL              | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"                 |
 | URL error            | "network error reaching GitLab (\<op\>)"                                                                           |
 | Other                | "unexpected error"                                                                                                 |
+
+A 404 is one of those GitLab responses although client-go hands it back without the response: it answers every 404 with its `ErrNotFound` sentinel, over REST as it is and over GraphQL wrapped in the query error, and the sentinel records the status alone. `ClassifyError` reads the status off the error when it carries no response, so a 404 on either surface is described as not found rather than as an unexpected error.
 
 ### ClassifyHTTPStatus
 

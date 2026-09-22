@@ -2394,9 +2394,9 @@ func (a gitLabAnswer) err(t *testing.T) error {
 }
 
 // requestLineRefusal builds the refusal client-go would build for Grape's
-// body, with the request line cut short by the given response: the guards
-// around the request line are for a hand-built error, since client-go always
-// fills it.
+// body, with the request line cut short by the given response, or missing
+// altogether when response is nil: the guards around the request line are for
+// a hand-built error, since client-go always fills it.
 func requestLineRefusal(response *http.Response) error {
 	return &gl.ErrorResponse{
 		StatusCode: http.StatusUnauthorized,
@@ -2420,7 +2420,9 @@ func requestLineRefusal(response *http.Response) error {
 // that error) and another code it does write; no body; a body that is not JSON
 // or is not an object; and a REST route whose last path parameter decodes to
 // api/graphql, which is not the GraphQL endpoint however its decoded path
-// reads. The last two rows are the guards around the request line.
+// reads. The last three rows are the guards around the request line and the
+// response it hangs from: client-go builds no 401 without a response, so only
+// an error built by hand reaches them.
 func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *testing.T) {
 	refused := func(body string) gitLabAnswer {
 		return gitLabAnswer{status: http.StatusUnauthorized, body: body}
@@ -2443,6 +2445,10 @@ func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *
 				status: http.StatusUnauthorized,
 				body:   permissionRefusalBody,
 			},
+		},
+		{
+			name:  "an error with no response",
+			built: requestLineRefusal(nil),
 		},
 		{
 			name:  "a response with no request",
@@ -2696,5 +2702,83 @@ func TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus(t *testing.T
 				t.Errorf("Markdown() = %q, want the row %q", md, row)
 			}
 		})
+	}
+}
+
+// TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel verifies that
+// a 404 is described by its status over both surfaces, and that its error card
+// carries that status.
+//
+// client-go answers every 404 with its ErrNotFound sentinel, one value shared
+// by every call, which records the status and no response: over REST it is
+// returned as it is, and over GraphQL wrapped by fmt.Errorf, since the sentinel
+// has no body for GraphQL.Do to decode. The classifier read the status off the
+// response alone, so every 404 either surface answered was described as an
+// unexpected error and its card had no HTTP Status row. The server answers
+// with a request ID, and the card is held to carrying none, because the
+// sentinel carries no response to read it from and any value there would be
+// one the card could not know.
+func TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel(t *testing.T) {
+	const operation = "get_issue"
+	notFound := ClassifyHTTPStatus(http.StatusNotFound)
+	tests := []struct {
+		name   string
+		answer gitLabAnswer
+		cause  string // what client-go's error reads, which the wrapping ends with
+	}{
+		{
+			name:   "REST",
+			answer: gitLabAnswer{path: "projects/1/issues/1", status: http.StatusNotFound, body: `{"message":"404 Not found"}`},
+			cause:  "404 Not Found",
+		},
+		{
+			name:   "GraphQL",
+			answer: gitLabAnswer{graphQL: true, status: http.StatusNotFound, body: `{"errors":[{"message":"Not found"}]}`},
+			cause:  "failed to execute GraphQL query: 404 Not Found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.answer.err(t)
+			if !errors.Is(err, gl.ErrNotFound) {
+				t.Fatalf("client-go answered %v, want its ErrNotFound sentinel", err)
+			}
+			if got := ClassifyError(err); got != notFound {
+				t.Errorf("ClassifyError() = %q, want %q", got, notFound)
+			}
+			if got, want := WrapErr(operation, err).Error(), operation+": "+notFound+": "+tt.cause; got != want {
+				t.Errorf("WrapErr() = %q, want %q", got, want)
+			}
+			de := NewDetailedError("issues", "get", err)
+			if de.GitLabStatus != http.StatusNotFound {
+				t.Errorf("GitLabStatus = %d, want %d", de.GitLabStatus, http.StatusNotFound)
+			}
+			if de.RequestID != "" {
+				t.Errorf("RequestID = %q, want none, since the sentinel carries no response", de.RequestID)
+			}
+			if row := "- **HTTP Status**: 404 (" + notFound + ")\n"; !strings.Contains(de.Markdown(), row) {
+				t.Errorf("Markdown() = %q, want the row %q", de.Markdown(), row)
+			}
+		})
+	}
+}
+
+// TestClassifyError_ErrorResponseRecordingNoStatus_IsNotAnAnswer verifies that
+// a *gl.ErrorResponse recording neither a response nor a status is not
+// described as a status GitLab answered with: there is no status to describe,
+// so it is classified like any other error GitLab did not answer, and its card
+// carries no HTTP Status row. client-go builds no such value; the row holds
+// the zero test in front of the status description to what it is for.
+func TestClassifyError_ErrorResponseRecordingNoStatus_IsNotAnAnswer(t *testing.T) {
+	err := &gl.ErrorResponse{Message: "Project Not Found"}
+	if got := ClassifyError(err); got != msgUnexpectedErr {
+		t.Errorf("ClassifyError() = %q, want %q", got, msgUnexpectedErr)
+	}
+	de := NewDetailedError("projects", "get", err)
+	if de.GitLabStatus != 0 {
+		t.Errorf("GitLabStatus = %d, want 0", de.GitLabStatus)
+	}
+	if md := de.Markdown(); strings.Contains(md, "HTTP Status") {
+		t.Errorf("Markdown() = %q, want no HTTP Status row", md)
 	}
 }
