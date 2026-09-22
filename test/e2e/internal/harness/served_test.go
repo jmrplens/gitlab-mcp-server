@@ -473,9 +473,11 @@ var standaloneActionIDs = []ActionID{
 func assertServesTheStandaloneActions(t *testing.T, expected surfaceExpectation) {
 	t.Helper()
 	for _, id := range standaloneActionIDs {
-		if _, found := expected.actions[id]; !found {
-			t.Errorf("the expectation does not serve %s, which the surface registers as a tool of its own", id)
-		}
+		t.Run(string(id), func(t *testing.T) {
+			if _, found := expected.actions[id]; !found {
+				t.Errorf("the expectation does not serve %s, which the surface registers as a tool of its own", id)
+			}
+		})
 	}
 }
 
