@@ -91,6 +91,18 @@ func applyOverlayNumbers(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	if o.RateLimitBurst != nil && !hcfg.setFlags["rate-limit-burst"] {
 		hcfg.rateLimitBurst = *o.RateLimitBurst
 	}
+	if o.AuthFailureLimit != nil && !hcfg.setFlags["auth-failure-limit"] {
+		hcfg.authFailureLimit = *o.AuthFailureLimit
+	}
+	if o.AuthFailureWindow != nil && !hcfg.setFlags["auth-failure-window"] {
+		hcfg.authFailureWindow = *o.AuthFailureWindow
+	}
+	if o.AuthDistinctTokenLimit != nil && !hcfg.setFlags["auth-distinct-token-limit"] {
+		hcfg.authDistinctLimit = *o.AuthDistinctTokenLimit
+	}
+	if o.AuthDistinctWindow != nil && !hcfg.setFlags["auth-distinct-token-window"] {
+		hcfg.authDistinctWindow = *o.AuthDistinctWindow
+	}
 }
 
 func applyOverlayDurations(hcfg *httpConfig, o *config.HTTPEnvOverlay) {

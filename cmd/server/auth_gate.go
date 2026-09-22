@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -254,7 +255,16 @@ type mcpServerGate struct {
 	// without a trusted header the two keys are the same string and one
 	// budget is the whole story. Its limiter is shared with [bearerGuard],
 	// like limiter.
-	sourceBudget       *transportBudget
+	sourceBudget *transportBudget
+	// spray is the slow budget: distinct credentials refused per address over
+	// a longer window, answered with a block that lengthens each time. Shared
+	// with [bearerGuard] for the same reason limiter is, so a sprayer cannot
+	// earn a fresh allowance by moving between the two layers. Nil when the
+	// deployment turns it off, and every method tolerates that.
+	spray *serverpool.DistinctTokenBudget
+	// blocks counts the refusals each budget produced, for telemetry. Shared
+	// with [bearerGuard], since the two layers share the budgets themselves.
+	blocks             *authBlockCounters
 	trustedProxyHeader string
 	// trustedProxies are the peers trustedProxyHeader is believed from; from
 	// anybody else the header is ignored and the peer is charged.
@@ -464,23 +474,27 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
 
-	if g.blockedByBudget(ip, source) && !g.credentialAlreadyAdmitted(r) {
+	if blocked, retryAfter, reason := g.blockedByBudget(ip, source); blocked && !g.credentialAlreadyAdmitted(r) {
+		g.blocks.record(reason)
 		// Named apart from the bearer guard's line: the throttle keys on the
 		// message, and one gate's window must not swallow the other's first
 		// report. The source is what spent the budget; behind a proxy the ip
 		// is often whoever arrived next.
-		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures (legacy auth mode)", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
+		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures (legacy auth mode)", "ip", ip, "source", source, "budget", reason) //#nosec G706 -- slog structured args are not interpolated
 		return nil, &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
 			message: "Too many failed authentication attempts from this address. Retry later with a valid token.",
-			header:  newHeader("Retry-After", strconv.Itoa(int(authFailureWindow.Seconds()))),
+			header:  newHeader("Retry-After", strconv.Itoa(retryAfterSeconds(retryAfter))),
 		}
 	}
 
 	token := g.extractCredential(r)
 	if token == "" {
-		g.chargeFailure(ip, source)
+		// No credential to count as distinct, and chargeFailure is given the
+		// empty one deliberately: a client that forgot its header must not
+		// move the escalation ladder.
+		g.chargeFailure(ip, source, token)
 		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
@@ -551,7 +565,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 		// failure in the full sense: 401, and it does count against the
 		// limiter — this is the path that stops a stream of invented tokens
 		// from churning the pool.
-		g.chargeFailure(ip, source)
+		g.chargeFailure(ip, source, token)
 		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
@@ -617,21 +631,42 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 	return g.pool.Admitted(token, options.GitLabURL)
 }
 
-// blockedByBudget reports whether either budget is exhausted: the caller's
-// key, or the transport source it arrived from.
-func (g *mcpServerGate) blockedByBudget(key, source string) bool {
+// blockedByBudget reports whether any budget is exhausted: the caller's key,
+// the transport source it arrived from, or the distinct credentials that key
+// has had refused. The duration is what Retry-After should say.
+//
+// It is a duration rather than a bare bool because the escalating budget's
+// block outlasts the window the other two are bounded by, and a 429 that
+// announces the short one is telling the caller to come back while it is still
+// refused. A well-behaved client then knocks for the rest of the block.
+// The reason is what telemetry records the refusal under, and is the only
+// thing recorded about it: an address is who was refused, which a counter must
+// not carry.
+func (g *mcpServerGate) blockedByBudget(key, source string) (bool, time.Duration, string) {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
-		return true
+		return true, authFailureWindow, mcpotel.AuthBlockFailureLockout
 	}
-	return g.sourceBudget.blocked(source)
+	if g.sourceBudget.blocked(source) {
+		return true, authFailureWindow, mcpotel.AuthBlockTransportSource
+	}
+	if blocked, remaining := g.spray.Blocked(key); blocked {
+		return true, remaining, mcpotel.AuthBlockDistinctTokens
+	}
+	return false, 0, ""
 }
 
-// chargeFailure charges one authentication failure to both budgets.
-func (g *mcpServerGate) chargeFailure(key, source string) {
+// chargeFailure charges one authentication failure to every budget.
+//
+// token is the credential that was refused, and is empty for a request that
+// carried none. The distinct-token budget ignores an empty one, so a client
+// that simply forgot its header never moves that ladder: only a credential
+// GitLab refused does, which is the thing a sprayer cannot avoid producing.
+func (g *mcpServerGate) chargeFailure(key, source, token string) {
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
 	g.sourceBudget.charge(source, key)
+	g.spray.Charge(key, token)
 }
 
 // transportBudget is the secondary authentication budget of

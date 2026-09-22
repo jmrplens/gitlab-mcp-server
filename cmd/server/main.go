@@ -178,6 +178,10 @@ type httpConfig struct {
 	trustedOrigins        string
 	rateLimitRPS          float64
 	rateLimitBurst        int
+	authFailureLimit      int
+	authFailureWindow     time.Duration
+	authDistinctLimit     int
+	authDistinctWindow    time.Duration
 	metaParamSchema       string
 	httpIdleTimeout       time.Duration
 	stateless             bool
@@ -288,6 +292,14 @@ func main() {
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-credential rate limit, in requests/second, on every call that reaches GitLab, plus tools/list on a bucket of its own refilled a tenth as fast; each pooled token and URL pair draws on its own buckets (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
+	flag.IntVar(&hcfg.authFailureLimit, "auth-failure-limit", config.DefaultAuthFailureLimit,
+		"Failed authentications one address may produce inside --auth-failure-window before it is blocked for the rest of it (0 disables this budget)")
+	flag.DurationVar(&hcfg.authFailureWindow, "auth-failure-window", config.DefaultAuthFailureWindow,
+		"Window the failure budget counts in, and the step the distinct-token escalation is built from: one window, then ten, then sixty")
+	flag.IntVar(&hcfg.authDistinctLimit, "auth-distinct-token-limit", config.DefaultAuthDistinctTokenLimit,
+		"Distinct credentials one address may have refused inside --auth-distinct-token-window before it is blocked, for longer each time (0 disables this budget)")
+	flag.DurationVar(&hcfg.authDistinctWindow, "auth-distinct-token-window", config.DefaultAuthDistinctWindow,
+		"Window the distinct-credential budget counts in")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so nothing above the transport closes idle connections; set a positive duration to recycle idle connections sooner")
 	flag.BoolVar(&hcfg.stateless, "stateless", true, "Stateless streamable HTTP (default; required for MCP protocol 2026-07-28 over HTTP): no Mcp-Session-Id tracking, each POST is self-contained, GET/DELETE return 405. Use -stateless=false to restore legacy stateful sessions")
@@ -1054,44 +1066,48 @@ func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
 
 func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
-		GitLabURL:             hcfg.gitlabURL,
-		GitLabURLs:            hcfg.gitlabURLs,
-		SkipTLSVerify:         hcfg.skipTLSVerify,
-		ToolSurface:           toolSurface,
-		CapabilitySurface:     hcfg.capabilitySurface,
-		Tier:                  tier,
-		TierExplicit:          tierExplicit,
-		ReadOnly:              hcfg.readOnly,
-		SafeMode:              hcfg.safeMode,
-		EmbeddedResources:     hcfg.embeddedResources,
-		ExcludeTools:          config.ParseCSV(hcfg.excludeTools),
-		IgnoreScopes:          hcfg.ignoreScopes,
-		MaxHTTPClients:        hcfg.maxHTTPClients,
-		SessionTimeout:        hcfg.sessionTimeout,
-		RevalidateInterval:    hcfg.revalidateInterval,
-		PoolIdleTimeout:       hcfg.poolIdleTimeout,
-		ActionTimeout:         hcfg.actionTimeout,
-		DrainDelay:            hcfg.drainDelay,
-		Stateless:             hcfg.stateless,
-		JSONResponse:          hcfg.jsonResponse,
-		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
-		UploadMaxFileSize:     uploadMaxFileSize(),
-		AuthMode:              hcfg.authMode,
-		PublicURL:             hcfg.publicURL,
-		ResourceDocumentation: hcfg.resourceDocumentation,
-		ResourcePolicyURI:     hcfg.resourcePolicyURI,
-		ResourceTermsURI:      hcfg.resourceTermsURI,
-		OAuthCacheTTL:         hcfg.oauthCacheTTL,
-		OAuthClientUIDs:       config.ParseCSV(hcfg.oauthClientUID),
-		TrustedProxyHeader:    hcfg.trustedProxyHeader,
-		TrustedProxies:        commaSeparated(hcfg.trustedProxies),
-		TrustedOrigins:        buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
-		RateLimitRPS:          hcfg.rateLimitRPS,
-		RateLimitBurst:        hcfg.rateLimitBurst,
-		MetaParamSchema:       hcfg.metaParamSchema,
-		TLSCertFile:           hcfg.tlsCert,
-		TLSKeyFile:            hcfg.tlsKey,
-		SocketMode:            hcfg.socketModeParsed,
+		GitLabURL:              hcfg.gitlabURL,
+		GitLabURLs:             hcfg.gitlabURLs,
+		SkipTLSVerify:          hcfg.skipTLSVerify,
+		ToolSurface:            toolSurface,
+		CapabilitySurface:      hcfg.capabilitySurface,
+		Tier:                   tier,
+		TierExplicit:           tierExplicit,
+		ReadOnly:               hcfg.readOnly,
+		SafeMode:               hcfg.safeMode,
+		EmbeddedResources:      hcfg.embeddedResources,
+		ExcludeTools:           config.ParseCSV(hcfg.excludeTools),
+		IgnoreScopes:           hcfg.ignoreScopes,
+		MaxHTTPClients:         hcfg.maxHTTPClients,
+		SessionTimeout:         hcfg.sessionTimeout,
+		RevalidateInterval:     hcfg.revalidateInterval,
+		PoolIdleTimeout:        hcfg.poolIdleTimeout,
+		ActionTimeout:          hcfg.actionTimeout,
+		DrainDelay:             hcfg.drainDelay,
+		Stateless:              hcfg.stateless,
+		JSONResponse:           hcfg.jsonResponse,
+		MaxRequestBodyBytes:    hcfg.maxRequestBodyBytes,
+		UploadMaxFileSize:      uploadMaxFileSize(),
+		AuthMode:               hcfg.authMode,
+		PublicURL:              hcfg.publicURL,
+		ResourceDocumentation:  hcfg.resourceDocumentation,
+		ResourcePolicyURI:      hcfg.resourcePolicyURI,
+		ResourceTermsURI:       hcfg.resourceTermsURI,
+		OAuthCacheTTL:          hcfg.oauthCacheTTL,
+		OAuthClientUIDs:        config.ParseCSV(hcfg.oauthClientUID),
+		TrustedProxyHeader:     hcfg.trustedProxyHeader,
+		TrustedProxies:         commaSeparated(hcfg.trustedProxies),
+		TrustedOrigins:         buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
+		RateLimitRPS:           hcfg.rateLimitRPS,
+		AuthFailureLimit:       hcfg.authFailureLimit,
+		AuthFailureWindow:      hcfg.authFailureWindow,
+		AuthDistinctTokenLimit: hcfg.authDistinctLimit,
+		AuthDistinctWindow:     hcfg.authDistinctWindow,
+		RateLimitBurst:         hcfg.rateLimitBurst,
+		MetaParamSchema:        hcfg.metaParamSchema,
+		TLSCertFile:            hcfg.tlsCert,
+		TLSKeyFile:             hcfg.tlsKey,
+		SocketMode:             hcfg.socketModeParsed,
 	}
 }
 
@@ -1155,6 +1171,9 @@ func validateHTTPPoolAndRateBounds(cfg *config.Config) error {
 	}
 	if cfg.RateLimitRPS > config.MaxRateLimitRPS {
 		return fmt.Errorf("--rate-limit-rps %g exceeds maximum of %g", cfg.RateLimitRPS, float64(config.MaxRateLimitRPS))
+	}
+	if err := validateAuthBudgetBounds(cfg); err != nil {
+		return err
 	}
 	if cfg.RateLimitBurst > config.MaxRateLimitBurst {
 		return fmt.Errorf("--rate-limit-burst %d exceeds maximum of %d", cfg.RateLimitBurst, config.MaxRateLimitBurst)
@@ -3280,13 +3299,18 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// the same per-address budget, so a caller cannot get a fresh allowance
 	// by failing at a different layer. The gate reaches it only for the pool
 	// rejections the guard cannot see.
-	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
+	authLimiter := serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
 	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
+	sprayBudget := authSprayBudget(cfg)
+	blockCounts := &authBlockCounters{}
+	observeAuthBlocks(blockCounts)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
+		spray:              sprayBudget,
+		blocks:             blockCounts,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessions:           binding.sessions,
@@ -3354,6 +3378,8 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		rejected:           rejectedTokens,
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
+		spray:              sprayBudget,
+		blocks:             blockCounts,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		metadataURL:        resourceMetadataURL,
@@ -3396,6 +3422,9 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	if sourceBudget != nil {
 		startPeriodicCleanup(ctx, sourceBudget.cleanup)
 	}
+	if sprayBudget != nil {
+		startPeriodicCleanup(ctx, sprayBudget.Cleanup)
+	}
 	slog.InfoContext(ctx, "oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
 }
 
@@ -3421,17 +3450,25 @@ func oauthCacheTTL(configured time.Duration) time.Duration {
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, binding poolBinding, mux *http.ServeMux) {
-	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
+	authLimiter := serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
 	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
 	if sourceBudget != nil {
 		startPeriodicCleanup(ctx, sourceBudget.cleanup)
 	}
+	sprayBudget := authSprayBudget(cfg)
+	if sprayBudget != nil {
+		startPeriodicCleanup(ctx, sprayBudget.Cleanup)
+	}
+	blockCounts := &authBlockCounters{}
+	observeAuthBlocks(blockCounts)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
+		spray:              sprayBudget,
+		blocks:             blockCounts,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessions:           binding.sessions,

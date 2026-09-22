@@ -1,0 +1,311 @@
+package serverpool
+
+import (
+	"strconv"
+	"testing"
+	"time"
+)
+
+// TestNewDistinctTokenBudget_OffSettings_ReturnOneNilBudget checks that every
+// way of asking for no budget produces the same thing.
+//
+// The constructor returns nil rather than a live object whose limits nothing
+// can reach, so a caller has one "off" state to reason about and every method
+// tolerates it.
+func TestNewDistinctTokenBudget_OffSettings_ReturnOneNilBudget(t *testing.T) {
+	cases := []struct {
+		name   string
+		limit  int
+		window time.Duration
+		step   time.Duration
+	}{
+		{name: "zero limit", limit: 0, window: time.Minute, step: time.Minute},
+		{name: "negative limit", limit: -1, window: time.Minute, step: time.Minute},
+		{name: "zero window", limit: 5, window: 0, step: time.Minute},
+		{name: "negative window", limit: 5, window: -time.Minute, step: time.Minute},
+		{name: "zero step", limit: 5, window: time.Minute, step: 0},
+		{name: "negative step", limit: 5, window: time.Minute, step: -time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NewDistinctTokenBudget(tc.limit, tc.window, tc.step); got != nil {
+				t.Fatalf("NewDistinctTokenBudget(%d, %v, %v) = %v, want nil",
+					tc.limit, tc.window, tc.step, got)
+			}
+		})
+	}
+}
+
+// TestDistinctTokenBudget_NilIsUsable checks that the nil budget answers every
+// method rather than panicking, which is what a deployment with the budget
+// turned off relies on.
+func TestDistinctTokenBudget_NilIsUsable(t *testing.T) {
+	var b *DistinctTokenBudget
+
+	if b.Charge("10.0.0.1", "glpat-x") {
+		t.Error("a nil budget must never report a block")
+	}
+	if blocked, d := b.Blocked("10.0.0.1"); blocked || d != 0 {
+		t.Errorf("Blocked = (%v, %v), want (false, 0)", blocked, d)
+	}
+	if got := b.Len(); got != 0 {
+		t.Errorf("Len = %d, want 0", got)
+	}
+	b.Cleanup()
+}
+
+// TestDistinctTokenBudget_DistinctTokensBlock_SameTokenDoesNot is the whole
+// point of the budget: the count is of distinct credentials, so a client
+// retrying one bad token forever never reaches it while a sprayer reaches it
+// immediately.
+func TestDistinctTokenBudget_DistinctTokensBlock_SameTokenDoesNot(t *testing.T) {
+	t.Run("one token repeated", func(t *testing.T) {
+		b := NewDistinctTokenBudget(3, time.Minute, time.Minute)
+		for range 20 {
+			if b.Charge("10.0.0.1", "glpat-the-same-one") {
+				t.Fatal("repeating one token must never raise a block")
+			}
+		}
+		if blocked, _ := b.Blocked("10.0.0.1"); blocked {
+			t.Error("address blocked after retrying a single token")
+		}
+	})
+
+	t.Run("distinct tokens", func(t *testing.T) {
+		b := NewDistinctTokenBudget(3, time.Minute, time.Minute)
+		raised := 0
+		for i := range 3 {
+			if b.Charge("10.0.0.1", "glpat-"+strconv.Itoa(i)) {
+				raised++
+			}
+		}
+		if raised != 1 {
+			t.Errorf("blocks raised = %d, want exactly 1", raised)
+		}
+		blocked, remaining := b.Blocked("10.0.0.1")
+		if !blocked {
+			t.Fatal("three distinct tokens did not block an address at a limit of three")
+		}
+		if remaining <= 0 || remaining > time.Minute {
+			t.Errorf("Retry-After = %v, want (0, 1m]", remaining)
+		}
+	})
+}
+
+// TestDistinctTokenBudget_BudgetIsPerAddress checks that one address's spray
+// does not spend another's allowance.
+func TestDistinctTokenBudget_BudgetIsPerAddress(t *testing.T) {
+	b := NewDistinctTokenBudget(3, time.Minute, time.Minute)
+
+	for i := range 3 {
+		b.Charge("10.0.0.1", "glpat-"+strconv.Itoa(i))
+	}
+	if blocked, _ := b.Blocked("10.0.0.1"); !blocked {
+		t.Fatal("the spraying address was not blocked")
+	}
+	if blocked, _ := b.Blocked("10.0.0.2"); blocked {
+		t.Error("a neighbour was blocked by another address's spray")
+	}
+}
+
+// TestDistinctTokenBudget_EscalationLengthensThenSaturates walks the ladder:
+// each block is longer than the last, and past its end the length stops
+// growing rather than becoming a de facto permanent ban on an address whoever
+// inherits it did nothing to earn.
+func TestDistinctTokenBudget_EscalationLengthensThenSaturates(t *testing.T) {
+	const step = time.Minute
+	b := NewDistinctTokenBudget(2, time.Minute, step)
+
+	want := []time.Duration{step, 10 * step, 60 * step, 60 * step}
+	for round, wantLen := range want {
+		// Two distinct tokens raise the next block. The record's own clock is
+		// wound back first so the previous block has lifted, which is what a
+		// real attacker waiting one out produces.
+		b.mu.Lock()
+		if rec, ok := b.addresses["10.0.0.1"]; ok {
+			rec.blockedUntil = time.Now().Add(-time.Second)
+		}
+		b.mu.Unlock()
+
+		b.Charge("10.0.0.1", "glpat-r"+strconv.Itoa(round)+"-a")
+		b.Charge("10.0.0.1", "glpat-r"+strconv.Itoa(round)+"-b")
+
+		blocked, remaining := b.Blocked("10.0.0.1")
+		if !blocked {
+			t.Fatalf("round %d: the address was not blocked", round)
+		}
+		// The remaining time is measured from a moment after the block was
+		// set, so it is at most the intended length and within a whisker of it.
+		if remaining > wantLen || remaining < wantLen-time.Second {
+			t.Errorf("round %d: block = %v, want about %v", round, remaining, wantLen)
+		}
+	}
+}
+
+// TestDistinctTokenBudget_SilenceResetsTheLadder checks the other end of the
+// escalation: an address that stops is forgiven, so today's block does not
+// make tomorrow's longer for a client that had one bad afternoon.
+func TestDistinctTokenBudget_SilenceResetsTheLadder(t *testing.T) {
+	const step = time.Minute
+	b := NewDistinctTokenBudget(2, time.Minute, step)
+
+	b.Charge("10.0.0.1", "glpat-a")
+	b.Charge("10.0.0.1", "glpat-b")
+	if blocked, remaining := b.Blocked("10.0.0.1"); !blocked || remaining > step {
+		t.Fatalf("first block = (%v, %v), want blocked for at most %v", blocked, remaining, step)
+	}
+
+	// Wind the record back past the reset horizon, which is the longest block
+	// the ladder imposes.
+	b.mu.Lock()
+	rec := b.addresses["10.0.0.1"]
+	past := time.Now().Add(-b.resetAfter() - time.Second)
+	rec.lastChargeAt = past
+	rec.windowStartedAt = past
+	rec.blockedUntil = past
+	b.mu.Unlock()
+
+	b.Charge("10.0.0.1", "glpat-c")
+	b.Charge("10.0.0.1", "glpat-d")
+
+	blocked, remaining := b.Blocked("10.0.0.1")
+	if !blocked {
+		t.Fatal("the address was not blocked after spraying again")
+	}
+	if remaining > step {
+		t.Errorf("block after silence = %v, want the first rung of at most %v", remaining, step)
+	}
+}
+
+// TestDistinctTokenBudget_WindowLapses_ForgetsTheCount checks that distinct
+// tokens spread thinly enough never add up: the count is per window, so a
+// client failing a handful of credentials a day is not eventually blocked by
+// accumulation.
+func TestDistinctTokenBudget_WindowLapses_ForgetsTheCount(t *testing.T) {
+	b := NewDistinctTokenBudget(3, time.Minute, time.Minute)
+
+	b.Charge("10.0.0.1", "glpat-a")
+	b.Charge("10.0.0.1", "glpat-b")
+
+	b.mu.Lock()
+	b.addresses["10.0.0.1"].windowStartedAt = time.Now().Add(-2 * time.Minute)
+	b.mu.Unlock()
+
+	if b.Charge("10.0.0.1", "glpat-c") {
+		t.Error("a charge in a fresh window raised a block on a lapsed count")
+	}
+	if blocked, _ := b.Blocked("10.0.0.1"); blocked {
+		t.Error("the address was blocked by a count the window had already dropped")
+	}
+}
+
+// TestDistinctTokenBudget_BlockLifts checks that a block ends on its own, and
+// that the record survives it so the ladder is still remembered.
+func TestDistinctTokenBudget_BlockLifts(t *testing.T) {
+	b := NewDistinctTokenBudget(2, time.Minute, time.Minute)
+
+	b.Charge("10.0.0.1", "glpat-a")
+	b.Charge("10.0.0.1", "glpat-b")
+
+	b.mu.Lock()
+	b.addresses["10.0.0.1"].blockedUntil = time.Now().Add(-time.Millisecond)
+	b.mu.Unlock()
+
+	if blocked, remaining := b.Blocked("10.0.0.1"); blocked || remaining != 0 {
+		t.Errorf("Blocked after the block lapsed = (%v, %v), want (false, 0)", blocked, remaining)
+	}
+	if b.Len() != 1 {
+		t.Errorf("Len = %d, want the record kept so the ladder survives", b.Len())
+	}
+}
+
+// TestDistinctTokenBudget_EmptyArguments_AreNotCharged checks the two inputs
+// that name nothing. An empty address cannot be blocked meaningfully and an
+// empty token is not a credential, so neither opens a record.
+func TestDistinctTokenBudget_EmptyArguments_AreNotCharged(t *testing.T) {
+	cases := []struct {
+		name    string
+		address string
+		token   string
+	}{
+		{name: "no address", address: "", token: "glpat-a"},
+		{name: "no token", address: "10.0.0.1", token: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := NewDistinctTokenBudget(1, time.Minute, time.Minute)
+			if b.Charge(tc.address, tc.token) {
+				t.Error("an empty argument raised a block")
+			}
+			if b.Len() != 0 {
+				t.Errorf("Len = %d, want 0", b.Len())
+			}
+		})
+	}
+}
+
+// TestDistinctTokenBudget_StopsGrowingAtTheCap checks that the address table
+// is bounded, since its keys come from whoever is calling.
+func TestDistinctTokenBudget_StopsGrowingAtTheCap(t *testing.T) {
+	b := NewDistinctTokenBudget(1000, time.Minute, time.Minute)
+
+	for i := range maxTrackedAuthSources + 100 {
+		b.Charge("10.0."+strconv.Itoa(i/256)+"."+strconv.Itoa(i%256), "glpat-"+strconv.Itoa(i))
+	}
+	if got := b.Len(); got > maxTrackedAuthSources {
+		t.Errorf("tracked addresses = %d, want at most %d", got, maxTrackedAuthSources)
+	}
+}
+
+// TestDistinctTokenBudget_CapDoesNotClearAnExistingBlock checks the direction
+// the cap must not fail in: an attacker who saturates the table must not
+// thereby drop the record that is blocking them.
+func TestDistinctTokenBudget_CapDoesNotClearAnExistingBlock(t *testing.T) {
+	b := NewDistinctTokenBudget(2, time.Minute, time.Minute)
+
+	b.Charge("10.0.0.1", "glpat-a")
+	b.Charge("10.0.0.1", "glpat-b")
+	if blocked, _ := b.Blocked("10.0.0.1"); !blocked {
+		t.Fatal("the address was not blocked to begin with")
+	}
+
+	for i := range maxTrackedAuthSources + 100 {
+		b.Charge("172.16."+strconv.Itoa(i/256)+"."+strconv.Itoa(i%256), "glpat-flood-"+strconv.Itoa(i))
+	}
+
+	if blocked, _ := b.Blocked("10.0.0.1"); !blocked {
+		t.Error("saturating the table cleared an existing block")
+	}
+}
+
+// TestDistinctTokenBudget_Cleanup_DropsQuietRecordsAndKeepsBlockedOnes checks
+// both halves of the sweep: a record that has gone quiet long enough is
+// forgotten, and a blocked one is kept however quiet it is, because the block
+// is the reason for the quiet.
+func TestDistinctTokenBudget_Cleanup_DropsQuietRecordsAndKeepsBlockedOnes(t *testing.T) {
+	b := NewDistinctTokenBudget(2, time.Minute, time.Minute)
+
+	b.Charge("10.0.0.1", "glpat-a")
+	b.Charge("10.0.0.2", "glpat-b")
+	b.Charge("10.0.0.2", "glpat-c")
+
+	b.mu.Lock()
+	past := time.Now().Add(-b.resetAfter() - time.Second)
+	b.addresses["10.0.0.1"].lastChargeAt = past
+	b.addresses["10.0.0.2"].lastChargeAt = past
+	b.mu.Unlock()
+
+	b.Cleanup()
+
+	b.mu.Lock()
+	_, quietKept := b.addresses["10.0.0.1"]
+	_, blockedKept := b.addresses["10.0.0.2"]
+	b.mu.Unlock()
+
+	if quietKept {
+		t.Error("a quiet, unblocked record survived the sweep")
+	}
+	if !blockedKept {
+		t.Error("a blocked record was swept away, which would end its block early")
+	}
+}
