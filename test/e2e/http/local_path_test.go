@@ -74,8 +74,9 @@ func startLocalPathGitLab(t *testing.T) *localPathGitLab {
 	// The tier and scope probes are answered without being recorded. They are
 	// the pool's, not the tool call's, and they arrive lazily on the first
 	// request rather than at startup, so leaving them in the record would
-	// charge the first case with two requests it never made.
-	for _, probe := range []string{"/api/v4/license", "/api/v4/personal_access_tokens/self", "/oauth/token/info"} {
+	// charge the first case with requests it never made. The tier costs two of
+	// them where the licence is refused: the namespace plans are read next.
+	for _, probe := range []string{"/api/v4/license", "/api/v4/namespaces", "/api/v4/personal_access_tokens/self", "/oauth/token/info"} {
 		mux.HandleFunc(probe, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		})
@@ -179,15 +180,6 @@ func TestLocalPath_HTTPRefusesEveryCallerSuppliedPath(t *testing.T) {
 			wantInput: "directory_path",
 		},
 	}
-
-	// Settle this credential's pool entry before measuring anything. Building
-	// one is itself a conversation with GitLab: the tier is resolved per entry,
-	// which reads the instance licence and, where that is refused, the plans of
-	// the namespaces the caller administers. That traffic belongs to the first
-	// call through the server rather than to the call under test, and counting
-	// it made the first subtest below report the startup requests as requests
-	// its own refusal had leaked.
-	_ = toolResultsCall(t, srv, tests[0].action, tests[0].params)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
