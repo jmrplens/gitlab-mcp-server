@@ -37,7 +37,7 @@ further down.
 | Runtime | Edition/tier        | Measured   | Catalog actions |          L1 |          L2 |          L3 | Test calls |
 | ------- | ------------------- | ---------- | --------------: | ----------: | ----------: | ----------: | ---------: |
 | `ce`    | community/free      | 2026-09-14 |             869 | 821 (94.5%) | 717 (82.5%) | 700 (80.6%) |       3423 |
-| `ee`    | enterprise/ultimate | 2026-09-13 |            1089 | 263 (24.2%) | 263 (24.2%) | 262 (24.1%) |       1473 |
+| `ee`    | enterprise/ultimate | 2026-09-22 |            1089 | 977 (89.7%) | 878 (80.6%) | 861 (79.1%) |       4411 |
 
 The actions behind each level are listed by id in `docs/development/e2e-coverage.json`, under `levels.l1`, `levels.l2` and `levels.l3`.
 
@@ -47,8 +47,8 @@ The actions behind each level are listed by id in `docs/development/e2e-coverage
 | ------- | -------- | -------- | ------- | --------- | -------------- | -------------- |
 | `ce`    | `ce`     | free     | started | 19.3.1    | no             | `baf7c4447781` |
 | `ce`    | `common` | any      | started | 19.3.1    | no             | `baf7c4447781` |
-| `ee`    | `common` | any      | started | 19.3.1-ee | yes            | `6bd82ea61e0e` |
-| `ee`    | `ee`     | licensed | started | 19.3.1-ee | yes            | `6bd82ea61e0e` |
+| `ee`    | `common` | any      | started | 19.3.1-ee | yes            | `8839ff7ddb6e` |
+| `ee`    | `ee`     | licensed | started | 19.3.1-ee | yes            | `8839ff7ddb6e` |
 
 A tier that is not confirmed came from a setting rather than from the instance license, which means the catalog the share is divided by may hold actions that instance would refuse. An unlicensed GitLab reports no license at all, so the `ce` half is expected to read `no` here.
 
@@ -90,19 +90,19 @@ Resources, prompts, completions, subscriptions and the protective modes, classif
 
 | Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `dynamic`    |      263 |          0 |        197 |              22 |           51 |            0 |            1 |          0 |          0 |       0 |      0 |    555 |
-| `meta`       |      263 |          0 |        197 |              20 |           53 |            0 |            1 |          0 |          0 |       0 |      0 |    555 |
-| `individual` |      262 |          0 |        194 |              20 |           56 |            0 |            1 |          0 |          4 |       0 |      0 |    552 |
+| `dynamic`    |      878 |          0 |         28 |              19 |           31 |            0 |            0 |          0 |          0 |      11 |     43 |     79 |
+| `meta`       |      947 |          0 |          7 |              20 |           31 |            0 |            0 |          0 |          0 |      11 |     42 |     31 |
+| `individual` |      879 |          0 |         26 |              17 |           32 |            0 |            0 |          0 |          4 |      11 |     42 |     78 |
 
 Resources, prompts, completions, subscriptions and the protective modes, classified on the same terms:
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `completions`   |      129 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `completions`   |      130 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `elicitation`   |        0 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |         12 |       0 |      0 |     24 |
 | `modes`         |       12 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `prompts`       |       36 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |    296 |
-| `resources`     |       28 |          0 |          0 |               4 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |    373 |
+| `resources`     |       31 |          0 |          0 |               4 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |    370 |
 | `subscriptions` |       12 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |    222 |
 
 ## Refreshing this page
