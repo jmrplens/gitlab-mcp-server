@@ -122,7 +122,7 @@ readable without opening the tracker:
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
-| 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), open | No | No | None taken |
+| 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
@@ -137,6 +137,17 @@ what the e2e rebuild found, the first from the EE port and the second from the
 CE coverage that closed the gap against the old suite's baseline. Row 47 was
 added on the 14th and is the first entry not found from this codebase, on the
 terms the next paragraph sets out.
+
+Re-verified in full on 2026-09-22, every merge request, pull request and issue
+the file links, against the trackers rather than against memory. One row moved:
+go-sdk `#1274` merged on the 21st and row 50 still read open. Four of the nine
+documentation merge requests had also landed since the last check, which is
+recorded in row 34's section rather than in the table, since that row counts
+the client-go structs and not the pages. A merged pull request was held to the
+tags that contain its merge commit rather than to its merge date, which is the
+rule the client-go section already states and which matters here: go-sdk
+v1.8.0 was tagged on 2026-09-14 and contains **none** of the six merges,
+`#1242` from the 6th included, so every one of them is merged and unreleased.
 
 Every `client-go` row was then re-read against the **v3.12.0** source on
 2026-09-19, when the pin moved there, rather than against the tracker: for each
@@ -1163,10 +1174,13 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
 [!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
-`!254507` was merged into `master` on 2026-09-10, `!254519` on 2026-09-11 and
-`!254511` on 2026-09-14, none in a tagged release yet; the other six are open
-and in review since 2026-09-12, `!254542` with the technical writer's approval
-and a pipeline that fails only in the fork's `get_sources` step.
+Seven are merged into `master`, none in a tagged release yet: `!254507` on
+2026-09-10, `!254519` on 2026-09-11, `!254511` and `!254542` on 2026-09-14
+and 2026-09-15, and `!254538`, `!254543` and `!254547` together on 2026-09-22.
+`!254538` is the one whose merge had been blocked by a `pre-merge-checks`
+race rather than by anything in the change. The two still open are `!254540`
+(the deploy key fields) and `!254552` (the snippet clone URLs), the second
+waiting on a reviewer rather than on a comment.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
@@ -2208,8 +2222,10 @@ dedicated path for it (`transport.go:261`).
   [modelcontextprotocol/go-sdk#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272),
   on 2026-09-15.
 - **In review**: yes,
-  [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274).
-- **Merged**: no.
+  [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274),
+  merged.
+- **Merged**: yes, on 2026-09-21, and in no tag: v1.8.0 was cut on 2026-09-14
+  and does not contain the merge commit.
 - **Blocking**: no, and the concrete failure is on the transport this server
   leads with. `ioConn.sessionUpdated` reads only `NegotiatedProtocolVersion`,
   so a SEP-2575 session over **stdio** is treated as `2025-03-26` and accepts
