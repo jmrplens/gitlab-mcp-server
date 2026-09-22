@@ -52,6 +52,13 @@ func ParseSource(record []byte) (Source, error) {
 }
 
 // String renders the provenance as one reportable line.
+//
+// The retrieval date is printed as the record spells it, which is a string
+// field and not an instant: this line is a log and a gate's refusal message,
+// read by whoever re-pins the schema, and the value they need is the one the
+// committed record carries rather than a rendering of it.
+//
+//gitlab:allow-raw s.RetrievedAt: a date the committed record carries as text, printed for a log rather than for a card
 func (s Source) String() string {
 	return fmt.Sprintf("%d types from %s (GitLab %s), retrieved %s",
 		s.Types, s.Instance, s.GitLabVersion, s.RetrievedAt)

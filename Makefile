@@ -1698,11 +1698,12 @@ audit-md-escaping:
 	go run ./cmd/audit_md_escaping/ -v -contexts all,card,bool-time -json plan/md-escaping-backlog.json
 
 ## check-md-escaping: fail when a value still reaches a Markdown construct
-## unescaped, when a directive excuses nothing, or when internal/toolutil holds
-## a value the audit cannot follow, since a blind spot there sits behind every
-## formatter that calls it. The staged rules are not judged here. CI gate.
+## unescaped, when a one-object card row is written by hand, when a flag or a
+## timestamp is printed raw, when a directive excuses nothing, or when
+## internal/toolutil holds a value the audit cannot follow, since a blind spot
+## there sits behind every formatter that calls it. CI gate.
 check-md-escaping:
-	go run ./cmd/audit_md_escaping/ -check -fail-unresolved-in internal/toolutil
+	go run ./cmd/audit_md_escaping/ -check -contexts all,card,bool-time -fail-unresolved-in internal/toolutil
 
 ## audit-action-ids: report every canonical action ID this repository publishes
 ## to a model that the catalog does not have: the RelatedActions of an

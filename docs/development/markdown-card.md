@@ -289,8 +289,40 @@ exactly what it did (`TestCard_EscapingIsIdempotent_APreEscapedValueRendersUncha
    lists every hand-written row the migration has to move, with `card.go`
    itself and the prompts outside its scope; measured on the tree at L1-08,
    1396 card sites (1323 rows, 73 field-table headers) and 247 flags or
-   timestamps printed without their helper (`-contexts bool-time`), both
-   report-only until a later layer names them beside `all`.
+   timestamps printed without their helper (`-contexts bool-time`).
+7. **Both staged rules now gate.** `make check-md-escaping` runs
+   `-contexts all,card,bool-time`, so a hand-written card row and a flag or
+   timestamp printed without its helper fail the build like an unescaped
+   value. The migration is what made that possible: the 1396 card sites and
+   247 raw values are 0 and 0, with 28 declared.
+
+   A card finding is declared with `//gitlab:allow-card <function>: <reason>`,
+   and it is the one directive whose subject is a function rather than a
+   value. A hand-written row has no value of its own to name, and the row text
+   carries a colon the directive grammar would cut a reason at; the claim is
+   also made at the function's grain, since what a declaration says is that
+   this function writes something that is not a card.
+
+   The case it exists for is the interactive consent prompt
+   (`internal/tools/elicitationtools`). Those lines are a question a caller
+   approves rather than a result they read, and their values go through
+   `toolutil.EscapeConsentValue`, which defangs a URL scheme (`https://` to
+   `https[:]//`) on top of the code span a card writes. Moving them onto
+   `Card` would take the defanging away from the one place a live link is
+   least wanted, so they are declared instead.
+
+   A `bool-time` finding keeps `//gitlab:allow-raw <expression>: <reason>`.
+   The eleven declared are not Markdown at all: a cache key compared and never
+   read, a provenance line written for a log, and the NUL-separated digest the
+   model evaluation corpus hashes itself with. A glyph in any of them would
+   fold two different inputs into one answer.
+8. The two runtime scans over the registry fail rather than log
+   (`TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries` and
+   `TestMarkdownRegistry_AbsentValue_RendersNoGlyph`). They reported while the
+   migration was in flight, because a gate over a backlog fails on the first
+   push and teaches everyone to ignore it; both read zero now. A case kept out
+   is named in `mdGateExceptions` with its reason, which is empty and is meant
+   to stay empty.
 
 ## Rendered examples
 

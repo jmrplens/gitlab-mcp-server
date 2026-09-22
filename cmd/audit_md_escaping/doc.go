@@ -167,13 +167,23 @@
 //
 //	//gitlab:allow-raw item.DueDate: a date GitLab sends without a time, shown as the day it names.
 //
-// A raw directive that excuses nothing is stale only once the rule has run,
-// because a run that never asked the question has no grounds to say the
-// answer was not needed.
+// A card finding is declared the other way round, by naming the function that
+// writes the rows:
 //
-// Both rules are staged: "all" names the six gating contexts and neither of
-// them, so the gate keeps its exit status while they report, and a rule joins
-// the gate when the Makefile names it beside "all".
+//	//gitlab:allow-card IssueCreate: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not.
+//
+// A hand-written row has no value of its own to name, and its text carries a
+// colon of its own that the grammar above would cut a reason at; the function
+// is also the grain the claim is made at, since what is declared is that this
+// function writes something that is not a card.
+//
+// A directive answering either of these two rules excuses nothing until that
+// rule has run, so it is stale only then: a run that never asked the question
+// has no grounds to say the answer was not needed.
+//
+// "all" names the six escaping contexts and neither of these two, so a caller
+// asking for the escaping verdict alone still gets it; check-md-escaping names
+// all three (-contexts all,card,bool-time) and gates on every one.
 //
 // # Declaring that a value is already safe
 //

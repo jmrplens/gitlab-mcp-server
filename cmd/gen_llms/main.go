@@ -36,6 +36,12 @@ const (
 	llmsFileName     = "llms.txt"
 	llmsFullFileName = "llms-full.txt"
 
+	// fmtH3 is the heading this generator writes a tool or a prompt under. It
+	// is spelled here rather than taken from internal/toolutil, because these
+	// documents are written for a reader to grep and not returned from a tool,
+	// so nothing about them is the card's business.
+	fmtH3 = "### %s\n\n"
+
 	// llms-full.txt is ~2.9 MB / ~750K tokens: a good grep and RAG corpus, but
 	// larger than any production context window and beyond the fetch ceiling some
 	// AI crawlers apply. These companions make the same content usable.
@@ -690,7 +696,7 @@ func writeLLMSMediumMetaTools(b *strings.Builder, catalog llmsCatalog) {
 	all := append([]*mcp.Tool{}, catalog.MetaBase...)
 	all = append(all, enterpriseOnlyMetaTools(catalog.MetaBase, catalog.MetaGitLabComEnterprise)...)
 	for _, tool := range all {
-		fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
+		fmt.Fprintf(b, fmtH3, tool.Name)
 		if tool.Title != "" {
 			fmt.Fprintf(b, llmsBoldTitleFormat, tool.Title)
 		}
@@ -756,7 +762,7 @@ func enterpriseOnlyMetaTools(baseTools, gitLabComTools []*mcp.Tool) []*mcp.Tool 
 }
 
 func writeLLMSFullMetaTool(b *strings.Builder, tool *mcp.Tool, routesByTool map[string]toolutil.ActionMap) {
-	fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
+	fmt.Fprintf(b, fmtH3, tool.Name)
 	if tool.Title != "" {
 		fmt.Fprintf(b, llmsBoldTitleFormat, tool.Title)
 	}
@@ -825,7 +831,7 @@ func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
 	b.WriteString("## Dynamic Toolset\n\n")
 	b.WriteString("Dynamic mode is the default when `GITLAB_MCP_TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `GITLAB_MCP_TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
 	for _, tool := range dynamicTools {
-		fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
+		fmt.Fprintf(b, fmtH3, tool.Name)
 		if tool.Title != "" {
 			fmt.Fprintf(b, llmsBoldTitleFormat, tool.Title)
 		}
@@ -849,7 +855,7 @@ func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCou
 }
 
 func writeLLMSResource(b *strings.Builder, name, uri, uriLabel, mimeType, description string) {
-	fmt.Fprintf(b, toolutil.FmtMdH3, name)
+	fmt.Fprintf(b, fmtH3, name)
 	fmt.Fprintf(b, "- **%s**: `%s`\n", uriLabel, uri)
 	if mimeType != "" {
 		fmt.Fprintf(b, "- **MIME**: %s\n", mimeType)
@@ -864,7 +870,7 @@ func writeLLMSFullPrompts(b *strings.Builder, promptDefs []*mcp.Prompt) {
 	b.WriteString("## Prompts\n\n")
 	fmt.Fprintf(b, "%d prompt templates for AI-assisted GitLab workflows.\n\n", len(promptDefs))
 	for _, prompt := range promptDefs {
-		fmt.Fprintf(b, toolutil.FmtMdH3, prompt.Name)
+		fmt.Fprintf(b, fmtH3, prompt.Name)
 		if prompt.Description != "" {
 			b.WriteString(prompt.Description)
 			b.WriteString("\n\n")
