@@ -596,9 +596,9 @@ func TestToolManifestTemplate_NotFound(t *testing.T) {
 	}
 }
 
-// TestToolSurfaceResourceURIs_NamesWhatRegistrationServes verifies the list
-// the e2e coverage command counts at the tool-surface grain against the
-// server itself: it is exactly what [RegisterToolSurfaceResources] makes a
+// TestToolSurfaceResourceURIs_Registration_NamesExactlyWhatItServes verifies
+// the list the e2e coverage command counts at the tool-surface grain against
+// the server itself: it is exactly what [RegisterToolSurfaceResources] makes a
 // session list, and none of it is in [NewHandlerIndex], which is the catalog
 // registered from the capability surface alone.
 //
@@ -607,7 +607,7 @@ func TestToolManifestTemplate_NotFound(t *testing.T) {
 // changes with the tool surface, and a name the capability catalog also
 // registers would be a resource whose content the tool surface does not
 // decide, counted at a grain it does not vary along.
-func TestToolSurfaceResourceURIs_NamesWhatRegistrationServes(t *testing.T) {
+func TestToolSurfaceResourceURIs_Registration_NamesExactlyWhatItServes(t *testing.T) {
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{Surface: toolSurfaceIndividual})
 	ctx := context.Background()
 	listed, err := session.ListResources(ctx, nil)

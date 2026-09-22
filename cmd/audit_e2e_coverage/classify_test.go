@@ -480,13 +480,15 @@ func TestClassify_Capabilities_ClassifiedByTarget(t *testing.T) {
 // TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities verifies what
 // folding the session lines settles: a shape opened twice is one shape with
 // both listings unioned, each capability surface is folded apart from the
-// other whatever shapes its sessions ran as, and the minimal surface gets no
-// subscription and no prompt cell, because the server registers neither
-// there and an absent cell would read as a kind nothing watched.
+// other whatever shapes its sessions ran as, the minimal surface serves no
+// prompt, and it gets no subscription cell, because the server accepts no
+// subscription there and an absent cell would read as a kind nothing watched.
 //
-// The absence is asserted by capability surface, which is what the keys carry
-// now, and beside a count on the full surface: a loop over the subscription
-// cells that found none at all would otherwise pass it.
+// The subscription absence is asserted by capability surface, which is what
+// the keys carry now, and beside a count on the full surface: a loop over the
+// subscription cells that found none at all would otherwise pass it. A prompt
+// the minimal surface was asked for anyway is a cell of its own, which
+// TestClassify_Prompts_OneCellPerCapabilitySurface holds.
 func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
 	leanShape := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}
 	second := fixtureSession(dynamicDefault, true)
@@ -525,11 +527,6 @@ func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
 	}
 	if subscriptions[full] != len(subscribableKinds(nil)) || subscriptions[minimal] != 0 {
 		t.Errorf("subscription cells per capability surface = %v, want every kind on full and none on minimal", subscriptions)
-	}
-	for key := range c.capabilities[capabilityPrompts] {
-		if key.capabilities == minimal {
-			t.Errorf("prompt cell %q on the minimal surface, which serves no prompt", key.action)
-		}
 	}
 }
 
@@ -711,12 +708,12 @@ func TestClassify_CallWithoutCapabilities_CountsAsTheDefaultSurface(t *testing.T
 	}
 }
 
-// TestCapabilityGrains_EachKindAtTheGrainItVariesAlong pins the model: every
-// capability kind the fold writes is in the table, at the grain the server
-// makes it vary along, and each grain keys its cells with exactly the
-// coordinates it names. A kind missing from the table would be keyed at the
-// zero grain without a word, and the page would not list it.
-func TestCapabilityGrains_EachKindAtTheGrainItVariesAlong(t *testing.T) {
+// TestCapabilityGrains_EveryKind_CountedAtTheGrainItVariesAlong pins the
+// model: every capability kind the fold writes is in the table, at the grain
+// the server makes it vary along, and each grain keys its cells with exactly
+// the coordinates it names. A kind missing from the table would be keyed at
+// the zero grain without a word, and the page would not list it.
+func TestCapabilityGrains_EveryKind_CountedAtTheGrainItVariesAlong(t *testing.T) {
 	shape := shapeKey{surface: config.ToolSurfaceMeta, mode: modeReadOnly}
 	cases := []struct {
 		kind  string
@@ -1210,14 +1207,14 @@ func TestSubscribableKinds_NoListing_EveryServerKindNamed(t *testing.T) {
 	}
 }
 
-// TestMatchTemplate_TiesAndBareVariables verifies the two edges of the
-// specificity count. Two templates a URI matches with as many literal
+// TestMatchTemplate_TiesAndBareVariables_Resolved verifies the two edges of
+// the specificity count. Two templates a URI matches with as many literal
 // segments each settle on the one listed first, which is the one the sorted
 // session listing puts first, so the cell a read lands on does not move from
 // one run to the next. And a template with no literal segment at all still
 // matches: zero literals is a match that consumed nothing, not the absence of
 // one.
-func TestMatchTemplate_TiesAndBareVariables(t *testing.T) {
+func TestMatchTemplate_TiesAndBareVariables_Resolved(t *testing.T) {
 	cases := []struct {
 		name      string
 		templates []string

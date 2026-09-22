@@ -142,14 +142,14 @@ func TestBuildReport_SubscriptionDelivery_Marked(t *testing.T) {
 	}
 }
 
-// TestCapabilitySurfaceRows_CountWhatEachSurfaceServed verifies the rows the
-// capability histograms are counted against, one per capability surface, full
-// first. Each figure is what that surface served of its kind: the resources
-// without the tool-manifest pair, the subscribable kinds on full only, and
-// the shapes and sessions its lines came from. The two surfaces are given
-// listings that differ in every column, so no two figures can be exchanged
-// and still read right.
-func TestCapabilitySurfaceRows_CountWhatEachSurfaceServed(t *testing.T) {
+// TestCapabilitySurfaceRows_EachSurface_CountsWhatItServed verifies the rows
+// the capability histograms are counted against, one per capability surface,
+// full first. Each figure is what that surface served of its kind: the
+// resources without the tool-manifest pair, the subscribable kinds on full
+// only, and the shapes and sessions its lines came from. The two surfaces are
+// given listings that differ in every column, so no two figures can be
+// exchanged and still read right.
+func TestCapabilitySurfaceRows_EachSurface_CountsWhatItServed(t *testing.T) {
 	rt := fixtureRuntime()
 	rt.calls = nil
 	offering := fixtureSession(dynamicDefault, true)

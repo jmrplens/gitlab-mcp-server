@@ -223,8 +223,10 @@ func writeCapabilityGrains(b *strings.Builder) {
 }
 
 // writeRecordCapabilities writes one runtime's capability histogram, beside
-// what it is counted against: the capability surfaces the entry recorded, or,
-// for an entry recorded before them, the grain its figures were counted at.
+// what it is counted against: the capability surfaces the entry recorded,
+// which are the denominator of the four kinds counted at the capability grain
+// and of none of the others, or, for an entry recorded before them, the grain
+// its figures were counted at.
 //
 // A runtime measured before the capability cells existed carries no histogram,
 // and gets nothing here: a sentence introducing an empty table would read as a
@@ -239,7 +241,9 @@ func writeRecordCapabilities(b *strings.Builder, key string, entry *recordEntry)
 			"many cells as there are shapes. `" + recordRegenerate + "-" + key + "` re-records it at " +
 			"the grain above.\n\n")
 	} else {
-		b.WriteString("What each capability surface served, which is what the capability rows are counted against:\n\n")
+		b.WriteString("What each capability surface served, which is what the `resources`, `prompts`, `completions` " +
+			"and `subscriptions` rows beneath are counted against (`tool_manifest`, `elicitation` and `modes` " +
+			"are counted per shape and have no figure here):\n\n")
 		b.WriteString(renderCapabilitySurfaceTable(entry.CapabilitySurfaces))
 		b.WriteString("\n")
 	}

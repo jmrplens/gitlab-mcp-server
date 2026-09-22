@@ -151,8 +151,9 @@ func (s *packageScanner) declarations(pkg *packages.Package, scan *packageScan) 
 // declared, and [methodKey] must produce the same string from the type
 // checker's side.
 //
-// A receiver list is never empty here: the parser refuses a method with no
-// receiver, and a package that did not parse never reaches the scan.
+// A receiver list is never empty here: the type checker refuses a method with
+// no receiver, and a package that did not type-check never reaches the scan
+// (goprogram.LoadWith returns none such).
 func declName(fn *ast.FuncDecl) string {
 	if fn.Recv == nil {
 		return fn.Name.Name

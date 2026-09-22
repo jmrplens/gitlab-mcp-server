@@ -812,12 +812,12 @@ func TestWriteReportJSON_FileThatRefusesTheWrite_ReportedAndNotAnnounced(t *test
 	}
 }
 
-// TestMain_HandsTheStatusToTheProcess verifies the one line main is: the flags
-// it parses reach run, and the status run returns is the one the process exits
-// with. A render of a record on disk exits zero and draws the page; a run asked
-// for nothing exits two. The streams are taken over for the call so that what
-// main prints can be read back.
-func TestMain_HandsTheStatusToTheProcess(t *testing.T) {
+// TestMain_ExitStatus_HandedToTheProcess verifies the one line main is: the
+// flags it parses reach run, and the status run returns is the one the process
+// exits with. A render of a record on disk exits zero and draws the page; a
+// run asked for nothing exits two. The streams are taken over for the call so
+// that what main prints can be read back.
+func TestMain_ExitStatus_HandedToTheProcess(t *testing.T) {
 	dir := t.TempDir()
 	recordPath, pagePath := filepath.Join(dir, "e2e-coverage.json"), filepath.Join(dir, "e2e-coverage.md")
 	writeRecordJSON(t, recordPath, pageFixture(t))
