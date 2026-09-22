@@ -1903,6 +1903,11 @@ func TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence(t *testing.T) {
 func pagedNamespaceServer(t *testing.T, pages [][]map[string]any, asked *int32) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		switch r.URL.Path {
 		case "/api/v4/version":
 			w.Header().Set("Content-Type", "application/json")
@@ -1989,6 +1994,11 @@ func TestDetectTier_NamespacePlan_StopsAtUltimate(t *testing.T) {
 // resolve lower than the caller has already been shown to hold.
 func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		switch r.URL.Path {
 		case "/api/v4/version":
 			w.Header().Set("Content-Type", "application/json")

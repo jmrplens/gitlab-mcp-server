@@ -75,7 +75,7 @@ func startLocalPathGitLab(t *testing.T) *localPathGitLab {
 	// the pool's, not the tool call's, and they arrive lazily on the first
 	// request rather than at startup, so leaving them in the record would
 	// charge the first case with requests it never made. The tier costs two of
-	// them where the licence is refused: the namespace plans are read next.
+	// them where the license is refused: the namespace plans are read next.
 	for _, probe := range []string{"/api/v4/license", "/api/v4/namespaces", "/api/v4/personal_access_tokens/self", "/oauth/token/info"} {
 		mux.HandleFunc(probe, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
