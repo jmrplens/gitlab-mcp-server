@@ -63,7 +63,7 @@ These hints are available in both the Markdown and JSON output, so your IDE can 
 
 ### Formatted Data
 
-- **Dates** appear in readable format (`2025-01-15 10:30`) instead of raw ISO timestamps
+- **Dates** appear in readable format (`15 Jan 2025 10:30 UTC`, or `15 Jan 2025` for a value GitLab sends without a time) instead of raw ISO timestamps
 - **Status** values use emoji indicators (✅ success, ❌ failed, ⏳ running)
 - **Pagination** shows "Page 1 of 3 (20 per page)" with hints to request more
 

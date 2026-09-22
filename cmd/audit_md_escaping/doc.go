@@ -144,9 +144,10 @@
 // read as one. The rule reads constant text wherever it is written, in a
 // template, a builder write or a print call, and leaves two files alone: the
 // prompts, whose lists are the prompt's own layout, and card.go, whose writes
-// are the rows every other formatter is asked to use. A card finding is
-// reported as it stands, with no verdict to reach and no directive to excuse
-// it, since the fix is the same whatever the value.
+// are the rows every other formatter is asked to use. A card finding reaches
+// no verdict about the value it carries, since the fix is the same whatever
+// that value is; what can excuse one is a claim about the function rather than
+// about the value, and is declared as the function-scoped directive below.
 //
 // # The second verdict: flags and instants
 //

@@ -57,6 +57,14 @@ GO_ANALYSIS_PKGS=./...
 # has to know: no package under test/e2e selects between two file sets any
 # more, and one run sees all of them.
 GO_ANALYSIS_TAGS=e2e,collectore2e,httpe2e,orbitlive,stdioe2e
+# The arguments the Markdown gate is run with, named once because it is run
+# from two places. `all` expands to the six escaping contexts and to neither
+# staged rule, so a target that spells `--check` without this list gates the
+# escaping verdict and silently lets a hand-written card row and a raw flag or
+# timestamp through. `make analyze` was in exactly that state while
+# `check-md-escaping` gated all three, which is two gates disagreeing about
+# what the rule is.
+MD_ESCAPING_ARGS=-contexts all,card,bool-time -fail-unresolved-in internal/toolutil
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -811,7 +819,7 @@ analyze:
 	run_check "[7/21] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
 	run_check "[8/21] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
 	run_check "[9/21] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/21] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[10/21] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
 	run_check "[11/21] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
 	run_check "[12/21] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
 	run_check "[13/21] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
@@ -1703,7 +1711,7 @@ audit-md-escaping:
 ## internal/toolutil holds a value the audit cannot follow, since a blind spot
 ## there sits behind every formatter that calls it. CI gate.
 check-md-escaping:
-	go run ./cmd/audit_md_escaping/ -check -contexts all,card,bool-time -fail-unresolved-in internal/toolutil
+	go run ./cmd/audit_md_escaping/ -check $(MD_ESCAPING_ARGS)
 
 ## audit-action-ids: report every canonical action ID this repository publishes
 ## to a model that the catalog does not have: the RelatedActions of an
