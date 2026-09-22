@@ -1,9 +1,13 @@
 package main
 
 import (
+	"go/ast"
+	"go/types"
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // TestFoldCall_DomainPrefixHelper_IsFolded is the case this folding exists
@@ -364,5 +368,43 @@ func options() toolutil.ActionSpecOptions {
 
 	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.get"}) {
 		t.Errorf("related values = %v, want demo.get", got)
+	}
+}
+
+// TestSingleReturnExpr_ABodyTheFoldNeverSees_IsRefused holds the two shapes a
+// one-line helper is not, asked of the function directly rather than through a
+// fixture.
+//
+// A declaration with no body at all is the one the walk cannot arrange: a Go
+// package whose function has no body and no assembly beside it does not type
+// check, and the loader refuses such a package before this is ever called. So
+// the guard is real and only a direct call can reach it, which is the same
+// bargain the loader's own error branches make.
+func TestSingleReturnExpr_ABodyTheFoldNeverSees_IsRefused(t *testing.T) {
+	cases := map[string]*ast.FuncDecl{
+		"no body at all":                {},
+		"a body of two":                 {Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{}, &ast.ReturnStmt{}}}},
+		"a statement that is no return": {Body: &ast.BlockStmt{List: []ast.Stmt{&ast.EmptyStmt{}}}},
+		"a return of two values": {Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent("a"), ast.NewIdent("b")}},
+		}}},
+	}
+	for name, decl := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, ok := singleReturnExpr(decl); ok {
+				t.Errorf("singleReturnExpr(%s) folded, want refused", name)
+			}
+		})
+	}
+}
+
+// TestConstantStringIn_AnExpressionTheCheckerNeverTyped_IsNoConstant holds the
+// lookup the fold makes before it reads a value. Every expression a loaded
+// package carries is in that map, so the miss is reachable only by handing the
+// function an expression from nowhere, which is what this does.
+func TestConstantStringIn_AnExpressionTheCheckerNeverTyped_IsNoConstant(t *testing.T) {
+	pkg := &packages.Package{TypesInfo: &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}}
+	if value, ok := constantStringIn(pkg, &ast.BasicLit{}); ok {
+		t.Errorf("constantStringIn of an untyped expression = %q, true; want no value", value)
 	}
 }

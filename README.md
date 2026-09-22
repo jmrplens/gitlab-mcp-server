@@ -449,20 +449,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,296 |     287,053 |
-| Unit tests (`_test.go`)  |       878 |     565,023 |
+| Source (`.go`, non-test) |     1,296 |     287,082 |
+| Unit tests (`_test.go`)  |       878 |     565,288 |
 | End-to-end tests         |       492 |      94,276 |
-| **Total**                | **2,666** | **946,352** |
+| **Total**                | **2,666** | **946,646** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,059 |
+| Source functions                | 10,058 |
 | . Exported (public)             |  3,179 |
-| . Unexported (private)          |  6,880 |
-| Unit test functions (`TestXxx`) | 17,123 |
-| Subtests (`t.Run(...)`)         |  6,015 |
+| . Unexported (private)          |  6,879 |
+| Unit test functions (`TestXxx`) | 17,133 |
+| Subtests (`t.Run(...)`)         |  6,016 |
 | End-to-end test functions       |  1,199 |
 
 ### Ratios worth noting
@@ -470,19 +470,19 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.97× more tests than code |
-| Average source file length         |                 ~221 lines |
+| Average source file length         |                 ~222 lines |
 | Average test file length           |                 ~644 lines |
-| Comment lines in source            |  65,197 (~22.7% of source) |
+| Comment lines in source            |  65,240 (~22.7% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,175 |
-| `defer` statements                 | 1,108 |
+| `if err != nil` checks             | 9,177 |
+| `defer` statements                 | 1,110 |
 | `struct` types defined             | 3,299 |
-| `//nolint` suppressions            |   223 |
+| `//nolint` suppressions            |   226 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project

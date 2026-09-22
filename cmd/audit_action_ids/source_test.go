@@ -1,12 +1,19 @@
 package main
 
 import (
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // fixtureDir is the directory the in-memory fixture package pretends to live
@@ -796,6 +803,21 @@ func TestRelativePath_OutsideTheRoot_KeepsTheWholePath(t *testing.T) {
 	if got := relativePath(outside, root); got != "/elsewhere/other.go" {
 		t.Errorf("relativePath outside the root = %q", got)
 	}
+	// A relative path against an absolute root is the one pair filepath.Rel
+	// refuses outright rather than answering with a climb, which is the other
+	// way into this branch and the one the case above takes. Both are answered
+	// with the whole path, rendered with slashes like every other answer: a
+	// finding reads the same wherever the audit ran, so the separator is the
+	// report's and never the platform's.
+	//
+	// The root is a real temporary directory rather than the invented one
+	// above, because what makes a path absolute is per platform: Windows calls
+	// a path absolute only with a volume in front of it.
+	absoluteRoot := t.TempDir()
+	unrelatable := filepath.FromSlash("some/other.go")
+	if got := relativePath(unrelatable, absoluteRoot); got != "some/other.go" {
+		t.Errorf("relativePath of a path no root can reach = %q, want %q", got, "some/other.go")
+	}
 }
 
 // TestIsRelatedParamName_NamedSpellings_AreFollowed holds the naming rule the
@@ -1283,5 +1305,150 @@ var (
 	}
 	if got := unresolvedExprs(sites); len(got) != 0 {
 		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestIndexFuncs_DeclarationsTheWalkCannotRead_AreSkipped holds the three
+// shapes the function index passes over, asked of it directly.
+//
+// It is called directly because two of them are states a loaded package cannot
+// be in: a function with no body does not type-check without assembly beside
+// it, and a function the checker never defined cannot come out of a package
+// the loader accepted. The walk is given a file the parser produced and a
+// package whose definitions are empty, which is exactly those two states and
+// nothing else.
+func TestIndexFuncs_DeclarationsTheWalkCannotRead_AreSkipped(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "fixture.go", `package fixture
+
+var notAFunctionAtAll = 1
+
+func bodyless()
+
+func withABody() {}
+`, 0)
+	if err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+
+	prog := indexProgram("", nil)
+	prog.indexFuncs(&packages.Package{TypesInfo: &types.Info{Defs: map[*ast.Ident]types.Object{}}}, file)
+
+	if len(prog.decls) != 0 {
+		t.Errorf("declarations indexed = %d, want none of the three", len(prog.decls))
+	}
+	if len(prog.params) != 0 {
+		t.Errorf("parameters indexed = %d, want none", len(prog.params))
+	}
+}
+
+// TestStructType_NoTypeAtAll_IsNoStruct holds the guard in front of the type
+// switch. An expression the checker recorded no type for yields a nil here,
+// and reading a nil type is a crash rather than an answer.
+func TestStructType_NoTypeAtAll_IsNoStruct(t *testing.T) {
+	if _, ok := (&walker{}).structType(nil); ok {
+		t.Error("structType(nil) resolved a struct, want none")
+	}
+}
+
+// TestFollowValues_AnIdentifierThatNamesNoVariable_IsNotFollowed holds the
+// first question following a value asks. Every identifier the walk reaches in
+// a loaded package names a variable, a constant the fold already read, or a
+// name the checker refused, so the miss is reachable only by handing the
+// method an identifier from nowhere.
+func TestFollowValues_AnIdentifierThatNamesNoVariable_IsNotFollowed(t *testing.T) {
+	w := &walker{pkg: &packages.Package{TypesInfo: &types.Info{
+		Defs: map[*ast.Ident]types.Object{},
+		Uses: map[*ast.Ident]types.Object{},
+	}}}
+	if w.followValues(kindErrorHint, ast.NewIdent("nothing"), recordHintValue) {
+		t.Error("followValues followed an identifier that names no variable")
+	}
+}
+
+// TestCollectSites_AHintReadOffAParameterNothingNames_IsReportedAndItsHalvesKept
+// holds the two answers a hint assembled from a parameter gets.
+//
+// A parameter whose name says nothing about hints is not followed out to its
+// callers, on purpose: following every string parameter judges whatever any
+// caller ever passes. So a hint that is nothing but such a parameter is named
+// as unread rather than guessed at, and one that concatenates a literal onto
+// it keeps the literal, which is where a capability would be spelled.
+func TestCollectSites_AHintReadOffAParameterNothingNames_IsReportedAndItsHalvesKept(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func fromAPlainParameter(text string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, text)
+}
+
+func fromHalfAParameter(text string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, text+" then run demo.list")
+}
+`)
+
+	if got := valuesOfKind(sites, kindErrorHint); len(got) != 1 || !strings.Contains(got[0], "then run demo.list") {
+		t.Errorf("error hint values = %q, want the literal half kept", got)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"text"}) {
+		t.Errorf("unresolved = %v, want the bare parameter named once", got)
+	}
+}
+
+// TestCollectSites_AVariadicRelatedParameter_ReadsEachElementAsAnID holds the
+// other half of the rule that reads a variadic parameter the way its callers
+// spell it. A list of hints spelled element by element is prose each; a list of
+// IDs spelled the same way is an ID each, and the two are told apart by the
+// kind the site publishes rather than by the shape of the call.
+func TestCollectSites_AVariadicRelatedParameter_ReadsEachElementAsAnID(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func specWith(relatedActions ...string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: relatedActions}
+}
+
+func spellsTheElements() toolutil.ActionSpecOptions {
+	return specWith("demo.get", "demo.list")
+}
+`)
+
+	want := []string{"demo.get", "demo.list"}
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, want) {
+		t.Errorf("related values = %v, want %v", got, want)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestCollectSites_ARootItCannotResolve_IsReported holds the one failure
+// between loading a program and walking it. filepath.Abs fails only when the
+// process has no working directory, which a test cannot arrange, so the seam
+// is what makes the branch reachable; the branch matters because a walk rooted
+// at nothing stamps every finding with a path a reader cannot open.
+func TestCollectSites_ARootItCannotResolve_IsReported(t *testing.T) {
+	restore := absolutePath
+	absolutePath = func(string) (string, error) { return "", errors.New("no working directory") }
+	defer func() { absolutePath = restore }()
+
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte("package fixture\n"),
+	}
+	sites, err := collectSites(root, fixturePatterns, overlay)
+	if err == nil {
+		t.Fatalf("collectSites() = %v, want the root failure reported", sites)
+	}
+	if !strings.Contains(err.Error(), "no working directory") {
+		t.Errorf("error = %v, want the reason the root could not be resolved", err)
 	}
 }

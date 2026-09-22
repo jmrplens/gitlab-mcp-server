@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 )
 
 // auditedPattern is a small, real package to run the whole command over. The
@@ -313,5 +316,29 @@ func Get() error {
 	// Unix and fail there for the separator rather than for the message.
 	if !strings.Contains(stderr.String(), filepath.FromSlash(fixtureDir)) {
 		t.Errorf("stderr = %q, want it to name what could not be read", stderr.String())
+	}
+}
+
+// TestRun_ACatalogItCannotBuild_IsReportedAndStops holds the first thing the
+// run does and the only way it can fail before any source is read.
+//
+// Building the catalog needs no network and no credentials, so nothing a test
+// can arrange makes it fail; the seam is what makes the branch reachable, and
+// the branch matters because a run that reported no findings after failing to
+// build the oracle would read as a clean tree.
+func TestRun_ACatalogItCannotBuild_IsReportedAndStops(t *testing.T) {
+	restore := buildCatalogIDs
+	buildCatalogIDs = func() (*actionids.IDs, error) { return nil, errors.New("no catalog today") }
+	defer func() { buildCatalogIDs = restore }()
+
+	var stdout, stderr bytes.Buffer
+	if code := run(auditConfig{dir: "."}, &stdout, &stderr); code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "no catalog today") {
+		t.Errorf("stderr = %q, want the reason the catalog could not be built", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing printed before the catalog exists", stdout.String())
 	}
 }

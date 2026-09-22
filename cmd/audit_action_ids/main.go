@@ -72,6 +72,11 @@ type auditConfig struct {
 	fixHintTests bool
 }
 
+// buildCatalogIDs is how the run reaches the canonical catalog, swapped in
+// tests. Building it needs no network and no credentials, so the branch that
+// reports its failure is reachable only by replacing it.
+var buildCatalogIDs = actionids.Build
+
 // run builds the catalog, walks the source, reports, and returns the process
 // exit code.
 //
@@ -85,7 +90,7 @@ type auditConfig struct {
 // the end: the one line that says why the job stopped should name the rule
 // rather than send a reader back up through a thousand lines of report.
 func run(cfg auditConfig, stdout, stderr io.Writer) int {
-	ids, err := actionids.Build()
+	ids, err := buildCatalogIDs()
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
 		return 1
