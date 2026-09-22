@@ -522,6 +522,25 @@ func TestStandaloneGroup_OnlyTheTwoUtilityKinds(t *testing.T) {
 	}
 }
 
+// TestProjection_MetaCallWithNoParameters_CarriesNoParamsObject checks that a
+// domain tool is sent the action alone when the action takes nothing, rather
+// than an empty params object beside it, which is the one shape a meta call
+// can take that no other call of this projection sends.
+func TestProjection_MetaCallWithNoParameters_CarriesNoParamsObject(t *testing.T) {
+	action, known := freeProjection(t).lookup("server.status")
+	if !known {
+		t.Fatal("the Free catalog has no server.status")
+	}
+
+	call, err := action.callOn(SurfaceMeta, nil, false)
+	if err != nil {
+		t.Fatalf("projecting server.status onto meta: %v", err)
+	}
+	if !slices.Equal(call.argumentNames, []string{"action"}) {
+		t.Errorf("the meta call carries %v, want the action argument alone", call.argumentNames)
+	}
+}
+
 // TestProjection_MetaActionWithoutAPair_IsRefused checks the meta refusal an
 // ordinary action with no tool and action pair gets, which the standalone
 // branch sits in front of: a projection that sent it anyway would name a tool
@@ -654,34 +673,62 @@ func (s *standaloneStubGitLab) answer(t *testing.T, w http.ResponseWriter, statu
 	}
 }
 
-// projectFlowResponder answers the guided project flow by the property each
-// prompt asks for, and declines anything it was not told to expect so an extra
-// prompt fails the flow rather than being filled in.
-func projectFlowResponder(name string) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-	answers := map[string]any{
+// projectFlowScript answers the guided project flow by the property each
+// prompt asks for, and records what was asked, in order. It declines anything
+// it was not told to expect, so an extra prompt fails the flow rather than
+// being filled in. It runs on the SDK's goroutine, so it touches no testing.T.
+type projectFlowScript struct {
+	answers map[string]any
+	mu      sync.Mutex
+	asked   []string
+}
+
+// newProjectFlowScript returns the script that creates a project named name.
+func newProjectFlowScript(name string) *projectFlowScript {
+	return &projectFlowScript{answers: map[string]any{
 		"name":           name,
 		"description":    "made by the harness",
 		"selection":      "private",
 		"confirmed":      true,
 		"default_branch": "main",
+	}}
+}
+
+// respond answers one elicitation request.
+func (s *projectFlowScript) respond(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	if req == nil || req.Params == nil {
+		return &mcp.ElicitResult{Action: "decline"}, nil
 	}
-	return func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-		if req == nil || req.Params == nil {
+	schema, _ := req.Params.RequestedSchema.(map[string]any)
+	properties, _ := schema["properties"].(map[string]any)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	content := map[string]any{}
+	for _, key := range slices.Sorted(maps.Keys(properties)) {
+		s.asked = append(s.asked, key)
+		value, expected := s.answers[key]
+		if !expected {
 			return &mcp.ElicitResult{Action: "decline"}, nil
 		}
-		content := map[string]any{}
-		schema, _ := req.Params.RequestedSchema.(map[string]any)
-		properties, _ := schema["properties"].(map[string]any)
-		for key := range properties {
-			value, expected := answers[key]
-			if !expected {
-				return &mcp.ElicitResult{Action: "decline"}, nil
-			}
-			content[key] = value
-		}
-		return &mcp.ElicitResult{Action: "accept", Content: content}, nil
+		content[key] = value
 	}
+	return &mcp.ElicitResult{Action: "accept", Content: content}, nil
 }
+
+// askedProperties returns what the flow asked for, in the order it asked.
+func (s *projectFlowScript) askedProperties() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.asked)
+}
+
+// projectFlowPrompts is what the guided project flow asks for, in order: the
+// README question and the final confirmation are both yes-or-no prompts. The
+// common package's scenario holds a real run to the same sequence, and this is
+// where a replay of an answered prompt under the multi round trip, which would
+// make that assertion fail against a real GitLab, is caught without one.
+var projectFlowPrompts = []string{"name", "description", "selection", "confirmed", "default_branch", "confirmed"}
 
 // createdProject is the part of a project answer this test reads.
 type createdProject struct {
@@ -708,12 +755,13 @@ func TestProjection_StandaloneActions_RunThroughTheBinaryOnEverySurface(t *testi
 		t.Run(string(surface), func(t *testing.T) {
 			env := newEnv(t, inst)
 			name := env.Name("elicited")
+			script := newProjectFlowScript(name)
 			// Scripted, and so private: the session is this subtest's and ends
 			// with it, before the stub behind it is closed.
 			session := env.Session(ServerConfig{
 				Surface:      surface,
 				Elicitation:  ElicitationScripted,
-				Responder:    projectFlowResponder(name),
+				Responder:    script.respond,
 				Capabilities: CapabilitiesMinimal,
 			})
 
@@ -723,6 +771,9 @@ func TestProjection_StandaloneActions_RunThroughTheBinaryOnEverySurface(t *testi
 
 			if created.ID != 42 || created.Name != name {
 				t.Errorf("the flow answered project %d named %q, want 42 named %q", created.ID, created.Name, name)
+			}
+			if asked := script.askedProperties(); !slices.Equal(asked, projectFlowPrompts) {
+				t.Errorf("the flow asked for %v, want %v in that order, each once", asked, projectFlowPrompts)
 			}
 			if posted := stub.createdNames(); !slices.Contains(posted, name) {
 				t.Errorf("GitLab was asked to create %v, want the elicited name %q among them", posted, name)

@@ -343,6 +343,23 @@ func TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads(t *testing.T) {
 	}
 }
 
+// TestServerConfig_ChildVariables_WhatIsNotAskedForIsNotSet holds the three
+// variables whose absence is the configuration to being absent, which the
+// table above cannot tell from being set to nothing: an empty exclusion list,
+// an empty tier or an empty schema mode handed to the child is a different
+// instruction from none at all.
+func TestServerConfig_ChildVariables_WhatIsNotAskedForIsNotSet(t *testing.T) {
+	vars := ServerConfig{}.normalized().childVariables()
+
+	for _, key := range []string{"GITLAB_MCP_EXCLUDE_TOOLS", "GITLAB_MCP_TIER", "GITLAB_MCP_META_PARAM_SCHEMA"} {
+		t.Run(key, func(t *testing.T) {
+			if value, present := vars[key]; present {
+				t.Errorf("%s is set to %q for a configuration that asked for nothing", key, value)
+			}
+		})
+	}
+}
+
 // TestServerConfig_Label_NamesTheShapeWithoutHashes checks that the name a
 // record and a server log carry reads as the configuration it describes.
 func TestServerConfig_Label_NamesTheShapeWithoutHashes(t *testing.T) {

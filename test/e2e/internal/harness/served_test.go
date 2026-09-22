@@ -12,6 +12,7 @@ package harness
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -147,8 +148,45 @@ func TestCheckServedTools_ManyDifferences_AreTruncated(t *testing.T) {
 	if err == nil {
 		t.Fatal("checkServedTools() accepted a session serving tools nothing expected")
 	}
-	if !strings.Contains(err.Error(), "more)") {
-		t.Errorf("a difference of %d names was not truncated:\n%v", len(served), err)
+	if want := fmt.Sprintf("(and %d more)", len(served)-missingDiffLimit); !strings.Contains(err.Error(), want) {
+		t.Errorf("a difference of %d names was not truncated to the count %q:\n%v", len(served), want, err)
+	}
+}
+
+// TestCheckServedTools_DifferenceAtTheLimit_IsNotTruncated is the boundary of
+// the same rule: a difference of exactly the limit is listed whole, with no
+// count of names it left out, because it left out none.
+func TestCheckServedTools_DifferenceAtTheLimit_IsNotTruncated(t *testing.T) {
+	served := make([]string, 0, missingDiffLimit)
+	for i := range missingDiffLimit {
+		served = append(served, fmt.Sprintf("gitlab_tool_%02d", i))
+	}
+
+	err := checkServedTools(SurfaceIndividual, served, surfaceExpectation{})
+
+	if err == nil {
+		t.Fatal("checkServedTools() accepted a session serving tools nothing expected")
+	}
+	if strings.Contains(err.Error(), "more)") {
+		t.Errorf("a difference of exactly %d names was truncated:\n%v", missingDiffLimit, err)
+	}
+	if !strings.Contains(err.Error(), served[len(served)-1]) {
+		t.Errorf("the last of the %d names is missing from the report:\n%v", missingDiffLimit, err)
+	}
+}
+
+// TestPromptSpecOf_SplitsTheArgumentsAndSkipsAHole checks the split a sweep
+// binds prompt arguments by, and that a nil entry in a listing is passed over
+// rather than read.
+func TestPromptSpecOf_SplitsTheArgumentsAndSkipsAHole(t *testing.T) {
+	spec := promptSpecOf(&mcp.Prompt{Name: "summarize", Arguments: []*mcp.PromptArgument{
+		nil,
+		{Name: "project_id", Required: true},
+		{Name: "since"},
+	}})
+
+	if spec.Name != "summarize" || !slices.Equal(spec.Required, []string{"project_id"}) || !slices.Equal(spec.Optional, []string{"since"}) {
+		t.Errorf("promptSpecOf() = %+v, want project_id required and since optional", spec)
 	}
 }
 

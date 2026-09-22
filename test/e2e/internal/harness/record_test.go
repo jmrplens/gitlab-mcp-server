@@ -1138,6 +1138,34 @@ func TestAcceptElicitation_FillsWhatTheSchemaRequires(t *testing.T) {
 			want: map[string]any{"selections": []any{"first"}},
 		},
 		{
+			// Nothing to choose from anywhere is an empty selection, never
+			// the first of nothing.
+			name: "many of nothing",
+			schema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"selections": map[string]any{"type": "array"}},
+				"required":   []any{"selections"},
+			},
+			want: map[string]any{"selections": []any{}},
+		},
+		{
+			// An item schema that lists no values says nothing about them, so
+			// the array's own list is the one read.
+			name: "an empty item list defers to the array's own",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"selections": map[string]any{
+						"type":  "array",
+						"enum":  []any{"first"},
+						"items": map[string]any{"type": "string", "enum": []any{}},
+					},
+				},
+				"required": []any{"selections"},
+			},
+			want: map[string]any{"selections": []any{"first"}},
+		},
+		{
 			name:   "a schema this policy cannot read",
 			schema: "not an object",
 			want:   map[string]any{},
