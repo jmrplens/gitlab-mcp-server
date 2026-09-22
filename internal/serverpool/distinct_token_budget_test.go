@@ -117,6 +117,7 @@ func TestDistinctTokenBudget_EscalationLengthensThenSaturates(t *testing.T) {
 	b := NewDistinctTokenBudget(2, time.Minute, step)
 
 	want := []time.Duration{step, 10 * step, 60 * step, 60 * step}
+	// sequential: each round climbs the ladder the previous round raised
 	for round, wantLen := range want {
 		// Two distinct tokens raise the next block. The record's own clock is
 		// wound back first so the previous block has lifted, which is what a

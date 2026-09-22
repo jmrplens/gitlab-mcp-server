@@ -450,9 +450,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,300 |     288,054 |
-| Unit tests (`_test.go`)  |       883 |     566,417 |
+| Unit tests (`_test.go`)  |       883 |     566,420 |
 | End-to-end tests         |       492 |      94,380 |
-| **Total**                | **2,675** | **948,851** |
+| **Total**                | **2,675** | **948,854** |
 
 ### Functions
 
@@ -479,7 +479,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,190 |
+| `if err != nil` checks             | 9,189 |
 | `defer` statements                 | 1,114 |
 | `struct` types defined             | 3,304 |
 | `//nolint` suppressions            |   226 |

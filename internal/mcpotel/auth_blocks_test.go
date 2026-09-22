@@ -150,15 +150,17 @@ func TestObserveAuthBlocks_ARefusedRegistration_IsReturnedNotSwallowed(t *testin
 // look exactly like a rule firing twice as often.
 func TestAuthBlockReasons_AreDistinct(t *testing.T) {
 	t.Parallel()
-	seen := map[string]bool{}
-	for _, r := range []string{AuthBlockFailureLockout, AuthBlockTransportSource, AuthBlockDistinctTokens} {
-		if r == "" {
-			t.Error("a reason is the empty string, which no attribute should carry")
-		}
-		if seen[r] {
-			t.Errorf("reason %q is used twice", r)
-		}
-		seen[r] = true
+	reasons := []string{AuthBlockFailureLockout, AuthBlockTransportSource, AuthBlockDistinctTokens}
+
+	distinct := map[string]bool{}
+	for _, r := range reasons {
+		distinct[r] = true
+	}
+	if len(distinct) != len(reasons) {
+		t.Errorf("the reasons are not distinct: %v collapses to %d values", reasons, len(distinct))
+	}
+	if distinct[""] {
+		t.Error("a reason is the empty string, which no attribute should carry")
 	}
 	if AttrAuthBlockReason == attribute.Key("") {
 		t.Error("the attribute key is empty")

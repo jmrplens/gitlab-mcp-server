@@ -104,8 +104,8 @@ func registeredFlagNames(t *testing.T) []string {
 		if !ok || lit.Kind != token.STRING {
 			return true
 		}
-		name, err := strconv.Unquote(lit.Value)
-		if err != nil {
+		name, unquoteErr := strconv.Unquote(lit.Value)
+		if unquoteErr != nil {
 			t.Errorf("a flag name in main.go is not a plain string literal: %s", lit.Value)
 			return true
 		}
