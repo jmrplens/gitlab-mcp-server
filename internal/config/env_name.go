@@ -42,6 +42,10 @@ const EnvPrefix = "GITLAB_MCP_"
 // consulted as an alias of YOLO_MODE and never warned about.
 var prefixedNames = []string{
 	"ACTION_TIMEOUT",
+	"AUTH_DISTINCT_TOKEN_LIMIT",
+	"AUTH_DISTINCT_TOKEN_WINDOW",
+	"AUTH_FAILURE_LIMIT",
+	"AUTH_FAILURE_WINDOW",
 	"AUTH_MODE",
 	"CAPABILITY_SURFACE",
 	"CLIENT_COMPAT",

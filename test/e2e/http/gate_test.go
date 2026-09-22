@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // jsonRPCError is the wire shape the gate emits for a transport-level
@@ -1411,4 +1412,107 @@ func TestAllowAnyGitLabURL_LinkLocalHeader_Refused(t *testing.T) {
 				got.status, http.StatusBadRequest, truncate(got.body))
 		}
 	})
+}
+
+// TestGate_DistinctTokensBlock_ARepeatedTokenDoesNot drives the distinction the
+// slow budget exists to make, on the wire.
+//
+// The fast budget is turned off for this one, so what blocks is the distinct
+// count and nothing else. A client retrying one bad token is the shape of a
+// stuck script: it must reach the endpoint forever, however many times it
+// tries. A client presenting a stream of different credentials is a spray, and
+// the count it produces is the one thing it cannot avoid producing.
+func TestGate_DistinctTokensBlock_ARepeatedTokenDoesNot(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--auth-failure-limit=0",
+		"--auth-distinct-token-limit=3",
+	)
+
+	t.Run("one token repeated is never blocked", func(t *testing.T) {
+		for i := range 12 {
+			got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-the-same-one"}))
+			if got.status == http.StatusTooManyRequests {
+				t.Fatalf("attempt %d was rate limited; retrying one credential must never reach the distinct-token budget", i+1)
+			}
+		}
+	})
+
+	t.Run("distinct tokens are blocked", func(t *testing.T) {
+		var blocked response
+		for i := range 6 {
+			got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-distinct-" + strconv.Itoa(i)}))
+			if got.status == http.StatusTooManyRequests {
+				blocked = got
+				break
+			}
+		}
+		if blocked.status != http.StatusTooManyRequests {
+			t.Fatal("a stream of distinct credentials was never blocked")
+		}
+		if blocked.header.Get("Retry-After") == "" {
+			t.Error("a 429 must tell the caller when to come back")
+		}
+	})
+}
+
+// TestGate_DistinctTokenBlockLengthensOnRepetition drives the escalation.
+//
+// The ladder is built from the failure window, so setting that to a second
+// makes it one second, then ten, and the whole thing is observable inside a
+// test rather than inside an hour. What is asserted is the Retry-After the
+// second block announces: a block that did not lengthen would repeat the
+// first figure, and a client would be told to come back long before it may.
+func TestGate_DistinctTokenBlockLengthensOnRepetition(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--auth-failure-limit=0",
+		"--auth-distinct-token-limit=2",
+		"--auth-failure-window=1s",
+	)
+
+	spendTheBudget := func(t *testing.T, round int) response {
+		t.Helper()
+		for i := range 8 {
+			got := srv.do(t, mcpPOST(map[string]string{
+				"PRIVATE-TOKEN": "glpat-r" + strconv.Itoa(round) + "-" + strconv.Itoa(i),
+			}))
+			if got.status == http.StatusTooManyRequests {
+				return got
+			}
+		}
+		t.Fatalf("round %d never produced a block", round)
+		return response{}
+	}
+
+	first := retryAfterOf(t, spendTheBudget(t, 1))
+	if first > 2 {
+		t.Fatalf("first Retry-After = %ds, want the first rung of about 1s", first)
+	}
+
+	// Wait out the first block, then spend the budget again. The second rung
+	// is ten windows, so the figure has to rise.
+	time.Sleep(1500 * time.Millisecond)
+	second := retryAfterOf(t, spendTheBudget(t, 2))
+	if second <= first {
+		t.Errorf("second Retry-After = %ds, first = %ds; the block did not lengthen on repetition", second, first)
+	}
+}
+
+// retryAfterOf reads the Retry-After seconds off a 429, failing the test when
+// the header is missing or is not a number, since both mean the client was
+// told nothing usable.
+func retryAfterOf(t *testing.T, got response) int {
+	t.Helper()
+	raw := got.header.Get("Retry-After")
+	if raw == "" {
+		t.Fatal("a 429 carried no Retry-After")
+	}
+	secs, err := strconv.Atoi(raw)
+	if err != nil {
+		t.Fatalf("Retry-After = %q, want whole seconds: %v", raw, err)
+	}
+	return secs
 }

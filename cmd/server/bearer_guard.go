@@ -74,6 +74,17 @@ type bearerGuard struct {
 	// rather than as its limiter: the accounting is the point of it, and this
 	// guard is the layer that spends it first.
 	sourceBudget *transportBudget
+	// spray is the slow budget: distinct credentials refused per address over
+	// a longer window, answered with a block that lengthens each time. Shared
+	// with [mcpServerGate], like limiter and sourceBudget, since this guard is
+	// the layer that sees a refused credential first.
+	spray *serverpool.DistinctTokenBudget
+	// blocks counts the refusals each budget produced, for telemetry. Shared
+	// with [mcpServerGate].
+	blocks *authBlockCounters
+	// failureWindow is the configured window the two counting budgets block
+	// for, and so what their Retry-After announces.
+	failureWindow time.Duration
 	// trustedProxyHeader names the header carrying the real client IP, so
 	// the limiter counts per caller rather than per reverse proxy, and
 	// trustedProxies are the peers it is believed from.
@@ -156,23 +167,24 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 	// nothing, least of all an upstream call. The one exemption is a
 	// credential this deployment has already verified, which is read back from
 	// memory and so costs nothing either.
-	if g.blockedByBudget(ip, source) && !g.credentialAlreadyVerified(r) {
+	if blocked, retryAfter, reason := g.blockedByBudget(ip, source); blocked && !g.credentialAlreadyVerified(r) {
+		g.blocks.record(reason)
 		// Both addresses, because the refusal may be either one's doing. The
 		// budget charged to the transport source is shared by everything
 		// behind one proxy, so ip is frequently just whoever arrived next;
 		// naming it alone pointed an operator at an innocent machine.
-		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
+		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures", "ip", ip, "source", source, "budget", reason) //#nosec G706 -- slog structured args are not interpolated
 		return &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
 			message: "Too many failed authentication attempts from this address. Retry later with a valid token.",
-			header:  newHeader(headerRetryAfter, strconv.Itoa(int(authFailureWindow.Seconds()))),
+			header:  newHeader(headerRetryAfter, strconv.Itoa(retryAfterSeconds(retryAfter))),
 		}
 	}
 
 	token := serverpool.ExtractBearerToken(r)
 	if token == "" {
-		g.recordFailure(ip, source)
+		g.recordFailure(ip, source, token)
 		// RFC 6750 section 3.1: a challenge answering a request that carried
 		// no credential at all must not name an error code, since the client
 		// has not got anything wrong yet.
@@ -230,7 +242,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 					"token_suffix", safeTokenSuffix(token))
 				return g.unacceptedRecipientFailure()
 			}
-			g.recordFailure(ip, source)
+			g.recordFailure(ip, source, token)
 			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
 			return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 		}
@@ -357,7 +369,7 @@ func (g *bearerGuard) classify(err error, ip, source, instance, token string) *g
 		if g.rejected != nil {
 			g.rejected.Record(instance, token)
 		}
-		g.recordFailure(ip, source)
+		g.recordFailure(ip, source, token)
 		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 	}
@@ -433,11 +445,15 @@ func (g *bearerGuard) invalidTokenFailure(message string) *gateFailure {
 // the correction the gate had already made, because this guard runs in front
 // of the gate and so spends the shared budget first. See
 // [transportFailureLimit].
-func (g *bearerGuard) recordFailure(key, source string) {
+func (g *bearerGuard) recordFailure(key, source, token string) {
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
 	g.sourceBudget.charge(source, key)
+	// Empty for a request that carried no Bearer token at all, which the
+	// distinct-token budget ignores: only a credential that was refused moves
+	// that ladder.
+	g.spray.Charge(key, token)
 }
 
 // credentialAlreadyVerified reports whether this request carries a token this
@@ -485,12 +501,18 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 	return oauth.SatisfiesMinimum(info.Scopes, g.minimumScope)
 }
 
-// blockedByBudget reports whether either budget is exhausted.
-func (g *bearerGuard) blockedByBudget(key, source string) bool {
-	if g.limiter != nil && g.limiter.IsBlocked(key) {
-		return true
+// blockedByBudget reports whether any budget is exhausted, for how much longer,
+// and which one refused. It is [mcpServerGate.blockedByBudget] at this layer,
+// consulting the same three budgets in the same order, and the two must agree:
+// a caller refused here and one refused there was refused by the same rule.
+func (g *bearerGuard) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
+	lockedOut, lockoutFor := false, time.Duration(0)
+	if g.limiter != nil {
+		lockedOut, lockoutFor = g.limiter.BlockedFor(key)
 	}
-	return g.sourceBudget.blocked(source)
+	sourceBlocked, sourceFor := g.sourceBudget.blockedFor(source)
+	sprayed, sprayFor := g.spray.Blocked(key)
+	return longestAuthBlock(lockedOut, lockoutFor, sourceBlocked, sourceFor, sprayed, sprayFor)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value

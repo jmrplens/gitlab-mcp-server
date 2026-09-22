@@ -58,6 +58,15 @@ type HTTPEnvOverlay struct {
 
 	RateLimitRPS   *float64
 	RateLimitBurst *int
+
+	// The two authentication budgets. Each is a pair, and each half is
+	// overlaid on its own: an operator who exports only a window means the
+	// window, with the other half left at whatever the flag or the default
+	// says.
+	AuthFailureLimit       *int
+	AuthFailureWindow      *time.Duration
+	AuthDistinctTokenLimit *int
+	AuthDistinctWindow     *time.Duration
 }
 
 // envPresent reports whether name is set to a non-empty value, under either
@@ -244,6 +253,48 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 			return fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
 		}
 		o.RateLimitBurst = &value
+	}
+	return o.readAuthBudgetEnv()
+}
+
+// readAuthBudgetEnv overlays the four authentication-budget settings, each
+// validated with the same parser and the same bound the stdio path uses, so a
+// value exported without its flag is honored and an invalid one fails startup
+// rather than falling back in silence.
+func (o *HTTPEnvOverlay) readAuthBudgetEnv() error {
+	if envPresent("AUTH_FAILURE_LIMIT") {
+		value, err := parseIntNonNegative(Getenv("AUTH_FAILURE_LIMIT"), DefaultAuthFailureLimit)
+		if err != nil {
+			return fmt.Errorf("invalid AUTH_FAILURE_LIMIT value: %w", err)
+		}
+		if value > MaxAuthFailureLimit {
+			return fmt.Errorf("AUTH_FAILURE_LIMIT exceeds maximum of %d (got %d)", MaxAuthFailureLimit, value)
+		}
+		o.AuthFailureLimit = &value
+	}
+	if envPresent("AUTH_FAILURE_WINDOW") {
+		value, err := parseDisableableDurationEnv("AUTH_FAILURE_WINDOW", DefaultAuthFailureWindow, MaxAuthFailureWindow)
+		if err != nil {
+			return err
+		}
+		o.AuthFailureWindow = &value
+	}
+	if envPresent("AUTH_DISTINCT_TOKEN_LIMIT") {
+		value, err := parseIntNonNegative(Getenv("AUTH_DISTINCT_TOKEN_LIMIT"), DefaultAuthDistinctTokenLimit)
+		if err != nil {
+			return fmt.Errorf("invalid AUTH_DISTINCT_TOKEN_LIMIT value: %w", err)
+		}
+		if value > MaxAuthDistinctTokenLimit {
+			return fmt.Errorf("AUTH_DISTINCT_TOKEN_LIMIT exceeds maximum of %d (got %d)", MaxAuthDistinctTokenLimit, value)
+		}
+		o.AuthDistinctTokenLimit = &value
+	}
+	if envPresent("AUTH_DISTINCT_TOKEN_WINDOW") {
+		value, err := parseDisableableDurationEnv("AUTH_DISTINCT_TOKEN_WINDOW", DefaultAuthDistinctWindow, MaxAuthDistinctWindow)
+		if err != nil {
+			return err
+		}
+		o.AuthDistinctWindow = &value
 	}
 	return nil
 }

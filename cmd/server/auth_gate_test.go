@@ -18,6 +18,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1331,7 +1332,7 @@ func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 			gate.trustedProxyHeader = tc.header
 			if tc.header != "" {
 				gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
-				gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+				gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
 			}
 			handler := gate.middleware(http.NotFoundHandler())
 
@@ -1378,7 +1379,7 @@ func TestMCPServerGate_TrustedProxyKeepsPerClientGranularity(t *testing.T) {
 	gate := newGate(t, okFactory)
 	gate.trustedProxyHeader = "X-Forwarded-For"
 	gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
-	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
 	handler := gate.middleware(http.NotFoundHandler())
 
 	post := func(client string) int {
@@ -1417,7 +1418,7 @@ func TestMCPServerGate_TrustedProxy_TheFleetBudgetCountsClientsNotFailures(t *te
 	gate := newGate(t, okFactory)
 	gate.trustedProxyHeader = "X-Forwarded-For"
 	gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
-	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
 	handler := gate.middleware(http.NotFoundHandler())
 
 	post := func(client, token string) int {
@@ -1461,18 +1462,18 @@ func TestMCPServerGate_TrustedProxy_TheFleetBudgetCountsClientsNotFailures(t *te
 func TestTransportBudget_ChargesOncePerKeyPerWindow(t *testing.T) {
 	t.Parallel()
 
-	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow))
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
 	const source = "203.0.113.7"
 
 	for range 50 {
 		budget.charge(source, "198.51.100.1")
 	}
-	if budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); blocked {
 		t.Error("fifty failures from one client exhausted a budget of two distinct clients")
 	}
 
 	budget.charge(source, "198.51.100.2")
-	if !budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); !blocked {
 		t.Error("a second distinct client did not reach a budget of two")
 	}
 }
@@ -1485,8 +1486,8 @@ func TestTransportBudget_NilBudgetIsInert(t *testing.T) {
 
 	var budget *transportBudget
 	budget.charge("203.0.113.7", "203.0.113.7")
-	if budget.blocked("203.0.113.7") {
-		t.Error("an absent budget blocked a request")
+	if blocked, remaining := budget.blockedFor("203.0.113.7"); blocked || remaining != 0 {
+		t.Errorf("an absent budget answered (%v, %v), want (false, 0)", blocked, remaining)
 	}
 	if budget.rateLimiter() != nil {
 		t.Error("an absent budget handed out a limiter")
@@ -1657,12 +1658,115 @@ func TestMcpServerGate_Middleware_AcceptsASessionTheCredentialOwns(t *testing.T)
 // header, and every method already tolerates it.
 func TestNewTransportBudget_WithoutALimiter_IsAbsent(t *testing.T) {
 	t.Parallel()
-	if budget := newTransportBudget(nil); budget != nil {
+	if budget := newTransportBudget(nil, authFailureWindow); budget != nil {
 		t.Errorf("newTransportBudget(nil) = %+v, want nil", budget)
 	}
 	limiter := serverpool.NewAuthRateLimiter(2, authFailureWindow)
-	if newTransportBudget(limiter).rateLimiter() != limiter {
+	if newTransportBudget(limiter, authFailureWindow).rateLimiter() != limiter {
 		t.Error("rateLimiter() did not hand back the limiter the budget wraps")
+	}
+}
+
+// TestLongestAuthBlock_AnswersWithTheLongestActiveBlock covers what a refused
+// request is told when more than one budget holds it.
+//
+// Returning the first active budget understated whenever a shorter one was
+// checked first: one failure can raise the minute-long lockout and the
+// hour-long distinct-token block together, and a client told to come back in a
+// minute spends the other fifty-nine being refused. Retry-After is a promise
+// about when the next attempt can succeed.
+func TestLongestAuthBlock_AnswersWithTheLongestActiveBlock(t *testing.T) {
+	t.Parallel()
+
+	const (
+		lockout = time.Minute
+		source  = 5 * time.Minute
+		spray   = time.Hour
+	)
+
+	cases := []struct {
+		name                              string
+		lockedOut, sourceBlocked, sprayed bool
+		wantBlocked                       bool
+		wantAfter                         time.Duration
+		wantReason                        string
+	}{
+		{name: "nothing active", wantBlocked: false},
+		{name: "lockout alone", lockedOut: true, wantBlocked: true, wantAfter: lockout, wantReason: mcpotel.AuthBlockFailureLockout},
+		{name: "source alone", sourceBlocked: true, wantBlocked: true, wantAfter: source, wantReason: mcpotel.AuthBlockTransportSource},
+		{name: "spray alone", sprayed: true, wantBlocked: true, wantAfter: spray, wantReason: mcpotel.AuthBlockDistinctTokens},
+		{
+			name:      "lockout and spray together answer with the spray",
+			lockedOut: true, sprayed: true,
+			wantBlocked: true, wantAfter: spray, wantReason: mcpotel.AuthBlockDistinctTokens,
+		},
+		{
+			name:      "lockout and source together answer with the source",
+			lockedOut: true, sourceBlocked: true,
+			wantBlocked: true, wantAfter: source, wantReason: mcpotel.AuthBlockTransportSource,
+		},
+		{
+			name:      "all three answer with the longest",
+			lockedOut: true, sourceBlocked: true, sprayed: true,
+			wantBlocked: true, wantAfter: spray, wantReason: mcpotel.AuthBlockDistinctTokens,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			blocked, after, reason := longestAuthBlock(
+				tc.lockedOut, lockout,
+				tc.sourceBlocked, source,
+				tc.sprayed, spray,
+			)
+			if blocked != tc.wantBlocked || after != tc.wantAfter || reason != tc.wantReason {
+				t.Errorf("longestAuthBlock() = (%v, %v, %q), want (%v, %v, %q)",
+					blocked, after, reason, tc.wantBlocked, tc.wantAfter, tc.wantReason)
+			}
+		})
+	}
+}
+
+// TestLongestAuthBlock_EqualDurations_KeepTheEarlierReason pins the tie-break,
+// which is the one thing the comparison cannot decide on length. The earlier
+// budget wins, so the reason recorded for two blocks of the same length does
+// not depend on evaluation order changing.
+func TestLongestAuthBlock_EqualDurations_KeepTheEarlierReason(t *testing.T) {
+	t.Parallel()
+
+	const equal = 30 * time.Second
+	_, after, reason := longestAuthBlock(true, equal, true, equal, true, equal)
+	if after != equal {
+		t.Errorf("retryAfter = %v, want %v", after, equal)
+	}
+	if reason != mcpotel.AuthBlockFailureLockout {
+		t.Errorf("reason = %q, want the first budget's %q", reason, mcpotel.AuthBlockFailureLockout)
+	}
+}
+
+// TestTransportBudget_Window_FallsBackToTheDefault covers the two shapes a
+// caller can leave the effective window in: a nil budget, which is a
+// deployment without a trusted proxy header, and one built with a
+// non-positive window, which is what a configured zero resolves to. Both
+// answer with the default, because that is what their limiter was built with,
+// and Retry-After is read off this value.
+func TestTransportBudget_Window_FallsBackToTheDefault(t *testing.T) {
+	t.Parallel()
+
+	var absent *transportBudget
+	if got := absent.window(); got != authFailureWindow {
+		t.Errorf("(nil).window() = %v, want %v", got, authFailureWindow)
+	}
+
+	limiter := serverpool.NewAuthRateLimiter(2, authFailureWindow)
+	if got := newTransportBudget(limiter, 0).window(); got != authFailureWindow {
+		t.Errorf("window() with a zero configured window = %v, want %v", got, authFailureWindow)
+	}
+
+	const configured = 5 * time.Minute
+	if got := newTransportBudget(limiter, configured).window(); got != configured {
+		t.Errorf("window() = %v, want the configured %v", got, configured)
 	}
 }
 
@@ -1673,7 +1777,7 @@ func TestNewTransportBudget_WithoutALimiter_IsAbsent(t *testing.T) {
 func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
 	t.Parallel()
 
-	budget := newTransportBudget(serverpool.NewAuthRateLimiter(3, authFailureWindow))
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(3, authFailureWindow), authFailureWindow)
 	const source = "203.0.113.7"
 	budget.charge(source, "198.51.100.1")
 	budget.charge(source, "198.51.100.2")
@@ -1693,12 +1797,12 @@ func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
 
 	// The kept pair is still counted, so charging it again costs nothing.
 	budget.charge(source, "198.51.100.2")
-	if budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); blocked {
 		t.Fatal("a key still inside its window was charged a second time")
 	}
 	// The forgotten pair is a fresh key again, and it is the third one.
 	budget.charge(source, "198.51.100.1")
-	if !budget.blocked(source) {
+	if blocked, _ := budget.blockedFor(source); !blocked {
 		t.Error("a key whose window lapsed did not charge the source again after cleanup")
 	}
 }

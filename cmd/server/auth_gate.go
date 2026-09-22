@@ -14,7 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -39,8 +41,11 @@ import (
 // holds means holding a credential GitLab accepts, which is not the state a
 // spray is in.
 const (
-	authFailureLimit  = 10
-	authFailureWindow = 1 * time.Minute
+	// The two figures a deployment gets unless it says otherwise. They live in
+	// internal/config with every other default, and are named here because
+	// the tests below build guards directly rather than through a Config.
+	authFailureLimit  = config.DefaultAuthFailureLimit
+	authFailureWindow = config.DefaultAuthFailureWindow
 	// transportFailureLimit is the secondary budget, charged to the address
 	// the connection actually came from rather than to whatever a trusted
 	// proxy header claims.
@@ -254,7 +259,21 @@ type mcpServerGate struct {
 	// without a trusted header the two keys are the same string and one
 	// budget is the whole story. Its limiter is shared with [bearerGuard],
 	// like limiter.
-	sourceBudget       *transportBudget
+	sourceBudget *transportBudget
+	// spray is the slow budget: distinct credentials refused per address over
+	// a longer window, answered with a block that lengthens each time. Shared
+	// with [bearerGuard] for the same reason limiter is, so a sprayer cannot
+	// earn a fresh allowance by moving between the two layers. Nil when the
+	// deployment turns it off, and every method tolerates that.
+	spray *serverpool.DistinctTokenBudget
+	// blocks counts the refusals each budget produced, for telemetry. Shared
+	// with [bearerGuard], since the two layers share the budgets themselves.
+	blocks *authBlockCounters
+	// failureWindow is how long the two counting budgets block for, which is
+	// what their Retry-After announces. It is the configured window rather
+	// than the default: a deployment that widened it to five minutes must not
+	// tell a caller to come back in one.
+	failureWindow      time.Duration
 	trustedProxyHeader string
 	// trustedProxies are the peers trustedProxyHeader is believed from; from
 	// anybody else the header is ignored and the peer is charged.
@@ -464,23 +483,27 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
 
-	if g.blockedByBudget(ip, source) && !g.credentialAlreadyAdmitted(r) {
+	if blocked, retryAfter, reason := g.blockedByBudget(ip, source); blocked && !g.credentialAlreadyAdmitted(r) {
+		g.blocks.record(reason)
 		// Named apart from the bearer guard's line: the throttle keys on the
 		// message, and one gate's window must not swallow the other's first
 		// report. The source is what spent the budget; behind a proxy the ip
 		// is often whoever arrived next.
-		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures (legacy auth mode)", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
+		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures (legacy auth mode)", "ip", ip, "source", source, "budget", reason) //#nosec G706 -- slog structured args are not interpolated
 		return nil, &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
 			message: "Too many failed authentication attempts from this address. Retry later with a valid token.",
-			header:  newHeader("Retry-After", strconv.Itoa(int(authFailureWindow.Seconds()))),
+			header:  newHeader("Retry-After", strconv.Itoa(retryAfterSeconds(retryAfter))),
 		}
 	}
 
 	token := g.extractCredential(r)
 	if token == "" {
-		g.chargeFailure(ip, source)
+		// No credential to count as distinct, and chargeFailure is given the
+		// empty one deliberately: a client that forgot its header must not
+		// move the escalation ladder.
+		g.chargeFailure(ip, source, token)
 		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
@@ -551,7 +574,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 		// failure in the full sense: 401, and it does count against the
 		// limiter — this is the path that stops a stream of invented tokens
 		// from churning the pool.
-		g.chargeFailure(ip, source)
+		g.chargeFailure(ip, source, token)
 		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
@@ -617,21 +640,72 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 	return g.pool.Admitted(token, options.GitLabURL)
 }
 
-// blockedByBudget reports whether either budget is exhausted: the caller's
-// key, or the transport source it arrived from.
-func (g *mcpServerGate) blockedByBudget(key, source string) bool {
-	if g.limiter != nil && g.limiter.IsBlocked(key) {
-		return true
+// blockedByBudget reports whether any budget is exhausted: the caller's key,
+// the transport source it arrived from, or the distinct credentials that key
+// has had refused. The duration is what Retry-After should say.
+//
+// It is a duration rather than a bare bool because the escalating budget's
+// block outlasts the window the other two are bounded by, and a 429 that
+// announces the short one is telling the caller to come back while it is still
+// refused. A well-behaved client then knocks for the rest of the block.
+// The reason is what telemetry records the refusal under, and is the only
+// thing recorded about it: an address is who was refused, which a counter must
+// not carry.
+func (g *mcpServerGate) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
+	lockedOut, lockoutFor := false, time.Duration(0)
+	if g.limiter != nil {
+		lockedOut, lockoutFor = g.limiter.BlockedFor(key)
 	}
-	return g.sourceBudget.blocked(source)
+	sourceBlocked, sourceFor := g.sourceBudget.blockedFor(source)
+	sprayed, sprayFor := g.spray.Blocked(key)
+	return longestAuthBlock(lockedOut, lockoutFor, sourceBlocked, sourceFor, sprayed, sprayFor)
 }
 
-// chargeFailure charges one authentication failure to both budgets.
-func (g *mcpServerGate) chargeFailure(key, source string) {
+// longestAuthBlock picks the block a refused request should be told about when
+// more than one budget holds it.
+//
+// Answering with the first one found is what both guards used to do, and it
+// understates whenever a shorter block is checked first: one failure can raise
+// the minute-long failure lockout and the hour-long distinct-token block
+// together, and a client told to come back in a minute spends the other
+// fifty-nine being refused. Retry-After is a promise about when the next
+// attempt can succeed, so the longest active block is the only honest answer,
+// and its reason is the one worth recording.
+func longestAuthBlock(
+	lockedOut bool, lockoutFor time.Duration,
+	sourceBlocked bool, sourceFor time.Duration,
+	sprayed bool, sprayFor time.Duration,
+) (blocked bool, retryAfter time.Duration, reason string) {
+	consider := func(active bool, d time.Duration, r string) {
+		if !active || d < retryAfter {
+			return
+		}
+		// A later budget only wins on a strict improvement, so the order below
+		// breaks a tie: the lockout is the cheapest to explain and the
+		// distinct-token block the most specific.
+		if blocked && d == retryAfter {
+			return
+		}
+		blocked, retryAfter, reason = true, d, r
+	}
+	consider(lockedOut, lockoutFor, mcpotel.AuthBlockFailureLockout)
+	consider(sourceBlocked, sourceFor, mcpotel.AuthBlockTransportSource)
+	consider(sprayed, sprayFor, mcpotel.AuthBlockDistinctTokens)
+	return blocked, retryAfter, reason
+}
+
+// chargeFailure charges one authentication failure to every budget.
+//
+// token is the credential that was refused, and is empty for a request that
+// carried none. The distinct-token budget ignores an empty one, so a client
+// that simply forgot its header never moves that ladder: only a credential
+// GitLab refused does, which is the thing a sprayer cannot avoid producing.
+func (g *mcpServerGate) chargeFailure(key, source, token string) {
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
 	g.sourceBudget.charge(source, key)
+	g.spray.Charge(key, token)
 }
 
 // transportBudget is the secondary authentication budget of
@@ -652,6 +726,14 @@ func (g *mcpServerGate) chargeFailure(key, source string) {
 // deployment without --trusted-proxy-header gets. Every method tolerates it.
 type transportBudget struct {
 	limiter *serverpool.AuthRateLimiter
+	// effectiveWindow is the window the limiter above was built with, which
+	// is the configured one or the default when that was zero or less. It is
+	// held here because charge and cleanup below have to lapse a pair on the
+	// same schedule the limiter forgets a failure on: deduplicating for longer
+	// than the limiter remembers undercharges a rotating source, and
+	// deduplicating for less recharges one pair inside a single window and
+	// blocks a proxy's legitimate clients early.
+	effectiveWindow time.Duration
 
 	mu sync.Mutex
 	// charged records when a (source, key) pair last opened a window, so a
@@ -663,11 +745,32 @@ type transportBudget struct {
 }
 
 // newTransportBudget wraps a limiter in the per-key accounting above.
-func newTransportBudget(limiter *serverpool.AuthRateLimiter) *transportBudget {
+//
+// window is the one the limiter was built with, not the one the operator
+// configured: the two differ when the configured value was zero or less, and
+// the accounting here has to follow the limiter rather than the configuration.
+func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duration) *transportBudget {
 	if limiter == nil {
 		return nil
 	}
-	return &transportBudget{limiter: limiter, charged: make(map[string]time.Time)}
+	if window <= 0 {
+		window = authFailureWindow
+	}
+	return &transportBudget{
+		limiter:         limiter,
+		effectiveWindow: window,
+		charged:         make(map[string]time.Time),
+	}
+}
+
+// window is the effective window this budget lapses pairs on, for the guards
+// that answer Retry-After with it. A nil budget reports the default, which is
+// what its own limiter would have used.
+func (b *transportBudget) window() time.Duration {
+	if b == nil || b.effectiveWindow <= 0 {
+		return authFailureWindow
+	}
+	return b.effectiveWindow
 }
 
 // rateLimiter is the underlying limiter, for the layer that shares this budget
@@ -679,13 +782,14 @@ func (b *transportBudget) rateLimiter() *serverpool.AuthRateLimiter {
 	return b.limiter
 }
 
-// blocked reports whether a transport source has minted more distinct primary
-// keys than its budget allows.
-func (b *transportBudget) blocked(source string) bool {
+// blockedFor reports whether a transport source has minted more distinct
+// primary keys than its budget allows, and how much of its block is left,
+// which is what a refusal answers Retry-After with.
+func (b *transportBudget) blockedFor(source string) (bool, time.Duration) {
 	if b == nil {
-		return false
+		return false, 0
 	}
-	return b.limiter.IsBlocked(source)
+	return b.limiter.BlockedFor(source)
 }
 
 // charge counts one failure against the source, unless this key has already
@@ -697,7 +801,7 @@ func (b *transportBudget) charge(source, key string) {
 	pair := source + "\x00" + key
 	b.mu.Lock()
 	first, seen := b.charged[pair]
-	fresh := !seen || time.Since(first) > authFailureWindow
+	fresh := !seen || time.Since(first) > b.effectiveWindow
 	if fresh {
 		b.charged[pair] = time.Now()
 	}
@@ -716,7 +820,7 @@ func (b *transportBudget) cleanup() {
 	b.mu.Lock()
 	now := time.Now()
 	for pair, first := range b.charged {
-		if now.Sub(first) > authFailureWindow {
+		if now.Sub(first) > b.effectiveWindow {
 			delete(b.charged, pair)
 		}
 	}
