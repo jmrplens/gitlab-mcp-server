@@ -194,6 +194,14 @@ func newHintReport() HintReport {
 	}
 }
 
+// The headings the verbose report opens its two lists with. Each is written
+// only over a list that has something in it, so a run that found nothing
+// announces no section.
+const (
+	hintRowsHeading      = "=== capabilities named in a hint by a spelling no listing publishes ==="
+	hintNotFoldedHeading = "=== hints not folded ==="
+)
+
 // writeHintReport prints what the staged rule found.
 //
 // The count is printed by every run and the rows only by a verbose one, which
@@ -203,11 +211,11 @@ func newHintReport() HintReport {
 // list is read from. The rows are in the JSON either way.
 func writeHintReport(out io.Writer, hints HintReport, verbose bool) {
 	if verbose && len(hints.Rows) > 0 {
-		fmt.Fprintln(out, "=== capabilities named in a hint by a spelling no listing publishes ===")
+		fmt.Fprintln(out, hintRowsHeading)
 		writeHintGroups(out, hints.Rows)
 	}
 	if verbose && len(hints.NotFolded) > 0 {
-		fmt.Fprintln(out, "=== hints not folded ===")
+		fmt.Fprintln(out, hintNotFoldedHeading)
 		for _, at := range hints.NotFolded {
 			fmt.Fprintf(out, "  %s:%d %s %s\n", at.File, at.Line, at.Kind, at.Expression)
 		}

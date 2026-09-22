@@ -297,6 +297,12 @@ func TestWriteHintReport_StaleDeclaration_IsPrintedWhateverVerbosityAsks(t *test
 // TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown holds a run
 // with no hints at all: the count is still printed, so a reader can tell the
 // rule ran and found nothing from the rule not having run.
+//
+// The two headings are asserted absent as well, and that is what makes the
+// emptiness of each list load-bearing rather than incidental: a heading is
+// printed by a verbose run, so asking only for verbosity would announce a
+// section and then print nothing under it, which reads as a section whose rows
+// were lost.
 func TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown(t *testing.T) {
 	report := classify(nil, stubCatalog(), false)
 
@@ -307,5 +313,39 @@ func TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown(t *testing.T) 
 	}
 	if strings.Contains(out.String(), "by rule") || strings.Contains(out.String(), "by kind") {
 		t.Errorf("report = %q, want no breakdown of nothing", out.String())
+	}
+	for _, heading := range []string{hintRowsHeading, hintNotFoldedHeading} {
+		t.Run(heading, func(t *testing.T) {
+			if strings.Contains(out.String(), heading) {
+				t.Errorf("report = %q, want no heading over an empty list", out.String())
+			}
+		})
+	}
+}
+
+// TestWriteHintGroups_RowsOfSeveralPackages_CarryOneHeadingEach holds the
+// grouping the verbose report reads by: a heading opens each package and the
+// rows of one package sit under one heading, however many there are.
+//
+// Both halves are the same comparison read in opposite directions, and a
+// report that got it backwards would be readable either way: every row under
+// its own heading says the same thing the rows say, and no heading at all says
+// nothing about which package a file belongs to.
+func TestWriteHintGroups_RowsOfSeveralPackages_CarryOneHeadingEach(t *testing.T) {
+	var out bytes.Buffer
+	writeHintGroups(&out, []HintFinding{
+		{Package: "p", File: "p/a.go", Line: 1, Kind: kindErrorHint, Name: "gitlab_demo_list", Rule: ruleToolName},
+		{Package: "p", File: "p/b.go", Line: 2, Kind: kindErrorHint, Name: "gitlab_demo_get", Rule: ruleToolName},
+		{Package: "q", File: "q/a.go", Line: 3, Kind: kindErrorHint, Name: "gitlab_other_list", Rule: ruleToolName},
+	})
+
+	var headings []string
+	for line := range strings.SplitSeq(strings.TrimSuffix(out.String(), "\n"), "\n") {
+		if strings.HasPrefix(line, "===") {
+			headings = append(headings, line)
+		}
+	}
+	if want := []string{"=== p ===", "=== q ==="}; !slices.Equal(headings, want) {
+		t.Errorf("headings = %v, want %v", headings, want)
 	}
 }

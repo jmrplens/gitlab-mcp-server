@@ -1153,3 +1153,135 @@ func TestIsHintName_NamedSpellings_AreRead(t *testing.T) {
 		})
 	}
 }
+
+// TestCollectSites_APairHandedAsTheWholeArgumentList_RecordsWhatWasWritten
+// holds the one shape where a parameter has no argument of its own in a call
+// that compiles: Go lets a call of a multi-valued function stand for the whole
+// argument list, so a two-parameter helper can be called with one expression.
+//
+// The first parameter is then recorded as that call, which folds to nothing
+// and is named; the second has no argument to read at all. Reading it anyway
+// would index past the list, which is a crash rather than a wrong answer, and
+// the shape is rare enough in a tree of hint helpers that nothing else here
+// would have produced one.
+func TestCollectSites_APairHandedAsTheWholeArgumentList_RecordsWhatWasWritten(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func pairOfHints() (string, string) {
+	return "left gitlab_demo_left", "right gitlab_demo_right"
+}
+
+func takesTwoHints(firstHint, secondHint string) {
+	_ = toolutil.WrapErrWithHint("demo_get", errDemo, firstHint)
+	_ = toolutil.WrapErrWithHint("demo_get", errDemo, secondHint)
+}
+
+func spellsBothHints() {
+	takesTwoHints("first gitlab_demo_first", "second gitlab_demo_second")
+}
+
+func handsThePairAsTheWholeList() {
+	takesTwoHints(pairOfHints())
+}
+`)
+
+	want := []string{"first gitlab_demo_first", "second gitlab_demo_second"}
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, want) {
+		t.Errorf("error hint values = %v, want %v", got, want)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"pairOfHints()"}) {
+		t.Errorf("unresolved = %v, want the pair named once", got)
+	}
+}
+
+// TestCollectSites_HintCallsThatAreNoToolutilHelper_AreReadAsProse holds the
+// three answers the toolutil test gives for a call standing where a hint is
+// expected, and it exists because two of them are reached by no other fixture
+// here.
+//
+// A conversion resolves to a type rather than to a function, so there is no
+// callee to ask a package of; a method of the universe scope resolves to a
+// function whose package is nil. Both sit in front of the path comparison and
+// each is the only thing standing between it and a nil dereference. The third
+// is an ordinary function of this package, which resolves whole and is simply
+// not the helper being looked for, so the fold gets it and reads the prose it
+// returns.
+func TestCollectSites_HintCallsThatAreNoToolutilHelper_AreReadAsProse(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func spell(name string) string { return name }
+
+func fromAConversion(raw []byte) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, string(raw))
+}
+
+func fromAMethodOfTheUniverse() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, errDemo.Error())
+}
+
+func fromAFunctionOfThisPackage() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, spell("gitlab_demo_list"))
+}
+`)
+
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, []string{"gitlab_demo_list"}) {
+		t.Errorf("error hint values = %v, want the one call the fold reaches", got)
+	}
+	want := []string{`errDemo.Error()`, `string(raw)`}
+	if got := unresolvedExprs(sites); !slices.Equal(got, want) {
+		t.Errorf("unresolved = %v, want %v", got, want)
+	}
+}
+
+// TestCollectSites_HintListGrownByAppend_ReadsASpreadAsAListAndTheRestAsProse
+// holds the two ways an append hands hints on. The list being grown is the
+// first argument and is followed as a list; an element spelled in place is one
+// hint; and a spread is a list again, which is the half that differs, since
+// reading it as one hint would record a slice where prose belongs and lose
+// every line in it.
+func TestCollectSites_HintListGrownByAppend_ReadsASpreadAsAListAndTheRestAsProse(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+type carrier struct {
+	Hints []string
+}
+
+var (
+	baseOfTheGrown  = []string{"base gitlab_demo_base"}
+	baseOfTheSpread = []string{"other gitlab_demo_other"}
+	extra           = []string{"extra gitlab_demo_extra"}
+
+	grown  = carrier{Hints: append(baseOfTheGrown, "grown gitlab_demo_grown")}
+	spread = carrier{Hints: append(baseOfTheSpread, extra...)}
+)
+`)
+
+	want := []string{
+		"base gitlab_demo_base",
+		"extra gitlab_demo_extra",
+		"grown gitlab_demo_grown",
+		"other gitlab_demo_other",
+	}
+	if got := valuesOfKind(sites, kindHintField); !slices.Equal(got, want) {
+		t.Errorf("hint field values = %v, want %v", got, want)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
