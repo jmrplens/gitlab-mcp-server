@@ -1761,3 +1761,333 @@ func TestTimeoutConstants_AreProtectionsRatherThanZero(t *testing.T) {
 		})
 	}
 }
+
+// tierCascadeServer answers the three endpoints the tier cascade asks, so a
+// test can describe a whole deployment rather than one response.
+//
+// licenseStatus is what GET /license answers (403 stands for the non-admin
+// token and for GitLab.com), namespaces is the list GET /namespaces returns,
+// and enterprise is what GET /version reports, which decides only whether an
+// unresolved tier is worth warning about.
+func tierCascadeServer(t *testing.T, licenseStatus int, licensePlan string, namespaces []map[string]any, enterprise bool) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Every endpoint the cascade asks is a read. Answering a write the
+		// same way would let a probe that started sending one pass unnoticed,
+		// so it is refused here and reported on the test goroutine's behalf.
+		if r.Method != http.MethodGet {
+			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.3.1-ee", "enterprise": enterprise})
+		case "/api/v4/license":
+			if licenseStatus != http.StatusOK {
+				w.WriteHeader(licenseStatus)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"plan": licensePlan})
+		case "/api/v4/namespaces":
+			if namespaces == nil {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(namespaces)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestDetectTier_NamespacePlan_RescuesTheNonAdminToken is the case the cascade
+// was built for, measured against a real GitLab on 2026-09-22: a caller who is
+// refused the instance license still administers namespaces whose plan GitLab
+// does report, which is every GitLab.com account.
+//
+// Before this, all of them resolved Free and were served the Free catalog
+// whatever they were paying for.
+func TestDetectTier_NamespacePlan_RescuesTheNonAdminToken(t *testing.T) {
+	cases := []struct {
+		name       string
+		namespaces []map[string]any
+		want       edition.Tier
+	}{
+		{
+			name:       "a premium namespace",
+			namespaces: []map[string]any{{"full_path": "acme", "kind": "group", "plan": "premium"}},
+			want:       edition.Premium,
+		},
+		{
+			name:       "an ultimate namespace",
+			namespaces: []map[string]any{{"full_path": "acme", "kind": "group", "plan": "ultimate"}},
+			want:       edition.Ultimate,
+		},
+		{
+			// The asymmetry ADR-0018 records for scopes: a tier resolved too
+			// low silently removes tools, one resolved too high surfaces as
+			// GitLab's own refusal on the one call that needed it.
+			name: "a free personal namespace beside an ultimate group",
+			namespaces: []map[string]any{
+				{"full_path": "someone", "kind": "user", "plan": "free"},
+				{"full_path": "acme", "kind": "group", "plan": "ultimate"},
+			},
+			want: edition.Ultimate,
+		},
+		{
+			name: "the highest of several paid plans",
+			namespaces: []map[string]any{
+				{"full_path": "a", "kind": "group", "plan": "premium"},
+				{"full_path": "b", "kind": "group", "plan": "ultimate"},
+				{"full_path": "c", "kind": "group", "plan": "premium"},
+			},
+			want: edition.Ultimate,
+		},
+		{
+			// A namespace the caller does not administer carries no plan key
+			// at all, which is what GitLab.com returned for a group I am only
+			// a member of.
+			name: "a namespace with no plan key is skipped",
+			namespaces: []map[string]any{
+				{"full_path": "not-mine", "kind": "group"},
+				{"full_path": "mine", "kind": "group", "plan": "premium"},
+			},
+			want: edition.Premium,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := tierCascadeServer(t, http.StatusForbidden, "", tc.namespaces, true)
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if got := client.DetectTier(context.Background()); got != tc.want {
+				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence pins the measurement
+// that decided the cascade's shape.
+//
+// Self-managed reports plan "default" for every namespace whatever the instance
+// is licensed for, because a subscription is a GitLab.com concept. So "default"
+// must not be read as Free evidence: it means the question was not answered,
+// and the caller falls through to the warning rather than to a confident Free.
+func TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence(t *testing.T) {
+	srv := tierCascadeServer(t, http.StatusForbidden, "",
+		[]map[string]any{{"full_path": "root", "kind": "user", "plan": "default"}}, true)
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Free {
+		t.Errorf("DetectTier() = %v, want Free: \"default\" says nothing about the instance license", got)
+	}
+}
+
+// pagedNamespaceServer answers GET /namespaces a page at a time, refusing
+// /license so the cascade reaches the namespace step, and records how many
+// pages were asked for.
+//
+// pages[i] is what page i+1 returns; X-Next-Page is set while a later page
+// exists, which is what the client reads to continue.
+func pagedNamespaceServer(t *testing.T, pages [][]map[string]any, asked *int32) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.3.1-ee", "enterprise": true})
+		case "/api/v4/license":
+			w.WriteHeader(http.StatusForbidden)
+		case "/api/v4/namespaces":
+			page := 1
+			if raw := r.URL.Query().Get("page"); raw != "" {
+				parsed, err := strconv.Atoi(raw)
+				if err != nil {
+					t.Errorf("page parameter %q is not a number", raw)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				page = parsed
+			}
+			if page < 1 || page > len(pages) {
+				t.Errorf("asked for page %d, which this fixture does not have", page)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			atomic.AddInt32(asked, 1)
+			if page < len(pages) {
+				w.Header().Set("X-Next-Page", strconv.Itoa(page+1))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(pages[page-1])
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestDetectTier_NamespacePlan_ReadsPastTheFirstPage covers the defect one page
+// left: a caller whose only paid namespace sits past the hundredth resolved
+// Free, and nothing said so.
+func TestDetectTier_NamespacePlan_ReadsPastTheFirstPage(t *testing.T) {
+	var asked int32
+	srv := pagedNamespaceServer(t, [][]map[string]any{
+		{{"full_path": "free-a", "kind": "user", "plan": "free"}},
+		{{"full_path": "paid-group", "kind": "group", "plan": "premium"}},
+	}, &asked)
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Premium {
+		t.Errorf("DetectTier() = %v, want Premium: the paid namespace is on the second page", got)
+	}
+	if asked != 2 {
+		t.Errorf("pages read = %d, want 2", asked)
+	}
+}
+
+// TestDetectTier_NamespacePlan_StopsAtUltimate checks the early exit: no later
+// namespace can raise the answer past the highest tier there is, so the probe
+// must not keep paying for pages once it has one.
+func TestDetectTier_NamespacePlan_StopsAtUltimate(t *testing.T) {
+	var asked int32
+	srv := pagedNamespaceServer(t, [][]map[string]any{
+		{{"full_path": "top", "kind": "group", "plan": "ultimate"}},
+		{{"full_path": "never-read", "kind": "group", "plan": "premium"}},
+	}, &asked)
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Ultimate {
+		t.Errorf("DetectTier() = %v, want Ultimate", got)
+	}
+	if asked != 1 {
+		t.Errorf("pages read = %d, want 1: Ultimate is the highest answer there is", asked)
+	}
+}
+
+// TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered checks the
+// failure path mid-walk. A page that fails after an earlier one answered must
+// keep that answer: the tier found so far is a fact, and discarding it would
+// resolve lower than the caller has already been shown to hold.
+func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.3.1-ee", "enterprise": true})
+		case "/api/v4/license":
+			w.WriteHeader(http.StatusForbidden)
+		case "/api/v4/namespaces":
+			if r.URL.Query().Get("page") == "2" {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("X-Next-Page", "2")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"full_path": "paid", "kind": "group", "plan": "premium"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Premium {
+		t.Errorf("DetectTier() = %v, want Premium: the first page answered before the second failed", got)
+	}
+}
+
+// TestDetectTier_LicenseWins checks the order: where the license is readable it
+// is authoritative, and the namespace plan is not consulted to contradict it.
+func TestDetectTier_LicenseWins(t *testing.T) {
+	srv := tierCascadeServer(t, http.StatusOK, "ultimate",
+		[]map[string]any{{"full_path": "acme", "kind": "group", "plan": "premium"}}, true)
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Ultimate {
+		t.Errorf("DetectTier() = %v, want Ultimate from the license rather than Premium from a namespace", got)
+	}
+}
+
+// TestDetectTier_NamespacesUnreadable_FallsBackToFree covers the deployment
+// where neither question can be asked, which must still resolve rather than
+// fail.
+func TestDetectTier_NamespacesUnreadable_FallsBackToFree(t *testing.T) {
+	for _, enterprise := range []bool{true, false} {
+		t.Run(map[bool]string{true: "enterprise build", false: "CE build"}[enterprise], func(t *testing.T) {
+			srv := tierCascadeServer(t, http.StatusForbidden, "", nil, enterprise)
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if got := client.DetectTier(context.Background()); got != edition.Free {
+				t.Errorf("DetectTier() = %v, want Free", got)
+			}
+		})
+	}
+}
+
+// TestDetectTier_GitLabComFreeIsAnAnswer separates the two plans that both map
+// to Free and mean opposite things.
+//
+// Measured on 2026-09-22: GitLab.com reports "free" for a namespace on the free
+// plan, and self-managed reports "default" for every namespace whatever the
+// instance is licensed for. Both resolve Free, and only the second is an
+// unanswered question, so only the second may warn. Reading them alike warned
+// every GitLab.com account on the free plan, at every startup, about a tier
+// that was correct: this test is what caught that when the cascade was first
+// driven against the real gitlab.com.
+func TestDetectTier_GitLabComFreeIsAnAnswer(t *testing.T) {
+	cases := []struct {
+		name     string
+		plan     string
+		answered bool
+	}{
+		{name: "gitlab.com free plan", plan: "free", answered: true},
+		{name: "self-managed default", plan: "default", answered: false},
+		{name: "no plan key", plan: "", answered: false},
+		{name: "a paid plan", plan: "premium", answered: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := namespacePlanAnswers(tc.plan); got != tc.answered {
+				t.Errorf("namespacePlanAnswers(%q) = %v, want %v", tc.plan, got, tc.answered)
+			}
+		})
+	}
+}
