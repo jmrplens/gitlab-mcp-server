@@ -125,6 +125,7 @@ readable without opening the tracker:
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), open | No | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
+| 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -147,7 +148,65 @@ removed or renamed, no field changed its Go type or its `omitempty`, and no
 route a service method builds changed. Row 52 was added on the 19th as well,
 and is read against that same v3.12.0 source.
 
+Row 53 was added on the 22nd. It is the register's first entry opened upstream
+as a feature rather than a defect, and the only one whose evidence is a
+measurement against two running instances rather than a reading of source.
+
 ## GitLab (`gitlab-org/gitlab`)
+
+### No endpoint reports the instance plan to a non-administrator
+
+- **Reported**: yes,
+  [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305),
+  opened 2026-09-22 with the measurements below.
+- **In review**: yes,
+  [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936),
+  open, from this repository's maintainer.
+- **Merged**: no.
+- **Blocking**: no. The tier can always be pinned with `--tier` or
+  `GITLAB_MCP_TIER`, which skips detection entirely.
+- **Workaround**: yes, the detection cascade in `internal/gitlab/client.go`.
+  `GET /license` first, then the namespace plans, then Free with a warning.
+  The merge request retires the second step for self-managed instances.
+
+**Where**: `GET /api/v4/license`, the only endpoint that reports the plan an
+instance is licensed for.
+
+**What**: it requires an administrator. Measured on 2026-09-21 against a
+licensed GitLab EE 19.3.1 in Docker with an administrator and an ordinary user
+on the same instance, and against gitlab.com with an ordinary account:
+
+| Endpoint          | Administrator             | Ordinary user             |
+| ----------------- | ------------------------- | ------------------------- |
+| `GET /license`    | `200`, `plan: ultimate`   | `403 Forbidden`           |
+| `GET /version`    | `200`, `enterprise: true` | `200`, `enterprise: true` |
+| `GET /namespaces` | `200`, `plan: default`    | `200`, `plan: default`    |
+| `GET /features`   | not asked                 | `403 Forbidden`           |
+
+On gitlab.com the namespace plans carry real values for a namespace the caller
+administers, under the `can_admin_namespace || has_gitlab_subscription`
+condition in `ee/lib/ee/api/entities/namespace.rb`. On a self-managed instance
+they read `default` for everyone, because `gitlab_subscription` is a gitlab.com
+concept, so they say nothing about the instance licence there.
+
+**Consequence for us**: `DetectTier` resolved Free for every non-administrator
+credential, so a caller on an Ultimate self-managed instance was served the
+Free catalogue with nothing in the listing explaining what was withheld. That
+is [issue 899](https://github.com/jmrplens/gitlab-mcp-server/issues/899).
+
+**What was contributed**: a `plan` field on the instance metadata already
+served to every authenticated caller, in its REST and GraphQL forms alike. It
+reports the licence plan, `free` where there is no licence, and nothing where
+subscriptions are held per namespace rather than per instance. Nothing
+commercial moves: the licensee, the seats, the expiry and the subscription
+identifier stay behind the administrator check on `/license`. Two issues have
+asked for this since 2020,
+[#247915](https://gitlab.com/gitlab-org/gitlab/-/issues/247915) and
+[#219732](https://gitlab.com/gitlab-org/gitlab/-/issues/219732), neither with a
+design objection recorded and both with their owning group archived.
+
+**Effort**: small. Five source files, five spec files, following the CE and EE
+split `Gitlab::Tracking::StandardContext` already uses for exactly this.
 
 ### 403 responses carry no WWW-Authenticate header
 
