@@ -27,7 +27,7 @@ func TestGroupSCIM_UnprovisionedGroup_ListsNothingAndRefusesAMissingIdentity(t *
 		return fixture.NewGroup(e, fixture.WithGroupNamePrefix("scim"))
 	}, func(e *harness.Env, surface harness.Surface, group fixture.Group) {
 		s := e.On(surface)
-		hint := []string{"uid", "gitlab_group_scim", "SCIM provisioning"}
+		hint := []string{"uid", "group_scim.list", "SCIM provisioning"}
 		uid := e.Name("scim")
 
 		listed := harness.Do[groupscim.ListOutput](s, actionGroupSCIMList, map[string]any{"group_id": group.IDParam()})

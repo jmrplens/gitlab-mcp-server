@@ -122,10 +122,12 @@ readable without opening the tracker:
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
-| 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), open | No | No | None taken |
+| 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
+| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
+| 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -135,6 +137,17 @@ what the e2e rebuild found, the first from the EE port and the second from the
 CE coverage that closed the gap against the old suite's baseline. Row 47 was
 added on the 14th and is the first entry not found from this codebase, on the
 terms the next paragraph sets out.
+
+Re-verified in full on 2026-09-22, every merge request, pull request and issue
+the file links, against the trackers rather than against memory. One row moved:
+go-sdk `#1274` merged on the 21st and row 50 still read open. Four of the nine
+documentation merge requests had also landed since the last check, which is
+recorded in row 34's section rather than in the table, since that row counts
+the client-go structs and not the pages. A merged pull request was held to the
+tags that contain its merge commit rather than to its merge date, which is the
+rule the client-go section already states and which matters here: go-sdk
+v1.8.0 was tagged on 2026-09-14 and contains **none** of the six merges,
+`#1242` from the 6th included, so every one of them is merged and unreleased.
 
 Every `client-go` row was then re-read against the **v3.12.0** source on
 2026-09-19, when the pin moved there, rather than against the tracker: for each
@@ -398,11 +411,20 @@ report names a reproduction rather than a symptom.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes. `internal/tools/features.Set` builds the request body
-  itself.
+- **Workaround**: yes, in two places. `internal/tools/features.Set` builds the
+  request body itself, and so does `fixture.setFeature` in the end-to-end
+  suite, which pins a flag as a scenario's precondition.
 
 **What**: the option struct's fields carry no `omitempty`, so empty strings are
 serialized and GitLab rejects the request with a "mutually exclusive" error.
+
+**Reach**: every call, not a corner. Grape counts a param that is present as
+given, so the body's empty `key`, `feature_group` and `user` collide whatever
+the caller asked for: GitLab answers `400 {error: key, feature_group are
+mutually exclusive, key, user are mutually exclusive}` for a plain
+instance-wide set. The method is therefore unusable as shipped, which is what
+made the second workaround necessary: the fixture called it and the licensed
+suite failed on the flag it was setting rather than on its own subject.
 
 **Effort**: small, struct tags plus a test. A good first contribution.
 
@@ -1152,10 +1174,13 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
 [!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
-`!254507` was merged into `master` on 2026-09-10, `!254519` on 2026-09-11 and
-`!254511` on 2026-09-14, none in a tagged release yet; the other six are open
-and in review since 2026-09-12, `!254542` with the technical writer's approval
-and a pipeline that fails only in the fork's `get_sources` step.
+Seven are merged into `master`, none in a tagged release yet: `!254507` on
+2026-09-10, `!254519` on 2026-09-11, `!254511` and `!254542` on 2026-09-14
+and 2026-09-15, and `!254538`, `!254543` and `!254547` together on 2026-09-22.
+`!254538` is the one whose merge had been blocked by a `pre-merge-checks`
+race rather than by anything in the change. The two still open are `!254540`
+(the deploy key fields) and `!254552` (the snippet clone URLs), the second
+waiting on a reviewer rather than on a comment.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
@@ -2197,8 +2222,10 @@ dedicated path for it (`transport.go:261`).
   [modelcontextprotocol/go-sdk#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272),
   on 2026-09-15.
 - **In review**: yes,
-  [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274).
-- **Merged**: no.
+  [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274),
+  merged.
+- **Merged**: yes, on 2026-09-21, and in no tag: v1.8.0 was cut on 2026-09-14
+  and does not contain the merge commit.
 - **Blocking**: no, and the concrete failure is on the transport this server
   leads with. `ioConn.sessionUpdated` reads only `NegotiatedProtocolVersion`,
   so a SEP-2575 session over **stdio** is treated as `2025-03-26` and accepts
@@ -2833,3 +2860,133 @@ written the same way.
   `TestDraftNotePublishAll_SendsNoPublishParameters` in
   `internal/tools/mrdraftnotes` pins what the call sends instead, and accepts
   either spelling of an empty body so an upstream fix does not fail the suite.
+
+### Seven more option structs send an optional param on every call
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: not measured. The tag defect is certain and read from the
+  source below; whether GitLab minds the null is per endpoint and was measured
+  for none of these seven. Entry 52's was measured and GitLab does mind it
+  (`422 Package type can't be blank`), so the class is not theoretical.
+- **Workaround**: none. Nothing here carries one, and none is possible from a
+  handler: the struct tag is what decides, so no option a caller passes
+  suppresses the key.
+
+**Where**: seven option structs across client-go.
+
+**What**: the same defect as entries 6 and 52, found systematically rather
+than one at a time. `audit_1to1 -scope=paths` compares the keys
+`encoding/json` writes whatever a handler set against the params GitLab's live
+record marks optional, and reports eleven fields in eight option types. One of
+the eight is entry 52. These are the other seven:
+
+| Option type                           | Field        | Param         | Endpoint                                                  |
+| ------------------------------------- | ------------ | ------------- | --------------------------------------------------------- |
+| `CreateDependencyListExportOptions`   | `ExportType` | `export_type` | `POST /pipelines/:id/dependency_list_exports`             |
+| `CreateGroupIssueBoardListOptions`    | `LabelID`    | `label_id`    | `POST /groups/:id/boards/:id/lists`                       |
+| `AddGroupMemberOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/members`                                |
+| `AddProjectMemberOptions`             | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/members`                              |
+| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/share`, `POST /groups/:id/share`      |
+| `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    |
+| `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` |
+
+**Two of them are a split tag, not a missing one**, which is worth separating
+because it reads as a fix somebody began and did not finish:
+
+```go
+ExpiresAt *string `url:"expires_at,omitempty" json:"expires_at"`
+```
+
+That is `AddGroupMemberOptions` and `AddProjectMemberOptions`. The `url` half
+omits the key and the `json` half does not, so the same field is absent from a
+query-encoded call and present as `null` in a JSON body. Every other field of
+both structs carries `omitempty` on both halves.
+
+The remaining five simply lack it.
+`EditPipelineScheduleVariableOptions` has the shape entry 52 has, one field
+with the tag and one without (`VariableType` carries it, `Value` does not).
+`CreateIssueLinkOptions` carries no `url` tags at all, so only the JSON body
+is affected. `ShareWithGroupOptions` is the one reached from three packages,
+since `projects`, `groups` and `groupmembers` all call it.
+
+**Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
+defect and does not appear, because the audit reads the request this server
+**recorded** and `internal/tools/features.Set` builds its body by hand to
+avoid the bug. The workaround hides the defect from the check that would have
+found it, which is a property worth knowing before trusting the count: the
+eight are the ones we still send through the SDK, not the eight that exist.
+
+**Effort**: small, and one merge request covers all nine of entries 6, 52 and
+these seven. Every case is a struct tag plus a test that the key is absent
+when the field is nil.
+
+### A permission refusal is answered 401 rather than 403
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The call is correctly refused and nothing is served that
+  should not be. What breaks is the explanation a client can give.
+- **Workaround**: partial. Several handlers pass a per-status hint through
+  `WrapErrWithStatusHint`, so the refusal carries a sentence naming the real
+  cause. The generic description in front of that sentence is still wrong, and
+  fixing it is ours rather than upstream's.
+
+**Where**: `lib/api/merge_request_approvals.rb:105` and 148,
+`lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
+`lib/api/resource_access_tokens.rb:32` and 63,
+`ee/lib/api/status_checks.rb:67`, `ee/lib/api/security_scans.rb:54`,
+`ee/lib/api/project_security_settings.rb:30` and 53,
+`ee/lib/api/group_security_settings.rb:36`, `ee/lib/api/saml_group_links.rb`
+(four sites), `ee/lib/ee/api/helpers.rb:193`, and
+`lib/api/ml/mlflow/api_helpers.rb:15` and 23. Read at 19.4.0-pre
+(`b183f4fad4bd`, 2026-09-22).
+
+**What**: Grape's `unauthorized!` renders 401, and these sites call it to
+refuse an **authenticated** user who lacks a permission. Eighteen of them
+guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
+calls it on a falsy service result, which is the same thing one layer down.
+RFC 9110 gives 401 for a request that lacks valid authentication credentials
+and 403 for one the server understood and refuses to authorize, so every one
+of these is the second answered as the first.
+
+It is not accidental, at least at the approve endpoint, whose own `desc` block
+declares the failure:
+
+```ruby
+failure [
+  { code: 404, message: 'Not found' },
+  { code: 401, message: 'Unauthorized' }
+]
+```
+
+So this is a design complaint rather than a bug report, which is the honest
+way to file it. GitLab's own REST API is not consistent with itself here:
+`forbidden!` appears 221 times against `unauthorized!`'s 94, and the
+neighbouring endpoints of several of these sites use it.
+
+**What it costs a client.** A refusal that says 401 is indistinguishable from
+an expired token unless the reader knows the endpoint, so a generic client
+tells its user to check their credentials when the real answer is "you wrote
+this merge request". Measured here: the licensed end-to-end run approves a
+merge request with the credential that opened it, a licensed instance ships
+"Prevent approval by author" on, and GitLab answers
+
+```text
+POST /api/v4/projects/109/merge_requests/1/approve: 401 {message: 401 Unauthorized}
+```
+
+which this server renders as `authentication failed: GITLAB_TOKEN may be
+invalid or expired` followed by the hint that contradicts it. The list above
+is not a corner: it covers merge, cancel auto-merge, approve, reset approvals,
+project mirrors, access token reads, external status checks, security scans,
+security settings and group SAML links, all of which this server serves.
+
+**Our half of it.** `httpStatusDescriptions` in `internal/toolutil/errors.go`
+maps 401 to a sentence about the token, which is right for a genuine
+authentication failure and wrong for every site above. That is a local fix
+and is tracked in
+[issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905); it does
+not wait for upstream, and it is the half a model actually reads.

@@ -113,7 +113,7 @@ func TestUserEmails_ForUser_AddListRefuseOwnReadDelete(t *testing.T) {
 		}
 
 		refusal := harness.Refused(s, actionUserGetEmail, map[string]any{"email_id": added.ID}, harness.FailureNotFound)
-		assertMentions(e, "the refusal of another user's email", refusal, "gitlab_list_emails")
+		assertMentions(e, "the refusal of another user's email", refusal, "user.emails")
 
 		deleted := harness.Do[useremails.DeleteOutput](s, actionUserDeleteEmailForUser, withParams(owner, map[string]any{"email_id": added.ID}))
 		if !deleted.Deleted || deleted.EmailID != added.ID {

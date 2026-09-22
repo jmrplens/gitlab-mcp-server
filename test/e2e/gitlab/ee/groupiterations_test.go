@@ -26,6 +26,6 @@ func TestGroupIterations_MissingGroup_IsRefusedAsNotFound(t *testing.T) {
 	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
 		s := e.On(surface)
 		refused := harness.Refused(s, actionIterationListGroup, map[string]any{"group_id": missingGroupID, "state": "opened"}, harness.FailureNotFound)
-		assertMentions(e, "the iteration listing of a missing group", refused, "gitlab_group_get", "Premium")
+		assertMentions(e, "the iteration listing of a missing group", refused, "group.get", "Premium")
 	})
 }

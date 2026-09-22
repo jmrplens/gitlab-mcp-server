@@ -89,7 +89,7 @@ func TestGeo_DisabledSecondarySite_Lifecycle(t *testing.T) {
 		// A site that never ran has reported nothing, and the read of its
 		// status says so rather than answering an empty one.
 		refused := harness.Refused(s, actionGeoGetStatus, map[string]any{"id": created.ID}, harness.FailureNotFound)
-		assertMentions(e, "the status of a site that never reported", refused, "reported status", "gitlab_list_geo_sites")
+		assertMentions(e, "the status of a site that never reported", refused, "reported status", "geo.list")
 
 		repaired := harness.Do[geo.Output](s, actionGeoRepair, map[string]any{"id": created.ID})
 		if repaired.ID != created.ID {

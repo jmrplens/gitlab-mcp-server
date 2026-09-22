@@ -28,7 +28,7 @@ func TestEnterpriseUsers_UnmanagedGroup_ListsNothingAndRefusesAMissingUser(t *te
 		return fixture.NewGroup(e, fixture.WithGroupNamePrefix("entusers"))
 	}, func(e *harness.Env, surface harness.Surface, group fixture.Group) {
 		s := e.On(surface)
-		hint := []string{"user_id", "gitlab_enterprise_user", "enterprise namespace"}
+		hint := []string{"user_id", "enterprise_user.list", "enterprise namespace"}
 
 		listed := harness.Do[enterpriseusers.ListOutput](s, actionEnterpriseUserList, map[string]any{"group_id": group.IDParam()})
 		if len(listed.Users) != 0 {
@@ -48,6 +48,6 @@ func TestEnterpriseUsers_UnmanagedGroup_ListsNothingAndRefusesAMissingUser(t *te
 		assertMentions(e, "the 2FA reset of an unmanaged user", refused, hint...)
 
 		refused = harness.Refused(s, actionEnterpriseUserDelete, map[string]any{"group_id": group.IDParam(), "user_id": missingID, "hard_delete": false}, harness.FailureNotFound)
-		assertMentions(e, "the delete of an unmanaged user", refused, "user_id", "gitlab_enterprise_user", "irreversible")
+		assertMentions(e, "the delete of an unmanaged user", refused, "user_id", "enterprise_user.list", "irreversible")
 	})
 }

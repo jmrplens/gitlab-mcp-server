@@ -138,7 +138,7 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 		defer markTodoDone(e, todo.ID)
 		awaitTodoListed(e, todo.ID)
 		refusal := harness.ExpectToolError(s, actionMergeRequestCreateTodo, params, "already exists")
-		assertMentions(e, "the refusal of a second to-do", refusal, "gitlab_todo_list")
+		assertMentions(e, "the refusal of a second to-do", refusal, "user.todo_list")
 
 		description := fmt.Sprintf("Closes #%d", f.issue.IID)
 		updated := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(params, map[string]any{"description": description}))

@@ -114,7 +114,7 @@ func TestExternalStatusChecks_Lifecycle_CreatesSetsRetriesAndDeletes(t *testing.
 		refused := harness.ExpectToolError(s, actionStatusCheckRetryProject, map[string]any{
 			"project_id": project, "merge_request_iid": f.mr.IID, "check_id": created.ID,
 		}, "failed")
-		assertMentions(e, "the retry of a passed check", refused, "gitlab_list_project_mr_external_status_checks")
+		assertMentions(e, "the retry of a passed check", refused, "external_status_check.list_project_mr_checks")
 
 		harness.DoVoid(s, actionStatusCheckDeleteProject, map[string]any{"project_id": project, "check_id": created.ID})
 		remaining := harness.Do[externalstatuschecks.ListProjectStatusCheckOutput](s, actionStatusCheckListProject, map[string]any{"project_id": project})

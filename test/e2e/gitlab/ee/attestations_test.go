@@ -41,6 +41,6 @@ func TestAttestations_UnattestedProject_ListsNothingAndRefusesADownload(t *testi
 
 		refused := harness.Refused(s, actionAttestationDownload,
 			map[string]any{"project_id": project.IDParam(), "attestation_iid": missingID}, harness.FailureNotFound)
-		assertMentions(e, "the download of a missing attestation", refused, "attestation_iid", "gitlab_attestation", "gitlab_list_attestations")
+		assertMentions(e, "the download of a missing attestation", refused, "attestation_iid", "attestation.list")
 	})
 }
