@@ -73,6 +73,18 @@ func NewCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.C
 // holds the standalone groups, and a tool name there is never the operation.
 // A missing catalog names nothing, as it does for [NewCallIdentifier].
 //
+// The index holds every standalone tool the surface registers and is not
+// narrowed by the visibility pass that runs after registration. That pass
+// removes a tool an --exclude-tools entry names exactly and, in read-only mode
+// (a read_api token's narrowing included), every tool that does not read, and
+// the index still names the removed ones. A call to one of them is therefore
+// attributed to the action the client asked for, and the server then refuses
+// it as a tool it does not serve. The individual surface already treats a
+// catalog tool read-only removed that way, since its catalog is narrowed by
+// exclusions and scopes only; the dynamic surface does not, because its
+// catalog is filtered before anything is registered, so an action withheld
+// there is named by nothing.
+//
 // It is a separate constructor rather than a change to [NewCallIdentifier]
 // because that one answers what a catalog names, and the model evaluation's
 // scoring reads it on those terms.
@@ -122,6 +134,10 @@ func indexStandaloneTools() map[string]mcpotel.Identity {
 	specs := StandaloneSurfaceToolSpecs(UnboundClient(false))
 	index := make(map[string]mcpotel.Identity, len(specs))
 	for _, spec := range specs {
+		// Not a defensive copy: the clone trims the name, the domain and the
+		// action as registration does before they become the tool's, so the
+		// key is the name a client calls and the id the one the catalog spells
+		// even for a spec that declares them with stray spaces.
 		spec = actioncatalog.CloneSurfaceToolSpec(spec)
 		index[spec.Name] = mcpotel.Identity{ActionID: spec.BaseDomain + "." + spec.ActionName, Domain: spec.BaseDomain}
 	}
@@ -194,8 +210,10 @@ type catalogIdentifier struct {
 	identify mcpotel.CallIdentifier
 	dispatch metaRoutes
 	// standalone names the tools a server registers outside its catalog, by
-	// the name they are registered under. Nil unless [NewServedCallIdentifier]
-	// built this for a surface that registers them that way.
+	// the name they are registered under: every one the surface registers,
+	// including one the visibility pass removes afterwards (see
+	// [NewServedCallIdentifier]). Nil unless [NewServedCallIdentifier] built
+	// this for a surface that registers them that way.
 	standalone map[string]mcpotel.Identity
 }
 

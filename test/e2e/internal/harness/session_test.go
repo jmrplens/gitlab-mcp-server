@@ -344,10 +344,10 @@ func TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads(t *testing.T) {
 }
 
 // TestServerConfig_ChildVariables_WhatIsNotAskedForIsNotSet holds the three
-// variables whose absence is the configuration to being absent, which the
-// table above cannot tell from being set to nothing: an empty exclusion list,
-// an empty tier or an empty schema mode handed to the child is a different
-// instruction from none at all.
+// variables a child must not see at all when the configuration asks for
+// nothing, which the table above cannot tell apart from a variable set to the
+// empty string: an empty exclusion list, tier or schema mode is a different
+// instruction from none.
 func TestServerConfig_ChildVariables_WhatIsNotAskedForIsNotSet(t *testing.T) {
 	vars := ServerConfig{}.normalized().childVariables()
 

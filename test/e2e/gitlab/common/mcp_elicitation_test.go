@@ -10,8 +10,9 @@
 // actions of the execute tool on dynamic, and the projection spells each one
 // the way its surface registers it, so the coverage record credits the calls
 // to the flows they ran. Until issue 903 the harness could not name them at
-// all, and one flow was driven on one surface through Raw, which the record
-// credits to nothing: the capability was exercised and read as absent.
+// all, and the four flows were driven through Raw on the individual surface
+// alone, which the record credits to nothing: the capability was exercised by
+// all four and read as absent.
 //
 // One test per flow rather than one for all four, because the record decides
 // that a flow elicited from the test that made the call, and a test driving

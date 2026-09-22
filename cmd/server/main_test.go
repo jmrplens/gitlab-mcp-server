@@ -1782,10 +1782,12 @@ func TestServerShellRegister_StandaloneToolCalls_AreNamedOnMetaAndIndividual(t *
 				t.Fatalf("register: %v", registerErr)
 			}
 			for tool, action := range want {
-				identity, ok := shell.identifier.Identify(tool, json.RawMessage(`{}`))
-				if !ok || identity.ActionID != action {
-					t.Errorf("Identify(%q) on %s = %+v, %t; want %s", tool, surface, identity, ok, action)
-				}
+				t.Run(tool, func(t *testing.T) {
+					identity, ok := shell.identifier.Identify(tool, json.RawMessage(`{}`))
+					if !ok || identity.ActionID != action {
+						t.Errorf("Identify(%q) on %s = %+v, %t; want %s", tool, surface, identity, ok, action)
+					}
+				})
 			}
 		})
 	}
