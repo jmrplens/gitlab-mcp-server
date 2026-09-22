@@ -126,6 +126,7 @@ readable without opening the tracker:
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
+| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2842,3 +2843,64 @@ written the same way.
   `TestDraftNotePublishAll_SendsNoPublishParameters` in
   `internal/tools/mrdraftnotes` pins what the call sends instead, and accepts
   either spelling of an empty body so an upstream fix does not fail the suite.
+
+### Seven more option structs send an optional param on every call
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: not measured. The tag defect is certain and read from the
+  source below; whether GitLab minds the null is per endpoint and was measured
+  for none of these seven. Entry 52's was measured and GitLab does mind it
+  (`422 Package type can't be blank`), so the class is not theoretical.
+- **Workaround**: none. Nothing here carries one, and none is possible from a
+  handler: the struct tag is what decides, so no option a caller passes
+  suppresses the key.
+
+**Where**: seven option structs across client-go.
+
+**What**: the same defect as entries 6 and 52, found systematically rather
+than one at a time. `audit_1to1 -scope=paths` compares the keys
+`encoding/json` writes whatever a handler set against the params GitLab's live
+record marks optional, and reports eleven fields in eight option types. One of
+the eight is entry 52. These are the other seven:
+
+| Option type                           | Field        | Param         | Endpoint                                                  |
+| ------------------------------------- | ------------ | ------------- | --------------------------------------------------------- |
+| `CreateDependencyListExportOptions`   | `ExportType` | `export_type` | `POST /pipelines/:id/dependency_list_exports`             |
+| `CreateGroupIssueBoardListOptions`    | `LabelID`    | `label_id`    | `POST /groups/:id/boards/:id/lists`                       |
+| `AddGroupMemberOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/members`                                |
+| `AddProjectMemberOptions`             | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/members`                              |
+| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/share`, `POST /groups/:id/share`      |
+| `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    |
+| `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` |
+
+**Two of them are a split tag, not a missing one**, which is worth separating
+because it reads as a fix somebody began and did not finish:
+
+```go
+ExpiresAt *string `url:"expires_at,omitempty" json:"expires_at"`
+```
+
+That is `AddGroupMemberOptions` and `AddProjectMemberOptions`. The `url` half
+omits the key and the `json` half does not, so the same field is absent from a
+query-encoded call and present as `null` in a JSON body. Every other field of
+both structs carries `omitempty` on both halves.
+
+The remaining five simply lack it.
+`EditPipelineScheduleVariableOptions` has the shape entry 52 has, one field
+with the tag and one without (`VariableType` carries it, `Value` does not).
+`CreateIssueLinkOptions` carries no `url` tags at all, so only the JSON body
+is affected. `ShareWithGroupOptions` is the one reached from three packages,
+since `projects`, `groups` and `groupmembers` all call it.
+
+**Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
+defect and does not appear, because the audit reads the request this server
+**recorded** and `internal/tools/features.Set` builds its body by hand to
+avoid the bug. The workaround hides the defect from the check that would have
+found it, which is a property worth knowing before trusting the count: the
+eight are the ones we still send through the SDK, not the eight that exist.
+
+**Effort**: small, and one merge request covers all nine of entries 6, 52 and
+these seven. Every case is a struct tag plus a test that the key is absent
+when the field is nil.
