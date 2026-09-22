@@ -7,18 +7,28 @@
 // Resources are a capability of the server, not of a tool surface: the same
 // set is registered whichever surface is active, and only on the full
 // capability surface. The sweep therefore runs on one full-capability session
-// rather than three. A template whose variables the World cannot supply is
-// named in the log rather than read, which is the "or names the binding it
-// lacks" the coverage report reads beside the templates it did read; a read
-// that answers a handled error is still credited by the recorder.
+// rather than three, and the coverage command counts each resource once per
+// capability surface for the same reason. A template whose variables the
+// World cannot supply is named in the log rather than read, which is the "or
+// names the binding it lacks" the coverage report reads beside the templates
+// it did read; a read that answers a handled error is still credited by the
+// recorder.
+//
+// The tool manifest, gitlab://tools and gitlab://tools/{id}, is the exception
+// and is left to mcp_manifest_test.go: its content is what the session's tool
+// surface registered in its mode, so it is counted per surface x mode x
+// capability surface and a read here would fill one of those cells and say
+// nothing of the others.
 
 package common
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -44,8 +54,14 @@ func TestResources_Sweep(t *testing.T) {
 	// name can still name a resource the World does not carry (a group-scoped
 	// label addressed with a project label id), which answers a handled error
 	// the recorder credits rather than a reason to abort the sweep.
-	staticErrs := 0
+	manifest := resources.ToolSurfaceResourceURIs()
+	staticsRead, staticErrs := 0, 0
 	for _, uri := range statics {
+		if slices.Contains(manifest, uri) {
+			t.Logf("resource %s not read here: TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads it on every shape", uri)
+			continue
+		}
+		staticsRead++
 		if _, err := s.TryReadResource(uri); err != nil {
 			staticErrs++
 		}
@@ -53,6 +69,10 @@ func TestResources_Sweep(t *testing.T) {
 
 	read, skipped, readErrs := 0, 0, 0
 	for _, template := range templates {
+		if slices.Contains(manifest, template) {
+			t.Logf("template %s not read here: TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads it on every shape", template)
+			continue
+		}
 		uri, missing := expandTemplate(template, world)
 		if missing != "" {
 			t.Logf("template %s not read: %s", template, missing)
@@ -65,7 +85,7 @@ func TestResources_Sweep(t *testing.T) {
 		read++
 	}
 	t.Logf("read %d static resources (%d errored) and %d templates (%d errored, %d the World cannot bind)",
-		len(statics), staticErrs, read, readErrs, skipped)
+		staticsRead, staticErrs, read, readErrs, skipped)
 }
 
 // expandTemplate replaces every RFC 6570 variable in a resource template with

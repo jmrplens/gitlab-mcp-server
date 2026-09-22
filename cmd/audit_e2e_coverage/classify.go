@@ -2,10 +2,12 @@ package main
 
 import (
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
@@ -184,30 +186,60 @@ type shapeKey struct {
 }
 
 // sessionShape is what the sessions of one surface and mode served, folded
-// over every session line with that shape.
+// over every session line with that shape, whatever their capability surface.
+// It is what the session rows publish and what the action cells are judged
+// against; the capability cells are judged against [capabilityShape].
 type sessionShape struct {
 	key shapeKey
-	// tools, resources, templates, prompts, completions and kinds are the
-	// union of what those sessions listed.
-	tools       map[string]bool
-	resources   map[string]bool
-	templates   []string
-	prompts     map[string]bool
-	completions map[string]bool
-	kinds       map[string]bool
-	// full is whether any session of the shape served the full capability
-	// surface, which is the one subscriptions exist on.
-	full bool
+	// tools, resources, templates and prompts are the union of what those
+	// sessions listed.
+	tools     map[string]bool
+	resources map[string]bool
+	templates []string
+	prompts   map[string]bool
 	// observed is whether every session of the shape saw its probe span.
 	observed bool
 	// sessions counts the session lines folded in.
 	sessions int
 }
 
-// cellKey names one surface x mode x action.
+// capabilityShape is what the sessions of one capability surface served,
+// folded over every session line with it, whatever their tool surface and
+// mode.
+//
+// It is the denominator of every capability kind counted at the capability
+// grain, which is why it exists apart from [sessionShape]: the server
+// registers its resources, prompts, completions and subscribable kinds from
+// the capability surface and the operator's exclusions alone, so the sessions
+// that differ only in tool surface or mode served the same set, and one cell
+// per item per capability surface is all there is to fill.
+type capabilityShape struct {
+	// key is the effective capability surface, full or minimal.
+	key string
+	// resources, templates, prompts, completions and kinds are the union of
+	// what those sessions listed. The resources and templates keep the
+	// tool-manifest pair, because a read of it resolves against them like any
+	// other; the capability cells leave the pair out and count it per shape.
+	resources   map[string]bool
+	templates   []string
+	prompts     map[string]bool
+	completions map[string]bool
+	kinds       map[string]bool
+	// shapes is every surface x mode a session of this capability surface ran
+	// as, each with the tool-manifest items it listed: the denominator of the
+	// tool_manifest cells, whose content varies along all three coordinates.
+	shapes map[shapeKey]map[string]bool
+	// sessions counts the session lines folded in.
+	sessions int
+}
+
+// cellKey names one cell: a surface x mode x action for the action cells, and
+// for a capability cell the coordinates its kind varies along, the others left
+// empty (see [capabilityKey]).
 type cellKey struct {
-	shape  shapeKey
-	action string
+	shape        shapeKey
+	capabilities string
+	action       string
 }
 
 // cell is one surface x mode x action with everything the calls said.
@@ -339,13 +371,16 @@ type classification struct {
 	catalog *servedCatalog
 	// shapes is every surface x mode a session line named.
 	shapes map[shapeKey]*sessionShape
+	// capabilitySurfaces is every effective capability surface a session line
+	// named.
+	capabilitySurfaces map[string]*capabilityShape
 	// cells is every surface x mode x action, filled for every catalog
 	// action on every shape once the calls are in.
 	cells map[cellKey]*cell
-	// capability cells, keyed by kind, then by surface x mode x target.
+	// capability cells, keyed by kind, then by the kind's grain and target.
 	capabilities map[string]map[cellKey]*cell
-	// delivered marks (shape, kind) pairs a resource-updated notification
-	// reached in a passing test.
+	// delivered marks the subscription cells a resource-updated notification
+	// reached in a passing test, keyed as those cells are.
 	delivered map[cellKey]bool
 	// elicited marks the tests that saw an elicitation request.
 	elicited map[string]bool
@@ -368,23 +403,103 @@ const (
 	capabilityPrompts       = "prompts"
 	capabilityCompletions   = "completions"
 	capabilitySubscriptions = "subscriptions"
+	capabilityToolManifest  = "tool_manifest"
 	capabilityElicitation   = "elicitation"
 	capabilityModes         = "modes"
 )
 
+// cellGrain is what one capability cell is per: the coordinates of a session
+// the kind's content varies along, which are the ones its key carries.
+type cellGrain int
+
+// The grains, from the coarsest a kind can be counted at.
+const (
+	// grainCapabilitySurface is one cell per item per capability surface.
+	grainCapabilitySurface cellGrain = iota
+	// grainShape is one cell per item per surface x mode.
+	grainShape
+	// grainShapeAndCapabilitySurface is one cell per item per surface x mode
+	// x capability surface.
+	grainShapeAndCapabilitySurface
+)
+
+// String spells a grain the way the committed page states it.
+func (g cellGrain) String() string {
+	switch g {
+	case grainShape:
+		return "surface x mode"
+	case grainShapeAndCapabilitySurface:
+		return "surface x mode x capability surface"
+	default:
+		return "capability surface"
+	}
+}
+
+// capabilityGrains is the grain each capability kind is counted at.
+//
+// A cell per coordinate a kind does not vary along is a cell nothing can fill
+// differently from its twin, so the key carries only the coordinates that
+// change what the server serves:
+//
+//   - Resources, prompts, completions and subscriptions are registered from
+//     the capability surface and the operator's exclusions alone. Neither the
+//     tool surface nor the protective mode reaches them, and the minimal
+//     capability surface serves a different set (no prompt, no subscription,
+//     one resource and one template), so it is the one coordinate kept.
+//   - The tool manifest, gitlab://tools and gitlab://tools/{id}, lists what the
+//     session's tool surface registered after the read-only and safe passes,
+//     and is served on both capability surfaces with a subscriptions section
+//     only on full, so it varies along all three.
+//   - The elicitation flows and the protective modes are reached through the
+//     actions a surface serves in a mode, and are counted where those are.
+//
+// It is the one statement of the model, read by [capabilityKey], which keys
+// every capability cell, and by the committed page, which prints it, so the
+// page cannot describe a grain the fold does not use.
+var capabilityGrains = map[string]cellGrain{
+	capabilityResources:     grainCapabilitySurface,
+	capabilityPrompts:       grainCapabilitySurface,
+	capabilityCompletions:   grainCapabilitySurface,
+	capabilitySubscriptions: grainCapabilitySurface,
+	capabilityToolManifest:  grainShapeAndCapabilitySurface,
+	capabilityElicitation:   grainShape,
+	capabilityModes:         grainShape,
+}
+
+// capabilityKey is the cell one item of a capability kind is counted in, at
+// the kind's grain: the coordinates the kind does not vary along are left
+// empty, so every session that differs only in them lands on the same cell.
+func capabilityKey(kind string, shape shapeKey, capabilities, target string) cellKey {
+	switch capabilityGrains[kind] {
+	case grainShape:
+		return cellKey{shape: shape, action: target}
+	case grainShapeAndCapabilitySurface:
+		return cellKey{shape: shape, capabilities: capabilities, action: target}
+	default:
+		return cellKey{capabilities: capabilities, action: target}
+	}
+}
+
+// isToolManifest reports whether a resource URI or template is one of the pair
+// the active tool surface decides, which the resources package names.
+func isToolManifest(uri string) bool {
+	return slices.Contains(resources.ToolSurfaceResourceURIs(), uri)
+}
+
 // classify judges one runtime's records against its catalog.
 func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 	c := &classification{
-		rt:           rt,
-		catalog:      catalog,
-		shapes:       map[shapeKey]*sessionShape{},
-		cells:        map[cellKey]*cell{},
-		capabilities: map[string]map[cellKey]*cell{},
-		delivered:    map[cellKey]bool{},
-		elicited:     map[string]bool{},
-		modes:        map[shapeKey]*modeEvidence{},
-		called:       map[shapeKey]map[string]bool{},
-		skipReasons:  map[string]string{},
+		rt:                 rt,
+		catalog:            catalog,
+		shapes:             map[shapeKey]*sessionShape{},
+		capabilitySurfaces: map[string]*capabilityShape{},
+		cells:              map[cellKey]*cell{},
+		capabilities:       map[string]map[cellKey]*cell{},
+		delivered:          map[cellKey]bool{},
+		elicited:           map[string]bool{},
+		modes:              map[shapeKey]*modeEvidence{},
+		called:             map[shapeKey]map[string]bool{},
+		skipReasons:        map[string]string{},
 	}
 	c.foldSessions()
 	c.foldSkips()
@@ -399,15 +514,15 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 	return c
 }
 
-// foldSessions unions the session lines per surface and mode.
+// foldSessions unions the session lines per surface and mode, and again per
+// capability surface.
 func (c *classification) foldSessions() {
 	for _, session := range c.rt.sessions {
 		key := shapeKey{surface: session.Surface, mode: session.Mode}
 		shape, seen := c.shapes[key]
 		if !seen {
 			shape = &sessionShape{
-				key: key, tools: map[string]bool{}, resources: map[string]bool{},
-				prompts: map[string]bool{}, completions: map[string]bool{}, kinds: map[string]bool{},
+				key: key, tools: map[string]bool{}, resources: map[string]bool{}, prompts: map[string]bool{},
 				observed: true,
 			}
 			c.shapes[key] = shape
@@ -416,16 +531,50 @@ func (c *classification) foldSessions() {
 		markAll(shape.tools, session.Tools)
 		markAll(shape.resources, session.Resources)
 		markAll(shape.prompts, session.Prompts)
-		markAll(shape.completions, session.Completions)
-		markAll(shape.kinds, session.SubscribableKinds)
 		shape.templates = mergeSorted(shape.templates, session.ResourceTemplates)
-		shape.full = shape.full || session.Capabilities == config.CapabilitySurfaceFull
 		if !session.DispatchObserved {
 			shape.observed = false
 			c.diagnostics.UnobservedSessions = append(c.diagnostics.UnobservedSessions, session.Label)
 		}
+		c.foldCapabilitySession(key, session)
 	}
 	sort.Strings(c.diagnostics.UnobservedSessions)
+}
+
+// foldCapabilitySession unions one session line into its capability surface.
+//
+// The surface is the effective one, so a line written before the harness
+// recorded it, or carrying a value the server would not take, is read as the
+// full surface the server falls back to rather than as a third surface of its
+// own.
+func (c *classification) foldCapabilitySession(shape shapeKey, session *e2ecalls.Session) {
+	key := config.EffectiveCapabilitySurface(session.Capabilities)
+	surface, seen := c.capabilitySurfaces[key]
+	if !seen {
+		surface = &capabilityShape{
+			key: key, resources: map[string]bool{}, prompts: map[string]bool{}, completions: map[string]bool{},
+			kinds: map[string]bool{}, shapes: map[shapeKey]map[string]bool{},
+		}
+		c.capabilitySurfaces[key] = surface
+	}
+	surface.sessions++
+	markAll(surface.resources, session.Resources)
+	markAll(surface.prompts, session.Prompts)
+	markAll(surface.completions, session.Completions)
+	markAll(surface.kinds, session.SubscribableKinds)
+	surface.templates = mergeSorted(surface.templates, session.ResourceTemplates)
+	manifest := surface.shapes[shape]
+	if manifest == nil {
+		manifest = map[string]bool{}
+		surface.shapes[shape] = manifest
+	}
+	for _, listed := range [][]string{session.Resources, session.ResourceTemplates} {
+		for _, uri := range listed {
+			if isToolManifest(uri) {
+				manifest[uri] = true
+			}
+		}
+	}
 }
 
 // foldSkips indexes the skip reasons by test.
@@ -469,26 +618,40 @@ func (c *classification) foldCall(call *e2ecalls.Call) {
 		c.diagnostics.TransportErrors++
 	}
 	shape := shapeKey{surface: call.Surface, mode: call.Mode}
+	// The effective surface, for the reason foldCapabilitySession reads it: a
+	// call line from before the harness recorded one is a call on full.
+	capabilities := config.EffectiveCapabilitySurface(call.Capabilities)
 	switch call.Method {
 	case methodCallTool:
 		c.foldToolCall(shape, call)
 	case methodReadResource:
-		c.foldCapability(capabilityResources, shape, c.resourceTarget(shape, call.Target), call)
+		target := c.resourceTarget(capabilities, call.Target)
+		c.foldCapability(resourceKind(target), shape, capabilities, target, call)
 	case methodGetPrompt:
-		c.foldCapability(capabilityPrompts, shape, call.Target, call)
+		c.foldCapability(capabilityPrompts, shape, capabilities, call.Target, call)
 	case methodComplete:
-		c.foldCapability(capabilityCompletions, shape, call.Target, call)
+		c.foldCapability(capabilityCompletions, shape, capabilities, call.Target, call)
 	case methodSubscribe, methodListen:
-		c.foldCapability(capabilitySubscriptions, shape, subscriptionKind(call.Target), call)
+		c.foldCapability(capabilitySubscriptions, shape, capabilities, subscriptionKind(call.Target), call)
 	case methodElicit:
 		if call.TestStatus == e2ecalls.StatusPassed {
 			c.elicited[call.Test] = true
 		}
 	case methodResourceUpdated:
 		if call.TestStatus == e2ecalls.StatusPassed {
-			c.delivered[cellKey{shape: shape, action: subscriptionKind(call.Target)}] = true
+			c.delivered[capabilityKey(capabilitySubscriptions, shape, capabilities, subscriptionKind(call.Target))] = true
 		}
 	}
+}
+
+// resourceKind files a read under the kind its target belongs to: the tool
+// manifest when the target is one of the pair the tool surface decides, and
+// the resources otherwise.
+func resourceKind(target string) string {
+	if isToolManifest(target) {
+		return capabilityToolManifest
+	}
+	return capabilityResources
 }
 
 // foldToolCall routes one tools/call line.
@@ -583,19 +746,24 @@ func (c *classification) capabilityCellFor(kind string, key cellKey) *cell {
 	return found
 }
 
-// foldCapability credits one non-tool call to its capability cell.
-func (c *classification) foldCapability(kind string, shape shapeKey, target string, call *e2ecalls.Call) {
+// foldCapability credits one non-tool call to its capability cell, keyed at
+// the kind's grain.
+func (c *classification) foldCapability(kind string, shape shapeKey, capabilities, target string, call *e2ecalls.Call) {
 	if target == "" {
 		return
 	}
-	c.capabilityCellFor(kind, cellKey{shape: shape, action: target}).add(creditOfOutcome(call), call.Test)
+	c.capabilityCellFor(kind, capabilityKey(kind, shape, capabilities, target)).add(creditOfOutcome(call), call.Test)
 }
 
 // resourceTarget names the resource a read addressed as its template, or as
-// its own URI when it is a static resource or matches no template the shape
-// served.
-func (c *classification) resourceTarget(shape shapeKey, uri string) string {
-	served, known := c.shapes[shape]
+// its own URI when it is a static resource or matches no template the
+// capability surface served.
+//
+// The capability surface and not the shape is what a read is resolved
+// against, because it is what decides the set: every shape of one capability
+// surface lists the same templates, the manifest pair included.
+func (c *classification) resourceTarget(capabilities, uri string) string {
+	served, known := c.capabilitySurfaces[capabilities]
 	if !known {
 		return uri
 	}
@@ -694,26 +862,23 @@ func (c *classification) reasonFor(found *cell) string {
 	return ""
 }
 
-// fillCapabilityCells gives every served resource, template, prompt,
-// completion and subscribable kind a cell on the shapes that served it, and
-// settles the elicitation flows from the interactive actions' cells.
+// fillCapabilityCells gives every item a capability surface served a cell at
+// its kind's grain, and settles the elicitation flows from the interactive
+// actions' cells.
+//
+// A cell a call created outside those denominators, a read of a URI nothing
+// listed or a subscription to a kind the server refuses, is settled too: it is
+// evidence of what was called, and the histogram would otherwise lose it.
 func (c *classification) fillCapabilityCells() {
-	for _, shape := range c.shapes {
-		for _, uri := range sortedKeys(shape.resources) {
-			c.settleCapability(capabilityResources, cellKey{shape: shape.key, action: uri})
+	for _, surface := range c.capabilitySurfaces {
+		for kind, items := range surface.served() {
+			for _, item := range items {
+				c.settleCapability(kind, capabilityKey(kind, shapeKey{}, surface.key, item))
+			}
 		}
-		for _, template := range shape.templates {
-			c.settleCapability(capabilityResources, cellKey{shape: shape.key, action: template})
-		}
-		for _, name := range sortedKeys(shape.prompts) {
-			c.settleCapability(capabilityPrompts, cellKey{shape: shape.key, action: name})
-		}
-		for _, ref := range sortedKeys(shape.completions) {
-			c.settleCapability(capabilityCompletions, cellKey{shape: shape.key, action: ref})
-		}
-		if shape.full {
-			for _, kind := range subscribableKinds(shape.kinds) {
-				c.settleCapability(capabilitySubscriptions, cellKey{shape: shape.key, action: kind})
+		for shape, items := range surface.shapes {
+			for item := range items {
+				c.settleCapability(capabilityToolManifest, capabilityKey(capabilityToolManifest, shape, surface.key, item))
 			}
 		}
 	}
@@ -727,8 +892,38 @@ func (c *classification) fillCapabilityCells() {
 	c.fillElicitationCells()
 }
 
-// settleCapability creates a capability cell for something a shape served and
-// settles its state.
+// served lists what one capability surface serves of each kind counted at the
+// capability grain: the cells the kind gets on it, and the figure its row in
+// the report publishes, which are one list so the two cannot disagree.
+//
+// The tool-manifest pair is left out of the resources, being counted per shape
+// as a kind of its own, and the subscribable kinds are listed only on the full
+// surface, which is the only one the server accepts a subscription on.
+func (s *capabilityShape) served() map[string][]string {
+	var items []string
+	for _, uri := range sortedKeys(s.resources) {
+		if !isToolManifest(uri) {
+			items = append(items, uri)
+		}
+	}
+	for _, template := range s.templates {
+		if !isToolManifest(template) {
+			items = append(items, template)
+		}
+	}
+	served := map[string][]string{
+		capabilityResources:   items,
+		capabilityPrompts:     sortedKeys(s.prompts),
+		capabilityCompletions: sortedKeys(s.completions),
+	}
+	if s.key == config.CapabilitySurfaceFull {
+		served[capabilitySubscriptions] = subscribableKinds(s.kinds)
+	}
+	return served
+}
+
+// settleCapability creates a capability cell for something a session served
+// and settles its state.
 func (c *classification) settleCapability(kind string, key cellKey) {
 	found := c.capabilityCellFor(kind, key)
 	found.state = c.settle(found, "")
@@ -796,7 +991,7 @@ func (c *classification) fillElicitationCells() {
 		if c.catalog.actions[key.action].domain != interactiveDomain {
 			continue
 		}
-		flow := c.capabilityCellFor(capabilityElicitation, key)
+		flow := c.capabilityCellFor(capabilityElicitation, capabilityKey(capabilityElicitation, key.shape, "", key.action))
 		flow.copyFrom(found)
 		if flow.state == stateAsserted && !c.anyElicited(found.tests[creditAsserted]) {
 			// The tool answered and nothing was asked of the client: the
@@ -850,7 +1045,7 @@ func (c *classification) fillModeCells() {
 // settleFacet writes one mode cell: asserted when a passing test showed the
 // facet, failed when only a failing test touched the shape, absent otherwise.
 func (c *classification) settleFacet(key shapeKey, facet string, shown, failed map[string]bool) {
-	found := c.capabilityCellFor(capabilityModes, cellKey{shape: key, action: facet})
+	found := c.capabilityCellFor(capabilityModes, capabilityKey(capabilityModes, key, "", facet))
 	for test := range shown {
 		found.add(creditAsserted, test)
 	}

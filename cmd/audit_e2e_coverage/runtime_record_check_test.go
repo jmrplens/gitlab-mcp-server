@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -352,6 +353,42 @@ func TestCheckRecord_ApproachingExpiry_IsANote(t *testing.T) {
 	}
 }
 
+// TestCheckRecord_EntryBeforeTheCapabilityGrain_IsANote verifies how the
+// committed record's own shape is read after the capability grain: an entry
+// with no capability_surfaces rows, which is every entry recorded before it,
+// is one note naming the half and the target that re-records it, and fails
+// nothing. Nothing in the repository can re-record an entry without a Docker
+// run of that half, so a finding here would fail every push until one ran.
+func TestCheckRecord_EntryBeforeTheCapabilityGrain_IsANote(t *testing.T) {
+	silentProbe(t)
+	opts, doc, _ := checkFixture(t)
+	doc.Runtimes["ee"].CapabilitySurfaces = nil
+	writeRecordJSON(t, opts.recordPath, doc)
+
+	verdict, err := checkRecord(opts, doc, checkClock)
+	if err != nil {
+		t.Fatalf("checkRecord() = %v, want a verdict", err)
+	}
+	if len(verdict.Findings) > 0 {
+		t.Errorf("findings = %q, want an entry before the grain to fail nothing", verdict.Findings)
+	}
+	want := []string{"ee was recorded before the capability grain: its capability histograms count every item once " +
+		"per surface x mode and it carries no capability_surfaces rows to count them against; re-record it with " +
+		"make e2e-coverage-record-ee after a Docker run of that half"}
+	if !slices.Equal(verdict.Notes, want) {
+		t.Errorf("notes = %q, want exactly %q", verdict.Notes, want)
+	}
+
+	opts.checkRecordPage = false
+	var stdout, stderr strings.Builder
+	if code := runCheckRecord(opts, &stdout, &stderr); code != exitOK {
+		t.Fatalf("runCheckRecord() = %d, stderr %q; want 0", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "record: note: "+want[0]+"\n") {
+		t.Errorf("stdout = %q, want the note printed beside the zero exit", stdout.String())
+	}
+}
+
 // TestCheckRecord_CatalogDrift_Notes verifies that a catalog that has moved
 // under the record is reported and does not fail: check-e2e-static already
 // fails on a rename from the scenario's side, and failing here too would mean
@@ -639,11 +676,7 @@ func TestRunCheckRecord_Findings_ExitNonZero(t *testing.T) {
 // commit a record the page no longer describes.
 func writeRecordJSON(t *testing.T, path string, doc *coverageRecord) {
 	t.Helper()
-	encoded, err := marshalRecord(doc)
-	if err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	if err = os.WriteFile(path, encoded, 0o600); err != nil {
+	if err := os.WriteFile(path, marshalRecord(doc), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

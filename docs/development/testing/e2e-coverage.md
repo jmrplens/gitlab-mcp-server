@@ -67,6 +67,20 @@ The profile is recorded per package and the two halves need not agree. A scenari
 
 Every cell of the default mode, counted per surface: the credit a passing assertion earned, then the shallower credits, then the reasons there is none. `unservable` is a cell the surface cannot reach at all (no individual tool, a shadowed tool name, a scope that withheld the group), and `absent` is a servable cell nothing called.
 
+The capabilities beside the tools are classified on the same states, each counted at the grain its content varies along:
+
+| Capability      | One cell per item per               |
+| --------------- | ----------------------------------- |
+| `completions`   | capability surface                  |
+| `elicitation`   | surface x mode                      |
+| `modes`         | surface x mode                      |
+| `prompts`       | capability surface                  |
+| `resources`     | capability surface                  |
+| `subscriptions` | capability surface                  |
+| `tool_manifest` | surface x mode x capability surface |
+
+The server registers its resources, prompts, completions and subscribable kinds from the capability surface alone, so neither the tool surface nor the protective mode changes what a session is served, and a cell per shape would be one nothing could fill differently from its twin. Subscriptions exist on the full capability surface only. `gitlab://tools` and `gitlab://tools/{id}` are the exception, counted as `tool_manifest`: they list what the session's tool surface registered after the read-only and safe passes, so they change along all three. The elicitation flows and the protective modes are reached through the actions a surface serves in a mode, and are counted where those are.
+
 ### ce
 
 | Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
@@ -75,7 +89,7 @@ Every cell of the default mode, counted per surface: the credit a passing assert
 | `meta`       |      791 |          0 |          3 |              11 |           19 |            0 |            0 |          0 |          0 |      11 |      0 |     34 |
 | `individual` |      719 |          0 |         22 |              10 |           18 |            0 |            0 |          0 |          4 |      11 |      0 |     85 |
 
-Resources, prompts, completions, subscriptions and the protective modes, classified on the same terms:
+This entry was recorded before the grain above: each of its capability rows counts every item once per surface x mode, whatever the kind, so an item every shape served is as many cells as there are shapes. `make e2e-coverage-record-ce` re-records it at the grain above.
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
@@ -94,7 +108,7 @@ Resources, prompts, completions, subscriptions and the protective modes, classif
 | `meta`       |      982 |          0 |          3 |              20 |           43 |            0 |            0 |          0 |          0 |      11 |      0 |     30 |
 | `individual` |      914 |          0 |         22 |              19 |           42 |            0 |            0 |          0 |          4 |      11 |      0 |     77 |
 
-Resources, prompts, completions, subscriptions and the protective modes, classified on the same terms:
+This entry was recorded before the grain above: each of its capability rows counts every item once per surface x mode, whatever the kind, so an item every shape served is as many cells as there are shapes. `make e2e-coverage-record-ee` re-records it at the grain above.
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |

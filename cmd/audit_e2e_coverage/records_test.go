@@ -134,6 +134,37 @@ func TestReadRuntimes_BrokenChild_Refused(t *testing.T) {
 	}
 }
 
+// TestReadRuntimes_ChildThatCannotBeListed_Refused verifies that a child the
+// parent's listing named, and that then cannot be listed itself, refuses the
+// whole read with the child's name rather than being passed over as a child
+// holding no shard: passing it over would report the runtimes of the other
+// children as all there is. The listing is handed in, because nothing a test
+// process can write is also something it cannot read.
+func TestReadRuntimes_ChildThatCannotBeListed_Refused(t *testing.T) {
+	dir := t.TempDir()
+	unlistable := filepath.Join(dir, "ee")
+	if err := os.MkdirAll(filepath.Join(dir, "ce"), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.MkdirAll(unlistable, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	refused := errors.New("listing refused")
+	t.Cleanup(func() { readDir = os.ReadDir })
+	readDir = func(name string) ([]os.DirEntry, error) {
+		if name == unlistable {
+			return nil, refused
+		}
+		return os.ReadDir(name)
+	}
+
+	_, err := readRuntimes(dir)
+
+	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "read "+unlistable) {
+		t.Errorf("readRuntimes() error = %v, want the listing's refusal naming %s", err, unlistable)
+	}
+}
+
 // TestReadRuntimes_DeeperShards_ReadAsOne verifies that shards two levels
 // down, with no shard at the first level, are read as one runtime.
 func TestReadRuntimes_DeeperShards_ReadAsOne(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -590,6 +591,52 @@ func TestToolManifestTemplate_NotFound(t *testing.T) {
 			_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
 			if err == nil {
 				t.Error("expected ResourceNotFoundError")
+			}
+		})
+	}
+}
+
+// TestToolSurfaceResourceURIs_NamesWhatRegistrationServes verifies the list
+// the e2e coverage command counts at the tool-surface grain against the
+// server itself: it is exactly what [RegisterToolSurfaceResources] makes a
+// session list, and none of it is in [NewHandlerIndex], which is the catalog
+// registered from the capability surface alone.
+//
+// Both halves are the claim the list stands for. A name missing from it would
+// leave that resource counted once per capability surface while its content
+// changes with the tool surface, and a name the capability catalog also
+// registers would be a resource whose content the tool surface does not
+// decide, counted at a grain it does not vary along.
+func TestToolSurfaceResourceURIs_NamesWhatRegistrationServes(t *testing.T) {
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{Surface: toolSurfaceIndividual})
+	ctx := context.Background()
+	listed, err := session.ListResources(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListResources() error = %v", err)
+	}
+	templates, err := session.ListResourceTemplates(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates() error = %v", err)
+	}
+	var served []string
+	for _, resource := range listed.Resources {
+		served = append(served, resource.URI)
+	}
+	for _, template := range templates.ResourceTemplates {
+		served = append(served, template.URITemplate)
+	}
+	slices.Sort(served)
+
+	named := ToolSurfaceResourceURIs()
+	slices.Sort(named)
+	if !slices.Equal(named, served) {
+		t.Errorf("ToolSurfaceResourceURIs() = %q, want what registration serves, %q", named, served)
+	}
+	index := NewHandlerIndex(registrarTestClient(t))
+	for _, uri := range named {
+		t.Run(uri, func(t *testing.T) {
+			if _, captured := index[uri]; captured {
+				t.Errorf("%s is in the capability catalog's handler index too, so no tool surface decides it", uri)
 			}
 		})
 	}

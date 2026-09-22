@@ -31,9 +31,25 @@
 // error-path-only, refused-only, preview-only, cleanup-only), then the states
 // that say why there is no credit (unasserted, unservable, skipped, failed,
 // absent). Levels summarize the default mode: L1 is asserted on any surface,
-// L2 on the default dynamic surface, L3 on all three. Resources, prompts,
-// completions, subscriptions, the elicitation flows and the protective modes
-// are classified on the same terms.
+// L2 on the default dynamic surface, L3 on all three.
+//
+// The capabilities beside the tools are classified on the same states, each
+// counted at the grain its content varies along, which capabilityGrains
+// states once for the fold and for the page. Resources (by template), prompts,
+// completions (by reference and argument) and subscriptions (by kind, and on
+// the full surface only) get one cell per item per capability surface: the
+// server registers them from the capability surface and the operator's
+// exclusions alone, so a cell per tool surface or mode would be one nothing
+// could fill differently from its twin. The tool manifest, gitlab://tools and
+// gitlab://tools/{id}, is a kind of its own, tool_manifest, with one cell per
+// surface x mode x capability surface, because it lists what the session's
+// surface registered after the read-only and safe passes; the resources
+// package names the pair, so a rename there reaches the fold. The elicitation
+// flows and the protective modes stay at surface x mode, reached as they are
+// through the actions a surface serves in a mode. Each capability surface's
+// row in the report (capability_surfaces) is the denominator of its cells:
+// the session rows cannot be, since they fold both capability surfaces into
+// one row per shape.
 //
 // # The gates
 //
@@ -46,8 +62,10 @@
 // order themselves: a cleanup credit is met by the same cell as cleanup, sweep
 // or asserted, and a sweep credit by sweep or asserted, since each of those
 // says the action ran and answered at least as firmly as the one it stands
-// in for. A baseline whose shards carry no verdicts, which is how the old
-// suite's recorder wrote them, is joined with the gotestsum stream at
+// in for. It compares the action cells alone, so the grain the capability
+// cells are counted at has no bearing on it. A baseline whose shards carry no
+// verdicts, which is how the old suite's recorder wrote them, is joined with
+// the gotestsum stream at
 // <directory>.results.json beside it, and refused when there is none, or when
 // the stream judges none or not all of the tests the calls name, rather than
 // compared against nothing. -port-map
@@ -64,8 +82,9 @@
 // dist/, so nothing on main can say what the suite covers. -record commits an
 // allowlist of the report to docs/development/e2e-coverage.json, one entry per
 // Docker target (ce, ee): the runtime, the run rows with their commit, GitLab
-// version and fixture profile, the session rows, the summary, and the three
-// level lists, which are what make the record an answer to which actions
+// version and fixture profile, the session rows, the capability surface rows,
+// the summary, and the three level lists, which are what make the record an
+// answer to which actions
 // rather than only to how many. The per-action cells stay out, being a
 // thousand rows per runtime that no reviewer would read, and the shard
 // directory stays out for being a path on the machine that ran the suite. The
@@ -94,7 +113,12 @@
 // does not fail, since -static already fails on the same rename from the
 // scenario's side; so is an entry measured on a revision that is not an
 // ancestor of HEAD, and only when git can resolve that revision at all, since
-// a shallow CI checkout knows none of them.
+// a shallow CI checkout knows none of them; and so is an entry recorded before
+// the capability grain, which carries no capability surface rows and whose
+// histograms count every capability item once per surface x mode. The schema
+// version did not move for those rows: they are optional, both versions of
+// the command read a document holding them or not, and a refresh folds one
+// runtime at a time, so the grain is a property of an entry.
 //
 // -static needs no GitLab and runs on push. It loads test/e2e/gitlab and
 // test/e2e/internal with their tests under the e2e tag and, from the type

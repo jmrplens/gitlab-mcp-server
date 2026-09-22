@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -62,6 +64,84 @@ func TestBuildRecordEntry_CEFixture_CarriesProvenanceAndLevels(t *testing.T) {
 	if entry.Summary.L1 != len(entry.Levels.L1) || entry.Summary.L1 == 0 {
 		t.Errorf("l1 = %d and lists %d actions, want a non-zero pair that agrees", entry.Summary.L1, len(entry.Levels.L1))
 	}
+}
+
+// TestBuildRecordEntry_CEFixture_CarriesTheCapabilitySurfaceRows verifies that
+// the entry commits what each capability surface served, which is the one
+// thing that tells a reader of the record which grain its capability
+// histograms were counted at, and without which the check calls the entry
+// older than it is. The fixture's three full shapes each list one static
+// resource, one template and one prompt, and no subscribable kind, so the
+// server's whole list stands for it.
+func TestBuildRecordEntry_CEFixture_CarriesTheCapabilitySurfaceRows(t *testing.T) {
+	entry, err := buildRecordEntry(shardReport(t, "ce"))
+	if err != nil {
+		t.Fatalf("buildRecordEntry() = %v, want an entry", err)
+	}
+	want := []capabilitySurfaceRow{{
+		Capabilities: "full", Sessions: 3, Shapes: 3, Resources: 2, Prompts: 1,
+		SubscribableKinds: len(subscribableKinds(nil)),
+	}}
+	if !reflect.DeepEqual(entry.CapabilitySurfaces, want) {
+		t.Errorf("capability_surfaces = %+v, want %+v", entry.CapabilitySurfaces, want)
+	}
+}
+
+// TestWriteRecord_RefreshOfOneHalf_LeavesAnOlderEntryAsItWas verifies the
+// migration the capability grain rests on: a document whose licensed entry was
+// recorded before the grain, with no capability_surfaces rows, is refreshed on
+// its community half and the licensed entry comes back byte for byte as it
+// was, with no field added. An empty list written as null or as [] would make
+// the old entry claim a grain it was never measured at, and would do it in a
+// diff nobody reads as a claim.
+func TestWriteRecord_RefreshOfOneHalf_LeavesAnOlderEntryAsItWas(t *testing.T) {
+	dir := t.TempDir()
+	recordPath := filepath.Join(dir, "e2e-coverage.json")
+	older, err := buildRecordEntry(eeReport())
+	if err != nil {
+		t.Fatalf("build the ee entry: %v", err)
+	}
+	older.CapabilitySurfaces = nil
+	writeRecordJSON(t, recordPath, &coverageRecord{
+		SchemaVersion: recordSchemaVersion, Note: recordNote, Runtimes: map[string]*recordEntry{"ee": older},
+	})
+	before := rawRuntime(t, recordPath, "ee")
+
+	if err = writeRecord(recordPath, filepath.Join(dir, "page.md"), []*report{shardReport(t, "ce")}); err != nil {
+		t.Fatalf("write ce: %v", err)
+	}
+
+	after := rawRuntime(t, recordPath, "ee")
+	if after != before {
+		t.Errorf("the ee entry changed when ce was written:\n before %s\n after  %s", before, after)
+	}
+	if strings.Contains(after, "capability_surfaces") {
+		t.Errorf("the ee entry gained a capability_surfaces field it was never measured with: %s", after)
+	}
+	if ce := rawRuntime(t, recordPath, "ce"); !strings.Contains(ce, `"capability_surfaces"`) {
+		t.Errorf("the refreshed ce entry carries no capability_surfaces rows: %s", ce)
+	}
+}
+
+// rawRuntime reads one runtime's entry out of a written document as the bytes
+// it was written with, for a comparison a decode and re-encode would launder.
+func rawRuntime(t *testing.T, path, key string) string {
+	t.Helper()
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is this test's own temporary directory.
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var doc struct {
+		Runtimes map[string]json.RawMessage `json:"runtimes"`
+	}
+	if err = json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	raw, held := doc.Runtimes[key]
+	if !held {
+		t.Fatalf("%s holds no %s entry", path, key)
+	}
+	return string(raw)
 }
 
 // TestBuildRecordEntry_Refusals verifies every reason a report is not
@@ -283,6 +363,30 @@ func TestWriteRecord_NoLocalPaths(t *testing.T) {
 	}
 	if strings.Contains(string(data), rep.Directory) {
 		t.Errorf("the record names the shard directory %q", rep.Directory)
+	}
+}
+
+// TestWriteRecord_RecordThatCannotBeWritten_DrawsNoPage verifies the write
+// failing after the read: a record path that is a link out of its directory,
+// to a place that does not exist, reads as a record not written yet and is
+// then refused by the write, which goes through the directory and follows no
+// link out of it. The refusal names the record, and the page is not drawn,
+// since a page rendered from a document that was never committed would
+// describe figures nothing holds.
+func TestWriteRecord_RecordThatCannotBeWritten_DrawsNoPage(t *testing.T) {
+	dir := t.TempDir()
+	recordPath, pagePath := filepath.Join(dir, "e2e-coverage.json"), filepath.Join(dir, "page.md")
+	if err := os.Symlink(filepath.Join(t.TempDir(), "absent", "e2e-coverage.json"), recordPath); err != nil {
+		t.Skipf("this filesystem will not hold the link the test needs: %v", err)
+	}
+
+	err := writeRecord(recordPath, pagePath, []*report{shardReport(t, "ce")})
+
+	if err == nil || !strings.Contains(err.Error(), "write "+recordPath) {
+		t.Errorf("writeRecord() = %v, want the refused write naming %s", err, recordPath)
+	}
+	if _, statErr := os.Stat(pagePath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("os.Stat(page) = %v, want no page drawn for a record that was never written", statErr)
 	}
 }
 
@@ -520,6 +624,9 @@ func eeReport() *report {
 			Commit: "6bd82ea61e0ee0751e28b0a75954b9e4b86a8648",
 		}},
 		Sessions: []sessionRow{{Surface: "dynamic", Mode: modeDefault, Sessions: 1, Tools: 2}},
+		CapabilitySurfaces: []capabilitySurfaceRow{{
+			Capabilities: "full", Sessions: 1, Shapes: 1, Resources: 8, Prompts: 3, SubscribableKinds: 26,
+		}},
 		Summary: summary{
 			CatalogActions: 12, TestCalls: 3, L1: 1, L2: 1,
 			States:       map[string]map[state]int{"dynamic": {stateAsserted: 1, stateAbsent: 11}},

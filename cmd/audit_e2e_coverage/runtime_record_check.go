@@ -134,7 +134,28 @@ func checkRecordEntry(opts options, verdict *recordVerdict, key string, entry *r
 	if note := revisionNote(opts.dir, key, entry); note != "" {
 		verdict.notef("%s", note)
 	}
+	if note := capabilityGrainNote(key, entry); note != "" {
+		verdict.notef("%s", note)
+	}
 	return checkRecordCatalog(opts, verdict, key, entry)
+}
+
+// capabilityGrainNote says when an entry was recorded before the capability
+// grain, which it can tell only by the rows that grain added being absent.
+//
+// It is a note and never a finding. Every entry recorded before this version
+// of the command lacks the rows, and nothing in this repository can re-record
+// one without a Docker run of that half, so a finding would fail every push
+// until somebody did. The histograms beside it are still true of what they
+// counted; they counted every capability item once per surface x mode, and the
+// reader of a figure is owed that before comparing it with a newer one.
+func capabilityGrainNote(key string, entry *recordEntry) string {
+	if len(entry.CapabilitySurfaces) > 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s was recorded before the capability grain: its capability histograms count every item once "+
+		"per surface x mode and it carries no capability_surfaces rows to count them against; re-record it with "+
+		"%s-%s after a Docker run of that half", key, recordRegenerate, key)
 }
 
 // recordLevel is one level's headline count and the list beside it.

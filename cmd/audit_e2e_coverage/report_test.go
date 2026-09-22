@@ -29,8 +29,8 @@ func TestBuildReport_Fixture_LevelsAndRows(t *testing.T) {
 	}); !reflect.DeepEqual(rep.Levels, want) {
 		t.Errorf("Levels = %+v, want %+v", rep.Levels, want)
 	}
-	if rep.Summary.CatalogActions != 12 || rep.Summary.L1 != 3 || rep.Summary.L2 != 2 || rep.Summary.L3 != 0 || rep.Summary.TestCalls != 25 {
-		t.Errorf("Summary = %+v, want 12 actions, L1 3, L2 2, L3 0, 25 test calls", rep.Summary)
+	if rep.Summary.CatalogActions != 12 || rep.Summary.L1 != 3 || rep.Summary.L2 != 2 || rep.Summary.L3 != 0 || rep.Summary.TestCalls != 26 {
+		t.Errorf("Summary = %+v, want 12 actions, L1 3, L2 2, L3 0, 26 test calls", rep.Summary)
 	}
 	var issueList actionRow
 	for _, row := range rep.Actions {
@@ -126,17 +126,114 @@ func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
 }
 
 // TestBuildReport_SubscriptionDelivery_Marked verifies that the subscription
-// row a notification reached says so, and the others do not.
+// row a notification reached says so and the others do not, which the report
+// can only find by the key the notification was filed under: the capability
+// surface and the kind, with no shape.
 func TestBuildReport_SubscriptionDelivery_Marked(t *testing.T) {
 	rep := fixtureReport()
 	delivered := map[string]bool{}
 	for _, row := range rep.Capabilities[capabilitySubscriptions] {
-		if row.Surface == config.ToolSurfaceDynamic && row.Mode == modeDefault {
+		if row.Capabilities == config.CapabilitySurfaceFull {
 			delivered[row.Target] = row.Delivered
 		}
 	}
 	if !delivered["issue"] || delivered["pipeline"] {
 		t.Errorf("delivered = issue %t, pipeline %t; want only the issue kind", delivered["issue"], delivered["pipeline"])
+	}
+}
+
+// TestCapabilitySurfaceRows_CountWhatEachSurfaceServed verifies the rows the
+// capability histograms are counted against, one per capability surface, full
+// first. Each figure is what that surface served of its kind: the resources
+// without the tool-manifest pair, the subscribable kinds on full only, and
+// the shapes and sessions its lines came from. The two surfaces are given
+// listings that differ in every column, so no two figures can be exchanged
+// and still read right.
+func TestCapabilitySurfaceRows_CountWhatEachSurfaceServed(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	offering := fixtureSession(dynamicDefault, true)
+	offering.Prompts = []string{"summarize_issue", "triage_issue"}
+	offering.Completions = []string{"summarize_issue project_id", "triage_issue issue_iid", "triage_issue project_id"}
+	lean := minimalSession(dynamicDefault)
+	lean.Completions = []string{manifestDetail + " id"}
+	rt.sessions = append(rt.sessions, offering, lean, minimalSession(metaDefault))
+
+	rows := capabilitySurfaceRows(classify(rt, fixtureCatalog()))
+
+	want := []capabilitySurfaceRow{
+		{
+			Capabilities: config.CapabilitySurfaceFull, Sessions: 6, Shapes: 5, Resources: 4, Prompts: 2,
+			Completions: 3, SubscribableKinds: len(subscribableKinds(nil)),
+		},
+		{Capabilities: config.CapabilitySurfaceMinimal, Sessions: 2, Shapes: 2, Completions: 1},
+	}
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("capabilitySurfaceRows() = %+v, want %+v", rows, want)
+	}
+}
+
+// TestCellRows_CapabilityGrain_CarriesOnlyItsCoordinates verifies what a
+// published cell row names: a prompt, counted once per capability surface,
+// carries that surface and no surface or mode key at all, while a tool
+// manifest row carries all three and an action cell's row the two it always
+// had. A prompt row that said dynamic/default would read as a prompt rendered
+// on that one shape.
+func TestCellRows_CapabilityGrain_CarriesOnlyItsCoordinates(t *testing.T) {
+	rep := fixtureReport()
+	cases := []struct {
+		name string
+		rows []cellRow
+		want string
+	}{
+		{
+			name: "a prompt",
+			rows: rep.Capabilities[capabilityPrompts],
+			want: `{"capabilities":"full","target":"summarize_issue","state":"asserted","tests":["TestPrompts"],"calls":1}`,
+		},
+		{
+			name: "a tool manifest read",
+			rows: rep.Capabilities[capabilityToolManifest],
+			want: `{"surface":"meta","mode":"default","capabilities":"full","target":"gitlab://tools/{id}","state":"asserted","tests":["TestManifest"],"calls":1}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.rows) != 1 {
+				t.Fatalf("rows = %+v, want the one cell a call reached, absent ones left out", tc.rows)
+			}
+			encoded, err := json.Marshal(tc.rows[0])
+			if err != nil {
+				t.Fatalf("encode: %v", err)
+			}
+			if string(encoded) != tc.want {
+				t.Errorf("row = %s, want %s", encoded, tc.want)
+			}
+		})
+	}
+	for _, row := range rep.Cells {
+		if row.Capabilities != "" || row.Surface == "" || row.Mode == "" {
+			t.Errorf("action cell %+v, want a surface and a mode and no capability surface", row)
+		}
+	}
+}
+
+// TestCellRows_SameTargetOnTwoCapabilitySurfaces_OrderedByTheSurface verifies
+// the tie the capability surface breaks: two cells with one target and no
+// shape are ordered by their capability surface, so a report of the same
+// classification lists them the same way every time.
+func TestCellRows_SameTargetOnTwoCapabilitySurfaces_OrderedByTheSurface(t *testing.T) {
+	cells := map[cellKey]*cell{}
+	for _, capabilities := range []string{config.CapabilitySurfaceMinimal, config.CapabilitySurfaceFull} {
+		found := newCell(cellKey{capabilities: capabilities, action: "summarize_issue"})
+		found.state = stateAsserted
+		cells[found.key] = found
+	}
+	for range 32 {
+		rows := cellRows(cells)
+		if len(rows) != 2 || rows[0].Capabilities != config.CapabilitySurfaceFull || rows[1].Capabilities != config.CapabilitySurfaceMinimal {
+			t.Fatalf("cellRows() = %+v, want full before minimal on every run", rows)
+		}
 	}
 }
 
@@ -232,7 +329,7 @@ func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 		"- L1 (asserted on any surface): 3 (25.0%)",
 		"- L2 (asserted on dynamic): 2",
 		"- L3 (asserted on all three surfaces): 0",
-		"- Test calls: 25; dispatch mismatches: 1; unresolved tools: 2",
+		"- Test calls: 26; dispatch mismatches: 1; unresolved tools: 2",
 		"",
 		"| Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
 		"| ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |",
@@ -245,9 +342,10 @@ func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 		"| `completions`   |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
 		"| `elicitation`   |        1 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          1 |       0 |      0 |      2 |",
 		"| `modes`         |        4 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
-		"| `prompts`       |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      4 |",
-		"| `resources`     |        3 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |     17 |",
-		"| `subscriptions` |        2 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |    128 |",
+		"| `prompts`       |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
+		"| `resources`     |        3 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      1 |",
+		"| `subscriptions` |        2 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |     24 |",
+		"| `tool_manifest` |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      9 |",
 		"",
 		"- Check: FAILED",
 		"  - no test call was recorded on community/free",

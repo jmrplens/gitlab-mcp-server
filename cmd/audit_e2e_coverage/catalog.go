@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -67,13 +67,17 @@ type catalogBuilder func(tier edition.Tier) (*servedCatalog, error)
 // took the base catalog would have no row for the elicitation flows at all.
 // The client is mcpsurface's stub, so the build is offline and the same on
 // every machine.
+//
+// The build cannot fail here, so its error goes through [cmdutil.MustDo]
+// rather than to the caller: the specs are compiled in, and the assembly
+// reports a failure only when they contradict each other, which the catalog's
+// own tests catch before any command is built. The error in the signature is
+// the one [catalogBuilder] declares, for the builders a test hands in.
 func buildServedCatalog(tier edition.Tier) (*servedCatalog, error) {
 	client, cleanup := mcpsurface.NewStubClient()
 	defer cleanup()
 	catalog, _, err := dynamiccatalog.Build(client, &config.ServerConfig{Tier: tier})
-	if err != nil {
-		return nil, fmt.Errorf("build the catalog at tier %s: %w", tier, err)
-	}
+	cmdutil.MustDo(err)
 	return catalogFrom(catalog, tier), nil
 }
 
