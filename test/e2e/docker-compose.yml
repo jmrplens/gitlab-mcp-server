@@ -125,8 +125,8 @@ services:
     profiles: ["bitbucket"]
     ports:
       # Loopback by default: nothing but the setup script and the import test
-      # on this machine should reach it. A fixture running on another host is
-      # bound to that host's LAN address instead (E2E_BITBUCKET_BIND=0.0.0.0).
+      # on this machine should reach it. For a fixture running on another host,
+      # run-docker-e2e.sh sets E2E_BITBUCKET_BIND=0.0.0.0 so they can.
       - "${E2E_BITBUCKET_BIND:-127.0.0.1}:7990:7990"
     environment:
       SEARCH_ENABLED: "false"

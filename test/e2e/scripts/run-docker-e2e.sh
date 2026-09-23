@@ -32,7 +32,8 @@
 #
 # Environment, all optional:
 #   E2E_DOCKER_GITLAB_URL          http://localhost:8929
-#   E2E_DOCKER_BITBUCKET_URL       http://localhost:7990
+#   E2E_DOCKER_BITBUCKET_URL       the GitLab URL on port 7990 when it ends in :8929,
+#                                  http://localhost:7990 otherwise
 #   E2E_BITBUCKET                  true under ce; false skips the Bitbucket fixture
 #   E2E_KEEP_STACK                 true leaves the stack up after the run, for a look
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
@@ -44,7 +45,7 @@
 #   GOTESTSUM                      the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
 #   E2E_GITLAB_EXTERNAL_URL, E2E_REGISTRY_EXTERNAL_URL, E2E_BITBUCKET_BIND
-#                                  what the compose file publishes; derived from the URL above
+#                                  what the compose file publishes; derived from the URLs above
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,7 +72,17 @@ if [ "$#" -eq 0 ]; then
 fi
 
 E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
-E2E_DOCKER_BITBUCKET_URL="${E2E_DOCKER_BITBUCKET_URL:-http://localhost:7990}"
+# Bitbucket runs beside GitLab, so it is reached on the same host. A fixed
+# localhost default sent a remote run's setup script to this machine, where
+# nothing listens, and the import test then skipped: the run passed and the
+# coverage record came out one action short with nothing saying why.
+if [ -z "${E2E_DOCKER_BITBUCKET_URL:-}" ]; then
+    if [ "${E2E_DOCKER_GITLAB_URL%:8929}" != "${E2E_DOCKER_GITLAB_URL}" ]; then
+        E2E_DOCKER_BITBUCKET_URL="${E2E_DOCKER_GITLAB_URL%:8929}:7990"
+    else
+        E2E_DOCKER_BITBUCKET_URL="http://localhost:7990"
+    fi
+fi
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
 E2E_REPORT_NAME="${E2E_REPORT_NAME:-e2e-${RUNTIME}}"
 GOTESTSUM="${GOTESTSUM:-gotestsum}"
@@ -86,7 +97,16 @@ export E2E_GITLAB_EXTERNAL_URL="${E2E_GITLAB_EXTERNAL_URL:-${E2E_DOCKER_GITLAB_U
 if [ -z "${E2E_REGISTRY_EXTERNAL_URL:-}" ] && [ "${E2E_DOCKER_GITLAB_URL%:8929}" != "${E2E_DOCKER_GITLAB_URL}" ]; then
     export E2E_REGISTRY_EXTERNAL_URL="${E2E_DOCKER_GITLAB_URL%:8929}:5050"
 fi
-export E2E_BITBUCKET_BIND="${E2E_BITBUCKET_BIND:-127.0.0.1}"
+# Bitbucket stays on loopback when it is reached on this machine, and is
+# published on the LAN only when it is reached from here on another one, whose
+# loopback the setup script and the import test cannot get to.
+if [ -z "${E2E_BITBUCKET_BIND:-}" ]; then
+    case "${E2E_DOCKER_BITBUCKET_URL}" in
+        *://localhost|*://localhost[:/]*|*://127.*|*://\[::1\]*) E2E_BITBUCKET_BIND=127.0.0.1 ;;
+        *) E2E_BITBUCKET_BIND=0.0.0.0 ;;
+    esac
+fi
+export E2E_BITBUCKET_BIND
 export E2E_COMMIT="${E2E_COMMIT:-$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)}"
 
 # Every down names the Bitbucket profile, whatever this run starts: a

@@ -165,17 +165,20 @@ machine:
 ```bash
 DOCKER_HOST=ssh://truenas \
 E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 \
-E2E_DOCKER_BITBUCKET_URL=http://192.168.0.40:7990 \
-E2E_BITBUCKET_BIND=0.0.0.0 \
 make test-e2e-docker          # or test-e2e-ce, test-e2e-ee
 ```
 
 `E2E_DOCKER_GITLAB_URL` is also handed to the container as its `external_url`
 (the registry's follows on port 5050), so the `web_url` fields GitLab answers
-with name the address the tests reach. Bitbucket is published on loopback by
-default and has to be bound to the remote host's LAN address for the setup
-script and the import test to reach it. The published ports are then open on
-that host's network: use it on a LAN you trust.
+with name the address the tests reach. Bitbucket follows the same host on port
+7990, and `test/e2e/scripts/run-docker-e2e.sh` publishes it on that host's LAN
+address only when the host is not this machine, since the setup script and the
+import test cannot reach a remote container's loopback; run locally, it stays on
+loopback. `E2E_DOCKER_BITBUCKET_URL` and `E2E_BITBUCKET_BIND` override either.
+Before the derivation a remote run had to set both by hand, and one that did
+not still passed: the import test skipped and the coverage record came out one
+action short. The published ports are open on the remote host's network: use
+it on a LAN you trust.
 
 ### Docker Enterprise Mode
 

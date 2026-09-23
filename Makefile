@@ -163,15 +163,17 @@ E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 make test-e2e-docker`. GitLab's
 # own idea of its URL (external_url, and the registry's beside it) follows the
 # same value, so the web_url fields it answers with are the ones the tests
-# reach. Bitbucket is published on loopback by default and has to be bound to
-# the LAN (E2E_BITBUCKET_BIND=0.0.0.0) when the fixture is remote.
+# reach. Bitbucket follows the same host, and test/e2e/scripts/run-docker-e2e.sh
+# derives both halves of it there rather than here: its URL on port 7990, and a
+# LAN bind (0.0.0.0) only when that host is not this machine, since the setup
+# script and the import test cannot reach a remote container's loopback.
+# E2E_DOCKER_BITBUCKET_URL and E2E_BITBUCKET_BIND, set in the environment or on
+# the make command line, override either. A default here would reach the script
+# as a value someone chose and switch the derivation off.
 E2E_DOCKER_GITLAB_URL ?= http://localhost:8929
 E2E_DOCKER_REGISTRY_URL ?= $(patsubst %:8929,%:5050,$(E2E_DOCKER_GITLAB_URL))
-E2E_DOCKER_BITBUCKET_URL ?= http://localhost:7990
-E2E_BITBUCKET_BIND ?= 127.0.0.1
 export E2E_GITLAB_EXTERNAL_URL = $(E2E_DOCKER_GITLAB_URL)
 export E2E_REGISTRY_EXTERNAL_URL = $(E2E_DOCKER_REGISTRY_URL)
-export E2E_BITBUCKET_BIND
 
 # Read version from VERSION file (single source of truth)
 VERSION := $(strip $(file < VERSION))
