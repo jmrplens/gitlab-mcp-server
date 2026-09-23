@@ -1,15 +1,17 @@
 ---
 title: Claude Desktop Extension
-description: Install GitLab MCP Server in Claude Desktop with one click using the .mcpb desktop extension — macOS and Windows, no Docker or runtime required.
+description: Install GitLab MCP Server in Claude Desktop with one click using the .mcpb desktop extension, on macOS, Windows and Linux, with no Docker or runtime required.
 datePublished: "2026-07-08"
 ---
 
 import { Steps } from "@astrojs/starlight/components";
 
 GitLab MCP Server ships as a one-click **desktop extension** (`.mcpb`) for
-Claude Desktop on macOS and Windows. The bundle contains a macOS universal
-binary (Apple Silicon + Intel) and a Windows executable — no Docker, Node.js,
-or Python required.
+Claude Desktop on macOS, Windows and Linux. The bundle contains a macOS
+universal binary (Apple Silicon + Intel), a Windows executable, and the Linux
+x64 and arm64 binaries with a small launcher that picks the right one. No
+Docker, Node.js or Python is required. Carrying four binaries makes the
+download about 75 MB.
 
 ## Install
 
@@ -18,13 +20,23 @@ or Python required.
 1. Download [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
    from the latest release.
 
-2. Open the file with Claude Desktop — double-click it, or drag it onto the
-   Claude Desktop Settings window. Claude shows an install dialog with the
-   extension details.
+2. Open the file with Claude Desktop. On macOS and Windows, double-click it,
+   or drag it onto the Claude Desktop Settings window. On Linux, use
+   **Extensions > Install Extension...** and select the file: the Linux app
+   registers no handler for `.mcpb` files, so a double-click does not open it.
+   Claude shows an install dialog with the extension details.
 
 3. Fill in the settings and start chatting.
 
 </Steps>
+
+:::note[Linux]
+The Linux entry runs on Claude Desktop's Linux beta (Ubuntu 22.04 or newer,
+Debian 12 or newer) on x86_64 and arm64. A launcher in the bundle picks the
+binary for your machine and hands over to it, so the server Claude Desktop
+starts and stops is the real binary. On any other machine type it refuses
+with a message in Claude Desktop's MCP log.
+:::
 
 ## Settings
 
@@ -40,9 +52,12 @@ or Python required.
 | Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
 :::tip[Token storage]
-Claude Desktop stores the Personal Access Token in the operating system
-keychain, not in a plain-text config file. Create the token with the `api`
-scope under **GitLab → User Settings → Access Tokens**.
+Claude Desktop encrypts the Personal Access Token before saving it, with a key
+protected by the operating system: the Keychain on macOS, DPAPI under your
+Windows login on Windows, and the desktop keyring (such as GNOME Keyring or
+KWallet) on Linux. A Linux desktop without a keyring leaves the token without that
+protection. Create the token with the `api` scope under
+**GitLab → User Settings → Access Tokens**.
 :::
 
 The default `dynamic` tool surface registers just two find/execute tools, so

@@ -96,11 +96,11 @@ Pick one. Each path ends with you typing a prompt to your assistant. Every chann
   <tr>
     <td><b>Claude Desktop</b></td>
     <td><a href="https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb"><img alt="Download .mcpb extension" src="https://img.shields.io/badge/Download-.mcpb_extension-d97757?style=flat-square&amp;logo=claude&amp;logoColor=white" /></a></td>
-    <td>settings UI (keychain)</td>
+    <td>settings UI</td>
   </tr>
 </table>
 
-Each button registers the **Docker**-based server (auto-pulls the image on first run; you need [Docker](https://www.docker.com/) installed). The **Claude Desktop** row instead downloads a native [.mcpb desktop extension](docs/guides/claude-desktop-extension.md) (macOS universal + Windows, no Docker) — open it with Claude Desktop and fill in the settings. Need a token? [Create a Personal Access Token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) with the **`api`** scope. Self-managed GitLab? Add a `GITLAB_URL` env var in your client's MCP config after install.
+Each button registers the **Docker**-based server (auto-pulls the image on first run; you need [Docker](https://www.docker.com/) installed). The **Claude Desktop** row instead downloads a native [.mcpb desktop extension](docs/guides/claude-desktop-extension.md) (macOS universal, Windows, and Linux amd64 and arm64; no Docker). Open it with Claude Desktop, or on Linux use **Extensions > Install Extension...**, and fill in the settings. Need a token? [Create a Personal Access Token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) with the **`api`** scope. Self-managed GitLab? Add a `GITLAB_URL` env var in your client's MCP config after install.
 
 ### Claude Code (`claude mcp add`)
 

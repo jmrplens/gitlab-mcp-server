@@ -38,6 +38,12 @@
       "platform_overrides": {
         "win32": {
           "command": "${__dirname}/server/gitlab-mcp-server.exe"
+        },
+        "linux": {
+          "command": "/bin/sh",
+          "args": [
+            "${__dirname}/server/linux/launch.sh"
+          ]
         }
       }
     }
@@ -74,7 +80,8 @@
     "claude_desktop": ">=0.10.0",
     "platforms": [
       "darwin",
-      "win32"
+      "win32",
+      "linux"
     ]
   },
   "user_config": {

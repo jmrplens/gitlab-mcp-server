@@ -29,8 +29,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 # macOS universal (fat) binary for the Claude Desktop extension (.mcpb):
-# platform_overrides in the MCPB manifest key by OS only (darwin/win32), not
-# by architecture, so the darwin entry point must run on both arm64 and amd64.
+# platform_overrides in the MCPB manifest key by OS only (darwin/win32/linux),
+# not by architecture, so the darwin entry point must run on both arm64 and
+# amd64. Linux gets no fat binary: its entry point is mcpb/linux/launch.sh,
+# which picks the linux amd64 or arm64 build above by `uname -m`.
 # replace: false keeps the per-arch darwin assets that the Homebrew formula
 # and the installers look up by exact name.
 universal_binaries:

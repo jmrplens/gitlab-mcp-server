@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Install the server",
-            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that stores the token in the OS keychain. The npm (npx), PyPI (uvx) and NuGet (dnx) launchers run it with no separate install step. You can also download the binary for your platform from GitHub Releases.",
+            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that encrypts the token with a key from the operating system's credential store where one exists. The npm (npx), PyPI (uvx) and NuGet (dnx) launchers run it with no separate install step. You can also download the binary for your platform from GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#quick-install"
           },
           {
@@ -126,8 +126,8 @@ These register a **Docker**-based server (it auto-pulls the image on first run; 
 [![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D)
 
 For **Claude Desktop**, download the [.mcpb desktop extension](/gitlab-mcp-server/claude-desktop/)
-instead — a native one-click install (macOS universal + Windows) with no Docker
-and the token stored in the OS keychain.
+instead: a native one-click install (macOS universal, Windows, and Linux x64 and arm64) with no Docker.
+On Linux, install it through **Extensions > Install Extension...** in Claude Desktop.
 
 Every button runs the container image; the [Docker](/gitlab-mcp-server/install/docker/) page covers its tags, the HTTP mode and how to update it.
 
@@ -433,7 +433,8 @@ Use VS Code input variables to avoid storing the token in plain text:
 :::tip[Easiest path]
 Claude Desktop also installs with one click via the
 [.mcpb desktop extension](/gitlab-mcp-server/claude-desktop/) — no JSON
-editing, token stored in the OS keychain.
+editing, and the token encrypted with a key from the operating system's
+credential store where one exists.
 :::
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):

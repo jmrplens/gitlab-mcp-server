@@ -93,16 +93,49 @@ while read -r identifier; do
     continue
   fi
 
+  # Every path the manifest names relative to the extension directory, in the
+  # base command and args and in each platform override, has to be in the
+  # archive: Claude Desktop substitutes ${__dirname} and starts that path, so a
+  # missing one is a platform on which the extension installs and never starts.
+  # ${__dirname} below is the manifest's own placeholder, meant literally.
+  # shellcheck disable=SC2016
   if ! python3 -c '
-import sys, zipfile
+import json, sys, zipfile
 path = sys.argv[1]
 if not zipfile.is_zipfile(path):
     with open(path, "rb") as fh:
         magic = fh.read(4).hex(" ")
     sys.exit("not a zip archive (magic bytes: %s)" % magic)
 with zipfile.ZipFile(path) as bundle:
-    if "manifest.json" not in bundle.namelist():
+    names = set(bundle.namelist())
+    if "manifest.json" not in names:
         sys.exit("zip archive carries no manifest.json")
+    try:
+        manifest = json.loads(bundle.read("manifest.json"))
+    except ValueError as err:
+        sys.exit("manifest.json is not JSON: %s" % err)
+server = manifest.get("server") or {}
+config = server.get("mcp_config") or {}
+named = [("mcp_config", config.get("command"))]
+named += [("mcp_config", arg) for arg in config.get("args") or []]
+for platform, override in sorted((config.get("platform_overrides") or {}).items()):
+    named.append((platform, override.get("command")))
+    named += [(platform, arg) for arg in override.get("args") or []]
+prefix = "${__dirname}/"
+problems = []
+for where, value in named:
+    if not isinstance(value, str) or "${__dirname}" not in value:
+        continue
+    if not value.startswith(prefix):
+        problems.append("%s: %s uses ${__dirname} other than as a leading path component" % (where, value))
+    elif value[len(prefix):] not in names:
+        problems.append("%s: %s is not in the archive" % (where, value[len(prefix):]))
+entry_point = server.get("entry_point")
+if entry_point and entry_point not in names:
+    problems.append("server.entry_point: %s is not in the archive" % entry_point)
+if problems:
+    sys.exit("the manifest names paths the bundle does not carry: " + "; ".join(problems))
+print("  %d entries; every path the manifest names is in the archive" % len(names))
 ' "$bundle"; then
     fail "not a valid MCP bundle"
     continue

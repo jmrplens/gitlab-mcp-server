@@ -379,6 +379,11 @@ class InstallShTest(unittest.TestCase):
         """
         self.drop_tool("curl")
         if not shutil.which("wget"):
+            # A skip keeps the job green, so on a runner without wget this
+            # branch would stop being tested and nobody would be told.
+            # GitHub sets CI on every step; there a missing tool is a failure.
+            if os.environ.get("CI"):
+                self.fail("wget is not installed, and CI must run this case rather than skip it")
             self.skipTest("wget is not installed on this machine")
 
         with self.subTest("a 404 on the bundle is read as absent"):

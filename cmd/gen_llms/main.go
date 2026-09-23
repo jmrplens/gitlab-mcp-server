@@ -378,7 +378,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	writeLLMSLink(&b, "Spanish documentation index", siteBaseURL+"es/"+llmsFileName, "The same documentation in Spanish, page for page")
 	writeLLMSLink(&b, "Getting started", "docs/getting-started.md", "Installation and first-run guide")
 	writeLLMSLink(&b, "Installation", "docs/guides/installation.md", "Every install channel with its exact command, and how each one upgrades")
-	writeLLMSLink(&b, "Claude Desktop extension", "docs/guides/claude-desktop-extension.md", "One-click .mcpb install for Claude Desktop (macOS universal + Windows)")
+	writeLLMSLink(&b, "Claude Desktop extension", "docs/guides/claude-desktop-extension.md", "One-click .mcpb install for Claude Desktop (macOS universal, Windows x64, Linux x64 and arm64)")
 	writeLLMSLink(&b, "Configuration", "docs/reference/configuration.md", "Full configuration reference")
 	writeLLMSLink(&b, "Environment variables", "docs/reference/env.md", "Environment variable reference")
 	writeLLMSLink(&b, "HTTP server mode", "docs/guides/http-server-mode.md", "Remote MCP transport setup")

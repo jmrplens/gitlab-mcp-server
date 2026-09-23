@@ -243,7 +243,7 @@ jobs:
         run: make check-server-json
       # Downloads every declared artifact, so it runs on main only. A pull
       # request does not move server.json — the release stamp does — and paying
-      # a 40 MB download plus a registry round-trip on every push would trade a
+      # a 75 MB download plus a registry round-trip on every push would trade a
       # real gate for a flaky one.
       - name: Check MCP Registry packages are published
         if: github.event_name == 'push'
@@ -870,7 +870,22 @@ jobs:
         run: make check-supply-chain
       - name: Test the auditor itself
         run: go test ./cmd/audit_supply_chain/ -count=1
-      - name: Test the installer and packaging scripts
+      # The Claude Desktop bundle's tests are among them.
+      # scripts/mcpb_launch_sh_test.py drives its Linux launcher
+      # (mcpb/linux/launch.sh) under /bin/sh, dash, busybox sh and
+      # bash --posix, whichever the runner has, and runs shellcheck on it.
+      # The runner's busybox is busybox-static, whose own uname and chmod run
+      # whatever PATH says, so under it the cases that need a stub assert the
+      # real machine's binary or are skipped with the reason;
+      # scripts/mcpb_manifest_test.py pins mcpb/manifest.json; and
+      # scripts/build_mcpb_sh_test.py runs scripts/build-mcpb.sh over stand-in
+      # binaries against each bundle its checks refuse, and over the dist/
+      # layouts of make mcpb and of the release job.
+      # shellcheck, bash, jq, zip, unzip and wget come from the runner image.
+      # Off CI a test skips when one is missing; here, where GitHub sets CI,
+      # it fails instead, so a runner image that drops one turns this step red
+      # rather than letting it pass with those cases unrun.
+      - name: Test the installer, launcher and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
   # Nothing written in this repository uses an em dash (U+2014), and until this
