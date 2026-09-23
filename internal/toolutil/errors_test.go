@@ -85,7 +85,7 @@ func TestClassifyError_HTTPStatuses(t *testing.T) {
 		want string
 	}{
 		{400, "bad request"},
-		{401, "authentication failed"},
+		{401, "unauthorized"},
 		{403, "access denied"},
 		{404, "not found"},
 		{409, "conflict"},
@@ -164,7 +164,9 @@ func TestClassifyError_GenericError(t *testing.T) {
 }
 
 // TestWrapErr_PropagatesSemanticClassification verifies that the full WrapErr
-// output includes the semantic classification for a GitLab 401 error.
+// output leads with the classification of a GitLab 401 whose body says
+// nothing about the cause: the sentence that names both of a 401's causes and
+// how to tell them apart, rather than the one that asserted an unusable token.
 func TestWrapErr_PropagatesSemanticClassification(t *testing.T) {
 	glErr := &gl.ErrorResponse{
 		Response: &http.Response{StatusCode: http.StatusUnauthorized},
@@ -173,14 +175,17 @@ func TestWrapErr_PropagatesSemanticClassification(t *testing.T) {
 	wrapped := WrapErr("userCurrent", glErr)
 	msg := wrapped.Error()
 
-	if !strings.Contains(msg, "userCurrent:") {
-		t.Errorf("missing operation name in: %q", msg)
-	}
-	if !strings.Contains(msg, "authentication failed") {
-		t.Errorf("missing semantic classification in: %q", msg)
+	if !strings.HasPrefix(msg, "userCurrent: "+unauthorizedSemantic+": ") {
+		t.Errorf("WrapErr() = %q, want it to open with the operation and %q", msg, unauthorizedSemantic)
 	}
 	if !strings.Contains(msg, "GITLAB_TOKEN") {
-		t.Errorf("missing remediation hint in: %q", msg)
+		t.Errorf("WrapErr() = %q, want it to name the token variable", msg)
+	}
+	if !strings.Contains(msg, "permission refusal") {
+		t.Errorf("WrapErr() = %q, want it to name the permission refusal a 401 can be", msg)
+	}
+	if strings.Contains(msg, "authentication failed") {
+		t.Errorf("WrapErr() = %q, must not assert an authentication failure the status cannot establish", msg)
 	}
 }
 
@@ -2071,6 +2076,17 @@ func TestSanitizeError_RendersWhatTheResponseCarried(t *testing.T) {
 			want: projectRequestLine + ": 404 {message: Project Not Found}",
 		},
 		{
+			// The shape a handler builds for itself: merge_requests.go makes
+			// one from a response it already holds, with no StatusCode and,
+			// here, no message, so client-go's rendering says 0 and the
+			// response says 404.
+			name: "the status is the response's when there is no message either",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
+			},
+			want: projectRequestLine + ": 404",
+		},
+		{
 			name: "no request line, with a message",
 			err: &gl.ErrorResponse{
 				StatusCode: http.StatusNotFound,
@@ -2258,5 +2274,511 @@ func TestWrapErrWithHint_ComposesTheWholeLine(t *testing.T) {
 				t.Errorf("WrapErrWithHint() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// The two sentences a 401 is described with, spelled out for the same reason
+// the classifications above are.
+const (
+	unauthorizedSemantic = "unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, " +
+		"or it is valid and lacks a permission this action needs, since some GitLab endpoints answer " +
+		"a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
+	rejectedTokenSemantic = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself " +
+		"as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
+)
+
+// The bodies GitLab answers a 401 with, byte for byte, read at b183f4fad4bd.
+// The three invalid_token bodies are rack-oauth2's rendering of what
+// lib/api/api_guard.rb answers an expired, a revoked and an impersonation
+// token with. The refusal body is Grape's unauthorized! (lib/api/helpers.rb),
+// which every permission refusal in entry 55 of docs/development/upstream-bugs.md
+// goes through, and which a token GitLab has no record of gets too. The
+// GraphQL body is what GraphqlController#authorize_access_api! renders for a
+// token it could not use.
+const (
+	expiredTokenBody          = `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`
+	revokedTokenBody          = `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`
+	impersonationDisabledBody = `{"error":"invalid_token","error_description":"Token is an impersonation token but impersonation was disabled."}`
+	permissionRefusalBody     = `{"message":"401 Unauthorized"}`
+	graphQLInvalidTokenBody   = `{"errors":[{"message":"Invalid token"}]}`
+)
+
+// answeredRequestID is the request ID [answeringServer] answers with, as
+// GitLab answers every request with one.
+const answeredRequestID = "01J9ANSWEREDREQUEST"
+
+// answeringServer starts a server that answers every request with status and
+// body, and stops it when the test ends.
+func answeringServer(t *testing.T, status int, body string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Request-Id", answeredRequestID)
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// gitLabClientFor returns a real client-go client for baseURL, with retries
+// off so that a 5xx is answered once rather than waited out.
+func gitLabClientFor(t *testing.T, baseURL string) *gl.Client {
+	t.Helper()
+	client, err := gl.NewClient("token", gl.WithBaseURL(baseURL), gl.WithoutRetries())
+	if err != nil {
+		t.Fatalf("gl.NewClient(%q) error = %v", baseURL, err)
+	}
+	return client
+}
+
+// restAnswer returns the address a REST request went to and the error
+// client-go hands a handler when GitLab answers method on path with status and
+// body.
+//
+// The request is really made, through a real client against a server that
+// answers it, so what the tests below hold this package to is what it makes
+// of client-go's own error value rather than of a fixture shaped like one.
+func restAnswer(t *testing.T, method, path string, status int, body string) (string, error) {
+	t.Helper()
+	server := answeringServer(t, status, body)
+	client := gitLabClientFor(t, server.URL)
+	req, err := client.NewRequest(method, path, nil, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%s %s) error = %v", method, path, err)
+	}
+	if _, err = client.Do(req, nil); err == nil {
+		t.Fatalf("Do(%s %s) error = nil, want the %d client-go builds from the answer", method, path, status)
+	}
+	return server.URL, err
+}
+
+// graphQLAnswer is [restAnswer] for a GraphQL query, sent through
+// client.GraphQL.Do, which is where the wrapping that hides the response comes
+// from. root is the relative URL root the instance is served under, empty for
+// none.
+func graphQLAnswer(t *testing.T, root string, status int, body string) error {
+	t.Helper()
+	server := answeringServer(t, status, body)
+	client := gitLabClientFor(t, server.URL+root)
+	var out struct{}
+	_, err := client.GraphQL.Do(gl.GraphQLQuery{Query: "query { currentUser { id } }"}, &out)
+	if err == nil {
+		t.Fatalf("GraphQL.Do() error = nil, want the %d client-go builds from the answer", status)
+	}
+	return err
+}
+
+// gitLabAnswer is one answer GitLab gives, to a REST GET or to a GraphQL
+// query, which is where the two credential signals differ.
+type gitLabAnswer struct {
+	graphQL bool
+	root    string // the relative URL root the instance is served under
+	path    string // the REST path read, the current user when empty
+	status  int
+	body    string
+}
+
+// err makes the request and returns what client-go hands a handler for it.
+func (a gitLabAnswer) err(t *testing.T) error {
+	t.Helper()
+	if a.graphQL {
+		return graphQLAnswer(t, a.root, a.status, a.body)
+	}
+	path := a.path
+	if path == "" {
+		path = "user"
+	}
+	_, err := restAnswer(t, http.MethodGet, path, a.status, a.body)
+	return err
+}
+
+// requestLineRefusal builds the refusal client-go would build for Grape's
+// body, with the request line cut short by the given response, or missing
+// altogether when response is nil: the guards around the request line are for
+// a hand-built error, since client-go always fills it.
+func requestLineRefusal(response *http.Response) error {
+	return &gl.ErrorResponse{
+		StatusCode: http.StatusUnauthorized,
+		Response:   response,
+		Body:       []byte(permissionRefusalBody),
+		Message:    "{message: 401 Unauthorized}",
+	}
+}
+
+// TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses
+// verifies that a 401 whose response does not say the credential was refused
+// is described with the sentence true of both of a 401's causes.
+//
+// GitLab answers 401 for an unusable credential and, at the routes entry 55 of
+// docs/development/upstream-bugs.md lists, for a valid credential refused a
+// permission. Only the first carries a signal, so every other answer has to
+// keep the sentence that names both: Grape's refusal body, which is also what
+// a token GitLab has no record of gets, and what a request carrying no token
+// gets; a JSON object whose code is not invalid_token, both the default code
+// the guard's MissingTokenError branch would render (nothing in GitLab raises
+// that error) and another code it does write; no body; a body that is not JSON
+// or is not an object; and a REST route whose last path parameter decodes to
+// api/graphql, which is not the GraphQL endpoint however its decoded path
+// reads. The last three rows are the guards around the request line and the
+// response it hangs from: client-go builds no 401 without a response, so only
+// an error built by hand reaches them.
+func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *testing.T) {
+	refused := func(body string) gitLabAnswer {
+		return gitLabAnswer{status: http.StatusUnauthorized, body: body}
+	}
+	tests := []struct {
+		name   string
+		answer gitLabAnswer
+		built  error
+	}{
+		{name: "no body", answer: refused("")},
+		{name: "Grape's refusal", answer: refused(permissionRefusalBody)},
+		{name: "the guard's default code, which nothing raises", answer: refused(`{"error":"unauthorized"}`)},
+		{name: "another API guard code", answer: refused(`{"error":"dpop_error","error_description":"DPoP validation error"}`)},
+		{name: "a body that is not JSON", answer: refused("<html><body>401 Authorization Required</body></html>")},
+		{name: "a JSON array", answer: refused(`["invalid_token"]`)},
+		{
+			name: "a REST path parameter that decodes to api/graphql",
+			answer: gitLabAnswer{
+				path:   "projects/1/repository/files/api%2Fgraphql",
+				status: http.StatusUnauthorized,
+				body:   permissionRefusalBody,
+			},
+		},
+		{
+			name:  "an error with no response",
+			built: requestLineRefusal(nil),
+		},
+		{
+			name:  "a response with no request",
+			built: requestLineRefusal(&http.Response{StatusCode: http.StatusUnauthorized}),
+		},
+		{
+			name: "a request with no URL",
+			built: requestLineRefusal(&http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Request:    &http.Request{Method: http.MethodPost},
+			}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.built
+			if err == nil {
+				err = tt.answer.err(t)
+			}
+			if got := ClassifyError(err); got != unauthorizedSemantic {
+				t.Errorf("ClassifyError() = %q, want %q", got, unauthorizedSemantic)
+			}
+		})
+	}
+	t.Run("the status alone", func(t *testing.T) {
+		if got := ClassifyHTTPStatus(http.StatusUnauthorized); got != unauthorizedSemantic {
+			t.Errorf("ClassifyHTTPStatus(401) = %q, want %q", got, unauthorizedSemantic)
+		}
+	})
+}
+
+// TestClassifyError_CredentialRejected_NamesTheTokenAlone verifies that a 401
+// GitLab answered about the credential itself is described as that, and never
+// as a possible permission refusal.
+//
+// Over REST the signal is the RFC 6750 code invalid_token, which only the API
+// guard writes. Over GraphQL there is no code, and none is needed: the
+// endpoint answers 401 only from its authentication checks. client-go returns
+// that answer as *gl.GraphQLResponseError, which does not unwrap to the
+// response, and until the classifier looked through it every GraphQL refusal
+// was reported as an unexpected error.
+//
+// A token without the api or read_api scope is one of those checks: the
+// GraphQL endpoint looks the user up with those scopes and answers a token
+// carrying neither with the same "Invalid token" body, where REST answers it
+// 403 insufficient_scope. Its row holds the verdict to naming the scope, so
+// the two surfaces keep describing that cause the same way.
+func TestClassifyError_CredentialRejected_NamesTheTokenAlone(t *testing.T) {
+	rest := func(body string) gitLabAnswer {
+		return gitLabAnswer{status: http.StatusUnauthorized, body: body}
+	}
+	graphQL := func(root, body string) gitLabAnswer {
+		return gitLabAnswer{graphQL: true, root: root, status: http.StatusUnauthorized, body: body}
+	}
+	tests := []struct {
+		name    string
+		answer  gitLabAnswer
+		wrapped bool
+		names   string // a cause the verdict must name for this answer
+	}{
+		{name: "an expired token", answer: rest(expiredTokenBody)},
+		{name: "a revoked token", answer: rest(revokedTokenBody)},
+		{name: "an impersonation token with impersonation disabled", answer: rest(impersonationDisabledBody)},
+		{name: "GraphQL", answer: graphQL("", graphQLInvalidTokenBody)},
+		{name: "GraphQL under a relative URL root", answer: graphQL("/gitlab", graphQLInvalidTokenBody)},
+		{name: "GraphQL with no body", answer: graphQL("", "")},
+		{name: "GraphQL wrapped by a handler", answer: graphQL("", graphQLInvalidTokenBody), wrapped: true},
+		{
+			name:   "GraphQL, a token without the api or read_api scope",
+			answer: graphQL("", graphQLInvalidTokenBody),
+			names:  "without the api or read_api scope",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.answer.err(t)
+			if tt.wrapped {
+				err = fmt.Errorf("list vulnerabilities: %w", err)
+			}
+			got := ClassifyError(err)
+			if got != rejectedTokenSemantic {
+				t.Errorf("ClassifyError() = %q, want %q", got, rejectedTokenSemantic)
+			}
+			if strings.Contains(got, "permission") {
+				t.Errorf("ClassifyError() = %q, must not offer a permission refusal GitLab has ruled out", got)
+			}
+			if !strings.Contains(got, tt.names) {
+				t.Errorf("ClassifyError() = %q, want it to name %q", got, tt.names)
+			}
+		})
+	}
+}
+
+// TestClassifyError_CredentialSignalOnAnotherStatus_KeepsThatStatus verifies
+// that the credential signals refine a 401 only: an invalid_token body or the
+// GraphQL endpoint on any other status is described by that status. The
+// GraphQL rows are also the other statuses the classifier now reads through
+// *gl.GraphQLResponseError, which it described as an unexpected error before.
+func TestClassifyError_CredentialSignalOnAnotherStatus_KeepsThatStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		answer gitLabAnswer
+	}{
+		{
+			name:   "REST 403 carrying invalid_token",
+			answer: gitLabAnswer{status: http.StatusForbidden, body: expiredTokenBody},
+		},
+		{
+			name:   "GraphQL 403",
+			answer: gitLabAnswer{graphQL: true, status: http.StatusForbidden, body: `{"errors":[{"message":"API not accessible for user"}]}`},
+		},
+		{
+			name:   "GraphQL 500",
+			answer: gitLabAnswer{graphQL: true, status: http.StatusInternalServerError, body: `{"errors":[{"message":"Internal server error"}]}`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, want := ClassifyError(tt.answer.err(t)), ClassifyHTTPStatus(tt.answer.status); got != want {
+				t.Errorf("ClassifyError() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestWrapErrWithHint_PermissionRefusedWith401_DescriptionAgreesWithTheHint
+// pins the composition issue 905 measured: the licensed end-to-end run
+// approves a merge request with the credential that opened it, GitLab refuses
+// with 401 and Grape's plain body, and the approve handler passes its
+// self-approval hint. The description in front of that hint used to say the
+// token was invalid or expired, which contradicted it and sent a model to
+// check a credential with nothing wrong.
+//
+// The cause after the suggestion is what describeGitLabResponse renders: the
+// request line, the status and GitLab's own message, which the body carries
+// under its one key. The end-to-end classifier reads the answered status off
+// the last ": 401" in that text, so the tail is asserted the way it reads it
+// and not as a message ending in the status, which it does not.
+func TestWrapErrWithHint_PermissionRefusedWith401_DescriptionAgreesWithTheHint(t *testing.T) {
+	const approvePath = "projects/109/merge_requests/1/approve"
+	const approveHint = "you may be the MR author (self-approval not allowed) or lack sufficient permissions"
+	base, err := restAnswer(t, http.MethodPost, approvePath, http.StatusUnauthorized, permissionRefusalBody)
+
+	got := WrapErrWithHint("mrApprove", err, approveHint).Error()
+	want := "mrApprove: " + unauthorizedSemantic + ". Suggestion: " + approveHint + ": " +
+		"POST " + base + "/api/v4/" + approvePath + ": 401 {message: 401 Unauthorized}"
+	if got != want {
+		t.Errorf("WrapErrWithHint() = %q, want %q", got, want)
+	}
+	if !strings.Contains(got, ": 401 {message: 401 Unauthorized}") {
+		t.Errorf("WrapErrWithHint() = %q, want the answered status the end-to-end classifier reads", got)
+	}
+	if strings.Contains(got, "authentication failed") {
+		t.Errorf("WrapErrWithHint() = %q, must not call a permission refusal an authentication failure", got)
+	}
+}
+
+// TestWrapErrWithMessage_ExpiredToken_SaysTheTokenWasRejected pins the other
+// direction: a genuine expiry still says so plainly, now as a verdict rather
+// than a guess, and keeps GitLab's own words about it, which the body carries
+// under the two keys GitLab's error shape allows.
+func TestWrapErrWithMessage_ExpiredToken_SaysTheTokenWasRejected(t *testing.T) {
+	const gitLabMessage = "{error: invalid_token}, " +
+		"{error_description: Token is expired. You can either do re-authorization or token refresh.}"
+	base, err := restAnswer(t, http.MethodGet, "user", http.StatusUnauthorized, expiredTokenBody)
+
+	got := WrapErrWithMessage("userCurrent", err).Error()
+	want := "userCurrent: " + rejectedTokenSemantic + " (" + gitLabMessage + "): " +
+		"GET " + base + "/api/v4/user: 401 " + gitLabMessage
+	if got != want {
+		t.Errorf("WrapErrWithMessage() = %q, want %q", got, want)
+	}
+}
+
+// TestWrapErrWithHint_GraphQLRefusedTheToken_LeadsWithTheVerdict verifies the
+// composition a GraphQL-backed handler hands a model for an unusable token:
+// the credential verdict, where it used to read "unexpected error". Only the
+// part in front of the cause is asserted, since the cause is client-go's own
+// rendering of *gl.GraphQLResponseError.
+func TestWrapErrWithHint_GraphQLRefusedTheToken_LeadsWithTheVerdict(t *testing.T) {
+	const hint = "verify the project fullPath is correct and your token has access to security features"
+	err := graphQLAnswer(t, "", http.StatusUnauthorized, graphQLInvalidTokenBody)
+
+	got := WrapErrWithHint("list_vulnerabilities", err, hint).Error()
+	if want := "list_vulnerabilities: " + rejectedTokenSemantic + ". Suggestion: " + hint + ": "; !strings.HasPrefix(got, want) {
+		t.Errorf("WrapErrWithHint() = %q, want it to open with %q", got, want)
+	}
+}
+
+// TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus verifies the
+// error card for a 401 over both surfaces: the message is the classifier's
+// reading of the whole response, while the HTTP Status row describes the
+// status alone and so names both causes whatever the response said, and the
+// request ID is the one GitLab answered with.
+//
+// The GraphQL rows are the ones the card used to lose. client-go wraps a
+// GraphQL refusal in *gl.GraphQLResponseError, which does not unwrap to the
+// response, so the card read no status and no request ID for it and wrote no
+// HTTP Status row, while its message, read through that type, was already the
+// verdict.
+func TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		answer  gitLabAnswer
+		wrapped bool
+		message string
+	}{
+		{
+			name:    "REST, a permission refusal",
+			answer:  gitLabAnswer{status: http.StatusUnauthorized, body: permissionRefusalBody},
+			message: unauthorizedSemantic,
+		},
+		{
+			name:    "REST, an expired token",
+			answer:  gitLabAnswer{status: http.StatusUnauthorized, body: expiredTokenBody},
+			message: rejectedTokenSemantic,
+		},
+		{
+			name:    "GraphQL",
+			answer:  gitLabAnswer{graphQL: true, status: http.StatusUnauthorized, body: graphQLInvalidTokenBody},
+			message: rejectedTokenSemantic,
+		},
+		{
+			name:    "GraphQL wrapped by a handler",
+			answer:  gitLabAnswer{graphQL: true, status: http.StatusUnauthorized, body: graphQLInvalidTokenBody},
+			wrapped: true,
+			message: rejectedTokenSemantic,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.answer.err(t)
+			if tt.wrapped {
+				err = fmt.Errorf("current user: %w", err)
+			}
+			de := NewDetailedError("users", "current", err)
+			if de.GitLabStatus != http.StatusUnauthorized {
+				t.Errorf("GitLabStatus = %d, want %d", de.GitLabStatus, http.StatusUnauthorized)
+			}
+			if de.RequestID != answeredRequestID {
+				t.Errorf("RequestID = %q, want %q", de.RequestID, answeredRequestID)
+			}
+			if de.Message != tt.message {
+				t.Errorf("Message = %q, want %q", de.Message, tt.message)
+			}
+			md := de.Markdown()
+			if row := "- **HTTP Status**: 401 (" + unauthorizedSemantic + ")\n"; !strings.Contains(md, row) {
+				t.Errorf("Markdown() = %q, want the row %q", md, row)
+			}
+			if row := "- **Request ID**: `" + answeredRequestID + "`\n"; !strings.Contains(md, row) {
+				t.Errorf("Markdown() = %q, want the row %q", md, row)
+			}
+		})
+	}
+}
+
+// TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel verifies that
+// a 404 is described by its status over both surfaces, and that its error card
+// carries that status.
+//
+// client-go answers every 404 with its ErrNotFound sentinel, one value shared
+// by every call, which records the status and no response: over REST it is
+// returned as it is, and over GraphQL wrapped by fmt.Errorf, since the sentinel
+// has no body for GraphQL.Do to decode. The classifier read the status off the
+// response alone, so every 404 either surface answered was described as an
+// unexpected error and its card had no HTTP Status row. The server answers
+// with a request ID, and the card is held to carrying none, because the
+// sentinel carries no response to read it from and any value there would be
+// one the card could not know.
+func TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel(t *testing.T) {
+	const operation = "get_issue"
+	notFound := ClassifyHTTPStatus(http.StatusNotFound)
+	tests := []struct {
+		name   string
+		answer gitLabAnswer
+		cause  string // what client-go's error reads, which the wrapping ends with
+	}{
+		{
+			name:   "REST",
+			answer: gitLabAnswer{path: "projects/1/issues/1", status: http.StatusNotFound, body: `{"message":"404 Not found"}`},
+			cause:  "404 Not Found",
+		},
+		{
+			name:   "GraphQL",
+			answer: gitLabAnswer{graphQL: true, status: http.StatusNotFound, body: `{"errors":[{"message":"Not found"}]}`},
+			cause:  "failed to execute GraphQL query: 404 Not Found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.answer.err(t)
+			if !errors.Is(err, gl.ErrNotFound) {
+				t.Fatalf("client-go answered %v, want its ErrNotFound sentinel", err)
+			}
+			if got := ClassifyError(err); got != notFound {
+				t.Errorf("ClassifyError() = %q, want %q", got, notFound)
+			}
+			if got, want := WrapErr(operation, err).Error(), operation+": "+notFound+": "+tt.cause; got != want {
+				t.Errorf("WrapErr() = %q, want %q", got, want)
+			}
+			de := NewDetailedError("issues", "get", err)
+			if de.GitLabStatus != http.StatusNotFound {
+				t.Errorf("GitLabStatus = %d, want %d", de.GitLabStatus, http.StatusNotFound)
+			}
+			if de.RequestID != "" {
+				t.Errorf("RequestID = %q, want none, since the sentinel carries no response", de.RequestID)
+			}
+			if row := "- **HTTP Status**: 404 (" + notFound + ")\n"; !strings.Contains(de.Markdown(), row) {
+				t.Errorf("Markdown() = %q, want the row %q", de.Markdown(), row)
+			}
+		})
+	}
+}
+
+// TestClassifyError_ErrorResponseRecordingNoStatus_IsNotAnAnswer verifies that
+// a *gl.ErrorResponse recording neither a response nor a status is not
+// described as a status GitLab answered with: there is no status to describe,
+// so it is classified like any other error GitLab did not answer, and its card
+// carries no HTTP Status row. client-go builds no such value; the row holds
+// the zero test in front of the status description to what it is for.
+func TestClassifyError_ErrorResponseRecordingNoStatus_IsNotAnAnswer(t *testing.T) {
+	err := &gl.ErrorResponse{Message: "Project Not Found"}
+	if got := ClassifyError(err); got != msgUnexpectedErr {
+		t.Errorf("ClassifyError() = %q, want %q", got, msgUnexpectedErr)
+	}
+	de := NewDetailedError("projects", "get", err)
+	if de.GitLabStatus != 0 {
+		t.Errorf("GitLabStatus = %d, want 0", de.GitLabStatus)
+	}
+	if md := de.Markdown(); strings.Contains(md, "HTTP Status") {
+		t.Errorf("Markdown() = %q, want no HTTP Status row", md)
 	}
 }

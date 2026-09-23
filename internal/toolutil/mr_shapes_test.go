@@ -20,6 +20,9 @@ func TestNewMRMilestoneOutputs(t *testing.T) {
 	if got := NewMRMilestoneOutputs(nil); got != nil {
 		t.Errorf("nil slice must return nil, got %+v", got)
 	}
+	if got := NewMRMilestoneOutputs([]*gl.Milestone{nil, nil}); got != nil {
+		t.Errorf("all-nil slice must return nil, not an empty list, got %+v", got)
+	}
 	created := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	due := gl.ISOTime(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC))
 	expired := true
@@ -65,6 +68,9 @@ func TestNewReferencesOutput(t *testing.T) {
 func TestNewLabelDetailsOutputs(t *testing.T) {
 	if got := NewLabelDetailsOutputs(nil); got != nil {
 		t.Errorf("nil slice must return nil, got %+v", got)
+	}
+	if got := NewLabelDetailsOutputs([]*gl.LabelDetails{nil}); got != nil {
+		t.Errorf("all-nil slice must return nil, not an empty list, got %+v", got)
 	}
 	got := NewLabelDetailsOutputs([]*gl.LabelDetails{
 		nil,

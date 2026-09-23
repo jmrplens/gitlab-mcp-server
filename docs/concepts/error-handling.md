@@ -43,7 +43,7 @@ type DetailedError struct {
 Created via `NewDetailedError(domain, action, err)` which automatically:
 
 - Classifies the error into a human-friendly message
-- Extracts HTTP status and X-Request-Id from GitLab API error responses
+- Extracts the HTTP status from GitLab API error responses, REST and GraphQL alike, and the X-Request-Id from each one that carries its response. A 404 carries none: client-go answers every 404 with its `ErrNotFound` sentinel, which records the status alone, so the card for a 404 has the status and no request ID
 - Safely handles nil response bodies (the GitLab client can panic on `.Error()`)
 
 ## Error Classification
@@ -52,33 +52,48 @@ Created via `NewDetailedError(domain, action, err)` which automatically:
 
 Inspects the error chain and returns a diagnostic message:
 
-| Error Type           | Message                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------- |
-| GitLab HTTP response | Delegates to `ClassifyHTTPStatus`                                                                       |
-| Connection refused   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running" |
-| DNS failure          | "GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL"                            |
-| Timeout              | "Request to GitLab timed out. The server may be overloaded or unreachable"                              |
-| TLS/SSL              | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"      |
-| URL error            | "network error reaching GitLab (\<op\>)"                                                                |
-| Other                | "unexpected error"                                                                                      |
+| Error Type           | Message                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| GitLab HTTP response | Delegates to `ClassifyHTTPStatus`, over REST and GraphQL alike, except a 401 that names the credential (see below) |
+| Connection refused   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running"            |
+| DNS failure          | "GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL"                                       |
+| Timeout              | "Request to GitLab timed out. The server may be overloaded or unreachable"                                         |
+| TLS/SSL              | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"                 |
+| URL error            | "network error reaching GitLab (\<op\>)"                                                                           |
+| Other                | "unexpected error"                                                                                                 |
+
+A 404 is one of those GitLab responses although client-go hands it back without the response: it answers every 404 with its `ErrNotFound` sentinel, over REST as it is and over GraphQL wrapped in the query error, and the sentinel records the status alone. `ClassifyError` reads the status off the error when it carries no response, so a 404 on either surface is described as not found rather than as an unexpected error.
 
 ### ClassifyHTTPStatus
 
 Maps HTTP status codes to actionable guidance:
 
-| Code | Message                                                                                                                                                                                                                                                 |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400  | "bad request: check your input parameters"                                                                                                                                                                                                              |
-| 401  | "authentication failed: GITLAB_TOKEN may be invalid or expired"                                                                                                                                                                                         |
-| 403  | "access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings" |
-| 404  | "not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct"                                                                                                        |
-| 405  | "method not allowed: the action cannot be performed on this resource in its current state"                                                                                                                                                              |
-| 409  | "conflict: the resource already exists or there is a state conflict"                                                                                                                                                                                    |
-| 422  | "validation failed: GitLab rejected the request due to invalid data"                                                                                                                                                                                    |
-| 429  | "rate limited: too many requests, please wait before retrying"                                                                                                                                                                                          |
-| 500  | "GitLab internal server error: the server encountered an unexpected condition"                                                                                                                                                                          |
-| 502  | "GitLab is temporarily unavailable (bad gateway): try again shortly"                                                                                                                                                                                    |
-| 503  | "GitLab is under maintenance or overloaded (service unavailable): try again shortly"                                                                                                                                                                    |
+| Code | Message                                                                                                                                                                                                                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | "bad request: check your input parameters"                                                                                                                                                                                                                                               |
+| 401  | "unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal" |
+| 403  | "access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings"                                  |
+| 404  | "not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct"                                                                                                                                         |
+| 405  | "method not allowed: the action cannot be performed on this resource in its current state"                                                                                                                                                                                               |
+| 409  | "conflict: the resource already exists or there is a state conflict"                                                                                                                                                                                                                     |
+| 422  | "validation failed: GitLab rejected the request due to invalid data"                                                                                                                                                                                                                     |
+| 429  | "rate limited: too many requests, please wait before retrying"                                                                                                                                                                                                                           |
+| 500  | "GitLab internal server error: the server encountered an unexpected condition"                                                                                                                                                                                                           |
+| 502  | "GitLab is temporarily unavailable (bad gateway): try again shortly"                                                                                                                                                                                                                     |
+| 503  | "GitLab is under maintenance or overloaded (service unavailable): try again shortly"                                                                                                                                                                                                     |
+
+### Why a 401 names two causes
+
+GitLab answers 401 for two different things. Its API guard answers it for a credential it cannot use, and at a family of REST routes Grape's `unauthorized!` answers it for a **valid** credential that lacks a permission: merging, cancelling auto-merge, approving and resetting approvals, remote mirrors, access token reads and rotation, external status checks, security scans, security settings and group SAML links. Approving a merge request you opened, on an instance that prevents approval by the author, is the common one. The upstream half is [entry 55 of the upstream bugs register](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403).
+
+The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both and ends with the test that separates them: if the same token works for other calls, the 401 is a permission refusal. It opens with "unauthorized" rather than "authentication failed", because for a permission refusal authentication succeeded.
+
+`ClassifyError` has the whole response, and narrows the answer in one direction only. It describes a 401 as a rejected credential ("authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it") when:
+
+- the body carries the RFC 6750 code `invalid_token`, which GitLab's REST API guard writes for an expired, revoked or impersonation-disabled token and nothing else in the REST API writes. The code is a REST signal only.
+- the GraphQL endpoint answered it. That endpoint answers 401 only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}` and no code, and refuses a field the caller may not see with a 200, so a GraphQL 401 has no permission refusal to be confused with. One of those checks is the scope: the endpoint authenticates a token only when it carries `api` or `read_api`, and answers one carrying neither with that same body, where REST answers it 403 `insufficient_scope`, which is why the sentence names the scope. The endpoint is recognised by the request path as sent, escaped, so a REST path parameter that decodes to `api/graphql` does not pass for it. client-go returns such an answer as `*gl.GraphQLResponseError`, which does not unwrap to the response, so `ClassifyError` looks through it to find the status.
+
+The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes. The `DetailedError` card's HTTP Status row describes the status alone, for a REST and a GraphQL 401 alike, so it always carries that sentence, beside a message that may be the narrower verdict.
 
 ## Error Flow in Tool Handlers
 
@@ -99,7 +114,7 @@ The basic error enrichment function for **read-only** operations (list, get, sea
 
 ```go
 err := WrapErr("list_issues", originalErr)
-// Result: "list_issues: authentication failed: GITLAB_TOKEN may be invalid or expired: <original>"
+// Result for an expired token: "list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it: <original>"
 ```
 
 ### ExtractGitLabMessage

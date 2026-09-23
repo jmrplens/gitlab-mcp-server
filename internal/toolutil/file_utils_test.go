@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -962,6 +963,29 @@ func TestCanonicalImportArchivePath_DeletedCwd_ReturnsResolveError(t *testing.T)
 	}
 }
 
+// TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError is the same deleted
+// working directory put to the upload and download resolvers, which make a
+// relative path absolute the same way and must refuse the same way rather
+// than resolve it against a directory that is gone.
+func TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("only Linux fails os.Getwd for a removed working directory")
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.Remove(dir); err != nil {
+		t.Skipf("cannot remove current working directory: %v", err)
+	}
+
+	if _, err := CanonicalLocalFilePath("upload.txt"); err == nil || !strings.HasPrefix(err.Error(), "resolve file path: ") {
+		t.Errorf("CanonicalLocalFilePath(relative, deleted cwd) error = %v, want the 'resolve file path' refusal", err)
+	}
+	if _, err := CanonicalDownloadOutputPath("artifact.bin"); err == nil || !strings.HasPrefix(err.Error(), "resolve output path: ") {
+		t.Errorf("CanonicalDownloadOutputPath(relative, deleted cwd) error = %v, want the 'resolve output path' refusal", err)
+	}
+}
+
 // TestPathWithinBase_RelError_ReturnsFalse verifies that pathWithinBase
 // returns false when filepath.Rel cannot relate the two paths (an absolute
 // target against a relative base), instead of panicking or misclassifying.
@@ -1179,6 +1203,133 @@ func TestCanonicalDownloadOutputPath_RejectsNonRegularDestination(t *testing.T) 
 
 	if got, err := CanonicalDownloadOutputPath(link); err == nil {
 		t.Fatalf("CanonicalDownloadOutputPath(symlink) = %q, want refusal", got)
+	}
+}
+
+// TestCanonicalDownloadOutputPath_RefusalsBeforeContainment verifies the three
+// refusals a download destination meets before the allow-list is consulted: an
+// empty path, a path running through a regular file as though it were a
+// directory, which the ancestor walk cannot resolve and must not take for a
+// path that merely does not exist yet, and an existing directory, which a
+// download would have to replace to write.
+func TestCanonicalDownloadOutputPath_RefusalsBeforeContainment(t *testing.T) {
+	root := t.TempDir()
+	confineLocalPathRoots(t, root)
+	file := filepath.Join(root, "notes.txt")
+	if err := os.WriteFile(file, []byte("notes"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	existingDir := filepath.Join(root, "downloads")
+	makeDirs(t, existingDir)
+	canonicalExistingDir, evalErr := filepath.EvalSymlinks(existingDir)
+	if evalErr != nil {
+		t.Fatalf("EvalSymlinks(%q) error = %v", existingDir, evalErr)
+	}
+
+	tests := []struct {
+		name       string
+		path       string
+		wantPrefix string
+	}{
+		{name: "an empty path", path: "", wantPrefix: "output path is required"},
+		{name: "a path through a regular file", path: filepath.Join(file, "sub", "artifact.bin"), wantPrefix: "resolve output path " + filepath.Join(file, "sub", "artifact.bin") + ": "},
+		{name: "an existing directory", path: existingDir, wantPrefix: "output path " + canonicalExistingDir + " already exists and is not a regular file"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CanonicalDownloadOutputPath(tt.path)
+			if err == nil || !strings.HasPrefix(err.Error(), tt.wantPrefix) {
+				t.Fatalf("CanonicalDownloadOutputPath(%q) = (%q, %v), want an error starting %q", tt.path, got, err, tt.wantPrefix)
+			}
+			if got != "" {
+				t.Errorf("CanonicalDownloadOutputPath(%q) = %q beside the error, want the empty string", tt.path, got)
+			}
+		})
+	}
+}
+
+// TestJoinBelowDirectory_RefusesAnAncestorThatIsNotADirectory verifies the
+// check the ancestor walk ends in: a tail is rejoined only below a directory,
+// and a regular file or a vanished ancestor is refused. On Linux the walk
+// never reaches a regular file, since a path through one fails with ENOTDIR
+// first, so the check is driven directly here; on Windows it is what makes a
+// path through a regular file fail at all, which the download refusal test
+// above asserts end to end.
+func TestJoinBelowDirectory_RefusesAnAncestorThatIsNotADirectory(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "notes.txt")
+	if err := os.WriteFile(file, []byte("notes"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	tail := filepath.Join("sub", "artifact.bin")
+
+	tests := []struct {
+		name       string
+		dir        string
+		want       string
+		wantErr    string
+		wantNotExt bool
+	}{
+		{name: "a directory", dir: root, want: filepath.Join(root, tail)},
+		{name: "a regular file", dir: file, wantErr: file + " is not a directory"},
+		{name: "an ancestor that vanished", dir: filepath.Join(root, "gone"), wantNotExt: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := joinBelowDirectory(tt.dir, tail)
+			switch {
+			case tt.wantErr != "":
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("joinBelowDirectory(%q) = (%q, %v), want the error %q", tt.dir, got, err, tt.wantErr)
+				}
+			case tt.wantNotExt:
+				if !errors.Is(err, fs.ErrNotExist) {
+					t.Fatalf("joinBelowDirectory(%q) = (%q, %v), want an error wrapping fs.ErrNotExist", tt.dir, got, err)
+				}
+			default:
+				if err != nil || got != tt.want {
+					t.Fatalf("joinBelowDirectory(%q) = (%q, %v), want (%q, nil)", tt.dir, got, err, tt.want)
+				}
+				return
+			}
+			if got != "" {
+				t.Errorf("joinBelowDirectory(%q) = %q beside the error, want the empty string", tt.dir, got)
+			}
+		})
+	}
+}
+
+// TestCanonicalLocalDirPath_RefusalsBeforeResolution verifies the two
+// refusals a directory path meets before anything on disk is looked at: an
+// empty path, and any path at all when the server is reached over HTTP, where
+// it would name a directory on the server rather than the caller's.
+func TestCanonicalLocalDirPath_RefusalsBeforeResolution(t *testing.T) {
+	if _, err := CanonicalLocalDirPath(""); err == nil || err.Error() != "directory path is required" {
+		t.Errorf("CanonicalLocalDirPath(\"\") error = %v, want the required-path refusal", err)
+	}
+
+	SetLocalFilesystemAccess(false)
+	t.Cleanup(func() { SetLocalFilesystemAccess(true) })
+	got, err := CanonicalLocalDirPath(t.TempDir())
+	if err == nil || !strings.HasPrefix(err.Error(), "directory_path is disabled when the server is reached over HTTP") {
+		t.Errorf("CanonicalLocalDirPath() in HTTP mode = (%q, %v), want the HTTP refusal", got, err)
+	}
+}
+
+// TestLocalFilesystemAccessAllowed_ReportsWhatWasSet verifies that the policy
+// query answers with what [SetLocalFilesystemAccess] last stored, both ways,
+// since every caller-supplied path is gated on it.
+func TestLocalFilesystemAccessAllowed_ReportsWhatWasSet(t *testing.T) {
+	original := LocalFilesystemAccessAllowed()
+	t.Cleanup(func() { SetLocalFilesystemAccess(original) })
+
+	SetLocalFilesystemAccess(false)
+	if LocalFilesystemAccessAllowed() {
+		t.Error("LocalFilesystemAccessAllowed() = true after SetLocalFilesystemAccess(false)")
+	}
+	SetLocalFilesystemAccess(true)
+	if !LocalFilesystemAccessAllowed() {
+		t.Error("LocalFilesystemAccessAllowed() = false after SetLocalFilesystemAccess(true)")
 	}
 }
 
@@ -1417,6 +1568,18 @@ func TestSkipHomeAsImplicitRoot_KeepsTheWorkingDirectoryWhenHomeIsUnknown(t *tes
 		{name: "lookup returns nothing", home: func() (string, error) { return "", nil }},
 		{name: "home does not exist", home: func() (string, error) { return filepath.Join(t.TempDir(), "absent"), nil }},
 	}
+	t.Run("the working directory does not resolve", func(t *testing.T) {
+		home := t.TempDir()
+		original := userHomeDir
+		userHomeDir = func() (string, error) { return home, nil }
+		t.Cleanup(func() { userHomeDir = original })
+
+		// Compared as written, a working directory that is gone cannot be the
+		// home directory, so the answer stays the one every deployment had.
+		if skipHomeAsImplicitRoot(filepath.Join(home, "removed")) {
+			t.Error("skipHomeAsImplicitRoot() = true for a working directory that does not resolve, want false")
+		}
+	})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			original := userHomeDir
@@ -1463,7 +1626,9 @@ func TestHTTPTransportConfigured(t *testing.T) {
 		args []string
 		want bool
 	}{
+		{name: "an empty argument list is stdio", args: nil},
 		{name: "no arguments is stdio", args: []string{"gitlab-mcp-server"}},
+		{name: "a positional argument before the flag is passed over", args: []string{"gitlab-mcp-server", "serve", "--http"}, want: true},
 		{name: "single dash http", args: []string{"gitlab-mcp-server", "-http"}, want: true},
 		{name: "double dash http", args: []string{"gitlab-mcp-server", "--http"}, want: true},
 		{name: "explicit true value", args: []string{"gitlab-mcp-server", "--http=true"}, want: true},

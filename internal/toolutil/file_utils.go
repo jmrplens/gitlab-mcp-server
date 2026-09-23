@@ -322,7 +322,7 @@ func canonicalizeThroughExistingAncestor(absolutePath string) (string, error) {
 			if tail == "" {
 				return resolved, nil
 			}
-			return filepath.Join(resolved, tail), nil
+			return joinBelowDirectory(resolved, tail)
 		}
 		if !errors.Is(err, fs.ErrNotExist) {
 			return "", err
@@ -334,6 +334,23 @@ func canonicalizeThroughExistingAncestor(absolutePath string) (string, error) {
 		tail = filepath.Join(filepath.Base(dir), tail)
 		dir = parent
 	}
+}
+
+// joinBelowDirectory rejoins a not-yet-existing tail to the existing ancestor
+// it hangs from, which has to be a directory for anything below it to be
+// created. The walk above only reaches a regular file on Windows: Linux
+// answers a path through a regular file with ENOTDIR before the walk climbs,
+// while Windows answers it as not found, so without this check the same
+// unusable path was refused on one and accepted on the other.
+func joinBelowDirectory(dir, tail string) (string, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", dir)
+	}
+	return filepath.Join(dir, tail), nil
 }
 
 // outsideAllowedDirsError explains a containment refusal in the terms the

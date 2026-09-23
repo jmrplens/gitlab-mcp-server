@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -2083,6 +2084,37 @@ func TestMakeMetaHandler_DestructiveActionConfirmBypass(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("result is nil")
+	}
+}
+
+// TestMakeMetaHandler_DestructiveAction_ForgedRequestState_IsAProtocolError
+// verifies what the meta dispatcher does when the confirmation guard cannot
+// run: a requestState this server never issued is the client's fault, so it
+// goes out as a JSON-RPC invalid-params error with no tool result beside it,
+// and the destructive route does not run.
+func TestMakeMetaHandler_DestructiveAction_ForgedRequestState_IsAProtocolError(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "false")
+	called := false
+	routes := ActionMap{
+		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return map[string]string{"status": "deleted"}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	result, out, err := handler(context.Background(), forgedRequestState("test_tool"),
+		MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1)}})
+
+	rpcErr, ok := errors.AsType[*jsonrpc.Error](err)
+	if !ok || rpcErr.Code != jsonrpc.CodeInvalidParams {
+		t.Fatalf("handler() error = %v, want a JSON-RPC invalid-params error", err)
+	}
+	if result != nil || out != nil {
+		t.Errorf("handler() = (%+v, %+v), want no tool result beside the protocol error", result, out)
+	}
+	if called {
+		t.Error("the destructive route ran although its confirmation could not be read")
 	}
 }
 
@@ -4280,6 +4312,57 @@ func TestCoerceSchemaParamValue_NumberProperty_NonNumericString_Unchanged(t *tes
 	got, changed := coerceSchemaParamValue("weight", "abc", property)
 	if changed || got != "abc" {
 		t.Errorf("coerceSchemaParamValue(number, non-numeric) = (%v, %v), want (abc, false)", got, changed)
+	}
+}
+
+// TestCoerceSchemaParamValue_IntegerProperty_UncoercibleValue_Unchanged
+// verifies the integer branch's refusals: a string that is not a whole number
+// and a value of another kind entirely are passed through untouched for the
+// schema validator to answer, rather than guessed into a number, and are not
+// reported as coerced.
+func TestCoerceSchemaParamValue_IntegerProperty_UncoercibleValue_Unchanged(t *testing.T) {
+	property := map[string]any{"type": "integer"}
+	tests := []struct {
+		name  string
+		value any
+	}{
+		{name: "a string that is not a number", value: "twenty"},
+		{name: "a string with a fraction", value: "2.5"},
+		{name: "a boolean", value: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, changed := coerceSchemaParamValue("per_page", tt.value, property)
+			if changed || got != tt.value {
+				t.Errorf("coerceSchemaParamValue(integer, %#v) = (%#v, %v), want (%#v, false)", tt.value, got, changed, tt.value)
+			}
+		})
+	}
+}
+
+// TestIsWholeFloat_Kinds_OnlyAWholeFloatCounts verifies the predicate
+// valueMatchesDeclaredType leans on for a decoded JSON number: a whole float of
+// either width is one, a fraction is not, and a value that is not a float at
+// all, integer kinds included, is not, since those are answered before it.
+func TestIsWholeFloat_Kinds_OnlyAWholeFloatCounts(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  bool
+	}{
+		{name: "a whole float64", value: float64(42), want: true},
+		{name: "a whole float32", value: float32(7), want: true},
+		{name: "a float64 fraction", value: 4.5, want: false},
+		{name: "a float32 fraction", value: float32(0.25), want: false},
+		{name: "an int", value: 42, want: false},
+		{name: "a string", value: "42", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isWholeFloat(tt.value); got != tt.want {
+				t.Errorf("isWholeFloat(%#v) = %t, want %t", tt.value, got, tt.want)
+			}
+		})
 	}
 }
 

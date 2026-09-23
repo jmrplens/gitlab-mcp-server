@@ -185,6 +185,36 @@ func TestApplyInputSchemaOverrides_AppliesAndSkips(t *testing.T) {
 	}
 }
 
+// TestSchemaApproverIDsOverride_WidensTheItemsToIntegerOrString verifies the
+// override an approver-IDs filter is registered with: the array keeps its
+// place and its items admit both a numeric user ID and the Any/None literals,
+// where the reflected schema admitted strings only and so refused every
+// numeric ID a caller sends.
+func TestSchemaApproverIDsOverride_WidensTheItemsToIntegerOrString(t *testing.T) {
+	approverIDs := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	schema := map[string]any{"properties": map[string]any{"approver_ids": approverIDs}}
+
+	applyInputSchemaOverrides(schema, []InputSchemaOverride{SchemaApproverIDsOverride("approver_ids")})
+
+	want := map[string]any{"type": []any{"integer", "string"}}
+	if !reflect.DeepEqual(approverIDs["items"], want) {
+		t.Errorf("approver_ids.items = %v, want %v", approverIDs["items"], want)
+	}
+	if approverIDs["type"] != "array" {
+		t.Errorf("approver_ids.type = %v, want the array it was", approverIDs["type"])
+	}
+}
+
+// TestFilterOverridesForSchema_NoOverrides_ReturnsWhatItWasGiven verifies that
+// an action with no overrides keeps none, nil rather than an empty list, so the
+// filter adds nothing to the specs of the many actions that declare none.
+func TestFilterOverridesForSchema_NoOverrides_ReturnsWhatItWasGiven(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{"state": map[string]any{"type": "string"}}}
+	if got := FilterOverridesForSchema(schema, nil); got != nil {
+		t.Errorf("FilterOverridesForSchema(schema, nil) = %#v, want nil", got)
+	}
+}
+
 // TestApplyInputSchemaOverrides_NilSchema_SkipsEveryOverride verifies the
 // contract an action with no input schema at all relies on: a nil map reaches
 // this from specInputSchema, and every override, root or property, has to be

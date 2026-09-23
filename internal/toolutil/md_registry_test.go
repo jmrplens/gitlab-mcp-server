@@ -582,6 +582,56 @@ func TestRegisterMarkdown_Collisions_AreRecordedAndTheFirstIsKept(t *testing.T) 
 	}
 }
 
+// mdResultFirstOutput is a test-only type whose result formatter is
+// registered before anything else claims it.
+type mdResultFirstOutput struct{ Name string }
+
+// TestRegisterMarkdownResult_Collisions_AreRecordedAndTheFirstIsKept is the
+// result-formatter half of the registration record, in the order the string
+// half cannot produce: a second result formatter for one type is refused and
+// the first keeps rendering, a string formatter arriving after a result one is
+// recorded from the string side, and an interface-typed result registration
+// is refused.
+func TestRegisterMarkdownResult_Collisions_AreRecordedAndTheFirstIsKept(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+
+	RegisterMarkdownResult(func(mdResultFirstOutput) *mcp.CallToolResult { return SuccessResult("first") })
+	RegisterMarkdownResult(func(mdResultFirstOutput) *mcp.CallToolResult { return SuccessResult("second") })
+	RegisterMarkdown(func(mdResultFirstOutput) string { return "string" })
+	RegisterMarkdownResult(func(mdInterfaceOutput) *mcp.CallToolResult { return SuccessResult("interface") })
+
+	// Sorted, as MarkdownRegistrationProblems returns them.
+	want := []string{
+		"Markdown formatter registered for the interface type toolutil.mdInterfaceOutput: nothing looks a formatter up by an interface",
+		"duplicate Markdown result formatter for toolutil.mdResultFirstOutput: the first registration is kept",
+		"toolutil.mdResultFirstOutput has a string and a result formatter: the result formatter is served",
+	}
+	if got := MarkdownRegistrationProblems(); !slices.Equal(got, want) {
+		t.Errorf("MarkdownRegistrationProblems() = %q, want %q", got, want)
+	}
+	if got := extractText(MarkdownForResult(mdResultFirstOutput{})); got != "first" {
+		t.Errorf("served result = %q, want the first registration's", got)
+	}
+	if _, ok := resultFormatters.Load(reflect.TypeFor[mdInterfaceOutput]()); ok {
+		t.Error("the interface-typed result registration was stored")
+	}
+}
+
+// TestFunctionName_NilFunction_IsUnnamed verifies that a formatter with no
+// code behind it is named with the empty string, which the runtime gate
+// prints as no name, rather than with whatever the zero program counter
+// happens to resolve to.
+func TestFunctionName_NilFunction_IsUnnamed(t *testing.T) {
+	var fn func(mdNamedOutput) string
+	if got := functionName(fn); got != "" {
+		t.Errorf("functionName(nil) = %q, want the empty string", got)
+	}
+	if got := functionName(formatMdNamedOutput); !strings.HasSuffix(got, ".formatMdNamedOutput") {
+		t.Errorf("functionName(formatMdNamedOutput) = %q, want the function's qualified name", got)
+	}
+}
+
 // TestRegisterMarkdownAnnotated_Preset_IsCarriedByTheResult verifies that a
 // formatter registered with a content preset renders results carrying it,
 // and that the plain registration renders the assistant default, so the

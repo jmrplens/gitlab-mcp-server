@@ -473,6 +473,11 @@ func TestActionSpecValidate_RejectsUnsupportedIndividualPolicies(t *testing.T) {
 			want: "unsupported embedded resource policy",
 		},
 		{
+			name: "an embedding policy with nothing to embed",
+			opts: ActionSpecOptions{EmbeddedResourcePolicy: ActionSpecEmbeddedAlways},
+			want: "but no embedded resource template",
+		},
+		{
 			name: "rich result policy",
 			opts: ActionSpecOptions{RichResultPolicy: "binary"},
 			want: "unsupported rich result policy",

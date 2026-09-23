@@ -127,7 +127,7 @@ readable without opening the tracker:
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
-| 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Partial |
+| 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2939,14 +2939,22 @@ when the field is nil.
 - **Merged**: no.
 - **Blocking**: no. The call is correctly refused and nothing is served that
   should not be. What breaks is the explanation a client can give.
-- **Workaround**: partial. Several handlers pass a per-status hint through
-  `WrapErrWithStatusHint`, so the refusal carries a sentence naming the real
-  cause. The generic description in front of that sentence is still wrong, and
-  fixing it is ours rather than upstream's.
+- **Workaround**: yes, in `internal/toolutil/errors.go`.
+  `ClassifyHTTPStatus(401)` names both causes and how to tell them apart, and
+  `ClassifyError` names the credential alone when GitLab's answer says the
+  credential was the problem: a REST body carrying the RFC 6750 code
+  `invalid_token`, which only its API guard writes, or any 401 from the
+  GraphQL endpoint, which has no permission 401 to confuse it with. A
+  handler's hint then names the permission; the handlers of these routes that
+  scope that hint to 403 or carry none are
+  [issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908). What
+  retires it is GitLab answering 403 at these sites, after which a REST 401
+  without that code would again mean an unusable credential alone.
 
 **Where**: `lib/api/merge_request_approvals.rb:105` and 148,
 `lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
-`lib/api/resource_access_tokens.rb:32` and 63,
+`lib/api/resource_access_tokens.rb:32`, 63 and 200,
+`lib/api/personal_access_tokens.rb:73` and 107,
 `ee/lib/api/status_checks.rb:67`, `ee/lib/api/security_scans.rb:54`,
 `ee/lib/api/project_security_settings.rb:30` and 53,
 `ee/lib/api/group_security_settings.rb:36`, `ee/lib/api/saml_group_links.rb`
@@ -2958,9 +2966,13 @@ when the field is nil.
 refuse an **authenticated** user who lacks a permission. Eighteen of them
 guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
 calls it on a falsy service result, which is the same thing one layer down.
-RFC 9110 gives 401 for a request that lacks valid authentication credentials
-and 403 for one the server understood and refuses to authorize, so every one
-of these is the second answered as the first.
+The three sites read on the second pass, `resource_access_tokens.rb:200`
+and `personal_access_tokens.rb:73` and 107 (rotating a resource access token,
+and reading or rotating a personal access token by id), refuse the same way
+behind `Ability.allowed?`, and tell only an administrator `not_found!`
+instead. RFC 9110 gives 401 for a request that lacks valid authentication
+credentials and 403 for one the server understood and refuses to authorize,
+so every one of these is the second answered as the first.
 
 It is not accidental, at least at the approve endpoint, whose own `desc` block
 declares the failure:
@@ -2988,15 +3000,20 @@ merge request with the credential that opened it, a licensed instance ships
 POST /api/v4/projects/109/merge_requests/1/approve: 401 {message: 401 Unauthorized}
 ```
 
-which this server renders as `authentication failed: GITLAB_TOKEN may be
+which this server rendered as `authentication failed: GITLAB_TOKEN may be
 invalid or expired` followed by the hint that contradicts it. The list above
 is not a corner: it covers merge, cancel auto-merge, approve, reset approvals,
-project mirrors, access token reads, external status checks, security scans,
-security settings and group SAML links, all of which this server serves.
+project mirrors, access token reads and rotation, external status checks,
+security scans, security settings and group SAML links, all of which this
+server serves.
 
 **Our half of it.** `httpStatusDescriptions` in `internal/toolutil/errors.go`
-maps 401 to a sentence about the token, which is right for a genuine
-authentication failure and wrong for every site above. That is a local fix
-and is tracked in
-[issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905); it does
-not wait for upstream, and it is the half a model actually reads.
+mapped 401 to a sentence about the token, which was right for a genuine
+authentication failure and wrong for every site above. It was fixed without
+waiting for upstream in
+[issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905), as the
+Workaround field describes, since it is the half a model actually reads. Two
+local consequences of the same upstream choice are tracked apart: the
+handlers' own hints ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)),
+and HTTP mode evicting a valid credential's pool entry on a permission 401
+([issue 907](https://github.com/jmrplens/gitlab-mcp-server/issues/907)).
