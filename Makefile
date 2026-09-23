@@ -458,7 +458,8 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 # Run by hand and by nothing else: a run sweeps only what carries its own run
 # ID, and this is the prefix-wide sweep for the leftovers of a run that could
 # not clean up. It is a test of the fixture package because that library is
-# importable only from test/e2e, and it skips unless the prefix is set.
+# importable only from test/e2e. The test skips when the prefix is empty, which
+# guards a bare go test run; this target always passes one.
 E2E_SWEEP_PREFIX ?= e2e-
 e2e-clean-orphans:
 	bash -o pipefail -c 'if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
