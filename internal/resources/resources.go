@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -1583,30 +1584,33 @@ func registerMilestoneResource(server registrar, base *gitlabclient.Client) {
 }
 
 // extractFileBlobURI splits a "gitlab://project/{id}/file/{ref}/{path}"
-// URI into its three components. The path component may contain slashes.
-// ok is false, and all three components are empty, when the URI does not
-// match the expected layout — like [extractTwoParts], it never fills some
-// of them and leaves the rest empty, so one flag decides the call site.
+// URI into its three components, each decoded once by [uriVariable]. The path
+// component may contain slashes. ok is false, and all three components are
+// empty, when the URI does not match the expected layout or a component does
+// not decode. Like [extractTwoParts], it never fills some of them and leaves
+// the rest empty, so one flag decides the call site.
 //
-// Limitation: when the ref itself contains a slash (e.g. "feature/new-ui"),
-// the URI is ambiguous because both segments use "/" as a separator. This
-// helper assumes refs are slash-free. Callers that need to address files
-// on branches with slashes should URL-encode the ref before constructing
-// the URI.
+// The ref is a simple expansion, so a ref carrying a slash arrives encoded
+// (feature%2Fnew-ui) and the first raw slash after it is the one that starts
+// the path. The split is made on the raw text for that reason and the decode
+// comes after it: decoding first would turn that ref's %2F into the separator.
 func extractFileBlobURI(uri string) (projectID, ref, filePath string, ok bool) {
-	rest := extractSuffix(uri, uriProjectPrefix)
-	if rest == "" {
+	rest, found := strings.CutPrefix(uri, uriProjectPrefix)
+	if !found {
 		return "", "", "", false
 	}
-	idx := strings.Index(rest, "/file/")
-	if idx <= 0 {
+	rawProject, tail, cut := strings.Cut(rest, "/file/")
+	if !cut {
 		return "", "", "", false
 	}
-	projectID = rest[:idx]
-	tail := rest[idx+len("/file/"):]
-	var cut bool
-	ref, filePath, cut = strings.Cut(tail, "/")
-	if !cut || ref == "" || filePath == "" {
+	rawRef, rawPath, cut := strings.Cut(tail, "/")
+	if !cut {
+		return "", "", "", false
+	}
+	projectID, projectOK := uriVariable(rawProject)
+	ref, refOK := uriVariable(rawRef)
+	filePath, pathOK := uriVariable(rawPath)
+	if !projectOK || !refOK || !pathOK {
 		return "", "", "", false
 	}
 	return projectID, ref, filePath, true
@@ -1667,45 +1671,84 @@ func issueToResourceOutput(issue *gl.Issue) IssueResourceOutput {
 }
 
 // URI parsing helpers.
+//
+// Every one of them splits the URI as it arrived and then decodes each
+// variable once, through [uriVariable]. The order is the point: a variable
+// carrying a reserved character arrives percent-encoded, so a project path is
+// group%2Fproject and a branch is feature%2Fworld, and decoding the whole URI
+// before splitting it would turn those %2F into the very separators the split
+// looks for.
 
-// extractSuffix returns the portion of uri after the given prefix, or
-// the empty string when uri does not start with prefix.
-func extractSuffix(uri, prefix string) string {
-	if !strings.HasPrefix(uri, prefix) {
-		return ""
+// uriVariable is the value of one variable of a resource URI, decoded once.
+//
+// A template variable written {name} is an RFC 6570 simple expansion, which
+// percent-encodes every byte outside the unreserved set, so the segment is the
+// value's encoding and not the value: a branch feature/world arrives as
+// feature%2Fworld, a scoped label priority::high as priority%3A%3Ahigh.
+// client-go escapes every identifier it is handed, so passing the segment on
+// as it arrived sent the value escaped twice and GitLab answered 404 for every
+// such name. A {+path} value is decoded the same way, since reserved expansion
+// passes an escape through and a file name with a space can only arrive as
+// %20.
+//
+// PathUnescape rather than QueryUnescape, so a plus in a branch, a tag or a
+// file name stays a plus. ok is false for an escape that does not decode
+// (a%zz), which a subscription can hand the handler without the SDK's router
+// having matched it, and for an empty segment, which names nothing.
+func uriVariable(segment string) (string, bool) {
+	value, err := url.PathUnescape(segment)
+	if err != nil || value == "" {
+		return "", false
 	}
-	return strings.TrimPrefix(uri, prefix)
+	return value, true
 }
 
-// extractMiddle returns the substring of uri between prefix and suffix.
-// Both prefix and suffix must match exactly; otherwise the empty string
-// is returned.
+// extractSuffix returns the variable after the given prefix, decoded, or the
+// empty string when uri does not start with prefix or the variable is empty or
+// does not decode.
+func extractSuffix(uri, prefix string) string {
+	rest, found := strings.CutPrefix(uri, prefix)
+	if !found {
+		return ""
+	}
+	value, _ := uriVariable(rest)
+	return value
+}
+
+// extractMiddle returns the variable of uri between prefix and suffix,
+// decoded. Both prefix and suffix must match exactly, and the variable must be
+// non-empty and decode; otherwise the empty string is returned.
 func extractMiddle(uri, prefix, suffix string) string {
 	if !strings.HasPrefix(uri, prefix) || !strings.HasSuffix(uri, suffix) {
 		return ""
 	}
-	return uri[len(prefix) : len(uri)-len(suffix)]
+	value, _ := uriVariable(uri[len(prefix) : len(uri)-len(suffix)])
+	return value
 }
 
-// extractTwoParts splits a URI into two dynamic segments around
-// separator. Both segments must be non-empty for the split to succeed;
-// ok is false, and both segments are empty, when the URI does not match
-// the expected layout.
+// extractTwoParts splits a URI into two variables around separator, each
+// decoded. Both must be non-empty and decode for the split to succeed; ok is
+// false, and both are empty, when the URI does not match the expected layout.
 //
 // The success flag is what callers branch on. It is not decoration: this
 // helper never returns one segment filled and the other empty, so a call
 // site that tested both would be testing the same fact twice, and the
 // second test would be a branch no input can reach.
 func extractTwoParts(uri, prefix, separator string) (first, second string, ok bool) {
-	rest := extractSuffix(uri, prefix)
-	if rest == "" {
+	rest, found := strings.CutPrefix(uri, prefix)
+	if !found {
 		return "", "", false
 	}
-	parts := strings.SplitN(rest, separator, 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	rawFirst, rawSecond, cut := strings.Cut(rest, separator)
+	if !cut {
 		return "", "", false
 	}
-	return parts[0], parts[1], true
+	first, firstOK := uriVariable(rawFirst)
+	second, secondOK := uriVariable(rawSecond)
+	if !firstOK || !secondOK {
+		return "", "", false
+	}
+	return first, second, true
 }
 
 // extractMRSubcollection splits a "gitlab://project/{id}/mr/{iid}/{listSuffix}"

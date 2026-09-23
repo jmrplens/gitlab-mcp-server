@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -110,6 +111,33 @@ func TestHandlerIndexRead_ReportsEachFailureDistinctly(t *testing.T) {
 				t.Errorf("Read() error = %v, want it to mention %q", err, tt.wantIn)
 			}
 		})
+	}
+}
+
+// TestHandlerIndexRead_InvalidEscape_ReadsNotFoundWithoutCallingGitLab covers
+// the one route an escape that does not decode takes to a handler.
+//
+// The SDK's router never delivers one, since a simple variable matches only
+// unreserved characters and well-formed escapes, but a subscription's first
+// read goes through this index with a URI the subscription whitelist accepted,
+// and that whitelist takes any non-empty segment. Such a URI names nothing, so
+// it must answer resource-not-found, the code a watcher stops on, and must not
+// reach GitLab: handed on undecoded, a%zz was escaped to a%25zz and GitLab was
+// asked for a branch nobody named.
+func TestHandlerIndexRead_InvalidEscape_ReadsNotFoundWithoutCallingGitLab(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	index := NewHandlerIndex(client)
+	ctx := gitlabclient.WithClient(t.Context(), client)
+
+	const uri = "gitlab://project/42/branch/a%zz"
+	_, err := index.Read(ctx, "gitlab://project/{project_id}/branch/{branch}", uri)
+
+	var want, got *jsonrpc.Error
+	if !errors.As(mcp.ResourceNotFoundError(uri), &want) {
+		t.Fatal("mcp.ResourceNotFoundError no longer returns a *jsonrpc.Error; this test needs another way to recognize it")
+	}
+	if !errors.As(err, &got) || got.Code != want.Code || got.Message != want.Message {
+		t.Errorf("Read() error = %v, want resource-not-found (%d %q)", err, want.Code, want.Message)
 	}
 }
 

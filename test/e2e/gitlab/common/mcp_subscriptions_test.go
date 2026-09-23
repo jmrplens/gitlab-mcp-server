@@ -60,13 +60,15 @@ import (
 // knownDeclines is every subscribable template the sweep expects the server to
 // decline, with the reason. An entry goes when the defect it names is fixed:
 // the sweep fails once the server acknowledges a template declared here, and
-// once the server no longer advertises it as subscribable.
-var knownDeclines = map[string]string{
-	// The World binds its feature branch, slash and all, and the branch
-	// resource hands the percent-encoded name to GitLab undecoded, so the
-	// first read is a 404 and the subscribe is declined (issue 912).
-	"gitlab://project/{project_id}/branch/{branch}": "issue 912: a branch name carrying a slash is escaped twice",
-}
+// once the server no longer advertises it as subscribable. Empty is the
+// healthy state; the table and its checks stay so the next known decline has
+// somewhere to be declared rather than being waved through.
+//
+// The branch template was the last entry, for issue 912: the World binds its
+// feature branch slash and all, and the resource handed the percent-encoded
+// name to GitLab undecoded, so the first read was a 404. It is subscribed now
+// like any other template, and that is what keeps the decode exercised.
+var knownDeclines = map[string]string{}
 
 // TestSubscriptions_Sweep subscribes to every advertised subscribable template
 // whose URI binds from the World, one at a time, and names every one the

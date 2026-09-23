@@ -791,6 +791,46 @@ func TestFinishToolResult_Hints_SetOnTheTypedOutput(t *testing.T) {
 	})
 }
 
+// TestFinishToolResult_EmbeddedResource_ExpandsFromTheNormalisedParameters
+// verifies the embedded URI names the object the handler read, not the
+// arguments as the caller spelled them.
+//
+// The handler reads its input through UnmarshalParams, which decodes a project
+// given URL-encoded and resolves a compatibility alias. Expanded from the raw
+// arguments instead, "group%2Fproject" came out as group%252Fproject, which a
+// resource read decodes to group%2Fproject and sends GitLab as a project
+// nobody has; and a project named through project_path left the template's
+// project_id unfilled, so the result carried no resource at all.
+func TestFinishToolResult_EmbeddedResource_ExpandsFromTheNormalisedParameters(t *testing.T) {
+	route := ActionRoute{
+		EmbeddedResource: "gitlab://project/{project_id}/issue/{issue_iid}",
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"issue_iid":  map[string]any{"type": "integer"},
+		}},
+	}
+	tests := []struct {
+		name   string
+		params map[string]any
+	}{
+		{name: "a project given URL-encoded", params: map[string]any{"project_id": "group%2Fproject", "issue_iid": float64(3)}},
+		{name: "a project given as its path", params: map[string]any{"project_id": "group/project", "issue_iid": float64(3)}},
+		{name: "a project given through an alias", params: map[string]any{"project_path": "group/project", "issue_iid": float64(3)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _ := FinishToolResult(&mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "issue"}}}, map[string]any{"iid": 3}, route, tt.params)
+			if len(got.Content) != 2 {
+				t.Fatalf("content blocks = %d, want the text and the embedded resource", len(got.Content))
+			}
+			embedded, ok := got.Content[1].(*mcp.EmbeddedResource)
+			if !ok || embedded.Resource.URI != "gitlab://project/group%2Fproject/issue/3" {
+				t.Errorf("embedded resource = %+v, want gitlab://project/group%%2Fproject/issue/3", got.Content[1])
+			}
+		})
+	}
+}
+
 // TestNormalizeResultMarkdown_Text_DropsTrailingWhitespaceAndControlBytes
 // verifies the one normalization every content block passes through.
 func TestNormalizeResultMarkdown_Text_DropsTrailingWhitespaceAndControlBytes(t *testing.T) {

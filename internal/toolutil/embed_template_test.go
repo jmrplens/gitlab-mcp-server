@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -23,6 +24,13 @@ func TestExpandResourceURI_FillsTheTemplateFromTheParameters(t *testing.T) {
 		{name: "numeric ids from json", template: "gitlab://project/{project_id}/issue/{issue_iid}", params: map[string]any{"project_id": float64(42), "issue_iid": float64(7)}, want: "gitlab://project/42/issue/7", ok: true},
 		{name: "a project path is escaped", template: "gitlab://project/{project_id}", params: map[string]any{"project_id": "group/sub/project"}, want: "gitlab://project/group%2Fsub%2Fproject", ok: true},
 		{name: "a branch name with a slash is escaped", template: "gitlab://project/{project_id}/branch/{branch_name}", params: map[string]any{"project_id": "42", "branch_name": "feature/login"}, want: "gitlab://project/42/branch/feature%2Flogin", ok: true},
+		// The characters a path segment may carry raw and a simple expansion
+		// may not, which url.PathEscape used to leave in the URI and the
+		// resource router then refused to match.
+		{name: "a scoped label is escaped", template: "gitlab://project/{project_id}/label/{label_id}", params: map[string]any{"project_id": "42", "label_id": "priority::high"}, want: "gitlab://project/42/label/priority%3A%3Ahigh", ok: true},
+		{name: "a tag with build metadata is escaped", template: "gitlab://project/{project_id}/tag/{tag_name}", params: map[string]any{"project_id": "42", "tag_name": "v1.0.0+build"}, want: "gitlab://project/42/tag/v1.0.0%2Bbuild", ok: true},
+		{name: "the other sub-delimiters are escaped", template: "gitlab://project/{project_id}/wiki/{slug}", params: map[string]any{"project_id": "42", "slug": "a@b=c&d$e"}, want: "gitlab://project/42/wiki/a%40b%3Dc%26d%24e", ok: true},
+		{name: "a multi-byte character is escaped byte by byte", template: "gitlab://project/{project_id}/wiki/{slug}", params: map[string]any{"project_id": "42", "slug": "café"}, want: "gitlab://project/42/wiki/caf%C3%A9", ok: true},
 		{name: "reserved expansion keeps the slashes of a path", template: "gitlab://project/{project_id}/file/{ref}/{+path}", params: map[string]any{"project_id": "42", "ref": "main", "path": "src/a b.go"}, want: "gitlab://project/42/file/main/src/a%20b.go", ok: true},
 		{name: "a missing variable yields nothing", template: "gitlab://project/{project_id}/issue/{issue_iid}", params: map[string]any{"project_id": "42"}, ok: false},
 		{name: "an empty variable yields nothing", template: "gitlab://project/{project_id}", params: map[string]any{"project_id": "  "}, ok: false},
@@ -45,6 +53,28 @@ func TestExpandResourceURI_FillsTheTemplateFromTheParameters(t *testing.T) {
 				t.Errorf("ExpandResourceURI(%q) = %q, %v; want %q, %v", tt.template, got, ok, tt.want, tt.ok)
 			}
 		})
+	}
+}
+
+// TestExpandResourceURI_SimpleVariable_EscapesEveryByteOutsideUnreserved holds
+// a simple variable's escaping to RFC 6570 byte by byte, for all 256 of them:
+// a byte in the unreserved set is written as itself and every other one as %XX
+// in uppercase hex. Each byte is wrapped in two letters because a value that
+// is only whitespace is trimmed to nothing and expands to no URI at all.
+func TestExpandResourceURI_SimpleVariable_EscapesEveryByteOutsideUnreserved(t *testing.T) {
+	t.Parallel()
+	const unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+	const prefix = "gitlab://t/x"
+	for b := range 256 {
+		c := byte(b)
+		want := fmt.Sprintf("%%%02X", c)
+		if strings.IndexByte(unreserved, c) >= 0 {
+			want = string([]byte{c})
+		}
+		got, ok := ExpandResourceURI("gitlab://t/{v}", map[string]any{"v": string([]byte{'x', c, 'x'})})
+		if !ok || !strings.HasPrefix(got, prefix) || !strings.HasSuffix(got, "x") || got[len(prefix):len(got)-1] != want {
+			t.Errorf("byte 0x%02X expanded to %q (ok %v), want %s%sx", c, got, ok, prefix, want)
+		}
 	}
 }
 

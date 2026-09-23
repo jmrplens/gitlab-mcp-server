@@ -23,6 +23,8 @@
 package common
 
 import (
+	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -104,11 +106,12 @@ func TestResources_Sweep(t *testing.T) {
 // A variable is one segment written {name} or {+name}; the reserved "+" form
 // the file template uses for its path is expanded the same way, since the
 // World's value is already a path. The bound value is spelled as a string
-// because it lands in a URI, and a segment carrying a slash is percent-encoded
-// so the server's own router, which expands variables as slash-free segments,
-// resolves it. The branch template is bound to the World's feature branch,
-// slash and all, on purpose: its resource hands the encoded name to GitLab
-// undecoded (issue 912), and binding a branch without a slash would hide that.
+// because it lands in a URI, and it is spelled the way a conforming client
+// spells it ([templateValue]), so the sweep reads what any RFC 6570 client
+// would send. The branch template is bound to the World's feature branch,
+// slash and all, on purpose: it arrives as feature%2Fworld and the server has
+// to decode it once before GitLab is asked (issue 912), and binding a branch
+// without a slash would leave that decode unexercised.
 func expandTemplate(template string, world *fixture.World) (string, string) {
 	var out strings.Builder
 	rest := template
@@ -136,9 +139,13 @@ func expandTemplate(template string, world *fixture.World) (string, string) {
 	}
 }
 
-// templateValue spells a World value for a URI: an integer or plain string as
-// itself, and a slash inside a plain segment percent-encoded so it stays one
-// segment. The reserved path form keeps its slashes, which is what it is for.
+// templateValue spells a World value for a URI the way RFC 6570 expands it: a
+// simple variable has every byte outside the unreserved set percent-encoded, so
+// a slash, a colon or a space stays inside its one segment, and the reserved
+// path form keeps its slashes, which is what it is for. It is written here
+// rather than borrowed from the server's own expansion, because a sweep that
+// spelled its URIs with the code under test would agree with it by
+// construction.
 func templateValue(value any, reservedPath bool) string {
 	var str string
 	switch typed := value.(type) {
@@ -150,5 +157,51 @@ func templateValue(value any, reservedPath bool) string {
 	if reservedPath {
 		return str
 	}
-	return strings.ReplaceAll(str, "/", "%2F")
+	var out strings.Builder
+	for i := range len(str) {
+		c := str[i]
+		if strings.IndexByte(uriUnreserved, c) >= 0 {
+			out.WriteByte(c)
+			continue
+		}
+		fmt.Fprintf(&out, "%%%02X", c)
+	}
+	return out.String()
+}
+
+// uriUnreserved is RFC 3986's unreserved set, the bytes a simple expansion
+// writes as themselves.
+const uriUnreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+
+// TestResources_Branch_NameWithASlash_ReadsTheBranch reads the World's feature
+// branch through the branch template, with the project given as its path and
+// both variables percent-encoded the way RFC 6570 simple expansion encodes
+// them, and asserts that the branch which comes back is the one the URI names.
+//
+// It is the read issue 912 was about. The resource handed the encoded segments
+// to client-go, which escaped them again, so GitLab was asked for a branch
+// named feature%2Fworld in a project named with a %2F of its own, and
+// answered 404. The sweep reads this template too, but a sweep read proves
+// only that the template answered; this one holds the answer to the object,
+// against a real GitLab.
+func TestResources_Branch_NameWithASlash_ReadsTheBranch(t *testing.T) {
+	e := harness.New(t)
+	world := fixture.SharedWorld(e)
+	if !strings.Contains(world.Branch.Name, "/") {
+		t.Fatalf("the World's branch %q carries no slash, so reading it proves nothing about decoding one", world.Branch.Name)
+	}
+	s := e.On(harness.SurfaceDynamic)
+
+	uri := "gitlab://project/" + templateValue(world.Project.Path, false) + "/branch/" + templateValue(world.Branch.Name, false)
+	result := s.ReadResource(uri)
+	if len(result.Contents) == 0 {
+		t.Fatalf("%s answered with no contents", uri)
+	}
+	var branch resources.BranchResourceOutput
+	if err := json.Unmarshal([]byte(result.Contents[0].Text), &branch); err != nil {
+		t.Fatalf("decoding %s: %v", uri, err)
+	}
+	if branch.Name != world.Branch.Name {
+		t.Errorf("%s read branch %q, want %q", uri, branch.Name, world.Branch.Name)
+	}
 }

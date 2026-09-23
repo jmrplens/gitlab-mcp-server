@@ -262,6 +262,40 @@ func TestSummarizePipelineStatusPrompt_SubscriptionHint(t *testing.T) {
 	}
 }
 
+// TestSummarizePipelineStatusPrompt_SubscriptionHint_NamesAURIThatRoutes
+// verifies the URI the hint hands a model for a project given as its path.
+//
+// The argument's own description offers "group/project", and the prompt reads
+// that form fine, but written into the URI raw its slash split one variable
+// into two segments, so the subscription it suggested matched no resource
+// template and the whitelist refused it. The URI is expanded the way the
+// template is, which spells the slash %2F.
+func TestSummarizePipelineStatusPrompt_SubscriptionHint_NamesAURIThatRoutes(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/group/project/pipelines/latest":
+			respondJSON(w, http.StatusOK,
+				`{"id":100,"iid":10,"status":"running","ref":"main","sha":"abc12345def","web_url":"https://gitlab.example.com/pipelines/100","source":"push"}`)
+		case "/api/v4/projects/group/project/pipelines/100/jobs":
+			respondJSON(w, http.StatusOK, `[{"id":201,"name":"lint","stage":"test","status":"running"}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+		Name:      "summarize_pipeline_status",
+		Arguments: map[string]string{"project_id": "group/project"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if want := "subscribe to gitlab://project/group%2Fproject/pipelines/latest to be notified"; !strings.Contains(text, want) {
+		t.Errorf("the hint does not name the routable URI %q:\n%s", want, text)
+	}
+}
+
 // TestSuggestMRReviewersPrompt_Success verifies that the suggest_mr_reviewers
 // prompt includes active members (excluding the MR author and blocked users)
 // as reviewer candidates.
