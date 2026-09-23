@@ -1725,7 +1725,10 @@ check-md-escaping:
 ## Constants are folded by the type checker rather than matched as text, and
 ## the IDs are judged against the catalog built at Ultimate for a self-managed
 ## instance and for GitLab.com together, so the Orbit family does not read as
-## dead. The work list lands in plan/action-ids.json.
+## dead. It reads a fifth kind of site too: the substrings the e2e suite
+## asserts a served text carries (assertMentions, mentionsAny, containsAny and
+## harness.ExpectToolError), loaded from ./test/e2e/gitlab/... under the e2e
+## tag the command states itself. The work list lands in plan/action-ids.json.
 audit-action-ids:
 	go run ./cmd/audit_action_ids/ -v -json plan/action-ids.json
 
@@ -1735,7 +1738,9 @@ audit-action-ids:
 ## gitlab_find_action publishes IDs, so a cross-link spelled as an alias works
 ## when it is followed and can be found in no listing. A site the type checker
 ## could not fold fails as well, since a gate with a silent blind spot is one a
-## new site can step into. CI gate.
+## new site can step into. So does an e2e assertion quoting a tool name, which
+## passes against a defective hint and breaks the day the hint is fixed, and a
+## helper table entry that describes no call. CI gate.
 check-action-ids:
 	go run ./cmd/audit_action_ids/ -check -json ''
 

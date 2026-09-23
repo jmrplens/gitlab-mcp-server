@@ -841,6 +841,61 @@ func TestIsRelatedParamName_NamedSpellings_AreFollowed(t *testing.T) {
 	}
 }
 
+// TestReadsAsHintProse_Kinds_AreRead holds which kinds are folded as a
+// sentence: the two hint sites and the suite's quotation of one, and none of
+// the four that publish an ID.
+func TestReadsAsHintProse_Kinds_AreRead(t *testing.T) {
+	cases := map[string]bool{
+		kindErrorHint:   true,
+		kindHintField:   true,
+		kindAssertion:   true,
+		kindRelated:     false,
+		kindHint:        false,
+		kindUsage:       false,
+		kindDescription: false,
+	}
+	for kind, want := range cases {
+		t.Run(kind, func(t *testing.T) {
+			if got := readsAsHintProse(kind); got != want {
+				t.Errorf("readsAsHintProse(%q) = %t, want %t", kind, got, want)
+			}
+		})
+	}
+	if isHintKind(kindAssertion) {
+		t.Error("isHintKind(assertion) = true, which would put the suite in the hint section and in -fix-hints' reach")
+	}
+}
+
+// TestFollowableParamName_EachKind_FollowsItsOwnNames holds the parameter
+// names each kind of site is followed out to its callers under. An assertion
+// takes the hint names and the helper table's names besides, and neither the
+// hint sites nor the ID sites take the table's: a served hint parameter named
+// contains is not prose by that name.
+func TestFollowableParamName_EachKind_FollowsItsOwnNames(t *testing.T) {
+	cases := []struct {
+		kind, name string
+		want       bool
+	}{
+		{kind: kindAssertion, name: "substrings", want: true},
+		{kind: kindAssertion, name: "hint", want: true},
+		{kind: kindAssertion, name: "wants", want: false},
+		{kind: kindAssertion, name: "related", want: false},
+		{kind: kindErrorHint, name: "hint", want: true},
+		{kind: kindErrorHint, name: "substrings", want: false},
+		{kind: kindHintField, name: "needles", want: false},
+		{kind: kindRelated, name: "related", want: true},
+		{kind: kindRelated, name: "hint", want: false},
+		{kind: kindRelated, name: "contains", want: false},
+	}
+	for _, one := range cases {
+		t.Run(one.kind+" "+one.name, func(t *testing.T) {
+			if got := followableParamName(one.kind, one.name); got != one.want {
+				t.Errorf("followableParamName(%q, %q) = %t, want %t", one.kind, one.name, got, one.want)
+			}
+		})
+	}
+}
+
 // TestCollectSites_EveryErrorHintShape_IsFolded drives the walk over one
 // fixture carrying each shape corrective prose is written in, and asserts the
 // folded hints.

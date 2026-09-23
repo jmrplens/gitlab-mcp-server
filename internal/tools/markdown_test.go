@@ -2284,7 +2284,7 @@ func mdGateExplicitCases(t *testing.T) []mdGateCase {
 			if !populated(opts) {
 				return ""
 			}
-			return extractTextContent(elicitationtools.UnsupportedResult("gitlab_interactive_issue_create"))
+			return extractTextContent(elicitationtools.UnsupportedResult("gitlab_interactive_issue_create", "issue.create"))
 		}},
 		{name: "elicitationtools.CancelledResult", pkg: "elicitationtools", explicit: func(opts testutil.FixtureOptions) string {
 			if !populated(opts) {

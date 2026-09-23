@@ -27,9 +27,15 @@ import (
 // about the run rather than the tree. Version 4 adds the `hints` section, the
 // rule over the corrective prose an error helper hands a model, which was
 // staged at 785 findings and gates now that the tree is clean; its unfolded
-// sites are still only reported. The counts move across all three lines, so a
-// reader comparing two runs across any of them is comparing two rules.
-const schemaVersion = 4
+// sites are still only reported. Version 5 adds the `e2e_assertions` section,
+// the same rule put to the substrings the e2e suite asserts a served text
+// carries, with `suite_judged` saying whether the run loaded the suite at all
+// and the helper table's own staleness beside it; and it renames the keys the
+// two prose sections share so they say nothing about hints (`read`,
+// `read_by_kind`, `not_folded`, `rows`, `not_folded_sites`). The counts move
+// across every one of these lines, so a reader comparing two runs across any
+// of them is comparing two rules.
+const schemaVersion = 5
 
 // Finding is one published action ID that is not a canonical catalog ID.
 type Finding struct {
@@ -85,9 +91,25 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	AliasRefs     []Finding    `json:"alias_references"`
 	Unresolved    []Unresolved `json:"unresolved"`
-	// Hints is the staged rule over corrective prose, which reports and never
-	// gates, so nothing it holds is read by [Report.Clean].
+	// Hints is the rule over corrective prose. Its findings fail
+	// [Report.Clean] and the sites it could not fold do not.
 	Hints HintReport `json:"hints"`
+	// SuiteJudged says whether this run loaded the e2e suite, and it is here
+	// for the reason DeclarationsJudged is in the summary: a run over
+	// ./internal/tools/issues reads no suite, and an assertion section
+	// printing "0 finding(s) over 0 assertion(s) read" would read as a clean
+	// suite rather than as one nobody looked at. Without it the section is
+	// neither printed nor meaningful.
+	SuiteJudged bool `json:"suite_judged"`
+	// Assertions is the same rule put to the e2e suite's quotations of served
+	// text, on the same terms: its findings fail [Report.Clean] and what it
+	// could not fold does not.
+	Assertions HintReport `json:"e2e_assertions"`
+	// StaleHelpers are the entries of the helper table that describe no call,
+	// each with what would make it describe one, and CallsByHelper how many
+	// calls of each the suite walk met.
+	StaleHelpers  []string       `json:"stale_assertion_helpers,omitempty"`
+	CallsByHelper map[string]int `json:"assertion_calls_by_helper,omitempty"`
 	// StaleExemptions are the declarations that excused nothing, of either
 	// table, each named with the table it is in.
 	StaleExemptions []string `json:"stale_exemptions,omitempty"`
@@ -118,10 +140,11 @@ type Report struct {
 // consults.
 //
 // A hint site is judged by neither of those rules and lands in [HintReport]
-// instead. It is corrective prose rather than a published ID, the class it
-// names is everywhere in the tree, and a gate cannot land before the code it
-// judges is clean, so that half reports and nothing in it reaches
-// [Report.Clean].
+// instead, since it is corrective prose rather than a published ID and the
+// question is what it names rather than whether it is one. An assertion site
+// lands in a second [HintReport], because it is that prose quoted back by the
+// e2e suite: it is held to the same spellings, and kept apart so a reader can
+// tell a defect of the server from a defect of its tests.
 //
 // declarationsJudged says whether the sites cover the whole tree, which is the
 // only run that can hold the declaration tables to it.
@@ -136,12 +159,17 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 			JudgedByKind:       map[string]int{},
 		},
 		Hints:             newHintReport(),
+		Assertions:        newHintReport(),
 		usedExemptions:    map[string]struct{}{},
 		usedAliasMentions: map[string]struct{}{},
 	}
 	for _, at := range sites {
+		if at.Kind == kindAssertion {
+			report.Assertions.judge(at, ids)
+			continue
+		}
 		if isHintKind(at.Kind) {
-			report.judgeHint(at, ids)
+			report.Hints.judge(at, ids)
 			continue
 		}
 		if !at.Resolved {
@@ -209,14 +237,30 @@ func (r *Report) finish() {
 	}
 	r.Summary.Stale = len(r.StaleExemptions)
 	r.Hints.finish(r.Summary.DeclarationsJudged)
+	// The suite's section never judges the tool-name declarations: the table
+	// describes the served source, and a quotation is not what it is about.
+	r.Assertions.finish(false)
+}
+
+// judgeHelpers holds the helper table to what the suite walk met, and marks
+// the run as one that loaded the suite.
+//
+// wholeSuite says whether the suite patterns name the whole suite, the bare
+// run's or one naming it itself ([namesWhole]), which is the only run that can
+// tell a helper nothing calls from a narrowed run.
+func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
+	r.SuiteJudged = true
+	r.CallsByHelper = read.calls
+	r.StaleHelpers = staleHelpers(read.calls, read.mismatches, wholeSuite)
 }
 
 // Clean reports whether this run found nothing the gate refuses.
 //
-// Five things fail it, and the reason each is here rather than reported is the
-// same one: a published ID that is not a canonical catalog ID, an ID that
+// Seven things fail it, and the reason each is here rather than reported is
+// the same one: a published ID that is not a canonical catalog ID, an ID that
 // resolves only as an alias, a declaration that excuses nothing, a site the
-// type checker could not fold, and a hint that names a tool.
+// type checker could not fold, a hint that names a tool, an e2e assertion that
+// quotes one, and a helper table entry that describes no call.
 //
 // The unfoldable site is the one that needs saying out loud. It is the audit's
 // own blind spot rather than a defect of the tree, and it fails anyway,
@@ -231,10 +275,20 @@ func (r *Report) finish() {
 // from the paragraph above, because a hint the type checker cannot fold is
 // text a reader can still read: three sites build one from a function call or
 // a format string and carry no tool name between them.
+//
+// The last two are the suite's, and joined with issue 902. A quotation naming
+// a tool is a test that passes against a defective server text and breaks the
+// day that text is fixed, which is what issue 901 was, found a month late by
+// the licensed run. A helper entry that describes no call is how a renamed
+// helper or parameter would stop every one of its calls being read, and a
+// gate whose reading can stop in silence is not one. The suite's unfoldable
+// needles fail nothing, on the hint rule's terms: a needle built from a
+// fixture's name at run time carries no literal to judge.
 func (r *Report) Clean() bool {
 	return r.Summary.Findings == 0 && r.Summary.AliasHits == 0 &&
 		r.Summary.Unresolved == 0 && r.Summary.Stale == 0 &&
-		r.Hints.Findings == 0
+		r.Hints.Findings == 0 &&
+		r.Assertions.Findings == 0 && len(r.StaleHelpers) == 0
 }
 
 // sortFindings orders findings by position, then by the ID, so two runs over
@@ -292,11 +346,15 @@ func isProseKind(kind string) bool {
 // to act on them, then the alias references and the sites nothing could fold,
 // then what the run saw.
 //
-// The alias references and the unfolded sites are printed whatever -v says,
-// because both fail the gate. -v decides only how much of a clean run is
-// shown, and how much of the staged hint rule: its count is always printed and
-// its rows only when they are asked for, since nothing there fails a build and
-// the backlog is hundreds of rows long.
+// The alias references, the unfolded sites and the rows of the two prose
+// sections are printed whatever -v says, because all of them fail the gate
+// and a gate's log has to name what it refused. -v decides only how much of
+// what fails nothing is shown: the breakdowns by kind, and the prose sites
+// the type checker could not fold.
+//
+// The suite's section is printed only by a run that loaded the suite, which a
+// run over ./internal/tools/... alone does not: its count over nothing would
+// read as a clean suite.
 func writeReport(out io.Writer, report Report, verbose bool) {
 	writeGroups(out, report.Findings, findingVerb)
 	if len(report.AliasRefs) > 0 || verbose {
@@ -307,6 +365,31 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 	writeStale(out, report.StaleExemptions)
 	writeSummary(out, report.Summary, verbose)
 	writeHintReport(out, report.Hints, verbose)
+	if report.SuiteJudged {
+		writeSuiteReport(out, report, verbose)
+	}
+}
+
+// writeSuiteReport prints what the run found in the e2e suite: its
+// quotations, then the helper table entries that describe no call, which fail
+// the gate and so are printed whatever -v says, then under -v how many calls
+// of each helper were read.
+//
+// Each stale entry carries its own remedy, unlike a stale declaration, because
+// the two kinds have different ones: an entry nothing calls is the table's to
+// fix, and a copy of a helper that takes no parameter of the entry's name is
+// the helper's (see [staleHelpers]).
+func writeSuiteReport(out io.Writer, report Report, verbose bool) {
+	writeAssertionReport(out, report.Assertions, verbose)
+	if len(report.StaleHelpers) > 0 {
+		fmt.Fprintln(out, "=== assertion helpers that describe no call ===")
+		for _, entry := range report.StaleHelpers {
+			fmt.Fprintf(out, "  %s.\n", entry)
+		}
+	}
+	if verbose && len(report.CallsByHelper) > 0 {
+		fmt.Fprintf(out, "    assertion calls by helper: %s\n", byCount(report.CallsByHelper))
+	}
 }
 
 // writeStale prints the declarations that excused nothing, which is a finding

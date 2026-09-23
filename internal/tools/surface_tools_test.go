@@ -4,11 +4,15 @@
 package tools
 
 import (
+	"context"
+	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
@@ -39,4 +43,67 @@ func TestRegisterSurfaceTools_UnprojectableSpec_PanicsNamingTheTool(t *testing.T
 	// A name and nothing else: the spec carries no description, no route and no
 	// owner, so validation refuses it at the first field it reads.
 	RegisterSurfaceTools(server, []actioncatalog.SurfaceToolSpec{{Name: "gitlab_broken_surface_tool"}})
+}
+
+// refusalActionID matches a dotted token that could be offered as an action
+// ID. The refusal a guided flow gives spells no other: the one tool name in it
+// has no dot, and each of its sentences ends in a dot followed by a space or a
+// line break.
+var refusalActionID = regexp.MustCompile(`\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b`)
+
+// TestStandaloneSurfaceToolSpecs_GuidedFlowRefusal_NamesAnActionTheCatalogServes
+// verifies that every guided flow, refused on a client that cannot elicit,
+// offers in its place exactly one action this catalog serves, on the Free
+// catalog every flow is served on.
+//
+// The alternative is spelled as a catalog ID inside elicitationtools, which
+// imports the four domain packages but never sees the IDs they are aggregated
+// under, since the domain half is added here. No source gate reads the
+// sentence either: it is rendered through toolutil.ErrorResult, which is not
+// one of the error helpers cmd/audit_action_ids reads, and the e2e scenario
+// quotes only the issue flow's. This is where all four meet the catalog. The
+// flows are driven with no request on the context, which is a client without
+// elicitation, so each ends at its first prompt.
+func TestStandaloneSurfaceToolSpecs_GuidedFlowRefusal_NamesAnActionTheCatalogServes(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{})
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	args := map[string]map[string]any{
+		"gitlab_interactive_issue_create":   {"project_id": "42"},
+		"gitlab_interactive_mr_create":      {"project_id": "42"},
+		"gitlab_interactive_release_create": {"project_id": "42"},
+		"gitlab_interactive_project_create": {},
+	}
+
+	flows := 0
+	for _, spec := range StandaloneSurfaceToolSpecs(client) {
+		if spec.GroupToolName != "gitlab_interactive" {
+			continue
+		}
+		flows++
+		t.Run(spec.Name, func(t *testing.T) {
+			params, known := args[spec.Name]
+			if !known {
+				t.Fatalf("guided flow %s has no arguments in this table, so its refusal is held to nothing: add it", spec.Name)
+			}
+			out, err := spec.Route.Handler(context.Background(), params)
+			if err != nil {
+				t.Fatalf("%s: a client without elicitation got an error instead of the refusal: %v", spec.Name, err)
+			}
+			result := spec.FormatResult(out)
+			if result == nil || !result.IsError {
+				t.Fatalf("%s: result = %+v, want the refusal", spec.Name, result)
+			}
+			text := extractTextContent(result)
+			ids := refusalActionID.FindAllString(text, -1)
+			if len(ids) != 1 {
+				t.Fatalf("%s: refusal offers %d action IDs %v, want exactly one:\n%s", spec.Name, len(ids), ids, text)
+			}
+			if _, served := catalog.Action(actioncatalog.ActionID(ids[0])); !served {
+				t.Errorf("%s: refusal offers %s, which the Free catalog does not serve:\n%s", spec.Name, ids[0], text)
+			}
+		})
+	}
+	if flows != len(args) {
+		t.Errorf("found %d guided flows, want the %d this table names", flows, len(args))
+	}
 }

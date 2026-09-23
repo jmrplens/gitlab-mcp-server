@@ -13,12 +13,12 @@ import (
 // toolToken matches a tool-name-shaped token in prose, which is the
 // documentation gate's own rule (cmd/audit_doc_tool_names) spelled again here.
 //
-// The two are deliberately not shared yet, because they answer different
+// The two are deliberately not shared, because they answer different
 // questions of the same token: the documentation gate asks whether some
 // surface registers that name and refuses the ones none does, while this rule
-// refuses every one of them, registered or not. If this ever gates, the token
+// refuses every one of them, registered or not. Both gate now, so the token
 // rule belongs in cmd/internal/actionids beside the ID rule the two gates
-// already share.
+// already share, and moving it there is the consolidation still open.
 var toolToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
 
 // The three ways a hint can name a capability that the session reading it
@@ -45,8 +45,9 @@ type HintFinding struct {
 	Package string `json:"package"`
 	File    string `json:"file"`
 	Line    int    `json:"line"`
-	// Kind is the site: the argument of an error helper, or the struct field a
-	// hint is written into on its way to one.
+	// Kind is the site: the argument of an error helper, the struct field a
+	// hint is written into on its way to one, or a substring the e2e suite
+	// asserts a served text carries.
 	Kind string `json:"kind"`
 	// Rule says which of the three spellings this is.
 	Rule string `json:"rule"`
@@ -60,61 +61,71 @@ type HintFinding struct {
 	Canonical string `json:"canonical,omitempty"`
 }
 
-// HintReport is the staged rule over the corrective prose a handler hands a
-// model, and it reports rather than gates.
+// HintReport is a rule over prose that names capabilities, and the report
+// carries two of them: the corrective prose a handler hands a model, and the
+// e2e suite's quotations of that prose. Both gate on their findings, and
+// neither gates on what it could not fold.
 //
-// It reports because the class it names is everywhere: a gate cannot land
-// before the code it judges is clean, and this is the first run that says how
-// much of it there is. What it costs to leave ungated is bounded and known: a
-// hint that names a tool no surface registers sends a model after a call it
-// cannot make, which it reads as the capability being absent rather than as
-// the sentence being wrong.
+// One type for both, because the two are one question put to two corpora: a
+// quotation is held to the spellings the text it quotes is held to, and a
+// second judge written for it is a judge that could drift from the first. The
+// JSON keys say nothing about hints for the same reason, since the suite's
+// section carries the same keys.
+//
+// What its findings cost is bounded and known: a hint that names a tool no
+// surface registers sends a model after a call it cannot make, which it reads
+// as the capability being absent rather than as the sentence being wrong; and
+// a quotation that names one is a test that breaks the day the server is
+// fixed, as twenty of them did in issue 901.
 type HintReport struct {
-	// Read is how many hint strings were folded and judged, and ReadByKind
-	// splits that between the two sites, because the field site is the wider
-	// net of the two and a reader should be able to tell which figure is which.
-	Read       int            `json:"hints_read"`
-	ReadByKind map[string]int `json:"hints_read_by_kind"`
+	// Read is how many strings were folded and judged, and ReadByKind splits
+	// that between the kinds of site, because the field site of the hint rule
+	// is the wider net of its two and a reader should be able to tell which
+	// figure is which.
+	Read       int            `json:"read"`
+	ReadByKind map[string]int `json:"read_by_kind"`
 	Packages   int            `json:"packages_with_findings"`
 	Findings   int            `json:"findings"`
 	ByRule     map[string]int `json:"findings_by_rule"`
-	// Unfolded is how many hint sites the type checker could not fold. They are
+	// Unfolded is how many sites the type checker could not fold. They are
 	// this rule's own blind spot, named rather than passed over, and unlike the
-	// gate's they fail nothing.
-	Unfolded  int           `json:"hints_not_folded"`
-	Rows      []HintFinding `json:"hint_findings,omitempty"`
-	NotFolded []Unresolved  `json:"hints_not_folded_sites,omitempty"`
+	// ID gate's they fail nothing.
+	Unfolded  int           `json:"not_folded"`
+	Rows      []HintFinding `json:"rows,omitempty"`
+	NotFolded []Unresolved  `json:"not_folded_sites,omitempty"`
 	// StaleDeclarations are the tool-name declarations that excused nothing,
 	// filled only by a run over the whole tree, since over one package every
 	// entry excuses nothing and reporting them all would be an answer about
-	// the patterns rather than about the declarations.
+	// the patterns rather than about the declarations. The suite's section
+	// never fills it: the table describes the served source.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 	// usedToolExemptions is what the run excused, which the stale list is
-	// computed against.
+	// computed against. Each section keeps its own, so a quotation spelling a
+	// declared token cannot keep that declaration alive for the served source.
 	usedToolExemptions map[string]struct{}
 }
 
-// judgeHint records what one hint site names.
+// judge records what one site names.
 //
-// A hint that could not be folded is kept apart from the gate's own unfolded
-// list, so that this rule's blind spot cannot fail a build the gate would have
-// passed.
-func (r *Report) judgeHint(at site, ids *actionids.IDs) {
+// A site that could not be folded is kept apart from the ID gate's own
+// unfolded list, so that this rule's blind spot cannot fail a build the gate
+// would have passed.
+func (h *HintReport) judge(at site, ids *actionids.IDs) {
 	if !at.Resolved {
-		r.Hints.NotFolded = append(r.Hints.NotFolded, Unresolved{
+		h.NotFolded = append(h.NotFolded, Unresolved{
 			Package: at.Package, File: at.File, Line: at.Line, Kind: at.Kind, Expression: at.Expr,
 		})
 		return
 	}
-	r.Hints.Read++
-	r.Hints.ReadByKind[at.Kind]++
-	r.judgeHintToolNames(at)
-	r.judgeHintIDs(at, ids)
+	h.Read++
+	h.ReadByKind[at.Kind]++
+	h.judgeToolNames(at)
+	h.judgeIDs(at, ids)
 }
 
-// judgeHintToolNames records every gitlab_* name one hint spells, once each:
-// a sentence naming the same tool twice is one thing to fix.
-func (r *Report) judgeHintToolNames(at site) {
+// judgeToolNames records every gitlab_* name one site spells, once each: a
+// sentence naming the same tool twice is one thing to fix.
+func (h *HintReport) judgeToolNames(at site) {
 	seen := map[string]struct{}{}
 	for _, name := range toolToken.FindAllString(at.Value, -1) {
 		if _, repeated := seen[name]; repeated {
@@ -122,41 +133,50 @@ func (r *Report) judgeHintToolNames(at site) {
 		}
 		seen[name] = struct{}{}
 		if exemptHintTool(name) {
-			r.Hints.usedToolExemptions[name] = struct{}{}
+			h.usedToolExemptions[name] = struct{}{}
 			continue
 		}
-		r.addHintFinding(at, ruleToolName, name, HintFinding{})
+		h.addFinding(at, ruleToolName, name, HintFinding{})
 	}
 }
 
-// judgeHintIDs records every dotted token one hint offers as an action ID that
-// is not the canonical one.
+// judgeIDs records every dotted token one site offers as an action ID that is
+// not the canonical one.
 //
 // Which tokens are offered as IDs is the shared rule in cmd/internal/actionids,
 // and the prose exemptions are the gate's own table, consulted here without
 // marking an entry used: the staleness judgement belongs to the rule that
 // gates, and a hint keeping a declaration alive would make that judgement say
 // something false about the Usage lines it is written about.
-func (r *Report) judgeHintIDs(at site, ids *actionids.IDs) {
+//
+// A quotation consults declaredAliasMentions on the same terms and a hint
+// does not. A hint is prose the server writes, and it writes canonical IDs; a
+// quotation is whatever the server wrote, and a Usage line may name one of
+// those aliases by design, so a test quoting that line would otherwise be
+// refused for quoting it faithfully.
+func (h *HintReport) judgeIDs(at site, ids *actionids.IDs) {
 	for _, token := range ids.Candidates(at.Value) {
 		if ids.IsID(token) || exemptProse(token) {
 			continue
 		}
 		if canonical, isAlias := ids.Alias(token); isAlias {
-			r.addHintFinding(at, ruleAlias, token, HintFinding{Canonical: canonical})
+			if at.Kind == kindAssertion && exemptAliasMention(token) {
+				continue
+			}
+			h.addFinding(at, ruleAlias, token, HintFinding{Canonical: canonical})
 			continue
 		}
-		r.addHintFinding(at, ruleUnknownID, token, HintFinding{Closest: ids.Closest(token)})
+		h.addFinding(at, ruleUnknownID, token, HintFinding{Closest: ids.Closest(token)})
 	}
 }
 
-// addHintFinding records one finding, taking its position from the site and
+// addFinding records one finding, taking its position from the site and
 // whatever else the rule knows from detail.
-func (r *Report) addHintFinding(at site, rule, name string, detail HintFinding) {
+func (h *HintReport) addFinding(at site, rule, name string, detail HintFinding) {
 	detail.Package, detail.File, detail.Line = at.Package, at.File, at.Line
 	detail.Kind, detail.Rule, detail.Name = at.Kind, rule, name
-	r.Hints.Rows = append(r.Hints.Rows, detail)
-	r.Hints.ByRule[rule]++
+	h.Rows = append(h.Rows, detail)
+	h.ByRule[rule]++
 }
 
 // finish sorts the lists and fills the counts that depend on the whole run.
@@ -194,42 +214,86 @@ func newHintReport() HintReport {
 	}
 }
 
-// The headings the verbose report opens its two lists with. Each is written
-// only over a list that has something in it, so a run that found nothing
-// announces no section.
+// The headings the report opens its lists with: the rows under every run, the
+// sites nothing folded under -v alone. Each is written only over a list that
+// has something in it, so a run that found nothing announces no section.
 const (
-	hintRowsHeading      = "=== capabilities named in a hint by a spelling no listing publishes ==="
-	hintNotFoldedHeading = "=== hints not folded ==="
+	hintRowsHeading           = "=== capabilities named in a hint by a spelling no listing publishes ==="
+	hintNotFoldedHeading      = "=== hints not folded ==="
+	assertionRowsHeading      = "=== e2e assertions quoting a spelling no listing publishes ==="
+	assertionNotFoldedHeading = "=== e2e assertions not folded ==="
 )
 
-// writeHintReport prints what the staged rule found.
-//
-// The count is printed by every run and the rows only by a verbose one, which
-// is the split between what a gate's log should carry and what a report is
-// read for: check-action-ids runs this on every push and the backlog is
-// hundreds of rows, while audit-action-ids passes -v and is where the work
-// list is read from. The rows are in the JSON either way.
-func writeHintReport(out io.Writer, hints HintReport, verbose bool) {
-	if verbose && len(hints.Rows) > 0 {
-		fmt.Fprintln(out, hintRowsHeading)
-		writeHintGroups(out, hints.Rows)
+// proseLabels are the words one section of prose findings is printed with,
+// so the hint section and the suite's section share one printer and differ
+// only in what they call themselves.
+type proseLabels struct {
+	// count opens the count line, and unit names what was read.
+	count string
+	unit  string
+	// byRule and byKind caption the two breakdowns.
+	byRule string
+	byKind string
+	// rowsHeading and notFoldedHeading open the two lists.
+	rowsHeading      string
+	notFoldedHeading string
+}
+
+// hintLabels and assertionLabels are the two sections the report prints.
+var (
+	hintLabels = proseLabels{
+		count: "error hints", unit: "hint(s)",
+		byRule: "hint findings by rule", byKind: "hints read by kind",
+		rowsHeading: hintRowsHeading, notFoldedHeading: hintNotFoldedHeading,
 	}
-	if verbose && len(hints.NotFolded) > 0 {
-		fmt.Fprintln(out, hintNotFoldedHeading)
-		for _, at := range hints.NotFolded {
+	assertionLabels = proseLabels{
+		count: "e2e assertions", unit: "assertion(s)",
+		byRule: "assertion findings by rule", byKind: "assertions read by kind",
+		rowsHeading: assertionRowsHeading, notFoldedHeading: assertionNotFoldedHeading,
+	}
+)
+
+// writeHintReport prints what the rule over error hints found.
+func writeHintReport(out io.Writer, hints HintReport, verbose bool) {
+	writeProseSection(out, hintLabels, hints, verbose)
+}
+
+// writeAssertionReport prints what the rule over the e2e suite's quotations
+// found.
+func writeAssertionReport(out io.Writer, assertions HintReport, verbose bool) {
+	writeProseSection(out, assertionLabels, assertions, verbose)
+}
+
+// writeProseSection prints one section of prose findings under its labels.
+//
+// The rows are printed by every run, because every one of them fails the gate:
+// check-action-ids passes no -v, and a red job whose log carried a count and a
+// rule name and no file, line or needle would send its reader to run the audit
+// again to learn what to fix. What -v adds is what fails nothing, the sites
+// the type checker could not fold and the breakdown by kind, which is the
+// split writeReport makes for the published IDs too. The rows are in the JSON
+// either way.
+func writeProseSection(out io.Writer, labels proseLabels, section HintReport, verbose bool) {
+	if len(section.Rows) > 0 {
+		fmt.Fprintln(out, labels.rowsHeading)
+		writeHintGroups(out, section.Rows)
+	}
+	if verbose && len(section.NotFolded) > 0 {
+		fmt.Fprintln(out, labels.notFoldedHeading)
+		for _, at := range section.NotFolded {
 			fmt.Fprintf(out, "  %s:%d %s %s\n", at.File, at.Line, at.Kind, at.Expression)
 		}
 	}
-	for _, entry := range hints.StaleDeclarations {
+	for _, entry := range section.StaleDeclarations {
 		fmt.Fprintf(out, "  %s. Remove the entry.\n", entry)
 	}
-	fmt.Fprintf(out, "  error hints: %d finding(s) in %d package(s) over %d hint(s) read; %d not folded (reported, not gated)\n",
-		hints.Findings, hints.Packages, hints.Read, hints.Unfolded)
-	if len(hints.ByRule) > 0 {
-		fmt.Fprintf(out, "    hint findings by rule: %s\n", byCount(hints.ByRule))
+	fmt.Fprintf(out, "  %s: %d finding(s) in %d package(s) over %d %s read; %d not folded (reported, not gated)\n",
+		labels.count, section.Findings, section.Packages, section.Read, labels.unit, section.Unfolded)
+	if len(section.ByRule) > 0 {
+		fmt.Fprintf(out, "    %s: %s\n", labels.byRule, byCount(section.ByRule))
 	}
-	if verbose && len(hints.ReadByKind) > 0 {
-		fmt.Fprintf(out, "    hints read by kind: %s\n", byCount(hints.ReadByKind))
+	if verbose && len(section.ReadByKind) > 0 {
+		fmt.Fprintf(out, "    %s: %s\n", labels.byKind, byCount(section.ReadByKind))
 	}
 }
 
