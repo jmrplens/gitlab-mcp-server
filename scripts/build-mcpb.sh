@@ -121,6 +121,10 @@ cp "$LINUX_ARM64_BIN" "$BUNDLE_DIR/server/linux/gitlab-mcp-server-linux-arm64"
 
 OUTPUT="$DIST_DIR/gitlab-mcp-server.mcpb"
 rm -f "$OUTPUT"
+# From here until every check below has passed, any exit removes the bundle,
+# including one set -e forces on a command nobody expected to fail: a bundle
+# that did not pass its own checks must not be left for a later step to find.
+trap 'rm -f "$OUTPUT"' EXIT
 
 # A .mcpb is a plain zip with manifest.json at its root — the layout above is
 # the whole specification, and `zip` produces it. This used to shell out to
@@ -164,7 +168,11 @@ fi
 # The executables are recorded as Unix files with mode 0755. A zip written
 # without Unix attributes extracts every file 0600 in Claude Desktop.
 for entry in "${EXECUTABLES[@]}"; do
-  recorded=$(unzip -Z "$OUTPUT" "$entry" | awk -v name="$entry" '$NF == name { print $1, $3 }')
+  # An entry the archive lacks was reported by the entry-list check, and
+  # zipinfo exits non-zero on it, which would end the script before the
+  # removal below. zip itself exits 0 when an input is missing.
+  grep -qxF "$entry" <<< "$actual_list" || continue
+  recorded=$(unzip -Z "$OUTPUT" "$entry" | awk -v name="$entry" '$NF == name { print $1, $3 }' || true)
   if [[ "$recorded" != "-rwxr-xr-x unx" ]]; then
     fail "$entry is recorded as '${recorded:-nothing}', expected '-rwxr-xr-x unx'"
   fi
@@ -178,8 +186,17 @@ done
 # replaces the base env rather than merging with it, which would drop
 # GITLAB_TOKEN and every other setting, and an override's args replace the
 # base args.
+#
+# The platform rules run both ways. Every override has to be listed in
+# compatibility.platforms, and every listed platform other than darwin has to
+# have an override, since the base command is the macOS universal binary and a
+# platform without an override would be handed that. The list has to name all
+# three platforms the archive carries a server for: Desktop marks the bundle
+# incompatible on a platform the list leaves out, and on one it lists with no
+# override it would start the Mach-O binary.
 entries_json=$(printf '%s\n' "${ENTRIES[@]}" | jq -R . | jq -s .)
-manifest_errors=$(unzip -p "$OUTPUT" manifest.json | jq -r --arg v "$VERSION" --argjson entries "$entries_json" '
+check_manifest() {
+  unzip -p "$OUTPUT" manifest.json | jq -r --arg v "$VERSION" --argjson entries "$entries_json" '
   (.server.mcp_config.platform_overrides // {}) as $overrides
   | (.compatibility.platforms // []) as $platforms
   | ([ .server.mcp_config.command, (.server.mcp_config.args // [])[],
@@ -205,17 +222,33 @@ manifest_errors=$(unzip -p "$OUTPUT" manifest.json | jq -r --arg v "$VERSION" --
       ($overrides | keys[]
         | select(IN($platforms[]) | not)
         | "platform_overrides.\(.) is not listed in compatibility.platforms"),
+      ($platforms[]
+        | select(. != "darwin")
+        | select(IN($overrides | keys[]) | not)
+        | "compatibility.platforms lists \(.) with no platform_overrides entry, so it would start the base command, the macOS binary"),
+      ("darwin", "win32", "linux"
+        | select(IN($platforms[]) | not)
+        | "compatibility.platforms does not list \(.), although the archive carries its server"),
       ($overrides | to_entries[] | select(.value | has("env"))
         | "platform_overrides.\(.key) declares env, which would replace the base env"),
       (select((.server.mcp_config.args // []) | length > 0)
         | $overrides | to_entries[] | select(.value | has("args"))
         | "platform_overrides.\(.key) declares args, which would replace the non-empty base args")
     ]
-  | .[]')
-if [[ -n "$manifest_errors" ]]; then
-  while IFS= read -r line; do
-    fail "$line"
-  done <<< "$manifest_errors"
+  | .[]'
+}
+# A manifest the entry-list check already found missing is not read again:
+# unzip would exit non-zero on it and end the script before the removal below.
+if grep -qxF manifest.json <<< "$actual_list"; then
+  if manifest_errors=$(check_manifest); then
+    if [[ -n "$manifest_errors" ]]; then
+      while IFS= read -r line; do
+        fail "$line"
+      done <<< "$manifest_errors"
+    fi
+  else
+    fail "the packed manifest.json could not be read and checked"
+  fi
 fi
 
 if [[ $failures -gt 0 ]]; then
@@ -226,5 +259,6 @@ if [[ $failures -gt 0 ]]; then
   exit 1
 fi
 
+trap - EXIT
 echo "Built $OUTPUT (version $VERSION)"
 unzip -Z -l "$OUTPUT"

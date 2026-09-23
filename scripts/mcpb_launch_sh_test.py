@@ -60,7 +60,10 @@ exit 0
 
 
 def shells():
-    """The POSIX shells available here, /bin/sh first since Desktop uses it."""
+    """/bin/sh, dash, busybox sh and bash --posix, whichever are installed.
+
+    /bin/sh comes first since Desktop uses it. No other shell is looked for.
+    """
     found = [("sh", ["/bin/sh"])]
     if shutil.which("dash"):
         found.append(("dash", [shutil.which("dash")]))

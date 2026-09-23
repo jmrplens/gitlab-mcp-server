@@ -29,7 +29,11 @@ the download about 75 MB.
 | Skip TLS verification        | No       | off                  | `GITLAB_MCP_SKIP_TLS_VERIFY` |
 | Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
-   The token is stored in the operating system keychain by Claude Desktop.
+   Claude Desktop encrypts the token before saving it, with a key held by the
+   operating system's credential store: the Keychain on macOS, DPAPI on
+   Windows, and the desktop keyring (such as GNOME Keyring or KWallet) on
+   Linux. A Linux desktop without a keyring leaves the token without that
+   protection.
 
 Updates arrive as new extension versions. The server never replaces its own
 binary, on any distribution channel.
@@ -77,10 +81,16 @@ file) unless it carries exactly that list, the launcher and the three Unix
 binaries are recorded as Unix files with mode 0755, and the packed manifest
 agrees with the archive: every `${__dirname}` path its command, its args and
 each platform override name is present, every override is keyed `darwin`,
-`win32` or `linux` and listed in `compatibility.platforms`, and no override
-declares `env`. That last rule exists because Claude Desktop applies an
-override's `env` in place of the base `env` rather than merging the two, so an
-override carrying one would start the server without `GITLAB_TOKEN`.
+`win32` or `linux` and listed in `compatibility.platforms`, that list names
+all three platforms and gives every one but `darwin` an override, and no
+override declares `env`. The platform rule runs both ways because the base
+command is the macOS universal binary: a platform listed without an override
+would be handed that binary, and a platform left out of the list is one
+Claude Desktop marks the bundle incompatible on. The `env` rule exists because
+Claude Desktop applies an override's `env` in place of the base `env` rather
+than merging the two, so an override carrying one would start the server
+without `GITLAB_TOKEN`. A check that fails, or a step that stops the script
+before the checks finish, leaves no bundle behind.
 
 ### How the Linux entry starts
 
@@ -107,7 +117,11 @@ with mode 0600 and restores 0700 only on entries whose recorded mode has the
 owner execute bit, which is why the build records 0755 on the binaries; the
 launcher's own `chmod` covers an archive that lost those bits.
 `scripts/mcpb_launch_sh_test.py` drives the launcher with stub binaries under
-every POSIX shell on the machine and runs in CI's supply-chain job.
+`/bin/sh`, `dash`, `busybox sh` and `bash --posix`, whichever the machine has.
+`scripts/mcpb_manifest_test.py` pins the manifest values this layout depends
+on, and `scripts/build_mcpb_test.py` runs the build script over stand-in
+binaries and checks that it refuses, and removes, each bundle its rules exist
+for. All three run in CI's supply-chain job.
 
 A `.mcpb` is a plain zip with `manifest.json` at its root, so the script builds
 it with `zip` and fixed entry timestamps: the same inputs produce the same
@@ -130,6 +144,8 @@ asset. The manifest version is stamped from the git tag by
 | `mcpb/linux/launch.sh`           | Linux entry point: picks the amd64 or arm64 binary by `uname -m`             |
 | `scripts/build-mcpb.sh`          | Bundle assembly, deterministic `zip` packing, and the checks on the archive  |
 | `scripts/mcpb_launch_sh_test.py` | Tests of the Linux launcher, run in CI                                       |
+| `scripts/mcpb_manifest_test.py`  | Tests of the manifest values the bundle layout depends on, run in CI         |
+| `scripts/build_mcpb_test.py`     | Tests of the build script's checks and its removal of a refused bundle       |
 | `PRIVACY.md`                     | Privacy policy referenced by the manifest                                    |
 
 ## Privacy and directory submission

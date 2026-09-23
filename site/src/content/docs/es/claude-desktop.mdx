@@ -55,9 +55,12 @@ Los nombres de la primera columna son los que muestra el diálogo de instalació
 | Log level (nivel de log)                                | No          | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
 :::tip[Almacenamiento del token]
-Claude Desktop guarda el Personal Access Token en el llavero del sistema
-operativo, no en un archivo de configuración en texto plano. Crea el token con
-el scope `api` en **GitLab → User Settings → Access Tokens**.
+Claude Desktop cifra el Personal Access Token antes de guardarlo, con una clave
+que custodia el almacén de credenciales del sistema operativo: el Llavero
+(Keychain) en macOS, DPAPI en Windows y el llavero del escritorio (como GNOME
+Keyring o KWallet) en Linux. En un escritorio Linux sin llavero, el token queda
+sin esa protección. Crea el token con el scope `api` en
+**GitLab → User Settings → Access Tokens**.
 :::
 
 La superficie de herramientas por defecto, `dynamic`, registra solo dos

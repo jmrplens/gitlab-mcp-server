@@ -52,9 +52,12 @@ with a message in Claude Desktop's MCP log.
 | Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
 :::tip[Token storage]
-Claude Desktop stores the Personal Access Token in the operating system
-keychain, not in a plain-text config file. Create the token with the `api`
-scope under **GitLab → User Settings → Access Tokens**.
+Claude Desktop encrypts the Personal Access Token before saving it, with a key
+held by the operating system's credential store: the Keychain on macOS, DPAPI
+on Windows, and the desktop keyring (such as GNOME Keyring or KWallet) on
+Linux. A Linux desktop without a keyring leaves the token without that
+protection. Create the token with the `api` scope under
+**GitLab → User Settings → Access Tokens**.
 :::
 
 The default `dynamic` tool surface registers just two find/execute tools, so

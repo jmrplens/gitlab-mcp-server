@@ -243,7 +243,7 @@ jobs:
         run: make check-server-json
       # Downloads every declared artifact, so it runs on main only. A pull
       # request does not move server.json — the release stamp does — and paying
-      # a 40 MB download plus a registry round-trip on every push would trade a
+      # a 75 MB download plus a registry round-trip on every push would trade a
       # real gate for a flaky one.
       - name: Check MCP Registry packages are published
         if: github.event_name == 'push'
@@ -870,9 +870,13 @@ jobs:
         run: make check-supply-chain
       - name: Test the auditor itself
         run: go test ./cmd/audit_supply_chain/ -count=1
-      # scripts/mcpb_launch_sh_test.py is among them: it drives the Claude
-      # Desktop bundle's Linux launcher (mcpb/linux/launch.sh) under every
-      # POSIX shell the runner has, and runs shellcheck on it.
+      # The Claude Desktop bundle's tests are among them.
+      # scripts/mcpb_launch_sh_test.py drives its Linux launcher
+      # (mcpb/linux/launch.sh) under /bin/sh, dash, busybox sh and
+      # bash --posix, whichever the runner has, and runs shellcheck on it;
+      # scripts/mcpb_manifest_test.py pins mcpb/manifest.json; and
+      # scripts/build_mcpb_test.py runs scripts/build-mcpb.sh over stand-in
+      # binaries against each bundle its checks refuse.
       - name: Test the installer, launcher and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
