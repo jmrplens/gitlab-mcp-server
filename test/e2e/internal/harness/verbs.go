@@ -252,11 +252,16 @@ func (s *Session) subscribe(uri, expectation string) (*Subscription, error) {
 	if err == nil && listening {
 		err = s.awaitAcknowledgement(acknowledged)
 	}
-	// Recorded here rather than by the sending middleware: the SDK's Subscribe
-	// opens the subscription on a background context under protocol 2026-07-28,
-	// so the attribution on subscribeCtx never reaches the middleware and the
-	// subscribe would be credited to no test. See [sessionConn.recordSubscribe].
-	s.conn.recordSubscribe(s.env.recorder, uri, expectation, outcomeOf(methodSubscribe, nil, err))
+	// Recorded here only on protocol 2026-07-28, where the SDK's Subscribe opens
+	// the subscription on a background context, so the attribution on
+	// subscribeCtx never reaches the sending middleware and the subscribe would
+	// be credited to no test. On an older protocol the request leaves through
+	// the middleware on subscribeCtx, which records it with the same answer,
+	// and a second line here would count it twice. See
+	// [sessionConn.recordSubscribe].
+	if listening {
+		s.conn.recordSubscribe(s.env.recorder, uri, expectation, outcomeOf(methodSubscribe, nil, err))
+	}
 
 	// There is something to unsubscribe when the server agreed, and also when
 	// it did not on 2026-07-28: the SDK keeps the listen it opened for the URI

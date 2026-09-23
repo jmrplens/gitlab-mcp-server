@@ -20,11 +20,12 @@
 // learned only by that acknowledgement timing out (the harness's
 // subscribeAckTimeout, 30 seconds), so each declined template costs the sweep
 // that long, and a run whose log shows a 30-second gap before each declined
-// line is behaving as designed. And the server holds at most ten watchers per credential,
-// evicting only one that has sat idle past its thirty-minute lease, so
-// twenty-six subscriptions held at once would be sixteen refusals. The sweep therefore runs on a session of its own and
-// closes each subscription before opening the next; a close reaches the server
-// a moment after it returns, so a few watchers may overlap, far inside the cap.
+// line is behaving as designed. And the server holds at most ten watchers per
+// credential, evicting only one that has sat idle past its thirty-minute lease,
+// so twenty-six subscriptions held at once would be sixteen refusals. The sweep
+// therefore runs on a session of its own and closes each subscription before
+// opening the next; a close reaches the server a moment after it returns, so a
+// few watchers may overlap, far inside the cap.
 
 package common
 

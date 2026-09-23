@@ -621,19 +621,19 @@ func TestWorldTemplates_UnmadeObject_NamesWhy(t *testing.T) {
 	}{
 		{
 			name: "scoped", template: "gitlab://project/{project_id}/wiki/{slug}", variable: "slug",
-			want: []string{"the World's wiki page was not made (403 Forbidden)", "variable slug"},
+			want: []string{"the World's wiki page was not made (403 Forbidden)", "no binding for slug"},
 		},
 		{
 			name: "plain", template: "gitlab://project/{project_id}/job/{job_id}", variable: "job_id",
-			want: []string{"the World's pipeline was not made (pipeline 77 did not settle)", "variable job_id"},
+			want: []string{"the World's pipeline was not made (pipeline 77 did not settle)", "no binding for job_id"},
 		},
 		{
 			name: "never attempted", template: "gitlab://project/{project_id}/tag/{tag_name}", variable: "tag_name",
-			want: []string{"the World holds no tag", "variable tag_name"},
+			want: []string{"the World holds no tag", "no binding for tag_name"},
 		},
 		{
 			name: "never carried", template: "gitlab://project/{project_id}/thing/{thing_id}", variable: "thing_id",
-			want: []string{"the World has no binding for variable thing_id"},
+			want: []string{"the World has no binding for thing_id"},
 		},
 	}
 	for _, testCase := range cases {
@@ -646,6 +646,62 @@ func TestWorldTemplates_UnmadeObject_NamesWhy(t *testing.T) {
 				if !strings.Contains(reason, part) {
 					t.Errorf("reason = %q, want it to say %q", reason, part)
 				}
+			}
+		})
+	}
+}
+
+// TestWorldBindParam_UnboundName_NamesWhy checks the reason the read and
+// preview sweeps log beside an action they could not bind: an extra the build
+// could not make is named with GitLab's own reason, one a World never
+// attempted says it holds none, and a name no binding carries says so, while
+// a bound name comes back with its value and no reason.
+func TestWorldBindParam_UnboundName_NamesWhy(t *testing.T) {
+	refused := extrasWorld()
+	refused.unbound = map[string]string{worldExtraPipeline: "pipeline 77 did not settle"}
+	cases := []struct {
+		name, param string
+		world       *World
+		want        string
+	}{
+		{
+			name: "extra not made", param: "pipeline_id", world: refused,
+			want: "the World's pipeline was not made (pipeline 77 did not settle), so it has no binding for pipeline_id",
+		},
+		{
+			name: "extra never attempted", param: "pipeline_id", world: extrasWorld(),
+			want: "the World holds no pipeline, so it has no binding for pipeline_id",
+		},
+		{
+			name: "never carried", param: "thing_id", world: extrasWorld(),
+			want: "the World has no binding for thing_id",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			value, bound, reason := testCase.world.BindParam(testCase.param)
+			if bound || value != nil {
+				t.Fatalf("BindParam(%s) bound %v, want nothing", testCase.param, value)
+			}
+			if reason != testCase.want {
+				t.Errorf("BindParam(%s) reason = %q, want %q", testCase.param, reason, testCase.want)
+			}
+		})
+	}
+
+	boundCases := []struct {
+		name, param string
+		want        any
+	}{
+		{name: "core", param: "project_id", want: int64(2)},
+		{name: "made extra", param: "pipeline_id", want: stubPipelineID},
+	}
+	made := madeWorld()
+	for _, testCase := range boundCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			value, bound, reason := made.BindParam(testCase.param)
+			if !bound || value != testCase.want || reason != "" {
+				t.Errorf("BindParam(%s) = (%v, %t, %q), want (%v, true, \"\")", testCase.param, value, bound, reason, testCase.want)
 			}
 		})
 	}

@@ -141,6 +141,17 @@ func subscribeLines(env *Env) []*e2ecalls.Call {
 	return lines
 }
 
+// describeSubscribeLines spells subscribe lines as their target, expectation
+// and outcome, for a failure message: the lines are pointers, which %v prints
+// as addresses.
+func describeSubscribeLines(lines []*e2ecalls.Call) string {
+	described := make([]string, 0, len(lines))
+	for _, line := range lines {
+		described = append(described, line.Target+" expecting "+line.Expectation+": "+line.Outcome)
+	}
+	return "[" + strings.Join(described, ", ") + "]"
+}
+
 // awaitCount waits for an atomic counter a server goroutine moves to reach a
 // value, failing the test when it does not in time.
 func awaitCount(t *testing.T, counter *atomic.Int64, want int64, what string) {
@@ -460,7 +471,7 @@ func TestSession_TrySubscribe_Acknowledged_IsRecordedAsAccepted(t *testing.T) {
 	}
 	lines := subscribeLines(env)
 	if len(lines) != 1 || lines[0].Outcome != e2ecalls.OutcomeOK || lines[0].Expectation != ExpectationAny || lines[0].Target != watchedURI {
-		t.Errorf("subscribe lines = %+v, want one ok line for %s expecting any answer", lines, watchedURI)
+		t.Errorf("subscribe lines = %s, want one ok line for %s expecting any answer", describeSubscribeLines(lines), watchedURI)
 	}
 }
 
@@ -481,7 +492,7 @@ func TestSession_Subscribe_Acknowledged_HandsBackAWatchedSubscription(t *testing
 		t.Errorf("the resource has %d update watchers, want the subscription's one", watching)
 	}
 	if lines := subscribeLines(env); len(lines) != 1 || lines[0].Expectation != ExpectationOK {
-		t.Errorf("subscribe lines = %+v, want one expecting success", lines)
+		t.Errorf("subscribe lines = %s, want one expecting success", describeSubscribeLines(lines))
 	}
 	subscription.Close()
 	if _, watched := session.conn.subscribers.recorderFor(watchedURI); watched {
@@ -558,6 +569,15 @@ func TestSession_TrySubscribe_OlderProtocol_TakesTheRequestsAnswer(t *testing.T)
 	subscription.Close()
 	if got := stub.unsubscribes.Load(); got != 1 {
 		t.Errorf("closing the subscription sent %d unsubscribes, want one", got)
+	}
+	// One line per subscribe sent, written by the sending middleware: the verb
+	// records only where the protocol hides the request from it.
+	lines := subscribeLines(env)
+	if len(lines) != 2 || lines[0].Outcome != e2ecalls.OutcomeOK || lines[1].Outcome != e2ecalls.OutcomeProtocolError {
+		t.Fatalf("subscribe lines = %s, want one ok line and one protocol_error line, one per subscribe sent", describeSubscribeLines(lines))
+	}
+	if lines[0].Target != watchedURI || lines[1].Target != declinedURI {
+		t.Errorf("recorded subscribe targets %q and %q, want %q and %q", lines[0].Target, lines[1].Target, watchedURI, declinedURI)
 	}
 }
 
@@ -707,6 +727,6 @@ func TestSession_TrySubscribe_RealBinary_AcknowledgesWhatItCanReadAndDeclinesThe
 
 	lines := subscribeLines(env)
 	if len(lines) != 2 || lines[0].Outcome != e2ecalls.OutcomeOK || lines[1].Outcome != e2ecalls.OutcomeProtocolError {
-		t.Errorf("subscribe lines = %+v, want the readable one ok and the other a protocol error", lines)
+		t.Errorf("subscribe lines = %s, want the readable one ok and the other a protocol error", describeSubscribeLines(lines))
 	}
 }

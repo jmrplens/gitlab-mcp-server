@@ -646,10 +646,9 @@ var templateBindings = map[string]map[string]worldBinding{
 // BindTemplate returns the World's value for one variable of one resource
 // template, whether it has one, and, when it has none, why.
 //
-// A value bound for that template alone wins, then the plain bindings. A
-// variable neither carries is reported with the reason its object was not
-// made when an extra would have carried it, so a sweep's log names the real
-// cause (a disabled wiki's 403) rather than a missing name.
+// A value bound for that template alone wins, then the plain bindings through
+// [World.BindParam], which also gives the reason for a variable neither
+// carries.
 func (w *World) BindTemplate(template, variable string) (value any, bound bool, reason string) {
 	if binding, scoped := templateBindings[template][variable]; scoped {
 		if made, held := binding.value(w); held {
@@ -657,22 +656,34 @@ func (w *World) BindTemplate(template, variable string) (value any, bound bool, 
 		}
 		return nil, false, w.unboundReason(binding.extra, variable)
 	}
-	if plainValue, plainBound := w.Bind(variable); plainBound {
-		return plainValue, true, ""
-	}
-	if binding, plain := plainExtraBindings[variable]; plain {
-		return nil, false, w.unboundReason(binding.extra, variable)
-	}
-	return nil, false, "the World has no binding for variable " + variable
+	return w.BindParam(variable)
 }
 
-// unboundReason says why the World holds no value for a variable an extra
-// would carry: the reason that extra was not made, when the build recorded
-// one, and otherwise that the World holds none, which is what a World built
-// without its extras says.
-func (w *World) unboundReason(extra, variable string) string {
-	if reason, recorded := w.unbound[extra]; recorded {
-		return fmt.Sprintf("the World's %s was not made (%s), so it has no binding for variable %s", extra, reason, variable)
+// BindParam returns the World's value for one parameter name, whether it has
+// one, and, when it has none, why. It is [World.Bind] with the reason, for a
+// sweep that logs what it could not bind.
+//
+// A name an extra would carry is reported with the reason that extra was not
+// made, so the read and preview sweeps name the real cause (a pipeline that
+// never settled) beside the action rather than a missing name, as the
+// resource and subscription sweeps do beside a template.
+func (w *World) BindParam(name string) (value any, bound bool, reason string) {
+	if plainValue, plainBound := w.Bind(name); plainBound {
+		return plainValue, true, ""
 	}
-	return fmt.Sprintf("the World holds no %s, so it has no binding for variable %s", extra, variable)
+	if binding, plain := plainExtraBindings[name]; plain {
+		return nil, false, w.unboundReason(binding.extra, name)
+	}
+	return nil, false, "the World has no binding for " + name
+}
+
+// unboundReason says why the World holds no value for a name an extra would
+// carry: the reason that extra was not made, when the build recorded one, and
+// otherwise that the World holds none, which is what a World built without
+// its extras says.
+func (w *World) unboundReason(extra, name string) string {
+	if reason, recorded := w.unbound[extra]; recorded {
+		return fmt.Sprintf("the World's %s was not made (%s), so it has no binding for %s", extra, reason, name)
+	}
+	return fmt.Sprintf("the World holds no %s, so it has no binding for %s", extra, name)
 }

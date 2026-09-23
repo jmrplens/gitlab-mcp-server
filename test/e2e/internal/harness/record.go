@@ -629,16 +629,18 @@ func (c *sessionConn) acknowledge(req mcp.Request) {
 }
 
 // recordSubscribe records one subscribe against the test that made it, with
-// what came of it.
+// what came of it, on protocol 2026-07-28 only.
 //
-// The sending middleware cannot: over protocol 2026-07-28 the SDK's Subscribe
-// opens the listen stream on a background context, dropping the attribution the
-// caller put on its own, so the one call the middleware would see carries no
-// test to file it under. The verb records it here instead, once it knows the
-// answer, so a subscribe the server declined is recorded as the refusal it was
-// rather than as accepted; the resource-updated notification that may follow
-// is recorded by [sessionConn.recordResourceUpdate], which is the delivery
-// half.
+// The sending middleware cannot there: over protocol 2026-07-28 the SDK's
+// Subscribe opens the listen stream on a background context, dropping the
+// attribution the caller put on its own, so the one call the middleware would
+// see carries no test to file it under. The verb records it here instead, once
+// it knows the answer, so a subscribe the server declined is recorded as the
+// refusal it was rather than as accepted. On an older protocol the subscribe
+// is an ordinary request sent on the caller's attributed context, so the
+// middleware records it with the request's own answer and this is not called.
+// The resource-updated notification that may follow is recorded by
+// [sessionConn.recordResourceUpdate], which is the delivery half.
 func (c *sessionConn) recordSubscribe(rec *envRecorder, uri, expectation, outcome string) {
 	line := &e2ecalls.Call{
 		Test:        rec.env.T.Name(),
