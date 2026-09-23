@@ -277,6 +277,43 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 	}
 }
 
+// TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree holds the
+// condition a declaration table is judged under: the run covered the whole
+// tree the table describes, however the caller spelled it. Compared
+// literally, the suite typed without its leading ./ loaded every package of
+// it and left the helper table unjudged, which is a clean report over a run
+// that never asked the question; and a part of the tree, or the tree plus
+// something beside it, is a run whose unused entries say nothing about the
+// table.
+func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T) {
+	cases := []struct {
+		name     string
+		patterns []string
+		whole    []string
+		want     bool
+	}{
+		{name: "the suite as the bare run names it", patterns: []string{"./test/e2e/gitlab/..."}, whole: defaultSuitePatterns, want: true},
+		{name: "the suite without the dot", patterns: []string{"test/e2e/gitlab/..."}, whole: defaultSuitePatterns, want: true},
+		{
+			name:     "the suite in the platform's spelling",
+			patterns: []string{filepath.Join("test", "e2e", "gitlab", "...")},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{name: "the served tree without the dot", patterns: []string{"internal/tools/..."}, whole: defaultPatterns, want: true},
+		{name: "one package of the suite", patterns: []string{"./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
+		{name: "the suite and a package again", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
+		{name: "nothing", whole: defaultSuitePatterns},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			if got := namesWhole(one.patterns, one.whole); got != one.want {
+				t.Errorf("namesWhole(%q, %q) = %t, want %t", one.patterns, one.whole, got, one.want)
+			}
+		})
+	}
+}
+
 // plantedToDoRefusal is the line issue 901 was made of, as the suite wrote it
 // before the fix: a quotation of a hint that had named a tool until issue 883
 // moved it to the action's catalog ID, so the test went on asserting the old
@@ -297,12 +334,13 @@ func TestToDo(t *testing.T) {
 // command over a suite whose only defect is issue 901's line, and holds the
 // gate that would have caught it on the push that introduced it: the row
 // names the file, the line and the needle, the count is in the report, and
-// the failure line names the rule.
+// the failure line names the rule. The run passes no -v, as check-action-ids
+// does not, so the row is what a red job's log carries.
 func TestRun_Check_SuiteAssertionNamingATool_FailsAndNamesIt(t *testing.T) {
 	overlay := suiteOverlay(t, map[string]string{"planted_test.go": plantedToDoRefusal})
 	var stdout, stderr bytes.Buffer
 
-	code := run(auditConfig{dir: repoRoot(t), patterns: []string{suiteFixturePattern}, overlay: overlay, check: true, verbose: true}, &stdout, &stderr)
+	code := run(auditConfig{dir: repoRoot(t), patterns: []string{suiteFixturePattern}, overlay: overlay, check: true}, &stdout, &stderr)
 
 	if code != 1 {
 		t.Fatalf("run with -check = %d over a quotation naming a tool, want 1; stdout %q", code, stdout.String())

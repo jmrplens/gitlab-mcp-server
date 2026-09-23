@@ -33,8 +33,9 @@
 // bare run makes both loads. A run naming patterns makes only the loads they
 // name: a pattern under test/e2e/ goes to the suite and any other to the
 // served tree, so an explicit ./internal/tools/... reads no suite and prints
-// no section for it, and only the bare run holds the helper table to the
-// whole suite.
+// no section for it. Only a run over the whole suite holds the helper table to
+// it: the bare run, or one naming ./test/e2e/gitlab/... itself, with or
+// without the leading ./.
 //
 // # What it compares against
 //

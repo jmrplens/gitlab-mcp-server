@@ -34,7 +34,7 @@ const defaultJSONPath = "plan/action-ids.json"
 func main() {
 	dir := flag.String("dir", ".", "repository root the patterns are resolved against")
 	jsonPath := flag.String("json", defaultJSONPath, "write the work list here; empty writes none")
-	verbose := flag.Bool("v", false, "also print the alias references of a clean run and what was judged by kind")
+	verbose := flag.Bool("v", false, "also print what fails nothing: the alias references of a clean run, what was judged by kind, the prose sites nothing could fold and the calls read per assertion helper")
 	check := flag.Bool("check", false, "exit non-zero when a published ID is not a canonical catalog ID, names a registered alias, sits at a site the type checker could not fold, or is excused by a declaration that excuses nothing; when a hint, or a substring the e2e suite asserts a served text carries, names a tool; or when an assertion helper declaration matches no call")
 	fixHintNames := flag.Bool("fix-hints", false, "rewrite each gitlab_* tool name a folded hint spells to the canonical ID of the action that tool projects, then report what moved")
 	fixHintTests := flag.Bool("fix-hints-tests", false, "with -fix-hints, rewrite the test files too, so an assertion pinning a hint moves with the hint")
@@ -134,9 +134,9 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
-	report := classify(append(sites, read.sites...), ids, slices.Equal(served, defaultPatterns))
+	report := classify(append(sites, read.sites...), ids, namesWhole(served, defaultPatterns))
 	if len(suite) > 0 {
-		report.judgeHelpers(read, slices.Equal(suite, defaultSuitePatterns))
+		report.judgeHelpers(read, namesWhole(suite, defaultSuitePatterns))
 	}
 	writeReport(stdout, report, cfg.verbose)
 	if cfg.jsonPath != "" {
@@ -159,12 +159,13 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 // splitPatterns sorts the positional patterns between the two loads: the
 // served tree and the e2e suite.
 //
-// A run with no arguments audits both whole, which is the only run that holds
-// the declaration tables and the helper table to the tree. A run naming
-// patterns loads only what they name, so `./internal/tools/issues` stays the
-// quick check it was and `./test/e2e/gitlab/ee` audits one suite package; an
-// explicit `./internal/tools/...` therefore reads no suite at all, and says so
-// by printing no assertion section.
+// A run with no arguments audits both whole. A run naming patterns loads only
+// what they name, so `./internal/tools/issues` stays the quick check it was
+// and `./test/e2e/gitlab/ee` audits one suite package; an explicit
+// `./internal/tools/...` therefore reads no suite at all, and says so by
+// printing no assertion section. What holds a table to its tree is that the
+// run covered the tree, which [namesWhole] decides: the bare run does for
+// both, and a run naming one whole tree itself does for that one.
 func splitPatterns(patterns []string) (served, suite []string) {
 	if len(patterns) == 0 {
 		return defaultPatterns, defaultSuitePatterns
@@ -183,5 +184,26 @@ func splitPatterns(patterns []string) (served, suite []string) {
 // spelling a caller types it: with or without the leading ./, and with the
 // platform's separator.
 func isSuitePattern(pattern string) bool {
-	return strings.HasPrefix(strings.TrimPrefix(filepath.ToSlash(pattern), "./"), suiteDir)
+	return strings.HasPrefix(normalizePattern(pattern), suiteDir)
+}
+
+// namesWhole reports whether patterns name exactly the whole of a tree, which
+// is the only run that can hold a declaration table to that tree: over part of
+// it every entry the part does not use excuses nothing, and reporting them
+// would be an answer about the patterns rather than about the table.
+//
+// The comparison reads the spelling isSuitePattern reads. Compared literally,
+// `test/e2e/gitlab/...` typed without the leading ./ loaded the whole suite
+// and left the helper table unjudged, which is a clean report over a run that
+// never asked the question.
+func namesWhole(patterns, whole []string) bool {
+	return slices.EqualFunc(patterns, whole, func(given, want string) bool {
+		return normalizePattern(given) == normalizePattern(want)
+	})
+}
+
+// normalizePattern is a pattern in the one spelling the comparisons read:
+// slash-separated, without a leading ./.
+func normalizePattern(pattern string) string {
+	return strings.TrimPrefix(filepath.ToSlash(pattern), "./")
 }

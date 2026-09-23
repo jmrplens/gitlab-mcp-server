@@ -244,8 +244,9 @@ func (r *Report) finish() {
 // judgeHelpers holds the helper table to what the suite walk met, and marks
 // the run as one that loaded the suite.
 //
-// wholeSuite says whether the suite patterns were the default ones, which is
-// the only run that can tell a helper nothing calls from a narrowed run.
+// wholeSuite says whether the suite patterns name the whole suite, the bare
+// run's or one naming it itself ([namesWhole]), which is the only run that can
+// tell a helper nothing calls from a narrowed run.
 func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 	r.SuiteJudged = true
 	r.CallsByHelper = read.calls
@@ -344,10 +345,11 @@ func isProseKind(kind string) bool {
 // to act on them, then the alias references and the sites nothing could fold,
 // then what the run saw.
 //
-// The alias references and the unfolded sites are printed whatever -v says,
-// because both fail the gate. -v decides only how much of a clean run is
-// shown, and how much of the two prose sections: each prints its count every
-// time and its rows only when they are asked for.
+// The alias references, the unfolded sites and the rows of the two prose
+// sections are printed whatever -v says, because all of them fail the gate
+// and a gate's log has to name what it refused. -v decides only how much of
+// what fails nothing is shown: the breakdowns by kind, and the prose sites
+// the type checker could not fold.
 //
 // The suite's section is printed only by a run that loaded the suite, which a
 // run over ./internal/tools/... alone does not: its count over nothing would

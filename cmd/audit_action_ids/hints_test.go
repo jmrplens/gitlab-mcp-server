@@ -206,12 +206,13 @@ func TestClassify_HintFindings_AreOrderedByPositionThenName(t *testing.T) {
 	}
 }
 
-// TestWriteHintReport_Rows_AreAskedForAndTheCountIsNot holds the split between
-// what every run says and what -v adds. check-action-ids runs on every push
-// and this rule fails nothing, so a log that carried hundreds of rows would
-// bury the refusals a reader came for; the count still has to be there, since
-// it is the figure the rule was built to produce.
-func TestWriteHintReport_Rows_AreAskedForAndTheCountIsNot(t *testing.T) {
+// TestWriteHintReport_QuietRun_PrintsTheRowsAndNotWhatFailsNothing holds the
+// split between what every run says and what -v adds. check-action-ids passes
+// no -v and a finding fails it, so its log has to carry the row a reader acts
+// on: a count and a rule name alone would send them to run the audit again to
+// learn which line to fix. What fails nothing, the site nothing folded and the
+// breakdown by kind, is what -v is for.
+func TestWriteHintReport_QuietRun_PrintsTheRowsAndNotWhatFailsNothing(t *testing.T) {
 	report := classify([]site{
 		hintSite(1, "list them with gitlab_demo_list first"),
 		{Package: "p", File: "p/a.go", Line: 2, Kind: kindErrorHint, Expr: "buildHint(x)"},
@@ -221,25 +222,22 @@ func TestWriteHintReport_Rows_AreAskedForAndTheCountIsNot(t *testing.T) {
 	writeHintReport(&quiet, report.Hints, false)
 	writeHintReport(&loud, report.Hints, true)
 
+	const row = `  p/a.go:1 error_hint "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`
 	const count = "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read; 1 not folded (reported, not gated)"
-	for _, want := range []string{count, "hint findings by rule: tool_name 1"} {
+	for _, want := range []string{hintRowsHeading, row, count, "hint findings by rule: tool_name 1"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(quiet.String(), want) {
 				t.Errorf("the quiet report left out %q; got %q", want, quiet.String())
 			}
 		})
 	}
-	if strings.Contains(quiet.String(), "gitlab_demo_list") || strings.Contains(quiet.String(), "buildHint(x)") {
-		t.Errorf("the quiet report printed rows: %q", quiet.String())
-	}
-	for _, want := range []string{
-		`  p/a.go:1 error_hint "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
-		"  p/a.go:2 error_hint buildHint(x)",
-		"hints read by kind: error_hint 1",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(loud.String(), want) {
-				t.Errorf("the verbose report left out %q; got %q", want, loud.String())
+	for _, verboseOnly := range []string{hintNotFoldedHeading, "  p/a.go:2 error_hint buildHint(x)", "hints read by kind: error_hint 1"} {
+		t.Run(verboseOnly, func(t *testing.T) {
+			if strings.Contains(quiet.String(), verboseOnly) {
+				t.Errorf("the quiet report printed %q, which -v is for; got %q", verboseOnly, quiet.String())
+			}
+			if !strings.Contains(loud.String(), verboseOnly) {
+				t.Errorf("the verbose report left out %q; got %q", verboseOnly, loud.String())
 			}
 		})
 	}
@@ -299,10 +297,10 @@ func TestWriteHintReport_StaleDeclaration_IsPrintedWhateverVerbosityAsks(t *test
 // rule ran and found nothing from the rule not having run.
 //
 // The two headings are asserted absent as well, and that is what makes the
-// emptiness of each list load-bearing rather than incidental: a heading is
-// printed by a verbose run, so asking only for verbosity would announce a
-// section and then print nothing under it, which reads as a section whose rows
-// were lost.
+// emptiness of each list load-bearing rather than incidental: the run is a
+// verbose one, which prints both lists, so a guard that asked for verbosity or
+// for nothing at all would announce a section and then print nothing under
+// it, which reads as a section whose rows were lost.
 func TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown(t *testing.T) {
 	report := classify(nil, stubCatalog(), false)
 
@@ -339,9 +337,16 @@ func TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows(t *testing.T)
 	writeAssertionReport(&loud, report.Assertions, true)
 	writeAssertionReport(&empty, classify(nil, stubCatalog(), false).Assertions, true)
 
-	const count = "  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated)\n    assertion findings by rule: tool_name 1\n"
-	if quiet.String() != count {
-		t.Errorf("the quiet section = %q, want %q", quiet.String(), count)
+	wantQuiet := strings.Join([]string{
+		assertionRowsHeading,
+		"=== s ===",
+		`  s/a_test.go:1 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated)",
+		"    assertion findings by rule: tool_name 1",
+		"",
+	}, "\n")
+	if quiet.String() != wantQuiet {
+		t.Errorf("the quiet section:\n%s\nwant:\n%s", quiet.String(), wantQuiet)
 	}
 	wantLoud := strings.Join([]string{
 		assertionRowsHeading,

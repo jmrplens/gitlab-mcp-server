@@ -164,6 +164,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_action_ids/fixture"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	` + suiteHarnessImport + `
 )
 
@@ -183,6 +184,7 @@ func TestPlanted(t *testing.T) {
 	assertMentions(t, "not read: what", text, searchTypes...)
 	assertMentions(t, "not read: what", text, append([]string{"from an append"}, searchTypes...)...)
 	assertMentions(t, "not read: what", text, harness.FeatureFlag)
+	assertMentions(t, "not read: what", text, toolutil.HintAction("from a HintAction's action ID", "not read: its purpose"))
 	if !mentionsAny(text, "from a negated mentionsAny") {
 		t.Error("absent")
 	}
@@ -275,9 +277,13 @@ func readPlantedSuite(t *testing.T) suiteRead {
 // of a local slice spread into the call, a package variable spread whole or
 // through an append, a constant of another package, the one contains of
 // ExpectToolError, or the needles of a negated predicate, parenthesised or
-// not. Beside them sit the positions that must stay silent: what a helper is
-// told it is checking, the text it is checking, ExpectToolError's id,
-// parameters and options, a predicate used as an absence check or as a
+// not. One more is a shape no suite file writes yet, although sixteen of them
+// import toolutil already: a needle built with toolutil.HintAction, read as the
+// action ID it names, since the served walk judges that ID where HintAction
+// is called and the suite walk has no such visit. Beside them sit the
+// positions that must stay silent: what a helper is told it is checking, the
+// text it is checking, ExpectToolError's id, parameters and options,
+// HintAction's purpose, a predicate used as an absence check or as a
 // classification, a tool named on purpose to Raw, a lookalike helper outside
 // the suite, and the direct string checks a test writes without a helper.
 //
@@ -290,6 +296,7 @@ func TestCollectAssertionSites_EveryQuotingPosition_IsRead(t *testing.T) {
 
 	want := []string{
 		"from ExpectToolError",
+		"from a HintAction's action ID",
 		"from a file both variants carry",
 		"from a literal",
 		"from a local slice",
@@ -357,7 +364,7 @@ func TestCollectAssertionSites_APackageWithNoTests_IsRead(t *testing.T) {
 func TestCollectAssertionSites_CallsAreCountedOncePerHelper(t *testing.T) {
 	read := readPlantedSuite(t)
 
-	want := map[string]int{"assertMentions": 6, "ExpectToolError": 3, "mentionsAny": 1, "containsAny": 3}
+	want := map[string]int{"assertMentions": 7, "ExpectToolError": 3, "mentionsAny": 1, "containsAny": 3}
 	if !maps.Equal(read.calls, want) {
 		t.Errorf("calls = %v, want %v", read.calls, want)
 	}

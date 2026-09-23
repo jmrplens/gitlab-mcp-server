@@ -1054,17 +1054,29 @@ func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 //
 // Three shapes are recognized, and each is a hint accounted for somewhere
 // else. toolutil.HintAction composes the one form this whole command exists to
-// ask for, and its ID is judged as an ID at this same call site, so there is
-// nothing the prose rule can add. toolutil.ListHints is a list of hints
-// spelled as its arguments. And a call handed nothing but hints read off
-// fields hands back prose recorded where it was written, which is the bargain
-// [walker.isListCopy] already makes for a list of IDs, with the same hole:
-// what such a body adds of its own is invisible here.
+// ask for, and in the served walk its ID is judged as an ID at this same call
+// site, so there is nothing the prose rule can add. toolutil.ListHints is a
+// list of hints spelled as its arguments. And a call handed nothing but hints
+// read off fields hands back prose recorded where it was written, which is the
+// bargain [walker.isListCopy] already makes for a list of IDs, with the same
+// hole: what such a body adds of its own is invisible here.
+//
+// A quotation is the exception to the first shape. The suite walk dispatches
+// through [walker.visitSuite], which never reaches [walker.visitCall], so a
+// needle built with HintAction has its ID judged nowhere unless it is judged
+// here. It is recorded as the quotation's own site, the ID alone: the purpose
+// after it is prose the served walk does not judge either, and binding the
+// whole sentence is not possible from the suite, whose load leaves toolutil's
+// declarations out, so a fold would report the call as unreadable rather than
+// read what it names.
 func (w *walker) recordHintCall(kind string, call *ast.CallExpr) bool {
 	callee, ok := w.callee(call)
 	if ok && callee.Pkg() != nil && callee.Pkg().Path() == goprogram.ToolutilPath {
 		switch callee.Name() {
 		case hintActionFunc:
+			if kind == kindAssertion {
+				w.recordErrorHint(kind, call.Args[0])
+			}
 			return true
 		case listHintsFunc:
 			w.recordErrorHintArgs(kind, call, 0)

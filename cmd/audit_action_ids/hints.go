@@ -214,9 +214,9 @@ func newHintReport() HintReport {
 	}
 }
 
-// The headings the verbose report opens its lists with. Each is written only
-// over a list that has something in it, so a run that found nothing announces
-// no section.
+// The headings the report opens its lists with: the rows under every run, the
+// sites nothing folded under -v alone. Each is written only over a list that
+// has something in it, so a run that found nothing announces no section.
 const (
 	hintRowsHeading           = "=== capabilities named in a hint by a spelling no listing publishes ==="
 	hintNotFoldedHeading      = "=== hints not folded ==="
@@ -234,7 +234,7 @@ type proseLabels struct {
 	// byRule and byKind caption the two breakdowns.
 	byRule string
 	byKind string
-	// rowsHeading and notFoldedHeading open the two verbose lists.
+	// rowsHeading and notFoldedHeading open the two lists.
 	rowsHeading      string
 	notFoldedHeading string
 }
@@ -266,14 +266,15 @@ func writeAssertionReport(out io.Writer, assertions HintReport, verbose bool) {
 
 // writeProseSection prints one section of prose findings under its labels.
 //
-// The count is printed by every run and the rows only by a verbose one, which
-// is the split between what a gate's log should carry and what a report is
-// read for: check-action-ids runs this on every push, while audit-action-ids
-// passes -v and is where the work list is read from. A finding still fails the
-// gate without -v, and the stderr line names the section it came from. The
-// rows are in the JSON either way.
+// The rows are printed by every run, because every one of them fails the gate:
+// check-action-ids passes no -v, and a red job whose log carried a count and a
+// rule name and no file, line or needle would send its reader to run the audit
+// again to learn what to fix. What -v adds is what fails nothing, the sites
+// the type checker could not fold and the breakdown by kind, which is the
+// split writeReport makes for the published IDs too. The rows are in the JSON
+// either way.
 func writeProseSection(out io.Writer, labels proseLabels, section HintReport, verbose bool) {
-	if verbose && len(section.Rows) > 0 {
+	if len(section.Rows) > 0 {
 		fmt.Fprintln(out, labels.rowsHeading)
 		writeHintGroups(out, section.Rows)
 	}

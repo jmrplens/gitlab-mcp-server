@@ -731,8 +731,10 @@ func TestReport_Clean_AnAssertionFindingOrAStaleHelper_Fails(t *testing.T) {
 
 // TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers holds the
 // suite's half of the quiet report, line for line, after the hint count: the
-// assertion count and its breakdown, then the helper entries that describe no
-// call, which fail the gate and so are printed without -v.
+// assertion rows, the count and its breakdown, then the helper entries that
+// describe no call. The rows and the entries fail the gate and so are printed
+// without -v; the breakdown by kind and the calls by helper fail nothing and
+// are what -v adds.
 func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T) {
 	report := classify([]site{
 		{Package: "s", File: "s/a_test.go", Line: 7, Kind: kindAssertion, Value: "use gitlab_demo_list", Resolved: true},
@@ -748,6 +750,9 @@ func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T
 
 	const hintCount = "  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read; 0 not folded (reported, not gated)\n"
 	wantTail := hintCount + strings.Join([]string{
+		assertionRowsHeading,
+		"=== s ===",
+		`  s/a_test.go:7 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
 		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated)",
 		"    assertion findings by rule: tool_name 1",
 		"=== assertion helpers that describe no call ===",
@@ -758,7 +763,6 @@ func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T
 		t.Errorf("report:\n%s\nwant it to end with:\n%s", quiet.String(), wantTail)
 	}
 	for _, want := range []string{
-		assertionRowsHeading + "\n=== s ===\n" + `  s/a_test.go:7 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool` + "\n",
 		"    assertions read by kind: assertion 1\n",
 		"    assertion calls by helper: assertMentions 1\n",
 	} {
