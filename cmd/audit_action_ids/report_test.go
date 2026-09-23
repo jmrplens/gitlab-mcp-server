@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -553,10 +554,15 @@ func TestWriteReport_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 // TestWriteJSON_Roundtrip_CarriesTheWholeReport holds that the work list a
 // later layer reads is the report, and that it is written even when it is
 // empty so a stale file cannot pass for today's answer.
+//
+// The suite's section is in it under its own keys, and the two prose sections
+// share the neutral ones, which is what schema version 5 is.
 func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
+		{Package: "s", File: "s/a_test.go", Line: 4, Kind: kindAssertion, Value: "use gitlab_demo_list", Resolved: true},
 	}, stubCatalog(), true)
+	report.judgeHelpers(suiteRead{calls: map[string]int{"assertMentions": 1}}, false)
 
 	path := filepath.Join(t.TempDir(), "nested", "action-ids.json")
 	if err := writeJSON(path, report); err != nil {
@@ -570,11 +576,235 @@ func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(data, &decoded); unmarshalErr != nil {
 		t.Fatalf("decode: %v", unmarshalErr)
 	}
-	if decoded.SchemaVersion != schemaVersion {
-		t.Errorf("schema version = %d, want %d", decoded.SchemaVersion, schemaVersion)
+	if decoded.SchemaVersion != 5 || schemaVersion != 5 {
+		t.Errorf("schema version = %d (constant %d), want 5", decoded.SchemaVersion, schemaVersion)
 	}
 	if len(decoded.Findings) != 1 || decoded.Findings[0].ID != "demo.gone" {
 		t.Errorf("findings = %+v, want the one finding", decoded.Findings)
+	}
+	wantRow := HintFinding{Package: "s", File: "s/a_test.go", Line: 4, Kind: kindAssertion, Rule: ruleToolName, Name: "gitlab_demo_list"}
+	if !decoded.SuiteJudged || !slices.Equal(decoded.Assertions.Rows, []HintFinding{wantRow}) {
+		t.Errorf("suite judged %t, assertion rows %+v, want the one row", decoded.SuiteJudged, decoded.Assertions.Rows)
+	}
+	if decoded.CallsByHelper["assertMentions"] != 1 {
+		t.Errorf("calls by helper = %v, want the one call carried", decoded.CallsByHelper)
+	}
+	for _, key := range []string{`"e2e_assertions": {`, `"suite_judged": true`, `"assertion_calls_by_helper"`, `"rows": [`, `"read": 1`, `"read_by_kind"`, `"not_folded": 0`} {
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(data), key) {
+				t.Errorf("work list = %s, want %s", data, key)
+			}
+		})
+	}
+	if strings.Contains(string(data), `"hints_read"`) || strings.Contains(string(data), `"hint_findings"`) {
+		t.Errorf("work list = %s, want the section keys to say nothing about hints", data)
+	}
+}
+
+// TestClassify_AssertionSite_IsJudgedInItsOwnSection holds where a quotation
+// lands and what it is held to: the section of its own, by the three rules a
+// hint is judged by, with the canonical ID silent and nothing reaching the
+// hint section or the published-ID gate.
+func TestClassify_AssertionSite_IsJudgedInItsOwnSection(t *testing.T) {
+	assertion := func(line int, value string) site {
+		return site{Package: "s", File: "s/a_test.go", Line: line, Kind: kindAssertion, Value: value, Resolved: true}
+	}
+	report := classify([]site{
+		assertion(1, "list them with gitlab_demo_list"),
+		assertion(2, "the demo.fetch action"),
+		assertion(3, "demo.gone"),
+		assertion(4, "demo.get"),
+		{Package: "s", File: "s/a_test.go", Line: 5, Kind: kindAssertion, Expr: "e.Name(x)"},
+	}, stubCatalog(), true)
+
+	want := []HintFinding{
+		{Package: "s", File: "s/a_test.go", Line: 1, Kind: kindAssertion, Rule: ruleToolName, Name: "gitlab_demo_list"},
+		{Package: "s", File: "s/a_test.go", Line: 2, Kind: kindAssertion, Rule: ruleAlias, Name: "demo.fetch", Canonical: "demo.get"},
+		{Package: "s", File: "s/a_test.go", Line: 3, Kind: kindAssertion, Rule: ruleUnknownID, Name: "demo.gone", Closest: "demo.get"},
+	}
+	if !slices.Equal(report.Assertions.Rows, want) {
+		t.Errorf("assertion rows = %+v\nwant %+v", report.Assertions.Rows, want)
+	}
+	if report.Assertions.Read != 4 || report.Assertions.Findings != 3 || report.Assertions.Unfolded != 1 {
+		t.Errorf("assertions read %d, findings %d, not folded %d; want 4, 3, 1",
+			report.Assertions.Read, report.Assertions.Findings, report.Assertions.Unfolded)
+	}
+	if report.Hints.Read != 0 || len(report.Hints.Rows) != 0 || report.Summary.Judged != 0 || report.Summary.Unresolved != 0 {
+		t.Errorf("hints %+v, summary %+v, want nothing from a quotation outside its own section", report.Hints, report.Summary)
+	}
+}
+
+// TestClassify_AssertionQuotingADeclaredAliasMention_IsExcused holds the one
+// place the two prose sections differ. A Usage line may name one of the two
+// declared aliases on purpose, and a test quoting that line quotes it
+// faithfully; a hint naming the same alias is the server writing a spelling
+// it should not, and stays a finding.
+func TestClassify_AssertionQuotingADeclaredAliasMention_IsExcused(t *testing.T) {
+	const quoted = "dynamic execute also accepts issue.close"
+	report := classify([]site{
+		{Package: "s", File: "s/a_test.go", Line: 1, Kind: kindAssertion, Value: quoted, Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 1, Kind: kindErrorHint, Value: quoted, Resolved: true},
+		{Package: "s", File: "s/a_test.go", Line: 2, Kind: kindAssertion, Value: "the demo.fetch action", Resolved: true},
+	}, stubCatalog("issue.update"), true)
+
+	if want := []HintFinding{{Package: "s", File: "s/a_test.go", Line: 2, Kind: kindAssertion, Rule: ruleAlias, Name: "demo.fetch", Canonical: "demo.get"}}; !slices.Equal(report.Assertions.Rows, want) {
+		t.Errorf("assertion rows = %+v, want only the undeclared alias", report.Assertions.Rows)
+	}
+	if len(report.Hints.Rows) != 1 || report.Hints.Rows[0].Name != "issue.close" {
+		t.Errorf("hint rows = %+v, want the declared alias still refused in a hint", report.Hints.Rows)
+	}
+	if !slices.ContainsFunc(report.StaleExemptions, func(entry string) bool { return strings.HasPrefix(entry, "issue.close ") }) {
+		t.Errorf("stale declarations = %v, want the entry left stale: a quotation keeps no declaration alive", report.StaleExemptions)
+	}
+}
+
+// TestClassify_AssertionSpellingADeclaredToken_DoesNotKeepTheHintDeclarationAlive
+// holds the tool-name declaration to the served source. A quotation may spell
+// the declared token and is excused for it, but the declaration is about what
+// the server writes, so a run whose only spelling of it is in the suite
+// reports it stale.
+func TestClassify_AssertionSpellingADeclaredToken_DoesNotKeepTheHintDeclarationAlive(t *testing.T) {
+	report := classify([]site{
+		{Package: "s", File: "s/a_test.go", Line: 1, Kind: kindAssertion, Value: "template_type gitlab_ci_ymls", Resolved: true},
+	}, stubCatalog(), true)
+
+	if len(report.Assertions.Rows) != 0 {
+		t.Errorf("assertion rows = %+v, want the declared token excused", report.Assertions.Rows)
+	}
+	if !slices.ContainsFunc(report.Hints.StaleDeclarations, func(entry string) bool { return strings.Contains(entry, "gitlab_ci_ymls") }) {
+		t.Errorf("hint stale declarations = %v, want the entry the suite alone spells reported", report.Hints.StaleDeclarations)
+	}
+	if len(report.Assertions.StaleDeclarations) != 0 {
+		t.Errorf("assertion stale declarations = %v, want the suite's section never to judge the table", report.Assertions.StaleDeclarations)
+	}
+}
+
+// TestJudgeHelpers_EachRun_MarksTheSuiteJudgedAndNamesWhatItCan holds what
+// the suite walk hands the report: the mark that the suite was loaded, the
+// counts, and the stale entries the run is allowed to name.
+func TestJudgeHelpers_EachRun_MarksTheSuiteJudgedAndNamesWhatItCan(t *testing.T) {
+	read := suiteRead{calls: map[string]int{"assertMentions": 2, "ExpectToolError": 1, "mentionsAny": 1}}
+
+	t.Run("the whole suite", func(t *testing.T) {
+		report := classify(nil, stubCatalog(), true)
+		report.judgeHelpers(read, true)
+		if !report.SuiteJudged || !maps.Equal(report.CallsByHelper, read.calls) {
+			t.Errorf("suite judged %t, calls %v, want true and %v", report.SuiteJudged, report.CallsByHelper, read.calls)
+		}
+		if want := []string{"containsAny is called nowhere in the suite (servedTextAssertions)"}; !slices.Equal(report.StaleHelpers, want) {
+			t.Errorf("stale helpers = %q, want %q", report.StaleHelpers, want)
+		}
+	})
+	t.Run("part of it", func(t *testing.T) {
+		report := classify(nil, stubCatalog(), true)
+		report.judgeHelpers(read, false)
+		if !report.SuiteJudged || len(report.StaleHelpers) != 0 {
+			t.Errorf("suite judged %t, stale helpers %q, want true and none", report.SuiteJudged, report.StaleHelpers)
+		}
+	})
+}
+
+// TestReport_Clean_AnAssertionFindingOrAStaleHelper_Fails holds the three
+// terms the prose sections and the helper table add to the gate, one at a
+// time, since a report with two of them filled answers the same under an and
+// as under an or.
+func TestReport_Clean_AnAssertionFindingOrAStaleHelper_Fails(t *testing.T) {
+	cases := []struct {
+		name   string
+		report Report
+		clean  bool
+	}{
+		{name: "a hint naming a tool", report: Report{Hints: HintReport{Findings: 1}}},
+		{name: "a quotation naming a tool", report: Report{Assertions: HintReport{Findings: 1}}},
+		{name: "a helper entry describing no call", report: Report{StaleHelpers: []string{"containsAny is called nowhere"}}},
+		{name: "a quotation nothing folds, alone", report: Report{Assertions: HintReport{Unfolded: 1}}, clean: true},
+		{name: "a suite that was judged, and clean", report: Report{SuiteJudged: true}, clean: true},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			if got := one.report.Clean(); got != one.clean {
+				t.Errorf("Clean() = %t, want %t", got, one.clean)
+			}
+		})
+	}
+}
+
+// TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers holds the
+// suite's half of the quiet report, line for line, after the hint count: the
+// assertion count and its breakdown, then the helper entries that describe no
+// call, which fail the gate and so are printed without -v.
+func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T) {
+	report := classify([]site{
+		{Package: "s", File: "s/a_test.go", Line: 7, Kind: kindAssertion, Value: "use gitlab_demo_list", Resolved: true},
+	}, stubCatalog(), false)
+	report.judgeHelpers(suiteRead{
+		calls:      map[string]int{"assertMentions": 1},
+		mismatches: map[string]string{"mentionsAny": "substrings"},
+	}, false)
+
+	var quiet, loud bytes.Buffer
+	writeReport(&quiet, report, false)
+	writeReport(&loud, report, true)
+
+	const hintCount = "  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read; 0 not folded (reported, not gated)\n"
+	wantTail := hintCount + strings.Join([]string{
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated)",
+		"    assertion findings by rule: tool_name 1",
+		"=== assertion helpers that describe no call ===",
+		"  mentionsAny takes no parameter named substrings (servedTextAssertions). Fix the entry.",
+		"",
+	}, "\n")
+	if !strings.HasSuffix(quiet.String(), wantTail) {
+		t.Errorf("report:\n%s\nwant it to end with:\n%s", quiet.String(), wantTail)
+	}
+	for _, want := range []string{
+		assertionRowsHeading + "\n=== s ===\n" + `  s/a_test.go:7 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool` + "\n",
+		"    assertions read by kind: assertion 1\n",
+		"    assertion calls by helper: assertMentions 1\n",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(loud.String(), want) {
+				t.Errorf("the verbose report left out %q; got %q", want, loud.String())
+			}
+			if strings.Contains(quiet.String(), want) {
+				t.Errorf("the quiet report printed %q, which -v is for", want)
+			}
+		})
+	}
+}
+
+// TestWriteReport_SuiteNotJudged_PrintsNoAssertionSection holds the section
+// to the runs that loaded a suite. Its count over nothing would read "0
+// finding(s) over 0 assertion(s) read", which a reader takes for a clean suite
+// when nobody looked at one.
+func TestWriteReport_SuiteNotJudged_PrintsNoAssertionSection(t *testing.T) {
+	report := classify(nil, stubCatalog(), false)
+	report.StaleHelpers = []string{"a line only a judged suite prints"}
+	report.CallsByHelper = map[string]int{"assertMentions": 1}
+
+	var out bytes.Buffer
+	writeReport(&out, report, true)
+	for _, unwanted := range []string{"e2e assertions", "a line only a judged suite prints", "assertion calls by helper"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(out.String(), unwanted) {
+				t.Errorf("report = %q, want nothing about a suite the run did not load", out.String())
+			}
+		})
+	}
+}
+
+// TestWriteSuiteReport_NothingStaleOrCounted_PrintsTheCountAlone holds the
+// two guards of the suite section against the empty lists they guard: no
+// heading over no stale entry, and no breakdown of no calls.
+func TestWriteSuiteReport_NothingStaleOrCounted_PrintsTheCountAlone(t *testing.T) {
+	report := classify(nil, stubCatalog(), false)
+	report.judgeHelpers(suiteRead{calls: map[string]int{}}, false)
+
+	var out bytes.Buffer
+	writeSuiteReport(&out, report, true)
+	const want = "  e2e assertions: 0 finding(s) in 0 package(s) over 0 assertion(s) read; 0 not folded (reported, not gated)\n"
+	if out.String() != want {
+		t.Errorf("suite report = %q, want %q", out.String(), want)
 	}
 }
 

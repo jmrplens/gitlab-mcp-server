@@ -11,19 +11,30 @@
 // that is that the capability is missing rather than that the cross-link is
 // wrong.
 //
-// A fourth kind is read and reported rather than gated: the corrective prose
-// an error helper hands a model, which names capabilities in whatever spelling
-// the handler happened to write. See the staged rule below.
+// A fourth kind is the corrective prose an error helper hands a model, which
+// names capabilities in whatever spelling the handler happened to write. See
+// the rule over error hints below. A fifth is that prose read back: the
+// substrings the e2e suite asserts a served text carries. See the suite that
+// quotes it, further down.
 //
 // # What it reads
 //
-// Those three sites, out of ./internal/tools/... loaded through
+// The first four kinds out of ./internal/tools/... loaded through
 // cmd/internal/goprogram, the front end four gates already share. Constants
 // are folded by the type checker rather than matched as text, and that is the
 // whole reason for the loader: the IDs are written as package-local constants
 // (actionGet, actionListProject), two packages build one by concatenation
 // ("group." + actionGroupExportDownload), and a scan over literals reports the
 // prefix "group." as a finding while passing the folded value in silence.
+//
+// The fifth out of ./test/e2e/gitlab/..., in a second load through the same
+// front end with the test variants included and the e2e build tag set, which
+// the command states itself, the way cmd/audit_e2e_coverage -static does. A
+// bare run makes both loads. A run naming patterns makes only the loads they
+// name: a pattern under test/e2e/ goes to the suite and any other to the
+// served tree, so an explicit ./internal/tools/... reads no suite and prints
+// no section for it, and only the bare run holds the helper table to the
+// whole suite.
 //
 // # What it compares against
 //
@@ -35,7 +46,9 @@
 //
 // # What -check refuses
 //
-// Four things, and the first two are the whole point of the rule.
+// Four things about a published ID, and the first two are the whole point of
+// the rule. The two prose rules below add their findings to them, and the
+// suite's rule adds its helper table.
 //
 // A published ID that resolves to nothing is a cross-link a model cannot
 // follow.
@@ -101,6 +114,62 @@
 // through the constant the catalog registers, which is the remedy for the
 // class.
 //
+// # The suite that quotes it
+//
+// The e2e suite is the one corpus that reads the server's hints back to it,
+// and it was the one corpus nothing held to the catalog. Issue 901 was what
+// that cost: twenty assertion literals still naming a tool after issue 883
+// had moved the hints they quoted to canonical IDs, and 53 failing subtests
+// that only the licensed run, which happens on tags, could report a month
+// later. A grep for gitlab_* in the suite is the wrong rule, because a tool
+// name there is usually right: harness.Raw names one on purpose, and the
+// manifest, mode, exclusion and annotation scenarios look tools up by name.
+// What made the twenty wrong was the position they sat in.
+//
+// So the position is what is read: the argument of a helper that asserts a
+// served text carries a substring. The helpers are declared in
+// servedTextAssertions (suite.go), each with the parameter its substring is
+// passed in, found by that name in the callee's own signature: the
+// substrings of assertMentions and mentionsAny, the needles of containsAny,
+// and the contains of harness.ExpectToolError. A helper matches by name, and
+// only when the function a call resolves to is declared under test/e2e/, so
+// the copies of assertMentions in common and in ee are one entry and a
+// function of the same name anywhere else is none. A suite wrapper that takes
+// the needles under one of those names, or under a hint's, and hands them on
+// is followed out to its callers.
+//
+// The two predicates are judged only where their call is negated. `if
+// !mentionsAny(...)` fails the test when no needle is there, so each needle
+// is a claim about what the server wrote; `if containsAny(...)` is an absence
+// check or a classification, and the tool name the exclusion scenario asserts
+// a refusal does NOT echo is exactly the literal such a check must spell.
+//
+// A needle is held to the three spellings a hint is: a gitlab_* tool name, a
+// registered alias and a dotted ID nothing resolves. It consults the same
+// exemption tables without keeping any entry of them alive, since those
+// describe the served source, and one table more than a hint does:
+// declaredAliasMentions, because a Usage line may name one of those aliases
+// by design and a test quoting the line quotes it faithfully. A needle the
+// type checker cannot fold, built from a fixture's name at run time or read
+// off a test table's field, is counted and listed under -v and fails nothing,
+// on the hint rule's terms. The findings gate, in a section of their own, so a
+// reader can tell a defect of the server from a defect of its test.
+//
+// The helper table is held to the suite as every declaration table here is.
+// Any run names an entry whose function takes no parameter of the declared
+// name, and a run over the whole suite names an entry nothing calls, which is
+// what a renamed helper looks like from here; both fail the gate, because
+// either would stop every call of that helper being read without a word.
+//
+// Its limits are the table's. A helper under a name the table does not
+// declare is not read until it is declared, and neither is one called through
+// a function value or a wrapper whose parameter carries another name, which
+// is reported as a needle nothing folds. The polarity is syntactic, so `ok :=
+// mentionsAny(...); if !ok` is not judged. And a dotted needle is judged as
+// the whole ID it spells, so one that is only the front of a longer ID in a
+// domain the catalog uses is refused although it matches at run time; the
+// remedy, quoting the whole ID, asserts strictly more.
+//
 // # The limit of a clean run
 //
 // It answers whether an ID resolves, never whether it is the right ID. The
@@ -125,4 +194,5 @@
 //	go run ./cmd/audit_action_ids/ -check                 # the gate: make check-action-ids
 //	go run ./cmd/audit_action_ids/ -v                     # also what a clean run judged, by kind
 //	go run ./cmd/audit_action_ids/ ./internal/tools/issues # one package
+//	go run ./cmd/audit_action_ids/ ./test/e2e/gitlab/ee    # one suite package
 package main

@@ -64,21 +64,30 @@ func CancelledResult(message string) *mcp.CallToolResult {
 }
 
 // UnsupportedResult returns the refusal a wizard answers with when the MCP
-// client does not support elicitation, naming the tools that do the same work
-// without it.
+// client does not support elicitation, naming the actions that do the same
+// work without it.
 //
 // It is prose in the one refusal envelope [toolutil.ErrorResult] writes, which
 // is what gives it the normalization and the annotation every other refusal
 // carries. The alternatives used to be introduced by a bolded label, which is
 // the shape of a card row and is not one: this result is about no GitLab
 // object, so it has no rows.
+//
+// The alternatives are named by catalog ID because the tool that runs one
+// differs by surface: the dynamic surface runs issue.create through
+// gitlab_execute_action and registers no tool of its own for it, meta runs it
+// as an action of the issue domain's tool, and individual as a tool of its
+// own. The sentence used to name the meta tool, which is right for one surface
+// of three. toolutil.ErrorResult is not one of the error helpers
+// cmd/audit_action_ids reads, so no source gate holds this sentence to the
+// catalog: its unit test and the e2e scenario that quotes issue.create do.
 func UnsupportedResult(toolName string) *mcp.CallToolResult {
 	return toolutil.ErrorResult(fmt.Sprintf(
 		"Tool %q requires the MCP elicitation capability. "+
 			"Your MCP client does not support elicitation. "+
 			"Check your client's MCP documentation for elicitation support.\n\n"+
-			"Alternatives: use the standard gitlab_issue action 'create', "+
-			"gitlab_merge_request action 'create' or the equivalent tool for the object.",
+			"Alternatives: use the standard issue.create or merge_request.create action, "+
+			"or the equivalent action for the object.",
 		toolName,
 	))
 }

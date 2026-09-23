@@ -12,9 +12,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
-// The kinds of site a model-facing capability name is written at. The first
-// four are the published action IDs the gate refuses; the last two are the
-// corrective prose the staged hint rule reports.
+// The kinds of site a model-facing capability name is written at, and the one
+// it is quoted back at. The first four are the published action IDs; the next
+// two are the corrective prose an error helper hands a model; the last is the
+// e2e suite asserting that a served text carries a substring, which is the
+// same prose read back rather than written.
 const (
 	kindRelated     = "related"
 	kindHint        = "hint"
@@ -28,6 +30,12 @@ const (
 	// reaches a Markdown formatter would need dataflow this walk does not do.
 	kindErrorHint = "error_hint"
 	kindHintField = "hint_field"
+	// kindAssertion is a substring the e2e suite asserts a served text
+	// carries. It is not served, so it is judged in a section of its own; it
+	// quotes what is, so it is held to the spellings a hint is held to, and a
+	// quotation naming a tool is a test that breaks the day the server is
+	// fixed. See suite.go.
+	kindAssertion = "assertion"
 )
 
 // hintActionFunc is the toolutil helper every cross-link hint is written
@@ -146,6 +154,11 @@ type funcDecl struct {
 	decl *ast.FuncDecl
 }
 
+// absolutePath resolves the walk root, swapped in tests. filepath.Abs fails
+// only when the process has no working directory, which a test cannot arrange
+// and which would otherwise leave the one branch that reports it unexercised.
+var absolutePath = filepath.Abs
+
 // collectSites loads the packages named by patterns, rooted at dir, and
 // returns every site a published action ID was written at.
 //
@@ -156,34 +169,40 @@ type funcDecl struct {
 // The overlay is how a test supplies source that is not on disk, so the walk
 // is exercised on the shapes it has to handle, type-checked against the real
 // toolutil, rather than on a mock of them. Production passes nil.
-// absolutePath resolves the walk root, swapped in tests. filepath.Abs fails
-// only when the process has no working directory, which a test cannot arrange
-// and which would otherwise leave the one branch that reports it unexercised.
-var absolutePath = filepath.Abs
-
 func collectSites(dir string, patterns []string, overlay map[string][]byte) ([]site, error) {
 	loaded, err := goprogram.Load(dir, patterns, overlay)
 	if err != nil {
 		return nil, err
 	}
+	collect, err := newCollector(dir, loaded)
+	if err != nil {
+		return nil, err
+	}
+	collect.walk((*walker).visit)
+	return collect.sites, nil
+}
+
+// newCollector indexes the loaded packages, rooted at dir, into the collector
+// a walk over them writes into.
+//
+// It is shared by the two loads this command makes, the served tree and the
+// e2e suite, which differ in what they load and in what a walk looks for and
+// in nothing else: the index, the fold and the recording rules are one, so a
+// needle the suite quotes is folded by exactly the machinery that folds the
+// hint it quotes.
+func newCollector(dir string, loaded []*packages.Package) (*collector, error) {
 	root, err := absolutePath(dir)
 	if err != nil {
 		return nil, err
 	}
-	prog := indexProgram(root, loaded)
-	collect := &collector{
-		prog:        prog,
+	return &collector{
+		prog:        indexProgram(root, loaded),
 		visited:     map[*types.Func]struct{}{},
 		visitedVars: map[*types.Var]struct{}{},
 		recorded:    map[ast.Expr]struct{}{},
-	}
-	for _, pkg := range prog.pkgs {
-		walk := &walker{collector: collect, pkg: pkg}
-		for _, file := range pkg.Syntax {
-			ast.Inspect(file, walk.visit)
-		}
-	}
-	return collect.sites, nil
+		calls:       map[string]int{},
+		mismatches:  map[string]string{},
+	}, nil
 }
 
 // indexProgram records every function declared in the loaded packages, so a
@@ -321,6 +340,23 @@ type collector struct {
 	// hints on that second path, which is what toolutil.WrapErrWithStatusHint
 	// does to WrapErrWithHint.
 	recorded map[ast.Expr]struct{}
+	// calls counts the calls of each declared assertion helper the suite walk
+	// met, and mismatches names the declared parameter a helper turned out not
+	// to take. Both are the suite walk's alone: they are what holds the
+	// helper table to the suite, and the served walk leaves them empty.
+	calls      map[string]int
+	mismatches map[string]string
+}
+
+// walk visits every file of every indexed package with one walker per
+// package, all writing into this collector.
+func (c *collector) walk(visit func(*walker, ast.Node) bool) {
+	for _, pkg := range c.prog.pkgs {
+		current := &walker{collector: c, pkg: pkg}
+		for _, file := range pkg.Syntax {
+			ast.Inspect(file, func(node ast.Node) bool { return visit(current, node) })
+		}
+	}
 }
 
 // walker walks one package, writing into the shared collector.
@@ -575,6 +611,18 @@ func isHintKind(kind string) bool {
 	return kind == kindErrorHint || kind == kindHintField
 }
 
+// readsAsHintProse reports whether a site's value is folded as a sentence
+// rather than as one action ID: a hint, and the suite's quotation of one.
+//
+// It is apart from [isHintKind] on purpose. That one decides which section a
+// site is judged in and what -fix-hints may rewrite, and a quotation belongs
+// to neither: it has a section of its own, and a fixer that rewrote the suite
+// would be moving the test to agree with the server rather than holding the
+// server to it.
+func readsAsHintProse(kind string) bool {
+	return isHintKind(kind) || kind == kindAssertion
+}
+
 // isStringSlice reports whether a type is []string.
 func isStringSlice(typ types.Type) bool {
 	slice, ok := types.Unalias(typ).Underlying().(*types.Slice)
@@ -712,9 +760,9 @@ func (w *walker) recordArguments(kind string, param paramRef, caller callSite, r
 }
 
 // elementRecorder is how one element of a list of this kind is recorded: an
-// action ID is folded whole, a hint is prose.
+// action ID is folded whole, a hint and a quotation of one are prose.
 func elementRecorder(kind string) recordFunc {
-	if isHintKind(kind) {
+	if readsAsHintProse(kind) {
 		return recordHintValue
 	}
 	return recordSingleValue
@@ -723,7 +771,20 @@ func elementRecorder(kind string) recordFunc {
 // followableParamName reports whether a parameter names itself a carrier of
 // the value the site publishes: hint prose for a hint site, related actions
 // for the rest.
+//
+// An assertion accepts the hint names and the names the helper table declares
+// besides, because what a suite wrapper forwards to one of those helpers is
+// the helper's own argument under the helper's own name: a wrapper taking
+// substrings and passing them on is followed out to its callers rather than
+// reported as a needle nothing folds.
+//
+// It is written as ifs rather than a switch on purpose: a condition in a case
+// clause sits outside every block Go's coverage counts, so mutation testing
+// reports it uncovered however many tests reach it.
 func followableParamName(kind, name string) bool {
+	if kind == kindAssertion {
+		return isHintName(name) || isAssertionParamName(name)
+	}
 	if isHintKind(kind) {
 		return isHintName(name)
 	}
@@ -982,7 +1043,7 @@ func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 			return
 		}
 	case *ast.SelectorExpr:
-		if w.isHintRead(typed) {
+		if w.readsARecordedHint(kind, typed) {
 			return
 		}
 	}
@@ -1010,22 +1071,35 @@ func (w *walker) recordHintCall(kind string, call *ast.CallExpr) bool {
 			return true
 		}
 	}
-	return w.carriesRecordedHints(call)
+	return w.carriesRecordedHints(kind, call)
 }
 
 // carriesRecordedHints reports whether a call was handed nothing but hints
 // read off fields this walk records where they are written.
-func (w *walker) carriesRecordedHints(call *ast.CallExpr) bool {
+func (w *walker) carriesRecordedHints(kind string, call *ast.CallExpr) bool {
 	if len(call.Args) == 0 {
 		return false
 	}
 	for _, arg := range call.Args {
 		selector, isSelector := ast.Unparen(arg).(*ast.SelectorExpr)
-		if !isSelector || !w.isHintRead(selector) {
+		if !isSelector || !w.readsARecordedHint(kind, selector) {
 			return false
 		}
 	}
 	return true
+}
+
+// readsARecordedHint reports whether a selector reads a hint field whose
+// writes this walk records, which makes the read a copy of prose judged where
+// it was written rather than a site of its own.
+//
+// The suite walk records no field write at all: it reads the calls of the
+// assertion helpers and nothing else. So a quotation read off a test table's
+// hint field has been recorded nowhere, and treating it as a copy would pass
+// it in silence. For an assertion the read is its own site, and reported as
+// one when nothing folds it.
+func (w *walker) readsARecordedHint(kind string, selector *ast.SelectorExpr) bool {
+	return kind != kindAssertion && w.isHintRead(selector)
 }
 
 // foldProse folds an expression to the prose it renders, keeping the literal
@@ -1078,7 +1152,7 @@ func (w *walker) recordHintList(kind string, value ast.Expr) {
 	case *ast.CallExpr:
 		w.recordHintListCall(kind, expr)
 	case *ast.SelectorExpr:
-		if !w.isHintRead(expr) {
+		if !w.readsARecordedHint(kind, expr) {
 			w.recordUnresolved(kind, expr)
 		}
 	case *ast.Ident:

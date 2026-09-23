@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 )
@@ -18,6 +20,12 @@ const toolName = "audit_action_ids"
 // an ID in front of a model.
 var defaultPatterns = []string{"./internal/tools/..."}
 
+// defaultSuitePatterns is the e2e suite that quotes what that tree serves: the
+// one corpus that reads the server's hints back to it, and so the one whose
+// quotation of a tool name breaks the day the hint is fixed. It has to lie
+// under suiteDir, or a run naming it would load it as served source.
+var defaultSuitePatterns = []string{"./test/e2e/gitlab/..."}
+
 // defaultJSONPath is where the work list lands. plan/ is the repository's
 // uncommitted working directory, which is what a work list wants: the layer
 // that reads this file is the one that empties it.
@@ -27,7 +35,7 @@ func main() {
 	dir := flag.String("dir", ".", "repository root the patterns are resolved against")
 	jsonPath := flag.String("json", defaultJSONPath, "write the work list here; empty writes none")
 	verbose := flag.Bool("v", false, "also print the alias references of a clean run and what was judged by kind")
-	check := flag.Bool("check", false, "exit non-zero when a published ID is not a canonical catalog ID, names a registered alias, sits at a site the type checker could not fold, or is excused by a declaration that excuses nothing")
+	check := flag.Bool("check", false, "exit non-zero when a published ID is not a canonical catalog ID, names a registered alias, sits at a site the type checker could not fold, or is excused by a declaration that excuses nothing; when a hint, or a substring the e2e suite asserts a served text carries, names a tool; or when an assertion helper declaration matches no call")
 	fixHintNames := flag.Bool("fix-hints", false, "rewrite each gitlab_* tool name a folded hint spells to the canonical ID of the action that tool projects, then report what moved")
 	fixHintTests := flag.Bool("fix-hints-tests", false, "with -fix-hints, rewrite the test files too, so an assertion pinning a hint moves with the hint")
 	flag.Parse()
@@ -82,24 +90,32 @@ var buildCatalogIDs = actionids.Build
 //
 // Without -check it is 1 only for a run that could not be made: a catalog that
 // would not build, source that did not type-check, a work list that could not
-// be written. With -check a finding fails it too, on the four terms
-// [Report.Clean] states.
+// be written. With -check a finding fails it too, on the terms [Report.Clean]
+// states.
 //
 // The failure is written to stderr rather than left to the exit code, and it
 // repeats the counts the report already printed, because a CI log is read at
 // the end: the one line that says why the job stopped should name the rule
 // rather than send a reader back up through a thousand lines of report.
+//
+// The served tree and the suite are two loads, each made only when a pattern
+// asks for it, and -fix-hints never makes the second: it rewrites what the
+// server writes, and a fixer that moved the suite would move the test to
+// agree with the server rather than hold the server to it.
 func run(cfg auditConfig, stdout, stderr io.Writer) int {
 	ids, err := buildCatalogIDs()
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
 		return 1
 	}
-	audited := patternsOrDefault(cfg.patterns)
-	sites, err := collectSites(cfg.dir, audited, cfg.overlay)
-	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
-		return 1
+	served, suite := splitPatterns(cfg.patterns)
+	var sites []site
+	if len(served) > 0 {
+		sites, err = collectSites(cfg.dir, served, cfg.overlay)
+		if err != nil {
+			fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
+			return 1
+		}
 	}
 	if cfg.fixHints {
 		fixed, fixErr := fixHints(cfg.dir, sites, ids, cfg.fixHintTests)
@@ -110,7 +126,18 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 		writeHintFixReport(stdout, fixed)
 		return 0
 	}
-	report := classify(sites, ids, slices.Equal(audited, defaultPatterns))
+	var read suiteRead
+	if len(suite) > 0 {
+		read, err = collectAssertionSites(cfg.dir, suite, cfg.overlay)
+		if err != nil {
+			fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
+			return 1
+		}
+	}
+	report := classify(append(sites, read.sites...), ids, slices.Equal(served, defaultPatterns))
+	if len(suite) > 0 {
+		report.judgeHelpers(read, slices.Equal(suite, defaultSuitePatterns))
+	}
 	writeReport(stdout, report, cfg.verbose)
 	if cfg.jsonPath != "" {
 		if writeErr := writeJSON(cfg.jsonPath, report); writeErr != nil {
@@ -121,18 +148,40 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 	}
 	if cfg.check && !report.Clean() {
 		fmt.Fprintf(stderr,
-			"\nERROR: %d published ID(s) resolve to no action, %d name a registered alias rather than a catalog ID, %d site(s) could not be folded, %d declaration(s) excuse nothing, %d hint(s) name a tool rather than an action\n",
-			report.Summary.Findings, report.Summary.AliasHits, report.Summary.Unresolved, report.Summary.Stale, report.Hints.Findings)
+			"\nERROR: %d published ID(s) resolve to no action, %d name a registered alias rather than a catalog ID, %d site(s) could not be folded, %d declaration(s) excuse nothing, %d hint(s) name a tool rather than an action, %d e2e assertion(s) name a tool rather than an action, %d assertion helper declaration(s) match no call\n",
+			report.Summary.Findings, report.Summary.AliasHits, report.Summary.Unresolved, report.Summary.Stale, report.Hints.Findings,
+			report.Assertions.Findings, len(report.StaleHelpers))
 		return 1
 	}
 	return 0
 }
 
-// patternsOrDefault is what a run with no arguments audits: the whole tree
-// that publishes action IDs.
-func patternsOrDefault(patterns []string) []string {
+// splitPatterns sorts the positional patterns between the two loads: the
+// served tree and the e2e suite.
+//
+// A run with no arguments audits both whole, which is the only run that holds
+// the declaration tables and the helper table to the tree. A run naming
+// patterns loads only what they name, so `./internal/tools/issues` stays the
+// quick check it was and `./test/e2e/gitlab/ee` audits one suite package; an
+// explicit `./internal/tools/...` therefore reads no suite at all, and says so
+// by printing no assertion section.
+func splitPatterns(patterns []string) (served, suite []string) {
 	if len(patterns) == 0 {
-		return defaultPatterns
+		return defaultPatterns, defaultSuitePatterns
 	}
-	return patterns
+	for _, pattern := range patterns {
+		if isSuitePattern(pattern) {
+			suite = append(suite, pattern)
+			continue
+		}
+		served = append(served, pattern)
+	}
+	return served, suite
+}
+
+// isSuitePattern reports whether a pattern names part of the e2e suite, in the
+// spelling a caller types it: with or without the leading ./, and with the
+// platform's separator.
+func isSuitePattern(pattern string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(filepath.ToSlash(pattern), "./"), suiteDir)
 }

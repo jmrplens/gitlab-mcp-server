@@ -323,6 +323,46 @@ func TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown(t *testing.T) 
 	}
 }
 
+// TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows holds the
+// suite's section in its own words. It is printed by the printer the hint
+// section uses, so every label is asserted: a section that said "error hints"
+// about the suite would send a reader to fix the server when the test is what
+// quotes the wrong name.
+func TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows(t *testing.T) {
+	report := classify([]site{
+		{Package: "s", File: "s/a_test.go", Line: 1, Kind: kindAssertion, Value: "list them with gitlab_demo_list", Resolved: true},
+		{Package: "s", File: "s/a_test.go", Line: 2, Kind: kindAssertion, Expr: "e.Name(x)"},
+	}, stubCatalog(), false)
+
+	var quiet, loud, empty bytes.Buffer
+	writeAssertionReport(&quiet, report.Assertions, false)
+	writeAssertionReport(&loud, report.Assertions, true)
+	writeAssertionReport(&empty, classify(nil, stubCatalog(), false).Assertions, true)
+
+	const count = "  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated)\n    assertion findings by rule: tool_name 1\n"
+	if quiet.String() != count {
+		t.Errorf("the quiet section = %q, want %q", quiet.String(), count)
+	}
+	wantLoud := strings.Join([]string{
+		assertionRowsHeading,
+		"=== s ===",
+		`  s/a_test.go:1 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
+		assertionNotFoldedHeading,
+		"  s/a_test.go:2 assertion e.Name(x)",
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated)",
+		"    assertion findings by rule: tool_name 1",
+		"    assertions read by kind: assertion 1",
+		"",
+	}, "\n")
+	if loud.String() != wantLoud {
+		t.Errorf("the verbose section:\n%s\nwant:\n%s", loud.String(), wantLoud)
+	}
+	const wantEmpty = "  e2e assertions: 0 finding(s) in 0 package(s) over 0 assertion(s) read; 0 not folded (reported, not gated)\n"
+	if empty.String() != wantEmpty {
+		t.Errorf("an empty section = %q, want the count and no heading: %q", empty.String(), wantEmpty)
+	}
+}
+
 // TestWriteHintGroups_RowsOfSeveralPackages_CarryOneHeadingEach holds the
 // grouping the verbose report reads by: a heading opens each package and the
 // rows of one package sit under one heading, however many there are.

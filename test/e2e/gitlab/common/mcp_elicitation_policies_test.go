@@ -100,14 +100,21 @@ func TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema(t *testing.T) {
 // enters and the tool of its own the other two register answering alike, and
 // it must say why, so a model reading it can fall back to the non-interactive
 // action rather than concluding the capability is missing.
+//
+// The alternative is asserted on its own, and by its catalog ID. The refusal
+// names it so a model can act, and the ID is the one spelling every surface
+// resolves; asserting it beside "elicitation" in one either-or check would
+// pass on the first word whatever the second said, which is how the sentence
+// named a tool the dynamic surface does not register without any run noticing.
 func TestElicitation_None_FailsClosedOnAFlowThatNeedsIt(t *testing.T) {
 	e := harness.New(t)
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
 		return fixture.NewProject(e, fixture.WithNamePrefix("elicitnone"))
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
-		harness.ExpectToolError(e.On(surface), actionInteractiveIssueCreate,
+		refusal := harness.ExpectToolError(e.On(surface), actionInteractiveIssueCreate,
 			map[string]any{"project_id": project.IDParam()}, "elicitation")
+		assertMentions(e, "the refusal of a guided flow on a client without elicitation", refusal, "issue.create")
 	})
 }
 

@@ -83,6 +83,11 @@ func TestCancelledResult(t *testing.T) {
 // client without elicitation: the prose naming the tool and the capability it
 // needs, the alternatives that do the same work, and the refusal envelope
 // every other refusal travels in.
+//
+// The alternatives are catalog IDs, and the whole-text comparison is what
+// holds them there: the one gitlab_* name the refusal may spell is the flow
+// the client called, and a sentence naming the meta tool instead would be
+// right for one surface of three.
 func TestUnsupportedResult(t *testing.T) {
 	result := UnsupportedResult("gitlab_interactive_issue_create")
 	if !result.IsError {
@@ -98,8 +103,8 @@ func TestUnsupportedResult(t *testing.T) {
 	want := `Tool "gitlab_interactive_issue_create" requires the MCP elicitation capability. ` +
 		"Your MCP client does not support elicitation. " +
 		"Check your client's MCP documentation for elicitation support.\n\n" +
-		"Alternatives: use the standard gitlab_issue action 'create', " +
-		"gitlab_merge_request action 'create' or the equivalent tool for the object."
+		"Alternatives: use the standard issue.create or merge_request.create action, " +
+		"or the equivalent action for the object."
 	if tc.Text != want {
 		t.Errorf("refusal:\n got %q\nwant %q", tc.Text, want)
 	}
