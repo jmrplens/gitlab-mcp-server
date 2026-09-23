@@ -47,9 +47,10 @@
 #   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
 #   E2E_REGISTRY_EXTERNAL_URL      the registry's: http:// and the GitLab URL's host on port 5050,
 #                                  whatever port or path the GitLab URL carries
-#   E2E_BITBUCKET_BIND             the address Bitbucket is published on: 127.0.0.1 when the
-#                                  Bitbucket URL (derived or set) names localhost, whatever its
-#                                  case, or 127.*, [::1] when it names [::1], 0.0.0.0 otherwise
+#   E2E_BITBUCKET_BIND             the address Bitbucket is published on, read off the Bitbucket
+#                                  URL (derived or set): 127.0.0.1 for localhost, whatever its
+#                                  case, the address itself for 127.x.y.z and for [::1], and
+#                                  0.0.0.0 for any other host, a name beginning 127. included
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

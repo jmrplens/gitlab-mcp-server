@@ -57,10 +57,13 @@
 // printing their counts over nothing. Only a run over the whole suite holds
 // the helper table to it: the bare run, one naming ./test/e2e/gitlab/...
 // itself, and one naming a wildcard that encloses it, ./... or ./test/...,
-// which brings the whole suite into the suite load. What is compared is what
-// the suite patterns load: a suite package named beside the suite or beside
+// which brings the whole suite into the suite load. The suite patterns are
+// compared with ./test/e2e/gitlab/... once those a wildcard of the same list
+// encloses are set aside: a suite package named beside the suite or beside
 // such a wildcard, which the suite already encloses, leaves the run whole,
 // and one outside ./test/e2e/gitlab/..., such as the harness, does not. The
+// patterns are compared and not the packages they load, so naming the suite's
+// three packages one by one is not judged whole, which the run says. The
 // comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is
 // the same run. A pattern given as an absolute path below the repository
 // root, or as an import path below this module, is read as the relative

@@ -469,6 +469,14 @@ func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T
 			whole:    defaultSuitePatterns,
 		},
 		{name: "a package of the suite twice", patterns: []string{"./test/e2e/gitlab/ee", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
+		{
+			// These load what the suite's wildcard loads, and the patterns
+			// are compared, not the packages: no wildcard of the list
+			// encloses the others, so the run is not judged whole.
+			name:     "the suite's packages one by one",
+			patterns: []string{"./test/e2e/gitlab/ce", "./test/e2e/gitlab/common", "./test/e2e/gitlab/ee"},
+			whole:    defaultSuitePatterns,
+		},
 		{name: "nothing", whole: defaultSuitePatterns},
 	}
 	for _, one := range cases {

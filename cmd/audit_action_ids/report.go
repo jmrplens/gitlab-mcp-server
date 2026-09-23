@@ -264,7 +264,7 @@ func (r *Report) finish() {
 // judgeHelpers holds the helper table to what the suite walk met, and marks
 // the run as one that loaded the suite.
 //
-// wholeSuite says whether the suite patterns load the whole suite and nothing
+// wholeSuite says whether the suite patterns name the whole suite and nothing
 // else ([namesWhole]): the bare run's, one naming it itself, and one naming a
 // wildcard that encloses it, ./... or ./test/.... That is the only run that
 // can tell a helper nothing calls from a narrowed run.

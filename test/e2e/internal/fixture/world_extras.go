@@ -626,26 +626,36 @@ var releaseTagBinding = worldBinding{worldExtraRelease, func(w *World) (any, boo
 // domainBindings are values bound for the actions of one catalog domain only,
 // because there the name means another object than the plain binding gives
 // it. The release domain's tag_name is the release wherever an action
-// addresses one that exists: release.get, release.update, release.delete and
-// the release link actions all address the release by its tag, so the plain
-// binding would call them on a tag with no release whenever the tag was made
-// and the release was not, and the read sweep would count each answer among
-// its errors without naming the action or the reason. Bound here, the
-// release's reason is logged beside each of them instead, as it is beside the
-// release template. The tag domain's actions keep the plain binding, since the
-// tag is what they address, and so do the actions [domainBindingExemptions]
-// names.
+// addresses one that exists, so it is bound only once the World's release was
+// made, and when it was not, release.get, release.link_list, release.update
+// and release.delete are logged with the release's reason, as the release
+// template is.
+//
+// What the plain binding would cost differs by sweep. The reads release.get
+// and release.link_list would be called on a tag with no release whenever the
+// tag was made and the release was not, and the read sweep would count each
+// answer among its errors without naming the action or the reason.
+// release.update and release.delete are never read: the preview sweep calls
+// them in safe mode, which never reaches GitLab, and they bind the release so
+// that a preview names a release the World holds, which leaves them unbound
+// rather than previewed when the release was not made. release.link_get and
+// the release link mutations also need a link id, or links, or a name and a
+// URL, that the World never binds, so they stay unbound whatever tag_name
+// binds to, and are logged as naming a parameter the World has no binding
+// for.
+//
+// The tag domain's actions keep the plain binding, since the tag is what they
+// address, and so do the actions [domainBindingExemptions] names.
 var domainBindings = map[string]map[string]worldBinding{
 	"release": {"tag_name": releaseTagBinding},
 }
 
 // domainBindingExemptions are the actions of a domain in [domainBindings]
 // whose parameter does not name the domain's object, and which keep the plain
-// binding. release.create's tag_name is the tag the new release will stand
-// on, one GitLab creates from ref when it does not exist, so it binds the
-// World's tag whether or not the World's release was made: the preview sweep
-// calls it in safe mode, which never reaches GitLab, and the tag is all it
-// needs.
+// binding. release.create's tag_name names no release that exists: it is the
+// tag the new release will stand on, one GitLab creates from ref when it does
+// not exist, so it binds the World's tag, and the preview sweep previews it,
+// whether or not the World's release was made.
 var domainBindingExemptions = map[string]struct{}{
 	"release.create": {},
 }

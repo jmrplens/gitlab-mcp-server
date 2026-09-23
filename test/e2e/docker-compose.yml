@@ -128,7 +128,8 @@ services:
       # should reach it, since GitLab reaches it over the compose network. For
       # a fixture running on another host, run-docker-e2e.sh sets
       # E2E_BITBUCKET_BIND=0.0.0.0 so the setup script can, and for a GitLab
-      # reached on [::1] it sets [::1], the loopback the script then dials.
+      # reached on [::1] or on another 127.x.y.z address it sets that address,
+      # the loopback the script then dials.
       - "${E2E_BITBUCKET_BIND:-127.0.0.1}:7990:7990"
     environment:
       SEARCH_ENABLED: "false"

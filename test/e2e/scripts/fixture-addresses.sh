@@ -28,11 +28,8 @@
 # The bind is chosen from the Bitbucket URL, the derived one or one set by
 # hand, by bitbucket_bind below.
 derive_fixture_addresses() {
-    local gitlab_host=""
-    local gitlab_url_re='^[A-Za-z][A-Za-z0-9+.-]*://([^]/?#:[]+|\[[^]/?#]*\])(:[0-9]*)?([/?#].*)?$'
-    if [[ "${E2E_DOCKER_GITLAB_URL}" =~ ${gitlab_url_re} ]]; then
-        gitlab_host="${BASH_REMATCH[1]}"
-    fi
+    local gitlab_host
+    gitlab_host="$(url_host "${E2E_DOCKER_GITLAB_URL}")"
     if [ -z "${E2E_DOCKER_BITBUCKET_URL:-}" ]; then
         if [ -n "${gitlab_host}" ]; then
             E2E_DOCKER_BITBUCKET_URL="http://${gitlab_host}:7990"
@@ -50,6 +47,16 @@ derive_fixture_addresses() {
     fi
 }
 
+# url_host prints the host a URL names, an IPv6 literal with its brackets,
+# whatever port, path, query or fragment follows it, and prints nothing for a
+# string no host can be read out of.
+url_host() {
+    local url_re='^[A-Za-z][A-Za-z0-9+.-]*://([^]/?#:[]+|\[[^]/?#]*\])(:[0-9]*)?([/?#].*)?$'
+    if [[ "$1" =~ ${url_re} ]]; then
+        echo "${BASH_REMATCH[1]}"
+    fi
+}
+
 # bitbucket_bind prints the address the Bitbucket port is published on for a
 # Bitbucket URL: the loopback the URL names when it names one, and 0.0.0.0
 # otherwise, since the setup script on this machine has to reach a remote
@@ -57,21 +64,31 @@ derive_fixture_addresses() {
 # this machine by its LAN address is published on 0.0.0.0 too.
 #
 # The loopback is the one the URL names because the setup script dials that
-# address and no other: localhost and 127.* are published on 127.0.0.1, which
-# a localhost URL reaches whichever address the name resolves to first, and
-# [::1] on [::1], which 127.0.0.1 would leave the script unable to reach. A
-# host name is matched without regard to case, as a resolver matches it, so
-# LOCALHOST is loopback too.
+# address and no other, and a port published on one loopback address refuses
+# a connection to another: a 127.x.y.z address is published on itself, so
+# 127.0.0.2 is not published on 127.0.0.1, and [::1] is published on [::1].
+# localhost names no address and is published on 127.0.0.1, which a localhost
+# URL reaches whichever address the name resolves to first. Only a dotted IPv4
+# literal counts as a 127.x.y.z address: a name that merely begins with 127.
+# is a name like any other and is published on 0.0.0.0. A host name is
+# matched without regard to case, as a resolver matches it, so LOCALHOST is
+# loopback too.
 bitbucket_bind() {
+    local host
+    host="$(url_host "$1")"
+    local octet='[0-9]{1,3}'
+    local ipv4_loopback_re="^127\.${octet}\.${octet}\.${octet}$"
     local restore_case
     restore_case="$(shopt -p nocasematch || true)"
     shopt -s nocasematch
-    local bind
-    case "$1" in
-        *://\[::1\]*) bind="[::1]" ;;
-        *://localhost|*://localhost[:/]*|*://127.*) bind=127.0.0.1 ;;
-        *) bind=0.0.0.0 ;;
-    esac
+    local bind=0.0.0.0
+    if [[ "${host}" == localhost ]]; then
+        bind=127.0.0.1
+    elif [[ "${host}" == "[::1]" ]]; then
+        bind="[::1]"
+    elif [[ "${host}" =~ ${ipv4_loopback_re} ]]; then
+        bind="${host}"
+    fi
     eval "${restore_case}"
     echo "${bind}"
 }

@@ -10,8 +10,9 @@ the URLs it has to handle, without starting a container.
 The failure it guards against is quiet: the Bitbucket setup script is best
 effort, so a URL it cannot reach makes it wait, warn and exit 0, and the
 import test then skips. A GitLab reached on [::1] used to publish Bitbucket on
-127.0.0.1 while the script dialled [::1], and a GitLab reached as LOCALHOST
-published it on every interface. Both runs passed.
+127.0.0.1 while the script dialled [::1], one reached on 127.0.0.2 did the
+same while the script dialled 127.0.0.2, and a GitLab reached as LOCALHOST
+published it on every interface. Every one of those runs passed.
 
 Run with:
 
@@ -84,6 +85,24 @@ class DeriveFixtureAddressesTest(unittest.TestCase):
     def test_an_ipv4_loopback_address_is_published_on_ipv4_loopback(self):
         self.assert_derived("http://127.0.0.1:8929", "http://127.0.0.1:7990", "http://127.0.0.1:5050", "127.0.0.1")
 
+    def test_another_ipv4_loopback_address_is_published_on_itself(self):
+        # A port published on 127.0.0.1 refuses a connection to 127.0.0.2,
+        # which is the address the setup script dials.
+        self.assert_derived("http://127.0.0.2:8929", "http://127.0.0.2:7990", "http://127.0.0.2:5050", "127.0.0.2")
+
+    def test_a_name_that_only_begins_like_a_loopback_address_is_not_loopback(self):
+        # A name is published on every interface whatever it resolves to, even
+        # one spelled as a whole loopback address followed by a domain, and so
+        # is a dotted string whose last part is too long to be an octet.
+        for host in ("127.example.org", "127.0.0.1.nip.io", "127.0.0.1000"):
+            with self.subTest(host=host):
+                self.assert_derived(
+                    f"http://{host}:8929",
+                    f"http://{host}:7990",
+                    f"http://{host}:5050",
+                    "0.0.0.0",
+                )
+
     def test_ipv6_loopback_is_published_on_the_loopback_it_names(self):
         self.assert_derived("http://[::1]:8929", "http://[::1]:7990", "http://[::1]:5050", "[::1]")
 
@@ -101,6 +120,10 @@ class DeriveFixtureAddressesTest(unittest.TestCase):
     def test_a_url_with_no_host_keeps_the_loopback_defaults_and_says_so(self):
         got = self.assert_derived("gitlab", "http://localhost:7990", "<unset>", "127.0.0.1")
         self.assertIn("WARN no host can be read out of E2E_DOCKER_GITLAB_URL=gitlab", got["stderr"])
+
+    def test_a_port_that_is_not_a_number_leaves_no_host_to_read(self):
+        got = self.assert_derived("http://gitlab.example:89x29", "http://localhost:7990", "<unset>", "127.0.0.1")
+        self.assertIn("WARN no host can be read out of", got["stderr"])
 
     def test_a_derived_url_says_nothing(self):
         got = self.assert_derived("http://localhost:8929", "http://localhost:7990", "http://localhost:5050", "127.0.0.1")
@@ -137,6 +160,23 @@ class DeriveFixtureAddressesTest(unittest.TestCase):
             check=True,
         )
         self.assertEqual(result.stdout.strip(), "on")
+
+    def test_bitbucket_bind_called_in_the_callers_shell_restores_nocasematch(self):
+        # derive_fixture_addresses calls it in a command substitution, whose
+        # subshell would hide a leak; called directly, nothing does.
+        for before, want in (("-u", "off"), ("-s", "on")):
+            with self.subTest(nocasematch=want):
+                script = (
+                    f'shopt {before} nocasematch; . "$1"; bitbucket_bind http://LOCALHOST:7990; '
+                    "if shopt -q nocasematch; then echo on; else echo off; fi"
+                )
+                result = subprocess.run(
+                    ["bash", "-c", script, "driver", SCRIPT],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual(result.stdout.split(), ["127.0.0.1", want])
 
 
 if __name__ == "__main__":

@@ -181,8 +181,9 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 // `./internal/tools/...` therefore reads no suite at all, and says so by
 // printing no assertion section. What holds a table to its tree is that the
 // run covered the tree, which [namesWhole] decides: the bare run does for
-// both, and a run whose patterns load exactly one whole tree does for that
-// one, which for the suite includes a run naming a wildcard that encloses it.
+// both, and a run whose patterns name exactly one whole tree, once the ones a
+// wildcard of the same list encloses are set aside, does for that one, which
+// for the suite includes a run naming a wildcard that encloses it.
 //
 // Each pattern is first read as the relative pattern it names
 // ([relativePattern]), and that spelling is what both the sorting and the
@@ -283,12 +284,16 @@ func isSuitePattern(pattern string) bool {
 // the leading ./ never does: go list reads it as an import path, which
 // matches no package of this module, and the load refuses the run first.
 //
-// What is compared is what the patterns load rather than how they are
-// listed ([outermostPatterns]), because go list loads a package once whatever
-// names it. A wildcard that encloses the suite brings the whole of it into the
-// suite load beside any suite package named with it, so ./... with
-// ./test/e2e/gitlab/ee loads the suite and nothing else, and compared as
-// listed it said it had not.
+// The lists are compared once each has set aside the patterns a wildcard of
+// the same list encloses ([outermostPatterns]), because go list loads a
+// package once whatever names it. A wildcard that encloses the suite brings
+// the whole of it into the suite load beside any suite package named with it,
+// so ./... with ./test/e2e/gitlab/ee loads the suite and nothing else, and
+// compared as listed it said it had not. What is compared is still the
+// patterns and not the packages they load: naming the suite's three packages
+// one by one loads what ./test/e2e/gitlab/... loads, and is not judged whole,
+// since no wildcard of that list encloses the others. That errs towards an
+// unjudged table, which the run says, and never towards a judged one.
 func namesWhole(patterns, whole []string) bool {
 	return slices.Equal(outermostPatterns(patterns), outermostPatterns(whole))
 }
@@ -320,7 +325,8 @@ func outermostPatterns(patterns []string) []string {
 // matches a pattern ending in /... by the prefix in front of the wildcard and
 // by the directory it names, so test/e2e/gitlab/... loads test/e2e/gitlab,
 // test/e2e/gitlab/ee and test/e2e/gitlab/ee/... alike. A pattern never
-// encloses itself, so a list with its repeats removed keeps every wildcard.
+// encloses itself, so a list with its repeats removed keeps every wildcard no
+// other wildcard of the list encloses.
 func enclosesPattern(wildcard, pattern string) bool {
 	prefix, isWildcard := strings.CutSuffix(wildcard, "...")
 	if !isWildcard || wildcard == pattern {
