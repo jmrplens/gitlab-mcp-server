@@ -592,6 +592,9 @@ type sessionConn struct {
 	// notifier fans resource-updated notifications out to the subscriptions
 	// tests opened on this session.
 	notifier *updateNotifier
+	// acks wakes a subscribe waiting for the server to acknowledge its URI,
+	// which on protocol 2026-07-28 is the only answer a subscribe gets.
+	acks *updateNotifier
 	// subscribers says whose record a resource-updated notification belongs
 	// in, which the notifier cannot answer: it wakes channels, not tests.
 	subscribers *subscriberIndex
@@ -833,6 +836,7 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		inst:        inst,
 		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, childVars)),
 		notifier:    newUpdateNotifier(),
+		acks:        newUpdateNotifier(),
 		progress:    newProgressCollector(),
 		subscribers: newSubscriberIndex(),
 	}

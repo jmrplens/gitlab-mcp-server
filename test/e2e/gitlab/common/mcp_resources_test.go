@@ -92,12 +92,20 @@ func TestResources_Sweep(t *testing.T) {
 // its World value, returning the reason it could not when a variable is
 // unbound.
 //
+// The value is the World's for that template ([fixture.World.BindTemplate]),
+// since a variable's name does not always mean one object: a group template's
+// label_id is the group's label, not the project's. An unbound variable comes
+// back with the World's own reason, which names the object it could not make
+// and why.
+//
 // A variable is one segment written {name} or {+name}; the reserved "+" form
 // the file template uses for its path is expanded the same way, since the
 // World's value is already a path. The bound value is spelled as a string
 // because it lands in a URI, and a segment carrying a slash is percent-encoded
 // so the server's own router, which expands variables as slash-free segments,
-// resolves it.
+// resolves it. The branch template is bound to the World's feature branch,
+// slash and all, on purpose: its resource hands the encoded name to GitLab
+// undecoded (issue 912), and binding a branch without a slash would hide that.
 func expandTemplate(template string, world *fixture.World) (string, string) {
 	var out strings.Builder
 	rest := template
@@ -116,9 +124,9 @@ func expandTemplate(template string, world *fixture.World) (string, string) {
 		variable := rest[open+1 : open+end]
 		reservedPath := strings.HasPrefix(variable, "+")
 		name := strings.TrimPrefix(variable, "+")
-		value, bound := world.Bind(name)
+		value, bound, reason := world.BindTemplate(template, name)
 		if !bound {
-			return "", "the World has no binding for variable " + name
+			return "", reason
 		}
 		out.WriteString(templateValue(value, reservedPath))
 		rest = rest[open+end+1:]

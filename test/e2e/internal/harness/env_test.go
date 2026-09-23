@@ -14,7 +14,51 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
+
+// TestNewDetached_Client_IsTheEnvsAndItsLedgerRunsAtTheEnd checks the Env a
+// library's own test builds without a run: it reaches GitLab through the
+// client it was given, names what it creates under a run of its own, knows
+// nothing a probe would have learned, and still undoes what it registered
+// when its test ends, which is what lets a builder that registers a deletion
+// be driven against a stub.
+func TestNewDetached_Client_IsTheEnvsAndItsLedgerRunsAtTheEnd(t *testing.T) {
+	client, err := gitlabclient.NewClientWithToken("http://gitlab.test", stubToken, false)
+	if err != nil {
+		t.Fatalf("building a client: %v", err)
+	}
+	undone := 0
+
+	t.Run("detached", func(t *testing.T) {
+		e := NewDetached(t, client)
+
+		if e.Client() != client {
+			t.Error("Client() is not the client the Env was given")
+		}
+		if !strings.HasSuffix(e.RunID(), "-"+detachedPackage) {
+			t.Errorf("RunID() = %q, want a run named after the %s package", e.RunID(), detachedPackage)
+		}
+		if name := e.Name("board"); !strings.Contains(name, e.RunID()) {
+			t.Errorf("Name() = %q, want it scoped to the run %q", name, e.RunID())
+		}
+		if runtime := e.Runtime(); runtime.Username != "" || runtime.UserID != 0 || runtime.URL != "" {
+			t.Errorf("Runtime() = %+v, want nothing a probe would have learned", runtime)
+		}
+		if e.Ctx.Err() != nil {
+			t.Errorf("the Env's context is already done: %v", e.Ctx.Err())
+		}
+		e.Defer("stub object", func(context.Context) error {
+			undone++
+			return nil
+		})
+	})
+
+	if undone != 1 {
+		t.Errorf("the ledger ran %d cleanups when the test ended, want the one registered", undone)
+	}
+}
 
 // TestLedger_MultipleRecords_CleansInReverseOrder checks that cleanups run
 // last-in-first-out.

@@ -19,6 +19,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -82,10 +84,7 @@ func (s *Session) CompleteResource(uriTemplate, argument, value string) []string
 func (s *Session) complete(ref *mcp.CompleteReference, argument, value string) []string {
 	s.env.T.Helper()
 
-	// The reference and the argument together are what a completion covers, so
-	// the record names both: a template whose project variable completes says
-	// nothing about its branch variable.
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: completionTarget(ref) + " " + argument})
+	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
 	result, err := s.conn.client().Complete(ctx, &mcp.CompleteParams{
 		Ref:      ref,
 		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},
@@ -103,6 +102,17 @@ func completionTarget(ref *mcp.CompleteReference) string {
 		return ref.Name
 	}
 	return ref.URI
+}
+
+// completionCallTarget spells what one completion covers: the reference and
+// the argument together, since a template whose project variable completes
+// says nothing about its branch variable.
+//
+// A session line's completion list is spelled through the same function, so
+// a call and the denominator it is counted against cannot name one completion
+// two ways.
+func completionCallTarget(reference, argument string) string {
+	return reference + " " + argument
 }
 
 // Raw sends one tools/call exactly as given, naming no action.
@@ -126,10 +136,29 @@ type Subscription struct {
 	session *Session
 	uri     string
 	updates <-chan struct{}
+	// release unsubscribes and unhooks the notifications, and closeOnce is
+	// shared by Close and the test's cleanup, so a subscription closed early
+	// is not unsubscribed a second time when the test ends.
+	release   func()
+	closeOnce sync.Once
 }
 
 // URI returns the resource this subscription watches.
 func (s *Subscription) URI() string { return s.uri }
+
+// Close stops watching the resource now rather than when the test ends.
+//
+// On protocol 2026-07-28 it is fire and forget: the SDK cancels the listen it
+// opened for the URI and tells the server so in a notifications/cancelled, and
+// the server drops its watcher when that arrives, a moment after Close has
+// returned. A test that subscribes and closes in turn therefore holds its one
+// open subscription plus the few whose cancellation is still on its way,
+// which is well inside the server's cap of ten watchers per credential. That
+// lag is also why a URI closed here must not be subscribed again on the same
+// session: a second listen that reaches the server before the first one's
+// teardown is acknowledged and then never delivers ([Session.TrySubscribe]
+// says why), so such a test takes a private session per subscription.
+func (s *Subscription) Close() { s.closeOnce.Do(s.release) }
 
 // Subscribe asks the server to notify this session when a resource changes,
 // and unsubscribes when the test ends.
@@ -137,46 +166,176 @@ func (s *Subscription) URI() string { return s.uri }
 // The first read the server makes is its authorization check, so a subscribe
 // that is accepted means the credential could read the resource; one it
 // refuses fails the test here rather than at the first update that never
-// arrives.
+// arrives. What counts as accepted is spelled out on [Session.TrySubscribe].
 func (s *Session) Subscribe(uri string) *Subscription {
 	s.env.T.Helper()
 
-	updates := s.conn.notifier.watch(uri)
+	subscription, err := s.subscribe(uri, ExpectationOK)
+	if err != nil {
+		s.env.T.Fatalf("resources/subscribe %s: %v%s", uri, err, s.conn.failureContext())
+	}
+	return subscription
+}
+
+// TrySubscribe asks the server to notify this session when a resource
+// changes, and hands back the refusal when it will not, for a test that
+// subscribes to things the server may decline, such as the subscription
+// sweep.
+//
+// Accepted means the server said so. On protocol 2026-07-28 a subscription is
+// a subscriptions/listen stream whose answer the SDK discards, so the only
+// word the client ever gets is the notifications/subscriptions/acknowledged
+// the server sends once every subscription the stream asked for succeeded;
+// this waits for it, and a subscription it never arrives for is a refusal:
+// the first read failed, or the session holds as many watchers as the server
+// allows. Silence is the only signal of that refusal, so it costs the whole of
+// subscribeAckTimeout before this returns. On an older protocol the subscribe
+// is an ordinary request and its error is the refusal. Either way the
+// subscribe is recorded with what came of it, so a refused one is never
+// credited as an accepted subscription.
+//
+// One test at a time may watch a URI on one session, because the SDK keeps a
+// single listen per URI and per session and answers a second Subscribe from
+// it without asking the server: a second test would be told nothing, and
+// closing either would end both. A second one is refused here, before anything
+// is sent. A test that needs a URI to itself asks for a private session.
+//
+// A URI released by [Subscription.Close] can be claimed here again, but on
+// protocol 2026-07-28 it must not be subscribed again on the same session
+// until the server has torn down the earlier listen, and nothing reports when
+// it has, since the SDK discards the listen's answer. A subscribe that lands
+// first is acknowledged and recorded ok, while the SDK's per-session delivery
+// table on the server has already lost it, so no update ever reaches the
+// session. That is the SDK defect recorded in docs/development/upstream-bugs.md
+// as "A session's second listen on a URI overwrites the first's subscription,
+// and its close deletes both"; cmd/server's bridge keeps the watch itself
+// alive, so what is lost is the delivery. A test that subscribes, closes and
+// subscribes one URI again takes a private session for each subscription.
+func (s *Session) TrySubscribe(uri string) (*Subscription, error) {
+	s.env.T.Helper()
+	return s.subscribe(uri, ExpectationAny)
+}
+
+// errSubscribedOnSession is the refusal a second subscription to one URI on
+// one session gets.
+var errSubscribedOnSession = errors.New("another test on this session already watches the resource")
+
+// errNotAcknowledged is a subscription the server never acknowledged, which is
+// how a refusal reads on protocol 2026-07-28.
+var errNotAcknowledged = errors.New("the server did not acknowledge the subscription")
+
+// subscribeAckTimeout bounds the wait for the server's acknowledgement. It
+// covers the server's first read of the resource, which is a GitLab call, and
+// is a variable so the harness's own tests can wait less than a real GitLab
+// may take.
+var subscribeAckTimeout = 30 * time.Second
+
+// listenProtocolVersion is the first protocol revision on which a subscribe is
+// a subscriptions/listen stream, spelled here because the SDK keeps its own
+// constant unexported.
+const listenProtocolVersion = "2026-07-28"
+
+// subscribesByListening reports whether a session subscribes through a listen
+// stream, whose answer the SDK drops, rather than through a request whose
+// error is the answer. Revisions are dates, so they order as strings.
+func subscribesByListening(session *mcp.ClientSession) bool {
+	result := session.InitializeResult()
+	return result != nil && result.ProtocolVersion >= listenProtocolVersion
+}
+
+// subscribe is the one path both subscribe verbs take: claim the URI on this
+// session, subscribe, wait for the answer where the protocol hides it, record
+// what came of it, and hand back a subscription whose cleanup is registered.
+func (s *Session) subscribe(uri, expectation string) (*Subscription, error) {
+	s.env.T.Helper()
+
 	// The index is what lets an update notification be recorded against this
 	// test: it arrives on the SDK's own goroutine, where nothing says whose
 	// subscription it answers.
-	unregister := s.conn.subscribers.add(uri, s.env.recorder)
-
-	subscribeCtx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: uri})
-	if err := s.conn.client().Subscribe(subscribeCtx, &mcp.SubscribeParams{URI: uri}); err != nil {
-		s.conn.notifier.forget(uri, updates)
-		unregister()
-		s.env.T.Fatalf("resources/subscribe %s: %v%s", uri, err, s.conn.failureContext())
-		return nil
+	unregister, claimed := s.conn.subscribers.claim(uri, s.env.recorder)
+	if !claimed {
+		return nil, fmt.Errorf("%w: %s", errSubscribedOnSession, uri)
 	}
-	// Recorded here rather than by the sending middleware: the SDK's Subscribe
-	// opens the subscription on a background context under protocol 2026-07-28,
-	// so the attribution on subscribeCtx never reaches the middleware and the
-	// subscribe would be credited to no test. See [sessionConn.recordSubscribe].
-	s.conn.recordSubscribe(s.env.recorder, uri)
-	s.env.T.Cleanup(func() {
-		// A background context, because the test's own is cancelled by the
-		// time cleanups run and an unsubscribe that never reached the server
-		// would leave it polling GitLab for the rest of the run.
-		ctx, cancel := context.WithTimeout(context.Background(), unsubscribeTimeout)
-		defer cancel()
-		ctx = withAttribution(ctx, callAttribution{
-			rec: s.env.recorder, conn: s.conn, purpose: PurposeCleanup,
-			expectation: ExpectationAny, target: uri,
-		})
-		_ = s.conn.client().Unsubscribe(ctx, &mcp.UnsubscribeParams{URI: uri})
+	updates := s.conn.notifier.watch(uri)
+	// Watched before the subscribe is sent, since the acknowledgement can
+	// arrive before Subscribe returns.
+	acknowledged := s.conn.acks.watch(uri)
+	defer s.conn.acks.forget(uri, acknowledged)
+
+	listening := subscribesByListening(s.conn.client())
+	subscribeCtx := s.attribute(s.env.Ctx, PurposeTest, expectation, callAttribution{target: uri})
+	err := s.conn.client().Subscribe(subscribeCtx, &mcp.SubscribeParams{URI: uri})
+	if err == nil && listening {
+		err = s.awaitAcknowledgement(acknowledged)
+	}
+	// Recorded here only on protocol 2026-07-28, where the SDK's Subscribe opens
+	// the subscription on a background context, so the attribution on
+	// subscribeCtx never reaches the sending middleware and the subscribe would
+	// be credited to no test. On an older protocol the request leaves through
+	// the middleware on subscribeCtx, which records it with the same answer,
+	// and a second line here would count it twice. See
+	// [sessionConn.recordSubscribe].
+	if listening {
+		s.conn.recordSubscribe(s.env.recorder, uri, expectation, outcomeOf(methodSubscribe, nil, err))
+	}
+
+	// There is something to unsubscribe when the server agreed, and also when
+	// it did not on 2026-07-28: the SDK keeps the listen it opened for the URI
+	// whatever the server answered, and would answer a later Subscribe for the
+	// URI from it without asking, so releasing it is what lets the URI be asked
+	// again. Asked again on the same session, though, it is not reliable until
+	// the server has torn the released listen down, which nothing reports; see
+	// [Session.TrySubscribe]. A request an older protocol refused subscribed
+	// nothing.
+	held := err == nil || listening
+	subscription := &Subscription{session: s, uri: uri, updates: updates}
+	subscription.release = func() {
+		if held {
+			s.conn.unsubscribe(s.env.recorder, uri)
+		}
 		s.conn.notifier.forget(uri, updates)
 		unregister()
-	})
-	return &Subscription{session: s, uri: uri, updates: updates}
+	}
+	if err != nil {
+		subscription.Close()
+		return nil, err
+	}
+	s.env.T.Cleanup(subscription.Close)
+	return subscription, nil
 }
 
-// unsubscribeTimeout bounds the unsubscribe a subscription's cleanup sends.
+// awaitAcknowledgement waits for the server to acknowledge the subscription
+// that watch was registered for.
+func (s *Session) awaitAcknowledgement(acknowledged <-chan struct{}) error {
+	timer := time.NewTimer(subscribeAckTimeout)
+	defer timer.Stop()
+	select {
+	case <-acknowledged:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("%w within %s: it declines a resource its first read could not reach, and one past its watcher cap",
+			errNotAcknowledged, subscribeAckTimeout)
+	case <-s.env.Ctx.Done():
+		return fmt.Errorf("waiting for the subscription to be acknowledged: %w", s.env.Ctx.Err())
+	}
+}
+
+// unsubscribe asks the server to stop watching a resource for this session.
+//
+// A background context, because a subscription's cleanup runs after the
+// test's own context is cancelled, and an unsubscribe that never reached the
+// server would leave it polling GitLab for the rest of the run.
+func (c *sessionConn) unsubscribe(rec *envRecorder, uri string) {
+	ctx, cancel := context.WithTimeout(context.Background(), unsubscribeTimeout)
+	defer cancel()
+	ctx = withAttribution(ctx, callAttribution{
+		rec: rec, conn: c, purpose: PurposeCleanup,
+		expectation: ExpectationAny, target: uri,
+	})
+	_ = c.client().Unsubscribe(ctx, &mcp.UnsubscribeParams{URI: uri})
+}
+
+// unsubscribeTimeout bounds the unsubscribe a subscription's release sends.
 const unsubscribeTimeout = 30 * time.Second
 
 // Next waits for the next update notification for this resource, and fails the
@@ -216,6 +375,11 @@ func (s *Subscription) TryNext(timeout time.Duration) bool {
 // here. Each watcher gets a buffered channel of its own and a delivery that
 // would block is dropped: a test waiting for the next change is not made more
 // correct by a queue of changes it never read.
+//
+// A session holds a second one for the subscription acknowledgements, which
+// are the same shape of signal: something happened to one URI, and whoever is
+// waiting on that URI is to be woken without the SDK's goroutine ever waiting
+// for them.
 type updateNotifier struct {
 	mu       sync.Mutex
 	watchers map[string][]chan struct{}

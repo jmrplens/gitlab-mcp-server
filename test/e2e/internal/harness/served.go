@@ -148,6 +148,56 @@ func declaredCapabilities(result *mcp.InitializeResult) listable {
 	}
 }
 
+// completionReferences lists every reference and argument a completion can
+// address on a session: each argument a served prompt declares, required and
+// optional alike, and each variable of each served resource template, spelled
+// the way a completion call names its target.
+//
+// It is the denominator the coverage command divides the completion cells by,
+// written on the session line because nothing else says what a session could
+// have completed. Without it every completion cell was one a test had asked
+// for, counted against a list of what the tests had asked for.
+func completionReferences(served servedSets) []string {
+	var references []string
+	for _, spec := range served.promptSpecs {
+		for _, argument := range slices.Concat(spec.Required, spec.Optional) {
+			references = append(references, completionCallTarget(spec.Name, argument))
+		}
+	}
+	for _, template := range served.templates {
+		for _, variable := range TemplateVariables(template) {
+			references = append(references, completionCallTarget(template, variable))
+		}
+	}
+	slices.Sort(references)
+	return slices.Compact(references)
+}
+
+// TemplateVariables returns the RFC 6570 variable names of a resource
+// template in the order they appear, each stripped of the reserved "+" a
+// path variable carries.
+//
+// It is exported because the completion sweep asks for a completion of each
+// of them and the harness spells a session's completion denominator from the
+// same list: two rules for what a variable is would let a sweep complete one
+// name while the denominator counted another.
+func TemplateVariables(template string) []string {
+	var names []string
+	rest := template
+	for {
+		_, opened, found := strings.Cut(rest, "{")
+		if !found {
+			return names
+		}
+		name, after, closed := strings.Cut(opened, "}")
+		if !closed {
+			return names
+		}
+		names = append(names, strings.TrimPrefix(name, "+"))
+		rest = after
+	}
+}
+
 // promptSpecOf splits a listed prompt's arguments into required and optional.
 func promptSpecOf(prompt *mcp.Prompt) PromptSpec {
 	spec := PromptSpec{Name: prompt.Name}

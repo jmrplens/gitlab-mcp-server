@@ -6,8 +6,11 @@
 package fixture
 
 import (
+	"context"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -38,16 +41,21 @@ func NewEnvironment(e *harness.Env, project Project, prefix string) Environment 
 
 	name := e.Name(prefix)
 	environment, err := retryTransient(e, "create environment "+name, createRetries, func() (Environment, error) {
-		created, _, err := e.Client().GL().Environments.CreateEnvironment(project.ID, &gl.CreateEnvironmentOptions{Name: new(name)}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return Environment{}, err
-		}
-		return Environment{ID: created.ID, Name: created.Name}, nil
+		return createEnvironment(e.Ctx, e.Client(), project.ID, name)
 	})
 	if err != nil {
 		e.T.Fatalf("creating environment %q in project %d: %v", name, project.ID, err)
 	}
 	return environment
+}
+
+// createEnvironment asks GitLab for the environment.
+func createEnvironment(ctx context.Context, client *gitlabclient.Client, projectID int64, name string) (Environment, error) {
+	created, _, err := client.GL().Environments.CreateEnvironment(projectID, &gl.CreateEnvironmentOptions{Name: new(name)}, gl.WithContext(ctx))
+	if err != nil {
+		return Environment{}, err
+	}
+	return Environment{ID: created.ID, Name: created.Name}, nil
 }
 
 // DeploymentRefIsBranch is the tag flag every fixture deployment states.
@@ -72,20 +80,26 @@ func NewDeployment(e *harness.Env, project Project, environment Environment, sha
 	e.T.Helper()
 
 	deployment, err := retryTransient(e, "create deployment", createRetries, func() (Deployment, error) {
-		created, _, err := e.Client().GL().Deployments.CreateProjectDeployment(project.ID, &gl.CreateProjectDeploymentOptions{
-			Environment: new(environment.Name),
-			Ref:         new(project.DefaultBranch),
-			SHA:         new(sha),
-			Tag:         new(DeploymentRefIsBranch),
-			Status:      new(DeploymentStatus),
-		}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return Deployment{}, err
-		}
-		return Deployment{ID: created.ID, Environment: environment, SHA: created.SHA, Status: created.Status}, nil
+		return createDeployment(e.Ctx, e.Client(), project.ID, environment, project.DefaultBranch, sha)
 	})
 	if err != nil {
 		e.T.Fatalf("creating a deployment of %s into %q in project %d: %v", ShortSHA(sha), environment.Name, project.ID, err)
 	}
 	return deployment
+}
+
+// createDeployment asks GitLab for a deployment of sha from the branch ref
+// into environment, stating the two facts GitLab 19 refuses one without.
+func createDeployment(ctx context.Context, client *gitlabclient.Client, projectID int64, environment Environment, ref, sha string) (Deployment, error) {
+	created, _, err := client.GL().Deployments.CreateProjectDeployment(projectID, &gl.CreateProjectDeploymentOptions{
+		Environment: new(environment.Name),
+		Ref:         new(ref),
+		SHA:         new(sha),
+		Tag:         new(DeploymentRefIsBranch),
+		Status:      new(DeploymentStatus),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return Deployment{}, err
+	}
+	return Deployment{ID: created.ID, Environment: environment, SHA: created.SHA, Status: created.Status}, nil
 }

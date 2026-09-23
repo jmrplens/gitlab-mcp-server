@@ -7,10 +7,12 @@
 package fixture
 
 import (
+	"context"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -44,20 +46,26 @@ func NewGroupLabel(e *harness.Env, group Group, prefix string) GroupLabel {
 
 	name := e.Name(prefix)
 	label, err := retryTransient(e, "create group label "+name, createRetries, func() (GroupLabel, error) {
-		created, _, err := e.Client().GL().GroupLabels.CreateGroupLabel(group.ID, &gl.CreateGroupLabelOptions{
-			Name:        new(name),
-			Color:       new(labelColor),
-			Description: new("e2e: " + e.T.Name()),
-		}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return GroupLabel{}, err
-		}
-		return GroupLabel{ID: created.ID, Name: created.Name, Color: created.Color}, nil
+		return createGroupLabel(e.Ctx, e.Client(), group.ID, name, "e2e: "+e.T.Name())
 	})
 	if err != nil {
 		e.T.Fatalf("creating group label %q in group %d: %v", name, group.ID, err)
 	}
 	return label
+}
+
+// createGroupLabel asks GitLab for the group label, in the one color every
+// fixture label carries.
+func createGroupLabel(ctx context.Context, client *gitlabclient.Client, groupID int64, name, description string) (GroupLabel, error) {
+	created, _, err := client.GL().GroupLabels.CreateGroupLabel(groupID, &gl.CreateGroupLabelOptions{
+		Name:        new(name),
+		Color:       new(labelColor),
+		Description: new(description),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return GroupLabel{}, err
+	}
+	return GroupLabel{ID: created.ID, Name: created.Name, Color: created.Color}, nil
 }
 
 // NewGroupMilestone creates a group milestone titled with the run's own
@@ -66,22 +74,30 @@ func NewGroupMilestone(e *harness.Env, group Group, prefix string) GroupMileston
 	e.T.Helper()
 
 	title := e.Name(prefix)
-	start := gl.ISOTime(time.Now().UTC())
-	due := gl.ISOTime(time.Now().UTC().Add(groupMilestoneLength))
+	start := time.Now().UTC()
 	milestone, err := retryTransient(e, "create group milestone "+title, createRetries, func() (GroupMilestone, error) {
-		created, _, err := e.Client().GL().GroupMilestones.CreateGroupMilestone(group.ID, &gl.CreateGroupMilestoneOptions{
-			Title:       new(title),
-			Description: new("e2e: " + e.T.Name()),
-			StartDate:   &start,
-			DueDate:     &due,
-		}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return GroupMilestone{}, err
-		}
-		return GroupMilestone{ID: created.ID, IID: created.IID, Title: created.Title}, nil
+		return createGroupMilestone(e.Ctx, e.Client(), group.ID, title, "e2e: "+e.T.Name(), start)
 	})
 	if err != nil {
 		e.T.Fatalf("creating group milestone %q in group %d: %v", title, group.ID, err)
 	}
 	return milestone
+}
+
+// createGroupMilestone asks GitLab for a group milestone running from start
+// for groupMilestoneLength. The start is the caller's, so the dates it sends
+// are the caller's to state rather than whatever the clock read inside.
+func createGroupMilestone(ctx context.Context, client *gitlabclient.Client, groupID int64, title, description string, start time.Time) (GroupMilestone, error) {
+	startDate := gl.ISOTime(start)
+	dueDate := gl.ISOTime(start.Add(groupMilestoneLength))
+	created, _, err := client.GL().GroupMilestones.CreateGroupMilestone(groupID, &gl.CreateGroupMilestoneOptions{
+		Title:       new(title),
+		Description: new(description),
+		StartDate:   &startDate,
+		DueDate:     &dueDate,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return GroupMilestone{}, err
+	}
+	return GroupMilestone{ID: created.ID, IID: created.IID, Title: created.Title}, nil
 }

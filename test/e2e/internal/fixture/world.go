@@ -5,7 +5,8 @@
 //
 // A read sweep over a thousand actions cannot build a project for each of
 // them, so the reads share one World: a group with a project in it, a branch
-// with a commit, a merge request, an issue, a label, a milestone. The World is
+// with a commit, a merge request, an issue, a label, a milestone, and, made
+// best effort beside them, the extras world_extras.go lists. The World is
 // read-only by contract, and the contract is enforced after the fact: a
 // digest of everything a test could change is taken when the World is built
 // and again when it is torn down, and a difference fails the run and names
@@ -54,6 +55,41 @@ type World struct {
 	// Username and UserID identify the run's own user, for user-scoped reads.
 	Username string
 	UserID   int64
+
+	// The extras below are made after the core and each may be missing (see
+	// world_extras.go): an extra the World could not make is its zero value,
+	// and unbound says why.
+
+	// Tag is an annotated tag of the default branch, and Release a release
+	// standing on it.
+	Tag     Tag
+	Release Release
+	// Environment is an environment of Project, and Deployment a deployment
+	// of Commit into it.
+	Environment Environment
+	Deployment  Deployment
+	// FeatureFlag is an active feature flag of Project.
+	FeatureFlag ProjectFeatureFlag
+	// DeployKey is a read-only deploy key of Project.
+	DeployKey DeployKey
+	// Board is an issue board of Project.
+	Board ProjectBoard
+	// ProjectSnippet is a snippet of Project, and Snippet a personal snippet
+	// of the run's user.
+	ProjectSnippet ProjectSnippet
+	Snippet        Snippet
+	// WikiPage is a page of Project's wiki.
+	WikiPage WikiPage
+	// GroupLabel and GroupMilestone belong to Group rather than to Project.
+	GroupLabel     GroupLabel
+	GroupMilestone GroupMilestone
+	// Pipeline is a canceled pipeline of the default branch, and JobID its
+	// one job. Both are zero unless the pipeline reached a terminal status.
+	Pipeline Pipeline
+	JobID    int64
+
+	// unbound names each extra the World could not make, with the reason.
+	unbound map[string]string
 
 	// baseline is every mutable field as it read when the World was built,
 	// and digest is its hash: the digest decides, the baseline explains.
@@ -153,7 +189,7 @@ func buildWorld(e *harness.Env, world *World) {
 	}
 	world.Group = group
 
-	spec := projectSpec{description: "The shared read-only World of run " + runID, visibility: gl.PrivateVisibility, readme: true, namespaceID: group.ID}
+	spec := projectSpec{description: worldDescription(runID), visibility: gl.PrivateVisibility, readme: true, namespaceID: group.ID}
 	project, err := createProject(e, spec, worldNames(runID, worldProjectPrefix))
 	if err != nil {
 		e.T.Fatalf("building the World: creating its project: %v", err)
@@ -167,6 +203,9 @@ func buildWorld(e *harness.Env, world *World) {
 	world.Issue = NewIssue(e, project, worldIssueTitle)
 	world.Label = createLabel(e, project, worldName(runID, worldLabelPrefix))
 	world.Milestone = createMilestone(e, project, worldName(runID, worldMilestonePrefix))
+	// Before the digest, so the extras are in it and the commit the pipeline
+	// adds to the default branch is part of the baseline rather than a change.
+	buildWorldExtras(e.Ctx, e.T, e.Client(), runID, world)
 
 	state, err := worldState(e.Ctx, e.Client(), world)
 	if err != nil {
@@ -200,6 +239,13 @@ func teardownWorld(client *gitlabclient.Client, world *World) error {
 	if world.digest != "" {
 		if err := verifyWorld(ctx, client, world); err != nil {
 			failures = append(failures, err)
+		}
+	}
+	// The personal snippet belongs to the user, so neither deletion below
+	// takes it along.
+	if world.Snippet.ID != 0 {
+		if err := deletePersonalSnippet(ctx, client, world.Snippet.ID); err != nil {
+			failures = append(failures, fmt.Errorf("tearing down the World's personal snippet: %w", err))
 		}
 	}
 	if world.Project.ID != 0 {
@@ -284,7 +330,8 @@ func worldStateDiff(before, after map[string]string) []string {
 }
 
 // worldState reads every field of the World a test could change and returns
-// them keyed by object and field.
+// them keyed by object and field. An extra the World did not make has nothing
+// to read and is left out, on both readings alike.
 func worldState(ctx context.Context, client *gitlabclient.Client, world *World) (map[string]string, error) {
 	state := map[string]string{}
 	readers := []func() error{
@@ -295,6 +342,11 @@ func worldState(ctx context.Context, client *gitlabclient.Client, world *World) 
 		func() error { return readIssueState(ctx, client, world, state) },
 		func() error { return readLabelState(ctx, client, world, state) },
 		func() error { return readMilestoneState(ctx, client, world, state) },
+	}
+	for _, extra := range worldExtras {
+		if extra.made(world) {
+			readers = append(readers, func() error { return extra.read(ctx, client, world, state) })
+		}
 	}
 	for _, read := range readers {
 		if err := read(); err != nil {
@@ -419,8 +471,12 @@ func sortedCopy(values []string) []string {
 // catalog action's schema gives it. It is what a read sweep binds required
 // parameters from, and a parameter it does not carry is one the sweep names
 // as unbound.
+//
+// An extra joins only once it was made, and only when its name means that one
+// object across the whole catalog; a name that does not is bound per template
+// by [World.BindTemplate] instead.
 func (w *World) Bindings() map[string]any {
-	return map[string]any{
+	bindings := map[string]any{
 		"project_id":        w.Project.ID,
 		"group_id":          w.Group.ID,
 		"namespace_id":      w.Group.ID,
@@ -441,6 +497,12 @@ func (w *World) Bindings() map[string]any {
 		"user_id":           w.UserID,
 		"username":          w.Username,
 	}
+	for name, binding := range plainExtraBindings {
+		if value, made := binding.value(w); made {
+			bindings[name] = value
+		}
+	}
+	return bindings
 }
 
 // Bind returns the World's value for one parameter name, and whether it has

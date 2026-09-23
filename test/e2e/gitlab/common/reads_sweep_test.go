@@ -137,8 +137,8 @@ func bindEntryParams(world *fixture.World, entry resources.ToolSurfaceEntry) (ma
 		return nil, missing
 	}
 	if len(entry.RequiredParamsAnyOf) > 0 {
-		if !bindOneAlternative(world, entry.RequiredParamsAnyOf, params) {
-			return nil, "no alternative requirement group binds from the World"
+		if missing := bindOneAlternative(world, entry.RequiredParamsAnyOf, params); missing != "" {
+			return nil, missing
 		}
 	}
 	return params, ""
@@ -147,11 +147,15 @@ func bindEntryParams(world *fixture.World, entry resources.ToolSurfaceEntry) (ma
 // bindRequiredGroup binds every parameter of one group into params, returning
 // the reason it could not when a parameter is unbound or its World value
 // cannot be spelled in the type the schema declares.
+//
+// An unbound parameter's reason is the World's own ([fixture.World.BindParam]),
+// so a parameter an extra would carry is logged with the reason GitLab gave
+// for not making it rather than as a name the World lacks.
 func bindRequiredGroup(world *fixture.World, group []resources.ToolSurfaceRequiredParam, params map[string]any) string {
 	for _, param := range group {
-		value, bound := world.Bind(param.Name)
+		value, bound, reason := world.BindParam(param.Name)
 		if !bound {
-			return "the World has no binding for required parameter " + param.Name
+			return "required parameter " + param.Name + " is unbound: " + reason
 		}
 		spelled, ok := spellParam(value, param.Type)
 		if !ok {
@@ -163,16 +167,21 @@ func bindRequiredGroup(world *fixture.World, group []resources.ToolSurfaceRequir
 }
 
 // bindOneAlternative binds the first alternative requirement group that binds
-// fully, reporting whether any did.
-func bindOneAlternative(world *fixture.World, groups [][]resources.ToolSurfaceRequiredParam, params map[string]any) bool {
+// fully, returning an empty reason when one did and, when none did, every
+// group's own reason, so an action whose alternatives all stand on an extra
+// the World could not make names that extra's reason too.
+func bindOneAlternative(world *fixture.World, groups [][]resources.ToolSurfaceRequiredParam, params map[string]any) string {
+	reasons := make([]string, 0, len(groups))
 	for _, group := range groups {
 		candidate := map[string]any{}
-		if bindRequiredGroup(world, group, candidate) == "" {
+		missing := bindRequiredGroup(world, group, candidate)
+		if missing == "" {
 			maps.Copy(params, candidate)
-			return true
+			return ""
 		}
+		reasons = append(reasons, missing)
 	}
-	return false
+	return "no alternative requirement group binds from the World: " + strings.Join(reasons, "; ")
 }
 
 // spellParam spells a World value in the flat schema type a parameter

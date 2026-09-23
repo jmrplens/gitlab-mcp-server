@@ -111,11 +111,7 @@ func NewPipeline(e *harness.Env, project Project, ref string) Pipeline {
 	requireRunner(e)
 
 	pipeline, err := retryTransient(e, "create pipeline", createRetries, func() (Pipeline, error) {
-		created, _, err := e.Client().GL().Pipelines.CreatePipeline(project.ID, &gl.CreatePipelineOptions{Ref: new(ref)}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return Pipeline{}, err
-		}
-		return Pipeline{ID: created.ID, Ref: created.Ref, SHA: created.SHA, Status: created.Status}, nil
+		return createPipeline(e.Ctx, e.Client(), project.ID, ref)
 	})
 	if err != nil {
 		e.T.Fatalf("creating a pipeline on %q in project %d: %v", ref, project.ID, err)
@@ -185,17 +181,34 @@ func NewPipelineNoWait(e *harness.Env, project Project, ref string) Pipeline {
 	e.T.Helper()
 
 	pipeline, err := retryTransient(e, "create pipeline", createRetries, func() (Pipeline, error) {
-		created, _, createErr := e.Client().GL().Pipelines.CreatePipeline(project.ID,
-			&gl.CreatePipelineOptions{Ref: new(ref)}, gl.WithContext(e.Ctx))
-		if createErr != nil {
-			return Pipeline{}, createErr
-		}
-		return Pipeline{ID: created.ID, Ref: created.Ref, SHA: created.SHA, Status: created.Status}, nil
+		return createPipeline(e.Ctx, e.Client(), project.ID, ref)
 	})
 	if err != nil {
 		e.T.Fatalf("creating a pipeline on %q in project %d: %v", ref, project.ID, err)
 	}
 	return pipeline
+}
+
+// createPipeline asks GitLab for a pipeline on ref and hands it back in the
+// status it was created in.
+func createPipeline(ctx context.Context, client *gitlabclient.Client, projectID int64, ref string) (Pipeline, error) {
+	created, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: new(ref)}, gl.WithContext(ctx))
+	if err != nil {
+		return Pipeline{}, err
+	}
+	return Pipeline{ID: created.ID, Ref: created.Ref, SHA: created.SHA, Status: created.Status}, nil
+}
+
+// cancelPipeline asks GitLab to cancel the pipeline's jobs.
+//
+// The answer is not a terminal status: a job a runner is holding is moved to
+// canceling first, so a caller that needs the pipeline settled waits for it
+// with [waitForPipelineStatus].
+func cancelPipeline(ctx context.Context, client *gitlabclient.Client, projectID, pipelineID int64) error {
+	if _, _, err := client.GL().Pipelines.CancelPipelineBuild(projectID, pipelineID, gl.WithContext(ctx)); err != nil {
+		return fmt.Errorf("canceling pipeline %d of project %d: %w", pipelineID, projectID, err)
+	}
+	return nil
 }
 
 // The wait for GitLab to create a pipeline's jobs, which happens a moment
@@ -235,20 +248,30 @@ func ManualPipelineJobID(e *harness.Env, project Project, pipelineID int64) int6
 func pipelineJobID(e *harness.Env, project Project, pipelineID int64, wanted string, accept func(*gl.Job) bool) int64 {
 	e.T.Helper()
 
+	found, err := awaitPipelineJob(e.Ctx, e.Client(), project.ID, pipelineID, pipelineJobsWait, accept)
+	if err != nil {
+		e.T.Fatalf("pipeline %d in project %d grew no job %s within %s: %v",
+			pipelineID, project.ID, jobDescription(wanted), pipelineJobsWait, err)
+	}
+	return found
+}
+
+// awaitPipelineJob polls the pipeline's jobs until one the predicate accepts
+// is there and returns its ID, or the error that ended the wait: the budget
+// running out, or a listing GitLab refused.
+func awaitPipelineJob(ctx context.Context, client *gitlabclient.Client, projectID, pipelineID int64, wait time.Duration,
+	accept func(*gl.Job) bool,
+) (int64, error) {
 	var found int64
-	err := harness.Poll(e.Ctx, pipelineJobsInterval, pipelineJobsWait, func() (bool, string, error) {
-		id, state, listErr := findPipelineJob(e.Ctx, e.Client(), project.ID, pipelineID, accept)
+	err := harness.Poll(ctx, pipelineJobsInterval, wait, func() (bool, string, error) {
+		id, state, listErr := findPipelineJob(ctx, client, projectID, pipelineID, accept)
 		if listErr != nil {
 			return false, state, listErr
 		}
 		found = id
 		return id != 0, state, nil
 	})
-	if err != nil {
-		e.T.Fatalf("pipeline %d in project %d grew no job %s within %s: %v",
-			pipelineID, project.ID, jobDescription(wanted), pipelineJobsWait, err)
-	}
-	return found
+	return found, err
 }
 
 // jobDescription spells what a job wait was looking for, for its failure.

@@ -5,16 +5,23 @@
 // with the delayed-deletion dance and the eventual-consistency answers a real
 // one gives. It exists so the two-step delete, the waits and the sweep can be
 // driven without a GitLab, on every push.
+//
+// Beside it are the two ways a test reaches a whole builder rather than the
+// half that takes a client: an Env pointed at the stub, and a child test
+// process for the branch where a builder fails the test that called it.
 
 package fixture
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +30,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
 // stubToken is the credential the stub client sends; the stub never checks
@@ -78,8 +86,10 @@ type stubGitLab struct {
 	// graphqlAnswers are answered one per document, the last repeating,
 	// each the raw body of a GraphQL response.
 	graphqlAnswers []string
-	// graphqlDocuments records every document the stub was sent.
+	// graphqlDocuments records every document the stub was sent, and
+	// graphqlVariables the variables each carried, in the same order.
 	graphqlDocuments []string
+	graphqlVariables []map[string]any
 	// hookEventAnswers are the raw bodies of the hook events listing,
 	// answered one per read, the last repeating; a body that is not JSON is
 	// answered as a 404, which is how a real GitLab answers before the
@@ -132,6 +142,11 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 	mux.HandleFunc("/api/v4/sidekiq/job_stats", stub.sidekiq)
 	mux.HandleFunc("/api/v4/runners/all", stub.listRunners)
 	mux.HandleFunc("/api/v4/projects/{id}/repository/branches/{branch...}", stub.branch)
+	// Named on its own, because the branch pattern above ends in a wildcard
+	// and ServeMux answers the bare collection path with a redirect to it,
+	// which client-go follows as a read: a branch creation would come back
+	// as a branch with no name rather than reaching the script.
+	mux.HandleFunc("/api/v4/projects/{id}/repository/branches", stub.scriptedRoute)
 	mux.HandleFunc("/api/v4/projects/{id}/merge_requests/{iid}", stub.mergeRequest)
 	mux.HandleFunc("/api/v4/projects/{id}/pipelines/{pipeline}", stub.pipeline)
 	mux.HandleFunc("/api/v4/projects/{id}/issues/{iid}", stub.stateAnswer)
@@ -260,8 +275,14 @@ func groupJSON(g *stubObject) map[string]any {
 	return map[string]any{"id": g.ID, "name": g.Name, "full_path": g.Path, "path": lastSegment(g.Path), "visibility": "private"}
 }
 
-// listProjects answers the project listing, filtered by search.
+// listProjects answers the project listing, filtered by search, and a
+// creation from the script, since what a created project is named is the
+// test's to decide.
 func (s *stubGitLab) listProjects(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		s.scriptedRoute(w, r)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	search := r.URL.Query().Get("search")
@@ -274,8 +295,13 @@ func (s *stubGitLab) listProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// listGroups answers the group listing, filtered by search.
+// listGroups answers the group listing, filtered by search, and a creation
+// from the script, like the project listing.
 func (s *stubGitLab) listGroups(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		s.scriptedRoute(w, r)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	search := r.URL.Query().Get("search")
@@ -448,13 +474,19 @@ func (s *stubGitLab) mergeRequest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"iid": pathID(r, "iid"), "detailed_merge_status": status})
 }
 
-// pipeline answers the configured failures, then the next status.
+// pipeline answers the configured failures, then the next status, or the
+// whole pipeline a test put under the request path when it needs more of one
+// than its status.
 func (s *stubGitLab) pipeline(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.pipelineFailures > 0 {
 		s.pipelineFailures--
 		writeError(w, http.StatusBadGateway, "502 Bad Gateway")
+		return
+	}
+	if answer, ok := s.state[r.URL.Path]; ok {
+		writeJSON(w, http.StatusOK, answer)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": pathID(r, "pipeline"), "status": nextStatus(&s.pipelineStatuses)})
@@ -478,13 +510,15 @@ func (s *stubGitLab) graphql(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 
 	var document struct {
-		Query string `json:"query"`
+		Query     string         `json:"query"`
+		Variables map[string]any `json:"variables"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&document); err != nil {
 		writeError(w, http.StatusBadRequest, "malformed document: "+err.Error())
 		return
 	}
 	s.graphqlDocuments = append(s.graphqlDocuments, document.Query)
+	s.graphqlVariables = append(s.graphqlVariables, document.Variables)
 	body := nextStatus(&s.graphqlAnswers)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -597,5 +631,212 @@ func statusError(code int, message string) error {
 	return &gl.ErrorResponse{
 		Response: &http.Response{StatusCode: code, Request: request},
 		Message:  message,
+	}
+}
+
+// detachedStub starts a stub and hands back an Env whose client is pointed
+// at it, for a test that drives a builder whole rather than only the half
+// that takes a client.
+func detachedStub(t *testing.T) (*stubGitLab, *harness.Env) {
+	t.Helper()
+	stub, client := newStubGitLab(t)
+	return stub, harness.NewDetached(t, client)
+}
+
+// isScopedName reports whether a name a builder made carries the prefix it
+// was given and the run its Env belongs to, which is how the sweep recognizes
+// what a run left behind.
+func isScopedName(name, prefix string, e *harness.Env) bool {
+	return strings.HasPrefix(name, prefix+"-") && strings.Contains(name, e.RunID())
+}
+
+// builderFatalEnv names the case [TestBuilderFatalCase_NamedByTheParent_RunsInAChildProcess]
+// runs, and is set only by a parent test that expects that child to fail.
+const builderFatalEnv = "E2E_FIXTURE_FATAL_CASE"
+
+// builderFatalReturned is what a child prints when the builder it drove
+// returned instead of ending its test, which is the one outcome a parent must
+// tell apart from the failure it expects.
+const builderFatalReturned = "the builder returned instead of failing its test"
+
+// TestBuilderFatalCase_NamedByTheParent_RunsInAChildProcess runs the fatal
+// case a parent test named, and skips when none did, which is every ordinary
+// run.
+func TestBuilderFatalCase_NamedByTheParent_RunsInAChildProcess(t *testing.T) {
+	name := os.Getenv(builderFatalEnv)
+	if name == "" {
+		t.Skip("runs only as the child of a test that expects it to fail")
+	}
+	run, known := builderFatalCases[name]
+	if !known {
+		t.Fatalf("no fatal case is named %q", name)
+	}
+	run(t)
+	t.Error(builderFatalReturned)
+}
+
+// runBuilderFatalCase runs one fatal case in a child test process and returns
+// what the child printed, failing unless the child failed its test by ending
+// it.
+//
+// A builder that cannot make what it was asked for calls t.Fatalf, which ends
+// the test that called it, so the branch can be watched only from outside the
+// process it ends. The child is this test binary asked for the one test
+// above, and the coverage directory this process was given is handed on, so
+// what the child executes is counted in the profile of the run that started
+// it.
+func runBuilderFatalCase(t *testing.T, name string) string {
+	t.Helper()
+	args := []string{"-test.run=^TestBuilderFatalCase_NamedByTheParent_RunsInAChildProcess$", "-test.count=1"}
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "-test.gocoverdir=") {
+			args = append(args, arg)
+		}
+	}
+	// #nosec G204 G702 -- the binary is this test binary, and the arguments are
+	// constants plus the coverage flag it was itself started with.
+	cmd := exec.CommandContext(t.Context(), os.Args[0], args...)
+	cmd.Env = append(os.Environ(), builderFatalEnv+"="+name)
+	out, err := cmd.CombinedOutput()
+	if _, exited := errors.AsType[*exec.ExitError](err); !exited {
+		t.Fatalf("the %q case did not fail its child test (%v):\n%s", name, err, out)
+	}
+	if strings.Contains(string(out), builderFatalReturned) {
+		t.Fatalf("in the %q case %s:\n%s", name, builderFatalReturned, out)
+	}
+	return string(out)
+}
+
+// fatalRefusal is the answer the fatal cases refuse a request with: one no
+// retry policy of the fixture library waits through, so the builder fails on
+// the first attempt.
+func fatalRefusal() scriptedAnswer { return stubRefusal(http.StatusForbidden, "403 Forbidden") }
+
+// builderFatalCases drive each builder into the branch that fails the test
+// calling it, against a stub that refuses the one request the builder cannot
+// do without.
+var builderFatalCases = map[string]func(t *testing.T){
+	"group board": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.configure(func() {
+			stub.graphqlAnswers = []string{`{"data":{"createBoard":{"board":null,"errors":["Multiple boards are not available"]}}}`}
+		})
+		NewGroupBoard(e, Group{Path: "e2e-group"}, "board")
+	},
+	"environment": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/projects/2/environments", fatalRefusal())
+		NewEnvironment(e, Project{ID: 2}, "env")
+	},
+	"deployment": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/projects/2/deployments", fatalRefusal())
+		NewDeployment(e, Project{ID: 2, DefaultBranch: "main"}, Environment{ID: 5, Name: "env-run"}, "0123456789abcdef")
+	},
+	"group label": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/groups/1/labels", fatalRefusal())
+		NewGroupLabel(e, Group{ID: 1}, "label")
+	},
+	"group milestone": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/groups/1/milestones", fatalRefusal())
+		NewGroupMilestone(e, Group{ID: 1}, "milestone")
+	},
+	"pipeline": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodGet, "/api/v4/runners", stubOK([]map[string]any{{"id": 1, "description": "runner"}}))
+		stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline", fatalRefusal())
+		NewPipeline(e, Project{ID: 2}, "main")
+	},
+	"pipeline without waiting": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline", fatalRefusal())
+		NewPipelineNoWait(e, Project{ID: 2}, "feature")
+	},
+	"pipeline job": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodGet, "/api/v4/projects/2/pipelines/77/jobs", fatalRefusal())
+		ManualPipelineJobID(e, Project{ID: 2}, 77)
+	},
+	"project snippet": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/projects/2/snippets", fatalRefusal())
+		NewProjectSnippet(e, Project{ID: 2})
+	},
+	"personal snippet": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/snippets", fatalRefusal())
+		NewSnippet(e)
+	},
+	"world group": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/groups", fatalRefusal())
+		buildWorld(e, &World{})
+	},
+	"world project": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		scriptWorldBuild(stub)
+		stub.answers(http.MethodPost, "/api/v4/projects", fatalRefusal())
+		buildWorld(e, &World{})
+	},
+	"world digest": func(t *testing.T) {
+		t.Helper()
+		shortWorldPipelineWaits(t)
+		stub, e := detachedStub(t)
+		scriptWorldBuild(stub)
+		stub.configure(func() { delete(stub.state, "/api/v4/projects/2/labels/5") })
+		buildWorld(e, &World{})
+	},
+}
+
+// TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking checks the
+// branch every builder ends in when GitLab will not make what it asked for:
+// the test that called it fails, and the failure names the object, the place
+// it was to be made in and GitLab's reason, which is all a reader of a failed
+// run has to go on.
+func TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking(t *testing.T) {
+	cases := []struct {
+		name string
+		want []string
+	}{
+		{name: "group board", want: []string{"creating a board in group e2e-group: GitLab refused the board: Multiple boards are not available"}},
+		{name: "environment", want: []string{`creating environment "env-`, `in project 2: `, "403"}},
+		{name: "deployment", want: []string{`creating a deployment of 01234567 into "env-run" in project 2: `, "403"}},
+		{name: "group label", want: []string{`creating group label "label-`, `in group 1: `, "403"}},
+		{name: "group milestone", want: []string{`creating group milestone "milestone-`, `in group 1: `, "403"}},
+		{name: "pipeline", want: []string{`creating a pipeline on "main" in project 2: `, "403"}},
+		{name: "pipeline without waiting", want: []string{`creating a pipeline on "feature" in project 2: `, "403"}},
+		{name: "pipeline job", want: []string{"pipeline 77 in project 2 grew no job named " + ManualJobName + " within ", "403"}},
+		{name: "project snippet", want: []string{`creating project snippet "snippet-`, `in project 2: `, "403"}},
+		{name: "personal snippet", want: []string{`creating snippet "snippet-`, "403"}},
+		{name: "world group", want: []string{"building the World: creating its group: ", "403"}},
+		{name: "world project", want: []string{"building the World: creating its project: ", "403"}},
+		{name: "world digest", want: []string{"building the World: reading it back for its digest: reading label 5 of project 2"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			out := runBuilderFatalCase(t, testCase.name)
+			for _, want := range testCase.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("the child printed:\n%s\nwant it to say %q", out, want)
+				}
+			}
+		})
+	}
+	if len(cases) != len(builderFatalCases) {
+		t.Errorf("%d cases are checked of the %d a child can run", len(cases), len(builderFatalCases))
 	}
 }

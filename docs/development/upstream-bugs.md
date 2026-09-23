@@ -2475,7 +2475,13 @@ The delivery end was the only part of the design with no per-credential seam.
 - **Merged**: no.
 - **Blocking**: no. It needs a client that opens two `subscriptions/listen`
   covering one URI, or mixes a legacy `resources/subscribe` with a listen, on
-  stdio or `--stateless=false`. The SDK's own client does neither.
+  stdio or `--stateless=false`. The SDK's own client never holds two at once,
+  but it reaches the same state when it unsubscribes a URI and subscribes it
+  again before the server has run the first listen's teardown: on 2026-07-28
+  `Unsubscribe` only cancels the listen and returns, so the second listen's
+  subscribe can land first, is acknowledged, and is then deleted by the first
+  one's deferred unsubscribe. The e2e harness is written around that
+  (`Session.TrySubscribe` in `test/e2e/internal/harness/verbs.go`).
 - **Workaround**: partial. `sessionBridge.holds` in
   `cmd/server/subscriptions.go` already keeps the watch alive for the surviving
   stream, which is the half this side owns. The delivery half cannot be repaired

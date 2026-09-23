@@ -16,6 +16,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -169,7 +170,16 @@ func retryTransient[O any](e *harness.Env, label string, attempts int, op func()
 // accept, or runs out of attempts, waiting a little longer after each failure.
 func retryWhen[O any](e *harness.Env, label string, attempts int, retryable func(error) bool, op func() (O, error)) (O, error) {
 	e.T.Helper()
-	return harness.Retry(e.Ctx, e.T, label, attempts, retryBaseDelay, func(int) (O, bool, string, error) {
+	return retryWhenIn(e.Ctx, e.T, label, attempts, retryable, op)
+}
+
+// retryWhenIn is [retryWhen] for a caller that holds a context and a test to
+// report its retries to rather than an Env: the World's extras, which run
+// under a budget of their own derived from the first asking test's context
+// and must never fail that test.
+func retryWhenIn[O any](ctx context.Context, tb testing.TB, label string, attempts int, retryable func(error) bool, op func() (O, error)) (O, error) {
+	tb.Helper()
+	return harness.Retry(ctx, tb, label, attempts, retryBaseDelay, func(int) (O, bool, string, error) {
 		out, err := op()
 		if err == nil {
 			return out, false, "", nil

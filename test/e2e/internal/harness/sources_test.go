@@ -34,11 +34,17 @@ var (
 	harnessTree     = filepath.Join("test", "e2e", "internal")
 )
 
-// The import paths whose use a runtime package may not make.
+// The import paths whose use a runtime package may not make, and the harness,
+// one of whose entry points it may not call.
 const (
-	sdkImportPath   = "github.com/modelcontextprotocol/go-sdk/mcp"
-	toolsImportPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	sdkImportPath     = "github.com/modelcontextprotocol/go-sdk/mcp"
+	toolsImportPath   = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	harnessImportPath = "github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
+
+// detachedEnvCall is the harness entry point that skips the bootstrap, which
+// the libraries' own tests use and a scenario must not: see [NewDetached].
+const detachedEnvCall = "NewDetached"
 
 // forbiddenSDKCalls are the go-sdk constructors that build a server or a
 // client in the test process. The harness builds the one client the suite
@@ -123,6 +129,7 @@ func assemblyFindings(fset *token.FileSet, files []string) ([]sourceFinding, err
 		}
 		sdkNames := localNames(file, sdkImportPath)
 		toolsNames := localNames(file, toolsImportPath)
+		harnessNames := localNames(file, harnessImportPath)
 
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, isCall := node.(*ast.CallExpr)
@@ -148,6 +155,8 @@ func assemblyFindings(fset *token.FileSet, files []string) ([]sourceFinding, err
 				findings = append(findings, sourceFinding{pos: pos, message: "mcp." + name + " assembles a server or a client in the test process; the harness is the only route to a server"})
 			case slices.Contains(toolsNames, receiver.Name) && strings.HasPrefix(name, "Register"):
 				findings = append(findings, sourceFinding{pos: pos, message: "tools." + name + " registers a surface in the test process; the binary registers its own"})
+			case slices.Contains(harnessNames, receiver.Name) && name == detachedEnvCall:
+				findings = append(findings, sourceFinding{pos: pos, message: "harness." + name + " skips the bootstrap that probes and guards the instance; a scenario takes its Env from harness.New"})
 			}
 			return true
 		})
@@ -316,6 +325,7 @@ package common
 import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	suite "github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
 func bad() {
@@ -325,6 +335,7 @@ func bad() {
 	gitlabtools.RegisterAll(server, nil)
 	var session *sdk.ClientSession
 	_, _ = session.CallTool(nil, nil)
+	_ = suite.NewDetached(nil, nil)
 }
 `)
 	plantFile(t, dir, "good_test.go", `//go:build e2e
@@ -343,7 +354,7 @@ func good(e *harness.Env) {
 		t.Fatalf("parsing the fixture: %v", err)
 	}
 
-	wantMessages := []string{"mcp.NewServer", "mcp.NewClient", "mcp.NewInMemoryTransports", "tools.RegisterAll", "CallTool"}
+	wantMessages := []string{"mcp.NewServer", "mcp.NewClient", "mcp.NewInMemoryTransports", "tools.RegisterAll", "CallTool", "harness.NewDetached"}
 	if len(findings) != len(wantMessages) {
 		t.Fatalf("got %d findings, want %d:\n%v", len(findings), len(wantMessages), findings)
 	}

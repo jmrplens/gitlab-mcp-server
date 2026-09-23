@@ -1,7 +1,11 @@
 //go:build e2e
 
 // snippet.go builds a personal snippet, which is the one object a snippet
-// storage move addresses and nothing else in the suite needs.
+// storage move addresses and the one the gitlab://snippet/{snippet_id}
+// resource reads.
+//
+// A personal snippet belongs to the user rather than to a project or a group,
+// so nothing that is torn down takes it along: whoever makes one deletes it.
 
 package fixture
 
@@ -12,7 +16,14 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
+)
+
+// The one file every personal snippet fixture carries.
+const (
+	snippetFileName = "e2e.txt"
+	snippetContent  = "e2e snippet fixture\n"
 )
 
 // Snippet is a personal snippet a builder created.
@@ -30,17 +41,7 @@ func NewSnippet(e *harness.Env) Snippet {
 
 	title := e.Name("snippet")
 	snippet, err := retryTransient(e, "create snippet "+title, createRetries, func() (Snippet, error) {
-		created, _, err := e.Client().GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
-			Title:       new(title),
-			FileName:    new("e2e.txt"),
-			Description: new("e2e: " + e.T.Name()),
-			Content:     new("e2e snippet fixture\n"),
-			Visibility:  new(gl.PrivateVisibility),
-		}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return Snippet{}, err
-		}
-		return Snippet{ID: created.ID, Title: created.Title}, nil
+		return createPersonalSnippet(e.Ctx, e.Client(), title, "e2e: "+e.T.Name())
 	})
 	if err != nil {
 		e.T.Fatalf("creating snippet %q: %v", title, err)
@@ -49,11 +50,32 @@ func NewSnippet(e *harness.Env) Snippet {
 	e.Defer("snippet "+title, func(ctx context.Context) error {
 		ctx, cancel := withCleanupTimeout(ctx)
 		defer cancel()
-		_, deleteErr := e.Client().GL().Snippets.DeleteSnippet(snippet.ID, gl.WithContext(ctx))
-		if deleteErr != nil && !IsStatus(deleteErr, http.StatusNotFound) {
-			return fmt.Errorf("deleting snippet %d: %w", snippet.ID, deleteErr)
-		}
-		return nil
+		return deletePersonalSnippet(ctx, e.Client(), snippet.ID)
 	})
 	return snippet
+}
+
+// createPersonalSnippet asks GitLab for a private personal snippet carrying
+// the one fixture file.
+func createPersonalSnippet(ctx context.Context, client *gitlabclient.Client, title, description string) (Snippet, error) {
+	created, _, err := client.GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
+		Title:       new(title),
+		FileName:    new(snippetFileName),
+		Description: new(description),
+		Content:     new(snippetContent),
+		Visibility:  new(gl.PrivateVisibility),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return Snippet{}, err
+	}
+	return Snippet{ID: created.ID, Title: created.Title}, nil
+}
+
+// deletePersonalSnippet removes the snippet and tolerates one a case deleted.
+func deletePersonalSnippet(ctx context.Context, client *gitlabclient.Client, id int64) error {
+	_, err := client.GL().Snippets.DeleteSnippet(id, gl.WithContext(ctx))
+	if err != nil && !IsStatus(err, http.StatusNotFound) {
+		return fmt.Errorf("deleting snippet %d: %w", id, err)
+	}
+	return nil
 }

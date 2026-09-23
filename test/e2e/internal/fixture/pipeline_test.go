@@ -1,7 +1,7 @@
 //go:build e2e
 
-// pipeline_test.go drives the pipeline wait and the runner lookup against
-// the stub.
+// pipeline_test.go drives the pipeline builders, the pipeline and job waits
+// and the runner lookup against the stub.
 
 package fixture
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -233,6 +234,183 @@ func TestFindPipelineJob_Answers(t *testing.T) {
 				t.Errorf("findPipelineJob() state = %q, want it to mention %q", state, tc.wantState)
 			}
 		})
+	}
+}
+
+// TestCreatePipeline_Answers_ReadsThePipelineAsCreated checks the creator
+// asks for a pipeline on the ref it was given and hands it back in the status
+// GitLab created it in, without waiting; a refusal comes back as it came.
+func TestCreatePipeline_Answers_ReadsThePipelineAsCreated(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline",
+		stubCreated(map[string]any{"id": 77, "ref": "main", "sha": "abc", "status": "created"}),
+		stubRefusal(http.StatusBadRequest, "Pipeline filtered out by workflow rules."))
+
+	got, err := createPipeline(t.Context(), client, 2, "main")
+	if err != nil {
+		t.Fatalf("createPipeline() error = %v, want nil", err)
+	}
+	if want := (Pipeline{ID: 77, Ref: "main", SHA: "abc", Status: "created"}); got != want {
+		t.Errorf("createPipeline() = %+v, want %+v", got, want)
+	}
+	if sent := stub.recordedRequests()[0].Body["ref"]; sent != "main" {
+		t.Errorf("createPipeline() sent ref %v, want main", sent)
+	}
+
+	got, err = createPipeline(t.Context(), client, 2, "main")
+	if !IsStatus(err, http.StatusBadRequest) || got != (Pipeline{}) {
+		t.Errorf("createPipeline() on a refusal = %+v, %v; want nothing and GitLab's 400", got, err)
+	}
+}
+
+// TestCancelPipeline_Answers_NamesThePipelineItCouldNotCancel checks the
+// cancel reaches the pipeline's cancel endpoint, and that a refusal names the
+// pipeline and keeps GitLab's status.
+func TestCancelPipeline_Answers_NamesThePipelineItCouldNotCancel(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/pipelines/77/cancel",
+		stubOK(map[string]any{"id": 77, "status": "canceling"}),
+		stubRefusal(http.StatusForbidden, "403 Forbidden"))
+
+	if err := cancelPipeline(t.Context(), client, 2, 77); err != nil {
+		t.Fatalf("cancelPipeline() error = %v, want nil", err)
+	}
+	err := cancelPipeline(t.Context(), client, 2, 77)
+	if !IsStatus(err, http.StatusForbidden) || !strings.Contains(err.Error(), "canceling pipeline 77 of project 2") {
+		t.Errorf("cancelPipeline() on a refusal = %v, want GitLab's 403 naming the pipeline", err)
+	}
+}
+
+// TestAwaitPipelineJob_Answers_WaitsForTheJobItWants covers the three endings
+// of the job wait: the job appears after a listing that did not hold it yet,
+// the budget runs out, and GitLab refuses the listing, which ends the wait at
+// once rather than at the budget.
+func TestAwaitPipelineJob_Answers_WaitsForTheJobItWants(t *testing.T) {
+	manual := func(job *gl.Job) bool { return job.Name == ManualJobName }
+	notYet := stubOK([]map[string]any{{"id": 10, "name": "fast-pass", "status": "running"}})
+	cases := []struct {
+		name    string
+		answers []scriptedAnswer
+		wait    time.Duration
+		want    int64
+		wantErr error
+		refused bool
+	}{
+		{
+			name:    "appears on the second listing",
+			answers: []scriptedAnswer{notYet, stubOK([]map[string]any{{"id": 11, "name": ManualJobName, "status": "manual"}})},
+			wait:    30 * time.Second, want: 11,
+		},
+		{name: "never appears", answers: []scriptedAnswer{notYet}, wait: 100 * time.Millisecond, wantErr: harness.ErrPollTimeout},
+		{name: "listing refused", answers: []scriptedAnswer{stubRefusal(http.StatusForbidden, "403 Forbidden")}, wait: 30 * time.Second, refused: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.answers(http.MethodGet, "/api/v4/projects/2/pipelines/5/jobs", tc.answers...)
+
+			started := time.Now()
+			got, err := awaitPipelineJob(t.Context(), client, 2, 5, tc.wait, manual)
+			if got != tc.want {
+				t.Errorf("awaitPipelineJob() = %d, want %d", got, tc.want)
+			}
+			switch {
+			case tc.refused:
+				if !IsStatus(err, http.StatusForbidden) || time.Since(started) > 10*time.Second {
+					t.Errorf("awaitPipelineJob() on a refused listing = %v after %s, want GitLab's 403 at once", err, time.Since(started))
+				}
+			case tc.wantErr != nil:
+				if !errors.Is(err, tc.wantErr) {
+					t.Errorf("awaitPipelineJob() error = %v, want %v", err, tc.wantErr)
+				}
+			case err != nil:
+				t.Errorf("awaitPipelineJob() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+// oneRunner is the instance runner listing of a run that has one, which is
+// what the pipeline builder asks before it creates anything.
+var oneRunner = stubOK([]map[string]any{{"id": 1, "description": DockerRunnerDescription}})
+
+// TestNewPipeline_Detached_CreatesOnTheRefAndWaitsForItToFinish checks the
+// pipeline builder whole on a run with a runner: the pipeline asked for on
+// the ref it was given, and handed back once it reached a terminal status,
+// carrying that status rather than the one it was created in.
+func TestNewPipeline_Detached_CreatesOnTheRefAndWaitsForItToFinish(t *testing.T) {
+	shortPipelinePolls(t)
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodGet, "/api/v4/runners", oneRunner)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline", stubCreated(map[string]any{"id": 77, "ref": "trunk", "sha": "abc", "status": "created"}))
+	stub.configure(func() { stub.pipelineStatuses = []string{"running", "success"} })
+
+	got := NewPipeline(e, Project{ID: 2}, "trunk")
+
+	if want := (Pipeline{ID: 77, Ref: "trunk", SHA: "abc", Status: "success"}); got != want {
+		t.Errorf("NewPipeline() = %+v, want %+v", got, want)
+	}
+	if sent := requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/pipeline").Body["ref"]; sent != "trunk" {
+		t.Errorf("NewPipeline() asked for a pipeline on %v, want trunk", sent)
+	}
+}
+
+// TestNewPipeline_NoRunner_SkipsBeforeCreatingAnything checks the pipeline
+// builder on a run without a runner: its test is skipped, and no pipeline is
+// asked for, since nothing would ever run one.
+func TestNewPipeline_NoRunner_SkipsBeforeCreatingAnything(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodGet, "/api/v4/runners", stubOK([]map[string]any{}))
+	var skipped *testing.T
+	returned := false
+
+	t.Run("no runner", func(t *testing.T) {
+		skipped = t
+		NewPipeline(harness.NewDetached(t, client), Project{ID: 2}, "trunk")
+		returned = true
+	})
+
+	if !skipped.Skipped() || returned {
+		t.Errorf("the test was skipped = %t and the builder returned = %t, want it skipped before returning", skipped.Skipped(), returned)
+	}
+	if sent := sentPaths(stub); !slices.Equal(sent, []string{"GET /api/v4/runners"}) {
+		t.Errorf("the builder asked for %v, want the runner listing and nothing after it", sent)
+	}
+}
+
+// TestNewPipelineNoWait_Detached_HandsItBackAsCreated checks the builder that
+// does not wait: the pipeline is asked for on the ref it was given and handed
+// back in the status GitLab created it in, without asking whether a runner is
+// there or how the pipeline went.
+func TestNewPipelineNoWait_Detached_HandsItBackAsCreated(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline", stubCreated(map[string]any{"id": 78, "ref": "trunk", "sha": "abc", "status": "created"}))
+
+	got := NewPipelineNoWait(e, Project{ID: 2}, "trunk")
+
+	if want := (Pipeline{ID: 78, Ref: "trunk", SHA: "abc", Status: "created"}); got != want {
+		t.Errorf("NewPipelineNoWait() = %+v, want %+v", got, want)
+	}
+	if sent := sentPaths(stub); !slices.Equal(sent, []string{"POST /api/v4/projects/2/pipeline"}) {
+		t.Errorf("the builder asked for %v, want the pipeline and nothing else", sent)
+	}
+}
+
+// TestPipelineJobID_Detached_FindsTheJobEachCallerWants checks the two job
+// lookups whole: the first job of the listing, and the manual one wherever it
+// sits in it.
+func TestPipelineJobID_Detached_FindsTheJobEachCallerWants(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodGet, "/api/v4/projects/2/pipelines/77/jobs", stubOK([]map[string]any{
+		{"id": 87, "name": "build", "status": "pending"},
+		{"id": 88, "name": ManualJobName, "status": "manual"},
+	}))
+
+	if got := FirstPipelineJobID(e, Project{ID: 2}, 77); got != 87 {
+		t.Errorf("FirstPipelineJobID() = %d, want the first job, 87", got)
+	}
+	if got := ManualPipelineJobID(e, Project{ID: 2}, 77); got != 88 {
+		t.Errorf("ManualPipelineJobID() = %d, want the manual job, 88", got)
 	}
 }
 
