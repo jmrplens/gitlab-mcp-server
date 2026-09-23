@@ -14,6 +14,7 @@ package tools
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -78,23 +79,61 @@ func FilterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 	return filtered, withheld, nil
 }
 
-// ExcludeFromCatalog removes the groups and actions an operator excluded, and
-// reports how many actions that was.
+// ExcludeFromCatalog removes the groups and actions an operator excluded,
+// reports how many actions that was, and warns about the entries that named
+// nothing.
 //
 // The count is the point. Removal already worked on the dynamic and meta
 // surfaces, but the only line an operator saw came from the registered-tool
 // filter, which counts registered tool names: on the dynamic surface there are
 // two of them and neither is ever an exclusion target, so a working exclusion
 // logged "excluded=0" and was indistinguishable from one that matched nothing.
+//
+// The warning is raised here because every surface's catalog passes through
+// this function once per configuration: [FilterActionCatalog] for the dynamic
+// and meta surfaces, the individual assembler directly. An entry this catalog
+// does not match may still name a standalone utility, which no surface keeps
+// in this catalog, so what is left is put to [ExcludedStandaloneTools] before
+// anything is reported. The warning used to be computed against this catalog
+// alone. It named every standalone entry, the working ones among them, and
+// added a note excusing them all as filtered where they are added, which was
+// false of the canonical ID on every surface, so a reader could not tell a
+// dead entry from a live one.
+//
+// One entry is still reported although it removes something: a name of the
+// dynamic surface's own two tools, gitlab_find_action and
+// gitlab_execute_action, which the pass over registered tools removes by name
+// there. This function knows no surface, and on the other two those names do
+// name nothing.
+//
+// It stays a warning rather than a refusal: one configuration is routinely
+// reused across Free, Premium and Ultimate instances, and a lower tier's
+// catalog legitimately lacks names the same file carries.
 func ExcludeFromCatalog(catalog *actioncatalog.Catalog, excludeTools []string) *actioncatalog.Catalog {
 	if len(excludeTools) == 0 {
 		return catalog
 	}
-	filtered := catalog.FilterExcludedTools(excludeTools)
+	filtered, unmatched := catalog.FilterExcludedToolNames(excludeTools)
+	warnExclusionsNamingNothing(unmatched)
 	if removed := catalog.CountActions() - filtered.CountActions(); removed > 0 {
 		slog.Info("excluded catalog actions by configuration", "excluded", removed, "patterns", excludeTools)
 	}
 	return filtered
+}
+
+// warnExclusionsNamingNothing logs, in the operator's order, the exclusion
+// entries the catalog did not match that no standalone utility answers
+// either, and logs nothing when there are none.
+func warnExclusionsNamingNothing(unmatched []string) {
+	if len(unmatched) == 0 {
+		return
+	}
+	_, namedNothing := ExcludedStandaloneTools(unmatched)
+	if len(namedNothing) == 0 {
+		return
+	}
+	slog.Warn("exclude-tools entries matched no group name, tool name or action ID",
+		"entries", strings.Join(namedNothing, ", "))
 }
 
 // RemovedActionKeys lists every canonical action ID, and every alias resolving

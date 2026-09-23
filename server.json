@@ -123,7 +123,7 @@
         },
         {
           "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
           "isRequired": false,
           "placeholder": "gitlab_admin,gitlab_runner"
         },
@@ -268,7 +268,7 @@
         },
         {
           "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
           "isRequired": false,
           "placeholder": "gitlab_admin,gitlab_runner"
         },
@@ -413,7 +413,7 @@
         },
         {
           "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
           "isRequired": false,
           "placeholder": "gitlab_admin,gitlab_runner"
         },
@@ -560,7 +560,7 @@
         },
         {
           "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
           "isRequired": false,
           "placeholder": "gitlab_admin,gitlab_runner"
         },
@@ -708,7 +708,7 @@
         },
         {
           "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
           "isRequired": false,
           "placeholder": "gitlab_admin,gitlab_runner"
         },
@@ -856,7 +856,7 @@
         },
         {
           "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
           "isRequired": false,
           "placeholder": "gitlab_admin,gitlab_runner"
         },

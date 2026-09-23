@@ -249,6 +249,71 @@ func TestExcludeFromCatalog_LogsExactlyWhatItRemoved(t *testing.T) {
 	})
 }
 
+// TestExcludeFromCatalog_StandaloneEntries_AreNotReportedAsNamingNothing
+// covers the warning an operator reads about their own --exclude-tools file.
+//
+// The standalone utilities are in no surface's catalog, so an entry naming
+// one was always unmatched here, and the warning used to name it beside the
+// dead entries with a note excusing them all as filtered elsewhere. That was
+// false of the canonical ID on every surface and made every standalone entry,
+// working or not, read the same. The warning now names only what neither the
+// catalog nor a standalone utility answers, in the operator's order, and is
+// absent when that is nothing.
+//
+// Sequential: the logger it captures is process-wide.
+func TestExcludeFromCatalog_StandaloneEntries_AreNotReportedAsNamingNothing(t *testing.T) {
+	catalog := excludeCountingTestCatalog(t)
+
+	cases := []struct {
+		name    string
+		exclude []string
+		// wantEntries is the entries value the one warning carries, or ""
+		// when no warning is due.
+		wantEntries string
+	}{
+		{
+			name:        "every standalone spelling beside one dead entry",
+			exclude:     []string{"interactive.issue_create", "gitlab_interactive", "gitlab_discover_project", "gitlab_zzz_absent"},
+			wantEntries: "gitlab_zzz_absent",
+		},
+		{
+			name:    "only standalone entries",
+			exclude: []string{"interactive.issue_create", "gitlab_interactive", "discover_project.resolve"},
+		},
+		{
+			name:    "a catalog entry and a standalone one",
+			exclude: []string{"gitlab_zzz_exclude_first", "interactive.mr_create"},
+		},
+		{
+			name:        "dead entries keep the operator's order around a live one",
+			exclude:     []string{"gitlab_zzz_absent", "gitlab_zzz_exclude_first", "other.absent"},
+			wantEntries: "gitlab_zzz_absent, other.absent",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			output := captureSlogOutput(t)
+
+			ExcludeFromCatalog(catalog, tc.exclude)
+
+			logged := output.String()
+			warnings := strings.Count(logged, `"level":"WARN"`)
+			if tc.wantEntries == "" {
+				if warnings != 0 {
+					t.Errorf("startup log = %s, want no warning when every entry named something", logged)
+				}
+				return
+			}
+			if warnings != 1 || !strings.Contains(logged, `"entries":"`+tc.wantEntries+`"`) {
+				t.Errorf("startup log = %s, want one warning naming exactly %q", logged, tc.wantEntries)
+			}
+			if strings.Contains(logged, `"note"`) {
+				t.Errorf("startup log = %s, want no note excusing the standalone entries", logged)
+			}
+		})
+	}
+}
+
 // excludeCountingTestCatalog returns a catalog of two one-action groups, so a
 // count of what an exclusion removed differs from the count of what it kept and
 // from their sum.

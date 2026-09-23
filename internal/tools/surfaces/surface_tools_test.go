@@ -467,9 +467,15 @@ func TestAddToolCatalog_ReadOnlyOnly_DropsTheMutatingSurfaces(t *testing.T) {
 }
 
 // TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed asserts that
-// --exclude-tools is honored at both grains the operator can name: the group
-// tool name removes the whole dispatcher, an individual tool name removes only
-// that action, and a name that matches nothing removes nothing.
+// --exclude-tools is honored by every spelling the operator can write: the
+// group tool name removes the whole dispatcher, and an individual tool name
+// or a canonical action ID removes only that action, while a name that
+// matches nothing removes nothing.
+//
+// The canonical ID cases are the ones issue 911 added. This projection
+// matched the tool and the group name only, so interactive.issue_create, the
+// one spelling that means the same thing on every surface, left the flow
+// executable here.
 func TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed(t *testing.T) {
 	everyID := []string{
 		"discover_project.resolve",
@@ -498,6 +504,31 @@ func TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed(t *testing.
 				"interactive.project_create",
 				"interactive.release_create",
 			},
+		},
+		{
+			name:    "canonical action ID removes one action",
+			exclude: []string{"interactive.issue_create"},
+			wantIDs: []string{
+				"discover_project.resolve",
+				"interactive.mr_create",
+				"interactive.project_create",
+				"interactive.release_create",
+			},
+		},
+		{
+			name:    "the discovery action ID removes discovery",
+			exclude: []string{"discover_project.resolve"},
+			wantIDs: []string{
+				"interactive.issue_create",
+				"interactive.mr_create",
+				"interactive.project_create",
+				"interactive.release_create",
+			},
+		},
+		{
+			name:    "a prefix of a tool name removes nothing",
+			exclude: []string{"gitlab_interactive_issue"},
+			wantIDs: everyID,
 		},
 		{
 			name:    "surrounding whitespace still matches",
@@ -529,6 +560,202 @@ func TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed(t *testing.
 			}
 			if got := catalogActionIDs(catalog); !slices.Equal(got, tc.wantIDs) {
 				t.Fatalf("catalog actions = %v, want %v", got, tc.wantIDs)
+			}
+		})
+	}
+}
+
+// TestExcludedToolSpecs_ReportsWhatItRemovedAndWhatNamedNothing asserts the
+// resolver every surface asks about the standalone utilities: the names it
+// returns are the ones the specs register under, whichever spelling reached
+// them, and the entries it returns are the ones that reached none, in the
+// order the operator wrote them.
+//
+// The unmatched half is what the startup warning is built from, so an entry
+// reported there that did remove something accuses a working configuration,
+// and one left out hides a dead entry.
+func TestExcludedToolSpecs_ReportsWhatItRemovedAndWhatNamedNothing(t *testing.T) {
+	flows := []string{
+		"gitlab_interactive_issue_create",
+		"gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create",
+		"gitlab_interactive_release_create",
+	}
+
+	testCases := []struct {
+		name          string
+		exclude       []string
+		wantExcluded  []string
+		wantUnmatched []string
+	}{
+		{
+			name:          "every spelling at once, beside one that names nothing",
+			exclude:       []string{"interactive.issue_create", "gitlab_interactive_mr_create", "gitlab_interactive", "gitlab_nope"},
+			wantExcluded:  flows,
+			wantUnmatched: []string{"gitlab_nope"},
+		},
+		{
+			name:         "a canonical action ID reaches the tool it is registered as",
+			exclude:      []string{"interactive.issue_create"},
+			wantExcluded: []string{"gitlab_interactive_issue_create"},
+		},
+		{
+			name:         "the discovery ID reaches the discovery tool",
+			exclude:      []string{"discover_project.resolve"},
+			wantExcluded: []string{"gitlab_discover_project"},
+		},
+		{
+			name:          "entries naming nothing come back in the operator's order",
+			exclude:       []string{"gitlab_zzz", "interactive.mr_create", "gitlab_aaa"},
+			wantExcluded:  []string{"gitlab_interactive_mr_create"},
+			wantUnmatched: []string{"gitlab_zzz", "gitlab_aaa"},
+		},
+		{
+			name:          "a prefix of a tool name reaches nothing",
+			exclude:       []string{"gitlab_interactive_issue"},
+			wantUnmatched: []string{"gitlab_interactive_issue"},
+		},
+		{
+			name:    "blank entries reach nothing and are not reported",
+			exclude: []string{"", "   "},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			excluded, unmatched, err := ExcludedToolSpecs(StandaloneToolSpecs(newProjectionClient(t)), tc.exclude)
+			if err != nil {
+				t.Fatalf("ExcludedToolSpecs() error = %v", err)
+			}
+			if got := slices.Sorted(maps.Keys(excluded)); !slices.Equal(got, tc.wantExcluded) {
+				t.Errorf("excluded = %v, want %v", got, tc.wantExcluded)
+			}
+			if !slices.Equal(unmatched, tc.wantUnmatched) {
+				t.Errorf("unmatched = %v, want %v", unmatched, tc.wantUnmatched)
+			}
+		})
+	}
+}
+
+// TestExcludedToolSpecs_NoEntries_BuildsNothing asserts that an empty
+// exclusion list is answered without assembling the specs, and that a list
+// with entries is answered by assembling them, so a spec that cannot be
+// assembled is reported rather than resolved against.
+//
+// [AddToolCatalog] asks on every call, and most calls, --tool-search and the
+// audit commands among them, exclude nothing. Assembling a catalog there only
+// to throw it away is work nobody asked for, and the specs given here would
+// make that work fail, which is how the early answer is observed.
+func TestExcludedToolSpecs_NoEntries_BuildsNothing(t *testing.T) {
+	broken := []actioncatalog.SurfaceToolSpec{
+		testSurfaceSpec("gitlab_test", "test", "gitlab_test_first", "surface"),
+		testSurfaceSpec("gitlab_test", "test", "gitlab_test_second", "surface"),
+	}
+
+	excluded, unmatched, err := ExcludedToolSpecs(broken, nil)
+	if err != nil || excluded != nil || unmatched != nil {
+		t.Errorf("ExcludedToolSpecs(broken, nil) = %v, %v, %v; want nothing built and nothing reported", excluded, unmatched, err)
+	}
+
+	excluded, unmatched, err = ExcludedToolSpecs(broken, []string{"gitlab_test_first"})
+	if err == nil || !strings.Contains(err.Error(), "build surface tool group gitlab_test") {
+		t.Errorf("ExcludedToolSpecs(broken, entries) error = %v, want the group that would not build named", err)
+	}
+	if excluded != nil || unmatched != nil {
+		t.Errorf("ExcludedToolSpecs(broken, entries) = %v, %v beside the error; want nothing resolved", excluded, unmatched)
+	}
+}
+
+// TestAddToolCatalog_ExclusionOverSpecsThatDoNotBuild_SaysItWasTheExclusion
+// asserts that a projection asked to exclude something from specs that cannot
+// be assembled fails naming the exclusion as the step that failed, and hands
+// back no catalog.
+//
+// Without the exclusion the same specs fail later, at the projection itself;
+// the prefix is what tells a reader of the startup error which of the two
+// assemblies it was.
+func TestAddToolCatalog_ExclusionOverSpecsThatDoNotBuild_SaysItWasTheExclusion(t *testing.T) {
+	specs := []actioncatalog.SurfaceToolSpec{
+		testSurfaceSpec("gitlab_test", "test", "gitlab_test_first", "surface"),
+		testSurfaceSpec("gitlab_test", "test", "gitlab_test_second", "surface"),
+	}
+
+	catalog, err := AddToolCatalog(nil, specs, CatalogOptions{ExcludeToolNames: []string{"gitlab_test_first"}})
+	if err == nil || !strings.HasPrefix(err.Error(), "resolve excluded surface tools: build surface tool group gitlab_test") {
+		t.Errorf("AddToolCatalog() error = %v, want the exclusion named as the step that failed", err)
+	}
+	if catalog != nil {
+		t.Errorf("AddToolCatalog() catalog = %v, want nil beside the error", catalog)
+	}
+}
+
+// TestAddToolCatalog_PaddedSpecName_IsExcludedByTheNameItRegistersUnder
+// asserts that a spec declaring its name with stray spaces is still removed
+// by the name it registers under, which registration trims.
+//
+// The resolver answers with registered names, and the projection compares
+// them with the specs' declared ones; comparing untrimmed, such a spec would
+// be named excluded by the resolver and served anyway.
+func TestAddToolCatalog_PaddedSpecName_IsExcludedByTheNameItRegistersUnder(t *testing.T) {
+	specs := []actioncatalog.SurfaceToolSpec{
+		testSurfaceSpec("gitlab_test", "test", "  gitlab_test_padded  ", "padded"),
+		testSurfaceSpec("gitlab_test", "test", "gitlab_test_kept", "kept"),
+	}
+
+	catalog, err := AddToolCatalog(nil, specs, CatalogOptions{ExcludeToolNames: []string{"gitlab_test_padded"}})
+	if err != nil {
+		t.Fatalf("AddToolCatalog() error = %v", err)
+	}
+	if got := catalogActionIDs(catalog); !slices.Equal(got, []string{"test.kept"}) {
+		t.Errorf("catalog actions = %v, want only test.kept", got)
+	}
+}
+
+// TestAddToolCatalog_StandaloneExclusion_LogsWhatItRemoved asserts the one
+// line an operator gets about a standalone exclusion on the dynamic surface,
+// which is where this projection runs.
+//
+// The pass over registered tools sees the two dynamic tools there, never a
+// standalone utility, so its count reads zero whatever the exclusion did; a
+// working exclusion was indistinguishable from a dead one until this line
+// existed. The count is of what the exclusion names, judged before read-only
+// mode removes anything, and nothing is logged when it names nothing.
+//
+// Sequential: the logger it captures is process-wide.
+func TestAddToolCatalog_StandaloneExclusion_LogsWhatItRemoved(t *testing.T) {
+	testCases := []struct {
+		name     string
+		opts     CatalogOptions
+		wantLine string
+	}{
+		{name: "the group name counts every flow", opts: CatalogOptions{ExcludeToolNames: []string{"gitlab_interactive"}}, wantLine: `"excluded":4`},
+		{name: "one canonical ID counts one", opts: CatalogOptions{ExcludeToolNames: []string{"discover_project.resolve"}}, wantLine: `"excluded":1`},
+		{
+			name:     "read-only mode does not hide what the exclusion named",
+			opts:     CatalogOptions{ReadOnlyOnly: true, ExcludeToolNames: []string{"gitlab_interactive"}},
+			wantLine: `"excluded":4`,
+		},
+		{name: "an entry naming nothing logs nothing", opts: CatalogOptions{ExcludeToolNames: []string{"gitlab_nope"}}},
+		{name: "no exclusion logs nothing", opts: CatalogOptions{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := testutil.CaptureSlog(t)
+
+			if _, err := AddToolCatalog(nil, StandaloneToolSpecs(newProjectionClient(t)), tc.opts); err != nil {
+				t.Fatalf("AddToolCatalog() error = %v", err)
+			}
+
+			output := logged.String()
+			if tc.wantLine == "" {
+				if strings.Contains(output, "excluded standalone actions by configuration") {
+					t.Errorf("log = %q, want no exclusion line when nothing was excluded", output)
+				}
+				return
+			}
+			if !strings.Contains(output, "excluded standalone actions by configuration") || !strings.Contains(output, tc.wantLine) {
+				t.Errorf("log = %q, want the exclusion line with %s", output, tc.wantLine)
 			}
 		})
 	}

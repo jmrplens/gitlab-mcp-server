@@ -64,24 +64,26 @@ func (c *Catalog) FilterExcludedToolNames(excludeTools []string) (filtered *Cata
 // FilterExcludedTools returns a cloned catalog without the tools and actions
 // named by excludeTools.
 //
-// Entries that name nothing on this surface are logged at WARN rather than
+// Entries that name nothing in this catalog are logged at WARN rather than
 // refused: one configuration is routinely reused across Free, Premium and
 // Ultimate instances, and a lower-tier catalog legitimately lacks tools the
-// same file names. The warning is deliberately operator-facing only — the
+// same file names. The warning is deliberately operator-facing only: the
 // excluded actions must stay out of the client-facing withheld list, or the
 // dynamic registry would name back the very actions the operator removed.
 //
-// Standalone utility tools (gitlab_discover_project, gitlab_interactive_*) are
-// not in this catalog; they are filtered where they are added, so the warning
-// names them too. Use [Catalog.FilterExcludedToolNames] when the caller can
-// account for those before reporting.
+// It is not how the server reports a deployment's exclusions. The standalone
+// utilities (gitlab_discover_project, the gitlab_interactive_* flows) are in
+// none of the catalogs the surfaces filter, yet an exclusion removes them on
+// every surface, so a warning computed here names an entry that works. The
+// server calls [Catalog.FilterExcludedToolNames] instead, from
+// tools.ExcludeFromCatalog, and reports only what neither the catalog nor a
+// standalone utility answers.
 func (c *Catalog) FilterExcludedTools(excludeTools []string) *Catalog {
 	filtered, unmatched := c.FilterExcludedToolNames(excludeTools)
 	if len(unmatched) > 0 {
 		slog.Warn(
 			"exclude-tools entries matched no catalog group, individual tool name or action ID",
 			"entries", strings.Join(unmatched, ", "),
-			"note", "standalone utility tools such as gitlab_discover_project are filtered where they are added, not here",
 		)
 	}
 	return filtered

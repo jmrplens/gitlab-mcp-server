@@ -149,13 +149,15 @@ func TestApply_DefaultMode_TouchesNothing(t *testing.T) {
 	}
 }
 
-// TestApply_ExcludeTools_RemovesRegisteredNamesOnly verifies the first step,
-// the one --exclude-tools reaches a standalone tool by: the names listed are
-// removed when registered, a name nothing registered is ignored, and the
-// startup line counts what this pass removed rather than what the catalog
-// did, since on a surface whose exclusions were applied to the catalog the
-// honest count here is zero.
-func TestApply_ExcludeTools_RemovesRegisteredNamesOnly(t *testing.T) {
+// TestApply_ExcludeTools_RemovesTheRegisteredNamesItLists verifies the first
+// step's exact-name rule, the one that reaches a tool registered outside the
+// catalog that is no standalone utility: a name listed is removed when
+// registered, a name nothing registered is ignored, and the startup line
+// counts what this pass removed rather than what the catalog did, since on a
+// surface whose exclusions were applied to the catalog the honest count here
+// is zero. The standalone utilities are also reached by the catalog's rule,
+// which the two tests after this one hold.
+func TestApply_ExcludeTools_RemovesTheRegisteredNamesItLists(t *testing.T) {
 	logged := testutil.CaptureSlog(t)
 	server := newServer()
 	for _, name := range []string{"gitlab_issue", "gitlab_runner", "gitlab_project"} {
@@ -169,6 +171,100 @@ func TestApply_ExcludeTools_RemovesRegisteredNamesOnly(t *testing.T) {
 	}
 	if log := logged.String(); !strings.Contains(log, `"excluded_registered_tools":1`) || !strings.Contains(log, "gitlab_absent") {
 		t.Errorf("log = %q, want the one removal counted and the patterns named", log)
+	}
+}
+
+// standaloneServer returns a server holding the standalone utilities as the
+// meta and individual surfaces register them, beside one catalog tool, so a
+// test can tell what an exclusion reached from what it left alone.
+func standaloneServer(t *testing.T) *mcp.Server {
+	t.Helper()
+	server := newServer()
+	gitlabtools.RegisterMetaStandaloneTools(server, testutil.NewTestClient(t, http.NotFoundHandler()))
+	addTool(server, "gitlab_issue", false)
+	return server
+}
+
+// TestApply_ExcludeTools_ReachesAStandaloneToolByEverySpelling verifies the
+// case issue 911 is about, against the standalone tools the meta and
+// individual surfaces really register: every spelling an operator may write
+// for a standalone utility removes it from tools/list.
+//
+// Those two surfaces register the utilities as tools of their own, outside
+// the catalog, so this pass is the only thing that can remove them, and it
+// used to match registered names alone. The canonical ID and the group name
+// therefore removed nothing here, while the documentation offered all three
+// spellings and the canonical ID is the one that means the same thing on
+// every surface.
+func TestApply_ExcludeTools_ReachesAStandaloneToolByEverySpelling(t *testing.T) {
+	everyTool := []string{
+		"gitlab_discover_project",
+		"gitlab_interactive_issue_create",
+		"gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create",
+		"gitlab_interactive_release_create",
+		"gitlab_issue",
+	}
+	without := func(removed ...string) []string {
+		return slices.DeleteFunc(slices.Clone(everyTool), func(name string) bool { return slices.Contains(removed, name) })
+	}
+
+	cases := []struct {
+		name    string
+		exclude []string
+		want    []string
+		// wantRemoved is the count the startup line must carry.
+		wantRemoved string
+	}{
+		{name: "the tool name", exclude: []string{"gitlab_interactive_issue_create"}, want: without("gitlab_interactive_issue_create"), wantRemoved: `"excluded_registered_tools":1`},
+		{name: "the canonical action ID", exclude: []string{"interactive.issue_create"}, want: without("gitlab_interactive_issue_create"), wantRemoved: `"excluded_registered_tools":1`},
+		{name: "the group name", exclude: []string{"gitlab_interactive"}, want: without(interactiveTools...), wantRemoved: `"excluded_registered_tools":4`},
+		{name: "discovery's canonical ID", exclude: []string{"discover_project.resolve"}, want: without("gitlab_discover_project"), wantRemoved: `"excluded_registered_tools":1`},
+		{
+			name:        "a spelling of each kind at once",
+			exclude:     []string{"interactive.mr_create", "gitlab_discover_project", "gitlab_issue"},
+			want:        without("gitlab_interactive_mr_create", "gitlab_discover_project", "gitlab_issue"),
+			wantRemoved: `"excluded_registered_tools":3`,
+		},
+	}
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					logged := testutil.CaptureSlog(t)
+					server := standaloneServer(t)
+
+					Apply(t.Context(), server, &config.ServerConfig{ExcludeTools: tc.exclude}, surface, nil)
+
+					if got := listNames(t, server); !slices.Equal(got, tc.want) {
+						t.Errorf("tools/list = %v, want %v", got, tc.want)
+					}
+					if log := logged.String(); !strings.Contains(log, tc.wantRemoved) {
+						t.Errorf("log = %q, want %s", log, tc.wantRemoved)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestApply_ExcludeTools_GroupNameResolvesAndIsNotAPrefix verifies that the
+// group name removes the guided flows because the catalog's rule resolves it
+// to them, not because they share its prefix: a registered tool whose name
+// starts the same way and is no guided flow is left alone.
+//
+// Removing the flows by prefix would pass every other test here and remove
+// more than the operator named, which a model reading tools/list cannot tell
+// from a tool that never existed.
+func TestApply_ExcludeTools_GroupNameResolvesAndIsNotAPrefix(t *testing.T) {
+	server := standaloneServer(t)
+	addTool(server, "gitlab_interactive_custom", false)
+
+	Apply(t.Context(), server, &config.ServerConfig{ExcludeTools: []string{"gitlab_interactive"}}, config.ToolSurfaceMeta, nil)
+
+	want := []string{"gitlab_discover_project", "gitlab_interactive_custom", "gitlab_issue"}
+	if got := listNames(t, server); !slices.Equal(got, want) {
+		t.Errorf("tools/list = %v, want %v: the four flows gone and the look-alike kept", got, want)
 	}
 }
 
