@@ -575,9 +575,10 @@ func TestRun_ServedPatternsOnly_PrintsNoAssertionSection(t *testing.T) {
 }
 
 // TestRun_SuitePatternsOnly_LoadsNoServedTree holds the other narrowing: a run
-// naming a suite package reads that package and no served source, so its
-// published-ID summary judges nothing and its declaration tables stay
-// unjudged, while its suite section is printed and counted.
+// naming a suite package reads that package and no served source, so it says
+// the published-ID and hint rules were not run rather than printing their
+// counts over nothing, which read as a clean tree, while its suite section is
+// printed and counted, and the work list says the served tree was not judged.
 func TestRun_SuitePatternsOnly_LoadsNoServedTree(t *testing.T) {
 	overlay := suiteOverlay(t, map[string]string{"planted_test.go": `//go:build e2e
 
@@ -590,14 +591,13 @@ func TestOne(t *testing.T) {
 }
 `})
 	var stdout, stderr bytes.Buffer
+	path := filepath.Join(t.TempDir(), "action-ids.json")
 
-	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{suiteFixturePattern}, overlay: overlay, verbose: true}, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{suiteFixturePattern}, overlay: overlay, jsonPath: path, verbose: true}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	for _, want := range []string{
-		"  judged 0 published ID(s) against",
-		"the declaration tables were not judged",
-		"  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read;",
+		toolName + ": no served source loaded: the published-ID and hint rules were not run\n",
 		"  e2e assertions: 0 finding(s) in 0 package(s) over 1 assertion(s) read;",
 		"    assertion calls by helper: assertMentions 1\n",
 	} {
@@ -606,6 +606,20 @@ func TestOne(t *testing.T) {
 				t.Errorf("stdout = %q, want %q", stdout.String(), want)
 			}
 		})
+	}
+	for _, unwanted := range []string{"published ID(s)", "error hints:", "the declaration tables were not judged"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(stdout.String(), unwanted) {
+				t.Errorf("stdout = %q, want nothing about a served tree the run did not load", stdout.String())
+			}
+		})
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the work list: %v", err)
+	}
+	if !strings.Contains(string(data), `"served_judged": false`) {
+		t.Errorf("work list = %s, want served_judged false", data)
 	}
 }
 

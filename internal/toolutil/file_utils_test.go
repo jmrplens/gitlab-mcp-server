@@ -1206,13 +1206,13 @@ func TestCanonicalDownloadOutputPath_RejectsNonRegularDestination(t *testing.T) 
 	}
 }
 
-// TestCanonicalDownloadOutputPath_RefusalsBeforeContainment verifies the three
+// TestCanonicalDownloadOutputPath_UnusablePath_RefusedBeforeContainment verifies the three
 // refusals a download destination meets before the allow-list is consulted: an
 // empty path, a path running through a regular file as though it were a
 // directory, which the ancestor walk cannot resolve and must not take for a
 // path that merely does not exist yet, and an existing directory, which a
 // download would have to replace to write.
-func TestCanonicalDownloadOutputPath_RefusalsBeforeContainment(t *testing.T) {
+func TestCanonicalDownloadOutputPath_UnusablePath_RefusedBeforeContainment(t *testing.T) {
 	root := t.TempDir()
 	confineLocalPathRoots(t, root)
 	file := filepath.Join(root, "notes.txt")
@@ -1299,11 +1299,11 @@ func TestJoinBelowDirectory_RefusesAnAncestorThatIsNotADirectory(t *testing.T) {
 	}
 }
 
-// TestCanonicalLocalDirPath_RefusalsBeforeResolution verifies the two
+// TestCanonicalLocalDirPath_EmptyOrOverHTTP_RefusedBeforeResolution verifies the two
 // refusals a directory path meets before anything on disk is looked at: an
 // empty path, and any path at all when the server is reached over HTTP, where
 // it would name a directory on the server rather than the caller's.
-func TestCanonicalLocalDirPath_RefusalsBeforeResolution(t *testing.T) {
+func TestCanonicalLocalDirPath_EmptyOrOverHTTP_RefusedBeforeResolution(t *testing.T) {
 	if _, err := CanonicalLocalDirPath(""); err == nil || err.Error() != "directory path is required" {
 		t.Errorf("CanonicalLocalDirPath(\"\") error = %v, want the required-path refusal", err)
 	}
@@ -1316,10 +1316,10 @@ func TestCanonicalLocalDirPath_RefusalsBeforeResolution(t *testing.T) {
 	}
 }
 
-// TestLocalFilesystemAccessAllowed_ReportsWhatWasSet verifies that the policy
+// TestLocalFilesystemAccessAllowed_EachSetting_ReportsWhatWasSet verifies that the policy
 // query answers with what [SetLocalFilesystemAccess] last stored, both ways,
 // since every caller-supplied path is gated on it.
-func TestLocalFilesystemAccessAllowed_ReportsWhatWasSet(t *testing.T) {
+func TestLocalFilesystemAccessAllowed_EachSetting_ReportsWhatWasSet(t *testing.T) {
 	original := LocalFilesystemAccessAllowed()
 	t.Cleanup(func() { SetLocalFilesystemAccess(original) })
 

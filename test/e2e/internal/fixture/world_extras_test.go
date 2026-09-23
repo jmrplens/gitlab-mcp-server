@@ -544,11 +544,11 @@ func TestWorldTemplates_WithoutExtras_NamesWhatIsMissing(t *testing.T) {
 	}
 }
 
-// TestWorldTemplates_TableNamesOnlyRegisteredTemplates is the drift guard on
+// TestWorldTemplates_EveryTableEntry_NamesARegisteredTemplate is the drift guard on
 // the per-template bindings: a template renamed in the server, or a variable
 // renamed in one, would otherwise leave an entry here that binds nothing and
 // the template it meant falling back to a binding for another object.
-func TestWorldTemplates_TableNamesOnlyRegisteredTemplates(t *testing.T) {
+func TestWorldTemplates_EveryTableEntry_NamesARegisteredTemplate(t *testing.T) {
 	registered := registeredTemplates(t)
 	for _, template := range slices.Sorted(maps.Keys(templateBindings)) {
 		t.Run(template, func(t *testing.T) {
@@ -908,17 +908,17 @@ func TestMakeExtra_Budget_BoundsTheCreate(t *testing.T) {
 	}
 }
 
-// TestWorldDescription_NamesTheRun pins the description the World's project
+// TestWorldDescription_RunID_NamesTheRun pins the description the World's project
 // and extras carry, which is how a reader of an instance tells the World's
 // objects from a scenario's.
-func TestWorldDescription_NamesTheRun(t *testing.T) {
+func TestWorldDescription_RunID_NamesTheRun(t *testing.T) {
 	if got, want := worldDescription("20260923t101500z"), "The shared read-only World of run 20260923t101500z"; got != want {
 		t.Errorf("worldDescription() = %q, want %q", got, want)
 	}
 }
 
-// TestIsWorldJob_PicksTheJobByName checks the predicate the job wait uses.
-func TestIsWorldJob_PicksTheJobByName(t *testing.T) {
+// TestIsWorldJob_JobsByName_PicksOnlyTheWorldJob checks the predicate the job wait uses.
+func TestIsWorldJob_JobsByName_PicksOnlyTheWorldJob(t *testing.T) {
 	cases := map[string]bool{worldJobName: true, "fast-pass": false, "": false}
 	for name, want := range cases {
 		t.Run(strconv.Quote(name), func(t *testing.T) {

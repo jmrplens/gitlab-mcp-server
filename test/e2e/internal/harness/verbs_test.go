@@ -441,9 +441,9 @@ func TestSession_Prompts_AreListedOnTheFullCapabilitySurface(t *testing.T) {
 	}
 }
 
-// TestCompletionCallTarget_JoinsReferenceAndArgument pins the spelling a
+// TestCompletionCallTarget_ReferenceAndArgument_JoinedWithASpace pins the spelling a
 // completion call's record and a session line's completion list share.
-func TestCompletionCallTarget_JoinsReferenceAndArgument(t *testing.T) {
+func TestCompletionCallTarget_ReferenceAndArgument_JoinedWithASpace(t *testing.T) {
 	if got, want := completionCallTarget("gitlab://project/{project_id}", "project_id"), "gitlab://project/{project_id} project_id"; got != want {
 		t.Errorf("completionCallTarget() = %q, want %q", got, want)
 	}
@@ -491,8 +491,8 @@ func TestSession_Subscribe_Acknowledged_HandsBackAWatchedSubscription(t *testing
 	if watching := session.conn.notifier.watching(watchedURI); watching != 1 {
 		t.Errorf("the resource has %d update watchers, want the subscription's one", watching)
 	}
-	if lines := subscribeLines(env); len(lines) != 1 || lines[0].Expectation != ExpectationOK {
-		t.Errorf("subscribe lines = %s, want one expecting success", describeSubscribeLines(lines))
+	if lines := subscribeLines(env); len(lines) != 1 || lines[0].Expectation != ExpectationOK || lines[0].Purpose != string(PurposeTest) {
+		t.Errorf("subscribe lines = %s with purposes %v, want one expecting success, made by the test", describeSubscribeLines(lines), purposesOf(lines))
 	}
 	subscription.Close()
 	if _, watched := session.conn.subscribers.recorderFor(watchedURI); watched {
@@ -737,4 +737,141 @@ func TestSession_TrySubscribe_RealBinary_AcknowledgesWhatItCanReadAndDeclinesThe
 	if len(lines) != 2 || lines[0].Outcome != e2ecalls.OutcomeOK || lines[1].Outcome != e2ecalls.OutcomeProtocolError {
 		t.Errorf("subscribe lines = %s, want the readable one ok and the other a protocol error", describeSubscribeLines(lines))
 	}
+}
+
+// readWatched answers a read of the watched resource, for a stub that serves
+// it without accepting subscriptions to it.
+func readWatched(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: watchedURI, Text: "{}"}}}, nil
+}
+
+// TestSession_TrySubscribe_NoSubscribeCapability_IsRefusedBeforeAnythingIsSent
+// checks a server that serves resources and declared no resources.subscribe
+// capability, which is what the minimal capability surface serves.
+//
+// On protocol 2026-07-28 the SDK opens the listen whatever the server
+// declared, and the server acknowledges it with an empty filter, so a verb
+// that sent it waited out the whole acknowledgement wait and then reported a
+// refusal for two causes neither of which had happened. The wait here is long
+// enough that a verb which sent anyway would come back with errNotAcknowledged
+// and fail on it. The refusal is recorded like any other.
+func TestSession_TrySubscribe_NoSubscribeCapability_IsRefusedBeforeAnythingIsSent(t *testing.T) {
+	shortAckWait(t, 2*time.Second)
+	env := newEnv(t, offlineInstance())
+	server := mcp.NewServer(&mcp.Implementation{Name: "no-subscribe-stub", Version: "1"}, nil)
+	server.AddResource(&mcp.Resource{URI: watchedURI, Name: "watched"}, readWatched)
+	session := inProcessSession(t, env, server)
+	if !subscribesByListening(session.conn.client()) {
+		t.Fatal("the in-process session did not negotiate a listening protocol, so this test would not reach the check")
+	}
+
+	subscription, err := session.TrySubscribe(watchedURI)
+
+	if !errors.Is(err, errNoSubscribeCapability) || subscription != nil {
+		t.Fatalf("TrySubscribe() = %v, %v; want no subscription and errNoSubscribeCapability", subscription, err)
+	}
+	if want := "capability surface is " + string(CapabilitiesFull); !strings.Contains(err.Error(), want) {
+		t.Errorf("TrySubscribe() error = %v, want it to name the session's capability surface (%q)", err, want)
+	}
+	if _, watched := session.conn.subscribers.recorderFor(watchedURI); watched {
+		t.Error("a subscription refused before it was sent is recorded as watched")
+	}
+	lines := subscribeLines(env)
+	if len(lines) != 1 || lines[0].Outcome != e2ecalls.OutcomeProtocolError || lines[0].Target != watchedURI {
+		t.Errorf("subscribe lines = %s, want one protocol error line for %s", describeSubscribeLines(lines), watchedURI)
+	}
+}
+
+// TestSession_TrySubscribe_RealBinaryMinimalSurface_IsRefusedForTheCapability
+// holds the check to the server it exists for: the real binary on the minimal
+// capability surface serves resources and no subscriptions, and the verb says
+// so rather than waiting for an acknowledgement that cannot name the URI.
+func TestSession_TrySubscribe_RealBinaryMinimalSurface_IsRefusedForTheCapability(t *testing.T) {
+	shortAckWait(t, 5*time.Second)
+	env := newEnv(t, instanceForStub(t, startStubGitLab(t)))
+	session := env.Session(ServerConfig{Capabilities: CapabilitiesMinimal, Private: true})
+
+	_, err := session.TrySubscribe("gitlab://project/42")
+
+	if !errors.Is(err, errNoSubscribeCapability) {
+		t.Fatalf("TrySubscribe() on the minimal surface = %v, want errNoSubscribeCapability", err)
+	}
+	if want := "capability surface is " + string(CapabilitiesMinimal); !strings.Contains(err.Error(), want) {
+		t.Errorf("TrySubscribe() error = %v, want it to name the minimal surface (%q)", err, want)
+	}
+}
+
+// TestDeclaresSubscribe_EachInitializeResult_ReadsTheResourcesCapability checks the reading of the
+// capability every shape of initialize result can carry, including the two a
+// server built with this SDK never sends, which is why the in-process tests
+// above cannot reach them.
+func TestDeclaresSubscribe_EachInitializeResult_ReadsTheResourcesCapability(t *testing.T) {
+	tests := []struct {
+		name   string
+		result *mcp.InitializeResult
+		want   bool
+	}{
+		{name: "no capabilities", result: &mcp.InitializeResult{}, want: false},
+		{name: "no resources capability", result: &mcp.InitializeResult{Capabilities: &mcp.ServerCapabilities{}}, want: false},
+		{
+			name:   "resources without subscribe",
+			result: &mcp.InitializeResult{Capabilities: &mcp.ServerCapabilities{Resources: &mcp.ResourceCapabilities{ListChanged: true}}},
+			want:   false,
+		},
+		{
+			name:   "resources with subscribe",
+			result: &mcp.InitializeResult{Capabilities: &mcp.ServerCapabilities{Resources: &mcp.ResourceCapabilities{Subscribe: true}}},
+			want:   true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := declaresSubscribe(tt.result); got != tt.want {
+				t.Errorf("declaresSubscribe() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSession_TrySubscribe_ForASweep_IsRecordedWithTheSweepsPurpose checks
+// that the purpose a caller gives reaches the record on both protocols: on
+// 2026-07-28 through the line the verb writes, and on an older one through
+// the attribution the sending middleware reads. The subscription sweep
+// subscribes to whatever the server advertises, and with the purpose fixed at
+// test every one of those subscribes was credited as an assertion.
+func TestSession_TrySubscribe_ForASweep_IsRecordedWithTheSweepsPurpose(t *testing.T) {
+	protocols := []struct {
+		name     string
+		versions []string
+	}{
+		{name: "listening", versions: nil},
+		{name: "older protocol", versions: []string{"2025-11-25"}},
+	}
+	for _, protocol := range protocols {
+		t.Run(protocol.name, func(t *testing.T) {
+			shortAckWait(t, 5*time.Second)
+			env := newEnv(t, offlineInstance())
+			session := inProcessSession(t, env, newSubscriptionStub(protocol.versions).server)
+
+			subscription, err := session.TrySubscribe(watchedURI, For(PurposeSweep))
+			if err != nil {
+				t.Fatalf("TrySubscribe() error = %v", err)
+			}
+			subscription.Close()
+
+			lines := subscribeLines(env)
+			if len(lines) != 1 || lines[0].Purpose != string(PurposeSweep) {
+				t.Errorf("subscribe lines = %s with purposes %v, want one carrying the caller's sweep", describeSubscribeLines(lines), purposesOf(lines))
+			}
+		})
+	}
+}
+
+// purposesOf lists the purpose of each line, for a failure message.
+func purposesOf(lines []*e2ecalls.Call) []string {
+	purposes := make([]string, 0, len(lines))
+	for _, line := range lines {
+		purposes = append(purposes, line.Purpose)
+	}
+	return purposes
 }

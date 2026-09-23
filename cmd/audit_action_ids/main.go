@@ -141,6 +141,7 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 		}
 	}
 	report := classify(append(sites, read.sites...), ids, namesWhole(served, defaultPatterns))
+	report.ServedJudged = len(served) > 0
 	if len(suite) > 0 {
 		report.judgeHelpers(read, namesWhole(suite, defaultSuitePatterns))
 	}

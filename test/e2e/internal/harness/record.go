@@ -641,10 +641,14 @@ func (c *sessionConn) acknowledge(req mcp.Request) {
 // middleware records it with the request's own answer and this is not called.
 // The resource-updated notification that may follow is recorded by
 // [sessionConn.recordResourceUpdate], which is the delivery half.
-func (c *sessionConn) recordSubscribe(rec *envRecorder, uri, expectation, outcome string) {
+//
+// The purpose is the caller's, which is what lets the subscription sweep's
+// subscribes be credited as a sweep's: written as PurposeTest here, every one
+// of them read as a test asserting that the server accepted that resource.
+func (c *sessionConn) recordSubscribe(rec *envRecorder, uri string, purpose Purpose, expectation, outcome string) {
 	line := &e2ecalls.Call{
 		Test:        rec.env.T.Name(),
-		Purpose:     string(PurposeTest),
+		Purpose:     string(purpose),
 		Expectation: expectation,
 		Method:      methodSubscribe,
 		Target:      uri,

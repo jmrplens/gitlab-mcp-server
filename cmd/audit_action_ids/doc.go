@@ -33,10 +33,12 @@
 // bare run makes both loads. A run naming patterns makes only the loads they
 // name: a pattern under test/e2e/ goes to the suite and any other to the
 // served tree, so an explicit ./internal/tools/... reads no suite and prints
-// no section for it. Only a run over the whole suite holds the helper table to
-// it: the bare run, or one naming ./test/e2e/gitlab/... itself, which the
-// comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is the
-// same run. A pattern given as an absolute path below the repository root, or
+// no section for it, and a run naming only suite packages reads no served
+// source and says the published-ID and hint rules were not run rather than
+// printing their counts over nothing. Only a run over the whole suite holds
+// the helper table to it: the bare run, or one naming ./test/e2e/gitlab/...
+// itself, which the comparison reads slash-separated, so .\test\e2e\gitlab\...
+// on Windows is the same run. A pattern given as an absolute path below the repository root, or
 // as an import path below this module, is read as the relative pattern it
 // names before it is sorted, and that is the pattern the load is handed: both
 // spellings used to go to the served load whatever they named, which read the
@@ -178,7 +180,10 @@
 // Its limits are the table's. A helper under a name the table does not
 // declare is not read until it is declared, and neither is one called through
 // a function value or a wrapper whose parameter carries another name, which
-// is reported as a needle nothing folds. The polarity is syntactic, so `ok :=
+// is reported as a needle nothing folds. A bare strings.Contains on a served
+// text is not read at all, by design: the suite calls it on its own values as
+// often as on the server's, so the suite's rule is to assert served text
+// through the helpers and never through it. The polarity is syntactic, so `ok :=
 // mentionsAny(...); if !ok` is not judged. And a dotted needle is judged as
 // the whole ID it spells, so one that is only the front of a longer ID in a
 // domain the catalog uses is refused although it matches at run time; the

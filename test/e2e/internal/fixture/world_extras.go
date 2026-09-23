@@ -367,8 +367,9 @@ func createWorldGroupMilestone(ctx context.Context, tb testing.TB, client *gitla
 // job.wait into the reads sweep, and on a pipeline that has not finished each
 // of those blocks for its own default wait, on each of three surfaces.
 // Canceling needs no runner, which is what makes the outcome the same on an
-// instance with one and on one without. A job that never appears is the one
-// failure that leaves the pipeline pending, and it goes with the project.
+// instance with one and on one without. A job that never appears, or a cancel
+// GitLab refuses, leaves the pipeline pending; either way it goes with the
+// project.
 func createWorldPipeline(ctx context.Context, tb testing.TB, client *gitlabclient.Client, _ string, world *World) error {
 	tb.Helper()
 	project := world.Project

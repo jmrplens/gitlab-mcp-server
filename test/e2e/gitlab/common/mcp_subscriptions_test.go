@@ -11,7 +11,9 @@
 // is read-only by contract, so the sweep proves the subscribe is accepted and
 // leaves proving a notification arrives to the scenario tests that create
 // state of their own. A template whose URI the World cannot bind is named
-// rather than subscribed.
+// rather than subscribed. Each subscribe is made for the sweep, so what it
+// earns in the coverage record is sweep-only; an asserted subscription comes
+// from a scenario that subscribes on purpose, such as the delivery test.
 //
 // Two facts about the server shape the sweep. A subscription counts as
 // accepted only once the server acknowledges it, because on protocol
@@ -65,7 +67,7 @@ func TestSubscriptions_Sweep(t *testing.T) {
 			skipped++
 			continue
 		}
-		subscription, err := s.TrySubscribe(uri)
+		subscription, err := s.TrySubscribe(uri, harness.For(harness.PurposeSweep))
 		if err != nil {
 			t.Logf("subscribable %s declined for %s: %v", template, uri, err)
 			declined++

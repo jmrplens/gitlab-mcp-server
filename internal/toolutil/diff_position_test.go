@@ -346,11 +346,11 @@ func TestParseHunkHeader_NoCount(t *testing.T) {
 	}
 }
 
-// TestParseHunkHeader_TokenThatIsNotARange verifies that a token between the
+// TestParseHunkHeader_TokenThatIsNotARange_PassedOver verifies that a token between the
 // markers that is neither an old nor a new range is passed over rather than
 // refused: a combined diff's header carries a third "@" there, and its ranges
 // still number the hunk.
-func TestParseHunkHeader_TokenThatIsNotARange(t *testing.T) {
+func TestParseHunkHeader_TokenThatIsNotARange_PassedOver(t *testing.T) {
 	old, newLine := parseHunkHeader("@@@ -7,2 +9,3 @@@")
 	if old != 7 || newLine != 9 {
 		t.Errorf("parseHunkHeader() = (%d,%d), want (7,9)", old, newLine)

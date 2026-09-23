@@ -753,9 +753,7 @@ Docker validation snapshots are written under `dist/e2e-reports/` after `make te
 **MCP capability tests**:
 
 - Elicitation: the four guided flows (issue, merge request, release, project) on every surface under one scripted client, with the auto-accept and no-elicitation policies beside them
-- Resource subscriptions: covered by unit tests (`internal/subscriptions/`,
-  `cmd/server/subscriptions_test.go`), not e2e — the e2e client drives
-  tools, and a subscription needs a client that holds one open
+- Resource subscriptions: `TestSubscriptions_Sweep` subscribes to every subscribable template the shared World binds through the real binary, counting one accepted only once the server acknowledges it, and `TestSubscriptionDelivery_ChangedIssue_NotifiesTheSubscriber` changes an issue it owns and waits for the notification
 
 #### Fixture Cleanup
 

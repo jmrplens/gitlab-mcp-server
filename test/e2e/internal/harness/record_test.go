@@ -754,7 +754,9 @@ func TestSubscriberIndex_OneWatcherPerURI_TurnsTheSecondAwayUntilReleased(t *tes
 // the sending middleware cannot: the SDK opens the subscription on a
 // background context under the current protocol, so the attribution never
 // reaches it. The outcome is the caller's, which is what lets a refused
-// subscribe be recorded as the refusal it was.
+// subscribe be recorded as the refusal it was, and so is the purpose, which
+// is what lets the subscription sweep's subscribes be credited as a sweep's
+// rather than as a test's assertion.
 func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	env := newEnv(t, offlineInstance())
 	conn := &sessionConn{
@@ -763,7 +765,7 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 		cfg:   ServerConfig{Surface: SurfaceDynamic, Mode: ModeDefault, Capabilities: CapabilitiesFull},
 	}
 
-	conn.recordSubscribe(env.recorder, "gitlab://project/7", ExpectationAny, e2ecalls.OutcomeProtocolError)
+	conn.recordSubscribe(env.recorder, "gitlab://project/7", PurposeSweep, ExpectationAny, e2ecalls.OutcomeProtocolError)
 
 	lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
 	var found *e2ecalls.Call
@@ -778,8 +780,8 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	if found.Method != methodSubscribe || found.Target != "gitlab://project/7" {
 		t.Errorf("subscribe line = method %q target %q, want %q and gitlab://project/7", found.Method, found.Target, methodSubscribe)
 	}
-	if found.Test != env.T.Name() || found.TestStatus != e2ecalls.StatusPassed || found.Purpose != string(PurposeTest) {
-		t.Errorf("subscribe line credited test %q status %q purpose %q, want this test, passed, test",
+	if found.Test != env.T.Name() || found.TestStatus != e2ecalls.StatusPassed || found.Purpose != string(PurposeSweep) {
+		t.Errorf("subscribe line credited test %q status %q purpose %q, want this test, passed, and the caller's sweep",
 			found.Test, found.TestStatus, found.Purpose)
 	}
 	if found.Outcome != e2ecalls.OutcomeProtocolError || found.Expectation != ExpectationAny {

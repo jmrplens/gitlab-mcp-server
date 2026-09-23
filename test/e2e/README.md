@@ -69,7 +69,7 @@ make e2e-clean-orphans  # delete what earlier runs left on a self-hosted instanc
 
 The suite. Every test drives the **real `cmd/server` binary over stdio** through `test/e2e/internal/harness`, names its actions by canonical catalog ID, and runs each scenario on the dynamic, meta and individual surfaces as subtests. The runtime a test needs is decided by its package: `common` runs on every runtime (Free actions are verified on the CE catalog and on the licensed EE one, where schema pruning differs), `ce` holds the few facts that only hold without a license, and `ee` needs a Premium or Ultimate one. A package pointed at the wrong runtime refuses before it writes anything, naming what it found and the target to run instead; `E2E_RUNTIME_MISMATCH=skip` turns that into skips.
 
-A refusal's wording is asserted through `assertMentions`, `mentionsAny`, `containsAny` or the `contains` of `harness.ExpectToolError`, and those substrings are read by `make check-action-ids` (`cmd/audit_action_ids`), which holds each one to the catalog the way it holds the hint it quotes: a tool name, a registered alias or a dotted ID nothing resolves fails the push rather than the next licensed run, which is how issue 901 was found a month late. Quote the canonical action ID the server writes, never a tool name, and assert each fact on its own rather than as one member of an either-or check whose other member always matches. A new assertion helper is read only once it is declared in `servedTextAssertions`, and a renamed one fails the gate until its entry follows it.
+Assert a refusal's wording through `assertMentions`, `mentionsAny`, `containsAny` or the `contains` of `harness.ExpectToolError`, never through a bare `strings.Contains`: `make check-action-ids` (`cmd/audit_action_ids`) reads the substrings those helpers are handed and no other call, and holds each one to the catalog the way it holds the hint it quotes. A tool name, a registered alias or a dotted ID nothing resolves fails the push rather than the next licensed run, which is how issue 901 was found a month late; the one excuse is an alias a `Usage` line names by design, declared in `declaredAliasMentions`, which a test quoting that line quotes faithfully. Quote the canonical action ID the server writes, never a tool name, and assert each fact on its own rather than as one member of an either-or check whose other member always matches. A new assertion helper is read only once it is declared in `servedTextAssertions`, and a renamed one fails the gate until its entry follows it.
 
 The read and preview sweeps, the resource and subscription sweeps and the prompt sweep bind what they call from one shared, read-only World (`fixture.SharedWorld`), built once per package and checked by a digest at the end of the run. Its core (a group, a project, a branch with a commit, a merge request, an issue, a label, a milestone) is what every read test stands on, so a core object the instance will not make fails the run. Beside it the World makes its extras best effort, each under its own bounded context: a tag and its release, an environment and a deployment into it, a feature flag, a deploy key, a project board, a project and a personal snippet, a wiki page, a group label and milestone, and a canceled pipeline with its one job, from a configuration whose workflow rule admits only API-created pipelines and whose job asks for a runner tag no runner carries, so an instance with a runner and one without end with the same pipeline. An extra the World cannot make (a pipeline that never reached a terminal state, a disabled wiki's 403) is left unbound with its reason. A name that means one object across the catalog (`pipeline_id`, `job_id`, `tag_name`, `environment_id`, `deployment_id`, `deploy_key_id`) is a plain binding, and the read, preview, resource and subscription sweeps log an unmade extra's reason beside every resource template naming it and every action requiring it. One that does not (`board_id`, a feature flag's `name`, `slug`, `snippet_id`, and the group templates' `label_id` and `milestone_iid`) is bound per resource template only, so the reason is logged beside that template alone: the disabled wiki's 403 appears beside the wiki template, and an action requiring a wiki's `slug`, a `board_id`, a feature flag's `name` or a `snippet_id` is not bound from the World at all and is logged as naming a parameter the World has no binding for. Outside the group templates, `label_id` and `milestone_iid` bind the project's label and milestone for every action, group actions included. A subscription counts as accepted only once the server acknowledges it, and the subscription sweep subscribes and closes one template at a time on a session of its own, since the server holds at most ten watchers per credential.
 
@@ -283,56 +283,33 @@ resource ledger.
 
 ## Architecture
 
-### Test Files
+### Layout
 
-All Go test files live in the `suite/` subdirectory (package `suite`):
+| Path                        | What it holds                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `test/e2e/gitlab/common`    | Scenarios any instance serves, run on CE and on licensed EE alike                                                                   |
+| `test/e2e/gitlab/ce`        | The few facts that hold only without a license                                                                                      |
+| `test/e2e/gitlab/ee`        | Premium and Ultimate scenarios                                                                                                      |
+| `test/e2e/internal/harness` | The one route from a test to a server: the binary, the sessions, the verbs, the recorder, the per-test ledger and the waits         |
+| `test/e2e/internal/fixture` | GitLab state built through client-go rather than the server under test, each builder registering its own undo, and the shared World |
 
-| File                       | Purpose                                              |
-| -------------------------- | ---------------------------------------------------- |
-| `suite/setup_test.go`      | TestMain, 6 MCP sessions, helpers, shared state      |
-| `suite/fixture_ce_test.go` | Self-contained GitLab resource builders (CE runtime) |
-| `suite/fixture_ee_test.go` | Self-contained GitLab resource builders (EE runtime) |
-| `suite/*_test.go`          | 137 domain-specific test files                        |
+A scenario names each action by its typed `harness.ActionID` and runs once per surface: `harness.SurfacesWith` builds the fixture once on the parent test and runs the body again on the dynamic, meta and individual surfaces as subtests, so the three are held to the same assertions.
 
-### MCP Sessions
+### Sessions
 
-| Session            | Purpose                                  |
-| ------------------ | ---------------------------------------- |
-| `individual`       | Individual tools                          |
-| `meta`             | Meta-tools                                |
-| `dynamic`          | Default dynamic find/execute surface                 |
-| `elicitation`      | The four guided flows, answered by a scripted client on every surface |
-| `safeMode`         | Mutating tools wrapped to return previews |
+A test asks its `Env` for a session by `harness.ServerConfig`: a tool surface, a protective mode (default, read-only or safe), a capability surface (full or minimal), and when it needs one a token, an exclusion list, an elicitation policy, a tier pin or the HTTP transport. Every field is a variable or a flag the released binary reads, and there is no way to hand the server a catalog of the test's own. Sessions of one configuration are shared by the tests of a package, since nothing one test calls changes what the next is served; `Private: true` gives a test a server nobody else touches, stopped when the test ends.
 
-Resource subscriptions (`resources/subscribe`) are deliberately not part of
-this suite: the e2e client drives tools through one-shot calls, while a
-subscription needs a client that holds one open and waits for
-notifications. They are covered by unit tests instead
-(`internal/subscriptions/`, `cmd/server/subscriptions_test.go`).
+The four guided flows (issue, merge request, release, project) are answered by a scripted client on every surface, in a private session per test and surface that ends with the test, with the auto-accept and no-elicitation policies beside them.
 
-### Safety Guardrails
+Resource subscriptions are driven through the real binary too. `TestSubscriptions_Sweep` subscribes to every subscribable template the World binds, one at a time on a session of its own, and counts one accepted only once the server acknowledges it; `TestSubscriptionDelivery_ChangedIssue_NotifiesTheSubscriber` changes an issue it owns and waits for the notification.
 
-- **Snapshot-based cleanup**: `TestMain` captures pre-test project/group/label/variable state and restores it on exit
-- **Unique names**: All test resources use timestamped names to avoid conflicts
-- **Scoped parallelism**: Most top-level tests call `t.Parallel()`; lifecycle subtests usually stay sequential inside each top-level test when they share IDs or mutable state
+### Safety guardrails
 
-### Isolation and capabilities
-
-E2E tests are grouped by the resource scope they touch. New tests that mutate resources must use an existing fixture helper or explicitly register cleanup for every resource they create. See `suite/CAPABILITIES.md` for the current inventory and future gating plan.
-
-| Scope | Meaning | Parallelism guidance |
-| ----- | ------- | -------------------- |
-| `project` | Project-owned resources such as files, branches, issues, merge requests, packages, releases, and project settings | Parallel by default when each test creates its own project and cleanup is registered |
-| `group` | Group-owned resources such as group projects, members, labels, wikis, epics, and group settings | Parallel by default when each test creates its own group and cleanup is registered |
-| `user` | Admin-created or test-created user resources | Requires explicit cleanup and, for admin user lifecycle tests, admin capability checks |
-| `current-user` | State attached to the authenticated test user, including status, todos, SSH keys, personal access tokens, and notification preferences | Must be serialized or restored before more parallelism is added |
-| `instance-global` | Instance-wide resources such as settings, topics, broadcast messages, feature flags, system hooks, OAuth applications, Sidekiq, and metadata | Must be admin-gated and serialized when mutating global state |
-| `runner` | Pipeline and job tests that depend on the Docker CI runner | Requires Docker mode with a registered runner; avoid concurrent runner-heavy lifecycles |
-| `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
-| `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
-| `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
-| `dynamic` | Default two-tool dynamic surface over the canonical action catalog | Parallel when each test owns created resources and uses find/execute rather than direct meta-tool calls |
-| `elicitation` | A private session per test and surface whose client answers the guided flows from a script, and ends with the test | Parallel when each test owns any GitLab resources it creates |
+- **Names**: `Env.Name` names every object a test creates after the run, the package and the test, so two runs and three packages can share an instance without one deleting another's fixtures.
+- **Ledger**: every fixture builder registers the undo for what it created on the test's `Env`, and the ledger runs it when the test ends, under a bounded cleanup budget. Projects and groups are permanently removed.
+- **Orphans**: what an interrupted run left behind is swept by hand with `make e2e-clean-orphans`, by name prefix, and only when `E2E_SWEEP_PREFIX` is set.
+- **Shared state**: a test that changes something every other test can observe declares a `harness.Lock` (instance-global settings, the current user's own state, the CI runner, the license), and the holders of one lock run one after another; `harness.Serial` is for a change nothing else can run beside, such as installing or removing the license.
+- **Requirements**: `harness.Needs` declares what the instance must provide (an administrator, a runner, the fixture service, an external network), and a test whose needs the run does not meet is skipped before it touches GitLab.
 
 ## Running Individual Workflows
 

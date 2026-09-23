@@ -244,11 +244,21 @@ func TestDetailedError_Markdown(t *testing.T) {
 
 	want := "## ❌ Error: projects/delete\n\n" +
 		"- **Message**: access denied &lt;b>\n" +
-		"- **HTTP Status**: 403 (" + ClassifyHTTPStatus(403) + ")\n" +
+		"- **HTTP Status**: 403 Forbidden\n" +
 		"- **Details**: 403 Forbidden: insufficient &#124; permissions\n" +
 		"- **Request ID**: `req-abc-123`\n"
 	if md != want {
 		t.Errorf("error card:\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestDetailedError_StatusWithoutAReasonPhrase_RendersTheBareCode verifies
+// the status row for a code net/http has no reason phrase for: the code
+// alone, rather than the code followed by an empty phrase.
+func TestDetailedError_StatusWithoutAReasonPhrase_RendersTheBareCode(t *testing.T) {
+	de := &DetailedError{Domain: "projects", Action: "get", Message: "GitLab returned HTTP 499", GitLabStatus: 499}
+	if row := "- **HTTP Status**: 499\n"; !strings.Contains(de.Markdown(), row) {
+		t.Errorf("Markdown() = %q, want the row %q", de.Markdown(), row)
 	}
 }
 
@@ -2638,11 +2648,131 @@ func TestWrapErrWithHint_GraphQLRefusedTheToken_LeadsWithTheVerdict(t *testing.T
 	}
 }
 
+// graphQLForbiddenBody is what GitLab's GraphQL endpoint answers a caller the
+// API is not accessible to with.
+const graphQLForbiddenBody = `{"errors":[{"message":"API not accessible for user"}]}`
+
+// TestIsHTTPStatus_GraphQLRefusal_ReadsTheAnsweredStatus verifies that the
+// status check reads a GraphQL refusal the way the classifier does.
+//
+// client-go wraps a GraphQL refusal in *gl.GraphQLResponseError, which keeps
+// the response in a field and does not unwrap to it. The classifier looked
+// through it and IsHTTPStatus did not, so one 403 was classified as access
+// denied while the check a handler branches on said it was not a 403 at all.
+func TestIsHTTPStatus_GraphQLRefusal_ReadsTheAnsweredStatus(t *testing.T) {
+	err := graphQLAnswer(t, "", http.StatusForbidden, graphQLForbiddenBody)
+	tests := []struct {
+		name string
+		err  error
+		code int
+		want bool
+	}{
+		{name: "the status GitLab answered", err: err, code: http.StatusForbidden, want: true},
+		{name: "another status", err: err, code: http.StatusBadRequest, want: false},
+		{name: "wrapped by a handler", err: fmt.Errorf("get epic: %w", err), code: http.StatusForbidden, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsHTTPStatus(tt.err, tt.code); got != tt.want {
+				t.Errorf("IsHTTPStatus(%d) = %v, want %v", tt.code, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWrapErrWithStatusHint_GraphQLRefusal_AttachesTheHint verifies the
+// composition a GraphQL-backed handler hands a model for the status its hint
+// was written for: the classification, then the hint. Every WrapErrWithStatusHint
+// on the GraphQL path used to drop its hint, since the status check it asks
+// could not see the status through client-go's wrapper.
+func TestWrapErrWithStatusHint_GraphQLRefusal_AttachesTheHint(t *testing.T) {
+	const hint = "check that the group has epics enabled and that you can read them"
+	err := graphQLAnswer(t, "", http.StatusForbidden, graphQLForbiddenBody)
+
+	t.Run("the status the hint is for", func(t *testing.T) {
+		got := WrapErrWithStatusHint("epicGet", err, http.StatusForbidden, hint).Error()
+		if want := "epicGet: " + ClassifyHTTPStatus(http.StatusForbidden) + ". Suggestion: " + hint + ": "; !strings.HasPrefix(got, want) {
+			t.Errorf("WrapErrWithStatusHint() = %q, want it to open with %q", got, want)
+		}
+	})
+	t.Run("another status", func(t *testing.T) {
+		if got := WrapErrWithStatusHint("epicGet", err, http.StatusBadRequest, hint).Error(); strings.Contains(got, hint) {
+			t.Errorf("WrapErrWithStatusHint() = %q, want no hint for a status it was not written for", got)
+		}
+	})
+}
+
+// TestExtractGitLabMessage_GraphQLRefusal_ReadsTheResponseThroughTheWrapper
+// verifies that GitLab's own message is read off a GraphQL refusal, and that
+// a body GitLab did not compose is still dropped there.
+func TestExtractGitLabMessage_GraphQLRefusal_ReadsTheResponseThroughTheWrapper(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "GitLab's own message", body: `{"message":"the token lacks the api scope"}`, want: "{message: the token lacks the api scope}"},
+		{name: "a gateway's body", body: gatewayBody, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := graphQLAnswer(t, "", http.StatusForbidden, tt.body)
+			if got := ExtractGitLabMessage(err); got != tt.want {
+				t.Errorf("ExtractGitLabMessage() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSanitizeError_GraphQLGatewayBody_ReflectsNoUpstreamDetail verifies that
+// a body something other than GitLab composed is not reflected when it came
+// back from the GraphQL endpoint.
+//
+// client-go wraps the answer in *gl.GraphQLResponseError whenever the body is
+// a JSON object, and that type's rendering embeds the response's, body and
+// all. The sanitizer looked for the response with errors.As, which cannot see
+// through the wrapper, so an ingress page answering in JSON reached the model
+// and the log with the operator's upstream hostname in it. The chain is kept,
+// so a caller asking for the wrapper still finds it.
+func TestSanitizeError_GraphQLGatewayBody_ReflectsNoUpstreamDetail(t *testing.T) {
+	err := graphQLAnswer(t, "", http.StatusBadGateway, gatewayBody)
+	tests := []struct {
+		name string
+		wrap func(error) error
+	}{
+		{name: "SanitizeError", wrap: SanitizeError},
+		{name: "WrapErr", wrap: func(err error) error { return WrapErr("listEpics", err) }},
+		{name: "WrapErrWithMessage", wrap: func(err error) error { return WrapErrWithMessage("listEpics", err) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wrapped := tt.wrap(err)
+			got := wrapped.Error()
+			for _, unwanted := range []string{"gitlab-web-03.internal", "upstream timeout"} {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("wrapped error = %q, must not carry %q from a body GitLab did not compose", got, unwanted)
+				}
+			}
+			if !strings.Contains(got, "/api/graphql: 502") {
+				t.Errorf("wrapped error = %q, want the request line and the status kept", got)
+			}
+			if _, found := errors.AsType[*gl.GraphQLResponseError](wrapped); !found {
+				t.Errorf("wrapped error = %q, want the GraphQL error still reachable through the chain", got)
+			}
+		})
+	}
+}
+
 // TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus verifies the
 // error card for a 401 over both surfaces: the message is the classifier's
-// reading of the whole response, while the HTTP Status row describes the
-// status alone and so names both causes whatever the response said, and the
-// request ID is the one GitLab answered with.
+// reading of the whole response, the HTTP Status row is the code and its
+// reason phrase with no second reading beside it, and the request ID is the
+// one GitLab answered with.
+//
+// The status row used to carry the classification of the status alone, which
+// for a 401 is the sentence naming both causes, so on the three rows below
+// whose message is the rejected-token verdict one card contradicted itself.
+// Each row is held to carrying that sentence exactly once, in its message.
 //
 // The GraphQL rows are the ones the card used to lose. client-go wraps a
 // GraphQL refusal in *gl.GraphQLResponseError, which does not unwrap to the
@@ -2694,14 +2824,29 @@ func TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus(t *testing.T
 			if de.Message != tt.message {
 				t.Errorf("Message = %q, want %q", de.Message, tt.message)
 			}
-			md := de.Markdown()
-			if row := "- **HTTP Status**: 401 (" + unauthorizedSemantic + ")\n"; !strings.Contains(md, row) {
-				t.Errorf("Markdown() = %q, want the row %q", md, row)
-			}
-			if row := "- **Request ID**: `" + answeredRequestID + "`\n"; !strings.Contains(md, row) {
-				t.Errorf("Markdown() = %q, want the row %q", md, row)
-			}
+			assertUnauthorizedCard(t, de.Markdown(), tt.message)
 		})
+	}
+}
+
+// assertUnauthorizedCard holds a 401's error card to its two answered rows and
+// to carrying the classifier's reading exactly once, in its message, with no
+// permission refusal beside a rejected-token verdict.
+func assertUnauthorizedCard(t *testing.T, md, message string) {
+	t.Helper()
+	for _, row := range []string{
+		"- **HTTP Status**: 401 Unauthorized\n",
+		"- **Request ID**: `" + answeredRequestID + "`\n",
+	} {
+		if !strings.Contains(md, row) {
+			t.Errorf("Markdown() = %q, want the row %q", md, row)
+		}
+	}
+	if count := strings.Count(md, message); count != 1 {
+		t.Errorf("Markdown() = %q, carries the message %d times, want once", md, count)
+	}
+	if message == rejectedTokenSemantic && strings.Contains(md, "permission") {
+		t.Errorf("Markdown() = %q, must not offer a permission refusal beside the rejected-token verdict", md)
 	}
 }
 
@@ -2756,7 +2901,7 @@ func TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel(t *testing.T)
 			if de.RequestID != "" {
 				t.Errorf("RequestID = %q, want none, since the sentinel carries no response", de.RequestID)
 			}
-			if row := "- **HTTP Status**: 404 (" + notFound + ")\n"; !strings.Contains(de.Markdown(), row) {
+			if row := "- **HTTP Status**: 404 Not Found\n"; !strings.Contains(de.Markdown(), row) {
 				t.Errorf("Markdown() = %q, want the row %q", de.Markdown(), row)
 			}
 		})

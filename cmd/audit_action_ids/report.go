@@ -30,7 +30,9 @@ import (
 // sites are still only reported. Version 5 adds the `e2e_assertions` section,
 // the same rule put to the substrings the e2e suite asserts a served text
 // carries, with `suite_judged` saying whether the run loaded the suite at all
-// and the helper table's own staleness beside it; and it renames the keys the
+// and the helper table's own staleness beside it, and `served_judged` saying
+// the same of the served tree, which a run naming only suite packages does not
+// load; and it renames the keys the
 // two prose sections share so they say nothing about hints (`read`,
 // `read_by_kind`, `not_folded`, `rows`, `not_folded_sites`). The counts move
 // across every one of these lines, so a reader comparing two runs across any
@@ -91,6 +93,14 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	AliasRefs     []Finding    `json:"alias_references"`
 	Unresolved    []Unresolved `json:"unresolved"`
+	// ServedJudged says whether this run loaded the served tree, for the
+	// reason SuiteJudged says it of the suite: a run naming only
+	// ./test/e2e/gitlab/ee reads no served source, and a summary printing
+	// "judged 0 published ID(s)" and a hint section over 0 hints would read
+	// as a clean tree rather than as one nobody looked at. [classify] sets
+	// it, since what it is handed is the served tree's sites, and the run
+	// clears it when its patterns named no served package.
+	ServedJudged bool `json:"served_judged"`
 	// Hints is the rule over corrective prose. Its findings fail
 	// [Report.Clean] and the sites it could not fold do not.
 	Hints HintReport `json:"hints"`
@@ -158,6 +168,7 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 			ByKind:             map[string]int{},
 			JudgedByKind:       map[string]int{},
 		},
+		ServedJudged:      true,
 		Hints:             newHintReport(),
 		Assertions:        newHintReport(),
 		usedExemptions:    map[string]struct{}{},
@@ -352,10 +363,26 @@ func isProseKind(kind string) bool {
 // what fails nothing is shown: the breakdowns by kind, and the prose sites
 // the type checker could not fold.
 //
-// The suite's section is printed only by a run that loaded the suite, which a
-// run over ./internal/tools/... alone does not: its count over nothing would
-// read as a clean suite.
+// Each tree's sections are printed only by a run that loaded it, since a
+// count over nothing reads as a clean tree. A run over ./internal/tools/...
+// alone prints no suite section; a run naming only suite packages prints one
+// line in place of the published-ID summary and the hint section, saying
+// those rules were not run.
 func writeReport(out io.Writer, report Report, verbose bool) {
+	if report.ServedJudged {
+		writeServedReport(out, report, verbose)
+	} else {
+		fmt.Fprintf(out, "%s: no served source loaded: the published-ID and hint rules were not run\n", toolName)
+	}
+	if report.SuiteJudged {
+		writeSuiteReport(out, report, verbose)
+	}
+}
+
+// writeServedReport prints what the run found in the served tree: the
+// findings, the alias references, the sites nothing folded, the declarations
+// that excuse nothing, the summary, and the hint section.
+func writeServedReport(out io.Writer, report Report, verbose bool) {
 	writeGroups(out, report.Findings, findingVerb)
 	if len(report.AliasRefs) > 0 || verbose {
 		fmt.Fprintln(out, "=== registered aliases, not catalog IDs ===")
@@ -365,9 +392,6 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 	writeStale(out, report.StaleExemptions)
 	writeSummary(out, report.Summary, verbose)
 	writeHintReport(out, report.Hints, verbose)
-	if report.SuiteJudged {
-		writeSuiteReport(out, report, verbose)
-	}
 }
 
 // writeSuiteReport prints what the run found in the e2e suite: its
