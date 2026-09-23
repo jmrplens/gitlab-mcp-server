@@ -48,7 +48,7 @@
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "dynamic",
@@ -78,7 +78,7 @@
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "meta",
@@ -108,7 +108,7 @@
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "individual",
@@ -186,7 +186,6 @@
     },
     "capabilities": {
      "completions": {
-      "asserted": 1,
       "sweep-only": 130
      },
      "elicitation": {
@@ -212,6 +211,20 @@
      "tool_manifest": {
       "asserted": 24
      }
+    },
+    "unlisted_capabilities": {
+     "completions": [
+      {
+       "capabilities": "full",
+       "target": "summarize_open_mrs issue_iid",
+       "state": "asserted",
+       "tests": [
+        "TestExcludeTools_RemovesTheActionFromEveryRequestPath"
+       ],
+       "calls": 1,
+       "unlisted": true
+      }
+     ]
     }
    },
    "levels": {
@@ -2516,7 +2529,7 @@
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "dynamic",
@@ -2546,7 +2559,7 @@
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "meta",
@@ -2576,7 +2589,7 @@
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "individual",
@@ -2654,7 +2667,6 @@
     },
     "capabilities": {
      "completions": {
-      "asserted": 1,
       "sweep-only": 130
      },
      "elicitation": {
@@ -2680,6 +2692,20 @@
      "tool_manifest": {
       "asserted": 24
      }
+    },
+    "unlisted_capabilities": {
+     "completions": [
+      {
+       "capabilities": "full",
+       "target": "summarize_open_mrs issue_iid",
+       "state": "asserted",
+       "tests": [
+        "TestExcludeTools_RemovesTheActionFromEveryRequestPath"
+       ],
+       "calls": 1,
+       "unlisted": true
+      }
+     ]
     }
    },
    "levels": {

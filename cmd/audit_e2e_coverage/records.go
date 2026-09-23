@@ -36,6 +36,15 @@ type runtimeRecords struct {
 	// packages, and the fold reads surface and mode off each call line rather
 	// than joining on it.
 	sessions []*e2ecalls.Session
+	// toolSessions are the session lines whose shard carries a tools/call
+	// under their label. Only those can say anything about dispatch: the
+	// server's span is a tool dispatch, so a session that read resources,
+	// asked for completions or only listed its surface has no span to wait
+	// for, and its unobserved flag is not evidence that one went missing.
+	//
+	// The join is by label within one shard, since a label repeats across
+	// packages and a shard is one package's process.
+	toolSessions map[*e2ecalls.Session]bool
 	// calls are the call lines, each with Dispatched filled from its dispatch
 	// line when the call was flushed before the span arrived.
 	calls []*e2ecalls.Call
@@ -187,12 +196,13 @@ func foldShards(shards []e2ecalls.Shard) (*runtimeRecords, error) {
 	for _, shard := range shards {
 		var calls []*e2ecalls.Call
 		var runs []*e2ecalls.Run
+		var sessions []*e2ecalls.Session
 		for _, record := range shard.Records {
 			switch record.Type {
 			case e2ecalls.TypeRun:
 				runs = append(runs, record.Run)
 			case e2ecalls.TypeSession:
-				rt.sessions = append(rt.sessions, record.Session)
+				sessions = append(sessions, record.Session)
 			case e2ecalls.TypeCall:
 				calls = append(calls, record.Call)
 			case e2ecalls.TypeDispatch:
@@ -203,7 +213,9 @@ func foldShards(shards []e2ecalls.Shard) (*runtimeRecords, error) {
 			}
 		}
 		rt.runs = append(rt.runs, runs...)
+		rt.sessions = append(rt.sessions, sessions...)
 		rt.calls = append(rt.calls, calls...)
+		rt.markToolSessions(sessions, calls)
 		if len(runs) == 1 && runs[0].Package != "" {
 			for _, call := range calls {
 				rt.packages[call] = runs[0].Package
@@ -215,6 +227,25 @@ func foldShards(shards []e2ecalls.Shard) (*runtimeRecords, error) {
 		return nil, err
 	}
 	return rt, nil
+}
+
+// markToolSessions records which of one shard's session lines called a tool.
+func (rt *runtimeRecords) markToolSessions(sessions []*e2ecalls.Session, calls []*e2ecalls.Call) {
+	labels := map[string]bool{}
+	for _, call := range calls {
+		if call.Method == methodCallTool {
+			labels[call.Session] = true
+		}
+	}
+	for _, session := range sessions {
+		if !labels[session.Label] {
+			continue
+		}
+		if rt.toolSessions == nil {
+			rt.toolSessions = map[*e2ecalls.Session]bool{}
+		}
+		rt.toolSessions[session] = true
+	}
 }
 
 // joinDispatches fills the dispatched action of every call that was flushed

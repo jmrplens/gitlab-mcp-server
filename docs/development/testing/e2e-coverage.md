@@ -98,13 +98,17 @@ What each capability surface served, which is what the `resources`, `prompts`, `
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `completions`   |        1 |          0 |        130 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `completions`   |        0 |          0 |        130 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `elicitation`   |       12 |          0 |          0 |               0 |            0 |           12 |            0 |          0 |         12 |       0 |      0 |      0 |
 | `modes`         |       12 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `prompts`       |       37 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `resources`     |        0 |          0 |         42 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `subscriptions` |        1 |          0 |         24 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `tool_manifest` |       24 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+
+Called outside what any session listed, and so counted in none of the rows above:
+
+- `completions` `summarize_open_mrs issue_iid` on `full`: asserted, by `TestExcludeTools_RemovesTheActionFromEveryRequestPath`
 
 ### ee
 
@@ -123,13 +127,17 @@ What each capability surface served, which is what the `resources`, `prompts`, `
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `completions`   |        1 |          0 |        130 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `completions`   |        0 |          0 |        130 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `elicitation`   |       12 |          0 |          0 |               0 |            0 |           12 |            0 |          0 |         12 |       0 |      0 |      0 |
 | `modes`         |       12 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `prompts`       |       37 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `resources`     |        0 |          0 |         42 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `subscriptions` |        1 |          0 |         24 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `tool_manifest` |       24 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+
+Called outside what any session listed, and so counted in none of the rows above:
+
+- `completions` `summarize_open_mrs issue_iid` on `full`: asserted, by `TestExcludeTools_RemovesTheActionFromEveryRequestPath`
 
 ## Refreshing this page
 

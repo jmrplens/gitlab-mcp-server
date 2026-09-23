@@ -20,16 +20,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 18,568 |
-| Unit test functions                                   | 17,264 |
+| Total test functions                                  | 18,572 |
+| Unit test functions                                   | 17,268 |
 | E2E test functions                                    |  1,304 |
-| cmd test functions                                    |  3,460 |
+| cmd test functions                                    |  3,464 |
 | Test files (internal/)                                |    653 |
 | Test files (cmd/)                                     |    222 |
 | Test files (test/e2e/)                                |    388 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     29 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  99.5% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  99.6% |
 | Overall coverage (`go test ./internal/...`)           |  99.8% |
 | Average package coverage                              |  99.7% |
 
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,461 | 67.1% |
+| `TestFunc_Scenario` (2-part)           | 12,462 | 67.1% |
 | `TestFunc` (no underscore)             |    905 |  4.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  5,202 | 28.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  5,205 | 28.0% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            373 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |         10,144 |        448 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,304 |        388 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          3,460 |        222 | server entry point and developer command utilities                                              |
-| **Total**               |     **18,568** |  **1,263** |                                                                                                 |
+| cmd packages            |          3,464 |        222 | server entry point and developer command utilities                                              |
+| **Total**               |     **18,572** |  **1,263** |                                                                                                 |
 
 ### Core Packages
 
@@ -86,7 +86,7 @@
 | testutil/modelrecord |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
 | testutil/modelscore  |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/shardio     |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil             |     1,080 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| toolutil             |     1,080 |    99.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
 | **Subtotal**         | **3,287** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
@@ -324,14 +324,14 @@
 | cmd/audit_1to1/internal/sdk      |   100.0% |
 | cmd/audit_1to1/internal/shared   |   100.0% |
 | cmd/audit_1to1/internal/structs  |   100.0% |
-| cmd/audit_action_ids             |    98.0% |
+| cmd/audit_action_ids             |    98.4% |
 | cmd/audit_catalog_first          |    97.4% |
 | cmd/audit_dead_consts            |    94.6% |
 | cmd/audit_discovery_completeness |    99.4% |
 | cmd/audit_doc_coverage           |    99.4% |
 | cmd/audit_doc_tool_names         |    95.3% |
 | cmd/audit_dynamic_aliases        |   100.0% |
-| cmd/audit_e2e_coverage           |    96.2% |
+| cmd/audit_e2e_coverage           |   100.0% |
 | cmd/audit_edition_tier           |    99.6% |
 | cmd/audit_gateway_chars          |   100.0% |
 | cmd/audit_graphql_documents      |    92.9% |
@@ -409,7 +409,7 @@
 | testutil/modelrecord |   100.0% |
 | testutil/modelscore  |   100.0% |
 | testutil/shardio     |   100.0% |
-| toolutil             |    98.8% |
+| toolutil             |    99.7% |
 
 ### Tool Sub-Packages
 

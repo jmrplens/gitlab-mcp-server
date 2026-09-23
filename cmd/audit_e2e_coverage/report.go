@@ -128,8 +128,16 @@ type summary struct {
 	L3 int `json:"l3"`
 	// States is the histogram of states per surface, in the default mode.
 	States map[string]map[state]int `json:"states"`
-	// Capabilities is the histogram of states per capability kind.
+	// Capabilities is the histogram of states per capability kind, over the
+	// items the sessions served: a row of the kinds counted at the capability
+	// grain sums to what its capability surfaces served.
 	Capabilities map[string]map[state]int `json:"capabilities"`
+	// UnlistedCapabilities are the capability cells a call created for a
+	// target no session listed, per kind: a completion for an argument no
+	// prompt or template declares, a read of a URI nothing served. They are
+	// what was called outside the denominator, named here rather than folded
+	// into a histogram they would push past the figure it is counted against.
+	UnlistedCapabilities map[string][]cellRow `json:"unlisted_capabilities,omitempty"`
 }
 
 // levels lists the actions at each level in the default mode.
@@ -172,6 +180,8 @@ type cellRow struct {
 	// Delivered is set on a subscription row when a resource-updated
 	// notification for the kind reached a passing test.
 	Delivered bool `json:"delivered,omitempty"`
+	// Unlisted is set on a capability row whose target no session listed.
+	Unlisted bool `json:"unlisted,omitempty"`
 }
 
 // uncalledRow lists the served tools of one shape that no call named.
@@ -340,6 +350,7 @@ func cellRows(cells map[cellKey]*cell) []cellRow {
 		rows = append(rows, cellRow{
 			Surface: found.key.shape.surface, Mode: found.key.shape.mode, Capabilities: found.key.capabilities,
 			Target: found.key.action, State: found.state, Reason: found.reason, Tests: found.bestTests(), Calls: calls,
+			Unlisted: found.unlisted,
 		})
 	}
 	slices.SortFunc(rows, func(a, b cellRow) int {
@@ -395,8 +406,19 @@ func summarize(c *classification, rep *report) summary {
 	}
 	for kind, cells := range c.capabilities {
 		s.Capabilities[kind] = map[state]int{}
-		for _, found := range cells {
+		unlisted := map[cellKey]*cell{}
+		for key, found := range cells {
+			if found.unlisted {
+				unlisted[key] = found
+				continue
+			}
 			s.Capabilities[kind][found.state]++
+		}
+		if rows := cellRows(unlisted); len(rows) > 0 {
+			if s.UnlistedCapabilities == nil {
+				s.UnlistedCapabilities = map[string][]cellRow{}
+			}
+			s.UnlistedCapabilities[kind] = rows
 		}
 	}
 	return s
@@ -460,6 +482,9 @@ func writeMarkdownSummary(w io.Writer, reports []*report) {
 			rep.Summary.TestCalls, len(rep.DispatchMismatches), len(rep.UnresolvedTools))
 		writeStateTable(w, "Surface", rep.Summary.States)
 		writeStateTable(w, "Capability", rep.Summary.Capabilities)
+		if text := renderUnlistedCapabilities(rep.Summary.UnlistedCapabilities); text != "" {
+			fmt.Fprint(w, "\n"+text)
+		}
 		writeVerdicts(w, rep)
 	}
 }
