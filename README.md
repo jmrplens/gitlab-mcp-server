@@ -96,7 +96,7 @@ Pick one. Each path ends with you typing a prompt to your assistant. Every chann
   <tr>
     <td><b>Claude Desktop</b></td>
     <td><a href="https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb"><img alt="Download .mcpb extension" src="https://img.shields.io/badge/Download-.mcpb_extension-d97757?style=flat-square&amp;logo=claude&amp;logoColor=white" /></a></td>
-    <td>settings UI (keychain)</td>
+    <td>settings UI</td>
   </tr>
 </table>
 

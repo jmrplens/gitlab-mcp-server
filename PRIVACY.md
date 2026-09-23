@@ -104,10 +104,13 @@ first.
 ## Credentials
 
 Your GitLab Personal Access Token is provided by you through environment
-variables or your MCP client's configuration UI. Claude Desktop stores
-extension secrets in the operating system keychain. The server keeps the
-token in process memory only, uses it solely to authenticate requests to your
-configured GitLab instance, and never logs it.
+variables or your MCP client's configuration UI. Claude Desktop encrypts
+sensitive extension settings, the token among them, before saving them, with a
+key held by the operating system's credential store: the Keychain on macOS,
+DPAPI on Windows, and the desktop keyring (such as GNOME Keyring or KWallet) on
+Linux. A Linux desktop without a keyring stores them without that protection.
+The server keeps the token in process memory only, uses it solely to
+authenticate requests to your configured GitLab instance, and never logs it.
 
 ## Local storage and logs
 

@@ -11,15 +11,20 @@ incompatible there), an override for an unlisted platform, an override
 carrying `env` (it replaces the base env and drops `GITLAB_TOKEN`), and a path
 the archive does not carry. And every refusal ends with the bundle removed,
 including one where an entry never reached the archive, which `zip` allows by
-exiting 0 when one of its inputs is missing.
+exiting 0 when one of its inputs is missing, and one before anything was
+packed, which must not leave the previous run's bundle behind.
 
 Each case runs the real script from a scratch tree laid out the way it expects,
 the repository root with mcpb/ and a dist/ of per-target builds, holding small
-stand-ins for the four release binaries.
+stand-ins for the release binaries, each with bytes of its own. Two dist/
+layouts are built: the one `make mcpb` leaves, and the one the release job
+builds from, so that a change to the script's discovery patterns that would
+pick the wrong file, or none, out of the release job's dist/ fails here and not
+in a release.
 
 Run with:
 
-    python3 -m unittest discover -s scripts -p 'build_mcpb_test.py'
+    python3 -m unittest discover -s scripts -p 'build_mcpb_sh_test.py'
 """
 
 import copy
@@ -35,14 +40,65 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SCRIPT = os.path.join(ROOT, "scripts", "build-mcpb.sh")
 VERSION = "9.8.7"
 
-# The per-target build outputs the script looks for, with the first bytes of
-# the format each one is. Nothing here executes them.
-BINARIES = {
-    "local_darwin_all/gitlab-mcp-server": b"\xcf\xfa\xed\xfe",
-    "local_windows_amd64/gitlab-mcp-server.exe": b"MZ",
-    "local_linux_amd64/gitlab-mcp-server": b"\x7fELF",
-    "local_linux_arm64/gitlab-mcp-server": b"\x7fELF",
+# The dist/ `make mcpb` leaves: one local_<goos>_<goarch> directory per target
+# it cross-compiles, the darwin one holding the lipo'd universal binary.
+MAKE_MCPB_DIST = [
+    "local_darwin_all/gitlab-mcp-server",
+    "local_windows_amd64/gitlab-mcp-server.exe",
+    "local_linux_amd64/gitlab-mcp-server",
+    "local_linux_arm64/gitlab-mcp-server",
+]
+# The file of that dist/ each server entry of the bundle is packed from.
+MAKE_MCPB_SOURCES = {
+    "server/gitlab-mcp-server": "local_darwin_all/gitlab-mcp-server",
+    "server/gitlab-mcp-server.exe": "local_windows_amd64/gitlab-mcp-server.exe",
+    "server/linux/gitlab-mcp-server-linux-amd64": "local_linux_amd64/gitlab-mcp-server",
+    "server/linux/gitlab-mcp-server-linux-arm64": "local_linux_arm64/gitlab-mcp-server",
 }
+
+# The dist/ the release job runs the script over, as `ls -1 dist/` printed it
+# in the v3.1.0 release rehearsal (run 35228958688), after GoReleaser and the
+# step that stages each binary at the root under its release asset name: the
+# per-target directories, including the darwin and windows arm64 builds the
+# bundle does not carry and the per-arch darwin builds beside the universal
+# one, the staged copies with their SBOMs, and GoReleaser's own metadata.
+RELEASE_DIST = [
+    "artifacts.json",
+    "checksums.txt",
+    "config.yaml",
+    "metadata.json",
+    "gitlab-mcp-server-universal_darwin_all/gitlab-mcp-server",
+    "gitlab-mcp-server_darwin_amd64_v1/gitlab-mcp-server",
+    "gitlab-mcp-server_darwin_arm64_v8.0/gitlab-mcp-server",
+    "gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server",
+    "gitlab-mcp-server_linux_arm64_v8.0/gitlab-mcp-server",
+    "gitlab-mcp-server_windows_amd64_v1/gitlab-mcp-server.exe",
+    "gitlab-mcp-server_windows_arm64_v8.0/gitlab-mcp-server.exe",
+] + [
+    staged + suffix
+    for staged in (
+        "gitlab-mcp-server-darwin-all",
+        "gitlab-mcp-server-darwin-amd64",
+        "gitlab-mcp-server-darwin-arm64",
+        "gitlab-mcp-server-linux-amd64",
+        "gitlab-mcp-server-linux-arm64",
+        "gitlab-mcp-server-windows-amd64.exe",
+        "gitlab-mcp-server-windows-arm64.exe",
+    )
+    for suffix in ("", ".sbom.json")
+]
+RELEASE_SOURCES = {
+    "server/gitlab-mcp-server": "gitlab-mcp-server-universal_darwin_all/gitlab-mcp-server",
+    "server/gitlab-mcp-server.exe": "gitlab-mcp-server_windows_amd64_v1/gitlab-mcp-server.exe",
+    "server/linux/gitlab-mcp-server-linux-amd64": "gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server",
+    "server/linux/gitlab-mcp-server-linux-arm64": "gitlab-mcp-server_linux_arm64_v8.0/gitlab-mcp-server",
+}
+
+
+def stand_in(rel):
+    """The bytes the scratch dist/ holds at rel: different for every file, so
+    a bundle packed from the wrong one is told apart. Nothing executes them."""
+    return b"stand-in for dist/" + rel.encode() + b"\n" * 64
 
 ENTRIES = [
     "manifest.json",
@@ -103,12 +159,28 @@ class BuildMcpbTest(unittest.TestCase):
         shutil.copyfile(self.launcher, os.path.join(self.work, "mcpb", "linux", "launch.sh"))
         with open(os.path.join(ROOT, "mcpb", "manifest.json"), encoding="utf-8") as fh:
             self.manifest = json.load(fh)
-        for rel, magic in BINARIES.items():
-            path = os.path.join(self.work, "dist", rel)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "wb") as fh:
-                fh.write(magic + rel.encode() * 16)
-        self.output = os.path.join(self.work, "dist", "gitlab-mcp-server.mcpb")
+        self.dist = os.path.join(self.work, "dist")
+        self.lay_out_dist(MAKE_MCPB_DIST)
+        self.output = os.path.join(self.dist, "gitlab-mcp-server.mcpb")
+
+    def lay_out_dist(self, files):
+        """Replaces dist/ with the given files, each holding its stand-in bytes."""
+        shutil.rmtree(self.dist, ignore_errors=True)
+        for rel in files:
+            self.add_to_dist(rel)
+
+    def add_to_dist(self, rel):
+        """Writes one file into dist/ and leaves everything else there alone."""
+        path = os.path.join(self.dist, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as fh:
+            fh.write(stand_in(rel))
+
+    def assert_packed_from(self, sources):
+        with zipfile.ZipFile(self.output) as bundle:
+            for entry, rel in sources.items():
+                with self.subTest(entry=entry):
+                    self.assertEqual(bundle.read(entry), stand_in(rel), f"{entry} was not packed from dist/{rel}")
 
     def build(self, manifest=None, drop_entry=None):
         with open(os.path.join(self.work, "mcpb", "manifest.json"), "w", encoding="utf-8") as fh:
@@ -159,6 +231,47 @@ class BuildMcpbTest(unittest.TestCase):
         expected_manifest = copy.deepcopy(self.manifest)
         expected_manifest["version"] = VERSION
         self.assertEqual(packed, expected_manifest)
+        self.assert_packed_from(MAKE_MCPB_SOURCES)
+
+    def test_packs_each_server_from_the_release_jobs_dist(self):
+        # Every staged root copy and every build the bundle does not carry sits
+        # beside the four it does, so a discovery pattern that matched one of
+        # them too would be refused as a duplicate, and one that matched none
+        # of the four would be refused as missing.
+        self.lay_out_dist(RELEASE_DIST)
+        result = self.build()
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        with zipfile.ZipFile(self.output) as bundle:
+            self.assertEqual(bundle.namelist(), ENTRIES)
+        self.assert_packed_from(RELEASE_SOURCES)
+
+    def test_a_refusal_before_packing_removes_the_previous_bundle(self):
+        # make mcpb after make release leaves both layouts in dist/, which is
+        # the duplicate the first case refuses; the previous run's bundle must
+        # not survive the refusal under its old version.
+        def with_a_second_linux_amd64_build():
+            self.add_to_dist("gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server")
+
+        def without_the_icon():
+            os.remove(os.path.join(self.work, "mcpb", "icon.png"))
+
+        cases = [
+            ("a binary found twice", with_a_second_linux_amd64_build, "remove the stale ones"),
+            ("a missing input", without_the_icon, "mcpb/icon.png not found"),
+        ]
+        for name, break_the_tree, message in cases:
+            with self.subTest(case=name):
+                self.lay_out_dist(MAKE_MCPB_DIST)
+                shutil.copyfile(os.path.join(ROOT, "mcpb", "icon.png"), os.path.join(self.work, "mcpb", "icon.png"))
+                first = self.build()
+                self.assertEqual(first.returncode, 0, first.stderr.decode())
+                self.assertTrue(os.path.exists(self.output))
+                break_the_tree()
+                result = self.build()
+                stderr = result.stderr.decode()
+                self.assertEqual(result.returncode, 1, stderr)
+                self.assertIn(message, stderr)
+                self.assertFalse(os.path.exists(self.output), "the previous run's bundle was left in dist/")
 
     def test_refuses_a_manifest_that_cannot_start_on_one_of_its_platforms(self):
         cases = [

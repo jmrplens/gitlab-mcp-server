@@ -32,7 +32,7 @@ It never checks for updates and never replaces its own binary, on any channel. U
 - **You want the smallest footprint and no runtime.** The native binary. Homebrew and winget install that same binary and take care of upgrades.
 - **Your client already launches servers with `npx`, `uvx` or `dnx`.** The npm, PyPI and NuGet packages: nothing to install ahead of time, and the client resolves the newest version on its own.
 - **You would rather not put anything on the host, or you are deploying for a team.** Docker, over stdio for one client or in HTTP mode behind a port.
-- **You use Claude Desktop.** The `.mcpb` extension: one click, and the token lives in the operating system keychain.
+- **You use Claude Desktop.** The `.mcpb` extension: one click, and the token is encrypted with a key from the operating system's credential store where one exists.
 - **You just want to look first.** The hosted endpoint, from any HTTP-capable client or straight from the browser inspector.
 
 <CardGrid>

@@ -875,8 +875,9 @@ jobs:
       # (mcpb/linux/launch.sh) under /bin/sh, dash, busybox sh and
       # bash --posix, whichever the runner has, and runs shellcheck on it;
       # scripts/mcpb_manifest_test.py pins mcpb/manifest.json; and
-      # scripts/build_mcpb_test.py runs scripts/build-mcpb.sh over stand-in
-      # binaries against each bundle its checks refuse.
+      # scripts/build_mcpb_sh_test.py runs scripts/build-mcpb.sh over stand-in
+      # binaries against each bundle its checks refuse, and over the dist/
+      # layouts of make mcpb and of the release job.
       - name: Test the installer, launcher and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 

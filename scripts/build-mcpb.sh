@@ -32,6 +32,16 @@ set -euo pipefail
 
 VERSION="${1:?Usage: $0 <version> [dist-dir]}"
 DIST_DIR="${2:-dist}"
+OUTPUT="$DIST_DIR/gitlab-mcp-server.mcpb"
+# The previous run's bundle is removed before anything can refuse this run, so
+# a refusal on any path, from a missing input to a binary found twice, does not
+# leave it in dist/ under the old version for a later step or a developer to
+# take for this one. From here until every check below has passed, any exit
+# removes the bundle, including one set -e forces on a command nobody expected
+# to fail: a bundle that did not pass its own checks must not be left behind.
+rm -f "$OUTPUT"
+trap 'rm -f "$OUTPUT"' EXIT
+
 MANIFEST="mcpb/manifest.json"
 ICON="mcpb/icon.png"
 LAUNCHER="mcpb/linux/launch.sh"
@@ -118,13 +128,6 @@ cp "$LINUX_ARM64_BIN" "$BUNDLE_DIR/server/linux/gitlab-mcp-server-linux-arm64"
   chmod 0644 "${ENTRIES[@]}"
   chmod 0755 server/gitlab-mcp-server.exe "${EXECUTABLES[@]}"
 )
-
-OUTPUT="$DIST_DIR/gitlab-mcp-server.mcpb"
-rm -f "$OUTPUT"
-# From here until every check below has passed, any exit removes the bundle,
-# including one set -e forces on a command nobody expected to fail: a bundle
-# that did not pass its own checks must not be left for a later step to find.
-trap 'rm -f "$OUTPUT"' EXIT
 
 # A .mcpb is a plain zip with manifest.json at its root — the layout above is
 # the whole specification, and `zip` produces it. This used to shell out to

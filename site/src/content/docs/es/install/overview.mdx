@@ -32,7 +32,7 @@ Nunca comprueba si hay actualizaciones ni reemplaza su propio binario, en ningú
 - **Quieres la huella más pequeña y ningún runtime.** El binario nativo. Homebrew y winget instalan ese mismo binario y se ocupan de las actualizaciones.
 - **Tu cliente ya lanza servidores con `npx`, `uvx` o `dnx`.** Los paquetes de npm, PyPI y NuGet: nada que instalar de antemano, y el cliente resuelve la versión más nueva por su cuenta.
 - **Prefieres no poner nada en el host, o despliegas para un equipo.** Docker, sobre stdio para un cliente o en modo HTTP tras un puerto.
-- **Usas Claude Desktop.** La extensión `.mcpb`: un clic, y el token vive en el llavero del sistema operativo.
+- **Usas Claude Desktop.** La extensión `.mcpb`: un clic, y el token se cifra con una clave del almacén de credenciales del sistema operativo, donde lo hay.
 - **Solo quieres echar un vistazo.** El endpoint alojado, desde cualquier cliente con soporte HTTP o directamente desde el inspector del navegador.
 
 <CardGrid>

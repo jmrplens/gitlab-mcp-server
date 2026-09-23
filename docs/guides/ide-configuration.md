@@ -220,7 +220,8 @@ VS Code discovers the GitLab authorization server automatically via `/.well-know
 ## Claude Desktop
 
 > **Easiest path**: install the one-click [.mcpb desktop extension](claude-desktop-extension.md)
-> instead — no JSON editing, token stored in the OS keychain.
+> instead: no JSON editing, and the token encrypted with a key from the
+> operating system's credential store where one exists.
 
 ### Stdio Mode
 

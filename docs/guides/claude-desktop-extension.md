@@ -119,9 +119,11 @@ launcher's own `chmod` covers an archive that lost those bits.
 `scripts/mcpb_launch_sh_test.py` drives the launcher with stub binaries under
 `/bin/sh`, `dash`, `busybox sh` and `bash --posix`, whichever the machine has.
 `scripts/mcpb_manifest_test.py` pins the manifest values this layout depends
-on, and `scripts/build_mcpb_test.py` runs the build script over stand-in
-binaries and checks that it refuses, and removes, each bundle its rules exist
-for. All three run in CI's supply-chain job.
+on, and `scripts/build_mcpb_sh_test.py` runs the build script over stand-in
+binaries, checks that it refuses, and removes, each bundle its rules exist
+for, and checks that each server entry is packed from the right file of both
+the `dist/` that `make mcpb` leaves and the one the release job builds from.
+All three run in CI's supply-chain job.
 
 A `.mcpb` is a plain zip with `manifest.json` at its root, so the script builds
 it with `zip` and fixed entry timestamps: the same inputs produce the same
@@ -145,7 +147,7 @@ asset. The manifest version is stamped from the git tag by
 | `scripts/build-mcpb.sh`          | Bundle assembly, deterministic `zip` packing, and the checks on the archive  |
 | `scripts/mcpb_launch_sh_test.py` | Tests of the Linux launcher, run in CI                                       |
 | `scripts/mcpb_manifest_test.py`  | Tests of the manifest values the bundle layout depends on, run in CI         |
-| `scripts/build_mcpb_test.py`     | Tests of the build script's checks and its removal of a refused bundle       |
+| `scripts/build_mcpb_sh_test.py`  | Tests of the build script's checks and its removal of a refused bundle       |
 | `PRIVACY.md`                     | Privacy policy referenced by the manifest                                    |
 
 ## Privacy and directory submission

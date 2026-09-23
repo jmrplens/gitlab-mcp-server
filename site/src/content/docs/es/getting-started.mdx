@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Instalar el servidor",
-            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. Los lanzadores de npm (npx), PyPI (uvx) y NuGet (dnx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
+            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que cifra el token con una clave del almacén de credenciales del sistema operativo, donde lo hay. Los lanzadores de npm (npx), PyPI (uvx) y NuGet (dnx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#instalación-rápida"
           },
           {
@@ -434,7 +434,8 @@ Usa variables de entrada de VS Code para evitar almacenar el token en texto plan
 :::tip[La vía más fácil]
 Claude Desktop también se instala con un clic mediante la
 [extensión de escritorio .mcpb](/gitlab-mcp-server/es/claude-desktop/) — sin
-editar JSON y con el token guardado en el llavero del sistema.
+editar JSON y con el token cifrado con una clave del almacén de credenciales
+del sistema operativo, donde lo hay.
 :::
 
 Edita `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o `%APPDATA%\Claude\claude_desktop_config.json` (Windows):

@@ -188,7 +188,7 @@ gitlab-mcp-server/
 │       ├── ce/                  # What only an unlicensed instance does (4)
 │       └── ee/                  # Premium and Ultimate (45)
 ├── plan/                        # Implementation plans for features
-├── mcpb/                        # Claude Desktop extension (.mcpb) manifest, icon and linux/launch.sh, the Linux entry point that picks the amd64 or arm64 binary by uname -m (packed and checked by scripts/build-mcpb.sh; tests in scripts/mcpb_launch_sh_test.py for the launcher, scripts/mcpb_manifest_test.py for the manifest and scripts/build_mcpb_test.py for the build script's checks)
+├── mcpb/                        # Claude Desktop extension (.mcpb) manifest, icon and linux/launch.sh, the Linux entry point that picks the amd64 or arm64 binary by uname -m (packed and checked by scripts/build-mcpb.sh; tests in scripts/mcpb_launch_sh_test.py for the launcher, scripts/mcpb_manifest_test.py for the manifest and scripts/build_mcpb_sh_test.py for the build script's checks and the files it packs from both dist/ layouts)
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
 │   ├── agents/                  # 7 specialized AI agents

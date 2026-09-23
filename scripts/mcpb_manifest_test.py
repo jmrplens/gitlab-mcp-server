@@ -84,7 +84,7 @@ class McpbManifestTest(unittest.TestCase):
 
     def test_the_launcher_the_linux_override_names_is_in_the_tree(self):
         # scripts/build-mcpb.sh packs this file as the entry the override
-        # names; build_mcpb_test.py checks that the packed bytes are these.
+        # names; build_mcpb_sh_test.py checks that the packed bytes are these.
         self.assertTrue(os.path.isfile(LAUNCHER_SOURCE), LAUNCHER_SOURCE)
 
 
