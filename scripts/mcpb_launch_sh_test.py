@@ -254,6 +254,11 @@ class McpbLaunchShTest(unittest.TestCase):
     def test_passes_shellcheck_as_posix_sh(self):
         shellcheck = shutil.which("shellcheck")
         if shellcheck is None:
+            # A skip keeps the job green, so on a runner without shellcheck
+            # this check would stop running and nobody would be told.
+            # GitHub sets CI on every step; there a missing tool is a failure.
+            if os.environ.get("CI"):
+                self.fail("shellcheck is not installed, and CI must run this check rather than skip it")
             self.skipTest("shellcheck is not installed")
         result = subprocess.run(
             [shellcheck, "--shell=sh", LAUNCHER], capture_output=True, timeout=60, check=False)

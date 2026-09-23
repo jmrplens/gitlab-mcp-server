@@ -123,7 +123,10 @@ on, and `scripts/build_mcpb_sh_test.py` runs the build script over stand-in
 binaries, checks that it refuses, and removes, each bundle its rules exist
 for, and checks that each server entry is packed from the right file of both
 the `dist/` that `make mcpb` leaves and the one the release job builds from.
-All three run in CI's supply-chain job.
+All three run in CI's supply-chain job. On a machine without `shellcheck`, or
+without the `bash`, `jq`, `zip` and `unzip` the build script needs, the cases
+that need them skip; in CI, where GitHub sets `CI`, they fail instead, so the
+job cannot pass with them unrun.
 
 A `.mcpb` is a plain zip with `manifest.json` at its root, so the script builds
 it with `zip` and fixed entry timestamps: the same inputs produce the same

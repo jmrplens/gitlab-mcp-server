@@ -150,7 +150,13 @@ class BuildMcpbTest(unittest.TestCase):
     def setUp(self):
         missing = [tool for tool in ("bash", "jq", "zip", "unzip") if shutil.which(tool) is None]
         if missing:
-            self.skipTest("the build script needs " + ", ".join(missing))
+            reason = "the build script needs " + ", ".join(missing)
+            # A skip keeps the job green, so on a runner without these tools
+            # every case here would stop running and nobody would be told.
+            # GitHub sets CI on every step; there a missing tool is a failure.
+            if os.environ.get("CI"):
+                self.fail(reason + ", and CI must run these cases rather than skip them")
+            self.skipTest(reason)
         self.work = tempfile.mkdtemp(prefix="build-mcpb-")
         self.addCleanup(shutil.rmtree, self.work, True)
         os.makedirs(os.path.join(self.work, "mcpb", "linux"))

@@ -878,6 +878,10 @@ jobs:
       # scripts/build_mcpb_sh_test.py runs scripts/build-mcpb.sh over stand-in
       # binaries against each bundle its checks refuse, and over the dist/
       # layouts of make mcpb and of the release job.
+      # shellcheck, bash, jq, zip, unzip and wget come from the runner image.
+      # Off CI a test skips when one is missing; here, where GitHub sets CI,
+      # it fails instead, so a runner image that drops one turns this step red
+      # rather than letting it pass with those cases unrun.
       - name: Test the installer, launcher and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
