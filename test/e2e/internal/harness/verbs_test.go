@@ -15,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -86,10 +88,15 @@ func newSubscriptionStub(versions []string, declined ...string) *subscriptionStu
 func inProcessSession(t *testing.T, env *Env, server *mcp.Server) *Session {
 	t.Helper()
 
+	const label = "dynamic-default-full-in-process"
 	conn := &sessionConn{
-		label:       "dynamic-default-full-in-process",
-		cfg:         ServerConfig{}.normalized(),
-		inst:        env.inst,
+		label: label,
+		cfg:   ServerConfig{}.normalized(),
+		inst:  env.inst,
+		// A process that was never started, so a verb that fails and
+		// describes the child it would have died of says there is none
+		// rather than reading a process that is not there.
+		proc:        newServerProcess(label, "", childEnv{}),
 		notifier:    newUpdateNotifier(),
 		acks:        newUpdateNotifier(),
 		progress:    newProgressCollector(),
@@ -144,6 +151,110 @@ func awaitCount(t *testing.T, counter *atomic.Int64, want int64, what string) {
 	})
 	if err != nil {
 		t.Fatalf("waiting for %s to reach %d: %v", what, want, err)
+	}
+}
+
+// fatalCaseEnv names the case [TestFatalCase_NamedByTheParent_RunsInAChildProcess]
+// runs, and is set only by a parent test that expects that child to fail.
+const fatalCaseEnv = "E2E_HARNESS_FATAL_CASE"
+
+// fatalCaseReturned is what a child prints when the verb it drove returned
+// instead of ending its test, which is the one outcome a parent must tell
+// apart from the failure it expects.
+const fatalCaseReturned = "the verb returned instead of failing its test"
+
+// fatalCases drive a verb into the branch that fails the test calling it.
+//
+// A verb that fails its test calls t.Fatalf, which ends the test that called
+// it, so the branch can be watched only from outside the process it ends: a
+// parent runs the case in a child and reads what the child printed.
+var fatalCases = map[string]func(t *testing.T){
+	"complete refused": func(t *testing.T) {
+		t.Helper()
+		server := mcp.NewServer(&mcp.Implementation{Name: "completion-stub", Version: "1"}, &mcp.ServerOptions{
+			CompletionHandler: func(context.Context, *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+				return nil, errStubCompletion
+			},
+		})
+		session := inProcessSession(t, newEnv(t, offlineInstance()), server)
+		session.CompletePrompt("summarize", "project_id", "")
+	},
+	"subscribe not acknowledged": func(t *testing.T) {
+		t.Helper()
+		shortAckWait(t, 200*time.Millisecond)
+		session := inProcessSession(t, newEnv(t, offlineInstance()), newSubscriptionStub(nil, declinedURI).server)
+		session.Subscribe(declinedURI)
+	},
+}
+
+// errStubCompletion is what the in-process completion stub answers every
+// completion with.
+var errStubCompletion = errors.New("stub: no completion for this argument")
+
+// TestFatalCase_NamedByTheParent_RunsInAChildProcess runs the fatal case a
+// parent test named, and skips when none did, which is every ordinary run.
+func TestFatalCase_NamedByTheParent_RunsInAChildProcess(t *testing.T) {
+	name := os.Getenv(fatalCaseEnv)
+	if name == "" {
+		t.Skip("runs only as the child of a test that expects it to fail")
+	}
+	run, known := fatalCases[name]
+	if !known {
+		t.Fatalf("no fatal case is named %q", name)
+	}
+	run(t)
+	t.Error(fatalCaseReturned)
+}
+
+// runFatalCase runs one fatal case in a child test process and returns what
+// the child printed, failing unless the child failed its test by ending it.
+//
+// The child is this test binary asked for the one test above. The coverage
+// directory this process was given is handed on, so what the child executes
+// is counted in the profile of the run that started it.
+func runFatalCase(t *testing.T, name string) string {
+	t.Helper()
+	args := []string{"-test.run=^TestFatalCase_NamedByTheParent_RunsInAChildProcess$", "-test.count=1"}
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "-test.gocoverdir=") {
+			args = append(args, arg)
+		}
+	}
+	// #nosec G204 G702 -- the binary is this test binary, and the arguments are
+	// constants plus the coverage flag it was itself started with.
+	cmd := exec.CommandContext(t.Context(), os.Args[0], args...)
+	cmd.Env = append(os.Environ(), fatalCaseEnv+"="+name)
+	out, err := cmd.CombinedOutput()
+	if _, exited := errors.AsType[*exec.ExitError](err); !exited {
+		t.Fatalf("the %q case did not fail its child test (%v):\n%s", name, err, out)
+	}
+	if strings.Contains(string(out), fatalCaseReturned) {
+		t.Fatalf("in the %q case %s:\n%s", name, fatalCaseReturned, out)
+	}
+	return string(out)
+}
+
+// TestSession_Complete_Refused_FailsTheTestNamingTheArgument checks the
+// completion verb's refusal: a completion the server answers with an error
+// fails the test, naming the reference and argument it asked about and the
+// server's own reason.
+func TestSession_Complete_Refused_FailsTheTestNamingTheArgument(t *testing.T) {
+	out := runFatalCase(t, "complete refused")
+
+	if !strings.Contains(out, "completion/complete summarize project_id: ") || !strings.Contains(out, errStubCompletion.Error()) {
+		t.Errorf("the child printed:\n%s\nwant the refused completion named with the server's reason", out)
+	}
+}
+
+// TestSession_Subscribe_NotAcknowledged_FailsTheTestNamingTheURI checks the
+// subscribe verb's refusal on protocol 2026-07-28: a subscription the server
+// never acknowledges fails the test, naming the resource and why it counts as
+// refused, rather than handing back a subscription nothing will ever notify.
+func TestSession_Subscribe_NotAcknowledged_FailsTheTestNamingTheURI(t *testing.T) {
+	out := runFatalCase(t, "subscribe not acknowledged")
+
+	if !strings.Contains(out, "resources/subscribe "+declinedURI+": ") || !strings.Contains(out, errNotAcknowledged.Error()) {
+		t.Errorf("the child printed:\n%s\nwant the unacknowledged subscription named with the reason", out)
 	}
 }
 

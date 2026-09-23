@@ -1,8 +1,8 @@
 //go:build e2e
 
-// group_tracker_test.go drives the group label and group milestone creators
-// against the stub: what each asks GitLab for, what it reads back, and a
-// refusal handed back as it came.
+// group_tracker_test.go drives the group label and group milestone builders
+// against the stub, whole and through the halves that take a client: what each
+// asks GitLab for, what it reads back, and a refusal handed back as it came.
 
 package fixture
 
@@ -70,4 +70,62 @@ func TestCreateGroupMilestone_Answers_RunsTwoWeeksFromTheStart(t *testing.T) {
 	if !IsStatus(err, http.StatusBadRequest) || got != (GroupMilestone{}) {
 		t.Errorf("createGroupMilestone() on a refusal = %+v, %v; want nothing and GitLab's 400", got, err)
 	}
+}
+
+// TestNewGroupLabel_Detached_AsksForItUnderTheRunForThisTest checks the group
+// label builder whole: asked for in the group it was given, named under the
+// run and described by the test that made it, and handed back as GitLab
+// answered it.
+func TestNewGroupLabel_Detached_AsksForItUnderTheRunForThisTest(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/groups/1/labels", stubCreated(map[string]any{"id": 11, "name": "as-answered", "color": labelColor}))
+
+	got := NewGroupLabel(e, Group{ID: 1}, "label")
+
+	if want := (GroupLabel{ID: 11, Name: "as-answered", Color: labelColor}); got != want {
+		t.Errorf("NewGroupLabel() = %+v, want %+v", got, want)
+	}
+	sent := requestTo(t, stub, http.MethodPost, "/api/v4/groups/1/labels").Body
+	if name, _ := sent["name"].(string); !isScopedName(name, "label", e) || sent["description"] != "e2e: "+t.Name() {
+		t.Errorf("NewGroupLabel() sent %v, want a name under the run described by this test", sent)
+	}
+}
+
+// TestNewGroupMilestone_Detached_RunsTwoWeeksFromToday checks the group
+// milestone builder whole: asked for in the group it was given, named under
+// the run, and dated from today for two weeks.
+func TestNewGroupMilestone_Detached_RunsTwoWeeksFromToday(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/groups/1/milestones", stubCreated(map[string]any{"id": 12, "iid": 3, "title": "as-answered"}))
+	before := time.Now().UTC()
+
+	got := NewGroupMilestone(e, Group{ID: 1}, "milestone")
+
+	after := time.Now().UTC()
+	if want := (GroupMilestone{ID: 12, IID: 3, Title: "as-answered"}); got != want {
+		t.Errorf("NewGroupMilestone() = %+v, want %+v", got, want)
+	}
+	sent := requestTo(t, stub, http.MethodPost, "/api/v4/groups/1/milestones").Body
+	if title, _ := sent["title"].(string); !isScopedName(title, "milestone", e) || sent["description"] != "e2e: "+t.Name() {
+		t.Errorf("NewGroupMilestone() sent %v, want a title under the run described by this test", sent)
+	}
+	start, _ := sent["start_date"].(string)
+	due, _ := sent["due_date"].(string)
+	if start != before.Format(time.DateOnly) && start != after.Format(time.DateOnly) {
+		t.Errorf("NewGroupMilestone() starts on %q, want today", start)
+	}
+	if length := mustDate(t, due).Sub(mustDate(t, start)); length != groupMilestoneLength {
+		t.Errorf("NewGroupMilestone() runs from %s to %s, %s, want %s", start, due, length, groupMilestoneLength)
+	}
+}
+
+// mustDate reads a date the way GitLab sends one, failing the test on
+// anything else.
+func mustDate(t *testing.T, value string) time.Time {
+	t.Helper()
+	date, err := time.Parse(time.DateOnly, value)
+	if err != nil {
+		t.Fatalf("reading date %q: %v", value, err)
+	}
+	return date
 }

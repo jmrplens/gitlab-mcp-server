@@ -789,6 +789,105 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	if found.Session != "dynamic-default-full" || found.Surface != string(SurfaceDynamic) {
 		t.Errorf("subscribe line names session %q on %q, want the session it was made on", found.Session, found.Surface)
 	}
+	if found.Requirement != Any.token() {
+		t.Errorf("subscribe line carries requirement %q, want the instance's %q", found.Requirement, Any.token())
+	}
+}
+
+// TestEnvRecorder_Record_NilCallOrRecorder_RecordsNothing checks the two
+// guards on the buffer: a call that is not there is not buffered, and a test
+// with no recorder takes a call without failing, since both reach it from the
+// SDK's goroutines where a panic would take the whole run down.
+func TestEnvRecorder_Record_NilCallOrRecorder_RecordsNothing(t *testing.T) {
+	env := newEnv(t, offlineInstance())
+	var none *envRecorder
+
+	env.recorder.record(nil)
+	none.record(&pendingCall{line: &e2ecalls.Call{Method: methodReadResource}})
+
+	if lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed); len(lines) != 0 {
+		t.Errorf("finish() wrote %d lines, want none from a nil call", len(lines))
+	}
+}
+
+// TestRecordSending_AttributionWithoutARecorder_IsPassedThrough checks that a
+// request attributed to no recorder is sent as it came: neither stamped with a
+// trace nor recorded, since there is no test to file it under.
+func TestRecordSending_AttributionWithoutARecorder_IsPassedThrough(t *testing.T) {
+	conn := &sessionConn{}
+	sent := 0
+	send := conn.recordSending()(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		sent++
+		return &mcp.CallToolResult{}, nil
+	})
+	params := &mcp.CallToolParams{Name: "gitlab_issue_list"}
+	ctx := withAttribution(t.Context(), callAttribution{purpose: PurposeTest})
+
+	if _, err := send(ctx, methodCallTool, &mcp.ClientRequest[*mcp.CallToolParams]{Params: params}); err != nil {
+		t.Fatalf("the middleware answered %v, want the call passed through", err)
+	}
+	if sent != 1 {
+		t.Errorf("the call reached the transport %d times, want once", sent)
+	}
+	if _, stamped := params.GetMeta()[traceParentKey]; stamped {
+		t.Error("a call attributed to no recorder was stamped with a trace nothing will join")
+	}
+}
+
+// TestDescribeToolRequest_NotAToolCall_NamesNothing checks the requests that
+// carry no tool: another method's params, and a tool call whose params are a
+// typed nil, which the SDK hands a middleware and which must not be read.
+func TestDescribeToolRequest_NotAToolCall_NamesNothing(t *testing.T) {
+	cases := []struct {
+		name string
+		req  mcp.Request
+	}{
+		{name: "another method", req: &mcp.ClientRequest[*mcp.ReadResourceParams]{Params: &mcp.ReadResourceParams{URI: "gitlab://tools"}}},
+		{name: "typed nil params", req: &mcp.ClientRequest[*mcp.CallToolParams]{}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if tool, arguments := describeToolRequest(testCase.req); tool != "" || arguments != nil {
+				t.Errorf("describeToolRequest() = %q, %v; want nothing", tool, arguments)
+			}
+		})
+	}
+}
+
+// TestRecordElicitation_NoParams_RecordsNothing checks that an elicitation
+// whose params are a typed nil is passed over rather than read, with a call in
+// flight to attribute it to.
+func TestRecordElicitation_NoParams_RecordsNothing(t *testing.T) {
+	env := newEnv(t, offlineInstance())
+	conn := &sessionConn{label: "dynamic-default-full", inst: env.inst}
+	release := conn.holdInFlight(callAttribution{rec: env.recorder, purpose: PurposeTest})
+	defer release()
+
+	conn.recordElicitation(&mcp.ElicitRequest{})
+
+	if lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed); len(lines) != 0 {
+		t.Errorf("recordElicitation() wrote %d lines for an elicitation with no params, want none", len(lines))
+	}
+}
+
+// TestFixtureProfile_Settings_RecordWhatTheRuntimeHad checks each flag of the
+// fixture profile against a runtime that had some fixtures and not others, so
+// a flag read the wrong way round is one that disagrees.
+func TestFixtureProfile_Settings_RecordWhatTheRuntimeHad(t *testing.T) {
+	inst := offlineInstance()
+	inst.settings = testSettings(map[string]string{
+		envGitLabURL: "http://gitlab.test", envGitLabToken: stubToken,
+		envFixtureURL: "http://fixtures.test", envGitHubToken: "ghp-test", envSeeds: "users, groups,users",
+	})
+	inst.runnerOnce.Do(func() {})
+
+	got := fixtureProfile(inst)
+
+	want := e2ecalls.FixtureProfile{FixtureService: true, GHToken: true, Seeds: []string{"groups", "users"}}
+	if got.Runner != want.Runner || got.FixtureService != want.FixtureService || got.Bitbucket != want.Bitbucket ||
+		got.GHToken != want.GHToken || !slices.Equal(got.Seeds, want.Seeds) {
+		t.Errorf("fixtureProfile() = %+v, want %+v", got, want)
+	}
 }
 
 // TestRecordReceiving_Acknowledgement_WakesOnlyTheURIsItNames checks the one
@@ -906,33 +1005,22 @@ func TestSessionLines_Completions_AreSpelledAsTheCompletionCallsNameThem(t *test
 		session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
 		completions := sessionLineCompletions(t, session)
 
-		var want []string
-		for _, spec := range session.PromptSpecs() {
-			for _, argument := range append(append([]string{}, spec.Required...), spec.Optional...) {
-				want = append(want, spec.Name+" "+argument)
-			}
-		}
-		for _, template := range session.ResourceTemplates() {
-			for _, variable := range TemplateVariables(template) {
-				want = append(want, template+" "+variable)
-			}
-		}
-		slices.Sort(want)
-		if !slices.Equal(completions, slices.Compact(want)) {
+		if want := listedCompletionReferences(session); !slices.Equal(completions, want) {
 			t.Errorf("the session line lists %d completions, want the %d the session's listings name", len(completions), len(want))
 		}
 
 		prompt := firstPromptWithAnArgument(t, session)
 		session.CompletePrompt(prompt.Name, prompt.Required[0], "")
 		session.CompleteResource("gitlab://project/{project_id}", "project_id", "")
+		calls := 0
 		for _, line := range env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed) {
-			call, isCall := line.(*e2ecalls.Call)
-			if !isCall || call.Method != methodComplete {
-				continue
+			if call, isCall := line.(*e2ecalls.Call); isCall && call.Method == methodComplete {
+				calls++
+				assertCompletionLine(t, call, completions)
 			}
-			if !slices.Contains(completions, call.Target) {
-				t.Errorf("a completion was recorded as %q, which the session line's list does not name", call.Target)
-			}
+		}
+		if calls != 2 {
+			t.Errorf("recorded %d completion calls, want the two this test made", calls)
 		}
 	})
 
@@ -943,6 +1031,40 @@ func TestSessionLines_Completions_AreSpelledAsTheCompletionCallsNameThem(t *test
 			t.Errorf("the minimal session line lists completions %q, want %q", got, want)
 		}
 	})
+}
+
+// listedCompletionReferences spells, independently of the harness's own
+// helper, every reference a session's listings offer a completion for: each
+// argument of each prompt and each variable of each template, sorted and
+// listed once.
+func listedCompletionReferences(session *Session) []string {
+	var want []string
+	for _, spec := range session.PromptSpecs() {
+		for _, argument := range append(append([]string{}, spec.Required...), spec.Optional...) {
+			want = append(want, spec.Name+" "+argument)
+		}
+	}
+	for _, template := range session.ResourceTemplates() {
+		for _, variable := range TemplateVariables(template) {
+			want = append(want, template+" "+variable)
+		}
+	}
+	slices.Sort(want)
+	return slices.Compact(want)
+}
+
+// assertCompletionLine checks one recorded completion call against the list
+// the session line counts it in, and that its duration is spelled in
+// milliseconds: a completion against a stub takes a few of them, so a
+// figure outside that range is a duration in another unit.
+func assertCompletionLine(t *testing.T, call *e2ecalls.Call, completions []string) {
+	t.Helper()
+	if !slices.Contains(completions, call.Target) {
+		t.Errorf("a completion was recorded as %q, which the session line's list does not name", call.Target)
+	}
+	if call.DurationMS <= 0 || call.DurationMS >= 60_000 {
+		t.Errorf("the completion of %q was recorded as taking %v ms", call.Target, call.DurationMS)
+	}
 }
 
 // TestSessionLines_SessionThatNeverStarted_WritesNoLine checks that a pool

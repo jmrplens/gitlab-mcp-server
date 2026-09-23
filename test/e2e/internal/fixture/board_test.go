@@ -1,7 +1,8 @@
 //go:build e2e
 
-// board_test.go pins the one piece of the board builder that is not a call
-// to GitLab: reading the number a REST action needs out of the global ID
+// board_test.go drives the board builders against the stub: the mutation each
+// sends and for which group or project, what a refused or empty answer comes
+// back as, and reading the number a REST action needs out of the global ID
 // the mutation answers with.
 
 package fixture
@@ -63,6 +64,29 @@ func TestCreateProjectBoard_Created_NamesTheProjectAndReadsTheNumber(t *testing.
 	}
 	if len(stub.graphqlDocuments) != 1 || stub.graphqlDocuments[0] != projectBoardMutation {
 		t.Errorf("the stub was sent %q, want exactly the project board mutation", stub.graphqlDocuments)
+	}
+}
+
+// TestNewGroupBoard_Detached_AsksForTheGroupsBoardUnderTheRun checks the
+// builder whole: the group mutation, carrying the group's path and a name
+// scoped to the run, and the board handed back with the number and the global
+// ID GitLab answered.
+func TestNewGroupBoard_Detached_AsksForTheGroupsBoardUnderTheRun(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.configure(func() {
+		stub.graphqlAnswers = []string{`{"data":{"createBoard":{"board":{"id":"gid://gitlab/Board/9"},"errors":[]}}}`}
+	})
+
+	board := NewGroupBoard(e, Group{ID: 1, Path: "e2e-group"}, "board")
+
+	if board.ID != 9 || board.GID != "gid://gitlab/Board/9" || !isScopedName(board.Name, "board", e) {
+		t.Errorf("NewGroupBoard() = %+v, want board 9 named under the run", board)
+	}
+	if len(stub.graphqlDocuments) != 1 || stub.graphqlDocuments[0] != groupBoardMutation {
+		t.Fatalf("the stub was sent %q, want exactly the group board mutation", stub.graphqlDocuments)
+	}
+	if sent := stub.graphqlVariables[0]; sent["groupPath"] != "e2e-group" || sent["name"] != board.Name {
+		t.Errorf("the mutation carried %v, want the group's path and the board's name", sent)
 	}
 }
 

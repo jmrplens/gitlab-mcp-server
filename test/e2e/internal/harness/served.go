@@ -185,16 +185,16 @@ func TemplateVariables(template string) []string {
 	var names []string
 	rest := template
 	for {
-		open := strings.IndexByte(rest, '{')
-		if open < 0 {
+		_, opened, found := strings.Cut(rest, "{")
+		if !found {
 			return names
 		}
-		end := strings.IndexByte(rest[open:], '}')
-		if end < 0 {
+		name, after, closed := strings.Cut(opened, "}")
+		if !closed {
 			return names
 		}
-		names = append(names, strings.TrimPrefix(rest[open+1:open+end], "+"))
-		rest = rest[open+end+1:]
+		names = append(names, strings.TrimPrefix(name, "+"))
+		rest = after
 	}
 }
 

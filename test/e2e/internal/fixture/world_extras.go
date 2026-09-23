@@ -368,9 +368,10 @@ func createWorldGroupMilestone(ctx context.Context, tb testing.TB, client *gitla
 func createWorldPipeline(ctx context.Context, tb testing.TB, client *gitlabclient.Client, _ string, world *World) error {
 	tb.Helper()
 	project := world.Project
-	if _, err := retryWhenIn(ctx, tb, "commit the World's pipeline configuration", createRetries, IsRetryable, func() (Commit, error) {
+	_, err := retryWhenIn(ctx, tb, "commit the World's pipeline configuration", createRetries, IsRetryable, func() (Commit, error) {
 		return commitWorldCIFile(ctx, client, project)
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	pipeline, err := retryWhenIn(ctx, tb, "create the World pipeline", createRetries, IsRetryable, func() (Pipeline, error) {

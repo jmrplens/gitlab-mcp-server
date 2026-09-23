@@ -73,6 +73,42 @@ func TestCreateDeployment_Answers_StatesTheBranchAndTheStatus(t *testing.T) {
 	}
 }
 
+// TestNewEnvironment_Detached_AsksForItUnderTheRun checks the environment
+// builder whole: the environment is asked for in the project it was given,
+// named under the run, and handed back as GitLab answered it.
+func TestNewEnvironment_Detached_AsksForItUnderTheRun(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/environments", stubCreated(map[string]any{"id": 5, "name": "as-answered"}))
+
+	got := NewEnvironment(e, Project{ID: 2}, "env")
+
+	if want := (Environment{ID: 5, Name: "as-answered"}); got != want {
+		t.Errorf("NewEnvironment() = %+v, want %+v", got, want)
+	}
+	if sent, _ := requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/environments").Body["name"].(string); !isScopedName(sent, "env", e) {
+		t.Errorf("NewEnvironment() asked for %q, want a name under the run", sent)
+	}
+}
+
+// TestNewDeployment_Detached_DeploysTheCommitFromTheDefaultBranch checks the
+// deployment builder whole: the commit it was given, deployed into the
+// environment it was given, from the project's default branch.
+func TestNewDeployment_Detached_DeploysTheCommitFromTheDefaultBranch(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/deployments", stubCreated(map[string]any{"id": 6, "sha": "abc123", "status": "running"}))
+	environment := Environment{ID: 5, Name: "env-run"}
+
+	got := NewDeployment(e, Project{ID: 2, DefaultBranch: "trunk"}, environment, "abc123")
+
+	if want := (Deployment{ID: 6, Environment: environment, SHA: "abc123", Status: "running"}); got != want {
+		t.Errorf("NewDeployment() = %+v, want %+v", got, want)
+	}
+	sent := requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/deployments").Body
+	if sent["ref"] != "trunk" || sent["sha"] != "abc123" || sent["environment"] != "env-run" {
+		t.Errorf("NewDeployment() sent %v, want the commit into env-run from the default branch", sent)
+	}
+}
+
 // TestDeploymentFacts_Constants_StateWhatGitLab19Demands checks that a
 // fixture deployment says its ref is a branch and is created running, the
 // two things GitLab 19 refuses a request without.

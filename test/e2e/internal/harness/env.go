@@ -18,6 +18,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // errLedgerClosed is returned by a ledger asked to record a cleanup after it
@@ -102,6 +104,36 @@ func newEnv(t *testing.T, inst *instance, opts ...Option) *Env {
 		env.ledger.cleanupAll(cleanupCtx, t)
 	})
 	return env
+}
+
+// detachedPackage is the package a detached Env's run ID is named after, so a
+// name one hands out cannot be mistaken for a real package's.
+const detachedPackage = "detached"
+
+// NewDetached prepares an Env against a GitLab the caller already holds a
+// client for, with none of the bootstrap [New] runs: no probe, no runtime
+// guard, no preparation of the instance, and a run ID of its own.
+//
+// It is for the libraries' own tests. The fixture library's builders take an
+// Env, so without one a test could drive only the halves of a builder that
+// take a client, and the half that turns an Env into those arguments (which
+// branch a deployment names, which project a board goes in) would be proven by
+// nothing short of a Docker run. A scenario never calls it: one that skipped
+// the bootstrap would run against an instance nobody guarded, which is why the
+// harness's source gate refuses it under test/e2e/gitlab.
+//
+// What a probe would have learned is left at its zero value, so everything
+// the Env answers from it (the runtime, the tier, the user) answers nothing,
+// and a test that needs a real answer belongs in a real run.
+func NewDetached(t *testing.T, client *gitlabclient.Client) *Env {
+	t.Helper()
+	return newEnv(t, &instance{
+		settings:    settings{values: map[string]string{}},
+		requirement: Any,
+		pkg:         detachedPackage,
+		runID:       configuredRunID(time.Now(), "", detachedPackage),
+		client:      client,
+	})
 }
 
 // Skipf ends this test with a reason the record carries.

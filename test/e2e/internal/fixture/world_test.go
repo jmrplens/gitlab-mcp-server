@@ -457,3 +457,113 @@ func TestTeardownWorld_PartialBuild_DeletesWhatExists(t *testing.T) {
 		t.Errorf("teardownWorld(nothing built) error = %v, want nil", err)
 	}
 }
+
+// scriptWorldBuild tells the stub to accept everything a World's build asks
+// for, the core and every extra, and puts each object where the digest reads
+// it back.
+//
+// The commits route answers twice, in the order the build commits: the World
+// file on its branch, then the pipeline configuration on the default branch.
+// The merge request is answered as already mergeable, which is what ends the
+// build's wait for GitLab to prepare it.
+func scriptWorldBuild(stub *stubGitLab) {
+	stubWorld(stub)
+	scriptWorldExtras(stub)
+	stubExtraState(stub)
+	stub.answers(http.MethodPost, "/api/v4/groups", stubCreated(map[string]any{
+		"id": 1, "name": "World group", "full_path": "e2e-world-group-run", "path": "e2e-world-group-run",
+	}))
+	stub.answers(http.MethodPost, "/api/v4/projects", stubCreated(map[string]any{
+		"id": 2, "name": "World project", "path_with_namespace": "e2e-world-group-run/e2e-world-project-run",
+		"default_branch": "main", "namespace": map[string]any{"id": 1},
+	}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/repository/branches", stubCreated(map[string]any{
+		"name": worldBranch, "commit": map[string]any{"id": "feature-sha"},
+	}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/repository/commits",
+		stubCreated(map[string]any{"id": "feature-sha", "short_id": "feature"}),
+		stubCreated(map[string]any{"id": "ci-sha", "short_id": "ci-sha"}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/merge_requests", stubCreated(map[string]any{
+		"iid": 3, "title": worldMergeTitle, "source_branch": worldBranch, "target_branch": "main",
+	}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/issues", stubCreated(map[string]any{"id": 40, "iid": 4, "title": worldIssueTitle}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/labels", stubCreated(map[string]any{"id": 5, "name": "world-label"}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/milestones", stubCreated(map[string]any{"id": 6, "iid": 1, "title": "world-milestone"}))
+	stub.configure(func() {
+		mergeRequest, _ := stub.state["/api/v4/projects/2/merge_requests/3"].(map[string]any)
+		mergeRequest["detailed_merge_status"] = "mergeable"
+	})
+}
+
+// TestBuildWorld_Detached_MakesTheCoreThenTheExtrasThenTakesTheDigest drives
+// the whole build against the stub: the group and project named for the run,
+// the core objects filled in from what GitLab answered, every extra made, and
+// the digest taken last, so its baseline holds the extras and the commit the
+// pipeline configuration added rather than reading them as a change at the
+// end of the run.
+func TestBuildWorld_Detached_MakesTheCoreThenTheExtrasThenTakesTheDigest(t *testing.T) {
+	shortWorldPipelineWaits(t)
+	stub, e := detachedStub(t)
+	scriptWorldBuild(stub)
+	world := &World{}
+
+	buildWorld(e, world)
+
+	core := []struct {
+		name      string
+		got, want any
+	}{
+		{name: "group", got: world.Group.ID, want: int64(1)},
+		{name: "project", got: world.Project.ID, want: int64(2)},
+		{name: "branch", got: world.Branch.Name, want: worldBranch},
+		{name: "commit", got: world.Commit.SHA, want: "feature-sha"},
+		{name: "merge request", got: world.MergeRequest.IID, want: int64(3)},
+		{name: "issue", got: world.Issue.IID, want: int64(4)},
+		{name: "label", got: world.Label.ID, want: int64(5)},
+		{name: "milestone", got: world.Milestone.ID, want: int64(6)},
+	}
+	for _, check := range core {
+		t.Run("core "+check.name, func(t *testing.T) {
+			if check.got != check.want {
+				t.Errorf("%s = %v, want %v", check.name, check.got, check.want)
+			}
+		})
+	}
+	if len(world.unbound) != 0 {
+		t.Errorf("unbound = %v, want every extra made", world.unbound)
+	}
+	for _, extra := range worldExtras {
+		t.Run("extra "+extra.name, func(t *testing.T) {
+			if !extra.made(world) {
+				t.Errorf("the World holds no %s", extra.name)
+			}
+		})
+	}
+	for _, field := range []string{"group.name", "milestone.title", "tag.target", "pipeline.sha", "job.name"} {
+		t.Run("baseline "+field, func(t *testing.T) {
+			if _, read := world.baseline[field]; !read {
+				t.Errorf("the baseline has no %s, want the digest taken after every object was made", field)
+			}
+		})
+	}
+	if world.digest == "" || world.digest != Digest(world.baseline) {
+		t.Errorf("digest = %q, want the digest of the baseline", world.digest)
+	}
+
+	group := requestTo(t, stub, http.MethodPost, "/api/v4/groups").Body
+	if group["name"] != worldName(e.RunID(), worldGroupPrefix) || group["visibility"] != "private" {
+		t.Errorf("the group was asked for as %v, want the run's World group, private", group)
+	}
+	project := requestTo(t, stub, http.MethodPost, "/api/v4/projects").Body
+	wantProject := map[string]any{
+		"name": worldName(e.RunID(), worldProjectPrefix), "description": worldDescription(e.RunID()),
+		"namespace_id": float64(1), "initialize_with_readme": true, "default_branch": "main", "visibility": "private",
+	}
+	for field, want := range wantProject {
+		t.Run("project "+field, func(t *testing.T) {
+			if project[field] != want {
+				t.Errorf("the project was asked for with %s = %v, want %v", field, project[field], want)
+			}
+		})
+	}
+}
