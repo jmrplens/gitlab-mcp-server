@@ -79,7 +79,7 @@ The capabilities beside the tools are classified on the same states, each counte
 | `subscriptions` | capability surface                  |
 | `tool_manifest` | surface x mode x capability surface |
 
-The server registers its resources, prompts, completions and subscribable kinds from the capability surface alone, so neither the tool surface nor the protective mode changes what a session is served, and a cell per shape would be one nothing could fill differently from its twin. Subscriptions exist on the full capability surface only. `gitlab://tools` and `gitlab://tools/{id}` are the exception, counted as `tool_manifest`: they list what the session's tool surface registered after the read-only and safe passes, so they change along all three. The elicitation flows and the protective modes are reached through the actions a surface serves in a mode, and are counted where those are.
+The server registers its resources, prompts, completions and subscribable kinds from the capability surface and the operator's exclusions alone, so neither the tool surface nor the protective mode changes what a session is served, and a cell per shape would be one nothing could fill differently from its twin. Subscriptions exist on the full capability surface only. `gitlab://tools` and `gitlab://tools/{id}` are the exception, counted as `tool_manifest`: they list what the session's tool surface registered after the read-only and safe passes, so they change along all three. The elicitation flows and the protective modes are reached through the actions a surface serves in a mode, and are counted where those are.
 
 ### ce
 
