@@ -291,65 +291,27 @@ func answeredStatus(glErr *gl.ErrorResponse) int {
 // read off a response: a token GitLab has no record of is answered with the
 // same body as a permission refusal, so a 401 without the signal keeps the
 // sentence that names both causes.
+//
+// Which 401 names the credential is [gitlabclient.UnauthorizedNamesCredential]'s
+// to say, and not this file's. The HTTP pool reads the same rule to decide
+// whether a refused call ends the caller's credential at once, so a copy here
+// could describe a permission refusal to the model while the pool treats the
+// same answer as a revoked token, or the reverse.
 func classifyGitLabResponse(glErr *gl.ErrorResponse, status int) string {
-	if status == http.StatusUnauthorized && (tokenRejected(glErr) || answeredByGraphQL(glErr)) {
+	if status == http.StatusUnauthorized && gitlabclient.UnauthorizedNamesCredential(answeredRequest(glErr), glErr.Body) {
 		return rejectedTokenDescription
 	}
 	return ClassifyHTTPStatus(status)
 }
 
-// invalidTokenCode is the RFC 6750 error code GitLab's REST API guard writes
-// into a 401 about the credential itself.
-const invalidTokenCode = "invalid_token"
-
-// tokenRejected reports whether a REST response says GitLab refused the
-// credential itself, as opposed to refusing a valid credential a permission.
-//
-// GitLab's API guard answers an expired, revoked or impersonation-disabled
-// token with rack-oauth2's body carrying the code invalid_token
-// (lib/api/api_guard.rb, pinned by spec/requests/api/api_guard_spec.rb), and
-// nothing else in the REST API writes it. Grape's unauthorized!, which the
-// permission refusals call, renders {"message":"401 Unauthorized"} instead.
-//
-// The code is a REST signal and nothing more. Its absence decides nothing,
-// since a token GitLab cannot find at all is answered through unauthorized!
-// too, byte for byte like a permission refusal; and a GraphQL 401 never
-// carries it, which [answeredByGraphQL] answers for.
-func tokenRejected(glErr *gl.ErrorResponse) bool {
-	var body struct {
-		Error string `json:"error"`
-	}
-	return json.Unmarshal(glErr.Body, &body) == nil && body.Error == invalidTokenCode
-}
-
-// answeredByGraphQL reports whether the response came from GitLab's GraphQL
-// endpoint, where a 401 is always about the credential.
-//
-// That endpoint answers 401 only from its authentication checks
-// (GraphqlController#authorize_access_api! renders {"errors":[{"message":
-// "Invalid token"}]} for a token it could not use, and the two authentication
-// errors the controller rescues are the others), and it refuses a field the
-// caller may not see with a 200 carrying errors, never with a 401. So the
-// permission refusal a REST 401 can be has no GraphQL counterpart to confuse
-// it with. The suffix rather than the whole path is compared because an
-// instance served under a relative URL root puts its own prefix in front.
-//
-// The path compared is the one sent, escaped, and not the decoded Path.
-// client-go escapes a path parameter, so a REST read of the repository file
-// api/graphql goes out as .../files/api%2Fgraphql, and its decoded Path ends in
-// /api/graphql like the GraphQL endpoint's does. Escaped, a %2F-encoded
-// parameter never matches, while the GraphQL request, whose Path client-go
-// rewrites without an escaped form to disagree with, still does.
-//
-// An error that carries no response names no endpoint, and is not taken for
-// the GraphQL one. client-go builds none with a 401, since only its 404
-// sentinel lacks a response, so that guard is for an error built by hand.
-func answeredByGraphQL(glErr *gl.ErrorResponse) bool {
+// answeredRequest returns the request GitLab answered, or nil for an error that
+// carries no response. client-go builds none with a 401, since only its 404
+// sentinel lacks a response, so the nil is for an error built by hand.
+func answeredRequest(glErr *gl.ErrorResponse) *http.Request {
 	if glErr.Response == nil {
-		return false
+		return nil
 	}
-	req := glErr.Response.Request
-	return req != nil && req.URL != nil && strings.HasSuffix(req.URL.EscapedPath(), gl.GraphQLAPIEndpoint)
+	return glErr.Response.Request
 }
 
 // unauthorizedDescription is what a 401 means when nothing but its status is
@@ -371,9 +333,9 @@ const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) i
 	"a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
 
 // rejectedTokenDescription is what a 401 means when GitLab said the credential
-// itself was the problem, which [tokenRejected] and [answeredByGraphQL] decide.
-// The token is named in the parenthesis rather than as the subject because in
-// HTTP mode the credential is the caller's header, not the variable.
+// itself was the problem, which [gitlabclient.UnauthorizedNamesCredential]
+// decides. The token is named in the parenthesis rather than as the subject
+// because in HTTP mode the credential is the caller's header, not the variable.
 //
 // The scope is named because the GraphQL endpoint authenticates a token only
 // when it carries api or read_api, and answers one without either with the

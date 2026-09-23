@@ -1,6 +1,8 @@
 package gitlab
 
 import (
+	"bytes"
+	"cmp"
 	"errors"
 	"io"
 	"net/http"
@@ -58,20 +60,45 @@ func (c *Client) maxResponseBytes() int64 {
 type responseLimitTransport struct {
 	base   http.RoundTripper
 	client *Client
+	// reportsUnauthorized says whether a 401 answered through this transport
+	// reaches the client's unauthorized hook ([Client.SetOnUnauthorized]).
+	//
+	// The SDK chain reports, since every call a tool, resource, prompt or
+	// watcher makes passes there. The health client does not: each request it
+	// makes is a probe whose caller acts on the answer itself, and one of them
+	// is the probe that confirms a 401 nobody explained
+	// ([Client.CheckCredential]). Reporting that probe's own 401 would hand the
+	// pool a second refusal to confirm, raised by the request confirming the
+	// first.
+	reportsUnauthorized bool
 }
+
+// unauthorizedPeekBytes is how much of a 401's body the transport reads to
+// classify it.
+//
+// GitLab's 401 bodies are all well under 300 bytes, rack-oauth2's included, so
+// 4 KiB holds any of them whole. A longer body is cut at the bound and no
+// longer decodes, which classifies it as naming no cause: the direction that
+// leads to asking GitLab again rather than to acting on a guess.
+const unauthorizedPeekBytes = 4 << 10
 
 // RoundTrip delegates to the base transport and wraps the response body in a
 // reader that refuses to deliver more than the client's ceiling.
 func (t *responseLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.base.RoundTrip(req)
-	if err == nil && resp != nil && resp.StatusCode == http.StatusUnauthorized {
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	if t.reportsUnauthorized && resp.StatusCode == http.StatusUnauthorized {
 		// Innermost layer, so every call the SDK makes passes here: the first
 		// data call GitLab refuses is the revocation signal, not the next
-		// periodic re-check.
-		t.client.notifyUnauthorized()
+		// periodic re-check. Classified here and not by whoever registered the
+		// hook, because this is the only layer that sees the request and the
+		// body together before anyone has consumed the body.
+		t.client.notifyUnauthorized(classifyUnauthorized(req, resp))
 	}
-	if err != nil || resp == nil || resp.Body == nil {
-		return resp, err
+	if resp.Body == nil {
+		return resp, nil
 	}
 	limit := t.client.maxResponseBytes()
 	if limit <= 0 {
@@ -80,6 +107,65 @@ func (t *responseLimitTransport) RoundTrip(req *http.Request) (*http.Response, e
 	resp.Body = &limitedBody{inner: resp.Body, remaining: limit}
 	return resp, nil
 }
+
+// classifyUnauthorized says what a 401 names, reading a bounded prefix of its
+// body and putting the prefix back so the body is delivered whole.
+//
+// The peek happens before the ceiling is applied, so the limit still counts
+// every byte, the peeked ones included, and the SDK and the response capture
+// (ADR-0021) read exactly what GitLab sent. The prefix is classified whatever
+// the read returned: one cut short by a failed read does not decode, so it
+// names nothing, and the failure itself is handed on to whoever reads the body
+// next rather than swallowed here.
+func classifyUnauthorized(req *http.Request, resp *http.Response) UnauthorizedAnswer {
+	var prefix []byte
+	if resp.Body != nil {
+		var readErr error
+		prefix, readErr = io.ReadAll(io.LimitReader(resp.Body, unauthorizedPeekBytes))
+		resp.Body = &replayedBody{
+			Reader: io.MultiReader(bytes.NewReader(prefix), remainderAfterPeek(resp.Body, readErr)),
+			closer: resp.Body,
+		}
+	}
+	if UnauthorizedNamesCredential(req, prefix) {
+		return UnauthorizedCredential
+	}
+	return UnauthorizedUnexplained
+}
+
+// remainderAfterPeek is what follows the peeked prefix: the rest of the body,
+// or, when the peek failed, the error it failed with.
+//
+// The error is replayed rather than the body read again because nothing
+// promises a body returns the same error twice. net/http's own does, and an
+// in-process transport need not, so reading on could hand the caller bytes that
+// follow a gap instead of the failure that made it.
+func remainderAfterPeek(body io.Reader, readErr error) io.Reader {
+	if readErr != nil {
+		return failingReader{err: readErr}
+	}
+	return body
+}
+
+// replayedBody is a response body whose first bytes were read to classify it
+// and are delivered again ahead of the rest. Closing it closes the original.
+type replayedBody struct {
+	io.Reader
+	closer io.Closer
+}
+
+// Close closes the original body.
+func (b *replayedBody) Close() error { return b.closer.Close() }
+
+// failingReader fails every read with the error a peek met.
+type failingReader struct{ err error }
+
+// Read returns the recorded error, and [io.ErrUnexpectedEOF] if none was
+// recorded. A reader that answers nothing and no error is one its caller waits
+// on forever, since io.ReadAll and the SDK's decoder both read until something
+// ends the body, so a reader whose job is to fail must never be able to answer
+// that, whoever built it.
+func (r failingReader) Read([]byte) (int, error) { return 0, cmp.Or(r.err, io.ErrUnexpectedEOF) }
 
 // limitedBody is an [io.ReadCloser] that delivers at most a fixed number of
 // bytes and then fails with [ErrResponseTooLarge].

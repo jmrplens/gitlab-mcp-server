@@ -1324,6 +1324,125 @@ func TestCredentialRejected_OnlyAnExplicitRefusalCountsAsOne(t *testing.T) {
 	}
 }
 
+// TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart verifies that the
+// credential probe tells the three answers apart rather than folding "no
+// verdict" into either of the other two.
+//
+// Admission reads only the refusal and fails open on the rest, but the pool's
+// confirmation of a 401 that named no cause reads the acceptance: it keeps the
+// entry and records the credential as just checked, which is only honest when
+// GitLab actually answered. A 500 read as accepted would push back the
+// credential-age ceiling on a question GitLab never answered.
+func TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		unreliable bool
+		want       CredentialVerdict
+	}{
+		{name: "200 accepts", status: http.StatusOK, want: CredentialAccepted},
+		{name: "204 accepts", status: http.StatusNoContent, want: CredentialAccepted},
+		{name: "401 refuses", status: http.StatusUnauthorized, want: CredentialRefused},
+		{name: "403 refuses", status: http.StatusForbidden, want: CredentialRefused},
+		{name: "404 is no verdict", status: http.StatusNotFound, want: CredentialUnanswered},
+		{name: "500 is no verdict", status: http.StatusInternalServerError, want: CredentialUnanswered},
+		{name: "no answer at all is no verdict", unreliable: true, want: CredentialUnanswered},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if tt.unreliable {
+				srv.Close()
+			}
+			if got := client.CheckCredential(t.Context()); got != tt.want {
+				t.Errorf("CheckCredential() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	t.Run("a probe that cannot be built is no verdict", func(t *testing.T) {
+		client, err := NewClientWithTokenRetries("http://gitlab.example.com", testValidToken, false, true)
+		if err != nil {
+			t.Fatalf(fmtNewClientErr, err)
+		}
+		//nolint:staticcheck // SA1012: a nil context is the one input that makes http.NewRequestWithContext fail, which is the branch under test
+		if got := client.CheckCredential(nil); got != CredentialUnanswered {
+			t.Errorf("CheckCredential(nil) = %v, want CredentialUnanswered", got)
+		}
+	})
+}
+
+// TestCredentialVerdictFor_StatusEdges_AreReadExactly pins the edges of the
+// status reading, where an off-by-one would move a whole class of answers: the
+// first and last 2xx accept, the statuses either side of that range are no
+// verdict, and among the 4xx only 401 and 403 refuse.
+func TestCredentialVerdictFor_StatusEdges_AreReadExactly(t *testing.T) {
+	tests := []struct {
+		status int
+		want   CredentialVerdict
+	}{
+		{status: 199, want: CredentialUnanswered},
+		{status: http.StatusOK, want: CredentialAccepted},
+		{status: 299, want: CredentialAccepted},
+		{status: http.StatusMultipleChoices, want: CredentialUnanswered},
+		{status: http.StatusBadRequest, want: CredentialUnanswered},
+		{status: http.StatusUnauthorized, want: CredentialRefused},
+		{status: http.StatusPaymentRequired, want: CredentialUnanswered},
+		{status: http.StatusForbidden, want: CredentialRefused},
+	}
+	for _, tt := range tests {
+		t.Run(strconv.Itoa(tt.status), func(t *testing.T) {
+			if got := credentialVerdictFor(tt.status); got != tt.want {
+				t.Errorf("credentialVerdictFor(%d) = %v, want %v", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUnauthorizedHook_SDKCallsReportAndProbesDoNot verifies which of a
+// client's requests reach the unauthorized hook, on a real client.
+//
+// Every call the SDK makes does, which is what lets the server pool notice a
+// refused credential on the first call GitLab refuses. The credential probe
+// does not, even when GitLab answers it with a 401 naming the credential: the
+// pool sends that probe to confirm a 401 naming nothing, and if its own 401
+// were reported it would raise the very question it was sent to answer.
+func TestUnauthorizedHook_SDKCallsReportAndProbesDoNot(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(expiredTokenBody))
+	}))
+	defer srv.Close()
+
+	client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	var told atomic.Int32
+	client.SetOnUnauthorized(func(UnauthorizedAnswer) { told.Add(1) })
+
+	if got := client.CheckCredential(t.Context()); got != CredentialRefused {
+		t.Fatalf("CheckCredential() = %v, want CredentialRefused from the stub", got)
+	}
+	if got := told.Load(); got != 0 {
+		t.Errorf("the credential probe's own 401 reached the hook %d times, want none", got)
+	}
+
+	if _, _, callErr := client.GL().Users.CurrentUser(); callErr == nil {
+		t.Fatal("the SDK call succeeded, so the stub did not refuse it")
+	}
+	if got := told.Load(); got != 1 {
+		t.Errorf("the SDK call's 401 reached the hook %d times, want once", got)
+	}
+}
+
 // TestPing_NullVersionDocument verifies that a version endpoint answering the
 // JSON literal null is reported as a failed ping rather than dereferenced.
 //

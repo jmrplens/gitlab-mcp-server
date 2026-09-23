@@ -49,11 +49,20 @@ type Entry struct {
 	createdAt     time.Time
 	lastValidated time.Time
 	lastUsed      time.Time
-	// rejected is set the moment GitLab answers 401 to a call on this entry,
-	// before the eviction that follows has taken the lock, so a request that
-	// finds the entry in between rebuilds instead of reusing a credential
-	// GitLab has already refused.
+	// rejected is set the moment GitLab has refused this entry's credential,
+	// by a 401 on a call that named the credential or by the probe that
+	// confirmed a 401 naming nothing, before the eviction that follows has
+	// taken the lock, so a request that finds the entry in between rebuilds
+	// instead of reusing a credential GitLab has already refused.
 	rejected atomic.Bool
+	// lastConfirmProbe is when this entry last claimed the right to confirm a
+	// 401 that named no cause, in Unix nanoseconds, and zero until the first.
+	// It is apart from lastValidated on purpose: that one is set when the entry
+	// is built and on every successful revalidation, so measuring the window
+	// from it would skip the confirmation of every refusal in the first
+	// window after either, which is where a token deleted in the meantime is
+	// most likely to be refused first. See [Entry.claimConfirmation].
+	lastConfirmProbe atomic.Int64
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -221,10 +230,23 @@ type Metrics struct {
 	// credential had not been checked within [DefaultMaxCredentialAge].
 	StaleCredentialEvictions atomic.Int64
 	// RejectedCredentialEvictions counts entries dropped because GitLab
-	// answered a call made with their credential with 401: the token was
-	// revoked or expired while the entry was live, and the first refused
-	// data call is the signal rather than the next periodic check.
+	// refused their credential on a call: a 401 that named the credential, or
+	// a 401 that named nothing and that the credential probe then confirmed.
+	// The token was revoked, expired or deleted while the entry was live, and
+	// the first refused data call is the signal rather than the next periodic
+	// check. A permission refusal answered with 401 is not counted here, since
+	// the probe finds the credential accepted; see UnauthorizedKept.
 	RejectedCredentialEvictions atomic.Int64
+	// UnauthorizedKept counts 401s that named no cause and after which the
+	// credential probe found GitLab still accepting the credential, so the
+	// entry was kept. Each is a permission refusal GitLab answered with 401
+	// rather than 403 (entry 55 of docs/development/upstream-bugs.md), and
+	// before the probe each one ended a valid credential's entry.
+	//
+	// It is read in the snapshot and exported nowhere else, like
+	// RevalidationsTransient: it is not an eviction, so it belongs to none of
+	// the series the eviction reason attribute splits.
+	UnauthorizedKept atomic.Int64
 }
 
 // Snapshot is a point-in-time copy of pool [Metrics] plus current state.
@@ -250,12 +272,17 @@ type Snapshot struct {
 	RevalidationsSucceeded   int64 `json:"revalidations_succeeded"`
 	RevalidationsTransient   int64 `json:"revalidations_transient"`
 	StaleCredentialEvictions int64 `json:"stale_credential_evictions"`
-	// RejectedCredentialEvictions counts entries dropped on a 401 from a
-	// call made with their credential.
-	RejectedCredentialEvictions int64     `json:"rejected_credential_evictions"`
-	CurrentSize                 int       `json:"current_size"`
-	MaxSize                     int       `json:"max_size"`
-	CreatedAt                   time.Time `json:"created_at"`
+	// RejectedCredentialEvictions counts entries dropped because GitLab
+	// refused their credential on a call, by a 401 naming it or by a 401 the
+	// credential probe then confirmed.
+	RejectedCredentialEvictions int64 `json:"rejected_credential_evictions"`
+	// UnauthorizedKept counts 401s that named no cause after which the
+	// credential probe found the credential still accepted, and the entry was
+	// kept. See [Metrics.UnauthorizedKept].
+	UnauthorizedKept int64     `json:"unauthorized_kept"`
+	CurrentSize      int       `json:"current_size"`
+	MaxSize          int       `json:"max_size"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // ServerPool maintains a bounded set of [*mcp.Server] instances keyed by
@@ -301,6 +328,11 @@ type ServerPool struct {
 	// probeQueueTimeout is how long a build waits for one of those slots,
 	// defaulting to [credentialProbeQueueTimeout].
 	probeQueueTimeout time.Duration
+	// confirmCooldown is how long after one confirmation of an unexplained 401
+	// an entry may start the next, set by [New] to
+	// [unauthorizedConfirmCooldown]. A field rather than the constant read in
+	// place, so a test can put both sides of the window within reach.
+	confirmCooldown time.Duration
 	// idleSweepInterval overrides the cadence derived from idleTimeout.
 	//
 	// Zero, which is what [New] leaves, means derive it: a quarter of the
@@ -365,8 +397,11 @@ const (
 	// CauseStaleCredential is an entry whose credential has not been checked
 	// against GitLab inside the ceiling, so it is rebuilt rather than trusted.
 	CauseStaleCredential EvictionCause = "stale_credential"
-	// CauseRejectedCredential is GitLab answering 401 to a call made with the
-	// entry's credential.
+	// CauseRejectedCredential is GitLab refusing the entry's credential on a
+	// call: a 401 that named the credential, or a 401 that named nothing and
+	// that the credential probe then confirmed. A permission refusal answered
+	// with 401 never produces it, which is what keeps the "re-authenticate"
+	// ending it maps to true.
 	CauseRejectedCredential EvictionCause = "rejected_credential"
 	// CauseInvalidCredential is the periodic revalidation finding that GitLab
 	// now refuses the credential.
@@ -528,6 +563,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		baseContext:        context.Background,
 		probes:             make(chan struct{}, maxConcurrentCredentialProbes),
 		probeQueueTimeout:  credentialProbeQueueTimeout,
+		confirmCooldown:    unauthorizedConfirmCooldown,
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -755,22 +791,174 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 	// The first data call GitLab refuses is the revocation signal. Without
 	// this, a token revoked while its entry was live kept being served until
 	// the periodic re-check, up to an hour, and every call in between was
-	// relayed and refused one by one.
-	//
-	// Off the calling goroutine, because that goroutine may hold the pool's
-	// lock: the revalidation sweep verifies credentials under it, and a 401
-	// there would otherwise wait on the sweep for a lock the sweep holds.
-	// The call fires once per client, so this is one goroutine per revoked
-	// credential, never per request.
-	// The mark is synchronous and the drop is not: between the two, a
-	// request racing for the same key sees the mark on the fast path and
-	// rebuilds rather than reusing the refused credential.
+	// relayed and refused one by one. See [ServerPool.handleUnauthorized] for
+	// why not every 401 is one.
 	key := sessionKey(token, gitlabURL)
-	client.SetOnUnauthorized(func() {
-		entry.rejected.Store(true)
-		go p.evictRejectedCredential(key, entry)
+	client.SetOnUnauthorized(func(answer gitlabclient.UnauthorizedAnswer) {
+		p.handleUnauthorized(key, entry, answer)
 	})
 	return entry, nil
+}
+
+// unauthorizedConfirmCooldown is how long after one confirmation of a 401 that
+// named no cause an entry may start another.
+//
+// Without it, a client retrying a call GitLab refuses a permission for turns
+// every refusal into a second request, a GET /user, and roughly doubles what
+// it costs the instance. Thirty seconds bounds that to one probe per
+// credential per window, while a token deleted just after a confirmation is
+// still caught by the next refused call once the window has passed, or by the
+// periodic revalidation, whichever comes first.
+//
+// It also has to outlast the probe itself, which [credentialCheckTimeout]
+// bounds: the claim that opens the window is what keeps two refusals arriving
+// together from confirming twice, so a window shorter than the probe would let
+// the second refusal start its own while the first was still waiting.
+const unauthorizedConfirmCooldown = 30 * time.Second
+
+// handleUnauthorized decides what a 401 on a call made with entry's credential
+// means for the entry.
+//
+// GitLab answers 401 for two different things. A 401 naming the credential
+// (the RFC 6750 invalid_token code, or any 401 from the GraphQL endpoint) is
+// GitLab's verdict on the token, and the entry goes at once. A 401 naming
+// nothing is ambiguous: GitLab answers a permission refusal on nineteen REST
+// routes that way (entry 55 of docs/development/upstream-bugs.md), approving a
+// merge request one opened among them, and answers a token it no longer finds
+// with the same bytes. Evicting on it ended a valid user's subscriptions,
+// terminated their sessions and told them to re-authenticate a token that
+// works; ignoring it would serve a deleted token until the next revalidation.
+// So it is confirmed with the probe admission already trusts, and the entry
+// goes only if that probe is refused.
+//
+// It runs on the goroutine that made the refused call, which may hold the
+// pool's lock (the revalidation sweep pings under it), so it takes no lock and
+// hands the work to a goroutine of its own. A 401 naming the credential reaches
+// it once per client, so that is one goroutine per revoked credential; one
+// naming nothing reaches it on every refusal, so only the one that claims the
+// confirmation window starts a goroutine.
+//
+// The mark on a verdict is synchronous and the drop is not: between the two, a
+// request racing for the same key sees the mark on the fast path and rebuilds
+// rather than reusing the refused credential.
+func (p *ServerPool) handleUnauthorized(key string, entry *Entry, answer gitlabclient.UnauthorizedAnswer) {
+	if answer == gitlabclient.UnauthorizedCredential {
+		entry.rejected.Store(true)
+		go p.evictRejectedCredential(key, entry)
+		return
+	}
+	// An entry already marked is on its way out, and asking GitLab about it
+	// again would only spend a probe on a verdict that has been given.
+	if entry.rejected.Load() || !entry.claimConfirmation(time.Now(), p.confirmCooldown) {
+		return
+	}
+	go p.confirmUnexplainedRefusal(key, entry)
+}
+
+// claimConfirmation reports whether the entry may confirm an unexplained 401
+// at now, and if so claims the window that starts there.
+//
+// The check and the claim are one compare-and-swap, which is what makes the
+// confirmation a single flight: of any number of refusals arriving together,
+// exactly one moves the timestamp and the rest find the window taken. Zero,
+// which an entry starts with, is always at least one window in the past, so
+// the first 401 an entry meets is always confirmed.
+//
+// The window is spent by the claim, not by the probe: a claim whose probe
+// could not be sent (no probe slot free, or the entry replaced meanwhile)
+// still waits out the cooldown, which is what keeps a burst of refusals from
+// retrying the slot on every one of them.
+func (e *Entry) claimConfirmation(now time.Time, cooldown time.Duration) bool {
+	last := e.lastConfirmProbe.Load()
+	if now.UnixNano()-last < int64(cooldown) {
+		return false
+	}
+	return e.lastConfirmProbe.CompareAndSwap(last, now.UnixNano())
+}
+
+// confirmUnexplainedRefusal asks GitLab whether it still accepts entry's
+// credential after a 401 that named no cause, and acts on the answer.
+//
+// Refused: the 401 was a token GitLab no longer finds, and the entry goes the
+// way a 401 naming the credential sends it, counted and ended as a rejected
+// credential. Accepted: the 401 was a permission refusal, the entry stays, and
+// the probe counts as the credential check it is. No verdict: nothing is
+// learned and nothing changes, the rule [verifyCredential] applies at
+// admission; the question is left to the next refusal or to revalidation.
+//
+// The probe slot is taken without waiting. A confirmation only refines an
+// entry already being served, while every other holder of a slot is a new
+// credential waiting to be admitted, so when GitLab is slow enough to keep all
+// of them busy it is the confirmation that gives way.
+func (p *ServerPool) confirmUnexplainedRefusal(key string, entry *Entry) {
+	defer recoverSweep(context.Background(), "unauthorized confirmation")
+	if !p.isCurrent(key, entry) {
+		return
+	}
+	release, ok := p.tryProbeSlot()
+	if !ok {
+		slog.Debug("server pool: no credential probe slot free to confirm a 401, keeping the entry")
+		return
+	}
+	defer release()
+
+	ctx, cancel := context.WithTimeout(p.lifetime(), credentialCheckTimeout)
+	defer cancel()
+	switch entry.client.CheckCredential(ctx) {
+	case gitlabclient.CredentialRefused:
+		entry.rejected.Store(true)
+		p.evictRejectedCredential(key, entry)
+	case gitlabclient.CredentialAccepted:
+		p.keepConfirmedEntry(key, entry)
+	default:
+		slog.Debug("server pool: could not confirm a 401 that named no cause, keeping the entry")
+	}
+}
+
+// isCurrent reports whether entry is still the one pooled under key.
+func (p *ServerPool) isCurrent(key string, entry *Entry) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.entries[key] == entry
+}
+
+// tryProbeSlot takes one of the [maxConcurrentCredentialProbes] slots if one
+// is free right now, returning the function that gives it back.
+func (p *ServerPool) tryProbeSlot() (func(), bool) {
+	if p.probes == nil {
+		return func() {
+			// No limiter is configured, so no slot was taken and there is
+			// nothing to give back.
+		}, true
+	}
+	select {
+	case p.probes <- struct{}{}:
+		return func() { <-p.probes }, true
+	default:
+		return nil, false
+	}
+}
+
+// keepConfirmedEntry records that GitLab still accepts entry's credential
+// after a 401 that named no cause, if entry is still the one under key.
+//
+// The probe is a credential check like any other, so it moves lastValidated
+// the way a successful revalidation does, and the entry's credential-age
+// ceiling runs from it.
+func (p *ServerPool) keepConfirmedEntry(key string, entry *Entry) {
+	p.mu.Lock()
+	kept := p.entries[key] == entry
+	if kept {
+		entry.lastValidated = time.Now()
+	}
+	p.mu.Unlock()
+	if !kept {
+		return
+	}
+	p.metrics.UnauthorizedKept.Add(1)
+	gitlabURL, _ := entryConfigLogValues(entry)
+	slog.Debug("server pool: gitlab refused a call with 401 and still accepts the credential, keeping the entry",
+		"gitlab_url", gitlabURL)
 }
 
 // evictRejectedCredential drops entry, if it is still the one under key: a
@@ -1232,6 +1420,7 @@ func (p *ServerPool) Stats() Snapshot {
 		RevalidationsTransient:      p.metrics.RevalidationsTransient.Load(),
 		StaleCredentialEvictions:    p.metrics.StaleCredentialEvictions.Load(),
 		RejectedCredentialEvictions: p.metrics.RejectedCredentialEvictions.Load(),
+		UnauthorizedKept:            p.metrics.UnauthorizedKept.Load(),
 		CurrentSize:                 size,
 		MaxSize:                     p.maxSize,
 		CreatedAt:                   p.createdAt,

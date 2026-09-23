@@ -360,7 +360,17 @@ type twoTenantGitLab struct {
 	// a membership removal would.
 	revoked atomic.Bool
 	reads   atomic.Int64
+	// vanished, once set, makes GitLab stop finding every token: the
+	// credential probe is answered with the plain 401 Grape's unauthorized!
+	// writes, which is what a deleted personal access token gets. The project
+	// stays readable, so a watcher's own read cannot be what ends a stream.
+	vanished atomic.Bool
 }
+
+// plainUnauthorizedBody is what Grape's unauthorized! answers with: a valid
+// credential refused a permission and a token GitLab no longer finds both get
+// it, byte for byte.
+const plainUnauthorizedBody = `{"message":"401 Unauthorized"}`
 
 func startTwoTenantGitLab(t *testing.T, changingToken, frozenToken string) *twoTenantGitLab {
 	t.Helper()
@@ -371,8 +381,21 @@ func startTwoTenantGitLab(t *testing.T, changingToken, frozenToken string) *twoT
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
 	})
+	// Approving the merge request is refused whoever asks, with the plain
+	// 401 GitLab answers an author approving their own merge request with
+	// where author approval is prevented (upstream-bugs entry 55).
+	mux.HandleFunc("POST /api/v4/projects/123/merge_requests/1/approve", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(plainUnauthorizedBody))
+	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if fake.vanished.Load() {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(plainUnauthorizedBody))
+			return
+		}
 		id := 7
 		if r.Header.Get("PRIVATE-TOKEN") == fake.frozen {
 			id = 8
@@ -701,6 +724,126 @@ func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 				t.Errorf("the busy eviction line is missing %s:\n%s", field.want, line)
 			}
 		})
+	}
+}
+
+// approveAs asks the server, as token, to approve merge request 1 of project
+// 123, which the two-tenant GitLab refuses with a plain 401, and returns the
+// tool result's text and whether it was reported as a failure.
+func approveAs(t *testing.T, srv *server, token string) (string, bool) {
+	t.Helper()
+
+	const action = "merge_request.approve"
+	body := `{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
+		`"arguments":{"action":"` + action + `","params":{"project_id":"123","merge_request_iid":1}},` +
+		`"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+	got := srv.do(t, request{
+		body: body,
+		headers: map[string]string{
+			"PRIVATE-TOKEN":    token,
+			"Mcp-Param-Action": action,
+		},
+	})
+	if got.status != http.StatusOK {
+		t.Fatalf("tools/call %s = %d: %s", action, got.status, got.body)
+	}
+	return toolResultsText(t, jsonRPCPayload(t, got.body))
+}
+
+// TestSharedServer_APermissionRefusalWith401_LeavesTheListenOpen is issue 907
+// on the wire.
+//
+// GitLab answers some permission refusals with 401 rather than 403, approving
+// a merge request one opened where author approval is prevented among them,
+// and the pool used to take any 401 on a call for a revoked token. So a user
+// with an open subscription who tried that approval had their listen completed
+// with credential_revoked and told to re-authenticate a token that works. Now
+// a 401 naming no cause is confirmed with the credential probe before anything
+// is ended, and GitLab accepting the probe keeps the entry.
+//
+// The DEBUG line is what shows the probe ran and accepted: without it the
+// listen staying open could as well mean the 401 never reached the pool.
+func TestSharedServer_APermissionRefusalWith401_LeavesTheListenOpen(t *testing.T) {
+	const (
+		token = "glpat-author-of-the-merge-request"
+		uri   = "gitlab://project/123"
+	)
+
+	gitlab := startTwoTenantGitLab(t, token, "glpat-unused")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--capability-surface=full", "--log-level=debug")
+
+	listen := openListen(t, srv, token, uri, 1)
+	if _, seen, ok := listen.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
+		t.Fatalf("the listen was never acknowledged; frames: %v", seen)
+	}
+
+	text, failed := approveAs(t, srv, token)
+	if !failed {
+		t.Fatalf("the approval succeeded, so the fake did not refuse it: %s", text)
+	}
+
+	seen, ended := listen.awaitEnd(t, crossTenantQuiet)
+	if ended {
+		t.Fatalf("a permission refusal ended the credential's listen.\nframes: %v\nserver output:\n%s", seen, srv.logs())
+	}
+	if line := awaitLogLine(t, srv, "gitlab refused a call with 401 and still accepts the credential"); line == "" {
+		t.Fatalf("the refusal was never confirmed as a permission refusal.\nserver output:\n%s", srv.logs())
+	}
+	updated := false
+	for _, frame := range seen {
+		updated = updated || strings.Contains(frame, "notifications/resources/updated")
+	}
+	if !updated {
+		if _, more, ok := listen.awaitFrame(t, "notifications/resources/updated", 60*time.Second); !ok {
+			t.Errorf("the kept listen delivered no update after the refusal; frames: %v", more)
+		}
+	}
+	if strings.Contains(srv.logs(), "gitlab rejected the credential on a call") {
+		t.Errorf("the server logged a rejected credential for a permission refusal.\nserver output:\n%s", srv.logs())
+	}
+}
+
+// TestSharedServer_A401ForAVanishedToken_EndsTheListenAsRevoked pins the half
+// of the posture the fix must not trade away: a token GitLab no longer finds
+// is answered with the same plain 401 as a permission refusal, and it is still
+// caught on the first call refused, one probe later, with its listen completed
+// as credential_revoked.
+//
+// The fake keeps the watched project readable, so the watcher's own read
+// cannot end the stream first: what ends it is the pool's eviction. A client
+// whose only activity is the subscription is not what this shows; its watcher
+// meets the 401 on its own read and ends with resource_gone.
+func TestSharedServer_A401ForAVanishedToken_EndsTheListenAsRevoked(t *testing.T) {
+	const (
+		token = "glpat-deleted-while-subscribed"
+		uri   = "gitlab://project/123"
+	)
+
+	gitlab := startTwoTenantGitLab(t, token, "glpat-unused")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--capability-surface=full")
+
+	listen := openListen(t, srv, token, uri, 1)
+	if _, seen, ok := listen.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
+		t.Fatalf("the listen was never acknowledged; frames: %v", seen)
+	}
+
+	gitlab.vanished.Store(true)
+	if text, failed := approveAs(t, srv, token); !failed {
+		t.Fatalf("the approval succeeded, so the fake did not refuse it: %s", text)
+	}
+
+	seen, ended := listen.awaitEnd(t, 30*time.Second)
+	if !ended {
+		t.Fatalf("the vanished token's listen was left open.\nframes: %v\nserver output:\n%s", seen, srv.logs())
+	}
+	var completion string
+	for _, frame := range seen {
+		if strings.Contains(frame, `"result"`) && strings.Contains(frame, `"id":1`) {
+			completion = frame
+		}
+	}
+	if !strings.Contains(completion, `"reason":"credential_revoked"`) {
+		t.Errorf("the listen ended without credential_revoked; completion: %s\nframes: %v", completion, seen)
 	}
 }
 
