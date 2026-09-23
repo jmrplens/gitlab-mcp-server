@@ -34,8 +34,12 @@
 // name: a pattern under test/e2e/ goes to the suite and any other to the
 // served tree, so an explicit ./internal/tools/... reads no suite and prints
 // no section for it. Only a run over the whole suite holds the helper table to
-// it: the bare run, or one naming ./test/e2e/gitlab/... itself, with or
-// without the leading ./.
+// it: the bare run, or one naming ./test/e2e/gitlab/... itself, which the
+// comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is the
+// same run. A pattern keeps its leading ./: without it go list reads
+// test/e2e/gitlab/... as an import path, which matches no package of this
+// module, and the run is refused with "no packages matched" before anything
+// is judged.
 //
 // # What it compares against
 //

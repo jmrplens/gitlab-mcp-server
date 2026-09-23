@@ -114,20 +114,29 @@ func collectAssertionSites(dir string, patterns []string, overlay map[string][]b
 	return suiteRead{sites: collect.sites, calls: collect.calls, mismatches: collect.mismatches}, nil
 }
 
-// suiteVariants picks one copy of each package to walk: the test variant
-// where one was loaded, and the package itself where none was.
+// suiteVariants picks one copy of each package to walk: the internal test
+// variant where one was loaded, and the package itself where none was.
 //
-// A load with tests hands back a tested package twice, as itself and as the
-// variant compiled with its tests, and a file that is not a test file is
-// parsed into both as two separate trees. A site is one per expression, so
-// walking both would read a call in such a file twice. The package itself
-// holds nothing its variant does not, so it is the one dropped. The test main
-// the go tool synthesizes is kept: it calls no helper, and telling it apart
-// costs more than walking it does.
+// A load with tests hands back a package with internal tests twice, as itself
+// and as the variant compiled with those tests, and a file that is not a test
+// file is parsed into both as two separate trees. A site is one per
+// expression, so walking both would read a call in such a file twice. The
+// package itself holds nothing its internal variant does not, so it is the one
+// dropped.
+//
+// Only an internal variant displaces it, which is the one whose path is the
+// path of the package it tests. An external test package (package p_test)
+// names p in ForTest too, but it compiles only its own files, and go list
+// builds no internal variant for a package whose tests are all external, so
+// there the package itself is the only copy of its non-test files and
+// dropping it would leave every helper call in them unread without a word.
+// The external package and the test main the go tool synthesizes are kept:
+// the first holds files nothing else compiles, and the second calls no helper
+// and would cost more to tell apart than to walk.
 func suiteVariants(loaded []*packages.Package) []*packages.Package {
 	tested := map[string]struct{}{}
 	for _, pkg := range loaded {
-		if pkg.ForTest != "" {
+		if pkg.ForTest != "" && pkg.PkgPath == pkg.ForTest {
 			tested[pkg.ForTest] = struct{}{}
 		}
 	}

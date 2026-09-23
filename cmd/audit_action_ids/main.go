@@ -180,9 +180,11 @@ func splitPatterns(patterns []string) (served, suite []string) {
 	return served, suite
 }
 
-// isSuitePattern reports whether a pattern names part of the e2e suite, in the
-// spelling a caller types it: with or without the leading ./, and with the
-// platform's separator.
+// isSuitePattern reports whether a pattern names part of the e2e suite, read
+// slash-separated, so .\test\e2e\gitlab\ee on Windows is the same pattern as
+// ./test/e2e/gitlab/ee. A pattern without the leading ./ is sorted the same
+// way and goes no further: go list reads it as an import path, which matches
+// no package of this module, so the load it is handed to refuses the run.
 func isSuitePattern(pattern string) bool {
 	return strings.HasPrefix(normalizePattern(pattern), suiteDir)
 }
@@ -192,10 +194,13 @@ func isSuitePattern(pattern string) bool {
 // it every entry the part does not use excuses nothing, and reporting them
 // would be an answer about the patterns rather than about the table.
 //
-// The comparison reads the spelling isSuitePattern reads. Compared literally,
-// `test/e2e/gitlab/...` typed without the leading ./ loaded the whole suite
-// and left the helper table unjudged, which is a clean report over a run that
-// never asked the question.
+// The comparison reads the spelling isSuitePattern reads, because go list
+// takes a pattern in the platform's spelling. Compared literally,
+// .\test\e2e\gitlab\... on Windows loaded the whole suite and left the helper
+// table unjudged, which is a clean report over a run that never asked the
+// question. A pattern without the leading ./ never reaches this comparison:
+// go list reads it as an import path, which matches no package of this
+// module, and the load refuses the run first.
 func namesWhole(patterns, whole []string) bool {
 	return slices.EqualFunc(patterns, whole, func(given, want string) bool {
 		return normalizePattern(given) == normalizePattern(want)
@@ -203,7 +208,8 @@ func namesWhole(patterns, whole []string) bool {
 }
 
 // normalizePattern is a pattern in the one spelling the comparisons read:
-// slash-separated, without a leading ./.
+// slash-separated, without a leading ./, which is the form suiteDir is written
+// in.
 func normalizePattern(pattern string) string {
 	return strings.TrimPrefix(filepath.ToSlash(pattern), "./")
 }

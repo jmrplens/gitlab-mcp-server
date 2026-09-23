@@ -245,11 +245,10 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 		{name: "one served package", patterns: []string{"./internal/tools/issues"}, served: []string{"./internal/tools/issues"}},
 		{name: "the served tree named", patterns: []string{"./internal/tools/..."}, served: []string{"./internal/tools/..."}},
 		{name: "a suite package", patterns: []string{"./test/e2e/gitlab/ee"}, suite: []string{"./test/e2e/gitlab/ee"}},
-		{name: "a suite package without the dot", patterns: []string{"test/e2e/gitlab/ee"}, suite: []string{"test/e2e/gitlab/ee"}},
 		{
 			name:     "a suite package in the platform's spelling",
-			patterns: []string{filepath.Join("test", "e2e", "gitlab", "ee")},
-			suite:    []string{filepath.Join("test", "e2e", "gitlab", "ee")},
+			patterns: []string{platformPattern("test", "e2e", "gitlab", "ee")},
+			suite:    []string{platformPattern("test", "e2e", "gitlab", "ee")},
 		},
 		{
 			name:     "both, in the order given",
@@ -279,12 +278,16 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 
 // TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree holds the
 // condition a declaration table is judged under: the run covered the whole
-// tree the table describes, however the caller spelled it. Compared
-// literally, the suite typed without its leading ./ loaded every package of
-// it and left the helper table unjudged, which is a clean report over a run
-// that never asked the question; and a part of the tree, or the tree plus
-// something beside it, is a run whose unused entries say nothing about the
-// table.
+// tree the table describes, in any spelling go list loads. Compared
+// literally, the suite named with Windows' separator, .\test\e2e\gitlab\...,
+// loaded every package of it and left the helper table unjudged, which is a
+// clean report over a run that never asked the question; and a part of the
+// tree, or the tree plus something beside it, is a run whose unused entries
+// say nothing about the table.
+//
+// A pattern without the leading ./ has no case here, because no run reaches
+// this comparison with one: go list reads it as an import path, which matches
+// no package of this module, and the load refuses the run first.
 func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -293,14 +296,18 @@ func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T
 		want     bool
 	}{
 		{name: "the suite as the bare run names it", patterns: []string{"./test/e2e/gitlab/..."}, whole: defaultSuitePatterns, want: true},
-		{name: "the suite without the dot", patterns: []string{"test/e2e/gitlab/..."}, whole: defaultSuitePatterns, want: true},
 		{
 			name:     "the suite in the platform's spelling",
-			patterns: []string{filepath.Join("test", "e2e", "gitlab", "...")},
+			patterns: []string{platformPattern("test", "e2e", "gitlab", "...")},
 			whole:    defaultSuitePatterns,
 			want:     true,
 		},
-		{name: "the served tree without the dot", patterns: []string{"internal/tools/..."}, whole: defaultPatterns, want: true},
+		{
+			name:     "the served tree in the platform's spelling",
+			patterns: []string{platformPattern("internal", "tools", "...")},
+			whole:    defaultPatterns,
+			want:     true,
+		},
 		{name: "one package of the suite", patterns: []string{"./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
 		{name: "the suite and a package again", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
 		{name: "nothing", whole: defaultSuitePatterns},
@@ -312,6 +319,14 @@ func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T
 			}
 		})
 	}
+}
+
+// platformPattern spells a relative pattern the way a caller on this platform
+// types it: the leading dot go list needs to read it as a path, and the
+// platform's separator, so on Windows it is .\test\e2e\gitlab\ee. On a
+// platform whose separator is the slash it is the pattern the code declares.
+func platformPattern(elems ...string) string {
+	return "." + string(filepath.Separator) + filepath.Join(elems...)
 }
 
 // plantedToDoRefusal is the line issue 901 was made of, as the suite wrote it

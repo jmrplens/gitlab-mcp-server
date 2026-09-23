@@ -352,7 +352,49 @@ func TestCollectAssertionSites_APackageWithNoTests_IsRead(t *testing.T) {
 	}
 }
 
-// TestCollectAssertionSites_CallsAreCountedOncePerHelper holds the figure the
+// TestCollectAssertionSites_APackageWhoseTestsAreAllExternal_IsReadOnce holds
+// the shape go list builds no internal variant for. The package's only tests
+// are in package external_test, which names it in ForTest without compiling
+// its files, so the package itself is the one copy of them: dropped because a
+// variant named it, a quotation in it would be read by nothing and reported
+// nowhere.
+func TestCollectAssertionSites_APackageWhoseTestsAreAllExternal_IsReadOnce(t *testing.T) {
+	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"external/external.go": `//go:build e2e
+
+// Package external is tested only from outside.
+package external
+
+import ` + suiteHarnessImport + `
+
+// Refusal quotes a served text from a package whose tests are all external.
+func Refusal(s *harness.Session) string {
+	return harness.ExpectToolError(s, "not read: an id", nil, "from a package whose tests are all external")
+}
+`,
+		"external/external_test.go": `//go:build e2e
+
+package external_test
+
+import (
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/actionidsfixture/external"
+)
+
+func TestRefusal(t *testing.T) {
+	t.Log(external.Refusal != nil)
+}
+`,
+	}))
+
+	sites := sitesIn(read.sites, suiteFixtureDir+"/external")
+	if got := valuesOfKind(sites, kindAssertion); !slices.Equal(got, []string{"from a package whose tests are all external"}) {
+		t.Errorf("assertion values = %q, want the one quotation of the package, read once from the package itself", got)
+	}
+}
+
+// TestCollectAssertionSites_EveryHelperCall_IsCountedOnce holds the figure the
 // helper table is judged by. A negated predicate is met twice by the walk, as
 // the operand of the `!` and as a call, and counted once; a predicate that is
 // not negated is counted and not judged; a function of a declared name outside
@@ -361,7 +403,7 @@ func TestCollectAssertionSites_APackageWithNoTests_IsRead(t *testing.T) {
 // A figure off by the double visit would never be zero where a helper is
 // used, so the staleness rule would read the same; it is the count published
 // in the report, and a reader comparing it with the suite would find it wrong.
-func TestCollectAssertionSites_CallsAreCountedOncePerHelper(t *testing.T) {
+func TestCollectAssertionSites_EveryHelperCall_IsCountedOnce(t *testing.T) {
 	read := readPlantedSuite(t)
 
 	want := map[string]int{"assertMentions": 7, "ExpectToolError": 3, "mentionsAny": 1, "containsAny": 3}
@@ -600,8 +642,11 @@ func TestCollectAssertionSites_RootThatCannotBeResolved_IsAnError(t *testing.T) 
 }
 
 // TestSuiteVariants_EachShapeALoadReturns_KeepsOneCopy holds the selection on
-// the metadata go list fills: a variant names the package it tests, and the
-// package itself names none.
+// the metadata go list fills: a variant names the package it tests, the
+// package itself names none, and only the internal variant, whose path is the
+// tested package's own, stands in for it. A package whose tests are all
+// external has no internal variant, so it is kept beside its external test
+// package.
 func TestSuiteVariants_EachShapeALoadReturns_KeepsOneCopy(t *testing.T) {
 	plain := &packages.Package{PkgPath: "m/p"}
 	variant := &packages.Package{PkgPath: "m/p", ForTest: "m/p"}
@@ -616,6 +661,11 @@ func TestSuiteVariants_EachShapeALoadReturns_KeepsOneCopy(t *testing.T) {
 	}{
 		{name: "a tested package keeps its variant only", loaded: []*packages.Package{plain, variant}, want: []*packages.Package{variant}},
 		{name: "a package with no tests is kept", loaded: []*packages.Package{untested}, want: []*packages.Package{untested}},
+		{
+			name:   "a package whose tests are all external is kept",
+			loaded: []*packages.Package{plain, external, testMain},
+			want:   []*packages.Package{plain, external, testMain},
+		},
 		{
 			name:   "the external test package and the test main are kept",
 			loaded: []*packages.Package{plain, variant, external, testMain, untested},
