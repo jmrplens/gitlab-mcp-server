@@ -483,8 +483,11 @@ func TestNewServedCallIdentifier_StandaloneTools_AreNamedWhereTheyAreToolsOfThei
 // The index spells an id by hand, domain then action, and the catalog spells
 // it through its own group rules. Were the two ever to differ, a meta or
 // individual span would name an action that the dynamic surface, the coverage
-// record and gitlab://tools all call something else, and every reader joining
-// them would lose the call.
+// record and the dynamic surface's gitlab://tools manifest all call something
+// else, and every reader joining them would lose the call. The meta and
+// individual manifests are not among them: those surfaces register the
+// standalone tools beside a catalog that does not carry them, so their
+// manifests file each one under its tool name rather than under this id.
 func TestNewServedCallIdentifier_StandaloneActions_AgreeWithTheCatalogAssembly(t *testing.T) {
 	assembled, err := surfaces.AddToolCatalog(nil, StandaloneSurfaceToolSpecs(UnboundClient(false)), surfaces.CatalogOptions{})
 	if err != nil {

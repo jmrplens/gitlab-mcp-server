@@ -180,10 +180,15 @@
 // Its limits are the table's. A helper under a name the table does not
 // declare is not read until it is declared, and neither is one called through
 // a function value or a wrapper whose parameter carries another name, which
-// is reported as a needle nothing folds. A bare strings.Contains on a served
-// text is not read at all, by design: the suite calls it on its own values as
-// often as on the server's, so the suite's rule is to assert served text
-// through the helpers and never through it. The polarity is syntactic, so `ok :=
+// is reported as a needle nothing folds. A copy of a declared helper may take
+// its needles as a variadic tail or as a []string of its own, and both are
+// read element by element. A bare strings.Contains on a served text is not
+// read at all, by design: the suite calls it on its own values as often as on
+// the server's, and on the server's for needles that name no tool and no
+// action, a status code or one of the server's fixed phrases. The rule the
+// suite's README states is therefore narrower than "never": a quotation that
+// names a tool, an alias or an action ID goes through the helpers, and one
+// written as a bare call is not read. The polarity is syntactic, so `ok :=
 // mentionsAny(...); if !ok` is not judged. And a dotted needle is judged as
 // the whole ID it spells, so one that is only the front of a longer ID in a
 // domain the catalog uses is refused although it matches at run time; the

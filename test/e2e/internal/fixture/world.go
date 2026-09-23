@@ -475,6 +475,13 @@ func sortedCopy(values []string) []string {
 // An extra joins only once it was made, and only when its name means that one
 // object across the whole catalog; a name that does not is bound per template
 // by [World.BindTemplate] instead.
+//
+// A file binding must name a file on the default branch, because every file
+// read takes its ref as optional and defaults it there, and a sweep binds only
+// what a schema requires. The World's own file is committed on feature/world
+// alone, so binding it swept every file read as a 404, credited as an error
+// path rather than as a read; README.md, which the project was created with,
+// is on both branches, so a read addressed by the World's commit finds it too.
 func (w *World) Bindings() map[string]any {
 	bindings := map[string]any{
 		"project_id":        w.Project.ID,
@@ -490,7 +497,7 @@ func (w *World) Bindings() map[string]any {
 		"sha":               w.Commit.SHA,
 		"commit_sha":        w.Commit.SHA,
 		"commit_id":         w.Commit.SHA,
-		"file_path":         w.Commit.FilePath,
+		"file_path":         worldReadmePath,
 		"label_id":          w.Label.ID,
 		"milestone_id":      w.Milestone.ID,
 		"milestone_iid":     w.Milestone.IID,

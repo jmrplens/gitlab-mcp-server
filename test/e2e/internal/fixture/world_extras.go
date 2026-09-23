@@ -76,9 +76,11 @@ const (
 )
 
 // worldReadmePath is the file the World's project was created with, and what
-// the file resource template is bound to. It sits on the default branch, whose
-// name carries no slash: the file resource cuts its ref at the first slash, so
-// the World's own file on feature/world could not be addressed through it.
+// the file resource template and the file_path parameter are bound to. It
+// sits on the default branch, whose name carries no slash: the file resource
+// cuts its ref at the first slash, so the World's own file on feature/world
+// could not be addressed through it, and a file read with no ref reads the
+// default branch, where that file is not.
 const worldReadmePath = "README.md"
 
 // worldExtraBudget bounds the making of one extra, its retries included. It is

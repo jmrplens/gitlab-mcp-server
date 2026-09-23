@@ -338,3 +338,5 @@ GraphQL error sites mostly use `WrapErrWithHint`, which always appends the hint,
 return toolutil.WrapErrWithHint("list_vulnerabilities", err,
     "verify the project fullPath is correct and your token has access to security features")
 ```
+
+That type's rendering carries more than the response's: after it, it appends `(GraphQL errors: ...)` listing every `errors[].message` of the body. The sanitizer swaps the whole of it, and holds the list to what a REST message is held to: flattened onto one line and capped at 300 characters as one list, and dropped altogether when the body carries a top-level key other than `data`, `errors` and `extensions`, since GitLab did not compose that body.

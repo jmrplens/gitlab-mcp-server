@@ -223,6 +223,14 @@ func (w *walker) visitAssertionCall(call *ast.CallExpr, negated bool) {
 		w.recordErrorHintArgs(kindAssertion, call, index)
 		return
 	}
+	// A helper may take its needles as a []string of its own rather than as a
+	// variadic tail, and the argument is then one list. Recorded as one needle
+	// it would fold to nothing, and a needle nothing folds fails nothing, so
+	// every quotation handed to such a helper would pass unread.
+	if isStringSlice(signature.Params().At(index).Type()) {
+		w.recordHintList(kindAssertion, call.Args[index])
+		return
+	}
 	w.recordErrorHint(kindAssertion, call.Args[index])
 }
 

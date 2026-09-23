@@ -711,7 +711,11 @@ const maxGitLabMessageLen = 300
 // boundedGitLabMessage renders ErrorResponse.Message for a reader: an unparsed
 // upstream body is dropped entirely, what remains is flattened onto one line
 // and capped. It is the only path by which any part of an upstream response
-// body reaches a model or a log line.
+// body reaches a model or a log line, and it is taken twice for a GraphQL
+// refusal: once for the message client-go parsed out of the body, and once
+// for the list of that body's errors[].message values, which client-go's
+// *gl.GraphQLResponseError appends after the response's own rendering and
+// which [boundedGraphQLMessages] caps as a whole at the same length.
 func boundedGitLabMessage(msg string) string {
 	if msg == "" || strings.HasPrefix(strings.TrimSpace(msg), unparsedBodyPrefix) {
 		return ""
@@ -765,8 +769,15 @@ func (e *sanitizedCauseError) Unwrap() error { return e.cause }
 // replaces the lot rather than letting the body through.
 //
 // A GraphQL refusal is found through its wrapper like any other response
-// ([gitLabResponseOf]), and the swap lands there too, because the wrapper's
-// own rendering embeds the response's verbatim.
+// ([gitLabResponseOf]), and it is the wrapper's rendering that is swapped,
+// because it carries more than the response's: client-go's
+// *gl.GraphQLResponseError renders the response and then appends
+// " (GraphQL errors: ...)" with every errors[].message of the body verbatim.
+// Swapping the response's rendering alone left that list in the text,
+// uncapped, and judged for authorship by nothing. The safe rendering of the
+// wrapper is the response's followed by [boundedGraphQLMessages], and a
+// message the bounded list does not carry whole counts as one that may not be
+// reflected, so the fallback above covers it too.
 func sanitize(err error) error {
 	if err == nil {
 		return nil
@@ -774,13 +785,7 @@ func sanitize(err error) error {
 	original := renderRecovering(err)
 	text := original
 	if glErr, ok := gitLabResponseOf(err); ok {
-		raw, safe := renderGitLabResponse(glErr)
-		if raw != safe {
-			text = strings.ReplaceAll(text, raw, safe)
-			if unsafe := unreflectableMessage(glErr); unsafe != "" && strings.Contains(text, unsafe) {
-				text = safe
-			}
-		}
+		text = swapGitLabResponse(text, err, glErr)
 	}
 	text = replaceUnboundRendering(text, err)
 	text = flattenErrorText(text)
@@ -788,6 +793,96 @@ func sanitize(err error) error {
 		return err
 	}
 	return &sanitizedCauseError{text: text, cause: err}
+}
+
+// swapGitLabResponse replaces the rendering of glErr inside text with its
+// bounded one, and returns the bounded one alone when a message that may not
+// be reflected is still in the text afterwards. err is the chain glErr was
+// found in, read again for the GraphQL wrapper whose rendering embeds it.
+func swapGitLabResponse(text string, err error, glErr *gl.ErrorResponse) string {
+	raw, safe := renderGitLabResponse(glErr)
+	unsafe := []string{unreflectableMessage(glErr)}
+	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
+		listed, withheld := boundedGraphQLMessages(gqlErr, glErr)
+		safe += listed
+		raw = recoveredErrorText(gqlErr)
+		if raw == "" {
+			raw = safe
+		}
+		unsafe = append(unsafe, withheld...)
+	}
+	if raw == safe {
+		return text
+	}
+	text = strings.ReplaceAll(text, raw, safe)
+	for _, message := range unsafe {
+		if message != "" && strings.Contains(text, message) {
+			return safe
+		}
+	}
+	return text
+}
+
+// graphQLNoMessages is what client-go's *gl.GraphQLResponseError appends when
+// the body listed no errors: its own words, carrying nothing of the body.
+const graphQLNoMessages = " (no additional error messages)"
+
+// graphQLResponseKeys is the whole of a GraphQL response as the GraphQL
+// specification defines one: "data", "errors" and "extensions". GitLab's
+// GraphQL endpoint answers every refusal inside that shape, so a top-level key
+// outside it is the evidence that something else composed the body, the same
+// evidence [gitLabErrorBodyKeys] is for a REST one.
+var graphQLResponseKeys = map[string]bool{"data": true, "errors": true, "extensions": true}
+
+// boundedGraphQLMessages returns the suffix that replaces the one client-go's
+// *gl.GraphQLResponseError appends after the response it wraps, and the
+// messages of the body that suffix does not carry whole.
+//
+// The messages are joined the way client-go joins them and bounded as one
+// list by [boundedGitLabMessage], so the most of them a reader sees is what it
+// would see of a REST message. They are dropped altogether when the body
+// carries a key a GraphQL response does not have, since GitLab did not compose
+// that body. A body that listed no errors keeps client-go's own words.
+func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, glErr *gl.ErrorResponse) (suffix string, withheld []string) {
+	if len(gqlErr.Errors.Errors) == 0 {
+		return graphQLNoMessages, nil
+	}
+	messages := make([]string, 0, len(gqlErr.Errors.Errors))
+	for _, graphQLError := range gqlErr.Errors.Errors {
+		messages = append(messages, graphQLError.Message)
+	}
+	listed := ""
+	if graphQLAuthored(glErr) {
+		listed = boundedGitLabMessage(strings.Join(messages, ", "))
+	}
+	// An empty message is carried by any list, so it is never withheld, and
+	// needs no test of its own to stay out of the fallback's way.
+	for _, message := range messages {
+		trimmed := strings.TrimSpace(message)
+		if !strings.Contains(listed, flattenErrorText(trimmed)) {
+			withheld = append(withheld, trimmed)
+		}
+	}
+	if listed == "" {
+		return "", withheld
+	}
+	return " (GraphQL errors: " + listed + ")", withheld
+}
+
+// graphQLAuthored reports whether the body a GraphQL refusal was decoded from
+// is a GraphQL response and nothing else: a JSON object every top-level key of
+// which is one [graphQLResponseKeys] names.
+func graphQLAuthored(glErr *gl.ErrorResponse) bool {
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(glErr.Body, &body); err != nil {
+		return false
+	}
+	for key := range body {
+		if !graphQLResponseKeys[key] {
+			return false
+		}
+	}
+	return true
 }
 
 // replaceUnboundRendering swaps the part of text that describes a request made
@@ -851,14 +946,21 @@ func SanitizeError(err error) error { return sanitize(err) }
 // checking it.
 func renderGitLabResponse(glErr *gl.ErrorResponse) (raw, safe string) {
 	safe = describeGitLabResponse(glErr)
-	func() {
-		defer func() { _ = recover() }()
-		raw = glErr.Error()
-	}()
+	raw = recoveredErrorText(glErr)
 	if raw == "" {
 		raw = safe
 	}
 	return raw, safe
+}
+
+// recoveredErrorText returns e.Error(), and the empty string when that call
+// panics. Unlike [renderRecovering] it renders no placeholder, because what it
+// returns is looked for inside a text, and a placeholder is found nowhere:
+// client-go's ErrorResponse.Error() dereferences the request without checking
+// it, and a *gl.GraphQLResponseError renders the response it wraps first.
+func recoveredErrorText(e error) (text string) {
+	defer func() { _ = recover() }()
+	return e.Error()
 }
 
 // unreflectableMessage returns the response message when no part of it may be

@@ -352,6 +352,62 @@ func TestCollectAssertionSites_APackageWithNoTests_IsRead(t *testing.T) {
 	}
 }
 
+// TestCollectAssertionSites_ANeedleListParameter_IsReadElementByElement holds
+// the one parameter shape no helper of the suite has today: a copy of a
+// declared helper that takes its needles as a []string of its own rather than
+// as a variadic tail. The argument is then one list, and read as one needle it
+// folded to nothing, which fails nothing, so every quotation handed to such a
+// copy would have passed unread. A literal list, a local one and an append to
+// a package list are the shapes the served walk already folds a list of hints
+// in, and each is read here element by element.
+func TestCollectAssertionSites_ANeedleListParameter_IsReadElementByElement(t *testing.T) {
+	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"listed/doc.go": "// Package listed takes its needles as a list.\npackage listed\n",
+		"listed/listed_test.go": `//go:build e2e
+
+package listed
+
+import (
+	"strings"
+	"testing"
+)
+
+func assertMentions(t *testing.T, what, text string, substrings []string) {
+	for _, want := range substrings {
+		if !strings.Contains(text, want) {
+			t.Errorf("%s does not mention %q", what, want)
+		}
+	}
+}
+
+var shared = []string{"from a package list"}
+
+func TestListed(t *testing.T) {
+	text := "text"
+	assertMentions(t, "not read: what", text, []string{"from a literal list", "from its second entry"})
+	local := []string{"from a local list"}
+	assertMentions(t, "not read: what", text, local)
+	assertMentions(t, "not read: what", text, append(shared, "from an appended entry"))
+}
+`,
+	}))
+	sites := sitesIn(read.sites, suiteFixtureDir+"/listed")
+
+	want := []string{
+		"from a literal list",
+		"from a local list",
+		"from a package list",
+		"from an appended entry",
+		"from its second entry",
+	}
+	if got := valuesOfKind(sites, kindAssertion); !slices.Equal(got, want) {
+		t.Errorf("assertion values = %q\nwant %q", got, want)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
 // TestCollectAssertionSites_APackageWhoseTestsAreAllExternal_IsReadOnce holds
 // the shape go list builds no internal variant for. The package's only tests
 // are in package external_test, which names it in ForTest without compiling

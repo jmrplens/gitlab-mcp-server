@@ -5,6 +5,7 @@ package toolutil
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -2761,6 +2762,197 @@ func TestSanitizeError_GraphQLGatewayBody_ReflectsNoUpstreamDetail(t *testing.T)
 			}
 		})
 	}
+}
+
+// graphQLUpstreamMessage is a GraphQL error message past the cap, across two
+// lines, whose tail names a host only the operator's network knows.
+var graphQLUpstreamMessage = strings.Repeat("x", 400) + " upstream gitlab-web-03.internal\nsecond line"
+
+// graphQLErrorsBody renders a GraphQL response listing messages as its
+// errors, the shape GitLab's GraphQL endpoint refuses a query with.
+func graphQLErrorsBody(t *testing.T, messages ...string) string {
+	t.Helper()
+	type graphQLError struct {
+		Message string `json:"message"`
+	}
+	body := struct {
+		Errors []graphQLError `json:"errors"`
+	}{}
+	for _, message := range messages {
+		body.Errors = append(body.Errors, graphQLError{Message: message})
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("json.Marshal(%q) error = %v", messages, err)
+	}
+	return string(encoded)
+}
+
+// TestSanitizeError_GraphQLErrorMessages_BoundedLikeARESTMessage verifies that
+// the messages a GraphQL refusal lists reach a reader bounded the way a REST
+// message is, through the sanitizer and the wrapping helpers alike.
+//
+// client-go's *gl.GraphQLResponseError renders the response it wraps and then
+// appends " (GraphQL errors: ...)" with every errors[].message of the body
+// verbatim. The sanitizer swapped the response's rendering and left that list
+// in the text, so a message of any length reached the model and the "tool call
+// failed" line with only its newlines flattened, and one from a body something
+// other than GitLab composed was reflected as though GitLab had written it.
+// The list is now capped as one message, and dropped for a body carrying a key
+// no GraphQL response has.
+func TestSanitizeError_GraphQLErrorMessages_BoundedLikeARESTMessage(t *testing.T) {
+	answers := []struct {
+		name       string
+		status     int
+		body       string
+		wantSuffix string
+		unwanted   []string
+	}{
+		{
+			name:       "a message past the cap, across two lines, naming an upstream host",
+			status:     http.StatusForbidden,
+			body:       graphQLErrorsBody(t, graphQLUpstreamMessage),
+			wantSuffix: "/api/graphql: 403 (GraphQL errors: " + strings.Repeat("x", 300) + "...)",
+			unwanted:   []string{"gitlab-web-03.internal", "second line"},
+		},
+		{
+			name:       "several messages whose list passes the cap",
+			status:     http.StatusForbidden,
+			body:       graphQLErrorsBody(t, strings.Repeat("a", 200), strings.Repeat("b", 200)),
+			wantSuffix: "/api/graphql: 403 (GraphQL errors: " + strings.Repeat("a", 200) + ", " + strings.Repeat("b", 98) + "...)",
+			unwanted:   []string{strings.Repeat("b", 99)},
+		},
+		{
+			name:       "GitLab's own message across two lines",
+			status:     http.StatusForbidden,
+			body:       graphQLErrorsBody(t, "API not accessible\nfor user"),
+			wantSuffix: "/api/graphql: 403 (GraphQL errors: API not accessible for user)",
+		},
+		{
+			name:       "a body carrying a key no GraphQL response has",
+			status:     http.StatusBadGateway,
+			body:       `{"errors":[{"message":"upstream timeout"}],"upstream":"gitlab-web-03.internal:8181"}`,
+			wantSuffix: "/api/graphql: 502",
+			unwanted:   []string{"gitlab-web-03.internal", "upstream timeout"},
+		},
+	}
+	wrappers := []struct {
+		name string
+		wrap func(error) error
+	}{
+		{name: "SanitizeError", wrap: SanitizeError},
+		{name: "WrapErr", wrap: func(err error) error { return WrapErr("listEpics", err) }},
+		{name: "WrapErrWithMessage", wrap: func(err error) error { return WrapErrWithMessage("listEpics", err) }},
+	}
+	for _, answer := range answers {
+		t.Run(answer.name, func(t *testing.T) {
+			err := graphQLAnswer(t, "", answer.status, answer.body)
+			for _, wrapper := range wrappers {
+				t.Run(wrapper.name, func(t *testing.T) {
+					wrapped := wrapper.wrap(err)
+					got := wrapped.Error()
+					if !strings.HasSuffix(got, answer.wantSuffix) {
+						t.Errorf("wrapped error = %q, want it to end with %q", got, answer.wantSuffix)
+					}
+					for _, unwanted := range answer.unwanted {
+						if strings.Contains(got, unwanted) {
+							t.Errorf("wrapped error = %q, must not carry %q", got, unwanted)
+						}
+					}
+					if _, found := errors.AsType[*gl.GraphQLResponseError](wrapped); !found {
+						t.Errorf("wrapped error = %q, want the GraphQL error still reachable through the chain", got)
+					}
+				})
+			}
+		})
+	}
+}
+
+// graphQLRefusal builds the *gl.GraphQLResponseError client-go builds for a
+// GraphQL refusal answered with status and carrying body, the response hanging
+// from request, or from none when request is nil: client-go always fills one,
+// so only an error built by hand reaches the guards around it. The message
+// stands for client-go's flattening of the body and carries all of it, which
+// is what makes it one the sanitizer may not reflect.
+func graphQLRefusal(t *testing.T, status int, request *http.Request, body string) *gl.GraphQLResponseError {
+	t.Helper()
+	refusal := &gl.GraphQLResponseError{
+		Err: &gl.ErrorResponse{
+			StatusCode: status,
+			Response:   &http.Response{StatusCode: status, Request: request},
+			Body:       []byte(body),
+			Message:    "{errors: [{message: " + body + "}]}",
+		},
+	}
+	if err := json.Unmarshal([]byte(body), &refusal.Errors); err != nil {
+		// A body that is not JSON lists no errors client-go could have read;
+		// the one listed here is what the hand-built case says it carried.
+		refusal.Errors.Errors = append(refusal.Errors.Errors, struct {
+			Message string `json:"message"`
+		}{Message: "API not accessible for user"})
+	}
+	return refusal
+}
+
+// TestSanitizeError_GraphQLRefusalWrapped_CollapsesOnlyWhenAMessageWouldSurvive
+// pins which of the two repairs a GraphQL refusal gets, the way
+// [TestSanitizeError_CollapsesTheTextOnlyWhenTheMessageWouldSurvive] pins them
+// for a REST one: the wrapper's rendering is swapped inside the text, keeping
+// the handler's context, and the whole text is replaced only when a message
+// the bounded list does not carry whole is still in it afterwards. The last
+// two rows are the guards an error built by hand reaches: a rendering that
+// panics is left as fmt renders it, since nothing of the body is in it, and a
+// body that is not JSON is no GraphQL response, so its messages are withheld.
+func TestSanitizeError_GraphQLRefusalWrapped_CollapsesOnlyWhenAMessageWouldSurvive(t *testing.T) {
+	request := projectGetRequest()
+	accessible := graphQLRefusal(t, http.StatusForbidden, request, graphQLErrorsBody(t, "API not accessible for user"))
+	pastTheCap := graphQLRefusal(t, http.StatusForbidden, request, graphQLErrorsBody(t, graphQLUpstreamMessage))
+	notGitLabs := graphQLRefusal(t, http.StatusBadGateway, request, `{"errors":[{"message":"upstream timeout"}],"upstream":"gitlab-web-03.internal:8181"}`)
+	notJSON := graphQLRefusal(t, http.StatusForbidden, request, "<html>403</html>")
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a message the list carries whole keeps the handler's context",
+			err:  fmt.Errorf("listing epics: %w", accessible),
+			want: "listing epics: " + projectRequestLine + ": 403 (GraphQL errors: API not accessible for user)",
+		},
+		{
+			name: "a message past the cap takes the whole text with it",
+			err:  fmt.Errorf("listing epics (%s): %w", graphQLUpstreamMessage, pastTheCap),
+			want: projectRequestLine + ": 403 (GraphQL errors: " + strings.Repeat("x", 300) + "...)",
+		},
+		{
+			name: "a message GitLab did not compose takes the whole text with it",
+			err:  fmt.Errorf("listing epics (upstream timeout): %w", notGitLabs),
+			want: projectRequestLine + ": 502",
+		},
+		{
+			name: "a body that is not JSON lists nothing a reader may see",
+			err:  fmt.Errorf("listing epics: %w", notJSON),
+			want: "listing epics: " + projectRequestLine + ": 403",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SanitizeError(tt.err).Error(); got != tt.want {
+				t.Errorf("SanitizeError() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("a rendering that panics is left as fmt renders it", func(t *testing.T) {
+		panicking := graphQLRefusal(t, http.StatusForbidden, nil, graphQLErrorsBody(t, graphQLUpstreamMessage))
+		// Rendered the way fmt renders it, since calling Error() here would
+		// panic in the test instead.
+		want := renderRecovering(panicking)
+		if got := renderRecovering(SanitizeError(panicking)); got != want {
+			t.Errorf("SanitizeError() = %q, want %q, which carries nothing of the body", got, want)
+		}
+	})
 }
 
 // TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus verifies the

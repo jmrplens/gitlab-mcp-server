@@ -21,9 +21,9 @@ func containsID(ids []int64, want int64) bool {
 
 // assertMentions checks that a refusal carries every substring, without
 // regard to case. The substrings are what the tool promises a caller: the
-// parameter to fix, the sibling tool to call first, the state the object
-// must be in. A refusal that lost one of them is a refusal a model cannot
-// act on.
+// parameter to fix, the sibling action to call first, by its canonical ID,
+// the state the object must be in. A refusal that lost one of them is a
+// refusal a model cannot act on.
 func assertMentions(e *harness.Env, what, text string, substrings ...string) {
 	e.T.Helper()
 	lowered := strings.ToLower(text)

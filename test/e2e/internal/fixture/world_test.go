@@ -134,7 +134,9 @@ func TestWorldBindings_Parameters_ComeFromTheObjects(t *testing.T) {
 		{param: "sha", want: "abc"},
 		{param: "commit_sha", want: "abc"},
 		{param: "commit_id", want: "abc"},
-		{param: "file_path", want: "docs/world.md"},
+		// Not the World's own file: that one is on feature/world only, and
+		// a file read with no ref reads the default branch.
+		{param: "file_path", want: "README.md"},
 		{param: "label_id", want: int64(5)},
 		{param: "milestone_id", want: int64(6)},
 		{param: "milestone_iid", want: int64(8)},

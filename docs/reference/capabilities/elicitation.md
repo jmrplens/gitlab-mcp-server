@@ -350,7 +350,16 @@ When the client does not support elicitation:
 3. Tool returns `elicitation.ErrElicitationNotSupported`
 4. Registration handler catches the error and returns an informational result explaining the requirement
 
-The user can then fall back to using the regular parameterized action (e.g., `gitlab_issue_create` instead of `gitlab_interactive_issue_create`).
+That result names the one action that does the same work with every field passed in the call, by its catalog ID, which is the same on every surface. Each flow names its own, and its description promises the same one:
+
+| Flow                                | Alternative named in the refusal |
+| ----------------------------------- | -------------------------------- |
+| `gitlab_interactive_issue_create`   | `issue.create`                   |
+| `gitlab_interactive_mr_create`      | `merge_request.create`           |
+| `gitlab_interactive_project_create` | `project.create`                 |
+| `gitlab_interactive_release_create` | `release.create`                 |
+
+The tool that runs the alternative depends on the surface: on the default dynamic surface it is `gitlab_execute_action` with the ID as `action` (`{"action": "issue.create", "params": {...}}`), on the meta surface the domain tool with `action` set to `create` (`gitlab_issue`, `gitlab_merge_request`, `gitlab_project`, `gitlab_release`), and on the individual surface the tool of its own (`gitlab_issue_create`, `gitlab_mr_create`, `gitlab_project_create`, `gitlab_release_create`).
 
 ## Frequently Asked Questions
 

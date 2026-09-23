@@ -544,9 +544,10 @@ func (c *classification) foldSessions() {
 // foldCapabilitySession unions one session line into its capability surface.
 //
 // The surface is the effective one, so a line written before the harness
-// recorded it, or carrying a value the server would not take, is read as the
-// full surface the server falls back to rather than as a third surface of its
-// own.
+// recorded the field is read as the default surface EffectiveCapabilitySurface
+// answers, which is what the server serves when the setting is unset, rather
+// than as a third surface of its own. An unknown value never starts a server:
+// both transports refuse it at startup, so no session line can carry one.
 func (c *classification) foldCapabilitySession(shape shapeKey, session *e2ecalls.Session) {
 	key := config.EffectiveCapabilitySurface(session.Capabilities)
 	surface, seen := c.capabilitySurfaces[key]
