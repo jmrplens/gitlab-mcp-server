@@ -420,14 +420,90 @@ func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T
 			want:     true,
 		},
 		{name: "the served tree without the helpers it hands hints to", patterns: []string{"./internal/tools/..."}, whole: defaultPatterns},
+		{
+			name:     "the served tree in another order",
+			patterns: []string{"./internal/toolutil", "./internal/tools/..."},
+			whole:    defaultPatterns,
+			want:     true,
+		},
+		{
+			name:     "the served tree and a package it encloses",
+			patterns: []string{"./internal/tools/...", "./internal/tools/issues", "./internal/toolutil"},
+			whole:    defaultPatterns,
+			want:     true,
+		},
 		{name: "one package of the suite", patterns: []string{"./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
-		{name: "the suite and a package again", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
+		{
+			name:     "the suite and a package it encloses",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{
+			name:     "the suite and a package it encloses, that package first",
+			patterns: []string{"./test/e2e/gitlab/ee", "./test/e2e/gitlab/..."},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{
+			name:     "the suite and the directory its wildcard names",
+			patterns: []string{"./test/e2e/gitlab", "./test/e2e/gitlab/..."},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{
+			name:     "the suite and a tree below it",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee/..."},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{name: "the suite twice", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/..."}, whole: defaultSuitePatterns, want: true},
+		{
+			name:     "the suite and a package beside it",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/internal/harness"},
+			whole:    defaultSuitePatterns,
+		},
+		{
+			name:     "the suite and a directory whose name only begins like it",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlabx"},
+			whole:    defaultSuitePatterns,
+		},
+		{name: "a package of the suite twice", patterns: []string{"./test/e2e/gitlab/ee", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
 		{name: "nothing", whole: defaultSuitePatterns},
 	}
 	for _, one := range cases {
 		t.Run(one.name, func(t *testing.T) {
 			if got := namesWhole(one.patterns, one.whole); got != one.want {
 				t.Errorf("namesWhole(%q, %q) = %t, want %t", one.patterns, one.whole, got, one.want)
+			}
+		})
+	}
+}
+
+// TestNamesWhole_AWildcardBesideASuitePackage_JudgesTheSuiteWhole holds the
+// two halves together, as run does: a wildcard enclosing the suite brings the
+// whole of it into the suite load, so naming a suite package beside it, or the
+// suite itself again, loads the suite and nothing else and is judged whole.
+// Compared as listed, both runs loaded the whole suite and reported the helper
+// table unjudged. A suite package outside ./test/e2e/gitlab/... is a load over
+// more than the suite, and stays unjudged.
+func TestNamesWhole_AWildcardBesideASuitePackage_JudgesTheSuiteWhole(t *testing.T) {
+	root := repoRoot(t)
+	cases := []struct {
+		name     string
+		patterns []string
+		want     bool
+	}{
+		{name: "the module and a suite package", patterns: []string{"./...", "./test/e2e/gitlab/ee"}, want: true},
+		{name: "the module and the suite", patterns: []string{"./...", "./test/e2e/gitlab/..."}, want: true},
+		{name: "a tree enclosing the suite and a suite package", patterns: []string{"./test/...", "./test/e2e/gitlab/common"}, want: true},
+		{name: "the module and the harness", patterns: []string{"./...", "./test/e2e/internal/harness"}},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			_, suite := splitPatterns(root, one.patterns)
+			if got := namesWhole(suite, defaultSuitePatterns); got != one.want {
+				t.Errorf("namesWhole(%q) after splitting %q = %t, want %t", suite, one.patterns, got, one.want)
 			}
 		})
 	}

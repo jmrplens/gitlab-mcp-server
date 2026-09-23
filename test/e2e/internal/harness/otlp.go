@@ -425,6 +425,11 @@ func acknowledgeExport(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// otlpEndpointVariable is the variable that points a child's exporters at
+// this process's receiver, and so the one that says a child's spans can
+// arrive here at all.
+const otlpEndpointVariable = "OTEL_EXPORTER_OTLP_ENDPOINT"
+
 // telemetryVariables returns the environment that points one child at this
 // process's receiver.
 //
@@ -443,7 +448,7 @@ func telemetryVariables() map[string]string {
 	return map[string]string{
 		"GITLAB_MCP_TELEMETRY":        "true",
 		"OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
-		"OTEL_EXPORTER_OTLP_ENDPOINT": received.url,
+		otlpEndpointVariable:          received.url,
 		// Milliseconds, as an integer: the specification defines every OTEL_
 		// duration that way, and "100ms" parses as nothing and silently keeps
 		// the five-second default, which is longer than a test's whole flush.

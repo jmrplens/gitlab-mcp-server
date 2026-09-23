@@ -635,14 +635,24 @@ func TestWorldTemplates_ScopedNames_BindTheirTemplatesObject(t *testing.T) {
 // extra the build could not make is named with GitLab's own reason, whether
 // the template binds it alone or by its plain name, and a name the World never
 // carries says so.
+//
+// The template gated on an extra has a World of its own, because the reason
+// that gate names has to be one it can meet: a pipeline that did not settle is
+// one GitLab created, which the project holds and the gate lets through, so
+// only a refused configuration commit or pipeline create leaves the project
+// holding none.
 func TestWorldTemplates_UnmadeObject_NamesWhy(t *testing.T) {
 	world := extrasWorld()
 	world.unbound = map[string]string{
 		worldExtraWikiPage: "403 Forbidden",
 		worldExtraPipeline: "pipeline 77 did not settle",
 	}
+	world.holdsPipeline = true
+	refused := extrasWorld()
+	refused.unbound = map[string]string{worldExtraPipeline: "POST /projects/2/pipeline: 400 Bad Request"}
 	cases := []struct {
 		name, template, variable string
+		world                    *World
 		want                     []string
 	}{
 		{
@@ -663,15 +673,20 @@ func TestWorldTemplates_UnmadeObject_NamesWhy(t *testing.T) {
 		},
 		{
 			name: "read stands on an extra", template: "gitlab://project/{project_id}/pipelines/latest", variable: "project_id",
+			world: refused,
 			want: []string{
-				"the World's pipeline was not made (pipeline 77 did not settle)",
+				"the World's pipeline was not made (POST /projects/2/pipeline: 400 Bad Request)",
 				"so the project holds no pipeline for the latest pipeline template to read",
 			},
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			value, bound, reason := world.BindTemplate(testCase.template, testCase.variable)
+			bindFrom := world
+			if testCase.world != nil {
+				bindFrom = testCase.world
+			}
+			value, bound, reason := bindFrom.BindTemplate(testCase.template, testCase.variable)
 			if bound || value != nil {
 				t.Fatalf("BindTemplate() bound %v, want nothing", value)
 			}
@@ -714,11 +729,12 @@ func TestWorldTemplates_LatestPipeline_BindsWhileTheProjectHoldsOne(t *testing.T
 }
 
 // TestWorldBindActionParam_ReleaseDomain_BindsTheRelease checks the one name
-// bound per domain: the release domain's tag_name is the release, so a tag
-// made without its release leaves release.get unbound with the release's
-// reason rather than bound to a tag with no release, while the tag domain's
-// actions keep the tag, and every other name falls through to the plain
-// bindings.
+// bound per domain: the release domain's tag_name is the release wherever an
+// action addresses one that exists, so a tag made without its release leaves
+// release.get unbound with the release's reason rather than bound to a tag
+// with no release. release.create keeps the tag, since its tag_name is the tag
+// a new release will stand on, and so do the tag domain's actions; every other
+// name falls through to the plain bindings.
 func TestWorldBindActionParam_ReleaseDomain_BindsTheRelease(t *testing.T) {
 	tagOnly := madeWorld()
 	tagOnly.Release = Release{}
@@ -739,6 +755,7 @@ func TestWorldBindActionParam_ReleaseDomain_BindsTheRelease(t *testing.T) {
 	}{
 		{name: "release made", action: "release.get", param: "tag_name", world: madeWorld(), want: "world-tag-run"},
 		{name: "tag domain keeps the tag", action: "tag.get", param: "tag_name", world: tagOnly, want: "world-tag-run"},
+		{name: "a release's create keeps the tag", action: "release.create", param: "tag_name", world: tagOnly, want: "world-tag-run"},
 		{name: "release domain, other name", action: "release.get", param: "project_id", world: tagOnly, want: int64(2)},
 		{name: "no domain", action: "tag_name", param: "tag_name", world: tagOnly, want: "world-tag-run"},
 	}

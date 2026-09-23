@@ -854,7 +854,7 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 // loop over a parameter and no literal, so recognizing the copy is the
 // difference between a quiet pass-through and a site reported as unfoldable.
 //
-// Two shapes qualify, and the second is a narrowing rather than a copy:
+// Three shapes qualify, and the second is a narrowing rather than a copy:
 // cloneStrings(spec.RelatedActions) is handed the list itself, and
 // Registry.publishedRelatedActions(entry) is handed the value it hangs off and
 // returns the subset one session may be shown. Both are judged where the IDs
@@ -864,24 +864,30 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 // written inside one is a hole in this audit rather than a finding. That hole
 // was accepted for the copy and is the same size here.
 //
-// An argument may also be a parameter named as a carrier of this kind of
-// site's values ([followableParamName]), which is a list recorded where its
-// callers write it: it is followed out to them, and the call is then a merge
-// of lists recorded elsewhere. toolutil's ActionRoute.WithRelatedActions is
-// that shape, merging the route's own list with the ones it is handed through
-// a normalizing helper, and following that helper's body instead found two
+// The third shape is a merge. An argument may also be a list parameter named
+// as a carrier of this kind of site's values ([walker.carrierParam]), which is
+// a list recorded where its callers write it, so beside a list recorded where
+// it is written it is followed out to them, and the call is then a merge of
+// lists recorded elsewhere. toolutil's ActionRoute.WithRelatedActions is that
+// shape, merging the route's own list with the ones it is handed through a
+// normalizing helper, and following that helper's body instead found two
 // values nothing folds and no ID. A run over the served tree alone never met
 // it, since toolutil was not loaded; a run loading toolutil reported it on
-// every -check. A parameter only counts once every argument has qualified, so
-// a call that also passes something else is followed into as before, and
-// nothing is recorded on the way to deciding.
+// every -check. The merge has the copy's hole too, and it is the one this
+// shape adds: a literal the merging body adds of its own is not read.
+//
+// A carrier counts only beside a recorded list and only once every argument
+// has qualified, and nothing is recorded on the way to deciding. A call handed
+// carriers alone merges nothing recorded, so it is followed into as before,
+// which is where an ID the callee appends to what it was handed is written;
+// passing it over dropped that ID without a word. A call that also passes
+// something else is followed into for the same reason.
 func (w *walker) isListCopy(kind string, call *ast.CallExpr) bool {
-	if len(call.Args) == 0 {
-		return false
-	}
+	recorded := false
 	var carriers []*ast.Ident
 	for _, arg := range call.Args {
 		if w.carriesRecordedIDList(arg) {
+			recorded = true
 			continue
 		}
 		param, followable := w.carrierParam(kind, arg)
@@ -890,15 +896,24 @@ func (w *walker) isListCopy(kind string, call *ast.CallExpr) bool {
 		}
 		carriers = append(carriers, param)
 	}
+	if !recorded {
+		return false
+	}
 	for _, param := range carriers {
 		w.followValues(kind, param, recordListValue)
 	}
 	return true
 }
 
-// carrierParam reports whether an argument is a parameter whose name says it
-// carries this kind of site's values, the one shape [walker.followParameter]
+// carrierParam reports whether an argument is a list parameter whose name says
+// it carries this kind of site's values, the one shape [walker.followParameter]
 // follows out to the callers that write them.
+//
+// The list is part of the shape. A scalar carrier holds one value, which
+// [walker.followReturns] reaches through the callee's body and records one ID
+// at a time; followed from here as a list, each caller's constant was
+// reported as a list nothing folds. A variadic parameter is a list in its
+// function's signature, so it qualifies.
 func (w *walker) carrierParam(kind string, arg ast.Expr) (*ast.Ident, bool) {
 	ident, isIdent := ast.Unparen(arg).(*ast.Ident)
 	if !isIdent {
@@ -908,7 +923,7 @@ func (w *walker) carrierParam(kind string, arg ast.Expr) (*ast.Ident, bool) {
 	if !known {
 		return nil, false
 	}
-	if _, isParam := w.prog.params[variable]; !isParam {
+	if _, isParam := w.prog.params[variable]; !isParam || !isStringSlice(variable.Type()) {
 		return nil, false
 	}
 	return ident, followableParamName(kind, variable.Name())

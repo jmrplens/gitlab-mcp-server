@@ -127,7 +127,8 @@ services:
       # Loopback by default: nothing but the setup script on this machine
       # should reach it, since GitLab reaches it over the compose network. For
       # a fixture running on another host, run-docker-e2e.sh sets
-      # E2E_BITBUCKET_BIND=0.0.0.0 so the setup script can.
+      # E2E_BITBUCKET_BIND=0.0.0.0 so the setup script can, and for a GitLab
+      # reached on [::1] it sets [::1], the loopback the script then dials.
       - "${E2E_BITBUCKET_BIND:-127.0.0.1}:7990:7990"
     environment:
       SEARCH_ENABLED: "false"

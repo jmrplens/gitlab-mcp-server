@@ -37,7 +37,14 @@
 // never met: the tree read 1330 hints and reported none, and with it read
 // 1355 and found eleven naming a tool the dynamic surface does not register.
 // The same load reaches ActionRoute.WithRelatedActions, whose related
-// parameter is followed out to its callers like any other.
+// parameter is followed out to its callers like any other. Its body merges
+// that list into the route's own through a helper, and a call merging a
+// recorded list with a list parameter named as related is passed over, like a
+// copy of a recorded list, with the copy's hole: an ID the merging helper
+// added of its own would not be read. A call handed such parameters alone is
+// followed into, so a helper appending an ID to what it was handed is judged
+// there, and a string parameter so named is one ID rather than a list, read
+// through the body of the helper it is handed to.
 //
 // The fifth out of ./test/e2e/gitlab/..., in a second load through the same
 // front end with the test variants included and the e2e build tag set, which
@@ -48,16 +55,22 @@
 // no section for it, and a run naming only suite packages reads no served
 // source and says the published-ID and hint rules were not run rather than
 // printing their counts over nothing. Only a run over the whole suite holds
-// the helper table to it: the bare run, or one naming ./test/e2e/gitlab/...
-// itself, which the comparison reads slash-separated, so .\test\e2e\gitlab\...
-// on Windows is the same run. A pattern given as an absolute path below the repository root, or
-// as an import path below this module, is read as the relative pattern it
-// names before it is sorted, and that is the pattern the load is handed: both
-// spellings used to go to the served load whatever they named, which read the
-// suite's packages as three doc.go files and reported them clean. A wildcard
-// pattern that encloses the suite, ./... or ./test/..., goes to the served
-// load as given and brings the whole suite into the suite load besides, since
-// sorted by its prefix alone it produced that same clean run. A relative
+// the helper table to it: the bare run, one naming ./test/e2e/gitlab/...
+// itself, and one naming a wildcard that encloses it, ./... or ./test/...,
+// which brings the whole suite into the suite load. What is compared is what
+// the suite patterns load: a suite package named beside the suite or beside
+// such a wildcard, which the suite already encloses, leaves the run whole,
+// and one outside ./test/e2e/gitlab/..., such as the harness, does not. The
+// comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is
+// the same run. A pattern given as an absolute path below the repository
+// root, or as an import path below this module, is read as the relative
+// pattern it names before it is sorted, and that is the pattern the load is
+// handed: both spellings used to go to the served load whatever they named,
+// which read the suite's packages as three doc.go files and reported them
+// clean. A wildcard pattern that encloses the suite, ./... or ./test/...,
+// goes to the served load as given and brings the whole suite into the suite
+// load besides, since sorted by its prefix alone it produced that same clean
+// run. A relative
 // pattern keeps its leading ./: without it go list reads test/e2e/gitlab/...
 // as an import path, which matches no package of this module, and the run is
 // refused with "no packages matched" before anything is judged.
@@ -224,8 +237,9 @@
 // since whether the needles are claims is decided at each of them, negated or
 // not, and following them all would judge an absence check as a claim. A
 // negation inside a function literal a return hands back is still read, since
-// that body runs where it is called. Nothing names such a wrapper either, so
-// it is a limit the suite keeps by writing none. And a dotted
+// that body runs where it is called, unless that body returns it in turn,
+// which makes the literal such a wrapper itself. Nothing names such a wrapper
+// either, so it is a limit the suite keeps by writing none. And a dotted
 // needle is judged as the whole ID it spells, so one that is only the front
 // of a longer ID in a domain the catalog uses is refused although it matches
 // at run time; the remedy, quoting the whole ID, asserts strictly more.

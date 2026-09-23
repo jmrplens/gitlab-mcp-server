@@ -168,10 +168,11 @@ E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # whatever port or path it carries: the registry's external URL, http:// and
 # that host on port 5050, Bitbucket's URL, the same on port 7990, and
 # Bitbucket's bind, chosen from the Bitbucket URL (the derived one, or
-# E2E_DOCKER_BITBUCKET_URL when set): loopback when it names localhost, 127.*
-# or [::1], and 0.0.0.0 otherwise, since the setup script on this machine has
-# to reach a remote container's port. Overriding E2E_DOCKER_BITBUCKET_URL
-# therefore moves the bind with it unless E2E_BITBUCKET_BIND is set too. The
+# E2E_DOCKER_BITBUCKET_URL when set): the loopback it names, 127.0.0.1 for
+# localhost, whatever its case, or 127.*, and [::1] for [::1], and 0.0.0.0
+# otherwise, since the setup script on this machine has to reach a remote
+# container's port. Overriding E2E_DOCKER_BITBUCKET_URL therefore moves the
+# bind with it unless E2E_BITBUCKET_BIND is set too. The
 # import test never dials Bitbucket; GitLab does, over the compose network.
 # E2E_REGISTRY_EXTERNAL_URL, E2E_DOCKER_BITBUCKET_URL and E2E_BITBUCKET_BIND,
 # set in the environment or on the make command line, override each. A
@@ -452,7 +453,7 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
 	  -- -tags e2e -p 1 -count=1 -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/...'
 
-## e2e-clean-orphans: delete what earlier runs left on a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project, group and user named with E2E_SWEEP_PREFIX (default e2e-).
+## e2e-clean-orphans: delete what earlier runs left on a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project and group named with E2E_SWEEP_PREFIX (default e2e-), and every such user when the token is an administrator's.
 # Run by hand and by nothing else: a run sweeps only what carries its own run
 # ID, and this is the prefix-wide sweep for the leftovers of a run that could
 # not clean up. It is a test of the fixture package because that library is

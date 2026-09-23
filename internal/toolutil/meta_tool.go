@@ -149,8 +149,8 @@ func (route ActionRoute) WithUsage(usage string) ActionRoute {
 // WithRelatedActions returns a copy of route with related canonical action IDs.
 //
 // The parameter is named related because cmd/audit_action_ids follows a
-// parameter out to its callers only under that name, and so judges the IDs
-// where each caller writes them.
+// parameter out to its callers only under a name beginning with related, and
+// so judges the IDs where each caller writes them.
 func (route ActionRoute) WithRelatedActions(related ...string) ActionRoute {
 	route.RelatedActions = appendNormalizedRouteStrings(route.RelatedActions, related...)
 	return route

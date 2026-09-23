@@ -625,16 +625,29 @@ var releaseTagBinding = worldBinding{worldExtraRelease, func(w *World) (any, boo
 
 // domainBindings are values bound for the actions of one catalog domain only,
 // because there the name means another object than the plain binding gives
-// it. The release domain's tag_name is the release: release.get,
-// release.delete and the release link actions all address the release by its
-// tag, so the plain binding would call them on a tag with no release whenever
-// the tag was made and the release was not, and the read sweep would count
-// each answer among its errors without naming the action or the reason. Bound
-// here, the release's reason is logged beside each of them instead, as it is
-// beside the release template. The tag domain's actions keep the plain
-// binding, since the tag is what they address.
+// it. The release domain's tag_name is the release wherever an action
+// addresses one that exists: release.get, release.update, release.delete and
+// the release link actions all address the release by its tag, so the plain
+// binding would call them on a tag with no release whenever the tag was made
+// and the release was not, and the read sweep would count each answer among
+// its errors without naming the action or the reason. Bound here, the
+// release's reason is logged beside each of them instead, as it is beside the
+// release template. The tag domain's actions keep the plain binding, since the
+// tag is what they address, and so do the actions [domainBindingExemptions]
+// names.
 var domainBindings = map[string]map[string]worldBinding{
 	"release": {"tag_name": releaseTagBinding},
+}
+
+// domainBindingExemptions are the actions of a domain in [domainBindings]
+// whose parameter does not name the domain's object, and which keep the plain
+// binding. release.create's tag_name is the tag the new release will stand
+// on, one GitLab creates from ref when it does not exist, so it binds the
+// World's tag whether or not the World's release was made: the preview sweep
+// calls it in safe mode, which never reaches GitLab, and the tag is all it
+// needs.
+var domainBindingExemptions = map[string]struct{}{
+	"release.create": {},
 }
 
 // worldNeed is an extra a resource template's first read stands on although
@@ -732,9 +745,13 @@ func (w *World) BindTemplate(template, variable string) (value any, bound bool, 
 // catalog action, whether it has one, and, when it has none, why. It is what
 // the read and preview sweeps bind an action's requirements through.
 //
-// A value bound for the action's domain ([domainBindings]) wins, then
-// [World.BindParam]. The domain is the canonical ID's part before its dot.
+// A value bound for the action's domain ([domainBindings]) wins, unless the
+// action is one [domainBindingExemptions] names, then [World.BindParam]. The
+// domain is the canonical ID's part before its dot.
 func (w *World) BindActionParam(action, name string) (value any, bound bool, reason string) {
+	if _, exempt := domainBindingExemptions[action]; exempt {
+		return w.BindParam(name)
+	}
 	domain, _, _ := strings.Cut(action, ".")
 	if binding, scoped := domainBindings[domain][name]; scoped {
 		return w.bindExtra(binding, name)

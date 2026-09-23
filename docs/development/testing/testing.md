@@ -762,7 +762,7 @@ The fixture builders live in `test/e2e/internal/fixture`, one file per kind, and
 1. Mark the project for deletion (`DELETE /projects/:id`)
 2. Permanently remove it (`DELETE /projects/:id?permanently_remove=true&full_path=...`)
 
-A run cleans up only what carries its own run id, which is what lets two runs share an instance. What an interrupted run left behind is swept separately and by hand, `make e2e-clean-orphans`, which deletes every project, group and user named with `E2E_SWEEP_PREFIX` (default `e2e-`) and skips unless that prefix is set. It is a test of the fixture package because that library is importable only from `test/e2e`, and nothing schedules it: a prefix-wide sweep is not something a run should decide to do to an instance it shares.
+A run cleans up only what carries its own run id, which is what lets two runs share an instance. What an interrupted run left behind is swept separately and by hand, `make e2e-clean-orphans`, which deletes every project and group named with `E2E_SWEEP_PREFIX` (default `e2e-`), and every such user when the token is an administrator's, and skips unless that prefix is set. It is a test of the fixture package because that library is importable only from `test/e2e`, and nothing schedules it: a prefix-wide sweep is not something a run should decide to do to an instance it shares.
 
 ### Meta-Tool Tests
 

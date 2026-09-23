@@ -344,15 +344,29 @@ const dispatchPoll = 25 * time.Millisecond
 var dispatchGaveUp atomic.Bool
 
 // awaitDispatch waits until the server has reported on every call of this
-// test, or until the budget runs out.
+// test whose span can arrive, or until the budget runs out.
+//
+// A call to a session whose server exports nothing to this process's receiver
+// is not waited for ([pendingCall.awaitsSpan]): an in-process server a test
+// assembles has no exporter, so its span never comes. Waiting for one cost
+// the whole budget at every flush once any earlier test of the process had
+// started the receiver, which is how the harness's own tests came to spend
+// most of their time waiting.
 func awaitDispatch(calls []*pendingCall) {
 	pending := make([]string, 0, len(calls))
 	for _, call := range calls {
-		if call.line.TraceID != "" {
+		if call.awaitsSpan() {
 			pending = append(pending, call.line.TraceID)
 		}
 	}
 	awaitTraces(pending)
+}
+
+// awaitsSpan reports whether a span of this call can still arrive: the call
+// carries a trace, and the session it went to exports its spans to this
+// process's receiver.
+func (call *pendingCall) awaitsSpan() bool {
+	return call.line.TraceID != "" && call.conn != nil && call.conn.exportsSpans
 }
 
 // awaitTraces waits for the server's own span of each of these traces.

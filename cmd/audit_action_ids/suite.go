@@ -201,8 +201,8 @@ func (w *walker) visitSuite(node ast.Node) bool {
 //
 // A function literal inside the result is not part of the answer: it is code
 // that runs when called, and a negated predicate in its body is in the
-// position every other negation is. Only a `!` is ever looked up, so marking
-// the other unary operators too costs nothing and asks no question.
+// position every other negation is. Only a `!` is acted on, so marking the
+// other unary operators too costs nothing and asks no question.
 func (w *walker) markReturnedNegations(ret *ast.ReturnStmt) {
 	for _, result := range ret.Results {
 		ast.Inspect(result, func(node ast.Node) bool {

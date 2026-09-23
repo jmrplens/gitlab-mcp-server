@@ -47,9 +47,9 @@
 #   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
 #   E2E_REGISTRY_EXTERNAL_URL      the registry's: http:// and the GitLab URL's host on port 5050,
 #                                  whatever port or path the GitLab URL carries
-#   E2E_BITBUCKET_BIND             the address Bitbucket is published on: loopback when the
-#                                  Bitbucket URL (derived or set) names localhost, 127.* or [::1],
-#                                  0.0.0.0 otherwise
+#   E2E_BITBUCKET_BIND             the address Bitbucket is published on: 127.0.0.1 when the
+#                                  Bitbucket URL (derived or set) names localhost, whatever its
+#                                  case, or 127.*, [::1] when it names [::1], 0.0.0.0 otherwise
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -77,33 +77,12 @@ fi
 
 E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
 # Bitbucket and the registry run beside GitLab, so they are reached on the
-# same host. A fixed localhost default sent a remote run's setup script to
-# this machine, where nothing listens, and the import test then skipped: the
-# run passed and the coverage record came out one action short with nothing
-# saying why.
-#
-# The host is read off the GitLab URL whatever else it carries. The compose
-# file publishes GitLab on port 8929 and on no other, so a URL naming another
-# port, or none, is a proxy or a tunnel in front of that host, and a trailing
-# slash or a path names the same host too. The scheme is not carried over:
-# Bitbucket answers plain HTTP on 7990 and the registry on 5050 whatever
-# terminates TLS in front of GitLab. A URL no host can be read out of keeps
-# the loopback defaults (the compose file's own, for the registry) and says
-# so for Bitbucket, rather than stopping a run that may not start it at all.
-gitlab_host=""
-gitlab_url_re='^[A-Za-z][A-Za-z0-9+.-]*://([^]/?#:[]+|\[[^]/?#]*\])(:[0-9]*)?([/?#].*)?$'
-if [[ "${E2E_DOCKER_GITLAB_URL}" =~ ${gitlab_url_re} ]]; then
-    gitlab_host="${BASH_REMATCH[1]}"
-fi
-if [ -z "${E2E_DOCKER_BITBUCKET_URL:-}" ]; then
-    if [ -n "${gitlab_host}" ]; then
-        E2E_DOCKER_BITBUCKET_URL="http://${gitlab_host}:7990"
-    else
-        E2E_DOCKER_BITBUCKET_URL="http://localhost:7990"
-        echo "run-docker-e2e.sh: WARN no host can be read out of E2E_DOCKER_GITLAB_URL=${E2E_DOCKER_GITLAB_URL};" \
-            "Bitbucket is looked for at ${E2E_DOCKER_BITBUCKET_URL}, so set E2E_DOCKER_BITBUCKET_URL if it runs elsewhere" >&2
-    fi
-fi
+# same host, and Bitbucket is published on the loopback its URL names, or on
+# 0.0.0.0 when it names none. fixture-addresses.sh holds the derivation and
+# the reasons for it, so a test can drive it with the URLs it has to handle.
+# shellcheck source=test/e2e/scripts/fixture-addresses.sh
+. "${SCRIPT_DIR}/fixture-addresses.sh"
+derive_fixture_addresses
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
 E2E_REPORT_NAME="${E2E_REPORT_NAME:-e2e-${RUNTIME}}"
 GOTESTSUM="${GOTESTSUM:-gotestsum}"
@@ -114,25 +93,14 @@ esac
 
 # What the compose file publishes follows the address the fixture is reached
 # from, so the web_url fields GitLab answers with are the ones the tests reach.
-# The registry's is the GitLab URL's host on port 5050, read the way
-# Bitbucket's is above, so a URL on another port, with none, or with a path
-# moves it too.
+# The registry's is the GitLab URL's host on port 5050, derived above with
+# Bitbucket's, so a URL on another port, with none, or with a path moves it
+# too. The import test itself never dials Bitbucket: it hands GitLab the
+# address the setup script recorded, and GitLab reaches it over the compose
+# network. E2E_BITBUCKET_BIND overrides the choice of bind.
 export E2E_GITLAB_EXTERNAL_URL="${E2E_GITLAB_EXTERNAL_URL:-${E2E_DOCKER_GITLAB_URL}}"
-if [ -z "${E2E_REGISTRY_EXTERNAL_URL:-}" ] && [ -n "${gitlab_host}" ]; then
-    export E2E_REGISTRY_EXTERNAL_URL="http://${gitlab_host}:5050"
-fi
-# Bitbucket is published on loopback when its URL names localhost, 127.* or
-# [::1], and on 0.0.0.0 otherwise, since the setup script on this machine has
-# to reach a remote container's port and a remote loopback is out of its reach.
-# The import test itself never dials Bitbucket: it hands GitLab the address
-# the setup script recorded, and GitLab reaches it over the compose network.
-# A URL naming this machine by its LAN address is published on 0.0.0.0 too;
-# E2E_BITBUCKET_BIND overrides the choice.
-if [ -z "${E2E_BITBUCKET_BIND:-}" ]; then
-    case "${E2E_DOCKER_BITBUCKET_URL}" in
-        *://localhost|*://localhost[:/]*|*://127.*|*://\[::1\]*) E2E_BITBUCKET_BIND=127.0.0.1 ;;
-        *) E2E_BITBUCKET_BIND=0.0.0.0 ;;
-    esac
+if [ -n "${E2E_REGISTRY_EXTERNAL_URL:-}" ]; then
+    export E2E_REGISTRY_EXTERNAL_URL
 fi
 export E2E_BITBUCKET_BIND
 export E2E_COMMIT="${E2E_COMMIT:-$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)}"

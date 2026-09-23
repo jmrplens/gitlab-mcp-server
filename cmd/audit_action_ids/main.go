@@ -181,7 +181,8 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 // `./internal/tools/...` therefore reads no suite at all, and says so by
 // printing no assertion section. What holds a table to its tree is that the
 // run covered the tree, which [namesWhole] decides: the bare run does for
-// both, and a run naming one whole tree itself does for that one.
+// both, and a run whose patterns load exactly one whole tree does for that
+// one, which for the suite includes a run naming a wildcard that encloses it.
 //
 // Each pattern is first read as the relative pattern it names
 // ([relativePattern]), and that spelling is what both the sorting and the
@@ -281,10 +282,51 @@ func isSuitePattern(pattern string) bool {
 // relative pattern it names ([relativePattern]). A relative pattern without
 // the leading ./ never does: go list reads it as an import path, which
 // matches no package of this module, and the load refuses the run first.
+//
+// What is compared is what the patterns load rather than how they are
+// listed ([outermostPatterns]), because go list loads a package once whatever
+// names it. A wildcard that encloses the suite brings the whole of it into the
+// suite load beside any suite package named with it, so ./... with
+// ./test/e2e/gitlab/ee loads the suite and nothing else, and compared as
+// listed it said it had not.
 func namesWhole(patterns, whole []string) bool {
-	return slices.EqualFunc(patterns, whole, func(given, want string) bool {
-		return normalizePattern(given) == normalizePattern(want)
-	})
+	return slices.Equal(outermostPatterns(patterns), outermostPatterns(whole))
+}
+
+// outermostPatterns is a list of patterns in the spelling the comparisons
+// read, sorted, without the ones another pattern of the list already loads: a
+// repeat, and a pattern a wildcard of the list encloses ([enclosesPattern]).
+func outermostPatterns(patterns []string) []string {
+	normalized := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		normalized = append(normalized, normalizePattern(pattern))
+	}
+	slices.Sort(normalized)
+	normalized = slices.Compact(normalized)
+	outermost := make([]string, 0, len(normalized))
+	for _, pattern := range normalized {
+		enclosed := slices.ContainsFunc(normalized, func(wildcard string) bool {
+			return enclosesPattern(wildcard, pattern)
+		})
+		if !enclosed {
+			outermost = append(outermost, pattern)
+		}
+	}
+	return outermost
+}
+
+// enclosesPattern reports whether a wildcard pattern loads every package
+// another pattern names, both in the spelling the comparisons read. go list
+// matches a pattern ending in /... by the prefix in front of the wildcard and
+// by the directory it names, so test/e2e/gitlab/... loads test/e2e/gitlab,
+// test/e2e/gitlab/ee and test/e2e/gitlab/ee/... alike. A pattern never
+// encloses itself, so a list with its repeats removed keeps every wildcard.
+func enclosesPattern(wildcard, pattern string) bool {
+	prefix, isWildcard := strings.CutSuffix(wildcard, "...")
+	if !isWildcard || wildcard == pattern {
+		return false
+	}
+	return strings.HasPrefix(pattern, prefix) || pattern+"/" == prefix
 }
 
 // normalizePattern is a pattern in the one spelling the comparisons read:

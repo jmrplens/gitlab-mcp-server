@@ -588,6 +588,13 @@ func options() toolutil.ActionSpecOptions {
 // not a parameter, even one named like a carrier, a parameter under another
 // name, and a name that is no variable at all each leave the call to be
 // followed into, which reports the body it cannot fold rather than passing it.
+// So does a call handed carriers alone, which merges nothing recorded and is
+// where a helper appending an ID of its own writes it, and a carrier that is
+// a string rather than a list, whose callers each pass one ID. Passed over,
+// the first dropped the helper's ID without a word and the second reported
+// every caller's constant as a list nothing folds. The last case pins the
+// hole the merge shares with the copy: an ID the merging helper adds of its
+// own is not read.
 func TestCollectSites_AMergeWithARelatedParameter_IsFollowedToItsCallers(t *testing.T) {
 	const merge = `package fixture
 
@@ -657,6 +664,75 @@ func options() toolutil.ActionSpecOptions {
 `,
 			related:    []string{"demo.base"},
 			unresolved: true,
+		},
+		{
+			name: "related parameters alone",
+			body: `func withCommon(related []string) []string {
+	return append(related, "demo.common")
+}
+
+func build(related []string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: withCommon(related)}
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build([]string{"demo.caller"})
+}
+`,
+			related: []string{"demo.caller", "demo.common"},
+		},
+		{
+			name: "string parameters named like carriers",
+			body: `const idA = "demo.first"
+
+func pair(related1, related2 string) []string {
+	return []string{related1, related2}
+}
+
+func build(relatedFirst, relatedSecond string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: pair(relatedFirst, relatedSecond)}
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build(idA, "demo.second")
+}
+`,
+			related: []string{"demo.first", "demo.second"},
+		},
+		{
+			name: "a string parameter named like a carrier beside a recorded list",
+			body: `func withOne(relatedList []string, related string) []string {
+	return append(relatedList, related)
+}
+
+func build(related string) toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}
+	opts.RelatedActions = withOne(opts.RelatedActions, related)
+	return opts
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build("demo.one")
+}
+`,
+			related: []string{"demo.base", "demo.one"},
+		},
+		{
+			name: "a merge whose helper adds an ID of its own",
+			body: `func withRelatedAndCommon(opts toolutil.ActionSpecOptions, related ...string) toolutil.ActionSpecOptions {
+	opts.RelatedActions = normalizeWithCommon(opts.RelatedActions, related...)
+	return opts
+}
+
+func normalizeWithCommon(existing []string, values ...string) []string {
+	return append(normalize(existing, values...), "demo.unread")
+}
+
+func options() toolutil.ActionSpecOptions {
+	return withRelatedAndCommon(toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}, "demo.merged")
+}
+`,
+			related: []string{"demo.base", "demo.merged"},
 		},
 	}
 	for _, one := range cases {
