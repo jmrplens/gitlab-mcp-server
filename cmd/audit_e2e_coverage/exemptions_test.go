@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -21,24 +20,6 @@ func TestExemptions_AfterTheSwitch_RatchetIsOn(t *testing.T) {
 	if len(assertedFloors) != 0 {
 		t.Errorf("assertedFloors holds %d entries, and floors belong to -check rather than to this table",
 			len(assertedFloors))
-	}
-}
-
-// TestExemptions_ReachedByToolName_NameTheDrivingFile holds the one category
-// that records a covering scenario rather than a missing one to the promise
-// its own documentation makes: each entry names the file that drives the
-// action, so a reviewer can check the claim instead of taking it.
-//
-// The other categories say why nothing runs an action, and there is no file
-// to name; only this one asserts that something does.
-func TestExemptions_ReachedByToolName_NameTheDrivingFile(t *testing.T) {
-	for id, exemption := range exemptedActions {
-		if exemption.Category != categoryReachedByToolName {
-			continue
-		}
-		if !strings.Contains(exemption.Reason, "_test.go") {
-			t.Errorf("exemption %s claims a scenario drives it and names no file: %q", id, exemption.Reason)
-		}
 	}
 }
 

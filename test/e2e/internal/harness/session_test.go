@@ -201,6 +201,62 @@ func TestServerConfig_Private_GetsAServerOfItsOwn(t *testing.T) {
 	}
 }
 
+// TestServerConfig_PrivateSessions_AreTheAskedAndTheScripted pins the one
+// predicate both halves of a private session read: the key nothing else can
+// name, and the close when the test that opened it ends.
+func TestServerConfig_PrivateSessions_AreTheAskedAndTheScripted(t *testing.T) {
+	cases := []struct {
+		name   string
+		config ServerConfig
+		want   bool
+	}{
+		{name: "asked for", config: ServerConfig{Private: true}, want: true},
+		{name: "scripted", config: ServerConfig{Elicitation: ElicitationScripted}, want: true},
+		{name: "auto-accepting", config: ServerConfig{Elicitation: ElicitationAutoAccept}, want: false},
+		{name: "ordinary", config: ServerConfig{}, want: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.config.normalized().private(); got != testCase.want {
+				t.Errorf("private() = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestSession_ScriptedElicitation_ItsChildEndsWithItsTest is the lifetime half
+// of a scripted session being private.
+//
+// A scripted session always had a key of its own, so no later test could reach
+// its child, and it was closed only when a test had also set Private: every
+// other one ran until the package ended. The scenario that drives the four
+// guided flows on three surfaces opens twelve of them, four on the individual
+// surface, so the leak was a dozen servers per run for nothing.
+func TestSession_ScriptedElicitation_ItsChildEndsWithItsTest(t *testing.T) {
+	inst := stubInstance(t)
+
+	var proc *serverProcess
+	t.Run("scripted", func(t *testing.T) {
+		env := newEnv(t, inst)
+		session := env.Session(ServerConfig{
+			Elicitation:  ElicitationScripted,
+			Responder:    acceptElicitation,
+			Capabilities: CapabilitiesMinimal,
+		})
+		proc = session.conn.proc
+		if !proc.alive() {
+			t.Fatal("the scripted session's child is not running while its test is")
+		}
+	})
+
+	if proc == nil {
+		t.Fatal("the subtest opened no session")
+	}
+	if !proc.waitForExit(time.Now().Add(10 * time.Second)) {
+		t.Errorf("the scripted session's child %s is still running after the test that opened it ended", proc.label)
+	}
+}
+
 // TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads pins the mapping
 // from a shape to the environment the server is started with.
 //
@@ -282,6 +338,23 @@ func TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads(t *testing.T) {
 				if vars[key] != want {
 					t.Errorf("%s = %q, want %q", key, vars[key], want)
 				}
+			}
+		})
+	}
+}
+
+// TestServerConfig_ChildVariables_WhatIsNotAskedForIsNotSet holds the three
+// variables a child must not see at all when the configuration asks for
+// nothing, which the table above cannot tell apart from a variable set to the
+// empty string: an empty exclusion list, tier or schema mode is a different
+// instruction from none.
+func TestServerConfig_ChildVariables_WhatIsNotAskedForIsNotSet(t *testing.T) {
+	vars := ServerConfig{}.normalized().childVariables()
+
+	for _, key := range []string{"GITLAB_MCP_EXCLUDE_TOOLS", "GITLAB_MCP_TIER", "GITLAB_MCP_META_PARAM_SCHEMA"} {
+		t.Run(key, func(t *testing.T) {
+			if value, present := vars[key]; present {
+				t.Errorf("%s is set to %q for a configuration that asked for nothing", key, value)
 			}
 		})
 	}

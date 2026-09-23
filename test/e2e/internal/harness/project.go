@@ -11,6 +11,13 @@
 // ActionSpec, a large legacy set is verb-first, and no string transformation
 // recovers one from an ID.
 //
+// The standalone utilities, project discovery and the guided interactive
+// flows, are the exception on meta: that surface registers each of them as a
+// tool of its own, under the declared individual name and with flat arguments,
+// so a standalone action is spelled there exactly as on individual. The
+// catalog read is the one the dynamic surface serves, because it is the only
+// assembly that carries them at all.
+//
 // It also answers which actions a surface cannot reach at all, which matters
 // more than it sounds. Several actions declare one individual tool name, and
 // registration binds that name to the first of them; the others are then
@@ -30,7 +37,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
 )
 
 // ActionID is a canonical catalog action identifier, such as issue.list.
@@ -75,9 +84,17 @@ type projectedAction struct {
 	id ActionID
 	// domain is the catalog domain, the half of the ID before the dot.
 	domain string
-	// metaTool is the domain tool the meta surface registers.
+	// standalone says the action is a standalone utility, which the meta and
+	// individual surfaces register as a tool of its own rather than as a route
+	// of a domain tool. It changes how meta spells the call, and it is what
+	// the served set reads to account for tools no catalog of those two
+	// surfaces carries.
+	standalone bool
+	// metaTool is the tool the meta surface registers the action under: the
+	// domain tool, or for a standalone action its own declared name.
 	metaTool string
-	// metaAction is the operation name that tool's action argument takes.
+	// metaAction is the operation name that tool's action argument takes,
+	// empty for a standalone action, whose tool takes no action argument.
 	metaAction string
 	// individualTool is the declared individual tool name, empty when this
 	// action cannot be reached on that surface.
@@ -124,7 +141,8 @@ type projectionEntry struct {
 }
 
 // newProjection returns the projection for a tier and instance class, building
-// it on first use from the same shared base catalog the binary registers from.
+// it on first use from the same catalog assembly the binary serves the dynamic
+// surface from.
 func newProjection(tier edition.Tier, dotcom bool) (*projection, error) {
 	loaded, _ := projections.LoadOrStore(projectionKey{tier: tier, dotcom: dotcom}, &projectionEntry{})
 	entry, _ := loaded.(*projectionEntry)
@@ -134,16 +152,26 @@ func newProjection(tier edition.Tier, dotcom bool) (*projection, error) {
 	return entry.made, entry.err
 }
 
+// buildServedCatalog is the assembly the projection reads. It is a variable so
+// a test can make it fail, which no tier the binary accepts does.
+var buildServedCatalog = dynamiccatalog.Build
+
 // buildProjection reads the catalog once and records what each surface calls
 // every action.
 //
-// IncludeMCP is set because the binary sets it: without it the gitlab_server
-// diagnostics group is absent, and a test naming server.status would be told
-// the catalog has no such action when the server serves it.
+// The catalog is the one [dynamiccatalog.Build] assembles, which cmd/server
+// and the coverage command both read, for the one thing it carries that the
+// shared base catalog does not: the standalone utilities. Read from the base
+// catalog, as this did until issue 903, the harness could not name
+// discover_project.resolve or a guided flow on any surface, and the only way
+// left to call one was a raw tool call the coverage record credits to nothing.
+// A configuration with nothing but the tier applies no filter, so every other
+// action the base catalog holds is here too, the gitlab_server diagnostics
+// group included, since the assembly asks for it exactly as the binary does.
 func buildProjection(tier edition.Tier, dotcom bool) (*projection, error) {
-	catalog, err := gitlabtools.SharedBaseCatalog(dotcom, gitlabtools.ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+	catalog, _, err := buildServedCatalog(gitlabtools.UnboundClient(dotcom), &config.ServerConfig{Tier: tier})
 	if err != nil {
-		return nil, fmt.Errorf("build the base catalog at tier %s: %w", tier, err)
+		return nil, fmt.Errorf("build the served catalog at tier %s: %w", tier, err)
 	}
 
 	// The identifier is the one reader that knows which action a declared
@@ -153,26 +181,47 @@ func buildProjection(tier edition.Tier, dotcom bool) (*projection, error) {
 	identify := gitlabtools.NewCallIdentifier(catalog, config.ToolSurfaceIndividual)
 
 	made := &projection{tier: tier, actions: make(map[ActionID]projectedAction, catalog.CountActions())}
-	for _, action := range catalog.Actions() {
-		projected := projectedAction{
-			id:          ActionID(action.ID),
-			domain:      action.Domain,
-			metaTool:    action.ToolName,
-			metaAction:  action.Name,
-			destructive: action.Destructive,
-			readOnly:    action.ReadOnly,
-			minimumTier: edition.TierFromEdition(action.Edition),
-		}
-		if name := strings.TrimSpace(action.IndividualTool.Name); name != "" {
-			if identity, known := identify.Identify(name, nil); known && identity.ActionID == string(action.ID) {
-				projected.individualTool = name
-			} else if known {
-				projected.individualOwner = identity.ActionID
+	for _, group := range catalog.Groups() {
+		standalone := standaloneGroup(group)
+		for _, action := range group.ActionsInOrder() {
+			name := strings.TrimSpace(action.IndividualTool.Name)
+			projected := projectedAction{
+				id:          ActionID(action.ID),
+				domain:      action.Domain,
+				standalone:  standalone,
+				metaTool:    action.ToolName,
+				metaAction:  action.Name,
+				destructive: action.Destructive,
+				readOnly:    action.ReadOnly,
+				minimumTier: edition.TierFromEdition(action.Edition),
 			}
+			if standalone {
+				// The meta surface registers it under its own declared name,
+				// not as a route of the group tool the dynamic catalog files
+				// it under, which is registered nowhere.
+				projected.metaTool = name
+				projected.metaAction = ""
+			}
+			if name != "" {
+				if identity, known := identify.Identify(name, nil); known && identity.ActionID == string(action.ID) {
+					projected.individualTool = name
+				} else if known {
+					projected.individualOwner = identity.ActionID
+				}
+			}
+			made.actions[projected.id] = projected
 		}
-		made.actions[projected.id] = projected
 	}
 	return made, nil
+}
+
+// standaloneGroup reports whether a catalog group holds standalone utilities:
+// project discovery, a runtime utility, and the guided flows, an interactive
+// one. Every domain group, the gitlab_server diagnostics included, is a meta
+// group, and the dynamic controller never reaches a catalog.
+func standaloneGroup(group actioncatalog.Group) bool {
+	return group.SurfaceKind == actioncatalog.SurfaceKindRuntimeUtility ||
+		group.SurfaceKind == actioncatalog.SurfaceKindInteractiveUtility
 }
 
 // lookup returns the projection of one action, and whether the catalog this
@@ -188,7 +237,9 @@ func (p *projection) lookup(id ActionID) (projectedAction, bool) {
 // It reads the whole catalog rather than the one this instance serves, so a
 // test on a Free runtime can ask about an action only a licensed one has and
 // assert that it is not served. A GitLab.com-only action is still absent on a
-// self-managed instance, since no tier adds it there.
+// self-managed instance, since no tier adds it there. The standalone utilities
+// are in the catalog it reads, at Free, so every action the dynamic surface
+// lists has an answer here.
 func (e *Env) ActionTier(id ActionID) (edition.Tier, bool) {
 	e.T.Helper()
 
@@ -246,6 +297,14 @@ func (a projectedAction) callOn(surface Surface, params map[string]any, confirm 
 		}
 		return toolCall{tool: dynamictools.ExecuteActionToolName, arguments: call, argumentNames: argumentNames(call)}, nil
 	case SurfaceMeta:
+		if a.standalone {
+			// A tool of its own here, with the parameters at the top level: the
+			// call the individual surface takes, and the one this tool's locked
+			// schema admits. It declares no destructive action, and were one
+			// to, the confirmation would travel with the parameters, as it
+			// does on individual.
+			return toolCall{tool: a.metaTool, arguments: arguments, argumentNames: argumentNames(arguments)}, nil
+		}
 		if a.metaTool == "" || a.metaAction == "" {
 			return toolCall{}, fmt.Errorf("action %s declares no meta tool and action pair", a.id)
 		}

@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
@@ -50,6 +51,59 @@ func NewCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.C
 	if catalog == nil {
 		return mcpotel.IdentifierFunc(noAction)
 	}
+	return catalogIdentifierFor(catalog, surface)
+}
+
+// NewServedCallIdentifier is [NewCallIdentifier] for the server that
+// registered catalog on surface, which on two surfaces serves more than the
+// catalog holds.
+//
+// The meta and individual surfaces register the standalone utilities
+// (gitlab_discover_project and the gitlab_interactive_* flows) as tools of
+// their own, through [RegisterMetaStandaloneTools], beside a catalog that
+// carries none of them. A resolver reading only that catalog left every call
+// to one of those tools without an action on its span, so a deployment on
+// either surface could not see them in its telemetry while the dynamic
+// surface, whose catalog does carry them, could. This adds them, keyed by the
+// tool name they are registered under, and consults them only when the
+// surface's own reading does not know the tool: the catalog is always asked
+// first, so nothing it names can be shadowed.
+//
+// The dynamic surface is left alone because it needs nothing: its catalog
+// holds the standalone groups, and a tool name there is never the operation.
+// A missing catalog names nothing, as it does for [NewCallIdentifier].
+//
+// The index holds every standalone tool the surface registers and is not
+// narrowed by the visibility pass that runs after registration. That pass
+// removes a tool an --exclude-tools entry names exactly and, in read-only mode
+// (a read_api token's narrowing included), every tool that does not read, and
+// the index still names the removed ones. A call to one of them is therefore
+// attributed to the action the client asked for, and the server then refuses
+// it as a tool it does not serve. The individual surface already treats a
+// catalog tool read-only removed that way, since its catalog is narrowed by
+// exclusions and scopes only; the dynamic surface does not, because its
+// catalog is filtered before anything is registered, so an action withheld
+// there is named by nothing.
+//
+// It is a separate constructor rather than a change to [NewCallIdentifier]
+// because that one answers what a catalog names, and the model evaluation's
+// scoring reads it on those terms.
+func NewServedCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.CallIdentifier {
+	if catalog == nil {
+		return mcpotel.IdentifierFunc(noAction)
+	}
+	identifier := catalogIdentifierFor(catalog, surface)
+	if surface == config.ToolSurfaceMeta || surface == config.ToolSurfaceIndividual {
+		// A copy of the shared identifier, so the one every other server of
+		// this catalog holds is not changed; the index itself is read only.
+		identifier.standalone = standaloneIdentities()
+	}
+	return identifier
+}
+
+// catalogIdentifierFor returns the resolver for a catalog, shared across every
+// server bound to the same shared catalog.
+func catalogIdentifierFor(catalog *actioncatalog.Catalog, surface string) catalogIdentifier {
 	origin := catalog.SharedOrigin()
 	if origin == nil {
 		return newCallIdentifier(identifierActions(catalog, surface), surface)
@@ -58,9 +112,36 @@ func NewCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.C
 	// shared catalog can use one; built from the origin, whose actions carry
 	// the same names, so the maps hold nothing bound to a credential.
 	key := identifierKey{origin: origin, surface: surface}
-	return sharedIdentifiers.Load(key, func() mcpotel.CallIdentifier {
+	return sharedIdentifiers.Load(key, func() catalogIdentifier {
 		return newCallIdentifier(identifierActions(origin, surface), surface)
 	})
+}
+
+// standaloneIdentities is the index [NewServedCallIdentifier] adds, built once
+// per process: it depends on nothing a configuration or a credential decides.
+var standaloneIdentities = sync.OnceValue(indexStandaloneTools)
+
+// indexStandaloneTools maps each standalone utility's registered tool name to
+// its canonical action.
+//
+// It reads the same specs [RegisterMetaStandaloneTools] registers, so the key is
+// the name a client calls, and it spells the canonical id the way the catalog
+// assembly does for a group with a base domain, domain then action. The client
+// is the credential-less one a shared catalog is built with, since the names
+// and the ids are all that is read and neither depends on a credential or on
+// the instance class.
+func indexStandaloneTools() map[string]mcpotel.Identity {
+	specs := StandaloneSurfaceToolSpecs(UnboundClient(false))
+	index := make(map[string]mcpotel.Identity, len(specs))
+	for _, spec := range specs {
+		// Not a defensive copy: the clone trims the name, the domain and the
+		// action as registration does before they become the tool's, so the
+		// key is the name a client calls and the id the one the catalog spells
+		// even for a spec that declares them with stray spaces.
+		spec = actioncatalog.CloneSurfaceToolSpec(spec)
+		index[spec.Name] = mcpotel.Identity{ActionID: spec.BaseDomain + "." + spec.ActionName, Domain: spec.BaseDomain}
+	}
+	return index
 }
 
 // identifierActions lists a catalog's actions in the order the surface's
@@ -90,7 +171,7 @@ type identifierKey struct {
 // sharedIdentifiers holds one identifier per shared catalog and surface.
 // Single-flight, so a startup burst of servers for one configuration indexes
 // the actions once rather than once each.
-var sharedIdentifiers toolutil.OnceMap[identifierKey, mcpotel.CallIdentifier]
+var sharedIdentifiers toolutil.OnceMap[identifierKey, catalogIdentifier]
 
 // newCallIdentifier builds the resolver from a plain slice of actions.
 //
@@ -103,7 +184,7 @@ var sharedIdentifiers toolutil.OnceMap[identifierKey, mcpotel.CallIdentifier]
 // An unrecognized surface resolves as dynamic, matching the server's own
 // default rather than inventing a fourth behavior for a value that cannot
 // reach here from configuration.
-func newCallIdentifier(actions []actioncatalog.Action, surface string) mcpotel.CallIdentifier {
+func newCallIdentifier(actions []actioncatalog.Action, surface string) catalogIdentifier {
 	routes := newMetaRoutes(actions)
 	var identify mcpotel.CallIdentifier
 	switch surface {
@@ -128,11 +209,22 @@ func newCallIdentifier(actions []actioncatalog.Action, surface string) mcpotel.C
 type catalogIdentifier struct {
 	identify mcpotel.CallIdentifier
 	dispatch metaRoutes
+	// standalone names the tools a server registers outside its catalog, by
+	// the name they are registered under: every one the surface registers,
+	// including one the visibility pass removes afterwards (see
+	// [NewServedCallIdentifier]). Nil unless [NewServedCallIdentifier] built
+	// this for a surface that registers them that way.
+	standalone map[string]mcpotel.Identity
 }
 
-// Identify reads a call the way its surface spells it.
+// Identify reads a call the way its surface spells it, and falls back to the
+// standalone tools only for a tool that reading does not know.
 func (c catalogIdentifier) Identify(toolName string, arguments any) (mcpotel.Identity, bool) {
-	return c.identify.Identify(toolName, arguments)
+	if identity, known := c.identify.Identify(toolName, arguments); known {
+		return identity, true
+	}
+	identity, known := c.standalone[toolName]
+	return identity, known
 }
 
 // IdentifyDispatch names the catalog action a meta handler dispatched.
@@ -166,10 +258,12 @@ func newMetaRoutes(actions []actioncatalog.Action) metaRoutes {
 	return routes
 }
 
-// identify resolves tool and action. A tool the catalog does not know is a
-// standalone tool such as gitlab_discover_project or an interactive elicitation
-// flow, which belongs to no catalog action. An action the domain does not have,
-// which happens whenever a model invents one, still names the domain.
+// identify resolves tool and action. A tool the catalog does not know resolves
+// to nothing here: it is a tool that does not exist, or one registered outside
+// this catalog, such as gitlab_discover_project or an interactive elicitation
+// flow, which [NewServedCallIdentifier] names from its own index. An action the
+// domain does not have, which happens whenever a model invents one, still names
+// the domain.
 func (m metaRoutes) identify(tool, action string) (mcpotel.Identity, bool) {
 	domain, known := m.domains[tool]
 	if !known {

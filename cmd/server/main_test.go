@@ -1755,6 +1755,44 @@ func TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse(t *t
 	}
 }
 
+// TestServerShellRegister_StandaloneToolCalls_AreNamedOnMetaAndIndividual
+// holds the shipped registration to the identifier telemetry reads.
+//
+// On these two surfaces the standalone tools are registered beside a catalog
+// that carries none of them, so the identifier built from that catalog alone
+// named no action for a call to one, and a span on meta or individual could
+// not say that gitlab_discover_project or a guided flow had run while the same
+// call on the dynamic surface said so. The identifier is read through the
+// shell, which is the wrapper the middleware holds, so a registration that
+// wired the catalog-only resolver would fail here.
+func TestServerShellRegister_StandaloneToolCalls_AreNamedOnMetaAndIndividual(t *testing.T) {
+	client := newMockGitLabClient(t)
+	want := map[string]string{
+		"gitlab_interactive_issue_create": "interactive.issue_create",
+		"gitlab_discover_project":         "discover_project.resolve",
+	}
+
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			shell, err := newServerShell(t.Context(), client, &config.ServerConfig{ToolSurface: surface})
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+			if registerErr := shell.register(t.Context()); registerErr != nil {
+				t.Fatalf("register: %v", registerErr)
+			}
+			for tool, action := range want {
+				t.Run(tool, func(t *testing.T) {
+					identity, ok := shell.identifier.Identify(tool, json.RawMessage(`{}`))
+					if !ok || identity.ActionID != action {
+						t.Errorf("Identify(%q) on %s = %+v, %t; want %s", tool, surface, identity, ok, action)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities verifies the
 // catalog-backed meta surface keeps standalone helper tools available.
 func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {

@@ -225,7 +225,9 @@ type ServerConfig struct {
 	// answers administrators only.
 	Tier TierPin
 	// Private asks for a server no other test shares, for a test that will
-	// leave the process in a state the next one should not inherit.
+	// leave the process in a state the next one should not inherit. The server
+	// is stopped when the test that opened it ends. A session scripted under
+	// ElicitationScripted is private whether or not this is set.
 	Private bool
 	// Transport is how the harness reaches the server. Empty is TransportStdio,
 	// which is what a client launching a local server uses and what almost
@@ -362,10 +364,23 @@ func (c ServerConfig) key(instance, token string) string {
 		"instance=" + shortStableHash(instance),
 		"token=" + shortStableHash(token),
 	}
-	if c.Private || c.Elicitation == ElicitationScripted {
+	if c.private() {
 		parts = append(parts, "private="+strconv.FormatInt(privateSessions.Add(1), 10))
 	}
 	return strings.Join(parts, "|")
+}
+
+// private reports whether this configuration gets a server nothing else can
+// share: one asked for as private, or one whose client answers elicitations
+// from a script, since the script belongs to the test that wrote it.
+//
+// It is the one predicate for both halves of what private means, the key no
+// other test can name and the close when the test that opened it ends. They
+// were two, and a scripted session got the first without the second: its child
+// then outlived its test and ran until the package ended, holding a process
+// nobody could reach, once per scripted test.
+func (c ServerConfig) private() bool {
+	return c.Private || c.Elicitation == ElicitationScripted
 }
 
 // label names a session in a record and in a log file. It is the key without
@@ -716,7 +731,9 @@ func (e *Env) Session(cfg ServerConfig) *Session {
 	if err != nil {
 		e.T.Fatalf("starting the %s session: %v", cfg.normalized().Surface, err)
 	}
-	if conn.cfg.Private {
+	// A private session's key is one no later test can name, so nothing but
+	// this test will ever use its child, and it is closed with the test.
+	if conn.cfg.private() {
 		e.T.Cleanup(conn.close)
 	}
 	return &Session{env: e, conn: conn}

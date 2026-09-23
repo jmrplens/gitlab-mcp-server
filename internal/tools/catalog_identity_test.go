@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -130,14 +131,14 @@ func TestNewCallIdentifier_EachSurfaceResolvesItsOwnShape(t *testing.T) {
 			wantOK:     true,
 		},
 		{
-			name:      "individual: a standalone tool belongs to no action",
+			name:      "individual: a tool the catalog does not carry resolves to nothing",
 			surface:   config.ToolSurfaceIndividual,
 			tool:      "gitlab_discover_project",
 			arguments: nil,
 			wantOK:    false,
 		},
 		{
-			name:      "meta: a standalone tool belongs to no action",
+			name:      "meta: a tool the catalog does not carry resolves to nothing",
 			surface:   config.ToolSurfaceMeta,
 			tool:      "gitlab_discover_project",
 			arguments: rawArgs(t, map[string]any{}),
@@ -408,6 +409,186 @@ func TestNewCallIdentifier_NilCatalogIsUsable(t *testing.T) {
 	}
 }
 
+// TestNewServedCallIdentifier_StandaloneTools_AreNamedWhereTheyAreToolsOfTheirOwn
+// is issue 903's server half.
+//
+// The meta and individual surfaces register gitlab_discover_project and the
+// gitlab_interactive_* flows as tools of their own, beside a catalog that
+// carries none of them, so a resolver reading only that catalog left every
+// call to one of them without an action on its span. The dynamic surface is
+// the control: there the tool is gitlab_execute_action and the standalone
+// action arrives as an argument, so a tool name must not be read as one.
+func TestNewServedCallIdentifier_StandaloneTools_AreNamedWhereTheyAreToolsOfTheirOwn(t *testing.T) {
+	catalog := buildTestCatalog(t)
+
+	tests := []struct {
+		name       string
+		surface    string
+		tool       string
+		wantAction string
+		wantDomain string
+		wantOK     bool
+	}{
+		{
+			name: "meta: project discovery", surface: config.ToolSurfaceMeta, tool: "gitlab_discover_project",
+			wantAction: "discover_project.resolve", wantDomain: "discover_project", wantOK: true,
+		},
+		{
+			name: "meta: a guided flow", surface: config.ToolSurfaceMeta, tool: "gitlab_interactive_issue_create",
+			wantAction: "interactive.issue_create", wantDomain: "interactive", wantOK: true,
+		},
+		{
+			name: "individual: project discovery", surface: config.ToolSurfaceIndividual, tool: "gitlab_discover_project",
+			wantAction: "discover_project.resolve", wantDomain: "discover_project", wantOK: true,
+		},
+		{
+			name: "individual: a guided flow", surface: config.ToolSurfaceIndividual, tool: "gitlab_interactive_release_create",
+			wantAction: "interactive.release_create", wantDomain: "interactive", wantOK: true,
+		},
+		{
+			name: "dynamic: a tool name is never the operation", surface: config.ToolSurfaceDynamic,
+			tool: "gitlab_interactive_issue_create", wantOK: false,
+		},
+		{
+			name: "an unknown surface resolves as dynamic does", surface: "no-such-surface",
+			tool: "gitlab_discover_project", wantOK: false,
+		},
+		{
+			name: "meta: a tool nothing registers still resolves to nothing", surface: config.ToolSurfaceMeta,
+			tool: "gitlab_not_a_tool", wantOK: false,
+		},
+		{
+			name: "individual: a catalog tool is still the catalog's", surface: config.ToolSurfaceIndividual,
+			tool: "gitlab_issue_list", wantAction: "issue.list", wantDomain: "issue", wantOK: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			identity, ok := NewServedCallIdentifier(catalog, tc.surface).Identify(tc.tool, rawArgs(t, map[string]any{}))
+			if ok != tc.wantOK {
+				t.Fatalf("Identify(%q) on %s ok = %t, want %t (identity %+v)", tc.tool, tc.surface, ok, tc.wantOK, identity)
+			}
+			if identity.ActionID != tc.wantAction || identity.Domain != tc.wantDomain {
+				t.Errorf("Identify(%q) on %s = %+v, want action %q in domain %q",
+					tc.tool, tc.surface, identity, tc.wantAction, tc.wantDomain)
+			}
+		})
+	}
+}
+
+// TestNewServedCallIdentifier_AgreesWithTheCatalogAssembly holds the index to
+// the one other place the standalone actions get their canonical ids: the
+// catalog the dynamic surface assembles from the same specs.
+//
+// The index spells an id by hand, domain then action, and the catalog spells
+// it through its own group rules. Were the two ever to differ, a meta or
+// individual span would name an action that the dynamic surface, the coverage
+// record and gitlab://tools all call something else, and every reader joining
+// them would lose the call.
+func TestNewServedCallIdentifier_AgreesWithTheCatalogAssembly(t *testing.T) {
+	assembled, err := surfaces.AddToolCatalog(nil, StandaloneSurfaceToolSpecs(UnboundClient(false)), surfaces.CatalogOptions{})
+	if err != nil {
+		t.Fatalf("assembling the standalone catalog: %v", err)
+	}
+	actions := assembled.Actions()
+	if len(actions) != len(StandaloneSurfaceToolSpecs(UnboundClient(false))) || len(actions) == 0 {
+		t.Fatalf("the assembled catalog holds %d standalone actions, want one per spec", len(actions))
+	}
+
+	catalog := buildTestCatalog(t)
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		identifier := NewServedCallIdentifier(catalog, surface)
+		for _, action := range actions {
+			t.Run(surface+"/"+string(action.ID), func(t *testing.T) {
+				identity, ok := identifier.Identify(action.IndividualTool.Name, nil)
+				want := mcpotel.Identity{ActionID: string(action.ID), Domain: action.Domain}
+				if !ok || identity != want {
+					t.Errorf("Identify(%q) = %+v, %t; want %+v, the identity the catalog assembly gives it",
+						action.IndividualTool.Name, identity, ok, want)
+				}
+			})
+		}
+	}
+}
+
+// TestNewServedCallIdentifier_KeepsTheDispatchAndTheSharedResolver covers the
+// two things the constructor must not lose while it adds the index.
+//
+// The dispatch half is what lets a span end with the route a dispatcher ran
+// rather than the one it was asked for, and the middleware finds it by a type
+// assertion, which a wrapper that forwarded only Identify would silently fail.
+// The shared half is the resolver every server of one catalog holds: the index
+// is added to a copy, so a caller of [NewCallIdentifier] on the same catalog is
+// answered exactly as before.
+func TestNewServedCallIdentifier_KeepsTheDispatchAndTheSharedResolver(t *testing.T) {
+	catalog := buildTestCatalog(t)
+
+	served := NewServedCallIdentifier(catalog, config.ToolSurfaceMeta)
+	dispatch, isDispatcher := served.(mcpotel.DispatchIdentifier)
+	if !isDispatcher {
+		t.Fatalf("the served resolver is a %T, which names no dispatched route", served)
+	}
+	if identity, ok := dispatch.IdentifyDispatch("gitlab_issue", "list"); !ok || identity.ActionID != "issue.list" {
+		t.Errorf("IdentifyDispatch(gitlab_issue, list) = %+v, %t; want issue.list", identity, ok)
+	}
+
+	if identity, ok := NewCallIdentifier(catalog, config.ToolSurfaceMeta).Identify("gitlab_discover_project", nil); ok {
+		t.Errorf("the shared resolver names %+v after a served one was built from it; the index leaked into it", identity)
+	}
+}
+
+// TestCatalogIdentifier_TheSurfacesOwnReadingWins pins the order the two
+// readings are asked in, on a resolver built by hand because no real catalog
+// tool shares a name with a standalone one: the fallback is consulted only for
+// a tool the surface's reading does not know, so an entry of the index can
+// never take a name the catalog registered.
+func TestCatalogIdentifier_TheSurfacesOwnReadingWins(t *testing.T) {
+	identifier := catalogIdentifier{
+		identify: mcpotel.IdentifierFunc(func(tool string, _ any) (mcpotel.Identity, bool) {
+			if tool == "gitlab_shared_name" {
+				return mcpotel.Identity{ActionID: "catalog.action", Domain: "catalog"}, true
+			}
+			return mcpotel.Identity{}, false
+		}),
+		standalone: map[string]mcpotel.Identity{
+			"gitlab_shared_name":     {ActionID: "standalone.shadow", Domain: "standalone"},
+			"gitlab_standalone_only": {ActionID: "standalone.only", Domain: "standalone"},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		tool       string
+		wantAction string
+		wantOK     bool
+	}{
+		{name: "a name both know is the catalog's", tool: "gitlab_shared_name", wantAction: "catalog.action", wantOK: true},
+		{name: "a name only the index knows is the index's", tool: "gitlab_standalone_only", wantAction: "standalone.only", wantOK: true},
+		{name: "a name neither knows is nobody's", tool: "gitlab_unknown", wantOK: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			identity, ok := identifier.Identify(tc.tool, nil)
+			if ok != tc.wantOK || identity.ActionID != tc.wantAction {
+				t.Errorf("Identify(%q) = %+v, %t; want %q, %t", tc.tool, identity, ok, tc.wantAction, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestNewServedCallIdentifier_NilCatalogNamesNothing pins the same degradation
+// [NewCallIdentifier] makes: a server wired without a catalog loses the action
+// attribute, including for the standalone tools, rather than the process.
+func TestNewServedCallIdentifier_NilCatalogNamesNothing(t *testing.T) {
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			if identity, ok := NewServedCallIdentifier(nil, surface).Identify("gitlab_discover_project", nil); ok {
+				t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
+			}
+		})
+	}
+}
+
 // TestIdentifierActions_IndividualSurfaceReadsRegistrationOrder covers the one
 // surface whose resolver cannot read the catalog's own order.
 //
@@ -533,10 +714,9 @@ func TestNewCallIdentifier_ActionMissingEitherName_ClaimsNoTool(t *testing.T) {
 			if identity, ok := identifier.Identify(tc.tool, rawArgs(t, map[string]any{"action": "list"})); ok {
 				t.Errorf("Identify(%q) = %+v, true; want a tool the index cannot name to resolve to nothing", tc.tool, identity)
 			}
-			dispatch, isDispatcher := identifier.(mcpotel.DispatchIdentifier)
-			if !isDispatcher {
-				t.Fatalf("the meta resolver is a %T, which names no dispatched route", identifier)
-			}
+			// Held as the interface the middleware asserts for, so a resolver
+			// that stopped naming dispatched routes would not compile here.
+			var dispatch mcpotel.DispatchIdentifier = identifier
 			if identity, ok := dispatch.IdentifyDispatch(tc.tool, "list"); ok {
 				t.Errorf("IdentifyDispatch(%q) = %+v, true; want a tool the index cannot name to resolve to nothing", tc.tool, identity)
 			}

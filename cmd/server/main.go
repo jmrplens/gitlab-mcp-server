@@ -2151,8 +2151,10 @@ func (sh *serverShell) register(ctx context.Context) error {
 
 	// Last, because until it is set a tools/call is unidentified in a trace,
 	// and until the gate opens no tools/call can reach the middleware that
-	// reads it.
-	sh.identifier.set(gitlabtools.NewCallIdentifier(surfaceCatalog, sh.toolSurface))
+	// reads it. The served variant, because on meta and individual the
+	// standalone tools are registered beside a catalog that does not carry
+	// them, and a resolver of that catalog alone names none of their calls.
+	sh.identifier.set(gitlabtools.NewServedCallIdentifier(surfaceCatalog, sh.toolSurface))
 	return nil
 }
 

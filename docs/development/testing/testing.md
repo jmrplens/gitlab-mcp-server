@@ -750,9 +750,9 @@ Docker validation snapshots are written under `dist/e2e-reports/` after `make te
 - Pipeline create/get/cancel/retry/delete
 - Job get/log/retry/cancel
 
-**MCP capability tests** (mock handlers):
+**MCP capability tests**:
 
-- Elicitation tools (1 test): confirm destructive action
+- Elicitation: the four guided flows (issue, merge request, release, project) on every surface under one scripted client, with the auto-accept and no-elicitation policies beside them
 - Resource subscriptions: covered by unit tests (`internal/subscriptions/`,
   `cmd/server/subscriptions_test.go`), not e2e — the e2e client drives
   tools, and a subscription needs a client that holds one open
@@ -977,7 +977,7 @@ test/e2e/
 │   └── fixture/              # Resource builders, one file per kind, each
 │                             # registering the undo for what it creates
 ├── gitlab/                   # The suite, one package per runtime
-│   ├── common/               # What any instance serves (168 test files)
+│   ├── common/               # What any instance serves (169 test files)
 │   ├── ce/                   # What only an unlicensed instance does (4)
 │   └── ee/                   # Premium and Ultimate (45)
 ├── http/                     # HTTP transport module (httpe2e)
