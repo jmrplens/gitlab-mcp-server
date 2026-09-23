@@ -578,7 +578,9 @@ func TestRun_ServedPatternsOnly_PrintsNoAssertionSection(t *testing.T) {
 // naming a suite package reads that package and no served source, so it says
 // the published-ID and hint rules were not run rather than printing their
 // counts over nothing, which read as a clean tree, while its suite section is
-// printed and counted, and the work list says the served tree was not judged.
+// printed and counted, and both the report and the work list say the served
+// tree was not judged and the helper table was not judged whole: over one
+// package an empty stale list says nothing about the entries it does not call.
 func TestRun_SuitePatternsOnly_LoadsNoServedTree(t *testing.T) {
 	overlay := suiteOverlay(t, map[string]string{"planted_test.go": `//go:build e2e
 
@@ -599,6 +601,7 @@ func TestOne(t *testing.T) {
 	for _, want := range []string{
 		toolName + ": no served source loaded: the published-ID and hint rules were not run\n",
 		"  e2e assertions: 0 finding(s) in 0 package(s) over 1 assertion(s) read;",
+		"  the assertion helper table was not judged whole: only a run over the whole suite can tell an entry nothing calls from a narrowed run\n",
 		"    assertion calls by helper: assertMentions 1\n",
 	} {
 		t.Run(want, func(t *testing.T) {
@@ -618,8 +621,12 @@ func TestOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the work list: %v", err)
 	}
-	if !strings.Contains(string(data), `"served_judged": false`) {
-		t.Errorf("work list = %s, want served_judged false", data)
+	for _, key := range []string{`"served_judged": false`, `"helpers_judged": false`} {
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(data), key) {
+				t.Errorf("work list = %s, want %s", data, key)
+			}
+		})
 	}
 }
 

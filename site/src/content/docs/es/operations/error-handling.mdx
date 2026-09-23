@@ -138,7 +138,7 @@ Cuando un handler responde con un resultado de error en lugar de un error de Go,
 
 **Message**: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal
 **HTTP Status**: 401 Unauthorized
-**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
+**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 {message: 401 Unauthorized}
 **Request ID**: `abc123def456`
 ```
 

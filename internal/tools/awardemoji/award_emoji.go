@@ -313,7 +313,7 @@ func createNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, notFoundHin
 	return toOutput(emoji), nil
 }
 
-func deleteNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, listToolHint string, remove func(any, int64, int64, int64, ...gl.RequestOptionFunc) (*gl.Response, error)) error {
+func deleteNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, listActionHint string, remove func(any, int64, int64, int64, ...gl.RequestOptionFunc) (*gl.Response, error)) error {
 	if err := validateNoteEmojiRequest(req, true); err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func deleteNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, listToolHin
 			return toolutil.WrapErrWithHint(req.Operation, err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint(req.Operation, err, "award already removed or never existed - list awards with "+listToolHint+" to verify award_id")
+			return toolutil.WrapErrWithHint(req.Operation, err, "award already removed or never existed - list awards with "+listActionHint+" to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage(req.Operation, err)
 	}
@@ -459,7 +459,7 @@ func CreateIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 // DeleteIssueNoteAwardEmoji deletes an award emoji from an issue note.
 func DeleteIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueDeleteOnNoteInput) error {
 	return deleteNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, AwardID: input.AwardID, IIDField: "issue_iid", Operation: "issue_note_emoji_delete"},
-		"gitlab_issue_note_emoji_list", client.GL().AwardEmoji.DeleteIssuesAwardEmojiOnNote)
+		"issue.emoji_issue_note_list", client.GL().AwardEmoji.DeleteIssuesAwardEmojiOnNote)
 }
 
 // MR Award Emoji Handlers.
@@ -612,7 +612,7 @@ func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 // DeleteMRNoteAwardEmoji deletes an award emoji from a merge request note.
 func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRDeleteOnNoteInput) error {
 	return deleteNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, AwardID: input.AwardID, IIDField: "merge_request_iid", Operation: "mr_note_emoji_delete"},
-		"gitlab_mr_note_emoji_list", client.GL().AwardEmoji.DeleteMergeRequestAwardEmojiOnNote)
+		"merge_request.emoji_mr_note_list", client.GL().AwardEmoji.DeleteMergeRequestAwardEmojiOnNote)
 }
 
 // Snippet Award Emoji Handlers.
@@ -733,7 +733,7 @@ func CreateSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Clien
 // DeleteSnippetNoteAwardEmoji deletes an award emoji from a snippet note.
 func DeleteSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetDeleteOnNoteInput) error {
 	return deleteNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, AwardID: input.AwardID, IIDField: "snippet_id", Operation: "snippet_note_emoji_delete"},
-		"gitlab_snippet_note_emoji_list", client.GL().AwardEmoji.DeleteSnippetAwardEmojiOnNote)
+		"snippet.emoji_snippet_note_list", client.GL().AwardEmoji.DeleteSnippetAwardEmojiOnNote)
 }
 
 // Converters.

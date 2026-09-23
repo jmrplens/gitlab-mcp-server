@@ -684,11 +684,18 @@ func ExtractGitLabMessage(err error) string {
 		return ""
 	}
 	// Filter out messages that are just the HTTP status text — they add no information
-	// beyond what ClassifyHTTPStatus already provides.
-	if glErr.Response != nil {
-		statusText := strconv.Itoa(glErr.Response.StatusCode)
+	// beyond what ClassifyHTTPStatus already provides. The status is read the
+	// way the classifier reads it, because client-go's ErrNotFound sentinel
+	// carries its status and no response: reading the response alone let the
+	// sentinel's own "Not Found" through, so every 404 a mutating wrapper
+	// described ended with it in parentheses. The status text without its code
+	// restates the status as much as the pair does, which is what the sentinel
+	// carries.
+	if status := answeredStatus(glErr); status != 0 {
+		statusText := strconv.Itoa(status)
 		normalized := strings.TrimSpace(msg)
-		if normalized == statusText || strings.HasPrefix(normalized, statusText+" ") {
+		if normalized == statusText || strings.HasPrefix(normalized, statusText+" ") ||
+			strings.EqualFold(normalized, http.StatusText(status)) {
 			return ""
 		}
 		// Also filter wrapped status messages like "{message: 405 Method Not Allowed}"

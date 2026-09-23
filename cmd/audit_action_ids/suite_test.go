@@ -653,7 +653,8 @@ func TestUnfolded(t *testing.T) {
 //
 // The forwarding caller concatenates, which is what tells the prose rule from
 // the ID rule here: the prose rule keeps the literal half of a sentence built
-// at run time, and the ID rule has nothing to keep.
+// at run time and names the half nothing folds, and the ID rule has nothing to
+// keep.
 func TestCollectAssertionSites_AWrapperForwardingItsNeedles_IsFollowedToItsCallers(t *testing.T) {
 	read := collectPlanted(t, suiteOverlay(t, map[string]string{
 		"wrappers/doc.go":          "// Package wrappers forwards needles through wrappers.\npackage wrappers\n",
@@ -689,8 +690,46 @@ func quoteThroughWrappers(t *testing.T, scope string) {
 	if got := valuesOfKind(sites, kindAssertion); !slices.Equal(got, want) {
 		t.Errorf("assertion values = %q\nwant %q", got, want)
 	}
-	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"wants"}) {
-		t.Errorf("unresolved = %v, want the parameter no rule follows named once", got)
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"scope", "wants"}) {
+		t.Errorf("unresolved = %v, want the unfolded half and the parameter no rule follows each named once", got)
+	}
+}
+
+// TestCollectAssertionSites_ANeedleConcatenatedFromAName_ReadsTheNameToo holds
+// the half of a concatenated needle the fold does not keep. A needle written
+// as a literal plus a local is a claim about the whole sentence, so the local
+// is read out to the value it is given, where a tool name is judged, and a
+// half no rule can read is named rather than dropped: a needle that kept only
+// its literal half was counted as folded, and the tool name it asserted was
+// judged nowhere.
+func TestCollectAssertionSites_ANeedleConcatenatedFromAName_ReadsTheNameToo(t *testing.T) {
+	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"halves/doc.go":          "// Package halves quotes needles built from two halves.\npackage halves\n",
+		"halves/helpers_test.go": suiteHelpersIn("halves"),
+		"halves/halves_test.go": `//go:build e2e
+
+package halves
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestHalves(t *testing.T) {
+	tool := "gitlab_demo_list"
+	assertMentions(t, "a refusal", "text", "use "+tool)
+	assertMentions(t, "a refusal", "text", fmt.Sprint(1)+" was refused")
+}
+`,
+	}))
+	sites := sitesIn(read.sites, suiteFixtureDir+"/halves")
+
+	want := []string{"  was refused", "gitlab_demo_list", "use  "}
+	if got := valuesOfKind(sites, kindAssertion); !slices.Equal(got, want) {
+		t.Errorf("assertion values = %q\nwant %q", got, want)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"fmt.Sprint(1)"}) {
+		t.Errorf("unresolved = %v, want the half no rule reads named once", got)
 	}
 }
 

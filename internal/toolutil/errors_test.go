@@ -566,6 +566,33 @@ func TestExtractGitLabMessage(t *testing.T) {
 			want: "useful error info",
 		},
 		{
+			// client-go's ErrNotFound carries its status and no response, and
+			// its message is the status text alone.
+			name: "not-found sentinel's status text filtered out",
+			err:  gl.ErrNotFound,
+			want: "",
+		},
+		{
+			// The status text without its code, in whatever case, restates
+			// the status as much as the pair does.
+			name: "status text without the code filtered out",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusUnauthorized},
+				Message:  " unauthorized ",
+			},
+			want: "",
+		},
+		{
+			// A message naming another status's text says something the
+			// status does not.
+			name: "another status's text is kept",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusConflict},
+				Message:  "Not Found",
+			},
+			want: "Not Found",
+		},
+		{
 			name: "truncates long messages",
 			err: &gl.ErrorResponse{
 				Response: &http.Response{StatusCode: http.StatusBadRequest},
@@ -3058,23 +3085,7 @@ func assertUnauthorizedCard(t *testing.T, md, message string) {
 func TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel(t *testing.T) {
 	const operation = "get_issue"
 	notFound := ClassifyHTTPStatus(http.StatusNotFound)
-	tests := []struct {
-		name   string
-		answer gitLabAnswer
-		cause  string // what client-go's error reads, which the wrapping ends with
-	}{
-		{
-			name:   "REST",
-			answer: gitLabAnswer{path: "projects/1/issues/1", status: http.StatusNotFound, body: `{"message":"404 Not found"}`},
-			cause:  "404 Not Found",
-		},
-		{
-			name:   "GraphQL",
-			answer: gitLabAnswer{graphQL: true, status: http.StatusNotFound, body: `{"errors":[{"message":"Not found"}]}`},
-			cause:  "failed to execute GraphQL query: 404 Not Found",
-		},
-	}
-	for _, tt := range tests {
+	for _, tt := range notFoundSentinelAnswers() {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.answer.err(t)
 			if !errors.Is(err, gl.ErrNotFound) {
@@ -3095,6 +3106,59 @@ func TestClassifyError_NotFound_ReadsTheStatusOffClientGosSentinel(t *testing.T)
 			}
 			if row := "- **HTTP Status**: 404 Not Found\n"; !strings.Contains(de.Markdown(), row) {
 				t.Errorf("Markdown() = %q, want the row %q", de.Markdown(), row)
+			}
+		})
+	}
+}
+
+// notFoundSentinelAnswer is one surface's 404, which client-go answers with
+// its ErrNotFound sentinel, and what client-go's error for it reads.
+type notFoundSentinelAnswer struct {
+	name   string
+	answer gitLabAnswer
+	cause  string // what client-go's error reads, which the wrapping ends with
+}
+
+// notFoundSentinelAnswers is a 404 over REST and over GraphQL, the two shapes
+// the sentinel reaches a wrapper in.
+func notFoundSentinelAnswers() []notFoundSentinelAnswer {
+	return []notFoundSentinelAnswer{
+		{
+			name:   "REST",
+			answer: gitLabAnswer{path: "projects/1/issues/1", status: http.StatusNotFound, body: `{"message":"404 Not found"}`},
+			cause:  "404 Not Found",
+		},
+		{
+			name:   "GraphQL",
+			answer: gitLabAnswer{graphQL: true, status: http.StatusNotFound, body: `{"errors":[{"message":"Not found"}]}`},
+			cause:  "failed to execute GraphQL query: 404 Not Found",
+		},
+	}
+}
+
+// TestWrapErrWithMessage_NotFoundSentinel_AppendsNoStatusText verifies that
+// the wrappers that append GitLab's message append nothing for a 404, over
+// either surface, and that the error card's Details row carries no
+// parenthetical either.
+//
+// The sentinel's message is "Not Found", the status text alone, and the
+// filter that drops a message restating the status read the status off the
+// response, which the sentinel does not carry. So every mutating 404 ended
+// with "(Not Found)" beside a classification and a cause that already said it.
+func TestWrapErrWithMessage_NotFoundSentinel_AppendsNoStatusText(t *testing.T) {
+	const operation = "delete_issue"
+	notFound := ClassifyHTTPStatus(http.StatusNotFound)
+	for _, tt := range notFoundSentinelAnswers() {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.answer.err(t)
+			if got, want := WrapErrWithMessage(operation, err).Error(), operation+": "+notFound+": "+tt.cause; got != want {
+				t.Errorf("WrapErrWithMessage() = %q, want %q", got, want)
+			}
+			if got, want := WrapErrWithStatusHint(operation, err, http.StatusNotFound, "use x").Error(), operation+": "+notFound+". Suggestion: use x: "+tt.cause; got != want {
+				t.Errorf("WrapErrWithStatusHint() = %q, want %q", got, want)
+			}
+			if de := NewDetailedError("issues", "delete", err); de.Details != tt.cause {
+				t.Errorf("Details = %q, want %q with no parenthetical restating the status", de.Details, tt.cause)
 			}
 		})
 	}

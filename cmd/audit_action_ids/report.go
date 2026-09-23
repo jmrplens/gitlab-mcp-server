@@ -30,7 +30,8 @@ import (
 // sites are still only reported. Version 5 adds the `e2e_assertions` section,
 // the same rule put to the substrings the e2e suite asserts a served text
 // carries, with `suite_judged` saying whether the run loaded the suite at all
-// and the helper table's own staleness beside it, and `served_judged` saying
+// and the helper table's own staleness beside it, `helpers_judged` saying
+// whether that staleness was judged whole, and `served_judged` saying
 // the same of the served tree, which a run naming only suite packages does not
 // load; and it renames the keys the
 // two prose sections share so they say nothing about hints (`read`,
@@ -120,6 +121,13 @@ type Report struct {
 	// calls of each the suite walk met.
 	StaleHelpers  []string       `json:"stale_assertion_helpers,omitempty"`
 	CallsByHelper map[string]int `json:"assertion_calls_by_helper,omitempty"`
+	// HelpersJudged says whether the helper table was judged whole, which
+	// only a run over the whole suite does: over part of it every entry that
+	// part does not call is called nowhere, so a narrowed run names only the
+	// entries whose helper takes no parameter of the declared name. It is here
+	// for the reason DeclarationsJudged is, since an empty stale list from a
+	// narrowed run would otherwise read as a table found clean.
+	HelpersJudged bool `json:"helpers_judged"`
 	// StaleExemptions are the declarations that excused nothing, of either
 	// table, each named with the table it is in.
 	StaleExemptions []string `json:"stale_exemptions,omitempty"`
@@ -261,6 +269,7 @@ func (r *Report) finish() {
 // tell a helper nothing calls from a narrowed run.
 func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 	r.SuiteJudged = true
+	r.HelpersJudged = wholeSuite
 	r.CallsByHelper = read.calls
 	r.StaleHelpers = staleHelpers(read.calls, read.mismatches, wholeSuite)
 }
@@ -394,6 +403,10 @@ func writeServedReport(out io.Writer, report Report, verbose bool) {
 	writeHintReport(out, report.Hints, verbose)
 }
 
+// helpersNotJudgedLine is what a run over part of the suite says in place of
+// the helper table's whole verdict.
+const helpersNotJudgedLine = "  the assertion helper table was not judged whole: only a run over the whole suite can tell an entry nothing calls from a narrowed run"
+
 // writeSuiteReport prints what the run found in the e2e suite: its
 // quotations, then the helper table entries that describe no call, which fail
 // the gate and so are printed whatever -v says, then under -v how many calls
@@ -403,6 +416,10 @@ func writeServedReport(out io.Writer, report Report, verbose bool) {
 // the two kinds have different ones: an entry nothing calls is the table's to
 // fix, and a copy of a helper that takes no parameter of the entry's name is
 // the helper's (see [staleHelpers]).
+//
+// A run over part of the suite says it did not judge the table whole, as the
+// served summary says it of the declaration tables, since its stale list can
+// hold no entry nothing calls and would otherwise read as a table found clean.
 func writeSuiteReport(out io.Writer, report Report, verbose bool) {
 	writeAssertionReport(out, report.Assertions, verbose)
 	if len(report.StaleHelpers) > 0 {
@@ -410,6 +427,9 @@ func writeSuiteReport(out io.Writer, report Report, verbose bool) {
 		for _, entry := range report.StaleHelpers {
 			fmt.Fprintf(out, "  %s.\n", entry)
 		}
+	}
+	if !report.HelpersJudged {
+		fmt.Fprintln(out, helpersNotJudgedLine)
 	}
 	if verbose && len(report.CallsByHelper) > 0 {
 		fmt.Fprintf(out, "    assertion calls by helper: %s\n", byCount(report.CallsByHelper))

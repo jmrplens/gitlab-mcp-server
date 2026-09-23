@@ -10,7 +10,10 @@
 // the two dispatchers do it per action inside a tool that also serves reads.
 // The gitlab_interactive_* flows are registered outside the base catalog, as
 // tools of their own on meta and individual and as actions of the execute tool
-// on dynamic, so each mode reaches them by a second mechanism. The projection
+// on dynamic, so read-only mode reaches them by a second filter on every
+// surface, and safe mode does on meta and individual through the visibility
+// pass; on dynamic they are previewed in the same pass as every other action.
+// The projection
 // spells them now, and they are still called
 // by name here, through Raw, on purpose: a credited Withheld would move the
 // read-only cells of the coverage record off unservable, which is the count

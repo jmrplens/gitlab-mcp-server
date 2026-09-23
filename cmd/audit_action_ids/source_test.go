@@ -1428,7 +1428,10 @@ func TestFollowValues_AnIdentifierThatNamesNoVariable_IsNotFollowed(t *testing.T
 // callers, on purpose: following every string parameter judges whatever any
 // caller ever passes. So a hint that is nothing but such a parameter is named
 // as unread rather than guessed at, and one that concatenates a literal onto
-// it keeps the literal, which is where a capability would be spelled.
+// it keeps the literal, which is where a capability would be spelled, and
+// names the parameter as well: the value it is handed is text the model reads
+// beside the literal, and a run that counted only the literal would report the
+// sentence read whole.
 func TestCollectSites_AHintReadOffAParameterNothingNames_IsReportedAndItsHalvesKept(t *testing.T) {
 	sites := collectFixture(t, `package fixture
 
@@ -1452,8 +1455,41 @@ func fromHalfAParameter(text string) error {
 	if got := valuesOfKind(sites, kindErrorHint); len(got) != 1 || !strings.Contains(got[0], "then run demo.list") {
 		t.Errorf("error hint values = %q, want the literal half kept", got)
 	}
-	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"text"}) {
-		t.Errorf("unresolved = %v, want the bare parameter named once", got)
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"text", "text"}) {
+		t.Errorf("unresolved = %v, want the bare parameter and the unfolded half each named once", got)
+	}
+}
+
+// TestCollectSites_AHalfNamedAsAHint_IsFollowedToWhatItIsHanded holds the
+// half of a concatenation a name can answer for: it is read the way a whole
+// hint in that name would be, out to the values it is handed, so a tool name a
+// caller passes is judged where it is written. awardemoji handed its note
+// deletes the list tool's name through exactly this shape, and the fold kept
+// the sentence around it and dropped the name.
+func TestCollectSites_AHalfNamedAsAHint_IsFollowedToWhatItIsHanded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func deleteThrough(listHint string) error {
+	return toolutil.WrapErrWithHint("demo_delete", errDemo, "list them with "+listHint+" first")
+}
+
+func deleteDemo() error { return deleteThrough("gitlab_demo_list") }
+`)
+
+	got := valuesOfKind(sites, kindErrorHint)
+	if len(got) != 2 || got[0] != "gitlab_demo_list" || !strings.HasPrefix(got[1], "list them with ") || !strings.HasSuffix(got[1], " first") {
+		t.Errorf("error hint values = %q, want the value the half is handed and the sentence around it", got)
+	}
+	if unresolved := unresolvedExprs(sites); len(unresolved) != 0 {
+		t.Errorf("unresolved = %v, want nothing: the half is read where it is written", unresolved)
 	}
 }
 

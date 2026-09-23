@@ -42,7 +42,7 @@ To run the Enterprise/Premium coverage against GitLab EE, set `ENTERPRISE_LICENS
 make test-e2e-ee    # or its older name, make test-e2e-docker-enterprise
 ```
 
-That target runs the `common` and `ee` packages of the suite under `test/e2e/gitlab` against the real server binary over stdio. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so `ee` refuses an unlicensed instance before it writes anything while `common` runs its Free actions on the licensed catalog too. The unlicensed half is `make test-e2e-ce`, which `make test-e2e-docker` is an older name for.
+That target runs the `common` and `ee` packages of the suite under `test/e2e/gitlab` against the real server binary over stdio. There is no Enterprise build tag: every test file carries `e2e` alone, and the package decides the runtime, so `ee` refuses an unlicensed instance before it writes anything while `common` runs its Free actions on the licensed catalog too. The unlicensed half is `make test-e2e-ce`, which `make test-e2e-docker` is an older name for.
 
 When `ENTERPRISE_LICENSE` contains a 24-character activation code, the first successful run exports the generated reusable license key to `test/e2e/.enterprise-license`. Later Enterprise runs prefer that ignored local cache and install it through the License API, so they do not need to spend the activation code again.
 

@@ -11,7 +11,7 @@ the old suite against a GitLab CE image, and its Premium and Ultimate half sat b
 a second build tag that appeared in no workflow, so 41 files and 74 test functions
 covering that surface were never compiled. Every package that turned out to hold a
 broken GraphQL document was a package only that half covered. The rebuilt suite under
-`test/e2e/gitlab` has no such half: every file carries `e2e` alone, so the licensed
+`test/e2e/gitlab` has no such half: every test file carries `e2e` alone, so the licensed
 package `ee` is compiled and linted by the same run as everything else, and what still
 needs a license is running it.
 

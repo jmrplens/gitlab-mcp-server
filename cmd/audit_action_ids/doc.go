@@ -114,9 +114,15 @@
 //
 // Its own blind spots are counted beside the findings and do NOT fail, which
 // is the one place this departs from the rule above. A hint the type checker
-// cannot fold is still text a reader can read, and the three sites in that
-// state build one from a function call or a format string and carry no tool
-// name between them.
+// cannot fold is still text a reader can read, and the six sites in that state
+// build one from a function call, a format string or a parameter no rule
+// follows, and carry no tool name between them. A hint concatenated from a
+// literal and a value is folded to its literal halves, and the half it leaves
+// unfolded is read on its own: a name is followed to the values it is handed,
+// where a tool name is judged, and anything else is counted with the sites
+// nothing folds. Three of the six are such halves. Keeping only the literal
+// half used to count the sentence as read whole, and awardemoji handed three
+// note deletes a list tool's name through exactly that shape.
 //
 // The dotted-ID half of it was never large: the five unresolvable IDs the
 // first run found were one constant in internal/tools/workitemsavedviews
@@ -163,7 +169,10 @@
 // by design and a test quoting the line quotes it faithfully. A needle the
 // type checker cannot fold, built from a fixture's name at run time or read
 // off a test table's field, is counted and listed under -v and fails nothing,
-// on the hint rule's terms. The findings gate, in a section of their own, so a
+// on the hint rule's terms, and so is the half of a concatenated needle that
+// no name answers for: a needle written as a literal plus a value keeps its
+// literal halves, and the value is followed to what it is given where it is a
+// name, so a tool name concatenated into a needle is judged too. The findings gate, in a section of their own, so a
 // reader can tell a defect of the server from a defect of its test.
 //
 // The helper table is held to the suite as every declaration table here is.

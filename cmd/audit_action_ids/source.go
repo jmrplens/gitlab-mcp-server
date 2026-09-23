@@ -1034,7 +1034,7 @@ func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 	if call, isCall := ast.Unparen(expr).(*ast.CallExpr); isCall && w.recordHintCall(kind, call) {
 		return
 	}
-	if value, ok := w.foldProse(expr); ok {
+	if value, ok := w.foldProse(kind, expr); ok {
 		w.addSite(site{Kind: kind, Value: value, Resolved: true}, expr)
 		return
 	}
@@ -1124,7 +1124,17 @@ func (w *walker) readsARecordedHint(kind string, selector *ast.SelectorExpr) boo
 // goes: a space rather than nothing, so two halves cannot be joined into a
 // token neither of them spells. A call is folded the way an ID is, by binding
 // a one-line helper's parameters.
-func (w *walker) foldProse(expr ast.Expr) (string, bool) {
+//
+// The half a concatenation leaves unfolded is recorded on its own, under the
+// kind the whole is recorded as, the way [walker.recordErrorHint] records a
+// whole: a name is followed to the values it carries, a read of a hint field
+// is left to where the field was written, and anything else is a site nothing
+// folds. It is text the reader of the rendered sentence reads, and a value it
+// is handed at run time may be the spelling the rule refuses, so dropping it
+// left a blind spot that neither the findings nor the unfolded count showed. A
+// whole that folds nowhere records nothing here: the caller records it as one
+// site.
+func (w *walker) foldProse(kind string, expr ast.Expr) (string, bool) {
 	if value, ok := w.constantString(expr); ok {
 		return value, true
 	}
@@ -1135,10 +1145,16 @@ func (w *walker) foldProse(expr ast.Expr) (string, bool) {
 		// string, and the only binary operator a string expression can carry
 		// is a concatenation: every other one yields a bool, which no hint
 		// parameter accepts.
-		left, leftFolded := w.foldProse(typed.X)
-		right, rightFolded := w.foldProse(typed.Y)
+		left, leftFolded := w.foldProse(kind, typed.X)
+		right, rightFolded := w.foldProse(kind, typed.Y)
 		if !leftFolded && !rightFolded {
 			return "", false
+		}
+		if !leftFolded {
+			w.recordErrorHint(kind, typed.X)
+		}
+		if !rightFolded {
+			w.recordErrorHint(kind, typed.Y)
 		}
 		return left + " " + right, true
 	case *ast.CallExpr:

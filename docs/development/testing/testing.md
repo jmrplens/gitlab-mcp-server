@@ -692,7 +692,7 @@ For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the s
 make test-e2e-ee                  # or its older name, make test-e2e-docker-enterprise
 ```
 
-The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one. The suite this replaced is deleted, along with the build tag that used to select its Enterprise half and the workflow input that used to run it.
+The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every test file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one. The suite this replaced is deleted, along with the build tag that used to select its Enterprise half and the workflow input that used to run it.
 
 The suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. Refusing rather than adapting is the point: a licensed package that quietly downgraded itself on a Free instance would report a pass for scenarios it never ran, which is how the old arrangement hid its Enterprise half for as long as it did.
 
@@ -985,8 +985,11 @@ test/e2e/
 ```
 
 The runtime a test needs is a property of the package it is in rather than of a
-build tag: every file under `gitlab/` and `internal/` carries `e2e` alone, so
-one compile and one analysis pass see all of them.
+build tag: every file under `gitlab/` and `internal/` carries `e2e` alone, with
+two exceptions: the package `doc.go` files carry no constraint, and the
+harness's race seam pair carries `e2e && race` and `e2e && !race`, of which a
+run sees the half its race setting selects. So one compile and one analysis
+pass see all of them.
 
 ### Wizard Test Helpers
 

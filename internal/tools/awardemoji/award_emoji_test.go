@@ -2128,25 +2128,29 @@ func TestDeleteAwardEmoji_NotFoundHints(t *testing.T) {
 	tests := []struct {
 		name string
 		call func(context.Context) error
+		// list is the canonical action the hint sends a model to, which is
+		// what every surface resolves: a tool name there is right on one
+		// surface of three.
+		list string
 	}{
 		{"DeleteIssueAwardEmoji", func(ctx context.Context) error {
 			return DeleteIssueAwardEmoji(ctx, client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
-		}},
+		}, "issue.emoji_issue_list"},
 		{"DeleteIssueNoteAwardEmoji", func(ctx context.Context) error {
 			return DeleteIssueNoteAwardEmoji(ctx, client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
-		}},
+		}, "issue.emoji_issue_note_list"},
 		{"DeleteMRAwardEmoji", func(ctx context.Context) error {
 			return DeleteMRAwardEmoji(ctx, client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
-		}},
+		}, "merge_request.emoji_mr_list"},
 		{"DeleteMRNoteAwardEmoji", func(ctx context.Context) error {
 			return DeleteMRNoteAwardEmoji(ctx, client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
-		}},
+		}, "merge_request.emoji_mr_note_list"},
 		{"DeleteSnippetAwardEmoji", func(ctx context.Context) error {
 			return DeleteSnippetAwardEmoji(ctx, client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
-		}},
+		}, "snippet.emoji_snippet_list"},
 		{"DeleteSnippetNoteAwardEmoji", func(ctx context.Context) error {
 			return DeleteSnippetNoteAwardEmoji(ctx, client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
-		}},
+		}, "snippet.emoji_snippet_note_list"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2156,6 +2160,12 @@ func TestDeleteAwardEmoji_NotFoundHints(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "award already removed") {
 				t.Fatalf("error = %q, want not-found hint", err.Error())
+			}
+			if !strings.Contains(err.Error(), " awards with "+tc.list+" to verify award_id") {
+				t.Errorf("error = %q, want the hint to name %s", err.Error(), tc.list)
+			}
+			if strings.Contains(err.Error(), "gitlab_") {
+				t.Errorf("error = %q, want no tool name, which the default surface does not register", err.Error())
 			}
 		})
 	}
