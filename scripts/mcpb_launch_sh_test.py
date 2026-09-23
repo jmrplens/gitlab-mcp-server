@@ -13,6 +13,17 @@ space in its path, puts stub binaries beside the real launcher and a stub
 `uname` on a curated PATH, and runs it from an unrelated working directory,
 since Desktop gives a binary-type server no working directory of its own.
 
+A busybox built with standalone applets runs its own `uname` and `chmod`
+whatever PATH says, so no stub on PATH reaches the launcher under it. Ubuntu's
+busybox-static package is built that way, and it is the busybox GitHub's
+ubuntu-24.04 runner carries, while Debian's busybox package looks commands up on
+PATH. Each shell is therefore asked once whether a stub reaches it. Under one
+that ignores the stub, a case that needs it asserts what the launcher does with
+the real command instead: it picks the binary for the machine the test runs on.
+The two cases that cannot be put that way, an unsupported machine type and a
+chmod that fails, are skipped for that shell alone, with the reason. The other
+shells still run them.
+
 Run with:
 
     python3 -m unittest discover -s scripts -p 'mcpb_launch_sh_test.py'
@@ -74,6 +85,41 @@ def shells():
     return found
 
 
+# The binary the launcher picks for each `uname -m` answer, as its case says.
+MACHINES = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+
+_PATH_PROBES = {}
+
+
+def honours_path(shell, command):
+    """Whether shell runs the command PATH names rather than an applet of its own.
+
+    It depends on how the shell was built, so it is asked once per shell and
+    command and the answer kept.
+    """
+    key = (tuple(shell), command)
+    if key not in _PATH_PROBES:
+        with tempfile.TemporaryDirectory(prefix="mcpb-path-probe-") as probe:
+            path = os.path.join(probe, command)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("#!/bin/sh\necho path-stub\n")
+            os.chmod(path, 0o755)
+            result = subprocess.run(
+                shell + ["-c", command],
+                capture_output=True,
+                env={"PATH": probe},
+                timeout=30,
+                check=False,
+            )
+            _PATH_PROBES[key] = result.stdout == b"path-stub\n"
+    return _PATH_PROBES[key]
+
+
+def host_arch():
+    """The binary the launcher picks for the machine this test runs on, or None."""
+    return MACHINES.get(os.uname().machine)
+
+
 class McpbLaunchShTest(unittest.TestCase):
     """Drives the real launcher over stub binaries and a stub uname."""
 
@@ -117,7 +163,24 @@ class McpbLaunchShTest(unittest.TestCase):
         env.update(extra)
         return env
 
+    def arch_for(self, shell, machine):
+        """The binary the launcher should pick under shell when the stub answers machine.
+
+        A shell that ignores the stub asks the real uname, so the answer is the
+        machine this test runs on. Skips when that machine has no Linux binary.
+        """
+        if honours_path(shell, "uname"):
+            return MACHINES[machine]
+        arch = host_arch()
+        if arch is None:
+            self.skipTest(f"this shell runs its own uname, and {os.uname().machine} has no Linux binary")
+        return arch
+
     def run_launcher(self, shell, machine, args=(), stdin=b"", cwd=None, launcher=None, **env):
+        # Every run starts without a PID file, so one a previous subtest left
+        # behind cannot pass for this run's server.
+        if os.path.exists(self.pid_file):
+            os.remove(self.pid_file)
         return subprocess.run(
             shell + [launcher or self.launcher, *args],
             input=stdin,
@@ -136,14 +199,15 @@ class McpbLaunchShTest(unittest.TestCase):
             ("arm64", "arm64"),
         ]
         for shell_name, shell in shells():
-            for machine, arch in cases:
+            for machine, _ in cases:
                 with self.subTest(shell=shell_name, machine=machine):
+                    want = self.arch_for(shell, machine)
                     result = self.run_launcher(shell, machine, args=["--version", "two words", ""])
                     stderr = result.stderr.decode()
                     self.assertEqual(result.returncode, 0, stderr)
                     self.assertEqual(result.stdout, b"", "the launcher wrote to stdout")
-                    self.assertIn(f"stub {BINARIES[arch]}\n", stderr)
-                    other = BINARIES["arm64" if arch == "amd64" else "amd64"]
+                    self.assertIn(f"stub {BINARIES[want]}\n", stderr)
+                    other = BINARIES["arm64" if want == "amd64" else "amd64"]
                     self.assertNotIn(other, stderr)
                     self.assertIn("arg=[--version]\narg=[two words]\narg=[]\n", stderr)
 
@@ -151,6 +215,8 @@ class McpbLaunchShTest(unittest.TestCase):
         for shell_name, shell in shells():
             for machine in ("riscv64", "armv7l", "i686", ""):
                 with self.subTest(shell=shell_name, machine=machine):
+                    if not honours_path(shell, "uname"):
+                        self.skipTest(f"{shell_name} runs its own uname, so no machine type but the real one reaches the launcher")
                     result = self.run_launcher(shell, machine)
                     stderr = result.stderr.decode()
                     self.assertNotEqual(result.returncode, 0)
@@ -162,11 +228,12 @@ class McpbLaunchShTest(unittest.TestCase):
     def test_restores_a_missing_execute_bit(self):
         for shell_name, shell in shells():
             with self.subTest(shell=shell_name):
-                path = self.write_stub(BINARIES["amd64"], 0o644)
+                want = self.arch_for(shell, "x86_64")
+                path = self.write_stub(BINARIES[want], 0o644)
                 result = self.run_launcher(shell, "x86_64")
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                 self.assertEqual(result.stdout, b"")
-                self.assertIn(f"stub {BINARIES['amd64']}\n", result.stderr.decode())
+                self.assertIn(f"stub {BINARIES[want]}\n", result.stderr.decode())
                 self.assertTrue(os.stat(path).st_mode & stat.S_IXUSR)
 
     def test_reports_a_failed_chmod_on_stderr(self):
@@ -178,6 +245,8 @@ class McpbLaunchShTest(unittest.TestCase):
         self.write_stub(BINARIES["arm64"], 0o644)
         for shell_name, shell in shells():
             with self.subTest(shell=shell_name):
+                if not (honours_path(shell, "chmod") and honours_path(shell, "uname")):
+                    self.skipTest(f"{shell_name} runs its own chmod and uname, so the failing chmod stub never reaches the launcher")
                 result = self.run_launcher(shell, "aarch64")
                 stderr = result.stderr.decode()
                 self.assertEqual(result.returncode, 126, stderr)
@@ -187,22 +256,26 @@ class McpbLaunchShTest(unittest.TestCase):
                 self.assertNotIn("stub ", stderr)
 
     def test_reports_a_missing_binary_on_stderr(self):
-        os.remove(os.path.join(self.linux_dir, BINARIES["amd64"]))
         for shell_name, shell in shells():
             with self.subTest(shell=shell_name):
+                want = self.arch_for(shell, "x86_64")
+                missing = os.path.join(self.linux_dir, BINARIES[want])
+                if os.path.exists(missing):
+                    os.remove(missing)
                 result = self.run_launcher(shell, "x86_64")
                 stderr = result.stderr.decode()
                 self.assertEqual(result.returncode, 127, stderr)
                 self.assertEqual(result.stdout, b"", "a failure must not reach stdout")
-                self.assertIn("gitlab-mcp-server-linux-amd64 is missing from the extension", stderr)
+                self.assertIn(f"{BINARIES[want]} is missing from the extension", stderr)
 
     def test_runs_from_its_own_directory_by_relative_name(self):
         for shell_name, shell in shells():
             with self.subTest(shell=shell_name):
+                want = self.arch_for(shell, "arm64")
                 result = self.run_launcher(shell, "arm64", cwd=self.linux_dir, launcher="launch.sh")
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                 self.assertEqual(result.stdout, b"")
-                self.assertIn(f"stub {BINARIES['arm64']}\n", result.stderr.decode())
+                self.assertIn(f"stub {BINARIES[want]}\n", result.stderr.decode())
 
     def test_hands_stdin_and_stdout_to_the_server(self):
         request = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'

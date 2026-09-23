@@ -873,7 +873,10 @@ jobs:
       # The Claude Desktop bundle's tests are among them.
       # scripts/mcpb_launch_sh_test.py drives its Linux launcher
       # (mcpb/linux/launch.sh) under /bin/sh, dash, busybox sh and
-      # bash --posix, whichever the runner has, and runs shellcheck on it;
+      # bash --posix, whichever the runner has, and runs shellcheck on it.
+      # The runner's busybox is busybox-static, whose own uname and chmod run
+      # whatever PATH says, so under it the cases that need a stub assert the
+      # real machine's binary or are skipped with the reason;
       # scripts/mcpb_manifest_test.py pins mcpb/manifest.json; and
       # scripts/build_mcpb_sh_test.py runs scripts/build-mcpb.sh over stand-in
       # binaries against each bundle its checks refuse, and over the dist/

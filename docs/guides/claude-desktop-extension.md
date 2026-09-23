@@ -118,6 +118,11 @@ owner execute bit, which is why the build records 0755 on the binaries; the
 launcher's own `chmod` covers an archive that lost those bits.
 `scripts/mcpb_launch_sh_test.py` drives the launcher with stub binaries under
 `/bin/sh`, `dash`, `busybox sh` and `bash --posix`, whichever the machine has.
+A busybox built with standalone applets, like Ubuntu's `busybox-static` on
+GitHub's runner, runs its own `uname` and `chmod` whatever `PATH` says, so under
+it the cases that need a stub check the binary for the real machine instead, and
+the two that cannot (an unsupported machine type, a failing `chmod`) are skipped
+with the reason.
 `scripts/mcpb_manifest_test.py` pins the manifest values this layout depends
 on, and `scripts/build_mcpb_sh_test.py` runs the build script over stand-in
 binaries, checks that it refuses, and removes, each bundle its rules exist
