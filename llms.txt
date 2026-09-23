@@ -212,7 +212,7 @@ Prompts:
 - [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): The same documentation in Spanish, page for page
 - [Getting started](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md): Installation and first-run guide
 - [Installation](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/installation.md): Every install channel with its exact command, and how each one upgrades
-- [Claude Desktop extension](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/claude-desktop-extension.md): One-click .mcpb install for Claude Desktop (macOS universal + Windows)
+- [Claude Desktop extension](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/claude-desktop-extension.md): One-click .mcpb install for Claude Desktop (macOS universal, Windows x64, Linux x64 and arm64)
 - [Configuration](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md): Full configuration reference
 - [Environment variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md): Environment variable reference
 - [HTTP server mode](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/http-server-mode.md): Remote MCP transport setup

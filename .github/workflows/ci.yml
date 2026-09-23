@@ -870,7 +870,10 @@ jobs:
         run: make check-supply-chain
       - name: Test the auditor itself
         run: go test ./cmd/audit_supply_chain/ -count=1
-      - name: Test the installer and packaging scripts
+      # scripts/mcpb_launch_sh_test.py is among them: it drives the Claude
+      # Desktop bundle's Linux launcher (mcpb/linux/launch.sh) under every
+      # POSIX shell the runner has, and runs shellcheck on it.
+      - name: Test the installer, launcher and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
   # Nothing written in this repository uses an em dash (U+2014), and until this

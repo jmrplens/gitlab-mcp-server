@@ -1,15 +1,17 @@
 ---
 title: Extensión para Claude Desktop
-description: Instala GitLab MCP Server en Claude Desktop con un clic mediante la extensión de escritorio .mcpb — macOS y Windows, sin Docker ni runtimes.
+description: Instala GitLab MCP Server en Claude Desktop con un clic mediante la extensión de escritorio .mcpb, en macOS, Windows y Linux, sin Docker ni runtimes.
 datePublished: "2026-07-08"
 ---
 
 import { Steps } from "@astrojs/starlight/components";
 
 GitLab MCP Server se distribuye como **extensión de escritorio** (`.mcpb`) de
-instalación en un clic para Claude Desktop en macOS y Windows. El paquete
-contiene un binario universal de macOS (Apple Silicon + Intel) y un ejecutable
-de Windows — sin Docker, Node.js ni Python.
+instalación en un clic para Claude Desktop en macOS, Windows y Linux. El
+paquete contiene un binario universal de macOS (Apple Silicon + Intel), un
+ejecutable de Windows y los binarios de Linux x64 y arm64 con un pequeño
+lanzador que elige el adecuado. No hace falta Docker, Node.js ni Python. Al
+llevar cuatro binarios, la descarga ocupa unos 75 MB.
 
 ## Instalación
 
@@ -18,13 +20,24 @@ de Windows — sin Docker, Node.js ni Python.
 1. Descarga [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
    desde la última release.
 
-2. Abre el archivo con Claude Desktop — doble clic, o arrástralo a la ventana
-   de Ajustes de Claude Desktop. Claude muestra un diálogo de instalación con
-   los detalles de la extensión.
+2. Abre el archivo con Claude Desktop. En macOS y Windows, haz doble clic o
+   arrástralo a la ventana de Ajustes de Claude Desktop. En Linux, usa
+   **Extensions > Install Extension...** y elige el archivo: la aplicación de
+   Linux no registra ningún gestor para los archivos `.mcpb`, así que el doble
+   clic no lo abre. Claude muestra un diálogo de instalación con los detalles
+   de la extensión.
 
 3. Rellena los ajustes y empieza a chatear.
 
 </Steps>
+
+:::note[Linux]
+La entrada de Linux funciona en la beta de Claude Desktop para Linux (Ubuntu
+22.04 o superior, Debian 12 o superior) en x86_64 y arm64. Un lanzador incluido
+en el paquete elige el binario de tu máquina y le cede el proceso, así que el
+servidor que Claude Desktop arranca y detiene es el binario real. En cualquier
+otro tipo de máquina se niega con un mensaje en el log MCP de Claude Desktop.
+:::
 
 ## Ajustes
 

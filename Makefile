@@ -1088,7 +1088,9 @@ check-server-json-packages:
 check-openplugin:
 	scripts/check-openplugin.sh
 
-# Pin the MCPB packer CLI for supply-chain integrity (also pinned in scripts/build-mcpb.sh).
+# Pin the MCPB CLI for supply-chain integrity. Only check-mcpb runs it:
+# scripts/build-mcpb.sh packs the bundle with zip and no longer calls the CLI.
+# CI reads this line for its npx cache key (ci.yml, the Markdown job).
 MCPB_CLI_VERSION := 2.1.2
 
 ## GOLANGCI_LINT_VERSION: the linter release CI installs, read from here by
@@ -1105,18 +1107,21 @@ check-mcpb:
 	npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate mcpb/manifest.json
 
 ## mcpb: build the Claude Desktop extension bundle (dist/gitlab-mcp-server.mcpb).
-## Cross-compiles the darwin universal binary (lipo) and the windows/amd64 binary,
+## Cross-compiles the darwin universal binary (lipo), the windows/amd64 binary and
+## the linux/amd64 and linux/arm64 binaries the Linux launcher chooses between,
 ## then assembles and packs the bundle with scripts/build-mcpb.sh.
 mcpb:
 	@command -v lipo >/dev/null || { echo "ERROR: lipo is required (macOS Xcode CLT)"; exit 1; }
 	@set -e; \
 	VER=$$(tr -d '[:space:]' < VERSION); \
-	rm -rf dist/local_darwin_arm64 dist/local_darwin_amd64 dist/local_darwin_all dist/local_windows_amd64; \
-	mkdir -p dist/local_darwin_arm64 dist/local_darwin_amd64 dist/local_darwin_all dist/local_windows_amd64; \
+	rm -rf dist/local_darwin_arm64 dist/local_darwin_amd64 dist/local_darwin_all dist/local_windows_amd64 dist/local_linux_amd64 dist/local_linux_arm64; \
+	mkdir -p dist/local_darwin_arm64 dist/local_darwin_amd64 dist/local_darwin_all dist/local_windows_amd64 dist/local_linux_amd64 dist/local_linux_arm64; \
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_darwin_arm64/gitlab-mcp-server ./cmd/server; \
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_darwin_amd64/gitlab-mcp-server ./cmd/server; \
 	lipo -create -output dist/local_darwin_all/gitlab-mcp-server dist/local_darwin_arm64/gitlab-mcp-server dist/local_darwin_amd64/gitlab-mcp-server; \
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_windows_amd64/gitlab-mcp-server.exe ./cmd/server; \
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_linux_amd64/gitlab-mcp-server ./cmd/server; \
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_linux_arm64/gitlab-mcp-server ./cmd/server; \
 	bash scripts/build-mcpb.sh "$$VER"
 
 ## gen-npm: assemble the npm distribution (launcher + 6 per-platform packages).
