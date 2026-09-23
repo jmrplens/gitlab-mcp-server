@@ -20,6 +20,7 @@ Run with:
 """
 
 import os
+import shutil
 import subprocess
 import unittest
 
@@ -34,19 +35,31 @@ DERIVED = ("E2E_DOCKER_BITBUCKET_URL", "E2E_REGISTRY_EXTERNAL_URL", "E2E_BITBUCK
 # and prints each result on a line of its own, "<unset>" for one left unset.
 # The last line says whether the case-insensitive matching the bind needs was
 # left switched on, which would change every later [[ ]] in the caller.
+#
+# The resolver is replaced by one answering RESOLVED_ADDRESSES, one address per
+# line, so that a case says what a name resolves to rather than inheriting
+# whatever the machine running it resolves: empty, the default, is a name that
+# resolves to nothing.
 DRIVER = r"""
 set -euo pipefail
 . "$1"
+resolve_host() {
+    if [ -n "${RESOLVED_ADDRESSES}" ]; then printf '%s\n' "${RESOLVED_ADDRESSES}"; fi
+}
 derive_fixture_addresses
 printf '%s\n' "${E2E_DOCKER_BITBUCKET_URL-<unset>}" "${E2E_REGISTRY_EXTERNAL_URL-<unset>}" "${E2E_BITBUCKET_BIND-<unset>}"
 if shopt -q nocasematch; then echo nocasematch-on; else echo nocasematch-off; fi
 """
 
 
-def derive(gitlab_url, **preset):
-    """Runs the derivation for one GitLab URL and returns what it produced."""
+def derive(gitlab_url, resolved=(), **preset):
+    """Runs the derivation for one GitLab URL and returns what it produced.
+
+    resolved is what the resolver answers for any name it is asked about.
+    """
     env = {key: value for key, value in os.environ.items() if key not in DERIVED}
     env["E2E_DOCKER_GITLAB_URL"] = gitlab_url
+    env["RESOLVED_ADDRESSES"] = "\n".join(resolved)
     env.update(preset)
     result = subprocess.run(
         ["bash", "-c", DRIVER, "driver", SCRIPT],
@@ -66,8 +79,8 @@ def derive(gitlab_url, **preset):
 
 
 class DeriveFixtureAddressesTest(unittest.TestCase):
-    def assert_derived(self, gitlab_url, bitbucket, registry, bind, **preset):
-        got = derive(gitlab_url, **preset)
+    def assert_derived(self, gitlab_url, bitbucket, registry, bind, resolved=(), **preset):
+        got = derive(gitlab_url, resolved, **preset)
         self.assertEqual(
             (got["bitbucket"], got["registry"], got["bind"]),
             (bitbucket, registry, bind),
@@ -91,9 +104,10 @@ class DeriveFixtureAddressesTest(unittest.TestCase):
         self.assert_derived("http://127.0.0.2:8929", "http://127.0.0.2:7990", "http://127.0.0.2:5050", "127.0.0.2")
 
     def test_a_name_that_only_begins_like_a_loopback_address_is_not_loopback(self):
-        # A name is published on every interface whatever it resolves to, even
-        # one spelled as a whole loopback address followed by a domain, and so
-        # is a dotted string whose last part is too long to be an octet.
+        # A name is never read as the address it is spelled like, even one
+        # spelled as a whole loopback address followed by a domain, and
+        # neither is a dotted string whose last part is too long to be an
+        # octet: resolving to nothing, each is published on every interface.
         for host in ("127.example.org", "127.0.0.1.nip.io", "127.0.0.1000"):
             with self.subTest(host=host):
                 self.assert_derived(
@@ -116,6 +130,54 @@ class DeriveFixtureAddressesTest(unittest.TestCase):
             "http://localhost.example:5050",
             "0.0.0.0",
         )
+
+    def test_a_name_resolving_only_to_loopbacks_is_published_on_one(self):
+        # Debian maps a machine's own hostname to 127.0.1.1, and an /etc/hosts
+        # alias can map any name to 127.0.0.1. The setup script dials that
+        # address and nothing else needs to reach the port, so it is not
+        # published on every interface of this machine.
+        for resolved, bind in (
+            (("127.0.1.1",), "127.0.1.1"),
+            (("::1",), "[::1]"),
+            (("::1", "127.0.0.1"), "127.0.0.1"),
+        ):
+            with self.subTest(resolved=resolved):
+                self.assert_derived(
+                    "http://gitlab.test:8929",
+                    "http://gitlab.test:7990",
+                    "http://gitlab.test:5050",
+                    bind,
+                    resolved=resolved,
+                )
+
+    def test_a_name_resolving_to_any_other_address_is_published_on_every_interface(self):
+        # A remote Docker host named by its hostname, one name that also maps
+        # to a LAN address, and a name nothing here can resolve.
+        for resolved in (("192.168.0.40",), ("127.0.0.1", "192.168.0.40"), ()):
+            with self.subTest(resolved=resolved):
+                self.assert_derived(
+                    "http://truenas:8929",
+                    "http://truenas:7990",
+                    "http://truenas:5050",
+                    "0.0.0.0",
+                    resolved=resolved,
+                )
+
+    def test_the_real_resolver_answers_localhost_with_loopbacks_once_each(self):
+        # Every other case stands a stub in for resolve_host; this one asks
+        # the machine, through the one name every resolver answers.
+        if shutil.which("getent") is None:
+            self.skipTest("no getent here, so resolve_host looks nothing up")
+        result = subprocess.run(
+            ["bash", "-c", 'set -euo pipefail; . "$1"; resolve_host localhost', "driver", SCRIPT],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        addresses = result.stdout.split()
+        self.assertTrue(addresses, "localhost resolved to nothing")
+        self.assertTrue(all(a == "::1" or a.startswith("127.") for a in addresses), addresses)
+        self.assertEqual(len(addresses), len(set(addresses)), f"an address was printed twice: {addresses}")
 
     def test_a_url_with_no_host_keeps_the_loopback_defaults_and_says_so(self):
         got = self.assert_derived("gitlab", "http://localhost:7990", "<unset>", "127.0.0.1")

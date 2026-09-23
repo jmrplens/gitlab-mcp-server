@@ -169,10 +169,11 @@ E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # that host on port 5050, Bitbucket's URL, the same on port 7990, and
 # Bitbucket's bind, chosen from the Bitbucket URL (the derived one, or
 # E2E_DOCKER_BITBUCKET_URL when set): the loopback it names, 127.0.0.1 for
-# localhost, whatever its case, and the address itself for 127.x.y.z and for
-# [::1], and 0.0.0.0 for any other host, a name that only begins with 127.
-# included, since the setup script on this machine has to reach a remote
-# container's port. Overriding E2E_DOCKER_BITBUCKET_URL therefore moves the
+# localhost, whatever its case, the address itself for 127.x.y.z and for
+# [::1], the loopback a name resolves to on this machine when it resolves to
+# no other address, and 0.0.0.0 for any other host, since the setup script on
+# this machine has to reach a remote container's port. Overriding
+# E2E_DOCKER_BITBUCKET_URL therefore moves the
 # bind with it unless E2E_BITBUCKET_BIND is set too. The
 # import test never dials Bitbucket; GitLab does, over the compose network.
 # E2E_REGISTRY_EXTERNAL_URL, E2E_DOCKER_BITBUCKET_URL and E2E_BITBUCKET_BIND,

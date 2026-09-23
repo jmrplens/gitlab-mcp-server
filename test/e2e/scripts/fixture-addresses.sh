@@ -70,9 +70,16 @@ url_host() {
 # localhost names no address and is published on 127.0.0.1, which a localhost
 # URL reaches whichever address the name resolves to first. Only a dotted IPv4
 # literal counts as a 127.x.y.z address: a name that merely begins with 127.
-# is a name like any other and is published on 0.0.0.0. A host name is
-# matched without regard to case, as a resolver matches it, so LOCALHOST is
-# loopback too.
+# is a name like any other. A host name is matched without regard to case, as
+# a resolver matches it, so LOCALHOST is loopback too.
+#
+# Any other name is resolved on this machine, since that is where the setup
+# script dials it from: a name every address of which is a loopback, a
+# hostname the resolver maps to 127.0.1.1 or an /etc/hosts alias of
+# 127.0.0.1, is published on that loopback, its first IPv4 one when it has
+# one and [::1] otherwise, rather than on every interface of a machine that
+# nothing else needs to reach it from. A name that also resolves to another
+# address, to none, or that cannot be looked up here is published on 0.0.0.0.
 bitbucket_bind() {
     local host
     host="$(url_host "$1")"
@@ -88,7 +95,45 @@ bitbucket_bind() {
         bind="[::1]"
     elif [[ "${host}" =~ ${ipv4_loopback_re} ]]; then
         bind="${host}"
+    elif [ -n "${host}" ]; then
+        bind="$(resolved_loopback_bind "${host}")"
     fi
     eval "${restore_case}"
     echo "${bind}"
+}
+
+# resolved_loopback_bind prints the loopback a host name is published on when
+# every address it resolves to here is a loopback, and 0.0.0.0 otherwise.
+resolved_loopback_bind() {
+    local octet='[0-9]{1,3}'
+    local ipv4_loopback_re="^127\.${octet}\.${octet}\.${octet}$"
+    local address ipv4="" ipv6=false
+    while read -r address; do
+        [ -n "${address}" ] || continue
+        if [[ "${address}" =~ ${ipv4_loopback_re} ]]; then
+            ipv4="${ipv4:-${address}}"
+        elif [ "${address}" = "::1" ]; then
+            ipv6=true
+        else
+            echo 0.0.0.0
+            return 0
+        fi
+    done <<<"$(resolve_host "$1")"
+    if [ -n "${ipv4}" ]; then
+        echo "${ipv4}"
+    elif [ "${ipv6}" = true ]; then
+        echo "[::1]"
+    else
+        echo 0.0.0.0
+    fi
+}
+
+# resolve_host prints the addresses a host name resolves to on this machine,
+# one per line in the order the resolver gives them, and nothing when it
+# resolves to none or cannot be looked up here. getent asks the system
+# resolver, /etc/hosts included; a machine without it (macOS has none) looks
+# nothing up, and the name is published on 0.0.0.0 as before.
+resolve_host() {
+    command -v getent >/dev/null 2>&1 || return 0
+    getent ahosts "$1" 2>/dev/null | awk '!seen[$1]++ { print $1 }' || true
 }

@@ -49,8 +49,9 @@
 #                                  whatever port or path the GitLab URL carries
 #   E2E_BITBUCKET_BIND             the address Bitbucket is published on, read off the Bitbucket
 #                                  URL (derived or set): 127.0.0.1 for localhost, whatever its
-#                                  case, the address itself for 127.x.y.z and for [::1], and
-#                                  0.0.0.0 for any other host, a name beginning 127. included
+#                                  case, the address itself for 127.x.y.z and for [::1], the
+#                                  loopback a name resolves to here when it resolves to nothing
+#                                  else, and 0.0.0.0 for any other host
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

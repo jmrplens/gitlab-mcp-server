@@ -178,10 +178,15 @@ printing the address it derived. It publishes the Bitbucket port on the
 loopback the Bitbucket URL (the derived one, or `E2E_DOCKER_BITBUCKET_URL` when
 set) names: `127.0.0.1` for `localhost`, whatever its case, and the address
 itself for a `127.x.y.z` address and for `[::1]`, since a port published on one
-loopback address refuses a connection to another. Any other URL is published
-on `0.0.0.0`, a name that only begins with `127.` included, since the setup
-script on this machine has to reach a remote container's port; a URL
-naming this machine by its LAN address is published on `0.0.0.0` too, and
+loopback address refuses a connection to another. A host name is resolved on
+this machine, and one that resolves to loopback addresses alone (a Debian
+hostname mapped to `127.0.1.1`, an `/etc/hosts` alias of `127.0.0.1`) is
+published on that loopback, its first IPv4 one or `[::1]`. Any other URL is
+published on `0.0.0.0`, since the setup script on this machine has to reach a
+remote container's port: a name that also resolves to another address, one
+that resolves to nothing here, and a name that only begins with `127.`, which
+is never read as the address it is spelled like. A URL naming this machine by
+its LAN address is published on `0.0.0.0` too, and
 overriding `E2E_DOCKER_BITBUCKET_URL` moves the bind with it unless
 `E2E_BITBUCKET_BIND` is set as well. The import test itself never dials
 Bitbucket: GitLab does, over the compose network, at the address the setup
