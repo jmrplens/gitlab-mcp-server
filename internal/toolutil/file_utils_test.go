@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -1242,6 +1243,57 @@ func TestCanonicalDownloadOutputPath_RefusalsBeforeContainment(t *testing.T) {
 			}
 			if got != "" {
 				t.Errorf("CanonicalDownloadOutputPath(%q) = %q beside the error, want the empty string", tt.path, got)
+			}
+		})
+	}
+}
+
+// TestJoinBelowDirectory_RefusesAnAncestorThatIsNotADirectory verifies the
+// check the ancestor walk ends in: a tail is rejoined only below a directory,
+// and a regular file or a vanished ancestor is refused. On Linux the walk
+// never reaches a regular file, since a path through one fails with ENOTDIR
+// first, so the check is driven directly here; on Windows it is what makes a
+// path through a regular file fail at all, which the download refusal test
+// above asserts end to end.
+func TestJoinBelowDirectory_RefusesAnAncestorThatIsNotADirectory(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "notes.txt")
+	if err := os.WriteFile(file, []byte("notes"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	tail := filepath.Join("sub", "artifact.bin")
+
+	tests := []struct {
+		name       string
+		dir        string
+		want       string
+		wantErr    string
+		wantNotExt bool
+	}{
+		{name: "a directory", dir: root, want: filepath.Join(root, tail)},
+		{name: "a regular file", dir: file, wantErr: file + " is not a directory"},
+		{name: "an ancestor that vanished", dir: filepath.Join(root, "gone"), wantNotExt: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := joinBelowDirectory(tt.dir, tail)
+			switch {
+			case tt.wantErr != "":
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("joinBelowDirectory(%q) = (%q, %v), want the error %q", tt.dir, got, err, tt.wantErr)
+				}
+			case tt.wantNotExt:
+				if !errors.Is(err, fs.ErrNotExist) {
+					t.Fatalf("joinBelowDirectory(%q) = (%q, %v), want an error wrapping fs.ErrNotExist", tt.dir, got, err)
+				}
+			default:
+				if err != nil || got != tt.want {
+					t.Fatalf("joinBelowDirectory(%q) = (%q, %v), want (%q, nil)", tt.dir, got, err, tt.want)
+				}
+				return
+			}
+			if got != "" {
+				t.Errorf("joinBelowDirectory(%q) = %q beside the error, want the empty string", tt.dir, got)
 			}
 		})
 	}
