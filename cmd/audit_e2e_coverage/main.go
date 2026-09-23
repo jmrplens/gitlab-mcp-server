@@ -87,6 +87,10 @@ type options struct {
 	retired []string
 }
 
+// osExit is os.Exit behind a variable, so the status main hands the process
+// is reachable from a test rather than only from a process.
+var osExit = os.Exit
+
 func main() {
 	opts := options{
 		catalogs: buildServedCatalog, harnessPath: harnessImportPath, staticPatterns: staticPatterns,
@@ -116,7 +120,7 @@ func main() {
 	flag.StringVar(&opts.recordPath, "record-path", "", "the coverage record to write, check or render (default: the repository's "+recordRelPath+")")
 	flag.StringVar(&opts.recordPage, "record-page", "", "the page rendered from the record (default: the repository's "+recordPageRelPath+")")
 	flag.Parse()
-	os.Exit(run(opts, os.Stdout, os.Stderr))
+	osExit(run(opts, os.Stdout, os.Stderr))
 }
 
 // run is main with its streams and its exit status handed to it.

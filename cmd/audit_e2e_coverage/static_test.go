@@ -114,6 +114,9 @@ func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 			"test/e2e/gitlab/common/planted_test.go merge_train.list is premium and common runs on every runtime",
 		}},
 		{kind: findingDiscardedResult, want: []string{
+			// Once through a helper's parameter, once through a multi-value
+			// call handing the verb every argument.
+			"test/e2e/gitlab/common/planted_test.go the result of Do(a non-constant id) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(a non-constant id) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(issue.get) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(issue.get) is discarded: read it, or call DoVoid",
@@ -312,11 +315,71 @@ func TestCollect_SitesOutOfOrder_SortedByPositionThenID(t *testing.T) {
 	}
 }
 
+// TestCollect_NonConstantOutOfOrder_SortedByPositionThenText verifies the
+// order the non-constant notes are printed in: by position, and two notes on
+// one line, which two verb calls on one line make, by their text, so a run
+// prints them the same way whatever order the scans appended them in.
+func TestCollect_NonConstantOutOfOrder_SortedByPositionThenText(t *testing.T) {
+	result := &staticResult{unassertedIDs: map[string]bool{}, testIDs: map[string]map[string]bool{}}
+	result.collect([]*packageScan{
+		{
+			nonConstant: []staticNote{
+				{Pos: "common/a_test.go:12", Text: "DoVoid is called with the non-constant id id"},
+				{Pos: "common/a_test.go:11", Text: "Try is called with the non-constant id b"},
+			},
+			resultSites: map[string]int{}, discardedSites: map[string]int{}, funcs: map[string]*funcScan{},
+		},
+		{
+			nonConstant: []staticNote{{Pos: "common/a_test.go:11", Text: "Do is called with the non-constant id a"}},
+			resultSites: map[string]int{}, discardedSites: map[string]int{}, funcs: map[string]*funcScan{},
+		},
+	})
+
+	want := []staticNote{
+		{Pos: "common/a_test.go:11", Text: "Do is called with the non-constant id a"},
+		{Pos: "common/a_test.go:11", Text: "Try is called with the non-constant id b"},
+		{Pos: "common/a_test.go:12", Text: "DoVoid is called with the non-constant id id"},
+	}
+	if !reflect.DeepEqual(result.NonConstant, want) {
+		t.Errorf("collect() non-constant notes = %+v, want %+v", result.NonConstant, want)
+	}
+}
+
+// TestJudge_Findings_SortedByPositionThenMessage verifies the order the
+// findings are printed and published in: by position, and two findings at
+// one position by their message.
+func TestJudge_Findings_SortedByPositionThenMessage(t *testing.T) {
+	result := &staticResult{}
+	result.judge(staticConfig{}, []*packageScan{{
+		pkgPath: "example.com/e2efake/test/e2e/gitlab/common", placement: placementCommon,
+		discarded: []staticNote{
+			{Pos: "common/a_test.go:12", Text: "the result of Do(b) is discarded"},
+			{Pos: "common/a_test.go:11", Text: "the result of Try(z) is discarded"},
+			{Pos: "common/a_test.go:11", Text: "the result of Do(a) is discarded"},
+		},
+	}})
+
+	var got []string
+	for _, finding := range result.Findings {
+		got = append(got, finding.Pos+" "+finding.Message)
+	}
+	want := []string{
+		"common/a_test.go:11 the result of Do(a) is discarded",
+		"common/a_test.go:11 the result of Try(z) is discarded",
+		"common/a_test.go:12 the result of Do(b) is discarded",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("judge() findings = %q, want %q", got, want)
+	}
+}
+
 // TestRunStatic_NonConstantSites_Listed verifies that a verb called with a
 // helper parameter or a table field is listed and not failed: both are
 // constants one step away, and listing is what lets a reader check that. A
 // verb called through a variable is not a verb call at all, so the constant
-// it takes is a site and no note.
+// it takes is a site and no note. A verb handed every argument by one
+// multi-value call has fewer arguments than parameters, and is listed by that
+// call rather than passed over.
 func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
@@ -327,9 +390,11 @@ func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 	sort.Strings(got)
 	want := []string{
 		"Do is called with the non-constant id id",
+		"Do is called with the non-constant id verbArguments(s)",
 		"DoVoid is called with the non-constant id each",
 		"DoVoid is called with the non-constant id id",
 		"DoVoid is called with the non-constant id tc.id",
+		"DoVoid is called with the non-constant id verbArguments(s)",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("non-constant sites = %q, want %q", got, want)
@@ -641,6 +706,120 @@ func TestReceiverTypeName_Receivers_Normalized(t *testing.T) {
 	}
 }
 
+// TestDeclarations_BodylessFunction_PassedOver verifies that a function
+// declared without a body, which Go allows for one implemented elsewhere, is
+// neither walked nor indexed: there is no call in it to read, and indexing it
+// would give the reference walk a function whose body it cannot reach.
+func TestDeclarations_BodylessFunction_PassedOver(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "external.go", "package p\n\nfunc external()\n\nfunc TestLocal() {}\n", 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	scan := &packageScan{funcs: map[string]*funcScan{}}
+
+	decls := (&packageScanner{}).declarations(&packages.Package{Syntax: []*ast.File{file}}, scan)
+
+	if len(decls) != 1 || decls[0].Name.Name != "TestLocal" {
+		t.Errorf("declarations() = %d declarations, want only TestLocal", len(decls))
+	}
+	if got := sortedKeys(scan.funcs); !slices.Equal(got, []string{"TestLocal"}) || !scan.funcs["TestLocal"].isTest {
+		t.Errorf("funcs = %q, want TestLocal alone, marked a test", got)
+	}
+}
+
+// TestSelectPackages_Variants_TheOneWithMoreFilesKept verifies which variant
+// of a package the scan reads, in either order the loader hands them over:
+// the one compiling more files, which is the test variant, since that is the
+// one holding the test files; a later variant with fewer files does not
+// replace it, and the generated test main is never kept at all.
+func TestSelectPackages_Variants_TheOneWithMoreFilesKept(t *testing.T) {
+	plain := &packages.Package{PkgPath: "m/p", ID: "m/p", CompiledGoFiles: []string{"p.go"}}
+	withTests := &packages.Package{PkgPath: "m/p", ID: "m/p [m/p.test]", CompiledGoFiles: []string{"p.go", "p_test.go"}}
+	testMain := &packages.Package{PkgPath: "m/p.test", Name: "main", CompiledGoFiles: []string{"main.go", "a.go", "b.go"}}
+	// A package whose only tests are external has a test variant compiling
+	// the same files as the plain one, so neither has more: the first the
+	// loader hands over is kept, rather than whichever came last.
+	external := &packages.Package{PkgPath: "m/e", ID: "m/e", CompiledGoFiles: []string{"e.go"}}
+	externalVariant := &packages.Package{PkgPath: "m/e", ID: "m/e [m/e.test]", CompiledGoFiles: []string{"e.go"}}
+	cases := []struct {
+		name   string
+		loaded []*packages.Package
+		want   []*packages.Package
+	}{
+		{name: "the plain variant first", loaded: []*packages.Package{plain, withTests, testMain}, want: []*packages.Package{withTests}},
+		{name: "the test variant first", loaded: []*packages.Package{withTests, testMain, plain}, want: []*packages.Package{withTests}},
+		{
+			name:   "two variants of one size, and two packages out of order",
+			loaded: []*packages.Package{withTests, external, externalVariant},
+			want:   []*packages.Package{external, withTests},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if selected := selectPackages(tc.loaded); !slices.Equal(selected, tc.want) {
+				t.Errorf("selectPackages() = %+v, want %+v", selected, tc.want)
+			}
+		})
+	}
+}
+
+// TestFindHarness_Variants_ThePlainOneInEitherOrder verifies that the harness
+// is read as its consumers see it, the plain variant, whichever order the
+// loader hands the two over in, and that a harness loaded only as its test
+// variant is still found.
+func TestFindHarness_Variants_ThePlainOneInEitherOrder(t *testing.T) {
+	plain := &packages.Package{PkgPath: fakeHarnessPath, ID: fakeHarnessPath}
+	withTests := &packages.Package{PkgPath: fakeHarnessPath, ID: fakeHarnessPath + " [" + fakeHarnessPath + ".test]"}
+	other := &packages.Package{PkgPath: "example.com/other", ID: "example.com/other"}
+	cases := []struct {
+		name   string
+		loaded []*packages.Package
+		want   *packages.Package
+	}{
+		{name: "the plain variant first", loaded: []*packages.Package{other, plain, withTests}, want: plain},
+		{name: "the test variant first", loaded: []*packages.Package{withTests, other, plain}, want: plain},
+		{name: "the test variant alone", loaded: []*packages.Package{other, withTests}, want: withTests},
+		{name: "no harness", loaded: []*packages.Package{other}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := findHarness(tc.loaded, fakeHarnessPath); got != tc.want {
+				t.Errorf("findHarness() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsActionIDType_Types_OnlyTheHarnessOne verifies the identity the site
+// collection rests on: the harness's ActionID is one, a type of the same
+// name in another package is not, an unnamed type is not, and a named type
+// declared in no package, which is what the universe's error is, is not
+// either rather than being looked up in a package that is not there.
+func TestIsActionIDType_Types_OnlyTheHarnessOne(t *testing.T) {
+	named := func(path string) types.Type {
+		pkg := types.NewPackage(path, "harness")
+		return types.NewNamed(types.NewTypeName(token.NoPos, pkg, actionIDTypeName, nil), types.Typ[types.String], nil)
+	}
+	cases := []struct {
+		name string
+		typ  types.Type
+		want bool
+	}{
+		{name: "the harness ActionID", typ: named(fakeHarnessPath), want: true},
+		{name: "an ActionID of another package", typ: named("example.com/other"), want: false},
+		{name: "an unnamed type", typ: types.Typ[types.String], want: false},
+		{name: "a named type of no package", typ: types.Universe.Lookup("error").Type(), want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isActionIDType(tc.typ, fakeHarnessPath); got != tc.want {
+				t.Errorf("isActionIDType(%s) = %t, want %t", tc.typ, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestPackageScan_Reachable_ClosureWithCycles verifies the walk the three
 // attributions share: every function at any depth is reached, a cycle is
 // walked once and brings the starting function into its own set, a function
@@ -721,6 +900,24 @@ func TestCollect_ZeroResultCounter_NotUnasserted(t *testing.T) {
 func TestMarkNamedTypes_Depth_Bounded(t *testing.T) {
 	pkg := types.NewPackage("example.com/e2efake/test/e2e/internal/harness", "harness")
 	env := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Env", nil), types.NewStruct(nil, nil), nil)
+	param := func(typ types.Type) *types.Tuple {
+		return types.NewTuple(types.NewParam(token.NoPos, pkg, "v", typ))
+	}
+	// Every constructor the walk descends through counts one level, whichever
+	// half of it holds the type: a map's key and its value, a signature's
+	// parameters and its results.
+	wrappers := map[string]func(types.Type) types.Type{
+		"pointers":   func(inner types.Type) types.Type { return types.NewPointer(inner) },
+		"slices":     func(inner types.Type) types.Type { return types.NewSlice(inner) },
+		"map keys":   func(inner types.Type) types.Type { return types.NewMap(inner, types.Typ[types.Int]) },
+		"map values": func(inner types.Type) types.Type { return types.NewMap(types.Typ[types.Int], inner) },
+		"parameters": func(inner types.Type) types.Type {
+			return types.NewSignatureType(nil, nil, nil, param(inner), nil, false)
+		},
+		"results": func(inner types.Type) types.Type {
+			return types.NewSignatureType(nil, nil, nil, nil, param(inner), false)
+		},
+	}
 	cases := []struct {
 		name  string
 		depth int
@@ -729,18 +926,20 @@ func TestMarkNamedTypes_Depth_Bounded(t *testing.T) {
 		{name: "at the bound", depth: typeDepth, want: true},
 		{name: "past the bound", depth: typeDepth + 1, want: false},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var wrapped types.Type = env
-			for range tc.depth {
-				wrapped = types.NewPointer(wrapped)
-			}
-			marked := map[string]bool{}
-			markNamedTypes(wrapped, pkg, func(key string) { marked[key] = true }, 0)
-			if marked["Env"] != tc.want {
-				t.Errorf("Env marked = %t under %d pointers, want %t", marked["Env"], tc.depth, tc.want)
-			}
-		})
+	for _, through := range sortedKeys(wrappers) {
+		for _, tc := range cases {
+			t.Run(through+" "+tc.name, func(t *testing.T) {
+				var wrapped types.Type = env
+				for range tc.depth {
+					wrapped = wrappers[through](wrapped)
+				}
+				marked := map[string]bool{}
+				markNamedTypes(wrapped, pkg, func(key string) { marked[key] = true }, 0)
+				if marked["Env"] != tc.want {
+					t.Errorf("Env marked = %t under %d %s, want %t", marked["Env"], tc.depth, through, tc.want)
+				}
+			})
+		}
 	}
 }
 

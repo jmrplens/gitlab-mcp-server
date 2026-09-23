@@ -70,7 +70,7 @@ func (r *recorder) AddResourceTemplate(template *mcp.ResourceTemplate, handler m
 		// package state, and Register can run once per pooled server.
 		annotated := *template
 		annotated.Description = template.Description + " " + subscribableMarker
-		meta := make(mcp.Meta, len(template.Meta)+1)
+		meta := make(mcp.Meta, len(template.Meta))
 		maps.Copy(meta, template.Meta)
 		meta[subscribableMetaKey] = true
 		annotated.Meta = meta

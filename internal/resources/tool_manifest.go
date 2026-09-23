@@ -1,8 +1,10 @@
 package resources
 
 import (
+	"cmp"
 	"context"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -293,6 +295,22 @@ func RegisterToolSurfaceResources(server *mcp.Server, opts ToolSurfaceResourceOp
 	registerToolManifestTemplate(server, snapshot)
 }
 
+// ToolSurfaceResourceURIs names what [RegisterToolSurfaceResources] registers:
+// the manifest's static URI and the template of its per-entry detail.
+//
+// They are the two resources whose content the active tool surface decides.
+// Every other resource is registered from the capability surface alone and
+// reads the same whichever tool surface and protective mode a session runs,
+// while these two list what the surface registered after the read-only and
+// safe passes. A reader outside this package that has to tell them apart, which
+// the e2e coverage command does to count them at that finer grain, asks here
+// rather than spelling the two strings again, so a rename here reaches it.
+//
+// Each call returns a slice of its own, so a caller may sort or trim it.
+func ToolSurfaceResourceURIs() []string {
+	return []string{toolsManifestURI, toolsManifestTemplateURI}
+}
+
 // sharedToolSurfaceSnapshots holds one snapshot per share key. Single-flight,
 // so a startup burst of servers under one key projects the surface once
 // rather than once each and discards all but one of the snapshots.
@@ -393,9 +411,7 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 	// here, that a reader of aliasCanonicalActionIDs cannot see.
 	snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	snapshot.addUncoveredDirectTools(toolDetails)
-	sort.Slice(snapshot.manifest.Entries, func(i, j int) bool {
-		return snapshot.manifest.Entries[i].ID < snapshot.manifest.Entries[j].ID
-	})
+	slices.SortFunc(snapshot.manifest.Entries, func(a, b ToolSurfaceEntry) int { return cmp.Compare(a.ID, b.ID) })
 	snapshot.manifest.EntryCount = len(snapshot.manifest.Entries)
 	return snapshot
 }
@@ -428,7 +444,7 @@ func visibleToolSnapshots(tools []*mcp.Tool) ([]ToolSurfaceVisibleTool, []toolSn
 			Destructive: tool.Annotations != nil && tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint,
 		})
 	}
-	sort.Slice(details, func(i, j int) bool { return details[i].Name < details[j].Name })
+	slices.SortFunc(details, func(a, b toolSnapshot) int { return cmp.Compare(a.Name, b.Name) })
 	visible := make([]ToolSurfaceVisibleTool, 0, len(details))
 	for _, tool := range details {
 		visible = append(visible, ToolSurfaceVisibleTool{

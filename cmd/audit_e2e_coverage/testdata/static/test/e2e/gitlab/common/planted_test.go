@@ -196,6 +196,21 @@ func discardVia(s *harness.Session, id harness.ActionID) {
 	_ = harness.Do[map[string]any](s, id, nil)
 }
 
+// TestPlanted_MultiValueArguments_NonConstant hands two verbs every argument
+// through one call, f(g()), so the id is the helper's result and no constant
+// spells it at the verb: both calls are non-constant sites, and the second,
+// which throws its answer away, is a discard like any other.
+func TestPlanted_MultiValueArguments_NonConstant(t *testing.T) {
+	s := harness.New(t).Session()
+	harness.DoVoid(verbArguments(s))
+	_ = harness.Do[map[string]any](verbArguments(s))
+}
+
+// verbArguments hands a verb its three arguments as one call's results.
+func verbArguments(s *harness.Session) (*harness.Session, harness.ActionID, map[string]any) {
+	return s, listIssues, nil
+}
+
 // TestPlanted_SharedName_FoldsBothPackages is declared here and in ce under
 // one name. The map from a test to the ids it names is keyed by the name
 // alone, because the skip line read through it names a test and no package,

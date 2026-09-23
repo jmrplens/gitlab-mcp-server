@@ -150,8 +150,12 @@ func (s *packageScanner) declarations(pkg *packages.Package, scan *packageScan) 
 // key, since a reference resolves to the method and not to how it was
 // declared, and [methodKey] must produce the same string from the type
 // checker's side.
+//
+// A receiver list is never empty here: the type checker refuses a method with
+// no receiver, and a package that did not type-check never reaches the scan
+// (goprogram.LoadWith returns none such).
 func declName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+	if fn.Recv == nil {
 		return fn.Name.Name
 	}
 	return receiverTypeName(fn.Recv.List[0].Type) + "." + fn.Name.Name
@@ -273,10 +277,10 @@ func (s *packageScanner) noteCall(pkg *packages.Package, scan *packageScan, fn *
 		return
 	}
 	verb, isVerb := harnessVerbs[callee]
-	if !isVerb || len(call.Args) <= verb.idArg {
+	if !isVerb {
 		return
 	}
-	arg := call.Args[verb.idArg]
+	arg := idArgument(call, verb)
 	tv := pkg.TypesInfo.Types[arg]
 	if tv.Value == nil {
 		scan.nonConstant = append(scan.nonConstant, staticNote{
@@ -284,9 +288,26 @@ func (s *packageScanner) noteCall(pkg *packages.Package, scan *packageScan, fn *
 		})
 		return
 	}
-	if verb.resultBearing && tv.Value.Kind() == constant.String {
+	if verb.resultBearing {
 		scan.resultSites[constant.StringVal(tv.Value)]++
 	}
+}
+
+// idArgument is the expression a verb call's id is read from.
+//
+// It is the id argument, except in the one call that has fewer arguments than
+// the verb has parameters and still type-checks: f(g()), where g's results are
+// every argument. The id is then whatever g returns, which no constant spells
+// at the call, so the call itself is what is read, and it reads as a
+// non-constant id like a variable does. Passing such a call over, which the
+// scan used to do, dropped it from the non-constant list and dropped a
+// discarded answer from the findings.
+//
+// A constant read here is always a string: the id parameter is the harness's
+// ActionID, whose underlying type is string, and the type checker records the
+// argument converted to it.
+func idArgument(call *ast.CallExpr, verb verbShape) ast.Expr {
+	return call.Args[min(verb.idArg, len(call.Args)-1)]
 }
 
 // needsUltimate reports whether a Needs call takes Tier(edition.Ultimate)
@@ -303,7 +324,10 @@ func (s *packageScanner) needsUltimate(pkg *packages.Package, needs *ast.CallExp
 		if !isCall || s.harnessCallee(pkg, tier) != tierFuncName {
 			continue
 		}
-		if len(tier.Args) == 1 && isUltimate(pkg.TypesInfo.Types[tier.Args[0]]) {
+		// Tier takes one argument, so a call that type-checked has exactly
+		// one: a multi-value g() in its place still has to return a single
+		// value, and that value is no constant.
+		if isUltimate(pkg.TypesInfo.Types[tier.Args[0]]) {
 			return true
 		}
 	}
@@ -401,11 +425,11 @@ func (s *packageScanner) noteDiscard(pkg *packages.Package, scan *packageScan, c
 	}
 	callee := s.harnessCallee(pkg, call)
 	verb, isVerb := harnessVerbs[callee]
-	if !isVerb || !verb.resultBearing || len(call.Args) <= verb.idArg {
+	if !isVerb || !verb.resultBearing {
 		return
 	}
 	id := "a non-constant id"
-	if tv := pkg.TypesInfo.Types[call.Args[verb.idArg]]; tv.Value != nil && tv.Value.Kind() == constant.String {
+	if tv := pkg.TypesInfo.Types[idArgument(call, verb)]; tv.Value != nil {
 		id = constant.StringVal(tv.Value)
 		scan.discardedSites[id]++
 	}

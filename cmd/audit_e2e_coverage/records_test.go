@@ -134,6 +134,37 @@ func TestReadRuntimes_BrokenChild_Refused(t *testing.T) {
 	}
 }
 
+// TestReadRuntimes_ChildThatCannotBeListed_Refused verifies that a child the
+// parent's listing named, and that then cannot be listed itself, refuses the
+// whole read with the child's name rather than being passed over as a child
+// holding no shard: passing it over would report the runtimes of the other
+// children as all there is. The listing is handed in, because nothing a test
+// process can write is also something it cannot read.
+func TestReadRuntimes_ChildThatCannotBeListed_Refused(t *testing.T) {
+	dir := t.TempDir()
+	unlistable := filepath.Join(dir, "ee")
+	if err := os.MkdirAll(filepath.Join(dir, "ce"), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.MkdirAll(unlistable, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	refused := errors.New("listing refused")
+	t.Cleanup(func() { readDir = os.ReadDir })
+	readDir = func(name string) ([]os.DirEntry, error) {
+		if name == unlistable {
+			return nil, refused
+		}
+		return os.ReadDir(name)
+	}
+
+	_, err := readRuntimes(dir)
+
+	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "read "+unlistable) {
+		t.Errorf("readRuntimes() error = %v, want the listing's refusal naming %s", err, unlistable)
+	}
+}
+
 // TestReadRuntimes_DeeperShards_ReadAsOne verifies that shards two levels
 // down, with no shard at the first level, are read as one runtime.
 func TestReadRuntimes_DeeperShards_ReadAsOne(t *testing.T) {
@@ -225,6 +256,26 @@ func TestFoldRecords_RunLines_Ruled(t *testing.T) {
 	}
 }
 
+// TestFoldRecords_CallAlreadyDispatched_KeepsItsAction verifies the one call
+// the late join leaves alone although a dispatch line matches its trace: the
+// harness joined it with the span already, so a dispatch line naming another
+// action is a second record of one event and does not overwrite what the call
+// carries, nor count as a join.
+func TestFoldRecords_CallAlreadyDispatched_KeepsItsAction(t *testing.T) {
+	rt, err := foldRecords([]e2ecalls.Record{
+		{Schema: 1, Type: e2ecalls.TypeRun, Run: &e2ecalls.Run{Package: "p", Edition: "community", Tier: "free", Status: e2ecalls.RunStarted}},
+		{Schema: 1, Type: e2ecalls.TypeCall, Call: &e2ecalls.Call{Test: "T", Action: "a.b", Dispatched: "a.b", TraceID: "t"}},
+		{Schema: 1, Type: e2ecalls.TypeDispatch, Dispatch: &e2ecalls.Dispatch{TraceID: "t", Action: "a.c"}},
+	})
+	if err != nil {
+		t.Fatalf("foldRecords() error = %v", err)
+	}
+
+	if rt.calls[0].Dispatched != "a.b" || rt.lateJoins != 0 {
+		t.Errorf("dispatched = %q, lateJoins = %d; want the call's own a.b and no join", rt.calls[0].Dispatched, rt.lateJoins)
+	}
+}
+
 // TestFoldRecords_LinesTheReaderCannotPlace verifies the two shapes a shard
 // can hold that name nothing: a run line with no package, whose calls are
 // then placed in none, and a line type this reader has no case for, which is
@@ -267,6 +318,9 @@ func TestMatchesRuntime_Selectors_Matched(t *testing.T) {
 		{name: "ee matches ultimate", key: "enterprise/ultimate", selector: "ee", want: true},
 		{name: "ee matches premium", key: "enterprise/premium", selector: "ee", want: true},
 		{name: "ee does not match an unlicensed image", key: "enterprise/free", selector: "ee", want: false},
+		// A community build run with a paid tier pinned by a setting serves a
+		// catalog its instance cannot back, and is no licensed runtime.
+		{name: "ee does not match a community build at a paid tier", key: "community/premium", selector: "ee", want: false},
 		{name: "ee does not match community", key: "community/free", selector: "ee", want: false},
 		{name: "a key matches itself", key: "enterprise/free", selector: "enterprise/free", want: true},
 		{name: "selectors are trimmed and case-insensitive", key: "community/free", selector: " CE ", want: true},

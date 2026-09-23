@@ -136,12 +136,127 @@ func TestRenderRecordPage_NoCapabilities_DrawsNoCapabilityTable(t *testing.T) {
 		entry.Summary.Capabilities = nil
 	}
 	page := renderRecordPage(doc)
+	folded := strings.Join(strings.Fields(page), " ")
 
-	if strings.Contains(page, "classified on the same terms") {
-		t.Error("the page introduced a capability table for a runtime whose record holds none")
+	for _, absent := range []string{"| Capability | asserted |", "| Capability surface |", "recorded before the grain above"} {
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(folded, absent) {
+				t.Errorf("the page carries %q for runtimes whose records hold no capability histogram", absent)
+			}
+		})
 	}
 	if !strings.Contains(page, "### ce") {
 		t.Error("the page lost the runtime whose capability table it left out")
+	}
+}
+
+// pageRows folds the padding out of every line of a page, so a test can look
+// for a table row by its cells rather than by the widths the formatter chose.
+func pageRows(page string) map[string]bool {
+	rows := map[string]bool{}
+	for line := range strings.SplitSeq(page, "\n") {
+		rows[strings.Join(strings.Fields(line), " ")] = true
+	}
+	return rows
+}
+
+// runtimeSection is one runtime's part of the States section: from its
+// heading to the next one, or to the end of the section.
+func runtimeSection(t *testing.T, page, key string) string {
+	t.Helper()
+	_, section, found := strings.Cut(page, "### "+key+"\n")
+	if !found {
+		t.Fatalf("the page has no section for %s", key)
+	}
+	if end := strings.Index(section, "\n### "); end >= 0 {
+		section = section[:end]
+	}
+	section, _, _ = strings.Cut(section, "\n## ")
+	return section
+}
+
+// TestRenderRecordPage_GrainTable_StatesEachKind verifies the table the page
+// states the grain of every capability kind in, drawn from the model the fold
+// keys its cells with.
+func TestRenderRecordPage_GrainTable_StatesEachKind(t *testing.T) {
+	rows := pageRows(renderRecordPage(pageFixture(t)))
+	for _, want := range []string{
+		"| Capability | One cell per item per |",
+		"| `completions` | capability surface |",
+		"| `elicitation` | surface x mode |",
+		"| `modes` | surface x mode |",
+		"| `prompts` | capability surface |",
+		"| `resources` | capability surface |",
+		"| `subscriptions` | capability surface |",
+		"| `tool_manifest` | surface x mode x capability surface |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !rows[want] {
+				t.Errorf("the page carries no row %q", want)
+			}
+		})
+	}
+}
+
+// TestRenderRecordPage_CapabilitySurfaces_DrawnFromTheRows verifies that an
+// entry recorded at the capability grain draws the rows its histogram is
+// counted against, cell by cell, in its own section and says nothing of an
+// older grain. The ee entry's figures all differ, so no two columns could be
+// exchanged and still read right.
+func TestRenderRecordPage_CapabilitySurfaces_DrawnFromTheRows(t *testing.T) {
+	doc := pageFixture(t)
+	doc.Runtimes["ee"].CapabilitySurfaces = []capabilitySurfaceRow{
+		{Capabilities: "full", Sessions: 7, Shapes: 6, Resources: 43, Prompts: 37, Completions: 5, SubscribableKinds: 26},
+		{Capabilities: "minimal", Sessions: 3, Shapes: 2, Completions: 1},
+	}
+	page := renderRecordPage(doc)
+	ee := runtimeSection(t, page, "ee")
+	rows := pageRows(ee)
+
+	for _, want := range []string{
+		"| Capability surface | Sessions | Shapes | Resources | Prompts | Completions | Subscribable kinds |",
+		"| `full` | 7 | 6 | 43 | 37 | 5 | 26 |",
+		"| `minimal` | 3 | 2 | 0 | 0 | 1 | 0 |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !rows[want] {
+				t.Errorf("the ee section carries no row %q:\n%s", want, ee)
+			}
+		})
+	}
+	if strings.Contains(ee, "recorded before the grain above") {
+		t.Error("the ee section calls an entry that carries its rows older than the grain")
+	}
+	if !strings.Contains(ee, "| `prompts`") {
+		t.Error("the ee section lost its capability histogram")
+	}
+}
+
+// TestRenderRecordPage_EntryBeforeTheGrain_NamesTheOlderGrain verifies what
+// the page says of an entry recorded before the capability grain: in its own
+// section, the grain its histogram was counted at and the target that
+// re-records it, and no capability surface table, since it has no rows to draw
+// one from. The runtime beside it, which carries its rows, says nothing of it.
+func TestRenderRecordPage_EntryBeforeTheGrain_NamesTheOlderGrain(t *testing.T) {
+	doc := pageFixture(t)
+	doc.Runtimes["ee"].CapabilitySurfaces = nil
+	page := renderRecordPage(doc)
+	ee, ce := runtimeSection(t, page, "ee"), runtimeSection(t, page, "ce")
+
+	want := "This entry was recorded before the grain above: each of its capability rows counts every item " +
+		"once per surface x mode, whatever the kind, so an item every shape served is as many cells as there " +
+		"are shapes. `make e2e-coverage-record-ee` re-records it at the grain above."
+	if !strings.Contains(ee, want) {
+		t.Errorf("the ee section does not name the older grain:\n%s", ee)
+	}
+	if strings.Contains(ee, "| Capability surface") {
+		t.Error("the ee section drew a capability surface table with no rows to draw it from")
+	}
+	if !strings.Contains(ee, "| `prompts`") {
+		t.Error("the ee section lost its capability histogram")
+	}
+	if strings.Contains(ce, "recorded before the grain above") || !strings.Contains(ce, "| Capability surface") {
+		t.Errorf("the ce section, which carries its rows, = \n%s", ce)
 	}
 }
 

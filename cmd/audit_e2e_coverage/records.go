@@ -61,29 +61,30 @@ type runtimeRecords struct {
 // directory holding none is read as one runtime per child directory, which is
 // the layout dist/e2e-calls/<target> produces. Anything else is the error
 // e2ecalls.ReadShards gives for a directory without shards.
+//
+// The directory is listed once and both questions are asked of that listing.
+// Listing it a second time to find its children could only differ from the
+// first by the directory changing in between, and an error branch no input
+// but a race reaches is one no test can hold to anything.
 func readRuntimes(dir string) ([]*runtimeRecords, error) {
-	holds, err := holdsShard(dir)
+	entries, err := listDirectory(dir)
 	if err != nil {
 		return nil, err
 	}
-	if holds {
+	if holdsShard(entries) {
 		one, readErr := readRuntime(dir)
 		if readErr != nil {
 			return nil, readErr
 		}
 		return []*runtimeRecords{one}, nil
 	}
-	children, err := childDirectories(dir)
-	if err != nil {
-		return nil, err
-	}
 	var runtimes []*runtimeRecords
-	for _, child := range children {
-		childHolds, childErr := holdsShard(child)
+	for _, child := range childDirectories(dir, entries) {
+		childEntries, childErr := listDirectory(child)
 		if childErr != nil {
 			return nil, childErr
 		}
-		if !childHolds {
+		if !holdsShard(childEntries) {
 			continue
 		}
 		one, readErr := readRuntime(child)
@@ -105,31 +106,42 @@ func readRuntimes(dir string) ([]*runtimeRecords, error) {
 	return runtimes, nil
 }
 
-// holdsShard reports whether dir directly holds at least one shard file.
-func holdsShard(dir string) (bool, error) {
-	entries, err := os.ReadDir(dir)
+// readDir is os.ReadDir behind a variable, for the one failure of
+// [readRuntimes] no input reaches: a child directory the parent's listing
+// named that cannot then be listed itself. A test process that can write the
+// tree can also read it, and the only other ways to get there are a race and
+// a permission that root ignores, so a test hands in a listing that fails
+// instead. What it holds to is that such a child refuses the whole read rather
+// than being passed over as a directory that holds nothing.
+var readDir = os.ReadDir
+
+// listDirectory lists dir, naming it in the error a listing that failed gives.
+func listDirectory(dir string) ([]os.DirEntry, error) {
+	entries, err := readDir(dir)
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", dir, err)
+		return nil, fmt.Errorf("read %s: %w", dir, err)
 	}
+	return entries, nil
+}
+
+// holdsShard reports whether a directory's listing holds at least one shard
+// file directly.
+func holdsShard(entries []os.DirEntry) bool {
 	for _, entry := range entries {
 		// The predicate is the record package's own, because this is the same
 		// question its reader asks a moment later: a second spelling of the
 		// name here is how the two would come to disagree about what a shard
 		// is called.
 		if !entry.IsDir() && e2ecalls.IsShard(entry.Name()) {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
-// childDirectories lists the subdirectories of dir, sorted by name so a report
-// is stable from one run to the next.
-func childDirectories(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", dir, err)
-	}
+// childDirectories names the subdirectories a listing of dir holds, sorted by
+// name so a report is stable from one run to the next.
+func childDirectories(dir string, entries []os.DirEntry) []string {
 	var children []string
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -137,7 +149,7 @@ func childDirectories(dir string) ([]string, error) {
 		}
 	}
 	sort.Strings(children)
-	return children, nil
+	return children
 }
 
 // errNoRunLine is a shard set with calls and no run line, which is a process

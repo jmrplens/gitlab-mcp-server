@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -167,6 +168,34 @@ func TestCheckRecord_Failures(t *testing.T) {
 			}
 			if !strings.Contains(strings.Join(verdict.Findings, "\n"), tc.want) {
 				t.Errorf("findings = %q, want one naming %q", verdict.Findings, tc.want)
+			}
+		})
+	}
+}
+
+// TestCheckRecordArithmetic_EveryActionAsserted_Holds verifies the edge of
+// the one ceiling the arithmetic applies: a record asserting every action of
+// its catalog is the best a run can do and no hand edit, so it holds, where
+// one asserting one more than the catalog has does not.
+func TestCheckRecordArithmetic_EveryActionAsserted_Holds(t *testing.T) {
+	ids := []string{"issue.get", "issue.list"}
+	cases := []struct {
+		name    string
+		catalog int
+		want    int
+	}{
+		{name: "every action", catalog: 2, want: 0},
+		{name: "more than the catalog", catalog: 1, want: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			verdict := &recordVerdict{}
+			checkRecordArithmetic(verdict, "ce", &recordEntry{
+				Summary: summary{CatalogActions: tc.catalog, L1: 2, L2: 2, L3: 2},
+				Levels:  levels{L1: ids, L2: ids, L3: ids},
+			})
+			if len(verdict.Findings) != tc.want {
+				t.Errorf("findings = %q, want %d", verdict.Findings, tc.want)
 			}
 		})
 	}
@@ -349,6 +378,42 @@ func TestCheckRecord_ApproachingExpiry_IsANote(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(verdict.Notes, "\n"), "days from now every push here fails on it") {
 		t.Errorf("notes = %q, want the deadline announced", verdict.Notes)
+	}
+}
+
+// TestCheckRecord_EntryBeforeTheCapabilityGrain_IsANote verifies how the
+// committed record's own shape is read after the capability grain: an entry
+// with no capability_surfaces rows, which is every entry recorded before it,
+// is one note naming the half and the target that re-records it, and fails
+// nothing. Nothing in the repository can re-record an entry without a Docker
+// run of that half, so a finding here would fail every push until one ran.
+func TestCheckRecord_EntryBeforeTheCapabilityGrain_IsANote(t *testing.T) {
+	silentProbe(t)
+	opts, doc, _ := checkFixture(t)
+	doc.Runtimes["ee"].CapabilitySurfaces = nil
+	writeRecordJSON(t, opts.recordPath, doc)
+
+	verdict, err := checkRecord(opts, doc, checkClock)
+	if err != nil {
+		t.Fatalf("checkRecord() = %v, want a verdict", err)
+	}
+	if len(verdict.Findings) > 0 {
+		t.Errorf("findings = %q, want an entry before the grain to fail nothing", verdict.Findings)
+	}
+	want := []string{"ee was recorded before the capability grain: its capability histograms count every item once " +
+		"per surface x mode and it carries no capability_surfaces rows to count them against; re-record it with " +
+		"make e2e-coverage-record-ee after a Docker run of that half"}
+	if !slices.Equal(verdict.Notes, want) {
+		t.Errorf("notes = %q, want exactly %q", verdict.Notes, want)
+	}
+
+	opts.checkRecordPage = false
+	var stdout, stderr strings.Builder
+	if code := runCheckRecord(opts, &stdout, &stderr); code != exitOK {
+		t.Fatalf("runCheckRecord() = %d, stderr %q; want 0", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "record: note: "+want[0]+"\n") {
+		t.Errorf("stdout = %q, want the note printed beside the zero exit", stdout.String())
 	}
 }
 
@@ -639,11 +704,7 @@ func TestRunCheckRecord_Findings_ExitNonZero(t *testing.T) {
 // commit a record the page no longer describes.
 func writeRecordJSON(t *testing.T, path string, doc *coverageRecord) {
 	t.Helper()
-	encoded, err := marshalRecord(doc)
-	if err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	if err = os.WriteFile(path, encoded, 0o600); err != nil {
+	if err := os.WriteFile(path, marshalRecord(doc), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

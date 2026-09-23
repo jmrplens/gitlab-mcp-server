@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -457,7 +458,7 @@ func TestRun_Static_OverTheFixtureModule(t *testing.T) {
 		// model evaluation package and the command beside the harness, the
 		// last two loaded as consumers and scanned for no id sites of their
 		// own.
-		"static: 34 id sites in 7 packages, 4 non-constant sites, 7 unused harness exports, 15 findings",
+		"static: 35 id sites in 7 packages, 6 non-constant sites, 7 unused harness exports, 16 findings",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(stdout, want) {
@@ -785,6 +786,89 @@ func TestRun_Output_UnwritablePath_IsAUsageError(t *testing.T) {
 	code, _, stderr := runFixture(t, opts)
 	if code != exitUsage || !strings.Contains(stderr, "write report:") {
 		t.Errorf("run() = %d, %q; want exit %d naming the report write", code, stderr, exitUsage)
+	}
+}
+
+// TestWriteReportJSON_FileThatRefusesTheWrite_ReportedAndNotAnnounced
+// verifies the failure after the file opened: a write the device refuses is
+// the error the run returns, and the line saying the report was written to
+// that path is not printed. /dev/full is the one file every Linux gives a
+// test that opens and then refuses the write, which is a disk that filled
+// between the two; the other platforms have no such file and skip.
+func TestWriteReportJSON_FileThatRefusesTheWrite_ReportedAndNotAnnounced(t *testing.T) {
+	const devFull = "/dev/full"
+	if _, err := os.Stat(devFull); err != nil {
+		t.Skipf("%s is not here to refuse a write: %v", devFull, err)
+	}
+	var out bytes.Buffer
+
+	err := writeReportJSON(options{output: devFull}, []*report{fixtureReport()}, &out)
+
+	if err == nil || !strings.Contains(err.Error(), "encode report:") {
+		t.Errorf("writeReportJSON() error = %v, want the refused write reported", err)
+	}
+	if out.Len() > 0 {
+		t.Errorf("stdout = %q, want nothing announced for a report the file refused", out.String())
+	}
+}
+
+// TestMain_ExitStatus_HandedToTheProcess verifies the one line main is: the
+// flags it parses reach run, and the status run returns is the one the process
+// exits with. A render of a record on disk exits zero and draws the page; a
+// run asked for nothing exits two. The streams are taken over for the call so
+// that what main prints can be read back.
+func TestMain_ExitStatus_HandedToTheProcess(t *testing.T) {
+	dir := t.TempDir()
+	recordPath, pagePath := filepath.Join(dir, "e2e-coverage.json"), filepath.Join(dir, "e2e-coverage.md")
+	writeRecordJSON(t, recordPath, pageFixture(t))
+	cases := []struct {
+		name   string
+		args   []string
+		want   int
+		output string
+	}{
+		{
+			name: "a render exits clean",
+			args: []string{"-dir", dir, "-render-record", "-record-path", recordPath, "-record-page", pagePath},
+			want: exitOK, output: "record: rendered " + pagePath + " from " + recordPath + "\n",
+		},
+		{name: "a run asked for nothing exits two", want: exitUsage, output: "audit_e2e_coverage: nothing to do"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			streams := filepath.Join(t.TempDir(), "streams")
+			captured, err := os.Create(streams) // #nosec G304 -- the path is this test's own temporary directory.
+			if err != nil {
+				t.Fatalf("create %s: %v", streams, err)
+			}
+			t.Cleanup(func() { _ = captured.Close() })
+			oldArgs, oldCommandLine, oldStdout, oldStderr := os.Args, flag.CommandLine, os.Stdout, os.Stderr
+			t.Cleanup(func() {
+				os.Args, flag.CommandLine, os.Stdout, os.Stderr = oldArgs, oldCommandLine, oldStdout, oldStderr
+				osExit = os.Exit
+			})
+			os.Args = append([]string{"audit_e2e_coverage"}, tc.args...)
+			flag.CommandLine = flag.NewFlagSet("audit_e2e_coverage", flag.ContinueOnError)
+			os.Stdout, os.Stderr = captured, captured
+			code := -1
+			osExit = func(status int) { code = status }
+
+			main()
+
+			if code != tc.want {
+				t.Errorf("main() exited %d, want %d", code, tc.want)
+			}
+			printed, err := os.ReadFile(streams) // #nosec G304 -- the path is this test's own temporary directory.
+			if err != nil {
+				t.Fatalf("read %s: %v", streams, err)
+			}
+			if !strings.Contains(string(printed), tc.output) {
+				t.Errorf("main() printed %q, want it to carry %q", printed, tc.output)
+			}
+		})
+	}
+	if _, err := os.Stat(pagePath); err != nil {
+		t.Errorf("the render drew no page: %v", err)
 	}
 }
 

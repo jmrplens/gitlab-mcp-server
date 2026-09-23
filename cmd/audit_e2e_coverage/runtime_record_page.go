@@ -1,7 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -186,6 +188,7 @@ func writeRecordStates(b *strings.Builder, doc *coverageRecord) {
 		"`unservable` is a cell the surface cannot reach at all (no individual tool, a " +
 		"shadowed tool name, a scope that withheld the group), and `absent` is a servable " +
 		"cell nothing called.\n\n")
+	writeCapabilityGrains(b)
 	for _, key := range recordPageOrder(doc) {
 		entry := doc.Runtimes[key]
 		if entry == nil {
@@ -194,13 +197,79 @@ func writeRecordStates(b *strings.Builder, doc *coverageRecord) {
 		b.WriteString("### " + key + "\n\n")
 		b.WriteString(renderStateTable("Surface", entry.Summary.States))
 		b.WriteString("\n")
-		if len(entry.Summary.Capabilities) > 0 {
-			b.WriteString("Resources, prompts, completions, subscriptions and the protective " +
-				"modes, classified on the same terms:\n\n")
-			b.WriteString(renderStateTable("Capability", entry.Summary.Capabilities))
-			b.WriteString("\n")
-		}
+		writeRecordCapabilities(b, key, entry)
 	}
+}
+
+// writeCapabilityGrains states the grain each capability kind is counted at,
+// drawn from [capabilityGrains] itself so the page cannot describe a grain the
+// fold does not use.
+func writeCapabilityGrains(b *strings.Builder) {
+	rows := make([][]string, 0, len(capabilityGrains))
+	for _, kind := range sortedKeys(capabilityGrains) {
+		rows = append(rows, []string{"`" + kind + "`", capabilityGrains[kind].String()})
+	}
+	b.WriteString("The capabilities beside the tools are classified on the same states, each " +
+		"counted at the grain its content varies along:\n\n")
+	b.WriteString(docgen.RenderMarkdownTable([]string{"Capability", "One cell per item per"}, nil, rows))
+	b.WriteString("\nThe server registers its resources, prompts, completions and subscribable kinds " +
+		"from the capability surface alone, so neither the tool surface nor the protective mode " +
+		"changes what a session is served, and a cell per shape would be one nothing could fill " +
+		"differently from its twin. Subscriptions exist on the full capability surface only. " +
+		"`gitlab://tools` and `gitlab://tools/{id}` are the exception, counted as `tool_manifest`: " +
+		"they list what the session's tool surface registered after the read-only and safe passes, " +
+		"so they change along all three. The elicitation flows and the protective modes are reached " +
+		"through the actions a surface serves in a mode, and are counted where those are.\n\n")
+}
+
+// writeRecordCapabilities writes one runtime's capability histogram, beside
+// what it is counted against: the capability surfaces the entry recorded,
+// which are the denominator of the four kinds counted at the capability grain
+// and of none of the others, or, for an entry recorded before them, the grain
+// its figures were counted at.
+//
+// A runtime measured before the capability cells existed carries no histogram,
+// and gets nothing here: a sentence introducing an empty table would read as a
+// run that watched nothing rather than as a record that says nothing.
+func writeRecordCapabilities(b *strings.Builder, key string, entry *recordEntry) {
+	if len(entry.Summary.Capabilities) == 0 {
+		return
+	}
+	if len(entry.CapabilitySurfaces) == 0 {
+		b.WriteString("This entry was recorded before the grain above: each of its capability rows counts " +
+			"every item once per surface x mode, whatever the kind, so an item every shape served is as " +
+			"many cells as there are shapes. `" + recordRegenerate + "-" + key + "` re-records it at " +
+			"the grain above.\n\n")
+	} else {
+		b.WriteString("What each capability surface served, which is what the `resources`, `prompts`, `completions` " +
+			"and `subscriptions` rows beneath are counted against (`tool_manifest` is counted per shape and " +
+			"capability surface, `elicitation` and `modes` per shape; none has a figure here):\n\n")
+		b.WriteString(renderCapabilitySurfaceTable(entry.CapabilitySurfaces))
+		b.WriteString("\n")
+	}
+	b.WriteString(renderStateTable("Capability", entry.Summary.Capabilities))
+	b.WriteString("\n")
+}
+
+// renderCapabilitySurfaceTable draws the capability surface rows in the order
+// the record holds them.
+func renderCapabilitySurfaceTable(surfaces []capabilitySurfaceRow) string {
+	rows := make([][]string, 0, len(surfaces))
+	for _, surface := range surfaces {
+		rows = append(rows, []string{
+			"`" + surface.Capabilities + "`", strconv.Itoa(surface.Sessions), strconv.Itoa(surface.Shapes),
+			strconv.Itoa(surface.Resources), strconv.Itoa(surface.Prompts), strconv.Itoa(surface.Completions),
+			strconv.Itoa(surface.SubscribableKinds),
+		})
+	}
+	return docgen.RenderMarkdownTable(
+		[]string{"Capability surface", "Sessions", "Shapes", "Resources", "Prompts", "Completions", "Subscribable kinds"},
+		[]docgen.Alignment{
+			docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+			docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+		},
+		rows,
+	)
 }
 
 // renderStateTable draws one histogram with a column per state, and is the one
@@ -218,28 +287,19 @@ func writeRecordStates(b *strings.Builder, doc *coverageRecord) {
 // It used to take an order function for that, and the only two arguments ever
 // passed produced identical output.
 func renderStateTable(first string, histogram map[string]map[state]int) string {
-	headers := make([]string, 0, len(markdownStates)+1)
-	headers = append(headers, first)
-	alignments := make([]docgen.Alignment, 0, len(markdownStates)+1)
-	alignments = append(alignments, docgen.AlignLeft)
+	headers := []string{first}
+	alignments := []docgen.Alignment{docgen.AlignLeft}
 	for _, s := range markdownStates {
 		headers = append(headers, string(s))
 		alignments = append(alignments, docgen.AlignRight)
 	}
-	keys := make([]string, 0, len(histogram))
-	for key := range histogram {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if surfaceOrder(keys[i]) != surfaceOrder(keys[j]) {
-			return surfaceOrder(keys[i]) < surfaceOrder(keys[j])
-		}
-		return keys[i] < keys[j]
-	})
+	keys := sortedKeys(histogram)
+	// Stable, so the name order sortedKeys settled survives among the keys
+	// surfaceOrder ranks alike.
+	slices.SortStableFunc(keys, func(a, b string) int { return cmp.Compare(surfaceOrder(a), surfaceOrder(b)) })
 	rows := make([][]string, 0, len(keys))
 	for _, key := range keys {
-		row := make([]string, 0, len(markdownStates)+1)
-		row = append(row, "`"+key+"`")
+		row := []string{"`" + key + "`"}
 		for _, s := range markdownStates {
 			row = append(row, strconv.Itoa(histogram[key][s]))
 		}
@@ -296,8 +356,5 @@ func shortCommit(commit string) string {
 	if commit == "" {
 		return "—"
 	}
-	if len(commit) > 12 {
-		return "`" + commit[:12] + "`"
-	}
-	return "`" + commit + "`"
+	return "`" + commit[:min(len(commit), 12)] + "`"
 }

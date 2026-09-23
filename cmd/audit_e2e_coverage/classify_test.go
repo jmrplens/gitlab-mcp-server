@@ -57,16 +57,42 @@ var servedTools = []string{
 	"gitlab_environment_get", "gitlab_environment_protected_get", "gitlab_merge_train_list",
 }
 
-// fixtureSession builds one session line.
+// The two resources the active tool surface decides, spelled here rather than
+// read from the resources package, so a test that expects them to be filed
+// apart does not take its expectation from the code under test.
+const (
+	manifestIndex  = "gitlab://tools"
+	manifestDetail = "gitlab://tools/{id}"
+)
+
+// fixtureSession builds one session line of the full capability surface, which
+// lists the tool-manifest pair beside the rest of the catalog as the server
+// does.
 func fixtureSession(key shapeKey, observed bool) *e2ecalls.Session {
 	return &e2ecalls.Session{
 		Label: key.surface + "/" + key.mode, Surface: key.surface, Mode: key.mode,
 		Capabilities: config.CapabilitySurfaceFull, Transport: "stdio", Tools: servedTools,
-		Resources:         []string{"gitlab://groups"},
-		ResourceTemplates: []string{"gitlab://project/{project_id}", "gitlab://project/{project_id}/issue/{issue_iid}", "gitlab://project/{project_id}/file/{ref}/{+path}"},
-		Prompts:           []string{"summarize_issue"},
-		DispatchObserved:  observed,
+		Resources: []string{"gitlab://groups", manifestIndex},
+		ResourceTemplates: []string{
+			"gitlab://project/{project_id}", "gitlab://project/{project_id}/issue/{issue_iid}",
+			"gitlab://project/{project_id}/file/{ref}/{+path}", manifestDetail,
+		},
+		Prompts:          []string{"summarize_issue"},
+		DispatchObserved: observed,
 	}
+}
+
+// minimalSession builds a session line of the minimal capability surface as
+// the harness records one: the tool-manifest pair and nothing else, since the
+// server registers no prompt, no other resource and no subscription there.
+func minimalSession(key shapeKey) *e2ecalls.Session {
+	session := fixtureSession(key, true)
+	session.Label += "/minimal"
+	session.Capabilities = config.CapabilitySurfaceMinimal
+	session.Resources = []string{manifestIndex}
+	session.ResourceTemplates = []string{manifestDetail}
+	session.Prompts = nil
+	return session
 }
 
 // callSpec is the short form a fixture call is written in.
@@ -159,6 +185,7 @@ func fixtureRuntime() *runtimeRecords {
 		{test: "TestResources", method: methodReadResource, target: "gitlab://project/1/file/main/docs/a.md", shape: dynamicDefault},
 		{test: "TestResources", method: methodReadResource, target: "gitlab://groups", shape: dynamicDefault},
 		{test: "TestResources", method: methodReadResource, target: "gitlab://nowhere", outcome: e2ecalls.OutcomeProtocolError, expectation: "protocol_error", shape: dynamicDefault},
+		{test: "TestManifest", method: methodReadResource, target: "gitlab://tools/issue.list", shape: metaDefault},
 		{test: "TestPrompts", method: methodGetPrompt, target: "summarize_issue", shape: metaDefault},
 		{test: "TestCompletions", method: methodComplete, target: "summarize_issue project_id", shape: metaDefault},
 		{test: "TestSubscriptions", method: methodSubscribe, target: "gitlab://project/1/issue/5", shape: dynamicDefault},
@@ -366,77 +393,110 @@ func TestClassify_Diagnostics_CountTheRecord(t *testing.T) {
 }
 
 // capabilityState reads one capability cell's state.
-func capabilityState(c *classification, kind string, shape shapeKey, target string) state {
-	found, exists := c.capabilities[kind][cellKey{shape: shape, action: target}]
+func capabilityState(c *classification, kind string, key cellKey) state {
+	found, exists := c.capabilities[kind][key]
 	if !exists {
 		return "missing"
 	}
 	return found.state
 }
 
+// onCapabilities is the key of a cell counted once per capability surface,
+// spelled out rather than built by the code under test.
+func onCapabilities(capabilities, target string) cellKey {
+	return cellKey{capabilities: capabilities, action: target}
+}
+
+// onShape is the key of a cell counted once per surface x mode.
+func onShape(shape shapeKey, target string) cellKey {
+	return cellKey{shape: shape, action: target}
+}
+
+// onShapeAndCapabilities is the key of a cell counted once per surface x mode x
+// capability surface, which is the tool manifest's.
+func onShapeAndCapabilities(shape shapeKey, capabilities, target string) cellKey {
+	return cellKey{shape: shape, capabilities: capabilities, action: target}
+}
+
+// capabilityStates reads every cell of one kind as key and state, for a test
+// that holds the whole set rather than the cells it thought to look up: a
+// twin nobody named is exactly what the grain exists to rule out.
+func capabilityStates(c *classification, kind string) map[cellKey]state {
+	states := map[cellKey]state{}
+	for key, found := range c.capabilities[kind] {
+		states[key] = found.state
+	}
+	return states
+}
+
+// The two capability surfaces, shortened for the tables below.
+const (
+	full    = config.CapabilitySurfaceFull
+	minimal = config.CapabilitySurfaceMinimal
+)
+
 // TestClassify_Capabilities_ClassifiedByTarget verifies the non-tool
 // classification: a resource by the template it expands or its own static
-// URI, a prompt by name, a completion by reference and argument, a
-// subscription by kind, and the elicitation flow by whether it elicited.
+// URI, the tool manifest by the same rule on the shape that read it, a prompt
+// by name, a completion by reference and argument, a subscription by kind,
+// and the elicitation flow by whether it elicited.
 func TestClassify_Capabilities_ClassifiedByTarget(t *testing.T) {
 	c := classify(fixtureRuntime(), fixtureCatalog())
 
 	cases := []struct {
-		name   string
-		kind   string
-		shape  shapeKey
-		target string
-		want   state
+		name string
+		kind string
+		key  cellKey
+		want state
 	}{
-		{name: "resource by template", kind: capabilityResources, shape: dynamicDefault, target: "gitlab://project/{project_id}/issue/{issue_iid}", want: stateAsserted},
-		{name: "resource by reserved-expansion template", kind: capabilityResources, shape: dynamicDefault, target: "gitlab://project/{project_id}/file/{ref}/{+path}", want: stateAsserted},
-		{name: "static resource by its URI", kind: capabilityResources, shape: dynamicDefault, target: "gitlab://groups", want: stateAsserted},
-		{name: "resource nothing read", kind: capabilityResources, shape: dynamicDefault, target: "gitlab://project/{project_id}", want: stateAbsent},
-		{name: "resource nothing serves keeps its URI", kind: capabilityResources, shape: dynamicDefault, target: "gitlab://nowhere", want: stateErrorPathOnly},
-		{name: "prompt by name", kind: capabilityPrompts, shape: metaDefault, target: "summarize_issue", want: stateAsserted},
-		{name: "prompt on a shape nothing rendered it on", kind: capabilityPrompts, shape: dynamicDefault, target: "summarize_issue", want: stateAbsent},
-		{name: "completion by reference and argument", kind: capabilityCompletions, shape: metaDefault, target: "summarize_issue project_id", want: stateAsserted},
-		{name: "subscription by kind", kind: capabilitySubscriptions, shape: dynamicDefault, target: "issue", want: stateAsserted},
-		{name: "listen by kind", kind: capabilitySubscriptions, shape: dynamicDefault, target: "pipeline", want: stateAsserted},
-		{name: "subscribable kind nothing watched", kind: capabilitySubscriptions, shape: dynamicDefault, target: "wiki", want: stateAbsent},
-		{name: "elicitation flow that elicited", kind: capabilityElicitation, shape: metaDefault, target: "interactive.issue_create", want: stateAsserted},
-		{name: "elicitation flow that answered without eliciting", kind: capabilityElicitation, shape: dynamicDefault, target: "interactive.issue_create", want: stateErrorPathOnly},
-		{name: "read-only reads", kind: capabilityModes, shape: metaReadOnly, target: facetReads, want: stateAsserted},
-		{name: "read-only withheld", kind: capabilityModes, shape: metaReadOnly, target: facetWithheld, want: stateAsserted},
-		{name: "safe reads", kind: capabilityModes, shape: individualSafe, target: facetReads, want: stateAsserted},
-		{name: "safe previews", kind: capabilityModes, shape: individualSafe, target: facetPreviews, want: stateAsserted},
+		{name: "resource by template", kind: capabilityResources, key: onCapabilities(full, "gitlab://project/{project_id}/issue/{issue_iid}"), want: stateAsserted},
+		{name: "resource by reserved-expansion template", kind: capabilityResources, key: onCapabilities(full, "gitlab://project/{project_id}/file/{ref}/{+path}"), want: stateAsserted},
+		{name: "static resource by its URI", kind: capabilityResources, key: onCapabilities(full, "gitlab://groups"), want: stateAsserted},
+		{name: "resource nothing read", kind: capabilityResources, key: onCapabilities(full, "gitlab://project/{project_id}"), want: stateAbsent},
+		{name: "resource nothing serves keeps its URI", kind: capabilityResources, key: onCapabilities(full, "gitlab://nowhere"), want: stateErrorPathOnly},
+		{name: "tool manifest detail by its template", kind: capabilityToolManifest, key: onShapeAndCapabilities(metaDefault, full, manifestDetail), want: stateAsserted},
+		{name: "tool manifest on a shape nothing read it on", kind: capabilityToolManifest, key: onShapeAndCapabilities(dynamicDefault, full, manifestDetail), want: stateAbsent},
+		{name: "prompt by name", kind: capabilityPrompts, key: onCapabilities(full, "summarize_issue"), want: stateAsserted},
+		{name: "completion by reference and argument", kind: capabilityCompletions, key: onCapabilities(full, "summarize_issue project_id"), want: stateAsserted},
+		{name: "subscription by kind", kind: capabilitySubscriptions, key: onCapabilities(full, "issue"), want: stateAsserted},
+		{name: "listen by kind", kind: capabilitySubscriptions, key: onCapabilities(full, "pipeline"), want: stateAsserted},
+		{name: "subscribable kind nothing watched", kind: capabilitySubscriptions, key: onCapabilities(full, "wiki"), want: stateAbsent},
+		{name: "elicitation flow that elicited", kind: capabilityElicitation, key: onShape(metaDefault, "interactive.issue_create"), want: stateAsserted},
+		{name: "elicitation flow that answered without eliciting", kind: capabilityElicitation, key: onShape(dynamicDefault, "interactive.issue_create"), want: stateErrorPathOnly},
+		{name: "read-only reads", kind: capabilityModes, key: onShape(metaReadOnly, facetReads), want: stateAsserted},
+		{name: "read-only withheld", kind: capabilityModes, key: onShape(metaReadOnly, facetWithheld), want: stateAsserted},
+		{name: "safe reads", kind: capabilityModes, key: onShape(individualSafe, facetReads), want: stateAsserted},
+		{name: "safe previews", kind: capabilityModes, key: onShape(individualSafe, facetPreviews), want: stateAsserted},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := capabilityState(c, tc.kind, tc.shape, tc.target); got != tc.want {
-				t.Errorf("%s %s/%s %q = %s, want %s", tc.kind, tc.shape.surface, tc.shape.mode, tc.target, got, tc.want)
+			if got := capabilityState(c, tc.kind, tc.key); got != tc.want {
+				t.Errorf("%s %+v = %s, want %s", tc.kind, tc.key, got, tc.want)
 			}
 		})
-	}
-	if !c.delivered[cellKey{shape: dynamicDefault, action: "issue"}] {
-		t.Error("the resource-updated notification was not recorded as delivered for the issue kind")
-	}
-	if got, want := len(c.capabilities[capabilitySubscriptions]), len(subscribableKinds(nil))*len(c.shapes); got != want {
-		t.Errorf("subscription cells = %d, want one per kind on each of the %d full-capability shapes (%d)", got, len(c.shapes), want)
 	}
 }
 
 // TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities verifies what
 // folding the session lines settles: a shape opened twice is one shape with
-// both listings unioned, and a shape whose sessions all ran on the minimal
-// capability surface gets no subscription cells, because the server registers
-// no subscribable resources there and an absent cell would read as a kind
-// nothing watched.
+// both listings unioned, each capability surface is folded apart from the
+// other whatever shapes its sessions ran as, the minimal surface serves no
+// prompt, and it gets no subscription cell, because the server accepts no
+// subscription there and an absent cell would read as a kind nothing watched.
+//
+// The subscription absence is asserted by capability surface, which is what
+// the keys carry now, and beside a count on the full surface: a loop over the
+// subscription cells that found none at all would otherwise pass it. A prompt
+// the minimal surface was asked for anyway is a cell of its own, which
+// TestClassify_Prompts_OneCellPerCapabilitySurface holds.
 func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
-	minimal := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}
+	leanShape := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}
 	second := fixtureSession(dynamicDefault, true)
 	second.Prompts = []string{"triage_issue"}
-	lean := fixtureSession(minimal, true)
-	lean.Capabilities = config.CapabilitySurfaceMinimal
 
 	rt := fixtureRuntime()
 	rt.calls = nil
-	rt.sessions = append(rt.sessions, second, lean)
+	rt.sessions = append(rt.sessions, second, minimalSession(leanShape))
 	c := classify(rt, fixtureCatalog())
 
 	shape, known := c.shapes[dynamicDefault]
@@ -446,19 +506,255 @@ func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
 	if shape.sessions != 2 {
 		t.Errorf("sessions = %d, want the two lines folded into one shape", shape.sessions)
 	}
-	if !shape.full {
-		t.Error("full = false on a shape both of whose sessions carried the full capability surface")
-	}
 	if !shape.prompts["summarize_issue"] || !shape.prompts["triage_issue"] {
 		t.Errorf("prompts = %q, want both listings unioned", sortedKeys(shape.prompts))
 	}
-	if leanShape := c.shapes[minimal]; leanShape == nil || leanShape.full {
-		t.Errorf("the minimal shape = %+v, want one that is not full", leanShape)
+	fullSurface, minimalSurface := c.capabilitySurfaces[full], c.capabilitySurfaces[minimal]
+	if fullSurface == nil || minimalSurface == nil {
+		t.Fatalf("capability surfaces = %q, want full and minimal", sortedKeys(c.capabilitySurfaces))
 	}
+	if fullSurface.sessions != 6 || len(fullSurface.shapes) != 5 {
+		t.Errorf("full = %d sessions on %d shapes, want the six full lines on the fixture's five shapes",
+			fullSurface.sessions, len(fullSurface.shapes))
+	}
+	if minimalSurface.sessions != 1 || len(minimalSurface.prompts) != 0 {
+		t.Errorf("minimal = %d sessions serving prompts %q, want the one lean line and no prompt",
+			minimalSurface.sessions, sortedKeys(minimalSurface.prompts))
+	}
+	subscriptions := map[string]int{}
 	for key := range c.capabilities[capabilitySubscriptions] {
-		if key.shape == minimal {
-			t.Errorf("subscription cell %q on the minimal shape, which serves no subscribable resource", key.action)
+		subscriptions[key.capabilities]++
+	}
+	if subscriptions[full] != len(subscribableKinds(nil)) || subscriptions[minimal] != 0 {
+		t.Errorf("subscription cells per capability surface = %v, want every kind on full and none on minimal", subscriptions)
+	}
+}
+
+// TestClassify_Prompts_OneCellPerCapabilitySurface verifies that a prompt is
+// one cell per capability surface, however many shapes served it: the
+// fixture's five shapes all list summarize_issue, one of them rendered it, and
+// the classification holds exactly one cell for it, asserted, with no absent
+// twin on the four shapes that did not. A render on the minimal surface, which
+// refuses prompts/get, is a cell of its own and leaves the full one alone.
+func TestClassify_Prompts_OneCellPerCapabilitySurface(t *testing.T) {
+	rt := fixtureRuntime()
+	refused := fixtureCall(callSpec{
+		test: "TestPromptsMinimal", method: methodGetPrompt, target: "summarize_issue",
+		expectation: "protocol_error", outcome: e2ecalls.OutcomeProtocolError, shape: dynamicDefault,
+	})
+	refused.Capabilities = minimal
+	rt.calls = append(rt.calls, refused)
+	c := classify(rt, fixtureCatalog())
+
+	want := map[cellKey]state{
+		onCapabilities(full, "summarize_issue"):    stateAsserted,
+		onCapabilities(minimal, "summarize_issue"): stateErrorPathOnly,
+	}
+	if got := capabilityStates(c, capabilityPrompts); !reflect.DeepEqual(got, want) {
+		t.Errorf("prompt cells = %v, want %v", got, want)
+	}
+}
+
+// TestClassify_Resources_OneCellPerCapabilitySurface verifies the same of the
+// resources: one cell per static URI and per template the capability surface
+// served, whatever shape read it, plus the one a read outside them made, and
+// no cell for the tool-manifest pair, which is a kind of its own.
+func TestClassify_Resources_OneCellPerCapabilitySurface(t *testing.T) {
+	c := classify(fixtureRuntime(), fixtureCatalog())
+
+	want := map[cellKey]state{
+		onCapabilities(full, "gitlab://groups"):                                  stateAsserted,
+		onCapabilities(full, "gitlab://project/{project_id}"):                    stateAbsent,
+		onCapabilities(full, "gitlab://project/{project_id}/issue/{issue_iid}"):  stateAsserted,
+		onCapabilities(full, "gitlab://project/{project_id}/file/{ref}/{+path}"): stateAsserted,
+		onCapabilities(full, "gitlab://nowhere"):                                 stateErrorPathOnly,
+	}
+	if got := capabilityStates(c, capabilityResources); !reflect.DeepEqual(got, want) {
+		t.Errorf("resource cells = %v, want %v", got, want)
+	}
+}
+
+// TestClassify_ToolManifest_OneCellPerShapeAndCapabilitySurface verifies the
+// one resource pair whose content the shape does change: gitlab://tools and
+// gitlab://tools/{id} are filed as tool_manifest, one cell per surface x mode
+// x capability surface, so a read on the minimal dynamic surface is not
+// credited to the full one on the same shape, a read of the index is not
+// credited to the detail, and a read in the default mode is not credited to
+// the read-only one.
+func TestClassify_ToolManifest_OneCellPerShapeAndCapabilitySurface(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	rt.sessions = append(rt.sessions, minimalSession(dynamicDefault))
+	index := fixtureCall(callSpec{test: "TestManifestIndex", method: methodReadResource, target: manifestIndex, shape: dynamicDefault})
+	detail := fixtureCall(callSpec{test: "TestManifestDetail", method: methodReadResource, target: "gitlab://tools/issue.list", shape: dynamicDefault})
+	detail.Capabilities = minimal
+	rt.calls = append(rt.calls, index, detail)
+	c := classify(rt, fixtureCatalog())
+
+	cells := capabilityStates(c, capabilityToolManifest)
+	if len(cells) != 12 {
+		t.Errorf("tool manifest cells = %d, want both items on each of the five full shapes and the one minimal shape (12): %v", len(cells), cells)
+	}
+	cases := []struct {
+		name string
+		key  cellKey
+		want state
+	}{
+		{name: "the index read on full", key: onShapeAndCapabilities(dynamicDefault, full, manifestIndex), want: stateAsserted},
+		{name: "the detail read on minimal", key: onShapeAndCapabilities(dynamicDefault, minimal, manifestDetail), want: stateAsserted},
+		{name: "the detail on full, kept apart from minimal", key: onShapeAndCapabilities(dynamicDefault, full, manifestDetail), want: stateAbsent},
+		{name: "the index on minimal, kept apart from full", key: onShapeAndCapabilities(dynamicDefault, minimal, manifestIndex), want: stateAbsent},
+		{name: "the index in another mode", key: onShapeAndCapabilities(metaReadOnly, full, manifestIndex), want: stateAbsent},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, held := cells[tc.key]; !held || got != tc.want {
+				t.Errorf("%+v = %s (held %t), want %s", tc.key, got, held, tc.want)
+			}
+		})
+	}
+	for key := range c.capabilities[capabilityResources] {
+		if key.action == manifestIndex || key.action == manifestDetail {
+			t.Errorf("resource cell %+v: the tool-manifest pair is a kind of its own", key)
 		}
+	}
+}
+
+// TestClassify_Subscriptions_OneCellPerKindOnTheFullSurface verifies that a
+// subscribable kind is one cell on the full capability surface, whatever the
+// number of shapes: a sixth full shape and a minimal one leave the count at
+// one per kind. The delivery a notification proved is filed under the same
+// key, so the report can find it without a shape.
+func TestClassify_Subscriptions_OneCellPerKindOnTheFullSurface(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.sessions = append(rt.sessions,
+		fixtureSession(shapeKey{surface: config.ToolSurfaceMeta, mode: modeSafe}, true),
+		minimalSession(shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}),
+	)
+	c := classify(rt, fixtureCatalog())
+
+	kinds := subscribableKinds(nil)
+	cells := capabilityStates(c, capabilitySubscriptions)
+	if len(cells) != len(kinds) {
+		t.Errorf("subscription cells = %d, want one per kind (%d) whatever the %d shapes", len(cells), len(kinds), len(c.shapes))
+	}
+	for _, kind := range kinds {
+		t.Run(kind, func(t *testing.T) {
+			want := stateAbsent
+			if kind == "issue" || kind == "pipeline" {
+				want = stateAsserted
+			}
+			if got := cells[onCapabilities(full, kind)]; got != want {
+				t.Errorf("%s on full = %q, want %s", kind, got, want)
+			}
+		})
+	}
+	if want := map[cellKey]bool{onCapabilities(full, "issue"): true}; !reflect.DeepEqual(c.delivered, want) {
+		t.Errorf("delivered = %v, want %v", c.delivered, want)
+	}
+}
+
+// TestClassify_Completions_OneCellPerReference verifies that a completion
+// reference two shapes offered is one cell, and that the reference of the
+// tool manifest's own template is a completion like any other: the completion
+// handler answers it the same way on every tool surface.
+func TestClassify_Completions_OneCellPerReference(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.sessions, rt.calls = nil, nil
+	for _, shape := range []shapeKey{dynamicDefault, metaDefault} {
+		session := fixtureSession(shape, true)
+		session.Completions = []string{"summarize_issue project_id", manifestDetail + " id"}
+		rt.sessions = append(rt.sessions, session)
+	}
+	rt.calls = append(rt.calls, fixtureCall(callSpec{
+		test: "TestCompletions", method: methodComplete, target: "summarize_issue project_id", shape: metaDefault,
+	}))
+	c := classify(rt, fixtureCatalog())
+
+	want := map[cellKey]state{
+		onCapabilities(full, "summarize_issue project_id"): stateAsserted,
+		onCapabilities(full, manifestDetail+" id"):         stateAbsent,
+	}
+	if got := capabilityStates(c, capabilityCompletions); !reflect.DeepEqual(got, want) {
+		t.Errorf("completion cells = %v, want %v", got, want)
+	}
+}
+
+// TestClassify_CallWithoutCapabilities_CountsAsTheDefaultSurface verifies how
+// a line written before the harness recorded the capability surface is read:
+// as the full surface the server falls back to, for the session and for the
+// call alike, rather than as a third surface keyed by the empty string that
+// nothing else would ever fill.
+func TestClassify_CallWithoutCapabilities_CountsAsTheDefaultSurface(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	for _, session := range rt.sessions {
+		session.Capabilities = ""
+	}
+	call := fixtureCall(callSpec{test: "TestPrompts", method: methodGetPrompt, target: "summarize_issue", shape: metaDefault})
+	call.Capabilities = ""
+	rt.calls = append(rt.calls, call)
+	c := classify(rt, fixtureCatalog())
+
+	if got := sortedKeys(c.capabilitySurfaces); !slices.Equal(got, []string{full}) {
+		t.Errorf("capability surfaces = %q, want the lines read as full", got)
+	}
+	want := map[cellKey]state{onCapabilities(full, "summarize_issue"): stateAsserted}
+	if got := capabilityStates(c, capabilityPrompts); !reflect.DeepEqual(got, want) {
+		t.Errorf("prompt cells = %v, want %v", got, want)
+	}
+	if got := len(c.capabilities[capabilitySubscriptions]); got != len(subscribableKinds(nil)) {
+		t.Errorf("subscription cells = %d, want the kinds of the full surface the lines are read as", got)
+	}
+}
+
+// TestCapabilityGrains_EveryKind_CountedAtTheGrainItVariesAlong pins the
+// model: every capability kind the fold writes is in the table, at the grain
+// the server makes it vary along, and each grain keys its cells with exactly
+// the coordinates it names. A kind missing from the table would be keyed at
+// the zero grain without a word, and the page would not list it, so the kinds
+// a classification of the fixture actually wrote are held against the table
+// in both directions rather than against the list below, which a new kind
+// would be missing from as well.
+func TestCapabilityGrains_EveryKind_CountedAtTheGrainItVariesAlong(t *testing.T) {
+	shape := shapeKey{surface: config.ToolSurfaceMeta, mode: modeReadOnly}
+	cases := []struct {
+		kind  string
+		grain string
+		key   cellKey
+	}{
+		{kind: capabilityResources, grain: "capability surface", key: onCapabilities(minimal, "x")},
+		{kind: capabilityPrompts, grain: "capability surface", key: onCapabilities(minimal, "x")},
+		{kind: capabilityCompletions, grain: "capability surface", key: onCapabilities(minimal, "x")},
+		{kind: capabilitySubscriptions, grain: "capability surface", key: onCapabilities(minimal, "x")},
+		{kind: capabilityToolManifest, grain: "surface x mode x capability surface", key: onShapeAndCapabilities(shape, minimal, "x")},
+		{kind: capabilityElicitation, grain: "surface x mode", key: onShape(shape, "x")},
+		{kind: capabilityModes, grain: "surface x mode", key: onShape(shape, "x")},
+	}
+	if len(capabilityGrains) != len(cases) {
+		t.Errorf("capabilityGrains holds %d kinds, want the %d the fold writes: %q", len(capabilityGrains), len(cases), sortedKeys(capabilityGrains))
+	}
+	written := classify(fixtureRuntime(), fixtureCatalog()).capabilities
+	for _, kind := range sortedKeys(written) {
+		if _, held := capabilityGrains[kind]; !held {
+			t.Errorf("the fold wrote the kind %q, which capabilityGrains does not hold: it is keyed at the zero grain and left off the page", kind)
+		}
+	}
+	for _, kind := range sortedKeys(capabilityGrains) {
+		if _, wrote := written[kind]; !wrote {
+			t.Errorf("capabilityGrains holds the kind %q, which a classification of the fixture never wrote", kind)
+		}
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			grain, held := capabilityGrains[tc.kind]
+			if !held || grain.String() != tc.grain {
+				t.Errorf("grain = %q (held %t), want %q", grain, held, tc.grain)
+			}
+			if got := capabilityKey(tc.kind, shape, minimal, "x"); got != tc.key {
+				t.Errorf("capabilityKey() = %+v, want %+v", got, tc.key)
+			}
+		})
 	}
 }
 
@@ -484,7 +780,7 @@ func TestClassify_Modes_AbsentWithoutEvidence(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := capabilityState(c, capabilityModes, tc.shape, tc.facet); got != tc.want {
+			if got := capabilityState(c, capabilityModes, onShape(tc.shape, tc.facet)); got != tc.want {
 				t.Errorf("%s = %s, want %s", tc.name, got, tc.want)
 			}
 		})
@@ -657,16 +953,24 @@ func TestClassify_ElicitationCells_OwnTheirCredit(t *testing.T) {
 
 // TestClassify_Edges_RecordOddities verifies the shapes a shard can hold
 // that the fixture above does not: a call on a shape no session line named,
-// a non-tool call with no target, a subscription to a URI the server would
-// not accept, a tool call naming no tool, a skipped subtest whose skip line
-// names its parent, and a call whose method the classification has no cell
-// for, which is counted as a call and credited to nothing.
+// a read on a capability surface no session line named, a manifest detail
+// read on such a surface, which is still the manifest, a non-tool call with
+// no target, a subscription to a URI the server would not accept, a tool call
+// naming no tool, a skipped subtest whose skip line names its parent, and a
+// call whose method the classification has no cell for, which is counted as a
+// call and credited to nothing.
 func TestClassify_Edges_RecordOddities(t *testing.T) {
 	rt := fixtureRuntime()
 	unlisted := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeSafe}
+	onUnlistedSurface := fixtureCall(callSpec{test: "TestUnlistedSurface", method: methodReadResource, target: "gitlab://project/2", shape: dynamicDefault})
+	onUnlistedSurface.Capabilities = minimal
+	detailOnUnlistedSurface := fixtureCall(callSpec{test: "TestUnlistedSurfaceManifest", method: methodReadResource, target: "gitlab://tools/issue.list", shape: dynamicDefault})
+	detailOnUnlistedSurface.Capabilities = minimal
 	rt.calls = append(rt.calls,
 		fixtureCall(callSpec{test: "TestUnlisted", action: "issue.list", dispatched: "issue.list", shape: unlisted}),
 		fixtureCall(callSpec{test: "TestUnlisted", method: methodReadResource, target: "gitlab://project/1", shape: unlisted}),
+		onUnlistedSurface,
+		detailOnUnlistedSurface,
 		fixtureCall(callSpec{test: "TestNoTarget", method: methodGetPrompt, shape: metaDefault}),
 		fixtureCall(callSpec{test: "TestNotSubscribable", method: methodSubscribe, target: "gitlab://project/1/branches", shape: dynamicDefault}),
 		fixtureCall(callSpec{test: "TestSkipped/sub", action: "project.list", dispatched: "project.list", status: e2ecalls.StatusSkipped, shape: dynamicDefault}),
@@ -691,7 +995,7 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 	if c.elicited["TestFailedElicit"] {
 		t.Error("a prompt answered inside a failing test was recorded as an elicitation")
 	}
-	if c.delivered[cellKey{shape: dynamicDefault, action: "pipeline"}] {
+	if c.delivered[onCapabilities(full, "pipeline")] {
 		t.Error("a notification delivered to a failing test was recorded as delivery")
 	}
 	if got := stateOf(c, dynamicDefault, "server.health_check"); got != stateAsserted {
@@ -704,13 +1008,25 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 	if got := stateOf(c, unlisted, "issue.list"); got != stateAsserted {
 		t.Errorf("a call on a shape without a session line = %s, want asserted", got)
 	}
-	if got := capabilityState(c, capabilityResources, unlisted, "gitlab://project/1"); got != stateAsserted {
-		t.Errorf("a read on a shape without a session line = %s, want asserted under its own URI", got)
+	if got := capabilityState(c, capabilityResources, onCapabilities(full, "gitlab://project/{project_id}")); got != stateAsserted {
+		t.Errorf("a read on a shape without a session line = %s, want asserted under the template its capability surface served", got)
 	}
-	if _, exists := c.capabilities[capabilityPrompts][cellKey{shape: metaDefault, action: ""}]; exists {
-		t.Error("a prompt call with no target created a cell")
+	if got := capabilityState(c, capabilityResources, onCapabilities(minimal, "gitlab://project/2")); got != stateAsserted {
+		t.Errorf("a read on a capability surface without a session line = %s, want asserted under its own URI", got)
 	}
-	if got := capabilityState(c, capabilitySubscriptions, dynamicDefault, "gitlab://project/1/branches"); got != stateAsserted {
+	if got := capabilityState(c, capabilityToolManifest, onShapeAndCapabilities(dynamicDefault, minimal, "gitlab://tools/{id}")); got != stateAsserted {
+		t.Errorf("a manifest detail read on a capability surface without a session line = %s, want asserted under the detail template on its shape", got)
+	}
+	wantManifest := []string{capabilityToolManifest + " " + config.ToolSurfaceDynamic + "/" + modeDefault + "/" + minimal + " gitlab://tools/{id}"}
+	if credited := testsCredited(c, "TestUnlistedSurfaceManifest"); !slices.Equal(credited, wantManifest) {
+		t.Errorf("a manifest detail read on a capability surface without a session line was credited to %q, want %q and no resources cell", credited, wantManifest)
+	}
+	for key := range c.capabilities[capabilityPrompts] {
+		if key.action == "" {
+			t.Errorf("a prompt call with no target created the cell %+v", key)
+		}
+	}
+	if got := capabilityState(c, capabilitySubscriptions, onCapabilities(full, "gitlab://project/1/branches")); got != stateAsserted {
 		t.Errorf("a subscription the server would refuse = %s under its URI, want asserted as recorded", got)
 	}
 	skipped := mustCell(t, c, dynamicDefault, "project.list")
@@ -738,7 +1054,7 @@ func testsCredited(c *classification, test string) []string {
 	note := func(kind string, key cellKey, found *cell) {
 		for _, tests := range found.tests {
 			if tests[test] {
-				credited = append(credited, kind+" "+key.shape.surface+"/"+key.shape.mode+" "+key.action)
+				credited = append(credited, kind+" "+key.shape.surface+"/"+key.shape.mode+"/"+key.capabilities+" "+key.action)
 			}
 		}
 	}
@@ -916,6 +1232,67 @@ func TestSubscribableKinds_NoListing_EveryServerKindNamed(t *testing.T) {
 	}
 }
 
+// TestMatchTemplate_TiesAndBareVariables_Resolved verifies the two edges of
+// the specificity count. Two templates a URI matches with as many literal
+// segments each settle on the one listed first, which is the one the sorted
+// session listing puts first, so the cell a read lands on does not move from
+// one run to the next. And a template with no literal segment at all still
+// matches: zero literals is a match that consumed nothing, not the absence of
+// one.
+func TestMatchTemplate_TiesAndBareVariables_Resolved(t *testing.T) {
+	cases := []struct {
+		name      string
+		templates []string
+		uri       string
+		want      string
+	}{
+		{name: "a tie goes to the first listed", templates: []string{"gitlab://x/{a}/y", "gitlab://x/{b}/y"}, uri: "gitlab://x/1/y", want: "gitlab://x/{a}/y"},
+		{name: "a template of one variable", templates: []string{"{whole}"}, uri: "anything", want: "{whole}"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, matched := matchTemplate(tc.templates, tc.uri)
+			if !matched || got != tc.want {
+				t.Errorf("matchTemplate(%q) = (%q, %t), want (%q, true)", tc.uri, got, matched, tc.want)
+			}
+		})
+	}
+}
+
+// TestClassify_UnservableReason_DynamicKeepsItsOwnReason verifies that the
+// dynamic surface's own reason stands when it has one: a mutation in read-only
+// mode is withheld by the mode, which the dynamic surface knows without
+// borrowing anything from the meta listing, and the meta sessions of the mode
+// serving the domain tool must not turn it back into a servable cell.
+func TestClassify_UnservableReason_DynamicKeepsItsOwnReason(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	dynamicReadOnly := shapeKey{surface: config.ToolSurfaceDynamic, mode: modeReadOnly}
+	rt.sessions = append(rt.sessions, fixtureSession(dynamicReadOnly, true))
+	c := classify(rt, fixtureCatalog())
+
+	found := mustCell(t, c, dynamicReadOnly, "issue.delete")
+	if found.state != stateUnservable || found.reason != "withheld by read-only mode" {
+		t.Errorf("issue.delete on dynamic/read-only = %s (%q), want unservable, withheld by read-only mode", found.state, found.reason)
+	}
+}
+
+// TestTemplateKinds_UnclassifiableTemplate_LeftOut verifies the fallback
+// universe's one filter: a template whose sample URI the server's classifier
+// refuses names no kind, since a subscription cell under a name the server
+// does not have would be one nothing could ever fill, while the templates
+// beside it are named and sorted.
+func TestTemplateKinds_UnclassifiableTemplate_LeftOut(t *testing.T) {
+	got := templateKinds([]string{
+		"gitlab://project/{project_id}/pipeline/{pipeline_id}",
+		"gitlab://nowhere/{thing}",
+		"gitlab://project/{project_id}/issue/{issue_iid}",
+	})
+	if want := []string{"issue", "pipeline"}; !slices.Equal(got, want) {
+		t.Errorf("templateKinds() = %q, want %q", got, want)
+	}
+}
+
 // TestSampleURI_Variables_Expanded verifies the expansion the kind lookup
 // rests on: numeric for identifiers, a word elsewhere.
 func TestSampleURI_Variables_Expanded(t *testing.T) {
@@ -928,6 +1305,9 @@ func TestSampleURI_Variables_Expanded(t *testing.T) {
 		{template: "gitlab://project/{project_id}/file/{ref}/{+path}", want: "gitlab://project/1/file/sample/sample"},
 		{template: "gitlab://groups", want: "gitlab://groups"},
 		{template: "gitlab://broken/{", want: "gitlab://broken/{"},
+		// A placeholder at the very start is still a placeholder: the first
+		// character is not text to copy over.
+		{template: "{project_id}/tail", want: "1/tail"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.template, func(t *testing.T) {

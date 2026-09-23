@@ -95,7 +95,10 @@ func markImplied(obj types.Object, used map[string]bool) bool {
 		if used[name] {
 			markSignatureTypes(o.Signature(), obj.Pkg(), mark)
 		}
-	case *types.Const, *types.Var:
+	default:
+		// A constant or a variable: those are the other two kinds a package
+		// scope declares, and each implies the named types its own type is
+		// built from.
 		if used[name] {
 			markNamedTypes(obj.Type(), obj.Pkg(), mark, 0)
 		}
@@ -219,6 +222,15 @@ func fieldOwners(pkg *types.Package) map[*types.Var]string {
 }
 
 // markUses records every harness symbol a package uses.
+//
+// The type checker's Uses is the whole of it. A selector's field or method is
+// in Uses as the object it resolves to, whose owner is the type that declares
+// it, and that is the key [exportedSymbols] lists it under. A second pass over
+// Selections used to key the same member by the type it was selected through,
+// which differs only for a member promoted through an embedded type, and the
+// promoted spelling is not a key exportedSymbols lists: the pass marked
+// nothing the first had not, and removing it changed no finding on the fixture
+// or on the suite.
 func markUses(pkg *packages.Package, harnessPath string, owners map[*types.Var]string, used map[string]bool) {
 	for _, obj := range pkg.TypesInfo.Uses {
 		if obj.Pkg() == nil || obj.Pkg().Path() != harnessPath {
@@ -227,15 +239,6 @@ func markUses(pkg *packages.Package, harnessPath string, owners map[*types.Var]s
 		key, keyed := symbolKey(obj, owners)
 		if keyed {
 			used[key] = true
-		}
-	}
-	for _, selection := range pkg.TypesInfo.Selections {
-		obj := selection.Obj()
-		if obj.Pkg() == nil || obj.Pkg().Path() != harnessPath {
-			continue
-		}
-		if named := receiverNamed(selection.Recv()); named != nil {
-			used[named.Obj().Name()+"."+obj.Name()] = true
 		}
 	}
 }

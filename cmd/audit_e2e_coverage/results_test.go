@@ -229,6 +229,9 @@ func TestAncestorTests_Names_WalkedUp(t *testing.T) {
 		{name: "TestA", want: []string{"TestA"}},
 		{name: "TestA/b", want: []string{"TestA/b", "TestA"}},
 		{name: "TestA/b/c", want: []string{"TestA/b/c", "TestA/b", "TestA"}},
+		// A name that opens with a slash has nothing above it, and the empty
+		// string in front of the slash is no test to mark.
+		{name: "/orphan", want: []string{"/orphan"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

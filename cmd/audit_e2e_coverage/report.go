@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -23,6 +25,11 @@ type report struct {
 	Runs []runRow `json:"runs"`
 	// Sessions is one row per surface and mode that served something.
 	Sessions []sessionRow `json:"sessions"`
+	// CapabilitySurfaces is one row per capability surface that served
+	// something: the denominator of every capability kind counted at the
+	// capability grain, which the session rows cannot give, since they fold
+	// the sessions of both capability surfaces into one row per shape.
+	CapabilitySurfaces []capabilitySurfaceRow `json:"capability_surfaces"`
 	// Summary is the counts a reader looks at first.
 	Summary summary `json:"summary"`
 	// Levels lists the actions at each level, in the default mode.
@@ -89,6 +96,26 @@ type sessionRow struct {
 	DispatchObserved  bool   `json:"dispatch_observed"`
 }
 
+// capabilitySurfaceRow is one capability surface, with what its sessions
+// served of each kind counted at the capability grain.
+//
+// Resources counts the static resources and the templates together, the
+// tool-manifest pair left out, because that is what the resources cells are:
+// the pair is a kind of its own, counted per shape and capability surface.
+// SubscribableKinds is zero
+// off the full surface, which accepts no subscription. Each figure is the
+// number of cells its kind gets on the surface, so a histogram row that is
+// larger than the rows beside it holds cells a call made outside them.
+type capabilitySurfaceRow struct {
+	Capabilities      string `json:"capabilities"`
+	Sessions          int    `json:"sessions"`
+	Shapes            int    `json:"shapes"`
+	Resources         int    `json:"resources"`
+	Prompts           int    `json:"prompts"`
+	Completions       int    `json:"completions"`
+	SubscribableKinds int    `json:"subscribable_kinds"`
+}
+
 // summary is the headline of a runtime.
 type summary struct {
 	// CatalogActions is the size of the catalog the runtime serves.
@@ -128,14 +155,20 @@ type actionRow struct {
 }
 
 // cellRow is one cell as published.
+//
+// A cell carries the coordinates its kind is counted at and no others, so a
+// prompt's row names its capability surface and no surface or mode, and a
+// reader cannot take a row counted once per capability surface for one
+// counted on a single shape.
 type cellRow struct {
-	Surface string   `json:"surface"`
-	Mode    string   `json:"mode"`
-	Target  string   `json:"target"`
-	State   state    `json:"state"`
-	Reason  string   `json:"reason,omitempty"`
-	Tests   []string `json:"tests,omitempty"`
-	Calls   int      `json:"calls,omitempty"`
+	Surface      string   `json:"surface,omitempty"`
+	Mode         string   `json:"mode,omitempty"`
+	Capabilities string   `json:"capabilities,omitempty"`
+	Target       string   `json:"target"`
+	State        state    `json:"state"`
+	Reason       string   `json:"reason,omitempty"`
+	Tests        []string `json:"tests,omitempty"`
+	Calls        int      `json:"calls,omitempty"`
 	// Delivered is set on a subscription row when a resource-updated
 	// notification for the kind reached a passing test.
 	Delivered bool `json:"delivered,omitempty"`
@@ -157,6 +190,7 @@ func buildReport(c *classification) *report {
 		Directory:          c.rt.dir,
 		Runs:               runRows(c.rt),
 		Sessions:           sessionRows(c),
+		CapabilitySurfaces: capabilitySurfaceRows(c),
 		Capabilities:       map[string][]cellRow{},
 		DispatchMismatches: c.mismatches,
 		UnresolvedTools:    c.unresolved,
@@ -170,10 +204,10 @@ func buildReport(c *classification) *report {
 	}
 	for i, row := range rep.Capabilities[capabilitySubscriptions] {
 		// A subscription is accepted at subscribe time and proven at
-		// delivery; the row says which it reached.
-		rep.Capabilities[capabilitySubscriptions][i].Delivered = c.delivered[cellKey{
-			shape: shapeKey{surface: row.Surface, mode: row.Mode}, action: row.Target,
-		}]
+		// delivery; the row says which it reached. The key is rebuilt at the
+		// kind's grain, the one the notification was filed under.
+		rep.Capabilities[capabilitySubscriptions][i].Delivered = c.delivered[capabilityKey(capabilitySubscriptions,
+			shapeKey{surface: row.Surface, mode: row.Mode}, row.Capabilities, row.Target)]
 	}
 	rep.Summary = summarize(c, rep)
 	return rep
@@ -189,8 +223,24 @@ func runRows(rt *runtimeRecords) []runRow {
 			TierConfirmed: run.TierConfirmed, Fixtures: run.Fixtures,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Package < rows[j].Package })
+	slices.SortFunc(rows, func(a, b runRow) int { return cmp.Compare(a.Package, b.Package) })
 	return rows
+}
+
+// compareShapes orders two surface x mode pairs the way every table here
+// reads them: the surfaces in level order, the default one first, a surface
+// that is none of the three after them and by name among themselves, and then
+// the modes by name.
+//
+// It is a three-way comparison of the keys in turn rather than a chain of
+// less-than tests under inequality guards, so the order is stated once and
+// each key is compared in one direction only.
+func compareShapes(aSurface, aMode, bSurface, bMode string) int {
+	return cmp.Or(
+		cmp.Compare(surfaceOrder(aSurface), surfaceOrder(bSurface)),
+		cmp.Compare(aSurface, bSurface),
+		cmp.Compare(aMode, bMode),
+	)
 }
 
 // sessionRows publishes the shapes.
@@ -203,12 +253,23 @@ func sessionRows(c *classification) []sessionRow {
 			Prompts: len(shape.prompts), DispatchObserved: shape.observed,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Surface != rows[j].Surface {
-			return surfaceOrder(rows[i].Surface) < surfaceOrder(rows[j].Surface)
-		}
-		return rows[i].Mode < rows[j].Mode
-	})
+	slices.SortFunc(rows, func(a, b sessionRow) int { return compareShapes(a.Surface, a.Mode, b.Surface, b.Mode) })
+	return rows
+}
+
+// capabilitySurfaceRows publishes the capability surfaces in name order, which
+// puts full before minimal.
+func capabilitySurfaceRows(c *classification) []capabilitySurfaceRow {
+	rows := make([]capabilitySurfaceRow, 0, len(c.capabilitySurfaces))
+	for _, key := range sortedKeys(c.capabilitySurfaces) {
+		surface := c.capabilitySurfaces[key]
+		served := surface.served()
+		rows = append(rows, capabilitySurfaceRow{
+			Capabilities: surface.key, Sessions: surface.sessions, Shapes: len(surface.shapes),
+			Resources: len(served[capabilityResources]), Prompts: len(served[capabilityPrompts]),
+			Completions: len(served[capabilityCompletions]), SubscribableKinds: len(served[capabilitySubscriptions]),
+		})
+	}
 	return rows
 }
 
@@ -277,18 +338,16 @@ func cellRows(cells map[cellKey]*cell) []cellRow {
 			calls += n
 		}
 		rows = append(rows, cellRow{
-			Surface: found.key.shape.surface, Mode: found.key.shape.mode, Target: found.key.action,
-			State: found.state, Reason: found.reason, Tests: found.bestTests(), Calls: calls,
+			Surface: found.key.shape.surface, Mode: found.key.shape.mode, Capabilities: found.key.capabilities,
+			Target: found.key.action, State: found.state, Reason: found.reason, Tests: found.bestTests(), Calls: calls,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Surface != rows[j].Surface {
-			return surfaceOrder(rows[i].Surface) < surfaceOrder(rows[j].Surface)
-		}
-		if rows[i].Mode != rows[j].Mode {
-			return rows[i].Mode < rows[j].Mode
-		}
-		return rows[i].Target < rows[j].Target
+	slices.SortFunc(rows, func(a, b cellRow) int {
+		return cmp.Or(
+			compareShapes(a.Surface, a.Mode, b.Surface, b.Mode),
+			cmp.Compare(a.Capabilities, b.Capabilities),
+			cmp.Compare(a.Target, b.Target),
+		)
 	})
 	return rows
 }
@@ -306,12 +365,7 @@ func uncalledRows(c *classification) []uncalledRow {
 		sort.Strings(uncalled)
 		rows = append(rows, uncalledRow{Surface: shape.key.surface, Mode: shape.key.mode, Tools: uncalled})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Surface != rows[j].Surface {
-			return surfaceOrder(rows[i].Surface) < surfaceOrder(rows[j].Surface)
-		}
-		return rows[i].Mode < rows[j].Mode
-	})
+	slices.SortFunc(rows, func(a, b uncalledRow) int { return compareShapes(a.Surface, a.Mode, b.Surface, b.Mode) })
 	return rows
 }
 

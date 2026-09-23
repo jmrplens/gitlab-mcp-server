@@ -227,6 +227,36 @@ func TestReplacesLines_MissingNewSuite_IsEmpty(t *testing.T) {
 	}
 }
 
+// TestReplacesLines_DocWithoutAReplacesLine_NotListed verifies what the map
+// holds: the new tests that name old ones, each with what it names, and no
+// entry at all for a documented test whose comment names nothing, which is
+// every new test that replaces no old one.
+func TestReplacesLines_DocWithoutAReplacesLine_NotListed(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "scenario_test.go"), strings.Join([]string{
+		"package scenario",
+		"",
+		`import "testing"`,
+		"",
+		"// TestNew_Port carries its predecessor.",
+		"//",
+		"// Replaces: TestOld_Port",
+		"func TestNew_Port(t *testing.T) {}",
+		"",
+		"// TestNew_Fresh replaces nothing, and says why in prose.",
+		"func TestNew_Fresh(t *testing.T) {}",
+		"",
+	}, "\n"))
+
+	replaces, err := replacesLines(dir)
+	if err != nil {
+		t.Fatalf("replacesLines() error = %v", err)
+	}
+	if want := map[string][]string{"TestNew_Port": {"TestOld_Port"}}; !reflect.DeepEqual(replaces, want) {
+		t.Errorf("replacesLines() = %v, want %v", replaces, want)
+	}
+}
+
 // TestBuildPortMap_Fixtures_ReadsBothTrees verifies the directory-level
 // entry point over the same fixtures, with and without a retired list, and
 // that an old suite with no Test function is refused.

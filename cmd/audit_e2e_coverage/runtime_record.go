@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
@@ -39,6 +40,14 @@ const recordErrPrefix = "audit_e2e_coverage: record:"
 // version of this command may spell a field differently, and a check that
 // read what it recognized and ignored the rest would report a coverage figure
 // it had only half understood.
+//
+// Adding an optional field is not a new version, and the capability grain is
+// the case that settled it. Its rows ([recordEntry.CapabilitySurfaces]) are
+// omitted when empty, so a document either version wrote is read by both, and
+// the grain an entry was measured at is said by the entry rather than by the
+// document: [writeRecord] refreshes one runtime at a time and stamps this
+// version on every write, so a document-level version would put the new number
+// over a licensed entry still measured at the old grain.
 const recordSchemaVersion = 1
 
 // recordRuntimes are the two runtimes the record is written under, in the
@@ -112,6 +121,16 @@ type recordEntry struct {
 	Runs []runRow `json:"runs"`
 	// Sessions is what each surface and mode served.
 	Sessions []sessionRow `json:"sessions"`
+	// CapabilitySurfaces is what each capability surface served: the
+	// denominator of the resources, prompts, completions and subscriptions
+	// histograms, which are counted per capability surface; tool_manifest is
+	// counted per shape and capability surface, elicitation and modes per
+	// shape, and none of the three has a figure here.
+	// An entry without them was recorded before the capability grain, when
+	// every capability kind was counted once per surface x mode; the check
+	// says so and the page states the older grain, and nothing else reads
+	// the difference.
+	CapabilitySurfaces []capabilitySurfaceRow `json:"capability_surfaces,omitempty"`
 	// Summary is the headline counts.
 	Summary summary `json:"summary"`
 	// Levels lists the actions at each level, which is what makes the record
@@ -164,14 +183,15 @@ func buildRecordEntry(rep *report) (*recordEntry, error) {
 		return nil, fmt.Errorf("%s: %w", rep.Runtime, err)
 	}
 	return &recordEntry{
-		RetrievedAt: retrievedAt,
-		Runtime:     rep.Runtime,
-		Edition:     rep.Edition,
-		Tier:        rep.Tier,
-		Runs:        rep.Runs,
-		Sessions:    rep.Sessions,
-		Summary:     rep.Summary,
-		Levels:      rep.Levels,
+		RetrievedAt:        retrievedAt,
+		Runtime:            rep.Runtime,
+		Edition:            rep.Edition,
+		Tier:               rep.Tier,
+		Runs:               rep.Runs,
+		Sessions:           rep.Sessions,
+		CapabilitySurfaces: rep.CapabilitySurfaces,
+		Summary:            rep.Summary,
+		Levels:             rep.Levels,
 	}, nil
 }
 
@@ -291,11 +311,7 @@ func writeRecord(recordPath, pagePath string, reps []*report) error {
 		settled[key] = rep
 		doc.Runtimes[key] = entry
 	}
-	encoded, err := marshalRecord(doc)
-	if err != nil {
-		return err
-	}
-	if writeErr := docgen.WriteOrCheck(recordPath, encoded, false, recordRegenerate); writeErr != nil {
+	if writeErr := docgen.WriteOrCheck(recordPath, marshalRecord(doc), false, recordRegenerate); writeErr != nil {
 		return writeErr
 	}
 	return writeRecordPage(pagePath, doc, false)
@@ -323,12 +339,14 @@ func recordSource(rep *report) string {
 // every map encoding/json writes sorts its keys, and every list the record
 // carries was sorted by the report, so two writes of one classification
 // produce the same bytes.
-func marshalRecord(doc *coverageRecord) ([]byte, error) {
-	encoded, err := json.MarshalIndent(doc, "", " ")
-	if err != nil {
-		return nil, fmt.Errorf("encode the coverage record: %w", err)
-	}
-	return encoded, nil
+//
+// The encoding cannot fail for this type, so it goes through [cmdutil.Must]
+// rather than handing its caller an error branch no input reaches: every field
+// of the document is a string, an int, a bool, or a slice or map of those, and
+// none declares a MarshalJSON, so there is no channel, function, cycle or
+// non-finite float for encoding/json to refuse.
+func marshalRecord(doc *coverageRecord) []byte {
+	return cmdutil.Must(json.MarshalIndent(doc, "", " "))
 }
 
 // recordRegenerate names the target that refreshes the record, and
