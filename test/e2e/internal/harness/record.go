@@ -778,6 +778,11 @@ func (c *sessionConn) currentInFlight() (callAttribution, bool) {
 // and per session: a second test would share the first one's, and could
 // neither learn whether the server agreed nor close it without closing the
 // first. [subscriberIndex.claim] is where the second one is turned away.
+//
+// A release makes the URI claimable again, and that is all it promises: it
+// says nothing about whether the server has torn the released listen down, so
+// a claim right after one may subscribe into the SDK's lost-delivery state
+// that [Session.TrySubscribe] describes.
 type subscriberIndex struct {
 	mu       sync.Mutex
 	watchers map[string]*envRecorder

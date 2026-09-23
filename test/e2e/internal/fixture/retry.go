@@ -174,9 +174,9 @@ func retryWhen[O any](e *harness.Env, label string, attempts int, retryable func
 }
 
 // retryWhenIn is [retryWhen] for a caller that holds a context and a test to
-// report its retries to rather than an Env: the World's extras, which are
-// made on behalf of whichever test asked for the World first and so must
-// neither use that test's context nor fail it.
+// report its retries to rather than an Env: the World's extras, which run
+// under a budget of their own derived from the first asking test's context
+// and must never fail that test.
 func retryWhenIn[O any](ctx context.Context, tb testing.TB, label string, attempts int, retryable func(error) bool, op func() (O, error)) (O, error) {
 	tb.Helper()
 	return harness.Retry(ctx, tb, label, attempts, retryBaseDelay, func(int) (O, bool, string, error) {

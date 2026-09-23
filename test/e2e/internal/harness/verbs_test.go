@@ -586,6 +586,14 @@ func TestSession_TrySubscribe_OlderProtocol_TakesTheRequestsAnswer(t *testing.T)
 // second from the first one's listen without asking the server, so the verb
 // refuses it itself, sends nothing and records nothing, and lets the URI be
 // claimed again once the first is closed.
+//
+// The stub's handlers only count, so what this proves is the harness's own
+// claim and release, and that a released URI is asked of the server again. It
+// cannot prove that the second subscription delivers: against the real server
+// on protocol 2026-07-28 a re-subscribe that lands before the first listen's
+// teardown is acknowledged and never delivers, which is why
+// [Session.TrySubscribe] tells a test re-subscribing a URI to take a private
+// session per subscription.
 func TestSession_TrySubscribe_SecondOnOneSession_IsTurnedAwayBeforeAnythingIsSent(t *testing.T) {
 	shortAckWait(t, 5*time.Second)
 	env := newEnv(t, offlineInstance())

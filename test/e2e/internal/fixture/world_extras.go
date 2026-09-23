@@ -13,8 +13,12 @@
 // legitimately lack any of them (a project whose wiki is disabled answers
 // 403), so each is made under its own bounded context with the builders' retry
 // policy, and one it cannot make is recorded with its reason and left unbound.
-// A sweep then names that reason beside the template or action it could not
-// bind, and nothing else is affected.
+// A sweep then names that reason beside the template it could not bind, or
+// beside the action when the name is a plain binding ([plainExtraBindings]),
+// and nothing else is affected. An action naming a name only a template binds
+// (a wiki's slug, board_id, a feature flag's name, snippet_id) is not bound
+// from the World at all, whatever became of the extra, and its line says the
+// World has no binding for the name.
 //
 // None of them goes through a New* builder, because those register their
 // deletion on the calling test's ledger, and the first test to end would
@@ -663,10 +667,14 @@ func (w *World) BindTemplate(template, variable string) (value any, bound bool, 
 // one, and, when it has none, why. It is [World.Bind] with the reason, for a
 // sweep that logs what it could not bind.
 //
-// A name an extra would carry is reported with the reason that extra was not
-// made, so the read and preview sweeps name the real cause (a pipeline that
-// never settled) beside the action rather than a missing name, as the
-// resource and subscription sweeps do beside a template.
+// A name a plain extra binding would carry ([plainExtraBindings]) is reported
+// with the reason that extra was not made, so the read and preview sweeps name
+// the real cause (a pipeline that never settled) beside the action rather than
+// a missing name, as the resource and subscription sweeps do beside a
+// template. A name only a template binds ([templateBindings]: a wiki's slug,
+// board_id, a feature flag's name, snippet_id, the file template's path) reads
+// here as a name the World has no binding for, whatever became of the extra,
+// and only [World.BindTemplate] gives that extra's reason.
 func (w *World) BindParam(name string) (value any, bound bool, reason string) {
 	if plainValue, plainBound := w.Bind(name); plainBound {
 		return plainValue, true, ""

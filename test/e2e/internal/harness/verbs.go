@@ -153,7 +153,11 @@ func (s *Subscription) URI() string { return s.uri }
 // the server drops its watcher when that arrives, a moment after Close has
 // returned. A test that subscribes and closes in turn therefore holds its one
 // open subscription plus the few whose cancellation is still on its way,
-// which is well inside the server's cap of ten watchers per credential.
+// which is well inside the server's cap of ten watchers per credential. That
+// lag is also why a URI closed here must not be subscribed again on the same
+// session: a second listen that reaches the server before the first one's
+// teardown is acknowledged and then never delivers ([Session.TrySubscribe]
+// says why), so such a test takes a private session per subscription.
 func (s *Subscription) Close() { s.closeOnce.Do(s.release) }
 
 // Subscribe asks the server to notify this session when a resource changes,
@@ -195,6 +199,18 @@ func (s *Session) Subscribe(uri string) *Subscription {
 // it without asking the server: a second test would be told nothing, and
 // closing either would end both. A second one is refused here, before anything
 // is sent. A test that needs a URI to itself asks for a private session.
+//
+// A URI released by [Subscription.Close] can be claimed here again, but on
+// protocol 2026-07-28 it must not be subscribed again on the same session
+// until the server has torn down the earlier listen, and nothing reports when
+// it has, since the SDK discards the listen's answer. A subscribe that lands
+// first is acknowledged and recorded ok, while the SDK's per-session delivery
+// table on the server has already lost it, so no update ever reaches the
+// session. That is the SDK defect recorded in docs/development/upstream-bugs.md
+// as "A session's second listen on a URI overwrites the first's subscription,
+// and its close deletes both"; cmd/server's bridge keeps the watch itself
+// alive, so what is lost is the delivery. A test that subscribes, closes and
+// subscribes one URI again takes a private session for each subscription.
 func (s *Session) TrySubscribe(uri string) (*Subscription, error) {
 	s.env.T.Helper()
 	return s.subscribe(uri, ExpectationAny)
@@ -267,7 +283,10 @@ func (s *Session) subscribe(uri, expectation string) (*Subscription, error) {
 	// it did not on 2026-07-28: the SDK keeps the listen it opened for the URI
 	// whatever the server answered, and would answer a later Subscribe for the
 	// URI from it without asking, so releasing it is what lets the URI be asked
-	// again. A request an older protocol refused subscribed nothing.
+	// again. Asked again on the same session, though, it is not reliable until
+	// the server has torn the released listen down, which nothing reports; see
+	// [Session.TrySubscribe]. A request an older protocol refused subscribed
+	// nothing.
 	held := err == nil || listening
 	subscription := &Subscription{session: s, uri: uri, updates: updates}
 	subscription.release = func() {
