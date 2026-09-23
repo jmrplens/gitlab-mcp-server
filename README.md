@@ -449,21 +449,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,300 |     288,499 |
-| Unit tests (`_test.go`)  |       883 |     568,190 |
-| End-to-end tests         |       492 |      94,439 |
-| **Total**                | **2,675** | **951,128** |
+| Source (`.go`, non-test) |     1,300 |     288,563 |
+| Unit tests (`_test.go`)  |       883 |     568,389 |
+| End-to-end tests         |       493 |      95,382 |
+| **Total**                | **2,676** | **952,334** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,093 |
-| . Exported (public)             |  3,186 |
-| . Unexported (private)          |  6,907 |
-| Unit test functions (`TestXxx`) | 17,216 |
-| Subtests (`t.Run(...)`)         |  6,049 |
-| End-to-end test functions       |  1,201 |
+| Source functions                | 10,096 |
+| . Exported (public)             |  3,187 |
+| . Unexported (private)          |  6,909 |
+| Unit test functions (`TestXxx`) | 17,221 |
+| Subtests (`t.Run(...)`)         |  6,070 |
+| End-to-end test functions       |  1,218 |
 
 ### Ratios worth noting
 
@@ -471,16 +471,16 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.97× more tests than code |
 | Average source file length         |                 ~222 lines |
-| Average test file length           |                 ~643 lines |
-| Comment lines in source            |  65,908 (~22.8% of source) |
+| Average test file length           |                 ~644 lines |
+| Comment lines in source            |  65,965 (~22.9% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,207 |
-| `defer` statements                 | 1,115 |
+| `if err != nil` checks             | 9,209 |
+| `defer` statements                 | 1,120 |
 | `struct` types defined             | 3,304 |
 | `//nolint` suppressions            |   226 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
@@ -497,15 +497,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,826 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 11,326 lines |
+| Longest source file | `cmd/server/main.go`. 4,828 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 11,364 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,245 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 14,001 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,246 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,993 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination` (87 chars) |
 
