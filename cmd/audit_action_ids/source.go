@@ -202,6 +202,7 @@ func newCollector(dir string, loaded []*packages.Package) (*collector, error) {
 		recorded:    map[ast.Expr]struct{}{},
 		calls:       map[string]int{},
 		mismatches:  map[helperCopy]string{},
+		returned:    map[*ast.UnaryExpr]struct{}{},
 	}, nil
 }
 
@@ -347,6 +348,10 @@ type collector struct {
 	// empty.
 	calls      map[string]int
 	mismatches map[helperCopy]string
+	// returned is every unary expression a return statement of the suite
+	// hands back, so a predicate negated there is known not to be a claim
+	// when the walk reaches it. The suite walk's alone, like the two above.
+	returned map[*ast.UnaryExpr]struct{}
 }
 
 // walk visits every file of every indexed package with one walker per
@@ -778,9 +783,10 @@ func elementRecorder(kind string) recordFunc {
 // the helper's own argument under the helper's own name: a wrapper taking
 // substrings and handing them to a helper in a position that asserts is
 // followed out to its callers rather than reported as a needle nothing folds.
-// A wrapper returning
-// a predicate's answer reaches no follow at all, since the predicate's call in
-// it is not negated and is therefore not read (see doc.go).
+// A wrapper returning a predicate's answer reaches no follow at all, negated
+// or not: an unnegated call is not read, and a negation inside what a return
+// hands back is passed over ([walker.markReturnedNegations]), since in both
+// the wrapper's callers decide whether the needles are claims (see doc.go).
 //
 // It is written as ifs rather than a switch on purpose: a condition in a case
 // clause sits outside every block Go's coverage counts, so mutation testing
@@ -834,7 +840,7 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 		w.recordIDList(kind, call.Args[0])
 		return
 	}
-	if w.isListCopy(call) {
+	if w.isListCopy(kind, call) {
 		return
 	}
 	if w.followReturns(kind, call) {
@@ -857,16 +863,55 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 // neither shape can prove is that the body adds no ID of its own, so a literal
 // written inside one is a hole in this audit rather than a finding. That hole
 // was accepted for the copy and is the same size here.
-func (w *walker) isListCopy(call *ast.CallExpr) bool {
+//
+// An argument may also be a parameter named as a carrier of this kind of
+// site's values ([followableParamName]), which is a list recorded where its
+// callers write it: it is followed out to them, and the call is then a merge
+// of lists recorded elsewhere. toolutil's ActionRoute.WithRelatedActions is
+// that shape, merging the route's own list with the ones it is handed through
+// a normalizing helper, and following that helper's body instead found two
+// values nothing folds and no ID. A run over the served tree alone never met
+// it, since toolutil was not loaded; a run loading toolutil reported it on
+// every -check. A parameter only counts once every argument has qualified, so
+// a call that also passes something else is followed into as before, and
+// nothing is recorded on the way to deciding.
+func (w *walker) isListCopy(kind string, call *ast.CallExpr) bool {
 	if len(call.Args) == 0 {
 		return false
 	}
+	var carriers []*ast.Ident
 	for _, arg := range call.Args {
-		if !w.carriesRecordedIDList(arg) {
+		if w.carriesRecordedIDList(arg) {
+			continue
+		}
+		param, followable := w.carrierParam(kind, arg)
+		if !followable {
 			return false
 		}
+		carriers = append(carriers, param)
+	}
+	for _, param := range carriers {
+		w.followValues(kind, param, recordListValue)
 	}
 	return true
+}
+
+// carrierParam reports whether an argument is a parameter whose name says it
+// carries this kind of site's values, the one shape [walker.followParameter]
+// follows out to the callers that write them.
+func (w *walker) carrierParam(kind string, arg ast.Expr) (*ast.Ident, bool) {
+	ident, isIdent := ast.Unparen(arg).(*ast.Ident)
+	if !isIdent {
+		return nil, false
+	}
+	variable, known := variableOf(w.pkg, ident)
+	if !known {
+		return nil, false
+	}
+	if _, isParam := w.prog.params[variable]; !isParam {
+		return nil, false
+	}
+	return ident, followableParamName(kind, variable.Name())
 }
 
 // carriesRecordedIDList reports whether one argument of a call is an ID list

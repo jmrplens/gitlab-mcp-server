@@ -20,8 +20,8 @@ const testFullPath = "my-group"
 // by the field name alone.
 //
 // Every handler's API-failure hint also names the field it validates ("verify
-// full_path + iid with gitlab_epic_list", "verify note_id with
-// gitlab_list_epic_discussions"), so a case asserting only "iid" or "note_id"
+// full_path + iid with group.epic_list", "verify note_id with
+// group.epic_discussion_list"), so a case asserting only "iid" or "note_id"
 // passes whether the guard refused the value or the request went out and came
 // back an error. That is what let a guard reading `input.IID < 0` instead of
 // `<= 0` sit under a green suite: zero reached GitLab and the failure that came
@@ -1427,11 +1427,11 @@ func TestDeleteNote(t *testing.T) {
 // expectation below can pin the whole rendered document.
 const (
 	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_get_epic_discussion` to view full discussion details\n"
+		"- Use `group.epic_discussion_get` to view full discussion details\n"
 	threadHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_add_epic_discussion_note` to reply to this discussion\n"
+		"- Use `group.epic_discussion_add_note` to reply to this discussion\n"
 	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_update_epic_discussion_note` to edit this note\n"
+		"- Use `group.epic_discussion_update_note` to edit this note\n"
 )
 
 // TestFormatListMarkdownString uses table-driven subtests to pin the whole

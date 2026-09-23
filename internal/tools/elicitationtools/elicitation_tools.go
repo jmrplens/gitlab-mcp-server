@@ -64,8 +64,8 @@ func CancelledResult(message string) *mcp.CallToolResult {
 }
 
 // UnsupportedResult returns the refusal a wizard answers with when the MCP
-// client does not support elicitation, naming the one action that does the
-// same work without it.
+// client does not support elicitation, naming the flow that was refused and
+// the one action that does the same work without it.
 //
 // It is prose in the one refusal envelope [toolutil.ErrorResult] writes, which
 // is what gives it the normalization and the annotation every other refusal
@@ -73,25 +73,28 @@ func CancelledResult(message string) *mcp.CallToolResult {
 // the shape of a card row and is not one: this result is about no GitLab
 // object, so it has no rows.
 //
-// The alternative is named by catalog ID because the tool that runs one
-// differs by surface: the dynamic surface runs issue.create through
-// gitlab_execute_action and registers no tool of its own for it, meta runs it
-// as an action of the issue domain's tool, and individual as a tool of its
-// own. The sentence used to name the meta tools, which is right for one
-// surface of three, and it named the issue and merge request tools whichever
-// flow was refused, while each flow's description promised its own. Each flow
-// now hands in the one its description names. toolutil.ErrorResult is not one
-// of the error helpers cmd/audit_action_ids reads, so no source gate holds this
-// sentence to the catalog: a test of the catalog in internal/tools holds every
-// flow's alternative to an action it serves, and the e2e scenario that quotes
-// issue.create holds the served text.
-func UnsupportedResult(toolName, alternative string) *mcp.CallToolResult {
+// Both actions are named by catalog ID because the tool that runs one differs
+// by surface: the dynamic surface runs issue.create and the flow itself
+// through gitlab_execute_action and registers no tool of its own for either,
+// meta runs issue.create as an action of the issue domain's tool, and
+// individual as a tool of its own. A sentence naming a per-surface tool is
+// right for one surface of three. The alternative used to name the meta tools,
+// and the issue and merge request ones whichever flow was refused, while each
+// flow's description promised its own; each flow now hands in the one its
+// description names. The refused flow used to be named by its tool alone,
+// which the default surface does not register, so it now leads with the ID and
+// gives the tool only as the name the other two surfaces call it by.
+// toolutil.ErrorResult is not one of the error helpers cmd/audit_action_ids
+// reads, so no source gate holds this sentence to the catalog: a test of the
+// catalog in internal/tools holds every flow's two IDs to actions it serves,
+// and the e2e scenario that quotes both holds the served text.
+func UnsupportedResult(actionID, toolName, alternative string) *mcp.CallToolResult {
 	return toolutil.ErrorResult(fmt.Sprintf(
-		"Tool %q requires the MCP elicitation capability. "+
+		"The %s action (the %s tool on the meta and individual surfaces) requires the MCP elicitation capability. "+
 			"Your MCP client does not support elicitation. "+
 			"Check your client's MCP documentation for elicitation support.\n\n"+
 			"Alternative: use the standard %s action, which takes every field in the call instead of prompting for it.",
-		toolName, alternative,
+		actionID, toolName, alternative,
 	))
 }
 

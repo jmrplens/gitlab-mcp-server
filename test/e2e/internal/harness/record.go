@@ -64,9 +64,13 @@ const (
 	// its 2026-07-28 replacement, subscriptions/listen.
 	methodSubscribe = "resources/subscribe"
 	// methodSubscriptionsAcknowledged is what the server sends first on a
-	// subscriptions/listen stream, once every subscription the stream asked
-	// for succeeded. It is not recorded as a call of its own: it is the
-	// answer [Session.TrySubscribe] waits for.
+	// subscriptions/listen stream, once every subscription it agreed to (the
+	// ones its declared capabilities admit) succeeded; a URI it did not admit
+	// is absent from the acknowledged list rather than holding the
+	// acknowledgement back, which is why [Session.TrySubscribe] refuses a
+	// subscribe to a server without the capability before sending it. It is
+	// not recorded as a call of its own: it is the answer TrySubscribe waits
+	// for.
 	methodSubscriptionsAcknowledged = "notifications/subscriptions/acknowledged"
 )
 

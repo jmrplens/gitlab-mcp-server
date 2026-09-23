@@ -292,6 +292,28 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 			patterns: []string{filepath.Join(filepath.Dir(root), "elsewhere", "test", "e2e", "gitlab", "...")},
 			served:   []string{filepath.Join(filepath.Dir(root), "elsewhere", "test", "e2e", "gitlab", "...")},
 		},
+		{name: "the whole module", patterns: []string{"./..."}, served: []string{"./..."}, suite: defaultSuitePatterns},
+		{name: "a tree enclosing the suite", patterns: []string{"./test/..."}, served: []string{"./test/..."}, suite: defaultSuitePatterns},
+		{
+			name:     "an enclosing tree before a served package",
+			patterns: []string{"./...", "./internal/tools/issues"},
+			served:   []string{"./...", "./internal/tools/issues"},
+			suite:    defaultSuitePatterns,
+		},
+		{
+			name:     "an enclosing tree as an absolute path",
+			patterns: []string{filepath.Join(root, "...")},
+			served:   []string{"./..."},
+			suite:    defaultSuitePatterns,
+		},
+		{name: "the root's parent as an absolute path", patterns: []string{filepath.Dir(root)}, served: []string{filepath.Dir(root)}},
+		{
+			name:     "a directory of the root whose name begins with two dots",
+			patterns: []string{filepath.Join(root, "..data", "x")},
+			served:   []string{"./..data/x"},
+		},
+		{name: "a single package above the suite", patterns: []string{"./test"}, served: []string{"./test"}},
+		{name: "a tree beside the suite", patterns: []string{"./cmd/..."}, served: []string{"./cmd/..."}},
 	}
 	for _, one := range cases {
 		t.Run(one.name, func(t *testing.T) {
@@ -301,8 +323,8 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 			}
 		})
 	}
-	if !slices.Equal(defaultPatterns, []string{"./internal/tools/..."}) {
-		t.Errorf("defaultPatterns = %v, want the tree that publishes action IDs", defaultPatterns)
+	if !slices.Equal(defaultPatterns, []string{"./internal/tools/...", "./internal/toolutil"}) {
+		t.Errorf("defaultPatterns = %v, want the tree that publishes action IDs and the helpers its hints are handed to", defaultPatterns)
 	}
 	if !slices.Equal(defaultSuitePatterns, []string{"./test/e2e/gitlab/..."}) {
 		t.Errorf("defaultSuitePatterns = %v, want the suite that quotes it", defaultSuitePatterns)
@@ -393,10 +415,11 @@ func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T
 		},
 		{
 			name:     "the served tree in the platform's spelling",
-			patterns: []string{platformPattern("internal", "tools", "...")},
+			patterns: []string{platformPattern("internal", "tools", "..."), platformPattern("internal", "toolutil")},
 			whole:    defaultPatterns,
 			want:     true,
 		},
+		{name: "the served tree without the helpers it hands hints to", patterns: []string{"./internal/tools/..."}, whole: defaultPatterns},
 		{name: "one package of the suite", patterns: []string{"./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
 		{name: "the suite and a package again", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
 		{name: "nothing", whole: defaultSuitePatterns},

@@ -196,10 +196,14 @@ func (s *Session) Subscribe(uri string, opts ...CallOption) *Subscription {
 // Accepted means the server said so. On protocol 2026-07-28 a subscription is
 // a subscriptions/listen stream whose answer the SDK discards, so the only
 // word the client ever gets is the notifications/subscriptions/acknowledged
-// the server sends once every subscription the stream asked for succeeded;
-// this waits for it, and a subscription it never arrives for is a refusal:
-// the first read failed, or the session holds as many watchers as the server
-// allows. Silence is the only signal of that refusal, so it costs the whole of
+// the server sends once every subscription it agreed to (the ones its
+// declared capabilities admit) succeeded. A URI it did not admit is simply
+// absent from the acknowledged list while the acknowledgement still arrives,
+// which is why a server without the capability is refused below before
+// anything is sent. This waits for the URI to be named in an acknowledgement,
+// and a subscription that never is is a refusal: the first read failed, or
+// the session holds as many watchers as the server allows. Silence is the
+// only signal of that refusal, so it costs the whole of
 // subscribeAckTimeout before this returns. On an older protocol the subscribe
 // is an ordinary request and its error is the refusal. Either way the
 // subscribe is recorded with what came of it, so a refused one is never

@@ -2,7 +2,7 @@ package snippetdiscussions
 
 import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
-var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No snippet discussions found.\n", "Use `gitlab_get_snippet_discussion` to view full discussion details", "Use `gitlab_add_snippet_discussion_note` to reply to this discussion", "Use `gitlab_update_snippet_discussion_note` to edit this note")
+var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No snippet discussions found.\n", "Use `snippet.discussion_get` to view full discussion details", "Use `snippet.discussion_add_note` to reply to this discussion", "Use `snippet.discussion_update_note` to edit this note")
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {

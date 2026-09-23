@@ -80,16 +80,17 @@ func TestCancelledResult(t *testing.T) {
 }
 
 // TestUnsupportedResult verifies the whole refusal a wizard answers with on a
-// client without elicitation: the prose naming the tool and the capability it
+// client without elicitation: the prose naming the flow and the capability it
 // needs, the one action that does the same work, and the refusal envelope
 // every other refusal travels in.
 //
-// The alternative is a catalog ID, and the whole-text comparison is what holds
-// it there: the one gitlab_* name the refusal may spell is the flow the client
-// called, and a sentence naming the meta tool instead would be right for one
-// surface of three.
+// Both actions are catalog IDs, and the whole-text comparison is what holds
+// them there: a sentence naming a per-surface tool is right for one surface of
+// three, so the one gitlab_* name the refusal may spell is the flow's own tool,
+// and only as the name the meta and individual surfaces register it under,
+// after the ID the default dynamic surface runs it by.
 func TestUnsupportedResult(t *testing.T) {
-	result := UnsupportedResult("gitlab_interactive_issue_create", "issue.create")
+	result := UnsupportedResult("interactive.issue_create", "gitlab_interactive_issue_create", "issue.create")
 	if !result.IsError {
 		t.Error("UnsupportedResult.IsError = false, want true")
 	}
@@ -100,7 +101,7 @@ func TestUnsupportedResult(t *testing.T) {
 	if !ok {
 		t.Fatal("content[0] is not TextContent")
 	}
-	want := `Tool "gitlab_interactive_issue_create" requires the MCP elicitation capability. ` +
+	want := "The interactive.issue_create action (the gitlab_interactive_issue_create tool on the meta and individual surfaces) requires the MCP elicitation capability. " +
 		"Your MCP client does not support elicitation. " +
 		"Check your client's MCP documentation for elicitation support.\n\n" +
 		"Alternative: use the standard issue.create action, which takes every field in the call instead of prompting for it."
@@ -745,12 +746,13 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        map[string]any
+		flow        string
 		alternative string
 	}{
-		{"gitlab_interactive_issue_create", map[string]any{keyProjectID: "42"}, "issue.create"},
-		{"gitlab_interactive_mr_create", map[string]any{keyProjectID: "42"}, "merge_request.create"},
-		{"gitlab_interactive_release_create", map[string]any{keyProjectID: "42"}, "release.create"},
-		{"gitlab_interactive_project_create", map[string]any{}, "project.create"},
+		{"gitlab_interactive_issue_create", map[string]any{keyProjectID: "42"}, "interactive.issue_create", "issue.create"},
+		{"gitlab_interactive_mr_create", map[string]any{keyProjectID: "42"}, "interactive.mr_create", "merge_request.create"},
+		{"gitlab_interactive_release_create", map[string]any{keyProjectID: "42"}, "interactive.release_create", "release.create"},
+		{"gitlab_interactive_project_create", map[string]any{}, "interactive.project_create", "project.create"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -765,7 +767,7 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 			if !res.IsError {
 				t.Errorf("%s should return IsError=true (elicitation unsupported)", tc.name)
 			}
-			want := contentText(UnsupportedResult(tc.name, tc.alternative))
+			want := contentText(UnsupportedResult(tc.flow, tc.name, tc.alternative))
 			if got := contentText(res); got != want {
 				t.Errorf("refusal of %s:\n got %q\nwant %q", tc.name, got, want)
 			}
@@ -1960,7 +1962,7 @@ func TestResultsForOperationsThatDidNotRun_AreErrorResults(t *testing.T) {
 		},
 		{
 			name:   "client cannot elicit",
-			result: UnsupportedResult("gitlab_interactive_create_issue", "issue.create"),
+			result: UnsupportedResult("interactive.issue_create", "gitlab_interactive_issue_create", "issue.create"),
 		},
 	}
 

@@ -14,8 +14,11 @@
 // 403), so each is made under its own bounded context with the builders' retry
 // policy, and one it cannot make is recorded with its reason and left unbound.
 // A sweep then names that reason beside the template it could not bind, or
-// beside the action when the name is a plain binding ([plainExtraBindings]),
-// and nothing else is affected. An action naming a name only a template binds
+// beside the action when the name is a plain binding ([plainExtraBindings]) or
+// one the action's domain binds ([domainBindings]), and nothing else is
+// affected. A template whose first read stands on an extra none of its
+// variables names ([templateNeeds]) is left unbound with that extra's reason
+// too. An action naming a name only a template binds
 // (a wiki's slug, board_id, a feature flag's name, snippet_id) is not bound
 // from the World at all, whatever became of the extra, and its line says the
 // World has no binding for the name.
@@ -34,6 +37,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -371,7 +375,9 @@ func createWorldGroupMilestone(ctx context.Context, tb testing.TB, client *gitla
 // Canceling needs no runner, which is what makes the outcome the same on an
 // instance with one and on one without. A job that never appears, or a cancel
 // GitLab refuses, leaves the pipeline pending; either way it goes with the
-// project.
+// project. The project holds it from the moment GitLab created it, settled or
+// not, which is recorded apart from the two bindings because the latest
+// pipeline template reads that pipeline and binds nothing of it.
 func createWorldPipeline(ctx context.Context, tb testing.TB, client *gitlabclient.Client, _ string, world *World) error {
 	tb.Helper()
 	project := world.Project
@@ -387,6 +393,7 @@ func createWorldPipeline(ctx context.Context, tb testing.TB, client *gitlabclien
 	if err != nil {
 		return err
 	}
+	world.holdsPipeline = true
 	jobID, err := awaitPipelineJob(ctx, client, project.ID, pipeline.ID, worldJobWait, isWorldJob)
 	if err != nil {
 		return fmt.Errorf("pipeline %d grew no %s job within %s: %w", pipeline.ID, worldJobName, worldJobWait, err)
@@ -599,7 +606,9 @@ type worldBinding struct {
 // plainExtraBindings are the extras whose parameter name means one object
 // across the whole catalog, so they join [World.Bindings] once made and the
 // read and preview sweeps bind them by name like the core ones. tag_name is
-// among them because the World's release stands on its tag.
+// among them because the World's release stands on its tag, and the release
+// domain's actions, where it names the release rather than the tag, bind it
+// through [domainBindings] instead.
 var plainExtraBindings = map[string]worldBinding{
 	"pipeline_id":    {worldExtraPipeline, func(w *World) (any, bool) { return w.Pipeline.ID, w.Pipeline.ID != 0 }},
 	"job_id":         {worldExtraPipeline, func(w *World) (any, bool) { return w.JobID, w.JobID != 0 }},
@@ -607,6 +616,57 @@ var plainExtraBindings = map[string]worldBinding{
 	"environment_id": {worldExtraEnvironment, func(w *World) (any, bool) { return w.Environment.ID, w.Environment.ID != 0 }},
 	"deployment_id":  {worldExtraDeployment, func(w *World) (any, bool) { return w.Deployment.ID, w.Deployment.ID != 0 }},
 	"deploy_key_id":  {worldExtraDeployKey, func(w *World) (any, bool) { return w.DeployKey.ID, w.DeployKey.ID != 0 }},
+}
+
+// releaseTagBinding is tag_name where it names the release rather than the
+// tag: bound only once the release standing on the tag was made, so a tag
+// made without its release does not bind a release read that can only fail.
+var releaseTagBinding = worldBinding{worldExtraRelease, func(w *World) (any, bool) { return w.Release.TagName, w.Release.TagName != "" }}
+
+// domainBindings are values bound for the actions of one catalog domain only,
+// because there the name means another object than the plain binding gives
+// it. The release domain's tag_name is the release: release.get,
+// release.delete and the release link actions all address the release by its
+// tag, so the plain binding would call them on a tag with no release whenever
+// the tag was made and the release was not, and the read sweep would count
+// each answer among its errors without naming the action or the reason. Bound
+// here, the release's reason is logged beside each of them instead, as it is
+// beside the release template. The tag domain's actions keep the plain
+// binding, since the tag is what they address.
+var domainBindings = map[string]map[string]worldBinding{
+	"release": {"tag_name": releaseTagBinding},
+}
+
+// worldNeed is an extra a resource template's first read stands on although
+// none of its variables names it: the extra, for the reason a missing one
+// gives, whether the World holds what the read needs, and what the template
+// lacks without it.
+type worldNeed struct {
+	extra string
+	held  func(*World) bool
+	lacks string
+}
+
+// templateNeeds are templates every variable of which binds from the core,
+// and whose first read fails all the same while an extra is missing. The
+// latest pipeline template names only the project, and GitLab answers its
+// read with an error while the project holds no pipeline: the resource sweep
+// would count that among its errors, and a subscribe is declined after the
+// harness's thirty seconds, which the subscription sweep fails on. Gated here,
+// the template is left unbound with the pipeline's reason instead.
+//
+// What it needs is a pipeline the project holds, not the settled one the
+// pipeline_id binding is: a job that never appeared, a cancel GitLab refused
+// or the settle budget leave pipeline_id unbound, and the project holds the
+// pipeline all the same, so the template stays bound. Only a pipeline GitLab
+// never created (its configuration commit or the create refused) leaves it
+// unbound.
+var templateNeeds = map[string]worldNeed{
+	"gitlab://project/{project_id}/pipelines/latest": {
+		extra: worldExtraPipeline,
+		held:  func(w *World) bool { return w.holdsPipeline },
+		lacks: "so the project holds no pipeline for the latest pipeline template to read",
+	},
 }
 
 // templateBindings are values bound for one resource template only, because
@@ -634,7 +694,7 @@ var templateBindings = map[string]map[string]worldBinding{
 		"path": {"", func(*World) (any, bool) { return worldReadmePath, true }},
 	},
 	"gitlab://project/{project_id}/release/{tag_name}": {
-		"tag_name": {worldExtraRelease, func(w *World) (any, bool) { return w.Release.TagName, w.Release.TagName != "" }},
+		"tag_name": releaseTagBinding,
 	},
 	"gitlab://project/{project_id}/snippet/{snippet_id}": {
 		"snippet_id": {worldExtraProjectSnippet, func(w *World) (any, bool) { return w.ProjectSnippet.ID, w.ProjectSnippet.ID != 0 }},
@@ -653,17 +713,41 @@ var templateBindings = map[string]map[string]worldBinding{
 // BindTemplate returns the World's value for one variable of one resource
 // template, whether it has one, and, when it has none, why.
 //
-// A value bound for that template alone wins, then the plain bindings through
+// A template whose first read stands on an extra the World does not hold
+// ([templateNeeds]) binds none of its variables, and says which extra. Then a
+// value bound for that template alone wins, then the plain bindings through
 // [World.BindParam], which also gives the reason for a variable neither
 // carries.
 func (w *World) BindTemplate(template, variable string) (value any, bound bool, reason string) {
+	if need, gated := templateNeeds[template]; gated && !need.held(w) {
+		return nil, false, w.extraReason(need.extra) + ", " + need.lacks
+	}
 	if binding, scoped := templateBindings[template][variable]; scoped {
-		if made, held := binding.value(w); held {
-			return made, true, ""
-		}
-		return nil, false, w.unboundReason(binding.extra, variable)
+		return w.bindExtra(binding, variable)
 	}
 	return w.BindParam(variable)
+}
+
+// BindActionParam returns the World's value for one required parameter of one
+// catalog action, whether it has one, and, when it has none, why. It is what
+// the read and preview sweeps bind an action's requirements through.
+//
+// A value bound for the action's domain ([domainBindings]) wins, then
+// [World.BindParam]. The domain is the canonical ID's part before its dot.
+func (w *World) BindActionParam(action, name string) (value any, bound bool, reason string) {
+	domain, _, _ := strings.Cut(action, ".")
+	if binding, scoped := domainBindings[domain][name]; scoped {
+		return w.bindExtra(binding, name)
+	}
+	return w.BindParam(name)
+}
+
+// bindExtra returns one extra binding's value, or why the World holds none.
+func (w *World) bindExtra(binding worldBinding, name string) (value any, bound bool, reason string) {
+	if made, held := binding.value(w); held {
+		return made, true, ""
+	}
+	return nil, false, w.unboundReason(binding.extra, name)
 }
 
 // BindParam returns the World's value for one parameter name, whether it has
@@ -693,8 +777,14 @@ func (w *World) BindParam(name string) (value any, bound bool, reason string) {
 // otherwise that the World holds none, which is what a World built without
 // its extras says.
 func (w *World) unboundReason(extra, name string) string {
+	return w.extraReason(extra) + ", so it has no binding for " + name
+}
+
+// extraReason says why the World lacks one extra: the reason it was not made,
+// when the build recorded one, and otherwise that the World holds none.
+func (w *World) extraReason(extra string) string {
 	if reason, recorded := w.unbound[extra]; recorded {
-		return fmt.Sprintf("the World's %s was not made (%s), so it has no binding for %s", extra, reason, name)
+		return fmt.Sprintf("the World's %s was not made (%s)", extra, reason)
 	}
-	return fmt.Sprintf("the World holds no %s, so it has no binding for %s", extra, name)
+	return "the World holds no " + extra
 }

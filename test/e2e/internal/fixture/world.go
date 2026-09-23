@@ -88,6 +88,13 @@ type World struct {
 	Pipeline Pipeline
 	JobID    int64
 
+	// holdsPipeline records that GitLab created the World's pipeline, set the
+	// moment it did and whatever became of the job wait, the cancel and the
+	// settle after it: the project holds a pipeline from then on even where
+	// Pipeline stays zero, and the latest pipeline template reads that one
+	// ([templateNeeds]).
+	holdsPipeline bool
+
 	// unbound names each extra the World could not make, with the reason.
 	unbound map[string]string
 

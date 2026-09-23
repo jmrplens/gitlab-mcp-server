@@ -575,6 +575,128 @@ func options() toolutil.ActionSpecOptions {
 	}
 }
 
+// TestCollectSites_AMergeWithARelatedParameter_IsFollowedToItsCallers holds
+// the third shape the pass-through rule accepts: a call handed a recorded list
+// and a parameter named as a carrier of related actions, which merges the two
+// through a helper whose body folds to nothing. toolutil's
+// ActionRoute.WithRelatedActions is the shape. The parameter is followed out
+// to the calls that fill it, where the IDs are written, and the helper's body
+// is not reported; read the old way, the make and the append inside it were
+// two sites nothing folds on every run that loaded toolutil.
+//
+// The other cases are what keeps the rule to that shape: an argument that is
+// not a parameter, even one named like a carrier, a parameter under another
+// name, and a name that is no variable at all each leave the call to be
+// followed into, which reports the body it cannot fold rather than passing it.
+func TestCollectSites_AMergeWithARelatedParameter_IsFollowedToItsCallers(t *testing.T) {
+	const merge = `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func normalize(existing []string, values ...string) []string {
+	merged := make([]string, 0, len(existing)+len(values))
+	merged = append(merged, existing...)
+	return append(merged, values...)
+}
+
+`
+	cases := []struct {
+		name       string
+		body       string
+		related    []string
+		unresolved bool
+	}{
+		{
+			name: "a related parameter",
+			body: `func withRelated(opts toolutil.ActionSpecOptions, related ...string) toolutil.ActionSpecOptions {
+	opts.RelatedActions = normalize(opts.RelatedActions, related...)
+	return opts
+}
+
+func options() toolutil.ActionSpecOptions {
+	return withRelated(toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}, "demo.merged")
+}
+`,
+			related: []string{"demo.base", "demo.merged"},
+		},
+		{
+			name: "a local named like one",
+			body: `func options() toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}
+	related := []string{"demo.local"}
+	opts.RelatedActions = normalize(opts.RelatedActions, related...)
+	return opts
+}
+`,
+			related:    []string{"demo.base"},
+			unresolved: true,
+		},
+		{
+			name: "a parameter under another name",
+			body: `func withValues(opts toolutil.ActionSpecOptions, values ...string) toolutil.ActionSpecOptions {
+	opts.RelatedActions = normalize(opts.RelatedActions, values...)
+	return opts
+}
+
+func options() toolutil.ActionSpecOptions {
+	return withValues(toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}, "demo.unread")
+}
+`,
+			related:    []string{"demo.base"},
+			unresolved: true,
+		},
+		{
+			name: "a constant",
+			body: `const relatedConstant = "demo.constant"
+
+func options() toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}
+	opts.RelatedActions = normalize(opts.RelatedActions, relatedConstant)
+	return opts
+}
+`,
+			related:    []string{"demo.base"},
+			unresolved: true,
+		},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			sites := collectFixture(t, merge+one.body)
+			if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, one.related) {
+				t.Errorf("related values = %v, want %v", got, one.related)
+			}
+			if got := unresolvedExprs(sites); (len(got) > 0) != one.unresolved {
+				t.Errorf("unresolved = %v, want some: %t", got, one.unresolved)
+			}
+		})
+	}
+}
+
+// TestCollectSites_AnIDHeldInALocal_IsFollowedToItsValue holds the one-ID
+// half of variable following: an element of a list that names a local rather
+// than a constant is followed to the value the local is given. This was
+// reached only through toolutil's own normalizing helper until that helper
+// stopped being followed into, so it is planted here rather than left to
+// whichever package the fixture load happens to walk.
+func TestCollectSites_AnIDHeldInALocal_IsFollowedToItsValue(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func options() toolutil.ActionSpecOptions {
+	id := "demo.local"
+	return toolutil.ActionSpecOptions{RelatedActions: []string{id}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.local"}) {
+		t.Errorf("related values = %v, want the value the local is given", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none: the local folds to its one value", got)
+	}
+}
+
 // TestCollectSites_AListNarrowedByAProjection_IsPassedOver holds the second
 // shape the pass-through rule accepts: a call handed the value an ID list
 // hangs off, returning the subset one caller may be shown. The dynamic

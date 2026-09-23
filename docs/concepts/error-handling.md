@@ -342,8 +342,10 @@ return toolutil.WrapErrWithHint("list_vulnerabilities", err,
 A GraphQL refusal GitLab answers with an error status does carry one: `IsHTTPStatus`, `ExtractGitLabMessage` and the sanitizer read it through client-go's `*gl.GraphQLResponseError` the way `ClassifyError` does, so `WrapErrWithStatusHint` attaches its hint there as it does over REST:
 
 ```go
-return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound,
-    "verify id with custom_emoji.list")
+return toolutil.WrapErrWithStatusHint("create_custom_emoji", err, http.StatusBadRequest,
+    "verify group_path, name is unique, and url points to a valid image")
 ```
+
+A 404 never arrives in that type: client-go answers it with the `ErrNotFound` sentinel before it reads a body, so a status hint on 404 over GraphQL matches through the sentinel described under [ClassifyError](#classifyerror) rather than through the wrapper.
 
 That type's rendering carries more than the response's: after it, it appends `(GraphQL errors: ...)` listing every `errors[].message` of the body. The sanitizer swaps the whole of it, and holds the list to what a REST message is held to: flattened onto one line and capped at 300 characters as one list, and dropped altogether when the body carries a top-level key other than `data`, `errors` and `extensions`, since GitLab did not compose that body.

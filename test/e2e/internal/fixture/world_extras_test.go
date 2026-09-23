@@ -308,6 +308,9 @@ func TestCreateWorldPipeline_Cancelled_BindsPipelineAndJob(t *testing.T) {
 	if world.Pipeline != (Pipeline{ID: stubPipelineID, Ref: "main", SHA: "ci-sha", Status: "canceled"}) || world.JobID != stubJobID {
 		t.Errorf("pipeline = %+v, job = %d, want pipeline 77 canceled and its world-job 88", world.Pipeline, world.JobID)
 	}
+	if !world.holdsPipeline {
+		t.Error("holdsPipeline = false after GitLab created the pipeline, want the latest pipeline template bound")
+	}
 	requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/pipelines/77/cancel")
 
 	commit := requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/repository/commits")
@@ -345,7 +348,8 @@ func TestCreateWorldPipeline_Cancelled_BindsPipelineAndJob(t *testing.T) {
 // TestCreateWorldPipeline_NeverSettles_LeavesBothUnbound checks that a
 // pipeline still canceling when the settle budget runs out binds neither
 // itself nor its job, since binding one puts a wait on an unfinished pipeline
-// into the reads sweep.
+// into the reads sweep, while the project is still recorded as holding it,
+// since the latest pipeline template reads it all the same.
 func TestCreateWorldPipeline_NeverSettles_LeavesBothUnbound(t *testing.T) {
 	shortWorldPipelineWaits(t)
 	stub, client := newStubGitLab(t)
@@ -361,11 +365,14 @@ func TestCreateWorldPipeline_NeverSettles_LeavesBothUnbound(t *testing.T) {
 	if world.Pipeline != (Pipeline{}) || world.JobID != 0 {
 		t.Errorf("pipeline = %+v, job = %d, want neither filled in", world.Pipeline, world.JobID)
 	}
+	if !world.holdsPipeline {
+		t.Error("holdsPipeline = false for a pipeline GitLab created and never settled, want it held")
+	}
 }
 
 // TestCreateWorldPipeline_NoJob_StopsBeforeTheCancel checks that a pipeline
 // that never grows its job is reported with the job it waited for, and is
-// neither canceled nor bound.
+// neither canceled nor bound, while the project holds it.
 func TestCreateWorldPipeline_NoJob_StopsBeforeTheCancel(t *testing.T) {
 	shortWorldPipelineWaits(t)
 	stub, client := newStubGitLab(t)
@@ -384,18 +391,23 @@ func TestCreateWorldPipeline_NoJob_StopsBeforeTheCancel(t *testing.T) {
 	if world.Pipeline != (Pipeline{}) || world.JobID != 0 {
 		t.Errorf("pipeline = %+v, job = %d, want neither filled in", world.Pipeline, world.JobID)
 	}
+	if !world.holdsPipeline {
+		t.Error("holdsPipeline = false for a pipeline GitLab created with no job, want it held")
+	}
 }
 
 // TestCreateWorldPipeline_StepRefused_StopsThereWithGitLabsReason checks each
 // request of the sequence being refused: the sequence stops at it, reports
-// GitLab's answer and binds nothing.
+// GitLab's answer and binds nothing, and the project is recorded as holding a
+// pipeline exactly when the refusal came after GitLab created it.
 func TestCreateWorldPipeline_StepRefused_StopsThereWithGitLabsReason(t *testing.T) {
 	cases := []struct {
 		name, method, path, later string
+		holds                     bool
 	}{
 		{name: "commit", method: http.MethodPost, path: "/api/v4/projects/2/repository/commits", later: "/api/v4/projects/2/pipeline"},
 		{name: "create", method: http.MethodPost, path: "/api/v4/projects/2/pipeline", later: "/api/v4/projects/2/pipelines/77/jobs"},
-		{name: "cancel", method: http.MethodPost, path: "/api/v4/projects/2/pipelines/77/cancel"},
+		{name: "cancel", method: http.MethodPost, path: "/api/v4/projects/2/pipelines/77/cancel", holds: true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -417,6 +429,9 @@ func TestCreateWorldPipeline_StepRefused_StopsThereWithGitLabsReason(t *testing.
 			}
 			if world.Pipeline != (Pipeline{}) || world.JobID != 0 {
 				t.Errorf("pipeline = %+v, job = %d, want neither filled in", world.Pipeline, world.JobID)
+			}
+			if world.holdsPipeline != testCase.holds {
+				t.Errorf("holdsPipeline = %t, want %t", world.holdsPipeline, testCase.holds)
 			}
 		})
 	}
@@ -465,6 +480,7 @@ func madeWorld() *World {
 	world.GroupMilestone = GroupMilestone{ID: stubGroupMilestoneID, IID: stubGroupMilestoneIn}
 	world.Pipeline = Pipeline{ID: stubPipelineID}
 	world.JobID = stubJobID
+	world.holdsPipeline = true
 	return world
 }
 
@@ -533,6 +549,7 @@ func TestWorldTemplates_WithoutExtras_NamesWhatIsMissing(t *testing.T) {
 		"gitlab://project/{project_id}/job/{job_id}",
 		"gitlab://project/{project_id}/pipeline/{pipeline_id}",
 		"gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs",
+		"gitlab://project/{project_id}/pipelines/latest",
 		"gitlab://project/{project_id}/release/{tag_name}",
 		"gitlab://project/{project_id}/snippet/{snippet_id}",
 		"gitlab://project/{project_id}/tag/{tag_name}",
@@ -547,7 +564,9 @@ func TestWorldTemplates_WithoutExtras_NamesWhatIsMissing(t *testing.T) {
 // TestWorldTemplates_EveryTableEntry_NamesARegisteredTemplate is the drift guard on
 // the per-template bindings: a template renamed in the server, or a variable
 // renamed in one, would otherwise leave an entry here that binds nothing and
-// the template it meant falling back to a binding for another object.
+// the template it meant falling back to a binding for another object. The
+// templates gated on an extra are held the same way, since a renamed one
+// would be bound whatever the extra did.
 func TestWorldTemplates_EveryTableEntry_NamesARegisteredTemplate(t *testing.T) {
 	registered := registeredTemplates(t)
 	for _, template := range slices.Sorted(maps.Keys(templateBindings)) {
@@ -559,6 +578,13 @@ func TestWorldTemplates_EveryTableEntry_NamesARegisteredTemplate(t *testing.T) {
 				if !slices.Contains(harness.TemplateVariables(template), variable) {
 					t.Errorf("the template has no variable %s", variable)
 				}
+			}
+		})
+	}
+	for _, template := range slices.Sorted(maps.Keys(templateNeeds)) {
+		t.Run("needs "+template, func(t *testing.T) {
+			if !slices.Contains(registered, template) {
+				t.Errorf("the server registers no template %s, so the extra it is gated on gates nothing", template)
 			}
 		})
 	}
@@ -635,6 +661,13 @@ func TestWorldTemplates_UnmadeObject_NamesWhy(t *testing.T) {
 			name: "never carried", template: "gitlab://project/{project_id}/thing/{thing_id}", variable: "thing_id",
 			want: []string{"the World has no binding for thing_id"},
 		},
+		{
+			name: "read stands on an extra", template: "gitlab://project/{project_id}/pipelines/latest", variable: "project_id",
+			want: []string{
+				"the World's pipeline was not made (pipeline 77 did not settle)",
+				"so the project holds no pipeline for the latest pipeline template to read",
+			},
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -646,6 +679,75 @@ func TestWorldTemplates_UnmadeObject_NamesWhy(t *testing.T) {
 				if !strings.Contains(reason, part) {
 					t.Errorf("reason = %q, want it to say %q", reason, part)
 				}
+			}
+		})
+	}
+}
+
+// TestWorldTemplates_LatestPipeline_BindsWhileTheProjectHoldsOne checks the
+// template gated on an extra none of its variables names: a pipeline GitLab
+// created and that never settled leaves pipeline_id unbound and the latest
+// pipeline template bound, since the project holds the pipeline its first
+// read answers with, and one GitLab never created leaves the template
+// unbound however its variable would bind.
+func TestWorldTemplates_LatestPipeline_BindsWhileTheProjectHoldsOne(t *testing.T) {
+	const latest = "gitlab://project/{project_id}/pipelines/latest"
+	world := extrasWorld()
+	world.unbound = map[string]string{worldExtraPipeline: "pipeline 77 did not settle"}
+	world.holdsPipeline = true
+
+	project, bound, reason := world.BindTemplate(latest, "project_id")
+	if !bound || project != int64(2) || reason != "" {
+		t.Errorf("BindTemplate(latest, project_id) = (%v, %t, %q), want the project, which holds the pipeline", project, bound, reason)
+	}
+	if pipeline, pipelineBound, _ := world.BindTemplate("gitlab://project/{project_id}/pipeline/{pipeline_id}", "pipeline_id"); pipelineBound {
+		t.Errorf("pipeline_id bound to %v for a pipeline that never settled, want it unbound", pipeline)
+	}
+
+	world.holdsPipeline = false
+	if gated, gatedBound, _ := world.BindTemplate(latest, "project_id"); gatedBound {
+		t.Errorf("BindTemplate(latest, project_id) bound %v for a project holding no pipeline, want the template unbound", gated)
+	}
+	if other, otherBound, _ := world.BindTemplate("gitlab://project/{project_id}/branch/{branch}", "project_id"); !otherBound || other != int64(2) {
+		t.Errorf("BindTemplate(branch, project_id) = (%v, %t), want a template standing on no extra bound whatever the pipeline did", other, otherBound)
+	}
+}
+
+// TestWorldBindActionParam_ReleaseDomain_BindsTheRelease checks the one name
+// bound per domain: the release domain's tag_name is the release, so a tag
+// made without its release leaves release.get unbound with the release's
+// reason rather than bound to a tag with no release, while the tag domain's
+// actions keep the tag, and every other name falls through to the plain
+// bindings.
+func TestWorldBindActionParam_ReleaseDomain_BindsTheRelease(t *testing.T) {
+	tagOnly := madeWorld()
+	tagOnly.Release = Release{}
+	tagOnly.unbound = map[string]string{worldExtraRelease: "403 Forbidden"}
+
+	unmade, unmadeBound, unmadeReason := tagOnly.BindActionParam("release.get", "tag_name")
+	if unmadeBound || unmade != nil {
+		t.Errorf("BindActionParam(release.get, tag_name) bound %v with no release, want it unbound", unmade)
+	}
+	if want := "the World's release was not made (403 Forbidden), so it has no binding for tag_name"; unmadeReason != want {
+		t.Errorf("BindActionParam(release.get, tag_name) reason = %q, want %q", unmadeReason, want)
+	}
+
+	cases := []struct {
+		name, action, param string
+		world               *World
+		want                any
+	}{
+		{name: "release made", action: "release.get", param: "tag_name", world: madeWorld(), want: "world-tag-run"},
+		{name: "tag domain keeps the tag", action: "tag.get", param: "tag_name", world: tagOnly, want: "world-tag-run"},
+		{name: "release domain, other name", action: "release.get", param: "project_id", world: tagOnly, want: int64(2)},
+		{name: "no domain", action: "tag_name", param: "tag_name", world: tagOnly, want: "world-tag-run"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			value, bound, reason := testCase.world.BindActionParam(testCase.action, testCase.param)
+			if !bound || value != testCase.want || reason != "" {
+				t.Errorf("BindActionParam(%s, %s) = (%v, %t, %q), want (%v, true, \"\")",
+					testCase.action, testCase.param, value, bound, reason, testCase.want)
 			}
 		})
 	}

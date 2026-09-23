@@ -728,6 +728,76 @@ func TestReturned(t *testing.T) {
 	}
 }
 
+// TestCollectAssertionSites_AWrapperReturningANegatedPredicate_IsNotRead holds
+// the other spelling of the same wrapper. Its predicate call sits under `!`,
+// which is the one position the walk reads a predicate's needles in, but the
+// negation is the wrapper's answer rather than a claim: whether the needles
+// are claims is decided where the wrapper is called, and the caller here uses
+// it as an absence check. Read as a claim, and followed out to that caller
+// through the wrapper's substrings parameter, the needle it asserts is absent
+// was judged as a tool name the server writes.
+func TestCollectAssertionSites_AWrapperReturningANegatedPredicate_IsNotRead(t *testing.T) {
+	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"negated/doc.go":          "// Package negated wraps a predicate and returns its negated answer.\npackage negated\n",
+		"negated/helpers_test.go": suiteHelpersIn("negated"),
+		"negated/negated_test.go": `//go:build e2e
+
+package negated
+
+import "testing"
+
+func lacks(text string, substrings ...string) bool { return !mentionsAny(text, substrings...) }
+
+func TestNegated(t *testing.T) {
+	if !lacks("text", "gitlab_asserted_absent_through_a_negating_wrapper") {
+		t.Fatal("leaked")
+	}
+}
+`,
+	}))
+
+	if got := sitesIn(read.sites, suiteFixtureDir+"/negated"); len(got) != 0 {
+		t.Errorf("sites = %+v, want none: a negation a return hands back is the wrapper's answer, not a claim", got)
+	}
+	if read.calls["mentionsAny"] != 1 {
+		t.Errorf("mentionsAny calls = %d, want the wrapper's one call still counted", read.calls["mentionsAny"])
+	}
+}
+
+// TestCollectAssertionSites_ANegationInAReturnedClosure_IsRead holds the edge
+// of that rule. A function literal a return hands back is code that runs
+// where it is called, so a negated predicate in its body fails the test like
+// any other and its needles are claims.
+func TestCollectAssertionSites_ANegationInAReturnedClosure_IsRead(t *testing.T) {
+	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"closure/doc.go":          "// Package closure returns a check as a function literal.\npackage closure\n",
+		"closure/helpers_test.go": suiteHelpersIn("closure"),
+		"closure/closure_test.go": `//go:build e2e
+
+package closure
+
+import "testing"
+
+func check(t *testing.T, text string) func() {
+	return func() {
+		if !mentionsAny(text, "gitlab_claimed_inside_a_returned_closure") {
+			t.Fatal("missing")
+		}
+	}
+}
+
+func TestClosure(t *testing.T) {
+	check(t, "text")()
+}
+`,
+	}))
+
+	got := valuesOfKind(sitesIn(read.sites, suiteFixtureDir+"/closure"), kindAssertion)
+	if !slices.Equal(got, []string{"gitlab_claimed_inside_a_returned_closure"}) {
+		t.Errorf("assertion values = %q, want the closure's needle read as the claim it is", got)
+	}
+}
+
 // TestCollectAssertionSites_ANeedleConcatenatedFromAName_ReadsTheNameToo holds
 // the half of a concatenated needle the fold does not keep. A needle written
 // as a literal plus a local is a claim about the whole sentence, so the local

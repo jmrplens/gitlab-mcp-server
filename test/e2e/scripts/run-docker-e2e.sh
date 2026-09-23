@@ -44,8 +44,12 @@
 #   GITLAB_IMAGE                   the image for the runtime; the defaults above
 #   GOTESTSUM                      the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
-#   E2E_GITLAB_EXTERNAL_URL, E2E_REGISTRY_EXTERNAL_URL, E2E_BITBUCKET_BIND
-#                                  what the compose file publishes; derived from the URLs above
+#   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
+#   E2E_REGISTRY_EXTERNAL_URL      the registry's: http:// and the GitLab URL's host on port 5050,
+#                                  whatever port or path the GitLab URL carries
+#   E2E_BITBUCKET_BIND             the address Bitbucket is published on: loopback when the
+#                                  Bitbucket URL (derived or set) names localhost, 127.* or [::1],
+#                                  0.0.0.0 otherwise
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -72,22 +76,28 @@ if [ "$#" -eq 0 ]; then
 fi
 
 E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
-# Bitbucket runs beside GitLab, so it is reached on the same host. A fixed
-# localhost default sent a remote run's setup script to this machine, where
-# nothing listens, and the import test then skipped: the run passed and the
-# coverage record came out one action short with nothing saying why.
+# Bitbucket and the registry run beside GitLab, so they are reached on the
+# same host. A fixed localhost default sent a remote run's setup script to
+# this machine, where nothing listens, and the import test then skipped: the
+# run passed and the coverage record came out one action short with nothing
+# saying why.
 #
 # The host is read off the GitLab URL whatever else it carries. The compose
 # file publishes GitLab on port 8929 and on no other, so a URL naming another
 # port, or none, is a proxy or a tunnel in front of that host, and a trailing
 # slash or a path names the same host too. The scheme is not carried over:
-# Bitbucket answers plain HTTP on 7990 whatever terminates TLS in front of
-# GitLab. A URL no host can be read out of keeps the loopback default and says
-# so, rather than stopping a run that may not start Bitbucket at all.
+# Bitbucket answers plain HTTP on 7990 and the registry on 5050 whatever
+# terminates TLS in front of GitLab. A URL no host can be read out of keeps
+# the loopback defaults (the compose file's own, for the registry) and says
+# so for Bitbucket, rather than stopping a run that may not start it at all.
+gitlab_host=""
+gitlab_url_re='^[A-Za-z][A-Za-z0-9+.-]*://([^]/?#:[]+|\[[^]/?#]*\])(:[0-9]*)?([/?#].*)?$'
+if [[ "${E2E_DOCKER_GITLAB_URL}" =~ ${gitlab_url_re} ]]; then
+    gitlab_host="${BASH_REMATCH[1]}"
+fi
 if [ -z "${E2E_DOCKER_BITBUCKET_URL:-}" ]; then
-    gitlab_url_re='^[A-Za-z][A-Za-z0-9+.-]*://([^]/?#:[]+|\[[^]/?#]*\])(:[0-9]*)?([/?#].*)?$'
-    if [[ "${E2E_DOCKER_GITLAB_URL}" =~ ${gitlab_url_re} ]]; then
-        E2E_DOCKER_BITBUCKET_URL="http://${BASH_REMATCH[1]}:7990"
+    if [ -n "${gitlab_host}" ]; then
+        E2E_DOCKER_BITBUCKET_URL="http://${gitlab_host}:7990"
     else
         E2E_DOCKER_BITBUCKET_URL="http://localhost:7990"
         echo "run-docker-e2e.sh: WARN no host can be read out of E2E_DOCKER_GITLAB_URL=${E2E_DOCKER_GITLAB_URL};" \
@@ -104,9 +114,12 @@ esac
 
 # What the compose file publishes follows the address the fixture is reached
 # from, so the web_url fields GitLab answers with are the ones the tests reach.
+# The registry's is the GitLab URL's host on port 5050, read the way
+# Bitbucket's is above, so a URL on another port, with none, or with a path
+# moves it too.
 export E2E_GITLAB_EXTERNAL_URL="${E2E_GITLAB_EXTERNAL_URL:-${E2E_DOCKER_GITLAB_URL}}"
-if [ -z "${E2E_REGISTRY_EXTERNAL_URL:-}" ] && [ "${E2E_DOCKER_GITLAB_URL%:8929}" != "${E2E_DOCKER_GITLAB_URL}" ]; then
-    export E2E_REGISTRY_EXTERNAL_URL="${E2E_DOCKER_GITLAB_URL%:8929}:5050"
+if [ -z "${E2E_REGISTRY_EXTERNAL_URL:-}" ] && [ -n "${gitlab_host}" ]; then
+    export E2E_REGISTRY_EXTERNAL_URL="http://${gitlab_host}:5050"
 fi
 # Bitbucket is published on loopback when its URL names localhost, 127.* or
 # [::1], and on 0.0.0.0 otherwise, since the setup script on this machine has

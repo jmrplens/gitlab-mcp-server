@@ -293,8 +293,10 @@ func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 // gate cannot land before the code it judges is clean. Its own unfoldable
 // sites are counted apart and do not fail, which is the one place this departs
 // from the paragraph above, because a hint the type checker cannot fold is
-// text a reader can still read: three sites build one from a function call or
-// a format string and carry no tool name between them.
+// text a reader can still read: the seven sites in that state build one from a
+// function call, a format string or a parameter no rule follows, or read one
+// back out of rendered text, and carry no tool name between them; three of
+// them are the unfolded halves of a concatenation.
 //
 // The last two are the suite's, and joined with issue 902. A quotation naming
 // a tool is a test that passes against a defective server text and breaks the

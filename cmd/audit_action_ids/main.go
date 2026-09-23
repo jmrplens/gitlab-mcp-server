@@ -19,7 +19,16 @@ const toolName = "audit_action_ids"
 // defaultPatterns is the tree that publishes action IDs. Every surface
 // projects from what these packages declare, so nothing outside them can put
 // an ID in front of a model.
-var defaultPatterns = []string{"./internal/tools/..."}
+//
+// internal/toolutil is part of it although it declares no action, because
+// the walk can follow a value only into a package it loaded: a hint handed to
+// a toolutil helper under a hint-named parameter (NewTemplateRenderer's
+// listHint, NewDiscussionRenderer's hints, ExecGraphQLDestroyNote's hint) is
+// followed out to the domain that wrote it from the helper's own signature,
+// and with toolutil unloaded that parameter was never met. The tree read 1330
+// hints and reported none; loading toolutil read 1355 and found eleven that
+// named a tool the dynamic surface does not register.
+var defaultPatterns = []string{"./internal/tools/...", "./internal/toolutil"}
 
 // defaultSuitePatterns is the e2e suite that quotes what that tree serves: the
 // one corpus that reads the server's hints back to it, and so the one whose
@@ -178,10 +187,19 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 // ([relativePattern]), and that spelling is what both the sorting and the
 // load are handed, so the two cannot disagree about which tree a pattern
 // names.
+//
+// A wildcard pattern whose prefix encloses the suite, ./... or ./test/...,
+// goes to the served load as it was given and brings the whole suite into the
+// suite load besides ([enclosesSuite]). Sorted by prefix alone it went to the
+// served load only, which reads no test file and sets no e2e tag, so it found
+// the suite's three packages holding a doc.go each, printed no assertion
+// section and exited 0: the silently clean run the absolute and import path
+// spellings used to give.
 func splitPatterns(root string, patterns []string) (served, suite []string) {
 	if len(patterns) == 0 {
 		return defaultPatterns, defaultSuitePatterns
 	}
+	wholeSuite := false
 	for _, given := range patterns {
 		pattern := relativePattern(root, given)
 		if isSuitePattern(pattern) {
@@ -189,8 +207,22 @@ func splitPatterns(root string, patterns []string) (served, suite []string) {
 			continue
 		}
 		served = append(served, pattern)
+		wholeSuite = wholeSuite || enclosesSuite(pattern)
+	}
+	if wholeSuite {
+		suite = append(suite, defaultSuitePatterns...)
 	}
 	return served, suite
+}
+
+// enclosesSuite reports whether a pattern ending in the ... wildcard matches
+// every package under suiteDir, which go list decides by the prefix in front
+// of the wildcard: ./... has none, ./test/... has test/, and both are a
+// prefix of test/e2e/. A pattern without the wildcard names one package, and
+// one outside the suite encloses none of it.
+func enclosesSuite(pattern string) bool {
+	prefix, wildcard := strings.CutSuffix(normalizePattern(pattern), "...")
+	return wildcard && strings.HasPrefix(suiteDir, prefix)
 }
 
 // relativePattern reads a pattern given in either of the two other spellings
@@ -207,13 +239,23 @@ func splitPatterns(root string, patterns []string) (served, suite []string) {
 // absolute root, and so does an absolute path outside the root, which names
 // nothing of either tree.
 func relativePattern(root, pattern string) string {
-	if rel, err := filepath.Rel(root, pattern); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, err := filepath.Rel(root, pattern); err == nil && !escapesRoot(rel) {
 		return "./" + filepath.ToSlash(rel)
 	}
 	if rest, underModule := strings.CutPrefix(pattern, goprogram.ModulePath+"/"); underModule {
 		return "./" + rest
 	}
 	return pattern
+}
+
+// escapesRoot reports whether a path filepath.Rel related to the root leaves
+// it: the parent itself, or anything below the parent. A name that merely
+// begins with two dots stays inside, and the one that matters is the
+// wildcard: <root>/... relates as ..., which a test for the prefix ".." read
+// as the parent, so the whole module named by its absolute path was handed to
+// the load as typed and never read as the tree enclosing the suite.
+func escapesRoot(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // isSuitePattern reports whether a pattern names part of the e2e suite, read

@@ -161,22 +161,24 @@ E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # Docker itself follows DOCKER_HOST or the active context, so the fixture can
 # run on another host: `DOCKER_HOST=ssh://truenas
 # E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 make test-e2e-docker`. GitLab's
-# own idea of its URL (external_url, and the registry's beside it) follows the
-# same value, so the web_url fields it answers with are the ones the tests
-# reach. Bitbucket follows the same host, and test/e2e/scripts/run-docker-e2e.sh
-# derives both halves of it there rather than here: its URL, http:// and that
-# host on port 7990 whatever port or path the GitLab URL carries, and its bind,
-# loopback when that URL names localhost, 127.* or [::1] and 0.0.0.0 otherwise,
-# since the setup script on this machine has to reach a remote container's
-# port. The import test never dials Bitbucket; GitLab does, over the compose
-# network. E2E_DOCKER_BITBUCKET_URL and E2E_BITBUCKET_BIND, set in the
-# environment or on the make command line, override either. A default here
-# would reach the script as a value someone chose and switch the derivation
-# off.
+# own idea of its URL (external_url) follows the same value, so the web_url
+# fields it answers with are the ones the tests reach. The registry and
+# Bitbucket follow the same host, and test/e2e/scripts/run-docker-e2e.sh
+# derives them there rather than here, reading the host out of the GitLab URL
+# whatever port or path it carries: the registry's external URL, http:// and
+# that host on port 5050, Bitbucket's URL, the same on port 7990, and
+# Bitbucket's bind, chosen from the Bitbucket URL (the derived one, or
+# E2E_DOCKER_BITBUCKET_URL when set): loopback when it names localhost, 127.*
+# or [::1], and 0.0.0.0 otherwise, since the setup script on this machine has
+# to reach a remote container's port. Overriding E2E_DOCKER_BITBUCKET_URL
+# therefore moves the bind with it unless E2E_BITBUCKET_BIND is set too. The
+# import test never dials Bitbucket; GitLab does, over the compose network.
+# E2E_REGISTRY_EXTERNAL_URL, E2E_DOCKER_BITBUCKET_URL and E2E_BITBUCKET_BIND,
+# set in the environment or on the make command line, override each. A
+# default here would reach the script as a value someone chose and switch the
+# derivation off.
 E2E_DOCKER_GITLAB_URL ?= http://localhost:8929
-E2E_DOCKER_REGISTRY_URL ?= $(patsubst %:8929,%:5050,$(E2E_DOCKER_GITLAB_URL))
 export E2E_GITLAB_EXTERNAL_URL = $(E2E_DOCKER_GITLAB_URL)
-export E2E_REGISTRY_EXTERNAL_URL = $(E2E_DOCKER_REGISTRY_URL)
 
 # Read version from VERSION file (single source of truth)
 VERSION := $(strip $(file < VERSION))

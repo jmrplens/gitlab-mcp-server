@@ -11,7 +11,10 @@
 // is read-only by contract, so the sweep proves the subscribe is accepted and
 // leaves proving a notification arrives to the scenario tests that create
 // state of their own. A template whose URI the World cannot bind is named
-// rather than subscribed. Each subscribe is made for the sweep, so what it
+// rather than subscribed, and so is one whose first read stands on an extra
+// the World does not hold although every variable binds: the latest pipeline
+// template on a project GitLab created no pipeline in, whose read can only
+// fail. Each subscribe is made for the sweep, so what it
 // earns in the coverage record is sweep-only; an asserted subscription comes
 // from a scenario that subscribes on purpose, such as the delivery test.
 //
@@ -37,11 +40,16 @@
 // the World should have satisfied. The two read the same from here, which is
 // why the sweep fails on either rather than guessing which it was. A declared
 // template the server acknowledges fails too, so the table cannot outlive the
-// defect that justified the entry.
+// defect that justified the entry, and so does one the server does not
+// advertise as subscribable at all, renamed or withdrawn, since that entry
+// excuses nothing. A declared template the World could not bind on this run
+// is logged as not judged rather than failed: the extra it stands on is one an
+// instance may legitimately lack, and the next run that binds it judges it.
 
 package common
 
 import (
+	"maps"
 	"slices"
 	"testing"
 
@@ -51,7 +59,8 @@ import (
 
 // knownDeclines is every subscribable template the sweep expects the server to
 // decline, with the reason. An entry goes when the defect it names is fixed:
-// the sweep fails once the server acknowledges a template declared here.
+// the sweep fails once the server acknowledges a template declared here, and
+// once the server no longer advertises it as subscribable.
 var knownDeclines = map[string]string{
 	// The World binds its feature branch, slash and all, and the branch
 	// resource hands the percent-encoded name to GitLab undecoded, so the
@@ -80,13 +89,14 @@ func TestSubscriptions_Sweep(t *testing.T) {
 		t.Fatal("the subscription manifest lists no template")
 	}
 
-	acknowledged, skipped := 0, 0
+	acknowledged := 0
 	var declined, unexpected []string
+	unbound := map[string]string{}
 	for _, template := range templates {
 		uri, missing := expandTemplate(template, world)
 		if missing != "" {
 			t.Logf("subscribable %s not subscribed: %s", template, missing)
-			skipped++
+			unbound[template] = missing
 			continue
 		}
 		subscription, err := s.TrySubscribe(uri, harness.For(harness.PurposeSweep))
@@ -108,7 +118,16 @@ func TestSubscriptions_Sweep(t *testing.T) {
 		}
 	}
 	t.Logf("subscribed to %d of %d advertised subscribable templates (%d declined, %d the World cannot bind)",
-		acknowledged, len(templates), len(declined), skipped)
+		acknowledged, len(templates), len(declined), len(unbound))
+	for _, template := range slices.Sorted(maps.Keys(knownDeclines)) {
+		switch missing, skipped := unbound[template]; {
+		case !slices.Contains(templates, template):
+			t.Errorf("knownDeclines names %s (%s), which the server does not advertise as subscribable: "+
+				"the entry excuses nothing, so rename or remove it", template, knownDeclines[template])
+		case skipped:
+			t.Logf("knownDeclines entry %s was not judged on this run: the World could not bind it (%s)", template, missing)
+		}
+	}
 	if acknowledged == 0 {
 		t.Fatal("the server acknowledged no subscription the World could bind; the sweep proves nothing about subscribing")
 	}
