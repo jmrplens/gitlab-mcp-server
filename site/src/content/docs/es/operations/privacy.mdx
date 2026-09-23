@@ -119,9 +119,9 @@ documentación llevan primero ahí.
 Tu Personal Access Token de GitLab lo proporcionas tú mediante variables de
 entorno o la interfaz de configuración de tu cliente MCP. Claude Desktop
 cifra los ajustes sensibles de las extensiones, entre ellos el token, antes de
-guardarlos, con una clave que custodia el almacén de credenciales del sistema
-operativo: el Llavero (Keychain) en macOS, DPAPI en Windows y el llavero del
-escritorio (como GNOME Keyring o KWallet) en Linux. En un escritorio Linux sin
+guardarlos, con una clave que protege el sistema operativo: el Llavero
+(Keychain) en macOS, DPAPI bajo tu sesión de Windows y el llavero del escritorio
+(como GNOME Keyring o KWallet) en Linux. En un escritorio Linux sin
 llavero se guardan sin esa protección. El servidor mantiene el token solo en
 la memoria del proceso, lo usa únicamente para autenticar las peticiones a tu
 instancia de GitLab y nunca lo escribe en los logs. Consulta [Seguridad](/gitlab-mcp-server/es/operations/security/)

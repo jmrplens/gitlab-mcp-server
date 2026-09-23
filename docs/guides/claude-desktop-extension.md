@@ -29,9 +29,9 @@ the download about 75 MB.
 | Skip TLS verification        | No       | off                  | `GITLAB_MCP_SKIP_TLS_VERIFY` |
 | Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
-   Claude Desktop encrypts the token before saving it, with a key held by the
-   operating system's credential store: the Keychain on macOS, DPAPI on
-   Windows, and the desktop keyring (such as GNOME Keyring or KWallet) on
+   Claude Desktop encrypts the token before saving it, with a key protected by
+   the operating system: the Keychain on macOS, DPAPI under your Windows login
+   on Windows, and the desktop keyring (such as GNOME Keyring or KWallet) on
    Linux. A Linux desktop without a keyring leaves the token without that
    protection.
 

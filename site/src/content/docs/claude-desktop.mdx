@@ -53,9 +53,9 @@ with a message in Claude Desktop's MCP log.
 
 :::tip[Token storage]
 Claude Desktop encrypts the Personal Access Token before saving it, with a key
-held by the operating system's credential store: the Keychain on macOS, DPAPI
-on Windows, and the desktop keyring (such as GNOME Keyring or KWallet) on
-Linux. A Linux desktop without a keyring leaves the token without that
+protected by the operating system: the Keychain on macOS, DPAPI under your
+Windows login on Windows, and the desktop keyring (such as GNOME Keyring or
+KWallet) on Linux. A Linux desktop without a keyring leaves the token without that
 protection. Create the token with the `api` scope under
 **GitLab → User Settings → Access Tokens**.
 :::
