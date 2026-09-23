@@ -360,4 +360,4 @@ go test -tags e2e -c -o NUL ./test/e2e/gitlab/...         # Windows
 
 **Docker-only domains**: pipeline create/get/cancel/retry/delete, job get/log/retry/cancel
 
-**MCP capability tests**: elicitation, the four guided flows (issue, merge request, release, project) on every surface under one scripted client, with the auto-accept and no-elicitation policies beside them
+**MCP capability tests**: elicitation, the four guided flows (issue, merge request, release, project) on every surface, each answered by a scripted client in a private session per test and surface, with the auto-accept and no-elicitation policies beside them
