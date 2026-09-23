@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 18,338 |
-| Unit test functions                                   | 17,137 |
-| E2E test functions                                    |  1,201 |
-| cmd test functions                                    |  3,381 |
-| Test files (internal/)                                |    652 |
-| Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    384 |
+| Total test functions                                  | 18,567 |
+| Unit test functions                                   | 17,263 |
+| E2E test functions                                    |  1,304 |
+| cmd test functions                                    |  3,460 |
+| Test files (internal/)                                |    653 |
+| Test files (cmd/)                                     |    222 |
+| Test files (test/e2e/)                                |    388 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     29 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.5% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,464 | 68.0% |
+| `TestFunc_Scenario` (2-part)           | 12,460 | 67.1% |
 | `TestFunc` (no underscore)             |    905 |  4.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,969 | 27.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  5,202 | 28.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,245 |        188 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Core packages           |          3,286 |        189 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            373 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |         10,144 |        448 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,201 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          3,381 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **18,338** |  **1,257** |                                                                                                 |
+| E2E integration         |          1,304 |        388 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          3,460 |        222 | server entry point and developer command utilities                                              |
+| **Total**               |     **18,567** |  **1,263** |                                                                                                 |
 
 ### Core Packages
 
@@ -74,7 +74,7 @@
 | oauth                |        82 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress             |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
 | prompts              |       370 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
-| resources            |       210 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
+| resources            |       211 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
 | serverpool           |       146 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                                                                              |
 | sourcewalk           |         9 |   100.0% | Package sourcewalk answers one question for everything here that walks this repository's tree: which directories below a walk root are this repository's own source, and which are something else that merely lives inside the checkout.                                                                                            |
 | subscriptions        |       107 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
@@ -86,8 +86,8 @@
 | testutil/modelrecord |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
 | testutil/modelscore  |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/shardio     |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil             |     1,039 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**         | **3,245** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil             |     1,079 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**         | **3,286** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
