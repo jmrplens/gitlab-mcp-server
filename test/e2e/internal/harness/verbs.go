@@ -184,9 +184,11 @@ func (s *Session) Subscribe(uri string) *Subscription {
 // the server sends once every subscription the stream asked for succeeded;
 // this waits for it, and a subscription it never arrives for is a refusal:
 // the first read failed, or the session holds as many watchers as the server
-// allows. On an older protocol the subscribe is an ordinary request and its
-// error is the refusal. Either way the subscribe is recorded with what came of
-// it, so a refused one is never credited as a subscription.
+// allows. Silence is the only signal of that refusal, so it costs the whole of
+// subscribeAckTimeout before this returns. On an older protocol the subscribe
+// is an ordinary request and its error is the refusal. Either way the
+// subscribe is recorded with what came of it, so a refused one is never
+// credited as an accepted subscription.
 //
 // One test at a time may watch a URI on one session, because the SDK keeps a
 // single listen per URI and per session and answers a second Subscribe from

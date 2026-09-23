@@ -636,8 +636,9 @@ func (c *sessionConn) acknowledge(req mcp.Request) {
 // caller put on its own, so the one call the middleware would see carries no
 // test to file it under. The verb records it here instead, once it knows the
 // answer, so a subscribe the server declined is recorded as the refusal it was
-// rather than credited; the resource-updated notification that may follow is
-// recorded by [sessionConn.recordResourceUpdate], which is the delivery half.
+// rather than as accepted; the resource-updated notification that may follow
+// is recorded by [sessionConn.recordResourceUpdate], which is the delivery
+// half.
 func (c *sessionConn) recordSubscribe(rec *envRecorder, uri, expectation, outcome string) {
 	line := &e2ecalls.Call{
 		Test:        rec.env.T.Name(),
