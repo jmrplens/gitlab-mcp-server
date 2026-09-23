@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // toolName is how the report names itself.
@@ -108,7 +109,12 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
 		return 1
 	}
-	served, suite := splitPatterns(cfg.patterns)
+	root, err := absolutePath(cfg.dir)
+	if err != nil {
+		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
+		return 1
+	}
+	served, suite := splitPatterns(root, cfg.patterns)
 	var sites []site
 	if len(served) > 0 {
 		sites, err = collectSites(cfg.dir, served, cfg.overlay)
@@ -166,11 +172,17 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 // printing no assertion section. What holds a table to its tree is that the
 // run covered the tree, which [namesWhole] decides: the bare run does for
 // both, and a run naming one whole tree itself does for that one.
-func splitPatterns(patterns []string) (served, suite []string) {
+//
+// Each pattern is first read as the relative pattern it names
+// ([relativePattern]), and that spelling is what both the sorting and the
+// load are handed, so the two cannot disagree about which tree a pattern
+// names.
+func splitPatterns(root string, patterns []string) (served, suite []string) {
 	if len(patterns) == 0 {
 		return defaultPatterns, defaultSuitePatterns
 	}
-	for _, pattern := range patterns {
+	for _, given := range patterns {
+		pattern := relativePattern(root, given)
 		if isSuitePattern(pattern) {
 			suite = append(suite, pattern)
 			continue
@@ -180,11 +192,35 @@ func splitPatterns(patterns []string) (served, suite []string) {
 	return served, suite
 }
 
+// relativePattern reads a pattern given in either of the two other spellings
+// go list loads, an absolute path below root or an import path below this
+// module, as the relative pattern it names, and returns any other pattern as
+// it was given.
+//
+// Both spellings used to be sorted as they were typed, which the suite's
+// prefix never matches, so a run naming the whole suite either way was handed
+// to the served load. That load reads no test file and sets no e2e tag, so it
+// found the three runtime packages holding nothing but a doc.go each, judged
+// nothing, printed no assertion section and exited 0. A relative pattern
+// passes through untouched, because filepath.Rel refuses to relate it to an
+// absolute root, and so does an absolute path outside the root, which names
+// nothing of either tree.
+func relativePattern(root, pattern string) string {
+	if rel, err := filepath.Rel(root, pattern); err == nil && !strings.HasPrefix(rel, "..") {
+		return "./" + filepath.ToSlash(rel)
+	}
+	if rest, underModule := strings.CutPrefix(pattern, goprogram.ModulePath+"/"); underModule {
+		return "./" + rest
+	}
+	return pattern
+}
+
 // isSuitePattern reports whether a pattern names part of the e2e suite, read
 // slash-separated, so .\test\e2e\gitlab\ee on Windows is the same pattern as
-// ./test/e2e/gitlab/ee. A pattern without the leading ./ is sorted the same
-// way and goes no further: go list reads it as an import path, which matches
-// no package of this module, so the load it is handed to refuses the run.
+// ./test/e2e/gitlab/ee. A relative pattern without the leading ./ is sorted
+// the same way and goes no further: go list reads it as an import path, which
+// matches no package of this module, so the load it is handed to refuses the
+// run.
 func isSuitePattern(pattern string) bool {
 	return strings.HasPrefix(normalizePattern(pattern), suiteDir)
 }
@@ -198,9 +234,10 @@ func isSuitePattern(pattern string) bool {
 // takes a pattern in the platform's spelling. Compared literally,
 // .\test\e2e\gitlab\... on Windows loaded the whole suite and left the helper
 // table unjudged, which is a clean report over a run that never asked the
-// question. A pattern without the leading ./ never reaches this comparison:
-// go list reads it as an import path, which matches no package of this
-// module, and the load refuses the run first.
+// question. An absolute path or an import path reaches it already read as the
+// relative pattern it names ([relativePattern]). A relative pattern without
+// the leading ./ never does: go list reads it as an import path, which
+// matches no package of this module, and the load refuses the run first.
 func namesWhole(patterns, whole []string) bool {
 	return slices.EqualFunc(patterns, whole, func(given, want string) bool {
 		return normalizePattern(given) == normalizePattern(want)

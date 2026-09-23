@@ -13,12 +13,12 @@ import (
 // toolToken matches a tool-name-shaped token in prose, which is the
 // documentation gate's own rule (cmd/audit_doc_tool_names) spelled again here.
 //
-// The two are deliberately not shared yet, because they answer different
+// The two are deliberately not shared, because they answer different
 // questions of the same token: the documentation gate asks whether some
 // surface registers that name and refuses the ones none does, while this rule
-// refuses every one of them, registered or not. If this ever gates, the token
+// refuses every one of them, registered or not. Both gate now, so the token
 // rule belongs in cmd/internal/actionids beside the ID rule the two gates
-// already share.
+// already share, and moving it there is the consolidation still open.
 var toolToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
 
 // The three ways a hint can name a capability that the session reading it

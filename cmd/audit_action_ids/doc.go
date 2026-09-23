@@ -36,10 +36,14 @@
 // no section for it. Only a run over the whole suite holds the helper table to
 // it: the bare run, or one naming ./test/e2e/gitlab/... itself, which the
 // comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is the
-// same run. A pattern keeps its leading ./: without it go list reads
-// test/e2e/gitlab/... as an import path, which matches no package of this
-// module, and the run is refused with "no packages matched" before anything
-// is judged.
+// same run. A pattern given as an absolute path below the repository root, or
+// as an import path below this module, is read as the relative pattern it
+// names before it is sorted, and that is the pattern the load is handed: both
+// spellings used to go to the served load whatever they named, which read the
+// suite's packages as three doc.go files and reported them clean. A relative
+// pattern keeps its leading ./: without it go list reads test/e2e/gitlab/...
+// as an import path, which matches no package of this module, and the run is
+// refused with "no packages matched" before anything is judged.
 //
 // # What it compares against
 //
@@ -81,7 +85,7 @@
 // The remedy is to spell the ID as a constant, which every site in the tree
 // does today.
 //
-// # The staged rule over error hints
+// # The rule over error hints
 //
 // A model reads the prose a handler hands it when a call fails exactly as it
 // reads the rest, and nothing judged it. A hint saying "verify project_id with
@@ -161,10 +165,15 @@
 // reader can tell a defect of the server from a defect of its test.
 //
 // The helper table is held to the suite as every declaration table here is.
-// Any run names an entry whose function takes no parameter of the declared
-// name, and a run over the whole suite names an entry nothing calls, which is
-// what a renamed helper looks like from here; both fail the gate, because
-// either would stop every call of that helper being read without a word.
+// Any run names a copy of a helper that takes no parameter of the declared
+// name, with the package that declares it, and a run over the whole suite
+// names an entry nothing calls, which is what a renamed helper looks like from
+// here; both fail the gate, because either would stop every call of that
+// helper being read without a word. The two are fixed in different places. An
+// entry nothing calls is the table's to fix. A parameter that differs is the
+// copy's: one entry names the parameter of every copy of its helper, so no
+// edit of the table can agree with two copies that disagree, and the row says
+// so rather than sending the reader to the entry.
 //
 // Its limits are the table's. A helper under a name the table does not
 // declare is not read until it is declared, and neither is one called through

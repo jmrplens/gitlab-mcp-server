@@ -106,7 +106,8 @@ type Report struct {
 	// could not fold does not.
 	Assertions HintReport `json:"e2e_assertions"`
 	// StaleHelpers are the entries of the helper table that describe no call,
-	// and CallsByHelper how many calls of each the suite walk met.
+	// each with what would make it describe one, and CallsByHelper how many
+	// calls of each the suite walk met.
 	StaleHelpers  []string       `json:"stale_assertion_helpers,omitempty"`
 	CallsByHelper map[string]int `json:"assertion_calls_by_helper,omitempty"`
 	// StaleExemptions are the declarations that excused nothing, of either
@@ -373,12 +374,17 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 // quotations, then the helper table entries that describe no call, which fail
 // the gate and so are printed whatever -v says, then under -v how many calls
 // of each helper were read.
+//
+// Each stale entry carries its own remedy, unlike a stale declaration, because
+// the two kinds have different ones: an entry nothing calls is the table's to
+// fix, and a copy of a helper that takes no parameter of the entry's name is
+// the helper's (see [staleHelpers]).
 func writeSuiteReport(out io.Writer, report Report, verbose bool) {
 	writeAssertionReport(out, report.Assertions, verbose)
 	if len(report.StaleHelpers) > 0 {
 		fmt.Fprintln(out, "=== assertion helpers that describe no call ===")
 		for _, entry := range report.StaleHelpers {
-			fmt.Fprintf(out, "  %s. Fix the entry.\n", entry)
+			fmt.Fprintf(out, "  %s.\n", entry)
 		}
 	}
 	if verbose && len(report.CallsByHelper) > 0 {

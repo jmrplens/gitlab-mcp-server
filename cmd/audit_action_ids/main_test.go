@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // auditedPattern is a small, real package to run the whole command over. The
@@ -234,7 +235,17 @@ func Get() error {
 // TestSplitPatterns_EachSpelling_GoesToItsLoad holds what a run covers: a bare
 // run both whole trees, and a run naming patterns exactly what it names, each
 // sorted to the load that reads it whatever spelling a caller typed.
+//
+// go list loads a package by three spellings, and each has a case: the
+// relative pattern with its leading ./, in either separator; an absolute path;
+// and an import path. The last two used to be sorted as typed, which the
+// suite's prefix never matches, so the whole suite named either way went to
+// the served load and came back clean with nothing judged. They are read as
+// the relative pattern they name, which is also the pattern the load is
+// handed. An absolute path outside the root names nothing of either tree and
+// is handed on as it was given.
 func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
+	root := t.TempDir()
 	cases := []struct {
 		name     string
 		patterns []string
@@ -256,10 +267,35 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 			served:   []string{"./internal/tools/issues", "./cmd/audit_action_ids"},
 			suite:    []string{"./test/e2e/gitlab/common", "./test/e2e/gitlab/ee"},
 		},
+		{
+			name:     "the suite as an absolute path",
+			patterns: []string{filepath.Join(root, "test", "e2e", "gitlab", "...")},
+			suite:    []string{"./test/e2e/gitlab/..."},
+		},
+		{
+			name:     "a served package as an absolute path",
+			patterns: []string{filepath.Join(root, "internal", "tools", "issues")},
+			served:   []string{"./internal/tools/issues"},
+		},
+		{
+			name:     "the suite as an import path",
+			patterns: []string{goprogram.ModulePath + "/test/e2e/gitlab/..."},
+			suite:    []string{"./test/e2e/gitlab/..."},
+		},
+		{
+			name:     "a served package as an import path",
+			patterns: []string{goprogram.ModulePath + "/internal/tools/issues"},
+			served:   []string{"./internal/tools/issues"},
+		},
+		{
+			name:     "an absolute path outside the root",
+			patterns: []string{filepath.Join(filepath.Dir(root), "elsewhere", "test", "e2e", "gitlab", "...")},
+			served:   []string{filepath.Join(filepath.Dir(root), "elsewhere", "test", "e2e", "gitlab", "...")},
+		},
 	}
 	for _, one := range cases {
 		t.Run(one.name, func(t *testing.T) {
-			served, suite := splitPatterns(one.patterns)
+			served, suite := splitPatterns(root, one.patterns)
 			if !slices.Equal(served, one.served) || !slices.Equal(suite, one.suite) {
 				t.Errorf("splitPatterns(%q) = %q, %q, want %q, %q", one.patterns, served, suite, one.served, one.suite)
 			}
@@ -271,8 +307,59 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 	if !slices.Equal(defaultSuitePatterns, []string{"./test/e2e/gitlab/..."}) {
 		t.Errorf("defaultSuitePatterns = %v, want the suite that quotes it", defaultSuitePatterns)
 	}
-	if served, suite := splitPatterns(defaultSuitePatterns); len(served) != 0 || !slices.Equal(suite, defaultSuitePatterns) {
+	if served, suite := splitPatterns(root, defaultSuitePatterns); len(served) != 0 || !slices.Equal(suite, defaultSuitePatterns) {
 		t.Errorf("the default suite named explicitly splits into %q and %q, want all of it read as suite", served, suite)
+	}
+}
+
+// TestRun_Check_SuiteNamedByAbsolutePathOrImportPath_IsJudgedAsTheSuite drives
+// the whole command over the planted suite named in the two spellings that
+// used to be sorted to the served load, which read three doc.go files, judged
+// nothing and exited 0 over a quotation naming a tool. Named either way, the
+// run reads the quotation and the gate fails on it.
+func TestRun_Check_SuiteNamedByAbsolutePathOrImportPath_IsJudgedAsTheSuite(t *testing.T) {
+	root := repoRoot(t)
+	overlay := suiteOverlay(t, map[string]string{"planted_test.go": plantedToDoRefusal})
+	for _, one := range []struct {
+		name    string
+		pattern string
+	}{
+		{name: "an absolute path", pattern: filepath.Join(root, filepath.FromSlash(suiteFixtureDir), "...")},
+		{name: "an import path", pattern: goprogram.ModulePath + "/" + suiteFixtureDir + "/..."},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			code := run(auditConfig{dir: root, patterns: []string{one.pattern}, overlay: overlay, check: true}, &stdout, &stderr)
+
+			if code != 1 {
+				t.Fatalf("run with -check = %d over a quotation naming a tool, want 1; stdout %q", code, stdout.String())
+			}
+			if want := "  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read;"; !strings.Contains(stdout.String(), want) {
+				t.Errorf("stdout = %q, want %q", stdout.String(), want)
+			}
+		})
+	}
+}
+
+// TestRun_NoWorkingDirectory_ExitsOne holds the one failure resolving the root
+// can have: filepath.Abs fails only when the process has no working
+// directory, which is reachable only by replacing it, and the run stops there
+// rather than sorting patterns against a root it does not have.
+func TestRun_NoWorkingDirectory_ExitsOne(t *testing.T) {
+	restore := absolutePath
+	absolutePath = func(string) (string, error) { return "", errors.New("no working directory") }
+	t.Cleanup(func() { absolutePath = restore })
+	var stdout, stderr bytes.Buffer
+
+	if code := run(auditConfig{dir: ".", patterns: []string{auditedPattern}}, &stdout, &stderr); code != 1 {
+		t.Fatalf("run = %d without a working directory, want 1", code)
+	}
+	if want := "audit_action_ids: no working directory\n"; stderr.String() != want {
+		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing reported for a run that could not start", stdout.String())
 	}
 }
 
@@ -285,9 +372,11 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 // tree, or the tree plus something beside it, is a run whose unused entries
 // say nothing about the table.
 //
-// A pattern without the leading ./ has no case here, because no run reaches
-// this comparison with one: go list reads it as an import path, which matches
-// no package of this module, and the load refuses the run first.
+// A relative pattern without the leading ./ has no case here, because no run
+// reaches this comparison with one: go list reads it as an import path, which
+// matches no package of this module, and the load refuses the run first. An
+// absolute path or an import path has none either, since splitPatterns has
+// already read it as the relative pattern it names.
 func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -449,7 +538,10 @@ func TestRenamed(t *testing.T) {
 	if stderr.String() != want {
 		t.Errorf("stderr = %q, want %q", stderr.String(), want)
 	}
-	const staleRow = "=== assertion helpers that describe no call ===\n  containsAny takes no parameter named needles (servedTextAssertions). Fix the entry.\n"
+	const staleRow = "=== assertion helpers that describe no call ===\n" +
+		"  test/e2e/actionidsfixture/renamed: containsAny takes no parameter named needles (servedTextAssertions). " +
+		"The entry names one parameter for every copy of containsAny, so rename this copy's parameter to needles, " +
+		"or the entry and every copy together.\n"
 	if !strings.Contains(stdout.String(), staleRow) {
 		t.Errorf("stdout = %q, want the mismatched helper printed without -v", stdout.String())
 	}

@@ -691,7 +691,7 @@ func TestJudgeHelpers_EachRun_MarksTheSuiteJudgedAndNamesWhatItCan(t *testing.T)
 		if !report.SuiteJudged || !maps.Equal(report.CallsByHelper, read.calls) {
 			t.Errorf("suite judged %t, calls %v, want true and %v", report.SuiteJudged, report.CallsByHelper, read.calls)
 		}
-		if want := []string{"containsAny is called nowhere in the suite (servedTextAssertions)"}; !slices.Equal(report.StaleHelpers, want) {
+		if want := []string{"containsAny is called nowhere in the suite (servedTextAssertions). Fix the entry"}; !slices.Equal(report.StaleHelpers, want) {
 			t.Errorf("stale helpers = %q, want %q", report.StaleHelpers, want)
 		}
 	})
@@ -741,7 +741,7 @@ func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T
 	}, stubCatalog(), false)
 	report.judgeHelpers(suiteRead{
 		calls:      map[string]int{"assertMentions": 1},
-		mismatches: map[string]string{"mentionsAny": "substrings"},
+		mismatches: map[helperCopy]string{{pkg: "s", name: "mentionsAny"}: "substrings"},
 	}, false)
 
 	var quiet, loud bytes.Buffer
@@ -756,7 +756,8 @@ func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T
 		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated)",
 		"    assertion findings by rule: tool_name 1",
 		"=== assertion helpers that describe no call ===",
-		"  mentionsAny takes no parameter named substrings (servedTextAssertions). Fix the entry.",
+		"  s: mentionsAny takes no parameter named substrings (servedTextAssertions). The entry names one parameter " +
+			"for every copy of mentionsAny, so rename this copy's parameter to substrings, or the entry and every copy together.",
 		"",
 	}, "\n")
 	if !strings.HasSuffix(quiet.String(), wantTail) {

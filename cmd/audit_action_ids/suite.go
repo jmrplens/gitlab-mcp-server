@@ -52,7 +52,9 @@ type assertionHelper struct {
 // copy added to ce is read with no entry of its own. The argument is found by
 // the parameter's name in the callee's own signature rather than by position,
 // which is what reads ExpectToolError's one contains and leaves the options
-// after it alone.
+// after it alone. The price is that one entry names the parameter of every
+// copy, so a copy whose parameter differs is named with its package (see
+// [helperCopy]): no edit of the table can agree with two copies at once.
 //
 // A predicate is judged only where its call is negated. `if !mentionsAny(...)`
 // fails the test when none of the needles is there, so each needle is a claim
@@ -84,13 +86,26 @@ func isAssertionParamName(name string) bool {
 	return false
 }
 
+// helperCopy is one declaration of a table helper: the package that declares
+// it, as the repository names it, and its name.
+//
+// A mismatch is a fact about one copy and not about the name. assertMentions
+// is declared in common and again in ee, both under the one entry, so a copy
+// whose parameter was renamed is the copy that has to change, and a row
+// naming the helper alone would say neither which copy that is nor that the
+// entry is not the thing to edit.
+type helperCopy struct {
+	pkg  string
+	name string
+}
+
 // suiteRead is what the walk of the suite hands back: the quotations it
-// found, how many times it met each declared helper, and the helpers whose
-// function turned out to take no parameter of the declared name.
+// found, how many times it met each declared helper, and the copies of a
+// helper whose function turned out to take no parameter of the declared name.
 type suiteRead struct {
 	sites      []site
 	calls      map[string]int
-	mismatches map[string]string
+	mismatches map[helperCopy]string
 }
 
 // collectAssertionSites loads the e2e suite named by patterns, rooted at dir,
@@ -189,7 +204,7 @@ func (w *walker) visitAssertionCall(call *ast.CallExpr, negated bool) {
 	signature := callee.Signature()
 	index := paramIndex(signature.Params(), helper.param)
 	if index < 0 {
-		w.mismatches[callee.Name()] = helper.param
+		w.mismatches[helperCopy{pkg: trimModulePath(callee.Pkg().Path()), name: callee.Name()}] = helper.param
 		return
 	}
 	if helper.predicate != negated {
@@ -223,22 +238,30 @@ func paramIndex(params *types.Tuple, name string) int {
 }
 
 // staleHelpers names the entries of [servedTextAssertions] that describe no
-// call, each with the table it sits in.
+// call, each with the table it sits in and what would make it describe one.
 //
 // A mismatch is named on any run, since one call is enough to show the
-// function takes no parameter of the declared name. An entry nothing calls is
-// named only by a run over the whole suite: over one package every helper
-// that package does not use is called nowhere, and reporting it would be an
-// answer about the patterns rather than about the table.
-func staleHelpers(calls map[string]int, mismatches map[string]string, wholeSuite bool) []string {
+// function takes no parameter of the declared name. It is named with the
+// package of the copy that disagrees, and its remedy is not the entry's: the
+// entry holds one parameter for every copy of the helper, so it is this
+// copy's parameter that has to take the entry's name, unless the entry is
+// renamed together with every copy.
+//
+// An entry nothing calls is named only by a run over the whole suite: over
+// one package every helper that package does not use is called nowhere, and
+// reporting it would be an answer about the patterns rather than about the
+// table. That one is the entry's to fix, renamed with its helper or removed.
+func staleHelpers(calls map[string]int, mismatches map[helperCopy]string, wholeSuite bool) []string {
 	var stale []string
-	for name, param := range mismatches {
-		stale = append(stale, name+" takes no parameter named "+param+" (servedTextAssertions)")
+	for declared, param := range mismatches {
+		stale = append(stale, declared.pkg+": "+declared.name+" takes no parameter named "+param+
+			" (servedTextAssertions). The entry names one parameter for every copy of "+declared.name+
+			", so rename this copy's parameter to "+param+", or the entry and every copy together")
 	}
 	if wholeSuite {
 		for name := range servedTextAssertions {
 			if calls[name] == 0 {
-				stale = append(stale, name+" is called nowhere in the suite (servedTextAssertions)")
+				stale = append(stale, name+" is called nowhere in the suite (servedTextAssertions). Fix the entry")
 			}
 		}
 	}

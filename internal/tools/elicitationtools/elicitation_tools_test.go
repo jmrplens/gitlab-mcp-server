@@ -81,15 +81,15 @@ func TestCancelledResult(t *testing.T) {
 
 // TestUnsupportedResult verifies the whole refusal a wizard answers with on a
 // client without elicitation: the prose naming the tool and the capability it
-// needs, the alternatives that do the same work, and the refusal envelope
+// needs, the one action that does the same work, and the refusal envelope
 // every other refusal travels in.
 //
-// The alternatives are catalog IDs, and the whole-text comparison is what
-// holds them there: the one gitlab_* name the refusal may spell is the flow
-// the client called, and a sentence naming the meta tool instead would be
-// right for one surface of three.
+// The alternative is a catalog ID, and the whole-text comparison is what holds
+// it there: the one gitlab_* name the refusal may spell is the flow the client
+// called, and a sentence naming the meta tool instead would be right for one
+// surface of three.
 func TestUnsupportedResult(t *testing.T) {
-	result := UnsupportedResult("gitlab_interactive_issue_create")
+	result := UnsupportedResult("gitlab_interactive_issue_create", "issue.create")
 	if !result.IsError {
 		t.Error("UnsupportedResult.IsError = false, want true")
 	}
@@ -103,8 +103,7 @@ func TestUnsupportedResult(t *testing.T) {
 	want := `Tool "gitlab_interactive_issue_create" requires the MCP elicitation capability. ` +
 		"Your MCP client does not support elicitation. " +
 		"Check your client's MCP documentation for elicitation support.\n\n" +
-		"Alternatives: use the standard issue.create or merge_request.create action, " +
-		"or the equivalent action for the object."
+		"Alternative: use the standard issue.create action, which takes every field in the call instead of prompting for it."
 	if tc.Text != want {
 		t.Errorf("refusal:\n got %q\nwant %q", tc.Text, want)
 	}
@@ -708,15 +707,23 @@ func TestCatalogSurface_NoPanic(t *testing.T) {
 // MCP round-trip — without elicitation (covers unsupported path in register.go)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripNoElicitation verifies the MCPRound_TripNoElicitation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestMCPRound_TripNoElicitation verifies that every guided flow, called by a
+// client that cannot elicit, refuses with the alternative its own description
+// promises.
+//
+// The client advertises no elicitation capability, so each flow ends at its
+// first prompt and the route turns that into the refusal. The whole refusal is
+// compared rather than a fragment of it, and the description is read for the
+// same ID, because the defect this holds against was a pair that disagreed:
+// the refusal named the issue and merge request actions whichever flow was
+// refused, while the release and project descriptions promised their own.
 func TestMCPRound_TripNoElicitation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	byTool := elicitationSpecsByTool(t, ActionSpecs(client))
 	for _, spec := range ActionSpecs(client) {
 		toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
 			Description:  spec.IndividualTool.Description,
@@ -736,13 +743,14 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 	}
 
 	tests := []struct {
-		name string
-		args map[string]any
+		name        string
+		args        map[string]any
+		alternative string
 	}{
-		{"gitlab_interactive_issue_create", map[string]any{keyProjectID: "42"}},
-		{"gitlab_interactive_mr_create", map[string]any{keyProjectID: "42"}},
-		{"gitlab_interactive_release_create", map[string]any{keyProjectID: "42"}},
-		{"gitlab_interactive_project_create", map[string]any{}},
+		{"gitlab_interactive_issue_create", map[string]any{keyProjectID: "42"}, "issue.create"},
+		{"gitlab_interactive_mr_create", map[string]any{keyProjectID: "42"}, "merge_request.create"},
+		{"gitlab_interactive_release_create", map[string]any{keyProjectID: "42"}, "release.create"},
+		{"gitlab_interactive_project_create", map[string]any{}, "project.create"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -756,6 +764,14 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 			}
 			if !res.IsError {
 				t.Errorf("%s should return IsError=true (elicitation unsupported)", tc.name)
+			}
+			want := contentText(UnsupportedResult(tc.name, tc.alternative))
+			if got := contentText(res); got != want {
+				t.Errorf("refusal of %s:\n got %q\nwant %q", tc.name, got, want)
+			}
+			promise := "If unsupported, returns a structured error naming " + tc.alternative + " as the alternative."
+			if description := byTool[tc.name].IndividualTool.Description; !strings.Contains(description, promise) {
+				t.Errorf("description of %s does not promise the refusal it gives, want %q in:\n%s", tc.name, promise, description)
 			}
 		})
 	}
@@ -1944,7 +1960,7 @@ func TestResultsForOperationsThatDidNotRun_AreErrorResults(t *testing.T) {
 		},
 		{
 			name:   "client cannot elicit",
-			result: UnsupportedResult("gitlab_interactive_create_issue"),
+			result: UnsupportedResult("gitlab_interactive_create_issue", "issue.create"),
 		},
 	}
 

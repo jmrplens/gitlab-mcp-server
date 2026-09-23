@@ -201,7 +201,7 @@ func newCollector(dir string, loaded []*packages.Package) (*collector, error) {
 		visitedVars: map[*types.Var]struct{}{},
 		recorded:    map[ast.Expr]struct{}{},
 		calls:       map[string]int{},
-		mismatches:  map[string]string{},
+		mismatches:  map[helperCopy]string{},
 	}, nil
 }
 
@@ -341,11 +341,12 @@ type collector struct {
 	// does to WrapErrWithHint.
 	recorded map[ast.Expr]struct{}
 	// calls counts the calls of each declared assertion helper the suite walk
-	// met, and mismatches names the declared parameter a helper turned out not
-	// to take. Both are the suite walk's alone: they are what holds the
-	// helper table to the suite, and the served walk leaves them empty.
+	// met, and mismatches names the declared parameter a copy of a helper
+	// turned out not to take. Both are the suite walk's alone: they are what
+	// holds the helper table to the suite, and the served walk leaves them
+	// empty.
 	calls      map[string]int
-	mismatches map[string]string
+	mismatches map[helperCopy]string
 }
 
 // walk visits every file of every indexed package with one walker per

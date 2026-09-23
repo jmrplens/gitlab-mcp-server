@@ -420,8 +420,26 @@ func TestCollectAssertionSites_EveryHelperCall_IsCountedOnce(t *testing.T) {
 // called as a bare predicate, whose needles would not be judged anyway, and it
 // is named all the same: the parameter is looked up on every call, so a
 // helper used only in the unjudged position is not a way past the rule.
+//
+// It is named as the copy it is. The planted suite's own mentionsAny takes
+// the declared parameter and is called too, which is the shape the real suite
+// has in assertMentions, declared in common and again in ee: the one entry
+// covers both, so only the copy's package says which of them has to change,
+// and the copy that agrees is read as before.
 func TestCollectAssertionSites_AHelperWithoutItsParameter_IsNamed(t *testing.T) {
 	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"kept_test.go": `//go:build e2e
+
+package actionidsfixture
+
+import "testing"
+
+func TestKept(t *testing.T) {
+	if !mentionsAny("text", "read: the copy that takes its parameter") {
+		t.Error("absent")
+	}
+}
+`,
 		"renamed/doc.go": "// Package renamed renames a helper's parameter.\npackage renamed\n",
 		"renamed/renamed_test.go": `//go:build e2e
 
@@ -449,14 +467,19 @@ func TestRenamed(t *testing.T) {
 `,
 	}))
 
-	if want := map[string]string{"mentionsAny": "substrings"}; !maps.Equal(read.mismatches, want) {
+	want := map[helperCopy]string{{pkg: suiteFixtureDir + "/renamed", name: "mentionsAny"}: "substrings"}
+	if !maps.Equal(read.mismatches, want) {
 		t.Errorf("mismatches = %v, want %v", read.mismatches, want)
 	}
 	if got := sitesIn(read.sites, suiteFixtureDir+"/renamed"); len(got) != 0 {
 		t.Errorf("sites = %+v, want none from a helper whose parameter is not there", got)
 	}
-	if read.calls["mentionsAny"] != 1 {
-		t.Errorf("calls = %v, want the call counted although it could not be read", read.calls)
+	wantKept := []string{"read: the copy that takes its parameter"}
+	if got := valuesOfKind(sitesIn(read.sites, suiteFixtureDir), kindAssertion); !slices.Equal(got, wantKept) {
+		t.Errorf("assertion values of the copy that agrees = %q, want %q", got, wantKept)
+	}
+	if read.calls["mentionsAny"] != 2 {
+		t.Errorf("calls = %v, want both copies' calls counted, the one that could not be read included", read.calls)
 	}
 }
 
@@ -691,13 +714,22 @@ func pkgPaths(pkgs []*packages.Package) []string {
 }
 
 // TestStaleHelpers_EachRun_NamesWhatItCanJudge holds the helper table's two
-// staleness rules and the run each is allowed on.
+// staleness rules, the run each is allowed on, and the remedy each row
+// carries: a mismatch names the copy of the helper that disagrees and sends
+// the reader to its parameter, an entry nothing calls sends them to the entry.
+// Two copies of one helper in two packages are two rows, since each is a
+// parameter to rename.
 func TestStaleHelpers_EachRun_NamesWhatItCanJudge(t *testing.T) {
 	everyHelperOnce := map[string]int{"assertMentions": 1, "ExpectToolError": 1, "mentionsAny": 1, "containsAny": 1}
+	mismatchRow := func(pkg, name, param string) string {
+		return pkg + ": " + name + " takes no parameter named " + param + " (servedTextAssertions). " +
+			"The entry names one parameter for every copy of " + name + ", so rename this copy's parameter to " +
+			param + ", or the entry and every copy together"
+	}
 	cases := []struct {
 		name       string
 		calls      map[string]int
-		mismatches map[string]string
+		mismatches map[helperCopy]string
 		wholeSuite bool
 		want       []string
 	}{
@@ -706,8 +738,8 @@ func TestStaleHelpers_EachRun_NamesWhatItCanJudge(t *testing.T) {
 			calls:      map[string]int{"assertMentions": 3, "ExpectToolError": 1},
 			wholeSuite: true,
 			want: []string{
-				"containsAny is called nowhere in the suite (servedTextAssertions)",
-				"mentionsAny is called nowhere in the suite (servedTextAssertions)",
+				"containsAny is called nowhere in the suite (servedTextAssertions). Fix the entry",
+				"mentionsAny is called nowhere in the suite (servedTextAssertions). Fix the entry",
 			},
 		},
 		{name: "a helper nothing calls, over part of it", calls: map[string]int{"assertMentions": 3}, wholeSuite: false},
@@ -715,17 +747,29 @@ func TestStaleHelpers_EachRun_NamesWhatItCanJudge(t *testing.T) {
 		{
 			name:       "a mismatch, over part of it",
 			calls:      map[string]int{"mentionsAny": 1},
-			mismatches: map[string]string{"mentionsAny": "substrings"},
-			want:       []string{"mentionsAny takes no parameter named substrings (servedTextAssertions)"},
+			mismatches: map[helperCopy]string{{pkg: "test/e2e/gitlab/common", name: "mentionsAny"}: "substrings"},
+			want:       []string{mismatchRow("test/e2e/gitlab/common", "mentionsAny", "substrings")},
+		},
+		{
+			name:  "two copies of one helper, each its own row",
+			calls: map[string]int{"assertMentions": 2},
+			mismatches: map[helperCopy]string{
+				{pkg: "test/e2e/gitlab/ee", name: "assertMentions"}:     "substrings",
+				{pkg: "test/e2e/gitlab/common", name: "assertMentions"}: "substrings",
+			},
+			want: []string{
+				mismatchRow("test/e2e/gitlab/common", "assertMentions", "substrings"),
+				mismatchRow("test/e2e/gitlab/ee", "assertMentions", "substrings"),
+			},
 		},
 		{
 			name:       "both, in order",
 			calls:      map[string]int{"assertMentions": 1, "ExpectToolError": 1, "mentionsAny": 1},
-			mismatches: map[string]string{"ExpectToolError": "contains"},
+			mismatches: map[helperCopy]string{{pkg: "test/e2e/internal/harness", name: "ExpectToolError"}: "contains"},
 			wholeSuite: true,
 			want: []string{
-				"ExpectToolError takes no parameter named contains (servedTextAssertions)",
-				"containsAny is called nowhere in the suite (servedTextAssertions)",
+				"containsAny is called nowhere in the suite (servedTextAssertions). Fix the entry",
+				mismatchRow("test/e2e/internal/harness", "ExpectToolError", "contains"),
 			},
 		},
 	}

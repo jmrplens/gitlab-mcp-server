@@ -21,6 +21,20 @@ const (
 	descElicitConfirmPrompt = "- confirm (boolean, required): final yes/no review of the assembled summary.\n\n"
 )
 
+// The action each flow offers in its place when the client cannot elicit, by
+// catalog ID. The refusal names it and so does the flow's description, both
+// from here, so the two cannot promise different things: they used to, when
+// the refusal named two meta tools for every flow while each description
+// promised its own. The domains write these IDs as package-local constants,
+// which is why they are spelled again here, and why a test of the catalog in
+// internal/tools holds each one to an action it serves.
+const (
+	alternativeIssueCreate   = "issue.create"
+	alternativeMRCreate      = "merge_request.create"
+	alternativeProjectCreate = "project.create"
+	alternativeReleaseCreate = "release.create"
+)
+
 type cancelledOutput struct {
 	Message string
 }
@@ -29,17 +43,20 @@ func (cancelledOutput) SurfaceToolTextOnly() {
 	// Marker method only; surface tool projection checks interface satisfaction.
 }
 
+// unsupportedOutput is a flow refused for want of elicitation: the tool the
+// client called, and the action that does the same work without prompting.
 type unsupportedOutput struct {
-	ToolName string
+	ToolName    string
+	Alternative string
 }
 
 // ActionSpecs returns canonical specs for standalone interactive elicitation actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		interactiveCreateSpec("issue_create", elicitationRoute(client, "gitlab_interactive_issue_create", "Issue creation cancelled by user.", IssueCreate), "gitlab_interactive_issue_create", "Guided issue creation through MCP elicitation with explicit user confirmation.", issueCreateDescription()),
-		interactiveCreateSpec("mr_create", elicitationRoute(client, "gitlab_interactive_mr_create", "Merge request creation cancelled by user.", MRCreate), "gitlab_interactive_mr_create", "Guided merge request creation through MCP elicitation with explicit user confirmation.", mrCreateDescription()),
-		interactiveCreateSpec("project_create", elicitationRoute(client, "gitlab_interactive_project_create", "Project creation cancelled by user.", ProjectCreate), "gitlab_interactive_project_create", "Guided project creation through MCP elicitation with explicit user confirmation.", projectCreateDescription()),
-		interactiveCreateSpec("release_create", elicitationRoute(client, "gitlab_interactive_release_create", "Release creation cancelled by user.", ReleaseCreate), "gitlab_interactive_release_create", "Guided release creation through MCP elicitation with explicit user confirmation.", releaseCreateDescription()),
+		interactiveCreateSpec("issue_create", elicitationRoute(client, "gitlab_interactive_issue_create", alternativeIssueCreate, "Issue creation cancelled by user.", IssueCreate), "gitlab_interactive_issue_create", "Guided issue creation through MCP elicitation with explicit user confirmation.", issueCreateDescription()),
+		interactiveCreateSpec("mr_create", elicitationRoute(client, "gitlab_interactive_mr_create", alternativeMRCreate, "Merge request creation cancelled by user.", MRCreate), "gitlab_interactive_mr_create", "Guided merge request creation through MCP elicitation with explicit user confirmation.", mrCreateDescription()),
+		interactiveCreateSpec("project_create", elicitationRoute(client, "gitlab_interactive_project_create", alternativeProjectCreate, "Project creation cancelled by user.", ProjectCreate), "gitlab_interactive_project_create", "Guided project creation through MCP elicitation with explicit user confirmation.", projectCreateDescription()),
+		interactiveCreateSpec("release_create", elicitationRoute(client, "gitlab_interactive_release_create", alternativeReleaseCreate, "Release creation cancelled by user.", ReleaseCreate), "gitlab_interactive_release_create", "Guided release creation through MCP elicitation with explicit user confirmation.", releaseCreateDescription()),
 	}
 }
 
@@ -53,7 +70,7 @@ func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTo
 	})
 }
 
-func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
+func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, alternative, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
 	// The handler needs the client itself, not only the handler it replaces,
 	// so it is bound through WithBoundHandler: a shared catalog then rebuilds
 	// it for each credential's client instead of keeping this one.
@@ -66,7 +83,7 @@ func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, cancelMes
 			}
 			out, err := fn(ctx, toolutil.RequestFromContext(ctx), client.For(ctx), input)
 			if errors.Is(err, elicitation.ErrElicitationNotSupported) {
-				return unsupportedOutput{ToolName: toolName}, nil
+				return unsupportedOutput{ToolName: toolName, Alternative: alternative}, nil
 			}
 			if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
 				return cancelledOutput{Message: cancelMessage}, nil
@@ -80,7 +97,7 @@ func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, cancelMes
 func FormatResult(result any) *mcp.CallToolResult {
 	switch v := result.(type) {
 	case unsupportedOutput:
-		return UnsupportedResult(v.ToolName)
+		return UnsupportedResult(v.ToolName, v.Alternative)
 	case cancelledOutput:
 		return CancelledResult(v.Message)
 	case issues.Output:
@@ -96,6 +113,12 @@ func FormatResult(result any) *mcp.CallToolResult {
 	}
 }
 
+// descElicitUnsupported is the paragraph a flow's description states its
+// requirement in, naming the action its refusal offers instead.
+func descElicitUnsupported(alternative string) string {
+	return descElicitRequired + " If unsupported, returns a structured error naming " + alternative + " as the alternative.\n\n"
+}
+
 func issueCreateDescription() string {
 	return "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.\n\n" +
 		"Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.\n\n" +
@@ -108,7 +131,7 @@ func issueCreateDescription() string {
 		"Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.\n\n" +
 		"When to use: human-in-the-loop issue creation. " +
 		"NOT for: scripted/programmatic creation. Use gitlab_issue (action='create') with all fields pre-supplied.\n\n" +
-		descElicitRequired + " If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\n" +
+		descElicitUnsupported(alternativeIssueCreate) +
 		"Returns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue_create, gitlab_issue_get."
 }
 
@@ -130,7 +153,7 @@ func mrCreateDescription() string {
 		"For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.\n\n" +
 		"When to use: human-in-the-loop MR creation. " +
 		"NOT for: scripted/programmatic creation. Use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
-		descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
+		descElicitUnsupported(alternativeMRCreate) +
 		"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_mr_create, gitlab_branch_create."
 }
 
@@ -144,7 +167,7 @@ func releaseCreateDescription() string {
 		descElicitConfirmPrompt +
 		"When to use: human-in-the-loop release publishing. " +
 		"NOT for: CI/automated release creation. Use gitlab_release (action='create') with all fields pre-supplied.\n\n" +
-		descElicitRequired + " If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\n" +
+		descElicitUnsupported(alternativeReleaseCreate) +
 		"Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Canceling or declining any prompt aborts with no GitLab API call and no side effects. This flow's optional fields take an empty answer rather than a decline. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\n" +
 		"Returns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release_create, gitlab_tag_create."
 }
@@ -161,6 +184,6 @@ func projectCreateDescription() string {
 		descElicitConfirmPrompt +
 		"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
 		"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
-		descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
+		descElicitUnsupported(alternativeProjectCreate) +
 		"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project_get, gitlab_group_get."
 }
