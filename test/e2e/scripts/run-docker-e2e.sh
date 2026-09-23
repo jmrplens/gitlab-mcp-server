@@ -32,8 +32,8 @@
 #
 # Environment, all optional:
 #   E2E_DOCKER_GITLAB_URL          http://localhost:8929
-#   E2E_DOCKER_BITBUCKET_URL       the GitLab URL on port 7990 when it ends in :8929,
-#                                  http://localhost:7990 otherwise
+#   E2E_DOCKER_BITBUCKET_URL       http:// and the GitLab URL's host on port 7990,
+#                                  whatever port or path the GitLab URL carries
 #   E2E_BITBUCKET                  true under ce; false skips the Bitbucket fixture
 #   E2E_KEEP_STACK                 true leaves the stack up after the run, for a look
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
@@ -76,11 +76,22 @@ E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
 # localhost default sent a remote run's setup script to this machine, where
 # nothing listens, and the import test then skipped: the run passed and the
 # coverage record came out one action short with nothing saying why.
+#
+# The host is read off the GitLab URL whatever else it carries. The compose
+# file publishes GitLab on port 8929 and on no other, so a URL naming another
+# port, or none, is a proxy or a tunnel in front of that host, and a trailing
+# slash or a path names the same host too. The scheme is not carried over:
+# Bitbucket answers plain HTTP on 7990 whatever terminates TLS in front of
+# GitLab. A URL no host can be read out of keeps the loopback default and says
+# so, rather than stopping a run that may not start Bitbucket at all.
 if [ -z "${E2E_DOCKER_BITBUCKET_URL:-}" ]; then
-    if [ "${E2E_DOCKER_GITLAB_URL%:8929}" != "${E2E_DOCKER_GITLAB_URL}" ]; then
-        E2E_DOCKER_BITBUCKET_URL="${E2E_DOCKER_GITLAB_URL%:8929}:7990"
+    gitlab_url_re='^[A-Za-z][A-Za-z0-9+.-]*://([^]/?#:[]+|\[[^]/?#]*\])(:[0-9]*)?([/?#].*)?$'
+    if [[ "${E2E_DOCKER_GITLAB_URL}" =~ ${gitlab_url_re} ]]; then
+        E2E_DOCKER_BITBUCKET_URL="http://${BASH_REMATCH[1]}:7990"
     else
         E2E_DOCKER_BITBUCKET_URL="http://localhost:7990"
+        echo "run-docker-e2e.sh: WARN no host can be read out of E2E_DOCKER_GITLAB_URL=${E2E_DOCKER_GITLAB_URL};" \
+            "Bitbucket is looked for at ${E2E_DOCKER_BITBUCKET_URL}, so set E2E_DOCKER_BITBUCKET_URL if it runs elsewhere" >&2
     fi
 fi
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
@@ -97,9 +108,13 @@ export E2E_GITLAB_EXTERNAL_URL="${E2E_GITLAB_EXTERNAL_URL:-${E2E_DOCKER_GITLAB_U
 if [ -z "${E2E_REGISTRY_EXTERNAL_URL:-}" ] && [ "${E2E_DOCKER_GITLAB_URL%:8929}" != "${E2E_DOCKER_GITLAB_URL}" ]; then
     export E2E_REGISTRY_EXTERNAL_URL="${E2E_DOCKER_GITLAB_URL%:8929}:5050"
 fi
-# Bitbucket stays on loopback when it is reached on this machine, and is
-# published on the LAN only when it is reached from here on another one, whose
-# loopback the setup script and the import test cannot get to.
+# Bitbucket is published on loopback when its URL names localhost, 127.* or
+# [::1], and on 0.0.0.0 otherwise, since the setup script on this machine has
+# to reach a remote container's port and a remote loopback is out of its reach.
+# The import test itself never dials Bitbucket: it hands GitLab the address
+# the setup script recorded, and GitLab reaches it over the compose network.
+# A URL naming this machine by its LAN address is published on 0.0.0.0 too;
+# E2E_BITBUCKET_BIND overrides the choice.
 if [ -z "${E2E_BITBUCKET_BIND:-}" ]; then
     case "${E2E_DOCKER_BITBUCKET_URL}" in
         *://localhost|*://localhost[:/]*|*://127.*|*://\[::1\]*) E2E_BITBUCKET_BIND=127.0.0.1 ;;
@@ -191,7 +206,9 @@ echo "=== Registering GitLab Runner ==="
 "${SCRIPT_DIR}/register-runner.sh" "${E2E_DOCKER_GITLAB_URL}"
 
 if [ "${WITH_BITBUCKET}" = "true" ]; then
-    echo "=== Provisioning Bitbucket import fixture ==="
+    # The address is printed because it was derived: a guess that missed
+    # leaves the import test skipping, and the log is where that shows.
+    echo "=== Provisioning Bitbucket import fixture at ${E2E_DOCKER_BITBUCKET_URL} (published on ${E2E_BITBUCKET_BIND}) ==="
     "${SCRIPT_DIR}/setup-bitbucket.sh" "${E2E_DOCKER_BITBUCKET_URL}"
 fi
 

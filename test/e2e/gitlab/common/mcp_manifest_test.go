@@ -12,7 +12,10 @@
 // safe passes, and carries a subscriptions section only on the full
 // capability surface. The coverage command therefore counts the pair per
 // surface x mode x capability surface, and TestManifest_EveryShape_ReadsTheIndexAndAnEntry
-// is what reads it on each of those shapes. The rest of the file holds the
+// is what reads it on every shape the suite holds sessions for: the three
+// surfaces in each protective mode on the full capability surface, and in the
+// default mode on the minimal one, which no test runs in another mode. The
+// rest of the file holds the
 // meta surface's detail to the call it describes, which is ported from the
 // old suite rather than dropped.
 
@@ -65,7 +68,8 @@ var surfaceEntryKinds = map[harness.Surface]string{
 }
 
 // TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads the manifest on every
-// shape it varies along and follows one entry to its detail.
+// shape the suite holds sessions for, the twelve [manifestShapes] lists, and
+// follows one entry to its detail.
 //
 // Each shape reads the index, which must name the session's own surface, list
 // entries, and carry the subscriptions section exactly when the capability

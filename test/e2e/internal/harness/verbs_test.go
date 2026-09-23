@@ -190,6 +190,11 @@ var fatalCases = map[string]func(t *testing.T){
 		session := inProcessSession(t, newEnv(t, offlineInstance()), server)
 		session.CompletePrompt("summarize", "project_id", "")
 	},
+	"read refused": func(t *testing.T) {
+		t.Helper()
+		session := inProcessSession(t, newEnv(t, offlineInstance()), newReadAndCompleteStub())
+		session.ReadResource(unservedURI)
+	},
 	"subscribe not acknowledged": func(t *testing.T) {
 		t.Helper()
 		shortAckWait(t, 200*time.Millisecond)
@@ -254,6 +259,21 @@ func TestSession_Complete_Refused_FailsTheTestNamingTheArgument(t *testing.T) {
 
 	if !strings.Contains(out, "completion/complete summarize project_id: ") || !strings.Contains(out, errStubCompletion.Error()) {
 		t.Errorf("the child printed:\n%s\nwant the refused completion named with the server's reason", out)
+	}
+}
+
+// unservedURI is a resource no in-process stub serves, so a read of it is
+// refused.
+const unservedURI = "gitlab://not-served"
+
+// TestSession_ReadResource_Refused_FailsTheTestNamingTheURI checks the read
+// verb's refusal: a read the server answers with an error fails the test,
+// naming the resource it asked for.
+func TestSession_ReadResource_Refused_FailsTheTestNamingTheURI(t *testing.T) {
+	out := runFatalCase(t, "read refused")
+
+	if !strings.Contains(out, "resources/read "+unservedURI+": ") {
+		t.Errorf("the child printed:\n%s\nwant the refused read named with its URI", out)
 	}
 }
 
@@ -865,6 +885,76 @@ func TestSession_TrySubscribe_ForASweep_IsRecordedWithTheSweepsPurpose(t *testin
 			}
 		})
 	}
+}
+
+// TestSession_ReadsAndCompletions_ForASweep_AreRecordedWithTheSweepsPurpose
+// checks that the purpose a caller gives a resource read or a completion
+// reaches the record, and that a call given none is still a test's. The
+// resource and completion sweeps read whatever the server advertises and
+// assert nothing about what came back, and with the purpose fixed at test
+// every one of those calls was credited as an assertion.
+func TestSession_ReadsAndCompletions_ForASweep_AreRecordedWithTheSweepsPurpose(t *testing.T) {
+	verbs := []struct {
+		name   string
+		method string
+		call   func(*Session, ...CallOption)
+	}{
+		{name: "ReadResource", method: methodReadResource, call: func(s *Session, opts ...CallOption) {
+			s.ReadResource(watchedURI, opts...)
+		}},
+		{name: "TryReadResource", method: methodReadResource, call: func(s *Session, opts ...CallOption) {
+			if _, err := s.TryReadResource(watchedURI, opts...); err != nil {
+				s.env.T.Fatalf("TryReadResource() error = %v", err)
+			}
+		}},
+		{name: "CompletePrompt", method: methodComplete, call: func(s *Session, opts ...CallOption) {
+			s.CompletePrompt("summarize", "project_id", "", opts...)
+		}},
+		{name: "CompleteResource", method: methodComplete, call: func(s *Session, opts ...CallOption) {
+			s.CompleteResource("gitlab://project/{project_id}", "project_id", "", opts...)
+		}},
+	}
+	purposes := []struct {
+		name string
+		opts []CallOption
+		want Purpose
+	}{
+		{name: "for a sweep", opts: []CallOption{For(PurposeSweep)}, want: PurposeSweep},
+		{name: "given no purpose", opts: nil, want: PurposeTest},
+	}
+	for _, verb := range verbs {
+		for _, purpose := range purposes {
+			t.Run(verb.name+" "+purpose.name, func(t *testing.T) {
+				env := newEnv(t, offlineInstance())
+				session := inProcessSession(t, env, newReadAndCompleteStub())
+
+				verb.call(session, purpose.opts...)
+
+				var got []string
+				for _, line := range env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed) {
+					if call, isCall := line.(*e2ecalls.Call); isCall && call.Method == verb.method {
+						got = append(got, call.Purpose)
+					}
+				}
+				if len(got) != 1 || got[0] != string(purpose.want) {
+					t.Errorf("%s lines carry purposes %v, want one carrying %q", verb.method, got, purpose.want)
+				}
+			})
+		}
+	}
+}
+
+// newReadAndCompleteStub builds an SDK server in this process that serves the
+// watched resource and answers every completion, so a read and a completion
+// each succeed without a binary or a GitLab.
+func newReadAndCompleteStub() *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{Name: "read-and-complete-stub", Version: "1"}, &mcp.ServerOptions{
+		CompletionHandler: func(context.Context, *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+			return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{"42"}}}, nil
+		},
+	})
+	server.AddResource(&mcp.Resource{URI: watchedURI, Name: "watched"}, readWatched)
+	return server
 }
 
 // purposesOf lists the purpose of each line, for a failure message.

@@ -332,11 +332,18 @@ return toolutil.WrapErrWithStatusHint("issueGet", err, http.StatusNotFound,
     "verify issue_iid with gitlab_issue_list")
 ```
 
-GraphQL error sites mostly use `WrapErrWithHint`, which always appends the hint, because an error GitLab reports inside a `200` response carries no status to match. A GraphQL refusal GitLab answers with an error status does carry one: `IsHTTPStatus`, `ExtractGitLabMessage` and the sanitizer read it through client-go's `*gl.GraphQLResponseError` the way `ClassifyError` does, so `WrapErrWithStatusHint` attaches its hint there as it does over REST:
+GraphQL error sites mostly use `WrapErrWithHint`, which always appends the hint, because an error GitLab reports inside a `200` response carries no status to match:
 
 ```go
 return toolutil.WrapErrWithHint("list_vulnerabilities", err,
     "verify the project fullPath is correct and your token has access to security features")
+```
+
+A GraphQL refusal GitLab answers with an error status does carry one: `IsHTTPStatus`, `ExtractGitLabMessage` and the sanitizer read it through client-go's `*gl.GraphQLResponseError` the way `ClassifyError` does, so `WrapErrWithStatusHint` attaches its hint there as it does over REST:
+
+```go
+return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound,
+    "verify id with custom_emoji.list")
 ```
 
 That type's rendering carries more than the response's: after it, it appends `(GraphQL errors: ...)` listing every `errors[].message` of the body. The sanitizer swaps the whole of it, and holds the list to what a REST message is held to: flattened onto one line and capped at 300 characters as one list, and dropped altogether when the body carries a top-level key other than `data`, `errors` and `extensions`, since GitLab did not compose that body.

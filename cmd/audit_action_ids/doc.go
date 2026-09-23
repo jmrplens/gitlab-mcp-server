@@ -152,8 +152,9 @@
 // only when the function a call resolves to is declared under test/e2e/, so
 // the copies of assertMentions in common and in ee are one entry and a
 // function of the same name anywhere else is none. A suite wrapper that takes
-// the needles under one of those names, or under a hint's, and hands them on
-// is followed out to its callers.
+// the needles under one of those names, or under a hint's, and hands them to
+// a helper in a position that asserts (an assertion, or a predicate under
+// `!`) is followed out to its callers.
 //
 // The two predicates are judged only where their call is negated. `if
 // !mentionsAny(...)` fails the test when no needle is there, so each needle
@@ -198,10 +199,16 @@
 // suite's README states is therefore narrower than "never": a quotation that
 // names a tool, an alias or an action ID goes through the helpers, and one
 // written as a bare call is not read. The polarity is syntactic, so `ok :=
-// mentionsAny(...); if !ok` is not judged. And a dotted needle is judged as
-// the whole ID it spells, so one that is only the front of a longer ID in a
-// domain the catalog uses is refused although it matches at run time; the
-// remedy, quoting the whole ID, asserts strictly more.
+// mentionsAny(...); if !ok` is not judged, and neither is a wrapper that
+// returns a predicate's answer,
+// `func has(...) bool { return mentionsAny(...) }`: its inner call is not
+// negated, and its callers are not followed, since whether its needles are
+// claims is decided at each of them, negated or not, and following them all
+// would judge an absence check as a claim. Nothing names such a wrapper
+// either, so it is a limit the suite keeps by writing none. And a dotted
+// needle is judged as the whole ID it spells, so one that is only the front
+// of a longer ID in a domain the catalog uses is refused although it matches
+// at run time; the remedy, quoting the whole ID, asserts strictly more.
 //
 // # The limit of a clean run
 //

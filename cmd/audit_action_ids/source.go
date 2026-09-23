@@ -776,8 +776,11 @@ func elementRecorder(kind string) recordFunc {
 // An assertion accepts the hint names and the names the helper table declares
 // besides, because what a suite wrapper forwards to one of those helpers is
 // the helper's own argument under the helper's own name: a wrapper taking
-// substrings and passing them on is followed out to its callers rather than
-// reported as a needle nothing folds.
+// substrings and handing them to a helper in a position that asserts is
+// followed out to its callers rather than reported as a needle nothing folds.
+// A wrapper returning
+// a predicate's answer reaches no follow at all, since the predicate's call in
+// it is not negated and is therefore not read (see doc.go).
 //
 // It is written as ifs rather than a switch on purpose: a condition in a case
 // clause sits outside every block Go's coverage counts, so mutation testing

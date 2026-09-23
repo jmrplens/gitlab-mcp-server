@@ -299,8 +299,9 @@ func RegisterToolSurfaceResources(server *mcp.Server, opts ToolSurfaceResourceOp
 // the manifest's static URI and the template of its per-entry detail.
 //
 // They are the two resources whose content the active tool surface decides.
-// Every other resource is registered from the capability surface alone and
-// reads the same whichever tool surface and protective mode a session runs,
+// Every other resource is registered from the capability surface and the
+// operator's exclusions alone, and reads the same whichever tool surface and
+// protective mode a session runs,
 // while these two list what the surface registered after the read-only and
 // safe passes. A reader outside this package that has to tell them apart, which
 // the e2e coverage command does to count them at that finer grain, asks here

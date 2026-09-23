@@ -12,10 +12,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
-// e2eBuildTag is the one build constraint every file of the e2e suite
-// carries. The load states it itself, the way cmd/audit_e2e_coverage -static
-// does, so neither make check-action-ids nor CI has to pass a flag the command
-// would otherwise need and could be run without.
+// e2eBuildTag is the one build constraint every test file of the e2e suite
+// carries (the package doc.go files carry none). The load states it itself,
+// the way cmd/audit_e2e_coverage -static does, so neither make
+// check-action-ids nor CI has to pass a flag the command would otherwise need
+// and could be run without.
 const e2eBuildTag = "e2e"
 
 // suiteDir is where the e2e suite lives, relative to the repository root. A

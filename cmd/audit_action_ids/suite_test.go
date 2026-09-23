@@ -695,6 +695,39 @@ func quoteThroughWrappers(t *testing.T, scope string) {
 	}
 }
 
+// TestCollectAssertionSites_AWrapperReturningAPredicate_IsNotRead pins a limit
+// doc.go states beside the syntactic polarity. A wrapper that returns a
+// predicate's answer calls the predicate in a position that is not negated,
+// and whether its needles are claims is decided where the wrapper is called,
+// negated or not, which the walk does not follow: following them out to every
+// caller would judge an absence check as a claim. So the needles are read
+// nowhere and named nowhere, and a change that starts reading them updates
+// this test and the limit together.
+func TestCollectAssertionSites_AWrapperReturningAPredicate_IsNotRead(t *testing.T) {
+	read := collectPlanted(t, suiteOverlay(t, map[string]string{
+		"returned/doc.go":          "// Package returned wraps a predicate and returns its answer.\npackage returned\n",
+		"returned/helpers_test.go": suiteHelpersIn("returned"),
+		"returned/returned_test.go": `//go:build e2e
+
+package returned
+
+import "testing"
+
+func has(text string, substrings ...string) bool { return mentionsAny(text, substrings...) }
+
+func TestReturned(t *testing.T) {
+	if !has("text", "gitlab_not_read_through_a_returning_wrapper") {
+		t.Fatal("missing")
+	}
+}
+`,
+	}))
+
+	if got := sitesIn(read.sites, suiteFixtureDir+"/returned"); len(got) != 0 {
+		t.Errorf("sites = %+v, want none: a wrapper returning a predicate's answer is a stated limit", got)
+	}
+}
+
 // TestCollectAssertionSites_ANeedleConcatenatedFromAName_ReadsTheNameToo holds
 // the half of a concatenated needle the fold does not keep. A needle written
 // as a literal plus a local is a claim about the whole sentence, so the local

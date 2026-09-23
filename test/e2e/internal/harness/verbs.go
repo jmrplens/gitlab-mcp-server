@@ -28,10 +28,15 @@ import (
 )
 
 // ReadResource reads one resource, failing the test when the server refuses.
-func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
+//
+// The one option read is [For], and only for its purpose, as on
+// [Session.TrySubscribe]: a sweep that reads whatever the server advertises
+// says so, and its reads are then credited as a sweep's rather than as a
+// test's assertion. The others describe a tool call and mean nothing here.
+func (s *Session) ReadResource(uri string, opts ...CallOption) *mcp.ReadResourceResult {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: uri})
+	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationOK, callAttribution{target: uri})
 	result, err := s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 	if err != nil {
 		s.env.T.Fatalf("resources/read %s: %v%s", uri, err, s.conn.failureContext())
@@ -40,11 +45,13 @@ func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
 }
 
 // TryReadResource reads one resource and hands both halves back, for a test
-// whose subject is the refusal.
-func (s *Session) TryReadResource(uri string) (*mcp.ReadResourceResult, error) {
+// whose subject is the refusal, and for a sweep, which reads what the server
+// advertises and may be told no. It reads [For] as [Session.ReadResource]
+// does.
+func (s *Session) TryReadResource(uri string, opts ...CallOption) (*mcp.ReadResourceResult, error) {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationAny, callAttribution{target: uri})
+	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationAny, callAttribution{target: uri})
 	return s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 }
 
@@ -68,23 +75,26 @@ func (s *Session) TryGetPrompt(name string, arguments map[string]string) (*mcp.G
 	return s.conn.client().GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
 }
 
-// CompletePrompt asks for the values one prompt argument offers.
-func (s *Session) CompletePrompt(prompt, argument, value string) []string {
+// CompletePrompt asks for the values one prompt argument offers. It reads
+// [For] as [Session.ReadResource] does, so the completion sweep's calls are
+// credited as a sweep's.
+func (s *Session) CompletePrompt(prompt, argument, value string, opts ...CallOption) []string {
 	s.env.T.Helper()
-	return s.complete(&mcp.CompleteReference{Type: "ref/prompt", Name: prompt}, argument, value)
+	return s.complete(&mcp.CompleteReference{Type: "ref/prompt", Name: prompt}, argument, value, opts)
 }
 
-// CompleteResource asks for the values one resource template variable offers.
-func (s *Session) CompleteResource(uriTemplate, argument, value string) []string {
+// CompleteResource asks for the values one resource template variable offers,
+// reading [For] as [Session.CompletePrompt] does.
+func (s *Session) CompleteResource(uriTemplate, argument, value string, opts ...CallOption) []string {
 	s.env.T.Helper()
-	return s.complete(&mcp.CompleteReference{Type: "ref/resource", URI: uriTemplate}, argument, value)
+	return s.complete(&mcp.CompleteReference{Type: "ref/resource", URI: uriTemplate}, argument, value, opts)
 }
 
 // complete sends one completion request and returns the values it answered.
-func (s *Session) complete(ref *mcp.CompleteReference, argument, value string) []string {
+func (s *Session) complete(ref *mcp.CompleteReference, argument, value string, opts []CallOption) []string {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
+	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
 	result, err := s.conn.client().Complete(ctx, &mcp.CompleteParams{
 		Ref:      ref,
 		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},

@@ -213,7 +213,8 @@ func writeCapabilityGrains(b *strings.Builder) {
 		"counted at the grain its content varies along:\n\n")
 	b.WriteString(docgen.RenderMarkdownTable([]string{"Capability", "One cell per item per"}, nil, rows))
 	b.WriteString("\nThe server registers its resources, prompts, completions and subscribable kinds " +
-		"from the capability surface alone, so neither the tool surface nor the protective mode " +
+		"from the capability surface and the operator's exclusions alone, so neither the tool surface " +
+		"nor the protective mode " +
 		"changes what a session is served, and a cell per shape would be one nothing could fill " +
 		"differently from its twin. Subscriptions exist on the full capability surface only. " +
 		"`gitlab://tools` and `gitlab://tools/{id}` are the exception, counted as `tool_manifest`: " +

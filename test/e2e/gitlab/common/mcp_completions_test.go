@@ -44,10 +44,14 @@ func TestCompletions_Sweep(t *testing.T) {
 				t.Fatalf("the %s session served no prompt or template; the completion sweep would prove nothing", capabilities)
 			}
 
+			// Each completion says it is a sweep's, since the values it
+			// answers are read by nothing, and the coverage command credits
+			// it as sweep-only rather than asserted.
+			sweep := harness.For(harness.PurposeSweep)
 			promptArgs := 0
 			for _, spec := range specs {
 				for _, arg := range append(append([]string{}, spec.Required...), spec.Optional...) {
-					s.CompletePrompt(spec.Name, arg, "")
+					s.CompletePrompt(spec.Name, arg, "", sweep)
 					promptArgs++
 				}
 			}
@@ -55,7 +59,7 @@ func TestCompletions_Sweep(t *testing.T) {
 			templateVars := 0
 			for _, template := range templates {
 				for _, variable := range harness.TemplateVariables(template) {
-					s.CompleteResource(template, variable, "")
+					s.CompleteResource(template, variable, "", sweep)
 					templateVars++
 				}
 			}
