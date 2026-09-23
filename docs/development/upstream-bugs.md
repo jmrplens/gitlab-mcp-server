@@ -1174,13 +1174,17 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
 [!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
-Seven are merged into `master`, none in a tagged release yet: `!254507` on
-2026-09-10, `!254519` on 2026-09-11, `!254511` and `!254542` on 2026-09-14
-and 2026-09-15, and `!254538`, `!254543` and `!254547` together on 2026-09-22.
-`!254538` is the one whose merge had been blocked by a `pre-merge-checks`
-race rather than by anything in the change. The two still open are `!254540`
-(the deploy key fields) and `!254552` (the snippet clone URLs), the second
-waiting on a reviewer rather than on a comment.
+Eight are merged into `master`: `!254507` on 2026-09-10, `!254519` on
+2026-09-11, `!254511` and `!254542` on 2026-09-14 and 2026-09-15, `!254538`,
+`!254543` and `!254547` together on 2026-09-22, and `!254552` (the snippet
+clone URLs) on 2026-09-23. Held to the tags that contain each merge commit,
+read on 2026-09-23, three of them have shipped: `!254507`, `!254511` and
+`!254519` are in `v19.4.0-ee` and `v19.4.1-ee`, and the other five are in no
+tag yet. Until this update the paragraph said none had shipped, a claim
+that had not been checked against the tags. `!254538` is the one whose merge had been blocked by a
+`pre-merge-checks` race rather than by anything in the change. The one still
+open is `!254540` (the deploy key fields), waiting on a reviewer rather than
+on a comment.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
