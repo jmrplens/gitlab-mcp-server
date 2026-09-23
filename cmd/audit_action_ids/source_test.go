@@ -575,6 +575,204 @@ func options() toolutil.ActionSpecOptions {
 	}
 }
 
+// TestCollectSites_AMergeWithARelatedParameter_IsFollowedToItsCallers holds
+// the third shape the pass-through rule accepts: a call handed a recorded list
+// and a parameter named as a carrier of related actions, which merges the two
+// through a helper whose body folds to nothing. toolutil's
+// ActionRoute.WithRelatedActions is the shape. The parameter is followed out
+// to the calls that fill it, where the IDs are written, and the helper's body
+// is not reported; read the old way, the make and the append inside it were
+// two sites nothing folds on every run that loaded toolutil.
+//
+// The other cases are what keeps the rule to that shape: an argument that is
+// not a parameter, even one named like a carrier, a parameter under another
+// name, and a name that is no variable at all each leave the call to be
+// followed into, which reports the body it cannot fold rather than passing it.
+// So does a call handed carriers alone, which merges nothing recorded and is
+// where a helper appending an ID of its own writes it, and a carrier that is
+// a string rather than a list, whose callers each pass one ID. Passed over,
+// the first dropped the helper's ID without a word and the second reported
+// every caller's constant as a list nothing folds. The last case pins the
+// hole the merge shares with the copy: an ID the merging helper adds of its
+// own is not read.
+func TestCollectSites_AMergeWithARelatedParameter_IsFollowedToItsCallers(t *testing.T) {
+	const merge = `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func normalize(existing []string, values ...string) []string {
+	merged := make([]string, 0, len(existing)+len(values))
+	merged = append(merged, existing...)
+	return append(merged, values...)
+}
+
+`
+	cases := []struct {
+		name       string
+		body       string
+		related    []string
+		unresolved bool
+	}{
+		{
+			name: "a related parameter",
+			body: `func withRelated(opts toolutil.ActionSpecOptions, related ...string) toolutil.ActionSpecOptions {
+	opts.RelatedActions = normalize(opts.RelatedActions, related...)
+	return opts
+}
+
+func options() toolutil.ActionSpecOptions {
+	return withRelated(toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}, "demo.merged")
+}
+`,
+			related: []string{"demo.base", "demo.merged"},
+		},
+		{
+			name: "a local named like one",
+			body: `func options() toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}
+	related := []string{"demo.local"}
+	opts.RelatedActions = normalize(opts.RelatedActions, related...)
+	return opts
+}
+`,
+			related:    []string{"demo.base"},
+			unresolved: true,
+		},
+		{
+			name: "a parameter under another name",
+			body: `func withValues(opts toolutil.ActionSpecOptions, values ...string) toolutil.ActionSpecOptions {
+	opts.RelatedActions = normalize(opts.RelatedActions, values...)
+	return opts
+}
+
+func options() toolutil.ActionSpecOptions {
+	return withValues(toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}, "demo.unread")
+}
+`,
+			related:    []string{"demo.base"},
+			unresolved: true,
+		},
+		{
+			name: "a constant",
+			body: `const relatedConstant = "demo.constant"
+
+func options() toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}
+	opts.RelatedActions = normalize(opts.RelatedActions, relatedConstant)
+	return opts
+}
+`,
+			related:    []string{"demo.base"},
+			unresolved: true,
+		},
+		{
+			name: "related parameters alone",
+			body: `func withCommon(related []string) []string {
+	return append(related, "demo.common")
+}
+
+func build(related []string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: withCommon(related)}
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build([]string{"demo.caller"})
+}
+`,
+			related: []string{"demo.caller", "demo.common"},
+		},
+		{
+			name: "string parameters named like carriers",
+			body: `const idA = "demo.first"
+
+func pair(related1, related2 string) []string {
+	return []string{related1, related2}
+}
+
+func build(relatedFirst, relatedSecond string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: pair(relatedFirst, relatedSecond)}
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build(idA, "demo.second")
+}
+`,
+			related: []string{"demo.first", "demo.second"},
+		},
+		{
+			name: "a string parameter named like a carrier beside a recorded list",
+			body: `func withOne(relatedList []string, related string) []string {
+	return append(relatedList, related)
+}
+
+func build(related string) toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}
+	opts.RelatedActions = withOne(opts.RelatedActions, related)
+	return opts
+}
+
+func options() toolutil.ActionSpecOptions {
+	return build("demo.one")
+}
+`,
+			related: []string{"demo.base", "demo.one"},
+		},
+		{
+			name: "a merge whose helper adds an ID of its own",
+			body: `func withRelatedAndCommon(opts toolutil.ActionSpecOptions, related ...string) toolutil.ActionSpecOptions {
+	opts.RelatedActions = normalizeWithCommon(opts.RelatedActions, related...)
+	return opts
+}
+
+func normalizeWithCommon(existing []string, values ...string) []string {
+	return append(normalize(existing, values...), "demo.unread")
+}
+
+func options() toolutil.ActionSpecOptions {
+	return withRelatedAndCommon(toolutil.ActionSpecOptions{RelatedActions: []string{"demo.base"}}, "demo.merged")
+}
+`,
+			related: []string{"demo.base", "demo.merged"},
+		},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			sites := collectFixture(t, merge+one.body)
+			if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, one.related) {
+				t.Errorf("related values = %v, want %v", got, one.related)
+			}
+			if got := unresolvedExprs(sites); (len(got) > 0) != one.unresolved {
+				t.Errorf("unresolved = %v, want some: %t", got, one.unresolved)
+			}
+		})
+	}
+}
+
+// TestCollectSites_AnIDHeldInALocal_IsFollowedToItsValue holds the one-ID
+// half of variable following: an element of a list that names a local rather
+// than a constant is followed to the value the local is given. This was
+// reached only through toolutil's own normalizing helper until that helper
+// stopped being followed into, so it is planted here rather than left to
+// whichever package the fixture load happens to walk.
+func TestCollectSites_AnIDHeldInALocal_IsFollowedToItsValue(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func options() toolutil.ActionSpecOptions {
+	id := "demo.local"
+	return toolutil.ActionSpecOptions{RelatedActions: []string{id}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.local"}) {
+		t.Errorf("related values = %v, want the value the local is given", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none: the local folds to its one value", got)
+	}
+}
+
 // TestCollectSites_AListNarrowedByAProjection_IsPassedOver holds the second
 // shape the pass-through rule accepts: a call handed the value an ID list
 // hangs off, returning the subset one caller may be shown. The dynamic
@@ -1428,7 +1626,10 @@ func TestFollowValues_AnIdentifierThatNamesNoVariable_IsNotFollowed(t *testing.T
 // callers, on purpose: following every string parameter judges whatever any
 // caller ever passes. So a hint that is nothing but such a parameter is named
 // as unread rather than guessed at, and one that concatenates a literal onto
-// it keeps the literal, which is where a capability would be spelled.
+// it keeps the literal, which is where a capability would be spelled, and
+// names the parameter as well: the value it is handed is text the model reads
+// beside the literal, and a run that counted only the literal would report the
+// sentence read whole.
 func TestCollectSites_AHintReadOffAParameterNothingNames_IsReportedAndItsHalvesKept(t *testing.T) {
 	sites := collectFixture(t, `package fixture
 
@@ -1452,8 +1653,41 @@ func fromHalfAParameter(text string) error {
 	if got := valuesOfKind(sites, kindErrorHint); len(got) != 1 || !strings.Contains(got[0], "then run demo.list") {
 		t.Errorf("error hint values = %q, want the literal half kept", got)
 	}
-	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"text"}) {
-		t.Errorf("unresolved = %v, want the bare parameter named once", got)
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"text", "text"}) {
+		t.Errorf("unresolved = %v, want the bare parameter and the unfolded half each named once", got)
+	}
+}
+
+// TestCollectSites_AHalfNamedAsAHint_IsFollowedToWhatItIsHanded holds the
+// half of a concatenation a name can answer for: it is read the way a whole
+// hint in that name would be, out to the values it is handed, so a tool name a
+// caller passes is judged where it is written. awardemoji handed its note
+// deletes the list tool's name through exactly this shape, and the fold kept
+// the sentence around it and dropped the name.
+func TestCollectSites_AHalfNamedAsAHint_IsFollowedToWhatItIsHanded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func deleteThrough(listHint string) error {
+	return toolutil.WrapErrWithHint("demo_delete", errDemo, "list them with "+listHint+" first")
+}
+
+func deleteDemo() error { return deleteThrough("gitlab_demo_list") }
+`)
+
+	got := valuesOfKind(sites, kindErrorHint)
+	if len(got) != 2 || got[0] != "gitlab_demo_list" || !strings.HasPrefix(got[1], "list them with ") || !strings.HasSuffix(got[1], " first") {
+		t.Errorf("error hint values = %q, want the value the half is handed and the sentence around it", got)
+	}
+	if unresolved := unresolvedExprs(sites); len(unresolved) != 0 {
+		t.Errorf("unresolved = %v, want nothing: the half is read where it is written", unresolved)
 	}
 }
 

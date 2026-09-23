@@ -257,6 +257,11 @@ type cell struct {
 	reason string
 	// state is settled once every call and every structural rule is in.
 	state state
+	// unlisted marks a capability cell only a call created, for a target no
+	// session of its capability surface listed. It stays in the report as
+	// evidence of what was called and out of the histogram, which is counted
+	// against what the sessions served.
+	unlisted bool
 }
 
 // newCell returns an empty cell.
@@ -348,7 +353,8 @@ type diagnostics struct {
 	// UnknownActions names the actions calls named that the runtime's
 	// catalog does not hold, sorted.
 	UnknownActions []string `json:"unknown_actions,omitempty"`
-	// UnobservedSessions names the sessions whose probe span never arrived.
+	// UnobservedSessions names the sessions that called a tool and saw no
+	// span of their own arrive.
 	UnobservedSessions []string `json:"unobserved_sessions,omitempty"`
 }
 
@@ -516,6 +522,13 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 
 // foldSessions unions the session lines per surface and mode, and again per
 // capability surface.
+//
+// A shape is dispatch-observed unless one of its sessions called a tool and
+// never saw a span. A session that called none is left out of that judgement
+// either way: the span is the server's record of a tool dispatch, so its
+// absence there means only that nothing was dispatched, and counting it would
+// mark every default shape unobserved through the capability and tier-pinned
+// sessions while each of its action cells was observed.
 func (c *classification) foldSessions() {
 	for _, session := range c.rt.sessions {
 		key := shapeKey{surface: session.Surface, mode: session.Mode}
@@ -532,7 +545,7 @@ func (c *classification) foldSessions() {
 		markAll(shape.resources, session.Resources)
 		markAll(shape.prompts, session.Prompts)
 		shape.templates = mergeSorted(shape.templates, session.ResourceTemplates)
-		if !session.DispatchObserved {
+		if !session.DispatchObserved && c.rt.toolSessions[session] {
 			shape.observed = false
 			c.diagnostics.UnobservedSessions = append(c.diagnostics.UnobservedSessions, session.Label)
 		}
@@ -544,9 +557,10 @@ func (c *classification) foldSessions() {
 // foldCapabilitySession unions one session line into its capability surface.
 //
 // The surface is the effective one, so a line written before the harness
-// recorded it, or carrying a value the server would not take, is read as the
-// full surface the server falls back to rather than as a third surface of its
-// own.
+// recorded the field is read as the default surface EffectiveCapabilitySurface
+// answers, which is what the server serves when the setting is unset, rather
+// than as a third surface of its own. An unknown value never starts a server:
+// both transports refuse it at startup, so no session line can carry one.
 func (c *classification) foldCapabilitySession(shape shapeKey, session *e2ecalls.Session) {
 	key := config.EffectiveCapabilitySurface(session.Capabilities)
 	surface, seen := c.capabilitySurfaces[key]
@@ -752,7 +766,15 @@ func (c *classification) foldCapability(kind string, shape shapeKey, capabilitie
 	if target == "" {
 		return
 	}
-	c.capabilityCellFor(kind, capabilityKey(kind, shape, capabilities, target)).add(creditOfOutcome(call), call.Test)
+	key := capabilityKey(kind, shape, capabilities, target)
+	found, seen := c.capabilities[kind][key]
+	if !seen {
+		// Unlisted until fillCapabilityCells finds the target among what a
+		// session served, which it does after every call is folded.
+		found = c.capabilityCellFor(kind, key)
+		found.unlisted = true
+	}
+	found.add(creditOfOutcome(call), call.Test)
 }
 
 // resourceTarget names the resource a read addressed as its template, or as
@@ -876,8 +898,11 @@ func (c *classification) reasonFor(found *cell) string {
 // actions' cells.
 //
 // A cell a call created outside those denominators, a read of a URI nothing
-// listed or a subscription to a kind the server refuses, is settled too: it is
-// evidence of what was called, and the histogram would otherwise lose it.
+// listed, a completion for an argument no prompt or template declares, or a
+// subscription to a kind the server refuses, is settled too and stays
+// unlisted: it is evidence of what was called, published apart from the
+// histogram so that each histogram row sums to the figure it is counted
+// against.
 func (c *classification) fillCapabilityCells() {
 	for _, surface := range c.capabilitySurfaces {
 		for kind, items := range surface.served() {
@@ -935,6 +960,7 @@ func (s *capabilityShape) served() map[string][]string {
 // and settles its state.
 func (c *classification) settleCapability(kind string, key cellKey) {
 	found := c.capabilityCellFor(kind, key)
+	found.unlisted = false
 	found.state = c.settle(found, "")
 }
 

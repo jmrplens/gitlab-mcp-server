@@ -28,10 +28,15 @@ import (
 )
 
 // ReadResource reads one resource, failing the test when the server refuses.
-func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
+//
+// The one option read is [For], and only for its purpose, as on
+// [Session.TrySubscribe]: a sweep that reads whatever the server advertises
+// says so, and its reads are then credited as a sweep's rather than as a
+// test's assertion. The others describe a tool call and mean nothing here.
+func (s *Session) ReadResource(uri string, opts ...CallOption) *mcp.ReadResourceResult {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: uri})
+	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationOK, callAttribution{target: uri})
 	result, err := s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 	if err != nil {
 		s.env.T.Fatalf("resources/read %s: %v%s", uri, err, s.conn.failureContext())
@@ -40,11 +45,13 @@ func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
 }
 
 // TryReadResource reads one resource and hands both halves back, for a test
-// whose subject is the refusal.
-func (s *Session) TryReadResource(uri string) (*mcp.ReadResourceResult, error) {
+// whose subject is the refusal, and for a sweep, which reads what the server
+// advertises and may be told no. It reads [For] as [Session.ReadResource]
+// does.
+func (s *Session) TryReadResource(uri string, opts ...CallOption) (*mcp.ReadResourceResult, error) {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationAny, callAttribution{target: uri})
+	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationAny, callAttribution{target: uri})
 	return s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 }
 
@@ -68,23 +75,26 @@ func (s *Session) TryGetPrompt(name string, arguments map[string]string) (*mcp.G
 	return s.conn.client().GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
 }
 
-// CompletePrompt asks for the values one prompt argument offers.
-func (s *Session) CompletePrompt(prompt, argument, value string) []string {
+// CompletePrompt asks for the values one prompt argument offers. It reads
+// [For] as [Session.ReadResource] does, so the completion sweep's calls are
+// credited as a sweep's.
+func (s *Session) CompletePrompt(prompt, argument, value string, opts ...CallOption) []string {
 	s.env.T.Helper()
-	return s.complete(&mcp.CompleteReference{Type: "ref/prompt", Name: prompt}, argument, value)
+	return s.complete(&mcp.CompleteReference{Type: "ref/prompt", Name: prompt}, argument, value, opts)
 }
 
-// CompleteResource asks for the values one resource template variable offers.
-func (s *Session) CompleteResource(uriTemplate, argument, value string) []string {
+// CompleteResource asks for the values one resource template variable offers,
+// reading [For] as [Session.CompletePrompt] does.
+func (s *Session) CompleteResource(uriTemplate, argument, value string, opts ...CallOption) []string {
 	s.env.T.Helper()
-	return s.complete(&mcp.CompleteReference{Type: "ref/resource", URI: uriTemplate}, argument, value)
+	return s.complete(&mcp.CompleteReference{Type: "ref/resource", URI: uriTemplate}, argument, value, opts)
 }
 
 // complete sends one completion request and returns the values it answered.
-func (s *Session) complete(ref *mcp.CompleteReference, argument, value string) []string {
+func (s *Session) complete(ref *mcp.CompleteReference, argument, value string, opts []CallOption) []string {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
+	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
 	result, err := s.conn.client().Complete(ctx, &mcp.CompleteParams{
 		Ref:      ref,
 		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},
@@ -166,11 +176,12 @@ func (s *Subscription) Close() { s.closeOnce.Do(s.release) }
 // The first read the server makes is its authorization check, so a subscribe
 // that is accepted means the credential could read the resource; one it
 // refuses fails the test here rather than at the first update that never
-// arrives. What counts as accepted is spelled out on [Session.TrySubscribe].
-func (s *Session) Subscribe(uri string) *Subscription {
+// arrives. What counts as accepted, and which option it reads, is spelled out
+// on [Session.TrySubscribe].
+func (s *Session) Subscribe(uri string, opts ...CallOption) *Subscription {
 	s.env.T.Helper()
 
-	subscription, err := s.subscribe(uri, ExpectationOK)
+	subscription, err := s.subscribe(uri, ExpectationOK, opts)
 	if err != nil {
 		s.env.T.Fatalf("resources/subscribe %s: %v%s", uri, err, s.conn.failureContext())
 	}
@@ -185,14 +196,31 @@ func (s *Session) Subscribe(uri string) *Subscription {
 // Accepted means the server said so. On protocol 2026-07-28 a subscription is
 // a subscriptions/listen stream whose answer the SDK discards, so the only
 // word the client ever gets is the notifications/subscriptions/acknowledged
-// the server sends once every subscription the stream asked for succeeded;
-// this waits for it, and a subscription it never arrives for is a refusal:
-// the first read failed, or the session holds as many watchers as the server
-// allows. Silence is the only signal of that refusal, so it costs the whole of
+// the server sends once every subscription it agreed to (the ones its
+// declared capabilities admit) succeeded. A URI it did not admit is simply
+// absent from the acknowledged list while the acknowledgement still arrives,
+// which is why a server without the capability is refused below before
+// anything is sent. This waits for the URI to be named in an acknowledgement,
+// and a subscription that never is is a refusal: the first read failed, or
+// the session holds as many watchers as the server allows. Silence is the
+// only signal of that refusal, so it costs the whole of
 // subscribeAckTimeout before this returns. On an older protocol the subscribe
 // is an ordinary request and its error is the refusal. Either way the
 // subscribe is recorded with what came of it, so a refused one is never
 // credited as an accepted subscription.
+//
+// A server that declared no resources.subscribe capability, which is what the
+// minimal capability surface serves, is refused here before anything is sent
+// on protocol 2026-07-28. The SDK would open the listen regardless and the
+// server would acknowledge it with an empty filter, so the wait above would
+// end in errNotAcknowledged after the whole of subscribeAckTimeout, naming two
+// causes neither of which had happened. The refusal is recorded like any
+// other, and is errNoSubscribeCapability.
+//
+// The one option read is [For], and only for its purpose: a sweep that
+// subscribes to whatever the server advertises says so, and its subscribes
+// are then credited as a sweep's rather than as a test's assertion. The
+// others describe a tool call and mean nothing to a subscribe.
 //
 // One test at a time may watch a URI on one session, because the SDK keeps a
 // single listen per URI and per session and answers a second Subscribe from
@@ -211,9 +239,9 @@ func (s *Session) Subscribe(uri string) *Subscription {
 // and its close deletes both"; cmd/server's bridge keeps the watch itself
 // alive, so what is lost is the delivery. A test that subscribes, closes and
 // subscribes one URI again takes a private session for each subscription.
-func (s *Session) TrySubscribe(uri string) (*Subscription, error) {
+func (s *Session) TrySubscribe(uri string, opts ...CallOption) (*Subscription, error) {
 	s.env.T.Helper()
-	return s.subscribe(uri, ExpectationAny)
+	return s.subscribe(uri, ExpectationAny, opts)
 }
 
 // errSubscribedOnSession is the refusal a second subscription to one URI on
@@ -223,6 +251,17 @@ var errSubscribedOnSession = errors.New("another test on this session already wa
 // errNotAcknowledged is a subscription the server never acknowledged, which is
 // how a refusal reads on protocol 2026-07-28.
 var errNotAcknowledged = errors.New("the server did not acknowledge the subscription")
+
+// errNoSubscribeCapability is a subscription asked of a server that declared
+// it cannot answer one, refused before anything is sent.
+var errNoSubscribeCapability = errors.New("the server declares no resources.subscribe capability")
+
+// declaresSubscribe reports whether the server a session initialized with
+// declared the resources.subscribe capability.
+func declaresSubscribe(result *mcp.InitializeResult) bool {
+	capabilities := result.Capabilities
+	return capabilities != nil && capabilities.Resources != nil && capabilities.Resources.Subscribe
+}
 
 // subscribeAckTimeout bounds the wait for the server's acknowledgement. It
 // covers the server's first read of the resource, which is a GitLab call, and
@@ -243,11 +282,20 @@ func subscribesByListening(session *mcp.ClientSession) bool {
 	return result != nil && result.ProtocolVersion >= listenProtocolVersion
 }
 
-// subscribe is the one path both subscribe verbs take: claim the URI on this
-// session, subscribe, wait for the answer where the protocol hides it, record
-// what came of it, and hand back a subscription whose cleanup is registered.
-func (s *Session) subscribe(uri, expectation string) (*Subscription, error) {
+// subscribe is the one path both subscribe verbs take: refuse a subscription
+// the server said it cannot answer, claim the URI on this session, subscribe,
+// wait for the answer where the protocol hides it, record what came of it,
+// and hand back a subscription whose cleanup is registered.
+func (s *Session) subscribe(uri, expectation string, opts []CallOption) (*Subscription, error) {
 	s.env.T.Helper()
+
+	purpose := resolveCallOptions(opts).purpose
+	listening := subscribesByListening(s.conn.client())
+	if listening && !declaresSubscribe(s.conn.client().InitializeResult()) {
+		err := fmt.Errorf("%w (this session's capability surface is %s)", errNoSubscribeCapability, s.conn.cfg.Capabilities)
+		s.conn.recordSubscribe(s.env.recorder, uri, purpose, expectation, outcomeOf(methodSubscribe, nil, err))
+		return nil, err
+	}
 
 	// The index is what lets an update notification be recorded against this
 	// test: it arrives on the SDK's own goroutine, where nothing says whose
@@ -262,8 +310,7 @@ func (s *Session) subscribe(uri, expectation string) (*Subscription, error) {
 	acknowledged := s.conn.acks.watch(uri)
 	defer s.conn.acks.forget(uri, acknowledged)
 
-	listening := subscribesByListening(s.conn.client())
-	subscribeCtx := s.attribute(s.env.Ctx, PurposeTest, expectation, callAttribution{target: uri})
+	subscribeCtx := s.attribute(s.env.Ctx, purpose, expectation, callAttribution{target: uri})
 	err := s.conn.client().Subscribe(subscribeCtx, &mcp.SubscribeParams{URI: uri})
 	if err == nil && listening {
 		err = s.awaitAcknowledgement(acknowledged)
@@ -276,7 +323,7 @@ func (s *Session) subscribe(uri, expectation string) (*Subscription, error) {
 	// and a second line here would count it twice. See
 	// [sessionConn.recordSubscribe].
 	if listening {
-		s.conn.recordSubscribe(s.env.recorder, uri, expectation, outcomeOf(methodSubscribe, nil, err))
+		s.conn.recordSubscribe(s.env.recorder, uri, purpose, expectation, outcomeOf(methodSubscribe, nil, err))
 	}
 
 	// There is something to unsubscribe when the server agreed, and also when

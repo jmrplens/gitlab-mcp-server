@@ -32,7 +32,8 @@
 #
 # Environment, all optional:
 #   E2E_DOCKER_GITLAB_URL          http://localhost:8929
-#   E2E_DOCKER_BITBUCKET_URL       http://localhost:7990
+#   E2E_DOCKER_BITBUCKET_URL       http:// and the GitLab URL's host on port 7990,
+#                                  whatever port or path the GitLab URL carries
 #   E2E_BITBUCKET                  true under ce; false skips the Bitbucket fixture
 #   E2E_KEEP_STACK                 true leaves the stack up after the run, for a look
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
@@ -43,8 +44,14 @@
 #   GITLAB_IMAGE                   the image for the runtime; the defaults above
 #   GOTESTSUM                      the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
-#   E2E_GITLAB_EXTERNAL_URL, E2E_REGISTRY_EXTERNAL_URL, E2E_BITBUCKET_BIND
-#                                  what the compose file publishes; derived from the URL above
+#   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
+#   E2E_REGISTRY_EXTERNAL_URL      the registry's: http:// and the GitLab URL's host on port 5050,
+#                                  whatever port or path the GitLab URL carries
+#   E2E_BITBUCKET_BIND             the address Bitbucket is published on, read off the Bitbucket
+#                                  URL (derived or set): 127.0.0.1 for localhost, whatever its
+#                                  case, the address itself for 127.x.y.z and for [::1], the
+#                                  loopback a name resolves to here when it resolves to nothing
+#                                  else, and 0.0.0.0 for any other host
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,7 +78,13 @@ if [ "$#" -eq 0 ]; then
 fi
 
 E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
-E2E_DOCKER_BITBUCKET_URL="${E2E_DOCKER_BITBUCKET_URL:-http://localhost:7990}"
+# Bitbucket and the registry run beside GitLab, so they are reached on the
+# same host, and Bitbucket is published on the loopback its URL names, or on
+# 0.0.0.0 when it names none. fixture-addresses.sh holds the derivation and
+# the reasons for it, so a test can drive it with the URLs it has to handle.
+# shellcheck source=test/e2e/scripts/fixture-addresses.sh
+. "${SCRIPT_DIR}/fixture-addresses.sh"
+derive_fixture_addresses
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
 E2E_REPORT_NAME="${E2E_REPORT_NAME:-e2e-${RUNTIME}}"
 GOTESTSUM="${GOTESTSUM:-gotestsum}"
@@ -82,11 +95,16 @@ esac
 
 # What the compose file publishes follows the address the fixture is reached
 # from, so the web_url fields GitLab answers with are the ones the tests reach.
+# The registry's is the GitLab URL's host on port 5050, derived above with
+# Bitbucket's, so a URL on another port, with none, or with a path moves it
+# too. The import test itself never dials Bitbucket: it hands GitLab the
+# address the setup script recorded, and GitLab reaches it over the compose
+# network. E2E_BITBUCKET_BIND overrides the choice of bind.
 export E2E_GITLAB_EXTERNAL_URL="${E2E_GITLAB_EXTERNAL_URL:-${E2E_DOCKER_GITLAB_URL}}"
-if [ -z "${E2E_REGISTRY_EXTERNAL_URL:-}" ] && [ "${E2E_DOCKER_GITLAB_URL%:8929}" != "${E2E_DOCKER_GITLAB_URL}" ]; then
-    export E2E_REGISTRY_EXTERNAL_URL="${E2E_DOCKER_GITLAB_URL%:8929}:5050"
+if [ -n "${E2E_REGISTRY_EXTERNAL_URL:-}" ]; then
+    export E2E_REGISTRY_EXTERNAL_URL
 fi
-export E2E_BITBUCKET_BIND="${E2E_BITBUCKET_BIND:-127.0.0.1}"
+export E2E_BITBUCKET_BIND
 export E2E_COMMIT="${E2E_COMMIT:-$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)}"
 
 # Every down names the Bitbucket profile, whatever this run starts: a
@@ -171,7 +189,9 @@ echo "=== Registering GitLab Runner ==="
 "${SCRIPT_DIR}/register-runner.sh" "${E2E_DOCKER_GITLAB_URL}"
 
 if [ "${WITH_BITBUCKET}" = "true" ]; then
-    echo "=== Provisioning Bitbucket import fixture ==="
+    # The address is printed because it was derived: a guess that missed
+    # leaves the import test skipping, and the log is where that shows.
+    echo "=== Provisioning Bitbucket import fixture at ${E2E_DOCKER_BITBUCKET_URL} (published on ${E2E_BITBUCKET_BIND}) ==="
     "${SCRIPT_DIR}/setup-bitbucket.sh" "${E2E_DOCKER_BITBUCKET_URL}"
 fi
 

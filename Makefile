@@ -161,17 +161,27 @@ E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # Docker itself follows DOCKER_HOST or the active context, so the fixture can
 # run on another host: `DOCKER_HOST=ssh://truenas
 # E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 make test-e2e-docker`. GitLab's
-# own idea of its URL (external_url, and the registry's beside it) follows the
-# same value, so the web_url fields it answers with are the ones the tests
-# reach. Bitbucket is published on loopback by default and has to be bound to
-# the LAN (E2E_BITBUCKET_BIND=0.0.0.0) when the fixture is remote.
+# own idea of its URL (external_url) follows the same value, so the web_url
+# fields it answers with are the ones the tests reach. The registry and
+# Bitbucket follow the same host, and test/e2e/scripts/run-docker-e2e.sh
+# derives them there rather than here, reading the host out of the GitLab URL
+# whatever port or path it carries: the registry's external URL, http:// and
+# that host on port 5050, Bitbucket's URL, the same on port 7990, and
+# Bitbucket's bind, chosen from the Bitbucket URL (the derived one, or
+# E2E_DOCKER_BITBUCKET_URL when set): the loopback it names, 127.0.0.1 for
+# localhost, whatever its case, the address itself for 127.x.y.z and for
+# [::1], the loopback a name resolves to on this machine when it resolves to
+# no other address, and 0.0.0.0 for any other host, since the setup script on
+# this machine has to reach a remote container's port. Overriding
+# E2E_DOCKER_BITBUCKET_URL therefore moves the
+# bind with it unless E2E_BITBUCKET_BIND is set too. The
+# import test never dials Bitbucket; GitLab does, over the compose network.
+# E2E_REGISTRY_EXTERNAL_URL, E2E_DOCKER_BITBUCKET_URL and E2E_BITBUCKET_BIND,
+# set in the environment or on the make command line, override each. A
+# default here would reach the script as a value someone chose and switch the
+# derivation off.
 E2E_DOCKER_GITLAB_URL ?= http://localhost:8929
-E2E_DOCKER_REGISTRY_URL ?= $(patsubst %:8929,%:5050,$(E2E_DOCKER_GITLAB_URL))
-E2E_DOCKER_BITBUCKET_URL ?= http://localhost:7990
-E2E_BITBUCKET_BIND ?= 127.0.0.1
 export E2E_GITLAB_EXTERNAL_URL = $(E2E_DOCKER_GITLAB_URL)
-export E2E_REGISTRY_EXTERNAL_URL = $(E2E_DOCKER_REGISTRY_URL)
-export E2E_BITBUCKET_BIND
 
 # Read version from VERSION file (single source of truth)
 VERSION := $(strip $(file < VERSION))
@@ -445,11 +455,12 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
 	  -- -tags e2e -p 1 -count=1 -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/...'
 
-## e2e-clean-orphans: delete what earlier runs left on a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project, group and user named with E2E_SWEEP_PREFIX (default e2e-).
+## e2e-clean-orphans: delete what earlier runs left on a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project and group the token owns whose name or path opens with E2E_SWEEP_PREFIX (default e2e-), and every such user when the token is an administrator's.
 # Run by hand and by nothing else: a run sweeps only what carries its own run
 # ID, and this is the prefix-wide sweep for the leftovers of a run that could
 # not clean up. It is a test of the fixture package because that library is
-# importable only from test/e2e, and it skips unless the prefix is set.
+# importable only from test/e2e. The test skips when the prefix is empty, which
+# guards a bare go test run; this target always passes one.
 E2E_SWEEP_PREFIX ?= e2e-
 e2e-clean-orphans:
 	bash -o pipefail -c 'if [ -f .env ]; then set -a; . ./.env; set +a; fi; \

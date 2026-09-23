@@ -175,10 +175,10 @@ func TestCheckServedTools_DifferenceAtTheLimit_IsNotTruncated(t *testing.T) {
 	}
 }
 
-// TestPromptSpecOf_SplitsTheArgumentsAndSkipsAHole checks the split a sweep
+// TestPromptSpecOf_ArgumentsWithAHole_SplitAndTheHoleSkipped checks the split a sweep
 // binds prompt arguments by, and that a nil entry in a listing is passed over
 // rather than read.
-func TestPromptSpecOf_SplitsTheArgumentsAndSkipsAHole(t *testing.T) {
+func TestPromptSpecOf_ArgumentsWithAHole_SplitAndTheHoleSkipped(t *testing.T) {
 	spec := promptSpecOf(&mcp.Prompt{Name: "summarize", Arguments: []*mcp.PromptArgument{
 		nil,
 		{Name: "project_id", Required: true},
@@ -543,7 +543,7 @@ func assertServesTheStandaloneActions(t *testing.T, expected surfaceExpectation)
 	}
 }
 
-// TestStandaloneActions_FollowTheVisibilityPass replays, one configuration at a
+// TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass replays, one configuration at a
 // time, what the binary's visibility pass leaves of the standalone tools on
 // the meta and individual surfaces.
 //
@@ -552,7 +552,7 @@ func assertServesTheStandaloneActions(t *testing.T, expected surfaceExpectation)
 // for it, since the pass there matches registered names exactly. The harness
 // follows the binary, so a session excluding the group still serves the flows
 // here, which is the behavior issue 911 tracks rather than one this corrects.
-func TestStandaloneActions_FollowTheVisibilityPass(t *testing.T) {
+func TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass(t *testing.T) {
 	made := freeProjection(t)
 	everything := standaloneActionIDs
 

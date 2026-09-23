@@ -14,7 +14,7 @@ There are five modules, answering different questions:
 
 Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
 
-Those five tags are the whole list. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries `e2e` alone, so one compile and one analysis run see all of them, and the runtime a test needs is decided by the package it is in rather than by a tag. The suite this replaced used to be two halves behind a second tag that excluded each other, which meant a single run could only see one half and the Enterprise one needed a compile step and an analysis pass of its own; that half was ported to `test/e2e/gitlab/ee` and deleted, and both passes went with it.
+Those five tags are the whole list. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries `e2e` alone, with two exceptions: the package `doc.go` files carry no constraint, and the harness's race seam pair (`server_race.go` and `server_norace.go`) carries `e2e && race` and `e2e && !race`, of which a run sees the half its race setting selects. So one compile and one analysis run see all of them, and the runtime a test needs is decided by the package it is in rather than by a tag. The suite this replaced used to be two halves behind a second tag that excluded each other, which meant a single run could only see one half and the Enterprise one needed a compile step and an analysis pass of its own; that half was ported to `test/e2e/gitlab/ee` and deleted, and both passes went with it.
 
 ## One build, four packages
 
@@ -69,11 +69,11 @@ make e2e-clean-orphans  # delete what earlier runs left on a self-hosted instanc
 
 The suite. Every test drives the **real `cmd/server` binary over stdio** through `test/e2e/internal/harness`, names its actions by canonical catalog ID, and runs each scenario on the dynamic, meta and individual surfaces as subtests. The runtime a test needs is decided by its package: `common` runs on every runtime (Free actions are verified on the CE catalog and on the licensed EE one, where schema pruning differs), `ce` holds the few facts that only hold without a license, and `ee` needs a Premium or Ultimate one. A package pointed at the wrong runtime refuses before it writes anything, naming what it found and the target to run instead; `E2E_RUNTIME_MISMATCH=skip` turns that into skips.
 
-A refusal's wording is asserted through `assertMentions`, `mentionsAny`, `containsAny` or the `contains` of `harness.ExpectToolError`, and those substrings are read by `make check-action-ids` (`cmd/audit_action_ids`), which holds each one to the catalog the way it holds the hint it quotes: a tool name, a registered alias or a dotted ID nothing resolves fails the push rather than the next licensed run, which is how issue 901 was found a month late. Quote the canonical action ID the server writes, never a tool name, and assert each fact on its own rather than as one member of an either-or check whose other member always matches. A new assertion helper is read only once it is declared in `servedTextAssertions`, and a renamed one fails the gate until its entry follows it.
+Assert a refusal's wording through `assertMentions`, `mentionsAny`, `containsAny` or the `contains` of `harness.ExpectToolError` whenever the substring names a tool, an alias or an action ID: `make check-action-ids` (`cmd/audit_action_ids`) reads the substrings those helpers are handed and no other call, and holds each one to the catalog the way it holds the hint it quotes. A tool name, a registered alias or a dotted ID nothing resolves fails the push rather than the next licensed run, which is how issue 901 was found a month late; the excuses are the hint rule's own declaration tables, consulted without keeping any entry alive (a `gitlab_`-shaped token that is no tool, `hintToolExemptions`; a dotted token that is no ID, `proseExemptions`, and the `params.` class, `proseNonDomains`), plus one more: an alias a `Usage` line names by design, declared in `declaredAliasMentions`, which a test quoting that line quotes faithfully. A bare `strings.Contains` on served text is outside the gate: the suite uses it for needles that name nothing the catalog holds, a status code (`403`) or one of the server's fixed phrases (`unknown action`, `confirm=true`), and a quotation of a tool or an action written that way would go unread. Quote the canonical action ID the server writes, never a tool name, and assert each fact on its own rather than as one member of an either-or check whose other member always matches. A new assertion helper is read only once it is declared in `servedTextAssertions`, and a renamed one fails the gate until its entry follows it.
 
-The read and preview sweeps, the resource and subscription sweeps and the prompt sweep bind what they call from one shared, read-only World (`fixture.SharedWorld`), built once per package and checked by a digest at the end of the run. Its core (a group, a project, a branch with a commit, a merge request, an issue, a label, a milestone) is what every read test stands on, so a core object the instance will not make fails the run. Beside it the World makes its extras best effort, each under its own bounded context: a tag and its release, an environment and a deployment into it, a feature flag, a deploy key, a project board, a project and a personal snippet, a wiki page, a group label and milestone, and a canceled pipeline with its one job, from a configuration whose workflow rule admits only API-created pipelines and whose job asks for a runner tag no runner carries, so an instance with a runner and one without end with the same pipeline. An extra the World cannot make (a pipeline that never reached a terminal state, a disabled wiki's 403) is left unbound with its reason. A name that means one object across the catalog (`pipeline_id`, `job_id`, `tag_name`, `environment_id`, `deployment_id`, `deploy_key_id`) is a plain binding, and the read, preview, resource and subscription sweeps log an unmade extra's reason beside every resource template naming it and every action requiring it. One that does not (`board_id`, a feature flag's `name`, `slug`, `snippet_id`, and the group templates' `label_id` and `milestone_iid`) is bound per resource template only, so the reason is logged beside that template alone: the disabled wiki's 403 appears beside the wiki template, and an action requiring a wiki's `slug`, a `board_id`, a feature flag's `name` or a `snippet_id` is not bound from the World at all and is logged as naming a parameter the World has no binding for. Outside the group templates, `label_id` and `milestone_iid` bind the project's label and milestone for every action, group actions included. A subscription counts as accepted only once the server acknowledges it, and the subscription sweep subscribes and closes one template at a time on a session of its own, since the server holds at most ten watchers per credential.
+The read and preview sweeps, the resource and subscription sweeps and the prompt sweep bind what they call from one shared, read-only World (`fixture.SharedWorld`), built once per package and checked by a digest at the end of the run. Its core (a group, a project, a branch with a commit, a merge request, an issue, a label, a milestone) is what every read test stands on, so a core object the instance will not make fails the run. Beside it the World makes its extras best effort, each under its own bounded context: a tag and its release, an environment and a deployment into it, a feature flag, a deploy key, a project board, a project and a personal snippet, a wiki page, a group label and milestone, and a canceled pipeline with its one job, from a configuration whose workflow rule admits only API-created pipelines and whose job asks for a runner tag no runner carries, so an instance with a runner and one without end with the same pipeline. An extra the World cannot make (a pipeline that never reached a terminal state, a disabled wiki's 403) is left unbound with its reason. A name that means one object across the catalog (`pipeline_id`, `job_id`, `tag_name`, `environment_id`, `deployment_id`, `deploy_key_id`) is a plain binding, and the read, preview, resource and subscription sweeps log an unmade extra's reason beside every resource template naming it and every action requiring it. One that does not (`board_id`, a feature flag's `name`, `slug`, `snippet_id`, and the group templates' `label_id` and `milestone_iid`) is bound per resource template only, so the reason is logged beside that template alone: the disabled wiki's 403 appears beside the wiki template, and an action requiring a wiki's `slug`, a `board_id`, a feature flag's `name` or a `snippet_id` is not bound from the World at all and is logged as naming a parameter the World has no binding for. Outside the group templates, `label_id` and `milestone_iid` bind the project's label and milestone for every action, group actions included. Two more names are bound per template, beside the plain bindings: the release template's `tag_name` stands on the release rather than the tag, and the file template's `path` is the README the project was created with, which is always bound and so never logs a reason. The release domain's actions that address an existing release bind `tag_name` to the release as well, so an instance with the tag and no release logs the release's reason beside the release template and beside `release.get`, `release.link_list`, `release.update` and `release.delete` rather than reading or previewing them against a tag with no release. `release.link_get` and the release link mutations address the release the same way and also need a link id, the links, or a name and a URL, which the World never binds, so they are logged as naming a parameter the World has no binding for whatever became of the release. `release.create` keeps the tag, since its `tag_name` is the tag a new release will stand on, and so do the tag actions. One template is gated on an extra none of its variables names: the latest pipeline template reads whatever pipeline the project holds, so it is left unbound with the pipeline's reason only when GitLab created none, and stays bound when the World's pipeline was created and never settled. A subscription counts as accepted only once the server acknowledges it, and the subscription sweep subscribes and closes one template at a time on a session of its own, since the server holds at most ten watchers per credential. It fails on a decline its `knownDeclines` table does not name, since one past those is the watcher cap or a first read the World should have satisfied, and on a declared template the server acknowledges or no longer advertises, so an entry goes with the defect it names; a declared template the World could not bind on a run is logged as not judged there.
 
-Coverage is what the server dispatched, in a test that passed, on a named runtime, surface and mode: every child runs with telemetry on and the harness reads its spans, and the calls are recorded under `dist/e2e-calls/<target>` for `cmd/audit_e2e_coverage`. GitLab state is built through client-go by `test/e2e/internal/fixture`, never through the server under test, so fixture traffic is never coverage. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries exactly `//go:build e2e` (doc.go carries none), so one compile and one analysis run see the whole suite; the harness's own tests hold that, and hold the runtime packages to never assembling a server of their own and never taking an Env from `harness.NewDetached`, which skips the bootstrap and exists so the fixture library's tests can drive a whole builder against a stub GitLab. The Docker lifecycle both targets share lives in `test/e2e/scripts/run-docker-e2e.sh`, and every run carries `-p 1 -count=1`: capability locks are process-local, and a cached PASS records no calls. The licensed run stays local; CI runs `common` and `ce` in the `e2e-gitlab` job of `e2e.yml`, which blocks and which `release.yml` reaches by calling that workflow.
+Coverage is what the server dispatched, in a test that passed, on a named runtime, surface and mode: every child runs with telemetry on and the harness reads its spans, and the calls are recorded under `dist/e2e-calls/<target>` for `cmd/audit_e2e_coverage`. GitLab state is built through client-go by `test/e2e/internal/fixture`, never through the server under test, so fixture traffic is never coverage. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries exactly `//go:build e2e` (doc.go carries none, and the harness's race seam pair carries `e2e && race` and `e2e && !race`), so one compile and one analysis run see the whole suite; the harness's own tests hold that, and hold the runtime packages to never assembling a server of their own and never taking an Env from `harness.NewDetached`, which skips the bootstrap and exists so the fixture library's tests can drive a whole builder against a stub GitLab. The Docker lifecycle both targets share lives in `test/e2e/scripts/run-docker-e2e.sh`, and every run carries `-p 1 -count=1`: capability locks are process-local, and a cached PASS records no calls. The licensed run stays local; CI runs `common` and `ce` in the `e2e-gitlab` job of `e2e.yml`, which blocks and which `release.yml` reaches by calling that workflow.
 
 ### Go statement coverage of the binary
 
@@ -165,17 +165,37 @@ machine:
 ```bash
 DOCKER_HOST=ssh://truenas \
 E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 \
-E2E_DOCKER_BITBUCKET_URL=http://192.168.0.40:7990 \
-E2E_BITBUCKET_BIND=0.0.0.0 \
 make test-e2e-docker          # or test-e2e-ce, test-e2e-ee
 ```
 
-`E2E_DOCKER_GITLAB_URL` is also handed to the container as its `external_url`
-(the registry's follows on port 5050), so the `web_url` fields GitLab answers
-with name the address the tests reach. Bitbucket is published on loopback by
-default and has to be bound to the remote host's LAN address for the setup
-script and the import test to reach it. The published ports are then open on
-that host's network: use it on a LAN you trust.
+`E2E_DOCKER_GITLAB_URL` is also handed to the container as its `external_url`,
+so the `web_url` fields GitLab answers with name the address the tests reach.
+The registry and Bitbucket follow the same host:
+`test/e2e/scripts/run-docker-e2e.sh` reads the host out of that URL whatever
+port or path it carries, gives the registry `http://` that host on port 5050 as
+its external URL, and looks for Bitbucket at `http://` that host on port 7990,
+printing the address it derived. It publishes the Bitbucket port on the
+loopback the Bitbucket URL (the derived one, or `E2E_DOCKER_BITBUCKET_URL` when
+set) names: `127.0.0.1` for `localhost`, whatever its case, and the address
+itself for a `127.x.y.z` address and for `[::1]`, since a port published on one
+loopback address refuses a connection to another. A host name is resolved on
+this machine, and one that resolves to loopback addresses alone (a Debian
+hostname mapped to `127.0.1.1`, an `/etc/hosts` alias of `127.0.0.1`) is
+published on that loopback, its first IPv4 one or `[::1]`. Any other URL is
+published on `0.0.0.0`, since the setup script on this machine has to reach a
+remote container's port: a name that also resolves to another address, one
+that resolves to nothing here, and a name that only begins with `127.`, which
+is never read as the address it is spelled like. A URL naming this machine by
+its LAN address is published on `0.0.0.0` too, and
+overriding `E2E_DOCKER_BITBUCKET_URL` moves the bind with it unless
+`E2E_BITBUCKET_BIND` is set as well. The import test itself never dials
+Bitbucket: GitLab does, over the compose network, at the address the setup
+script recorded. `E2E_REGISTRY_EXTERNAL_URL`, `E2E_DOCKER_BITBUCKET_URL` and
+`E2E_BITBUCKET_BIND` override each.
+Before the derivation a remote run had to set both by hand, and one that did
+not still passed: the import test skipped and the coverage record came out one
+action short. The published ports are open on the remote host's network: use
+it on a LAN you trust.
 
 ### Docker Enterprise Mode
 
@@ -283,56 +303,33 @@ resource ledger.
 
 ## Architecture
 
-### Test Files
+### Layout
 
-All Go test files live in the `suite/` subdirectory (package `suite`):
+| Path                        | What it holds                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `test/e2e/gitlab/common`    | Scenarios any instance serves, run on CE and on licensed EE alike                                                                   |
+| `test/e2e/gitlab/ce`        | The few facts that hold only without a license                                                                                      |
+| `test/e2e/gitlab/ee`        | Premium and Ultimate scenarios                                                                                                      |
+| `test/e2e/internal/harness` | The one route from a test to a server: the binary, the sessions, the verbs, the recorder, the per-test ledger and the waits         |
+| `test/e2e/internal/fixture` | GitLab state built through client-go rather than the server under test, each builder registering its own undo, and the shared World |
 
-| File                       | Purpose                                              |
-| -------------------------- | ---------------------------------------------------- |
-| `suite/setup_test.go`      | TestMain, 6 MCP sessions, helpers, shared state      |
-| `suite/fixture_ce_test.go` | Self-contained GitLab resource builders (CE runtime) |
-| `suite/fixture_ee_test.go` | Self-contained GitLab resource builders (EE runtime) |
-| `suite/*_test.go`          | 137 domain-specific test files                        |
+A scenario names each action by its typed `harness.ActionID` and runs once per surface: `harness.SurfacesWith` builds the fixture once on the parent test and runs the body again on the dynamic, meta and individual surfaces as subtests, so the three are held to the same assertions.
 
-### MCP Sessions
+### Sessions
 
-| Session            | Purpose                                  |
-| ------------------ | ---------------------------------------- |
-| `individual`       | Individual tools                          |
-| `meta`             | Meta-tools                                |
-| `dynamic`          | Default dynamic find/execute surface                 |
-| `elicitation`      | The four guided flows, answered by a scripted client on every surface |
-| `safeMode`         | Mutating tools wrapped to return previews |
+A test asks its `Env` for a session by `harness.ServerConfig`: a tool surface, a protective mode (default, read-only or safe), a capability surface (full or minimal), a meta parameter-schema mode, and when it needs one a token, an exclusion list, an elicitation policy, a tier pin or the HTTP transport. Every field the server sees is a variable or a flag the released binary reads, and there is no way to hand the server a catalog of the test's own. Three fields configure the harness rather than the server: the elicitation policy, which is what the harness client advertises and does with a request, its `Responder`, which answers a scripted one, and `Private`, which is the session's lifetime. Sessions of one configuration are shared by the tests of a package, since nothing one test calls changes what the next is served; `Private: true` gives a test a server nobody else touches, stopped when the test ends.
 
-Resource subscriptions (`resources/subscribe`) are deliberately not part of
-this suite: the e2e client drives tools through one-shot calls, while a
-subscription needs a client that holds one open and waits for
-notifications. They are covered by unit tests instead
-(`internal/subscriptions/`, `cmd/server/subscriptions_test.go`).
+The four guided flows (issue, merge request, release, project) are answered by a scripted client on every surface, in a private session per test and surface that ends with the test, with the auto-accept and no-elicitation policies beside them.
 
-### Safety Guardrails
+Resource subscriptions are driven through the real binary too. `TestSubscriptions_Sweep` subscribes to every subscribable template the World binds, one at a time on a session of its own, and counts one accepted only once the server acknowledges it; `TestSubscriptionDelivery_ChangedIssue_NotifiesTheSubscriber` changes an issue it owns and waits for the notification.
 
-- **Snapshot-based cleanup**: `TestMain` captures pre-test project/group/label/variable state and restores it on exit
-- **Unique names**: All test resources use timestamped names to avoid conflicts
-- **Scoped parallelism**: Most top-level tests call `t.Parallel()`; lifecycle subtests usually stay sequential inside each top-level test when they share IDs or mutable state
+### Safety guardrails
 
-### Isolation and capabilities
-
-E2E tests are grouped by the resource scope they touch. New tests that mutate resources must use an existing fixture helper or explicitly register cleanup for every resource they create. See `suite/CAPABILITIES.md` for the current inventory and future gating plan.
-
-| Scope | Meaning | Parallelism guidance |
-| ----- | ------- | -------------------- |
-| `project` | Project-owned resources such as files, branches, issues, merge requests, packages, releases, and project settings | Parallel by default when each test creates its own project and cleanup is registered |
-| `group` | Group-owned resources such as group projects, members, labels, wikis, epics, and group settings | Parallel by default when each test creates its own group and cleanup is registered |
-| `user` | Admin-created or test-created user resources | Requires explicit cleanup and, for admin user lifecycle tests, admin capability checks |
-| `current-user` | State attached to the authenticated test user, including status, todos, SSH keys, personal access tokens, and notification preferences | Must be serialized or restored before more parallelism is added |
-| `instance-global` | Instance-wide resources such as settings, topics, broadcast messages, feature flags, system hooks, OAuth applications, Sidekiq, and metadata | Must be admin-gated and serialized when mutating global state |
-| `runner` | Pipeline and job tests that depend on the Docker CI runner | Requires Docker mode with a registered runner; avoid concurrent runner-heavy lifecycles |
-| `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
-| `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
-| `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
-| `dynamic` | Default two-tool dynamic surface over the canonical action catalog | Parallel when each test owns created resources and uses find/execute rather than direct meta-tool calls |
-| `elicitation` | A private session per test and surface whose client answers the guided flows from a script, and ends with the test | Parallel when each test owns any GitLab resources it creates |
+- **Names**: `Env.Name` names every object a test creates after the run, the package and the test, so two runs and three packages can share an instance without one deleting another's fixtures.
+- **Ledger**: every fixture builder registers the undo for what it created on the test's `Env`, and the ledger runs it when the test ends, under a bounded cleanup budget. Projects and groups are permanently removed.
+- **Orphans**: what an interrupted run left behind is swept by hand with `make e2e-clean-orphans`, by name prefix (`E2E_SWEEP_PREFIX`, `e2e-` by default), against the instance `.env` names: every project and group the token owns whose name or path opens with the prefix is deleted, and, with an administrator's token, every such user. The test the target runs skips when the variable is empty, which guards only a bare `go test` of it.
+- **Shared state**: a test that changes something every other test can observe declares a `harness.Lock` (instance-global settings, the current user's own state, the CI runner, the license), and the holders of one lock run one after another; `harness.Serial` is for a change nothing else can run beside, such as installing or removing the license.
+- **Requirements**: `harness.Needs` declares what the instance must provide (an administrator, a runner, the fixture service, an external network), and a test whose needs the run does not meet is skipped before it touches GitLab.
 
 ## Running Individual Workflows
 
@@ -368,4 +365,4 @@ go test -tags e2e -c -o NUL ./test/e2e/gitlab/...         # Windows
 
 **Docker-only domains**: pipeline create/get/cancel/retry/delete, job get/log/retry/cancel
 
-**MCP capability tests**: elicitation, the four guided flows (issue, merge request, release, project) on every surface under one scripted client, with the auto-accept and no-elicitation policies beside them
+**MCP capability tests**: elicitation, the four guided flows (issue, merge request, release, project) on every surface, each answered by a scripted client in a private session per test and surface, with the auto-accept and no-elicitation policies beside them

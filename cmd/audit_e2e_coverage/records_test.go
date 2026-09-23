@@ -303,6 +303,53 @@ func TestFoldRecords_LinesTheReaderCannotPlace(t *testing.T) {
 	}
 }
 
+// TestFoldShards_ToolSessions_JoinedByLabelWithinTheShard verifies which
+// session lines are held to have called a tool: the one whose own shard
+// carries a tools/call under its label, and neither the line of the same label
+// in another shard, which only read a resource, nor a line of another label
+// beside the caller.
+//
+// The shard is the boundary because a label repeats across packages, so a
+// join over the whole runtime would lend one process's tool call to every
+// session that happened to share its name.
+func TestFoldShards_ToolSessions_JoinedByLabelWithinTheShard(t *testing.T) {
+	run := func() e2ecalls.Record {
+		return e2ecalls.Record{Schema: 1, Type: e2ecalls.TypeRun, Run: &e2ecalls.Run{
+			Package: "common", Edition: "community", Tier: "free", Status: e2ecalls.RunStarted,
+		}}
+	}
+	session := func(label string) *e2ecalls.Session {
+		return &e2ecalls.Session{Label: label, Surface: "dynamic", Mode: "default"}
+	}
+	caller, reader, beside := session("dynamic-default-full"), session("dynamic-default-full"), session("dynamic-default-minimal")
+	rt, err := foldShards([]e2ecalls.Shard{
+		{Records: []e2ecalls.Record{
+			run(),
+			{Schema: 1, Type: e2ecalls.TypeSession, Session: caller},
+			{Schema: 1, Type: e2ecalls.TypeSession, Session: beside},
+			{Schema: 1, Type: e2ecalls.TypeCall, Call: &e2ecalls.Call{Test: "T", Session: caller.Label, Method: methodCallTool}},
+			{Schema: 1, Type: e2ecalls.TypeCall, Call: &e2ecalls.Call{Test: "T", Session: beside.Label, Method: methodReadResource}},
+		}},
+		{Records: []e2ecalls.Record{
+			run(),
+			{Schema: 1, Type: e2ecalls.TypeSession, Session: reader},
+			{Schema: 1, Type: e2ecalls.TypeCall, Call: &e2ecalls.Call{Test: "U", Session: reader.Label, Method: methodReadResource}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("foldShards() error = %v", err)
+	}
+
+	want := map[*e2ecalls.Session]bool{caller: true}
+	if !reflect.DeepEqual(rt.toolSessions, want) {
+		t.Errorf("toolSessions holds %d lines, want only the caller: caller=%t reader=%t beside=%t",
+			len(rt.toolSessions), rt.toolSessions[caller], rt.toolSessions[reader], rt.toolSessions[beside])
+	}
+	if len(rt.sessions) != 3 {
+		t.Errorf("folded %d session lines, want all 3", len(rt.sessions))
+	}
+}
+
 // TestMatchesRuntime_Selectors_Matched verifies the two shorthands and the literal
 // key: ce is any community runtime, ee is a licensed enterprise one, an
 // unlicensed enterprise image is neither, and a key matches itself.

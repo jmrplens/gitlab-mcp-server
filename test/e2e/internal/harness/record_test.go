@@ -27,8 +27,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
@@ -220,6 +222,9 @@ func TestRecorder_IndividualSafeMode_RecordsAPreviewAndTheServersRefusal(t *test
 	inst := stubInstance(t)
 	env := newEnv(t, inst)
 	session := env.Session(ServerConfig{Surface: SurfaceIndividual, Mode: ModeSafe, Private: true})
+	if !session.conn.exportsSpans {
+		t.Fatal("a session of the real binary is not marked as exporting its spans here, so no flush waits for them")
+	}
 
 	_, _ = Try[map[string]any](session, "project.create", map[string]any{"name": env.Name("safe-mode")})
 
@@ -754,7 +759,9 @@ func TestSubscriberIndex_OneWatcherPerURI_TurnsTheSecondAwayUntilReleased(t *tes
 // the sending middleware cannot: the SDK opens the subscription on a
 // background context under the current protocol, so the attribution never
 // reaches it. The outcome is the caller's, which is what lets a refused
-// subscribe be recorded as the refusal it was.
+// subscribe be recorded as the refusal it was, and so is the purpose, which
+// is what lets the subscription sweep's subscribes be credited as a sweep's
+// rather than as a test's assertion.
 func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	env := newEnv(t, offlineInstance())
 	conn := &sessionConn{
@@ -763,7 +770,7 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 		cfg:   ServerConfig{Surface: SurfaceDynamic, Mode: ModeDefault, Capabilities: CapabilitiesFull},
 	}
 
-	conn.recordSubscribe(env.recorder, "gitlab://project/7", ExpectationAny, e2ecalls.OutcomeProtocolError)
+	conn.recordSubscribe(env.recorder, "gitlab://project/7", PurposeSweep, ExpectationAny, e2ecalls.OutcomeProtocolError)
 
 	lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
 	var found *e2ecalls.Call
@@ -778,8 +785,8 @@ func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
 	if found.Method != methodSubscribe || found.Target != "gitlab://project/7" {
 		t.Errorf("subscribe line = method %q target %q, want %q and gitlab://project/7", found.Method, found.Target, methodSubscribe)
 	}
-	if found.Test != env.T.Name() || found.TestStatus != e2ecalls.StatusPassed || found.Purpose != string(PurposeTest) {
-		t.Errorf("subscribe line credited test %q status %q purpose %q, want this test, passed, test",
+	if found.Test != env.T.Name() || found.TestStatus != e2ecalls.StatusPassed || found.Purpose != string(PurposeSweep) {
+		t.Errorf("subscribe line credited test %q status %q purpose %q, want this test, passed, and the caller's sweep",
 			found.Test, found.TestStatus, found.Purpose)
 	}
 	if found.Outcome != e2ecalls.OutcomeProtocolError || found.Expectation != ExpectationAny {
@@ -1272,14 +1279,32 @@ func TestRunLine_StartedRun_CarriesWhatTheRuntimeWas(t *testing.T) {
 //
 // A test that made no traced call must not pay the dispatch budget, and
 // neither must a call the harness could not stamp: both would add ten seconds
-// per test to a suite of hundreds.
+// per test to a suite of hundreds. Nor must a traced call to a session whose
+// server exports nothing here, which is every in-process server a test of the
+// harness assembles: with a receiver running, each such flush paid the whole
+// budget, and the harness's own tests spent most of their time doing that.
+// The receiver is one of this test's own that has seen spans, so the budget
+// in force is the full one.
 func TestAwaitDispatch_NothingToWaitFor_ReturnsAtOnce(t *testing.T) {
+	useWaitingReceiver(t)
 	cases := []struct {
 		name  string
 		calls []*pendingCall
 	}{
 		{name: "no calls at all", calls: nil},
 		{name: "a call with no trace", calls: []*pendingCall{{line: &e2ecalls.Call{Action: "issue.list"}}}},
+		{
+			name:  "a call with no trace to a session exporting spans",
+			calls: []*pendingCall{{line: &e2ecalls.Call{Action: "issue.list"}, conn: &sessionConn{exportsSpans: true}}},
+		},
+		{
+			name:  "a traced call to a session exporting no spans",
+			calls: []*pendingCall{{line: &e2ecalls.Call{Action: "issue.list", TraceID: testTraceID}, conn: &sessionConn{}}},
+		},
+		{
+			name:  "a traced call with no session",
+			calls: []*pendingCall{{line: &e2ecalls.Call{Action: "issue.list", TraceID: testTraceID}}},
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -1292,6 +1317,54 @@ func TestAwaitDispatch_NothingToWaitFor_ReturnsAtOnce(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAwaitDispatch_ACallToAnExportingSession_WaitsForItsSpan checks the other
+// half: a traced call to a session whose server exports to this receiver is
+// still waited for, and the flush returns once its span lands rather than
+// before it. The span is delivered from another goroutine a moment after the
+// wait began, so a flush that skipped the wait would return before it.
+func TestAwaitDispatch_ACallToAnExportingSession_WaitsForItsSpan(t *testing.T) {
+	received := useWaitingReceiver(t)
+	received.issue(testTraceID)
+	const delay = 200 * time.Millisecond
+	delivered := make(chan struct{})
+	go func() {
+		defer close(delivered)
+		time.Sleep(delay)
+		received.absorbSpan(stubSpan(testTraceID, map[string]string{
+			string(mcpotel.AttrActionID): "issue.list",
+		}, tracepb.Status_STATUS_CODE_OK))
+	}()
+	call := &pendingCall{line: &e2ecalls.Call{Action: "issue.list", TraceID: testTraceID}, conn: &sessionConn{exportsSpans: true}}
+	started := time.Now()
+
+	awaitDispatch([]*pendingCall{call})
+
+	waited := time.Since(started)
+	<-delivered
+	if waited < delay {
+		t.Errorf("the flush returned after %s, before the span that lands after %s", waited, delay)
+	}
+	if waited >= dispatchWait {
+		t.Errorf("the flush waited the whole budget of %s for a span that arrived after %s", dispatchWait, delay)
+	}
+}
+
+// useWaitingReceiver installs a receiver of the test's own that has already
+// seen a span, so every wait on it runs on the full budget rather than the
+// grace a run whose telemetry never worked gets, and puts the process's
+// receiver back when the test ends. These tests do not run in parallel, which
+// is what makes swapping the package's pointer safe.
+func useWaitingReceiver(t *testing.T) *spanReceiver {
+	t.Helper()
+	previous := startedSpans.Load()
+	t.Cleanup(func() { startedSpans.Store(previous) })
+
+	received := &spanReceiver{issued: map[string]struct{}{}, seen: map[string]traceSpans{}}
+	received.observed.Store(true)
+	startedSpans.Store(received)
+	return received
 }
 
 // TestSessionLines_NameWhatEachSessionServed covers the denominator of the

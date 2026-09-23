@@ -606,6 +606,11 @@ type sessionConn struct {
 	// arrives. While it is false every call of the session is a claim about
 	// what was asked for and not about what ran, and the session line says so.
 	dispatchObserved atomic.Bool
+	// exportsSpans says whether the server behind this session exports its
+	// spans to this process's receiver, which only a child started with the
+	// receiver's endpoint in its environment does. A test's flush waits for
+	// the spans of such a session's calls alone.
+	exportsSpans bool
 
 	// inFlight holds the attribution of every call this session is serving
 	// right now, so an elicitation the server sends back mid-call can be
@@ -839,6 +844,10 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		acks:        newUpdateNotifier(),
 		progress:    newProgressCollector(),
 		subscribers: newSubscriberIndex(),
+		// The child's environment is what points it at the receiver, so it is
+		// what says whether its spans can arrive: telemetryVariables leaves
+		// the endpoint out when no receiver could start.
+		exportsSpans: childVars[otlpEndpointVariable] != "",
 	}
 	if connectErr := conn.connect(); connectErr != nil {
 		return nil, connectErr

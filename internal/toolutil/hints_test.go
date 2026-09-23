@@ -154,11 +154,11 @@ func TestExtractHints_SectionWithNoItems(t *testing.T) {
 	}
 }
 
-// TestExtractHints_SectionThatEndsEmpty verifies that a guidance section
+// TestExtractHints_SectionThatEndsEmpty_YieldsNoHints verifies that a guidance section
 // closing the response with nothing after its heading but blank lines yields
 // no hints rather than an empty list, which a caller would publish as an empty
 // next_steps.
-func TestExtractHints_SectionThatEndsEmpty(t *testing.T) {
+func TestExtractHints_SectionThatEndsEmpty_YieldsNoHints(t *testing.T) {
 	md := "## x\n---\n" + hintsHeading + "\n\n\n"
 	if hints := ExtractHints(md); hints != nil {
 		t.Errorf("ExtractHints() = %#v, want nil for a section with no bullets", hints)

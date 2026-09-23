@@ -53,16 +53,19 @@ func TestResources_Sweep(t *testing.T) {
 	// TryReadResource rather than ReadResource: a template bound by variable
 	// name can still name a resource the World does not carry (a group-scoped
 	// label addressed with a project label id), which answers a handled error
-	// the recorder credits rather than a reason to abort the sweep.
+	// the recorder credits rather than a reason to abort the sweep. Each read
+	// says it is a sweep's, since it asserts nothing about what came back,
+	// and the coverage command credits it as sweep-only rather than asserted.
+	sweep := harness.For(harness.PurposeSweep)
 	manifest := resources.ToolSurfaceResourceURIs()
 	staticsRead, staticErrs := 0, 0
 	for _, uri := range statics {
 		if slices.Contains(manifest, uri) {
-			t.Logf("resource %s not read here: TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads it on every shape", uri)
+			t.Logf("resource %s not read here: TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads it on every shape the suite holds sessions for", uri)
 			continue
 		}
 		staticsRead++
-		if _, err := s.TryReadResource(uri); err != nil {
+		if _, err := s.TryReadResource(uri, sweep); err != nil {
 			staticErrs++
 		}
 	}
@@ -70,7 +73,7 @@ func TestResources_Sweep(t *testing.T) {
 	read, skipped, readErrs := 0, 0, 0
 	for _, template := range templates {
 		if slices.Contains(manifest, template) {
-			t.Logf("template %s not read here: TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads it on every shape", template)
+			t.Logf("template %s not read here: TestManifest_EveryShape_ReadsTheIndexAndAnEntry reads it on every shape the suite holds sessions for", template)
 			continue
 		}
 		uri, missing := expandTemplate(template, world)
@@ -79,7 +82,7 @@ func TestResources_Sweep(t *testing.T) {
 			skipped++
 			continue
 		}
-		if _, err := s.TryReadResource(uri); err != nil {
+		if _, err := s.TryReadResource(uri, sweep); err != nil {
 			readErrs++
 		}
 		read++

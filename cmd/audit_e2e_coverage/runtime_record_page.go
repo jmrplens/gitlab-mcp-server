@@ -213,7 +213,8 @@ func writeCapabilityGrains(b *strings.Builder) {
 		"counted at the grain its content varies along:\n\n")
 	b.WriteString(docgen.RenderMarkdownTable([]string{"Capability", "One cell per item per"}, nil, rows))
 	b.WriteString("\nThe server registers its resources, prompts, completions and subscribable kinds " +
-		"from the capability surface alone, so neither the tool surface nor the protective mode " +
+		"from the capability surface and the operator's exclusions alone, so neither the tool surface " +
+		"nor the protective mode " +
 		"changes what a session is served, and a cell per shape would be one nothing could fill " +
 		"differently from its twin. Subscriptions exist on the full capability surface only. " +
 		"`gitlab://tools` and `gitlab://tools/{id}` are the exception, counted as `tool_manifest`: " +
@@ -249,6 +250,36 @@ func writeRecordCapabilities(b *strings.Builder, key string, entry *recordEntry)
 	}
 	b.WriteString(renderStateTable("Capability", entry.Summary.Capabilities))
 	b.WriteString("\n")
+	if text := renderUnlistedCapabilities(entry.Summary.UnlistedCapabilities); text != "" {
+		b.WriteString(text + "\n")
+	}
+}
+
+// renderUnlistedCapabilities names what the suite called outside what any
+// session listed, which the histogram leaves out so that each of its rows
+// sums to the figure it is counted against, and is empty when there is
+// nothing to name. It is the one rendering of that list, for the committed
+// page and for a run's Markdown summary alike.
+func renderUnlistedCapabilities(unlisted map[string][]cellRow) string {
+	if len(unlisted) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Called outside what any session listed, and so counted in none of the rows above:\n\n")
+	for _, kind := range sortedKeys(unlisted) {
+		for _, row := range unlisted[kind] {
+			where := "`" + row.Capabilities + "`"
+			if row.Surface != "" {
+				where = "`" + row.Surface + "` `" + row.Mode + "` on " + where
+			}
+			fmt.Fprintf(&b, "- `%s` `%s` on %s: %s", kind, row.Target, where, row.State)
+			if len(row.Tests) > 0 {
+				b.WriteString(", by `" + strings.Join(row.Tests, "`, `") + "`")
+			}
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }
 
 // renderCapabilitySurfaceTable draws the capability surface rows in the order

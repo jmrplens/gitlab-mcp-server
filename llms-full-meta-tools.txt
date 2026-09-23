@@ -4376,7 +4376,7 @@ Behavior: canceling at any prompt aborts with no GitLab API call and no side eff
 
 When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use gitlab_issue (action='create') with all fields pre-supplied.
 
-Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.
+Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming issue.create as the alternative.
 
 Returns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.
 
@@ -4406,7 +4406,7 @@ Behavior: canceling at any prompt aborts with no GitLab API call and no side eff
 
 When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use gitlab_merge_request (action='create') with all fields pre-supplied.
 
-Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.
+Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming merge_request.create as the alternative.
 
 Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.
 
@@ -4434,7 +4434,7 @@ When to use: human-in-the-loop project creation. NOT for: scripted/programmatic 
 
 Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.
 
-Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.
+Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming project.create as the alternative.
 
 Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).
 
@@ -4458,7 +4458,7 @@ After invocation, the tool elicits in order:
 
 When to use: human-in-the-loop release publishing. NOT for: CI/automated release creation. Use gitlab_release (action='create') with all fields pre-supplied.
 
-Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.
+Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming release.create as the alternative.
 
 Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Canceling or declining any prompt aborts with no GitLab API call and no side effects. This flow's optional fields take an empty answer rather than a decline. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.
 

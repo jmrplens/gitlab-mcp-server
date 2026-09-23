@@ -19,13 +19,32 @@
 //
 // # What it reads
 //
-// The first four kinds out of ./internal/tools/... loaded through
-// cmd/internal/goprogram, the front end four gates already share. Constants
-// are folded by the type checker rather than matched as text, and that is the
-// whole reason for the loader: the IDs are written as package-local constants
-// (actionGet, actionListProject), two packages build one by concatenation
-// ("group." + actionGroupExportDownload), and a scan over literals reports the
-// prefix "group." as a finding while passing the folded value in silence.
+// The first four kinds out of ./internal/tools/... and ./internal/toolutil,
+// loaded through cmd/internal/goprogram, the front end four gates already
+// share. Constants are folded by the type checker rather than matched as
+// text, and that is the whole reason for the loader: the IDs are written as
+// package-local constants (actionGet, actionListProject), two packages build
+// one by concatenation ("group." + actionGroupExportDownload), and a scan over
+// literals reports the prefix "group." as a finding while passing the folded
+// value in silence.
+//
+// toolutil declares no action and is loaded for the helpers a domain hands
+// its hints to: a hint passed to a parameter named as one (the listHint and
+// detailHint of NewTemplateRenderer, the hints of NewDiscussionRenderer, the
+// hint of ExecGraphQLDestroyNote) is followed out to the domain that wrote it
+// from the helper's own signature, and the walk can follow a value only into
+// a package it loaded. Without toolutil in the load those parameters were
+// never met: the tree read 1330 hints and reported none, and with it read
+// 1355 and found eleven naming a tool the dynamic surface does not register.
+// The same load reaches ActionRoute.WithRelatedActions, whose related
+// parameter is followed out to its callers like any other. Its body merges
+// that list into the route's own through a helper, and a call merging a
+// recorded list with a list parameter named as related is passed over, like a
+// copy of a recorded list, with the copy's hole: an ID the merging helper
+// added of its own would not be read. A call handed such parameters alone is
+// followed into, so a helper appending an ID to what it was handed is judged
+// there, and a string parameter so named is one ID rather than a list, read
+// through the body of the helper it is handed to.
 //
 // The fifth out of ./test/e2e/gitlab/..., in a second load through the same
 // front end with the test variants included and the e2e build tag set, which
@@ -33,14 +52,28 @@
 // bare run makes both loads. A run naming patterns makes only the loads they
 // name: a pattern under test/e2e/ goes to the suite and any other to the
 // served tree, so an explicit ./internal/tools/... reads no suite and prints
-// no section for it. Only a run over the whole suite holds the helper table to
-// it: the bare run, or one naming ./test/e2e/gitlab/... itself, which the
-// comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is the
-// same run. A pattern given as an absolute path below the repository root, or
-// as an import path below this module, is read as the relative pattern it
-// names before it is sorted, and that is the pattern the load is handed: both
-// spellings used to go to the served load whatever they named, which read the
-// suite's packages as three doc.go files and reported them clean. A relative
+// no section for it, and a run naming only suite packages reads no served
+// source and says the published-ID and hint rules were not run rather than
+// printing their counts over nothing. Only a run over the whole suite holds
+// the helper table to it: the bare run, one naming ./test/e2e/gitlab/...
+// itself, and one naming a wildcard that encloses it, ./... or ./test/...,
+// which brings the whole suite into the suite load. The suite patterns are
+// compared with ./test/e2e/gitlab/... once those a wildcard of the same list
+// encloses are set aside: a suite package named beside the suite or beside
+// such a wildcard, which the suite already encloses, leaves the run whole,
+// and one outside ./test/e2e/gitlab/..., such as the harness, does not. The
+// patterns are compared and not the packages they load, so naming the suite's
+// three packages one by one is not judged whole, which the run says. The
+// comparison reads slash-separated, so .\test\e2e\gitlab\... on Windows is
+// the same run. A pattern given as an absolute path below the repository
+// root, or as an import path below this module, is read as the relative
+// pattern it names before it is sorted, and that is the pattern the load is
+// handed: both spellings used to go to the served load whatever they named,
+// which read the suite's packages as three doc.go files and reported them
+// clean. A wildcard pattern that encloses the suite, ./... or ./test/...,
+// goes to the served load as given and brings the whole suite into the suite
+// load besides, since sorted by its prefix alone it produced that same clean
+// run. A relative
 // pattern keeps its leading ./: without it go list reads test/e2e/gitlab/...
 // as an import path, which matches no package of this module, and the run is
 // refused with "no packages matched" before anything is judged.
@@ -112,9 +145,16 @@
 //
 // Its own blind spots are counted beside the findings and do NOT fail, which
 // is the one place this departs from the rule above. A hint the type checker
-// cannot fold is still text a reader can read, and the three sites in that
-// state build one from a function call or a format string and carry no tool
-// name between them.
+// cannot fold is still text a reader can read, and the seven sites in that
+// state build one from a function call, a format string or a parameter no rule
+// follows, or read one back out of rendered text (toolutil's safe-mode preview
+// parser), and carry no tool name between them. A hint concatenated from a
+// literal and a value is folded to its literal halves, and the half it leaves
+// unfolded is read on its own: a name is followed to the values it is handed,
+// where a tool name is judged, and anything else is counted with the sites
+// nothing folds. Three of the seven are such halves. Keeping only the literal
+// half used to count the sentence as read whole, and awardemoji handed three
+// note deletes a list tool's name through exactly that shape.
 //
 // The dotted-ID half of it was never large: the five unresolvable IDs the
 // first run found were one constant in internal/tools/workitemsavedviews
@@ -144,8 +184,9 @@
 // only when the function a call resolves to is declared under test/e2e/, so
 // the copies of assertMentions in common and in ee are one entry and a
 // function of the same name anywhere else is none. A suite wrapper that takes
-// the needles under one of those names, or under a hint's, and hands them on
-// is followed out to its callers.
+// the needles under one of those names, or under a hint's, and hands them to
+// a helper in a position that asserts (an assertion, or a predicate under
+// `!`) is followed out to its callers.
 //
 // The two predicates are judged only where their call is negated. `if
 // !mentionsAny(...)` fails the test when no needle is there, so each needle
@@ -161,7 +202,10 @@
 // by design and a test quoting the line quotes it faithfully. A needle the
 // type checker cannot fold, built from a fixture's name at run time or read
 // off a test table's field, is counted and listed under -v and fails nothing,
-// on the hint rule's terms. The findings gate, in a section of their own, so a
+// on the hint rule's terms, and so is the half of a concatenated needle that
+// no name answers for: a needle written as a literal plus a value keeps its
+// literal halves, and the value is followed to what it is given where it is a
+// name, so a tool name concatenated into a needle is judged too. The findings gate, in a section of their own, so a
 // reader can tell a defect of the server from a defect of its test.
 //
 // The helper table is held to the suite as every declaration table here is.
@@ -178,11 +222,30 @@
 // Its limits are the table's. A helper under a name the table does not
 // declare is not read until it is declared, and neither is one called through
 // a function value or a wrapper whose parameter carries another name, which
-// is reported as a needle nothing folds. The polarity is syntactic, so `ok :=
-// mentionsAny(...); if !ok` is not judged. And a dotted needle is judged as
-// the whole ID it spells, so one that is only the front of a longer ID in a
-// domain the catalog uses is refused although it matches at run time; the
-// remedy, quoting the whole ID, asserts strictly more.
+// is reported as a needle nothing folds. A copy of a declared helper may take
+// its needles as a variadic tail or as a []string of its own, and both are
+// read element by element. A bare strings.Contains on a served text is not
+// read at all, by design: the suite calls it on its own values as often as on
+// the server's, and on the server's for needles that name no tool and no
+// action, a status code or one of the server's fixed phrases. The rule the
+// suite's README states is therefore narrower than "never": a quotation that
+// names a tool, an alias or an action ID goes through the helpers, and one
+// written as a bare call is not read. The polarity is syntactic, so `ok :=
+// mentionsAny(...); if !ok` is not judged, and neither is a wrapper that
+// returns a predicate's answer, negated or not,
+// `func has(...) bool { return mentionsAny(...) }` or
+// `func lacks(...) bool { return !mentionsAny(...) }`: the first's inner call
+// is not negated, the second's negation is part of what the return hands back
+// and is passed over for that reason, and neither's callers are followed,
+// since whether the needles are claims is decided at each of them, negated or
+// not, and following them all would judge an absence check as a claim. A
+// negation inside a function literal a return hands back is still read, since
+// that body runs where it is called, unless that body returns it in turn,
+// which makes the literal such a wrapper itself. Nothing names such a wrapper
+// either, so it is a limit the suite keeps by writing none. And a dotted
+// needle is judged as the whole ID it spells, so one that is only the front
+// of a longer ID in a domain the catalog uses is refused although it matches
+// at run time; the remedy, quoting the whole ID, asserts strictly more.
 //
 // # The limit of a clean run
 //

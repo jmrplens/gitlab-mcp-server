@@ -35,6 +35,19 @@ const (
 	alternativeReleaseCreate = "release.create"
 )
 
+// The ID each flow is served under, which is the name its refusal leads with
+// because it is the one spelling every surface resolves: the dynamic surface
+// runs a flow through gitlab_execute_action and registers no tool of its own
+// for it. The domain is the one internal/tools/surfaces aggregates the flows
+// under, so these are spelled again here for the reason the alternatives are,
+// and the same catalog test holds each to the flow it is handed to.
+const (
+	flowIssueCreate   = "interactive.issue_create"
+	flowMRCreate      = "interactive.mr_create"
+	flowProjectCreate = "interactive.project_create"
+	flowReleaseCreate = "interactive.release_create"
+)
+
 type cancelledOutput struct {
 	Message string
 }
@@ -43,9 +56,11 @@ func (cancelledOutput) SurfaceToolTextOnly() {
 	// Marker method only; surface tool projection checks interface satisfaction.
 }
 
-// unsupportedOutput is a flow refused for want of elicitation: the tool the
-// client called, and the action that does the same work without prompting.
+// unsupportedOutput is a flow refused for want of elicitation: the flow the
+// client called, by ID and by the tool the meta and individual surfaces
+// register for it, and the action that does the same work without prompting.
 type unsupportedOutput struct {
+	ActionID    string
 	ToolName    string
 	Alternative string
 }
@@ -53,10 +68,10 @@ type unsupportedOutput struct {
 // ActionSpecs returns canonical specs for standalone interactive elicitation actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		interactiveCreateSpec("issue_create", elicitationRoute(client, "gitlab_interactive_issue_create", alternativeIssueCreate, "Issue creation cancelled by user.", IssueCreate), "gitlab_interactive_issue_create", "Guided issue creation through MCP elicitation with explicit user confirmation.", issueCreateDescription()),
-		interactiveCreateSpec("mr_create", elicitationRoute(client, "gitlab_interactive_mr_create", alternativeMRCreate, "Merge request creation cancelled by user.", MRCreate), "gitlab_interactive_mr_create", "Guided merge request creation through MCP elicitation with explicit user confirmation.", mrCreateDescription()),
-		interactiveCreateSpec("project_create", elicitationRoute(client, "gitlab_interactive_project_create", alternativeProjectCreate, "Project creation cancelled by user.", ProjectCreate), "gitlab_interactive_project_create", "Guided project creation through MCP elicitation with explicit user confirmation.", projectCreateDescription()),
-		interactiveCreateSpec("release_create", elicitationRoute(client, "gitlab_interactive_release_create", alternativeReleaseCreate, "Release creation cancelled by user.", ReleaseCreate), "gitlab_interactive_release_create", "Guided release creation through MCP elicitation with explicit user confirmation.", releaseCreateDescription()),
+		interactiveCreateSpec("issue_create", elicitationRoute(client, flowIssueCreate, "gitlab_interactive_issue_create", alternativeIssueCreate, "Issue creation cancelled by user.", IssueCreate), "gitlab_interactive_issue_create", "Guided issue creation through MCP elicitation with explicit user confirmation.", issueCreateDescription()),
+		interactiveCreateSpec("mr_create", elicitationRoute(client, flowMRCreate, "gitlab_interactive_mr_create", alternativeMRCreate, "Merge request creation cancelled by user.", MRCreate), "gitlab_interactive_mr_create", "Guided merge request creation through MCP elicitation with explicit user confirmation.", mrCreateDescription()),
+		interactiveCreateSpec("project_create", elicitationRoute(client, flowProjectCreate, "gitlab_interactive_project_create", alternativeProjectCreate, "Project creation cancelled by user.", ProjectCreate), "gitlab_interactive_project_create", "Guided project creation through MCP elicitation with explicit user confirmation.", projectCreateDescription()),
+		interactiveCreateSpec("release_create", elicitationRoute(client, flowReleaseCreate, "gitlab_interactive_release_create", alternativeReleaseCreate, "Release creation cancelled by user.", ReleaseCreate), "gitlab_interactive_release_create", "Guided release creation through MCP elicitation with explicit user confirmation.", releaseCreateDescription()),
 	}
 }
 
@@ -70,7 +85,7 @@ func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTo
 	})
 }
 
-func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, alternative, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
+func elicitationRoute[T, R any](client *gitlabclient.Client, actionID, toolName, alternative, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
 	// The handler needs the client itself, not only the handler it replaces,
 	// so it is bound through WithBoundHandler: a shared catalog then rebuilds
 	// it for each credential's client instead of keeping this one.
@@ -83,7 +98,7 @@ func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, alternati
 			}
 			out, err := fn(ctx, toolutil.RequestFromContext(ctx), client.For(ctx), input)
 			if errors.Is(err, elicitation.ErrElicitationNotSupported) {
-				return unsupportedOutput{ToolName: toolName, Alternative: alternative}, nil
+				return unsupportedOutput{ActionID: actionID, ToolName: toolName, Alternative: alternative}, nil
 			}
 			if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
 				return cancelledOutput{Message: cancelMessage}, nil
@@ -97,7 +112,7 @@ func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, alternati
 func FormatResult(result any) *mcp.CallToolResult {
 	switch v := result.(type) {
 	case unsupportedOutput:
-		return UnsupportedResult(v.ToolName, v.Alternative)
+		return UnsupportedResult(v.ActionID, v.ToolName, v.Alternative)
 	case cancelledOutput:
 		return CancelledResult(v.Message)
 	case issues.Output:

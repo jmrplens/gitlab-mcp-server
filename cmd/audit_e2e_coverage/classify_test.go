@@ -198,6 +198,8 @@ func fixtureRuntime() *runtimeRecords {
 	raw := fixtureCall(callSpec{test: "TestRaw", purpose: e2ecalls.PurposeRaw, expectation: e2ecalls.ExpectationAny, shape: metaDefault, outcome: e2ecalls.OutcomeProtocolError})
 	raw.Tool = "gitlab_nope"
 	rt.calls = append(rt.calls, raw)
+	// The fixture is one shard, as foldShards would read it.
+	rt.markToolSessions(rt.sessions, rt.calls)
 	return rt
 }
 
@@ -369,6 +371,87 @@ func TestClassify_Mismatches_Listed(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(c.mismatches, want) {
 		t.Errorf("mismatches = %+v, want %+v", c.mismatches, want)
+	}
+}
+
+// TestClassify_UnobservedSession_OnlyAToolCallerCounts verifies that a
+// session which saw no span marks its shape unobserved, and is listed as such,
+// only when it called a tool. The span is the server's record of a tool
+// dispatch, so a session that only read a resource never had one to wait for:
+// counting it marked every default shape of the recorded runs unobserved
+// through its capability and tier-pinned sessions, while each action cell of
+// those shapes was observed.
+func TestClassify_UnobservedSession_OnlyAToolCallerCounts(t *testing.T) {
+	cases := []struct {
+		name         string
+		method       string
+		wantObserved bool
+		wantListed   []string
+	}{
+		{name: "a reader leaves the shape observed", method: methodReadResource, wantObserved: true},
+		{name: "a tool caller marks it unobserved", method: methodCallTool, wantObserved: false, wantListed: []string{"dynamic/default/second"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			first := fixtureSession(dynamicDefault, true)
+			second := fixtureSession(dynamicDefault, false)
+			second.Label += "/second"
+			secondCall := fixtureCall(callSpec{test: "TestSecond", method: tc.method, action: "issue.list", dispatched: "issue.list", target: "gitlab://groups", shape: dynamicDefault})
+			secondCall.Session = second.Label
+			rt, err := foldRecords([]e2ecalls.Record{
+				{Schema: 1, Type: e2ecalls.TypeRun, Run: &e2ecalls.Run{Package: "common", Requirement: "any", Edition: "community", Tier: "free", Status: e2ecalls.RunStarted}},
+				{Schema: 1, Type: e2ecalls.TypeSession, Session: first},
+				{Schema: 1, Type: e2ecalls.TypeSession, Session: second},
+				{Schema: 1, Type: e2ecalls.TypeCall, Call: fixtureCall(callSpec{test: "TestFirst", action: "issue.list", dispatched: "issue.list", shape: dynamicDefault})},
+				{Schema: 1, Type: e2ecalls.TypeCall, Call: secondCall},
+			})
+			if err != nil {
+				t.Fatalf("foldRecords() error = %v", err)
+			}
+
+			c := classify(rt, fixtureCatalog())
+
+			rows := sessionRows(c)
+			if len(rows) != 1 || rows[0].DispatchObserved != tc.wantObserved {
+				t.Errorf("session rows = %+v, want one dynamic/default row with dispatch_observed %t", rows, tc.wantObserved)
+			}
+			if !reflect.DeepEqual(c.diagnostics.UnobservedSessions, tc.wantListed) {
+				t.Errorf("unobserved sessions = %v, want %v", c.diagnostics.UnobservedSessions, tc.wantListed)
+			}
+		})
+	}
+}
+
+// TestClassify_CapabilityCell_UnlistedUntilServed verifies which capability
+// cells a call created stay unlisted: those whose target no session of their
+// capability surface listed, and not those a session served, which the call
+// reached first and fillCapabilityCells claimed afterwards.
+func TestClassify_CapabilityCell_UnlistedUntilServed(t *testing.T) {
+	c := classify(fixtureRuntime(), fixtureCatalog())
+	full := config.CapabilitySurfaceFull
+	cases := []struct {
+		name         string
+		kind, target string
+		shape        shapeKey
+		want         bool
+	}{
+		{name: "a completion no session offers", kind: capabilityCompletions, target: "summarize_issue project_id", want: true},
+		{name: "a read of a URI nothing listed", kind: capabilityResources, target: "gitlab://nowhere", want: true},
+		{name: "a read of a listed resource", kind: capabilityResources, target: "gitlab://groups"},
+		{name: "a read through a listed template", kind: capabilityResources, target: "gitlab://project/{project_id}/issue/{issue_iid}"},
+		{name: "a prompt a session listed", kind: capabilityPrompts, target: "summarize_issue"},
+		{name: "a manifest read on its shape", kind: capabilityToolManifest, target: manifestDetail, shape: metaDefault},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found, exists := c.capabilities[tc.kind][capabilityKey(tc.kind, tc.shape, full, tc.target)]
+			if !exists {
+				t.Fatalf("no %s cell for %q", tc.kind, tc.target)
+			}
+			if found.unlisted != tc.want {
+				t.Errorf("unlisted = %t, want %t", found.unlisted, tc.want)
+			}
+		})
 	}
 }
 

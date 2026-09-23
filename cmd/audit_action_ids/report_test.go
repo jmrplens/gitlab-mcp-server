@@ -589,7 +589,7 @@ func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	if decoded.CallsByHelper["assertMentions"] != 1 {
 		t.Errorf("calls by helper = %v, want the one call carried", decoded.CallsByHelper)
 	}
-	for _, key := range []string{`"e2e_assertions": {`, `"suite_judged": true`, `"assertion_calls_by_helper"`, `"rows": [`, `"read": 1`, `"read_by_kind"`, `"not_folded": 0`} {
+	for _, key := range []string{`"e2e_assertions": {`, `"suite_judged": true`, `"helpers_judged": false`, `"assertion_calls_by_helper"`, `"rows": [`, `"read": 1`, `"read_by_kind"`, `"not_folded": 0`} {
 		t.Run(key, func(t *testing.T) {
 			if !strings.Contains(string(data), key) {
 				t.Errorf("work list = %s, want %s", data, key)
@@ -688,8 +688,9 @@ func TestJudgeHelpers_EachRun_MarksTheSuiteJudgedAndNamesWhatItCan(t *testing.T)
 	t.Run("the whole suite", func(t *testing.T) {
 		report := classify(nil, stubCatalog(), true)
 		report.judgeHelpers(read, true)
-		if !report.SuiteJudged || !maps.Equal(report.CallsByHelper, read.calls) {
-			t.Errorf("suite judged %t, calls %v, want true and %v", report.SuiteJudged, report.CallsByHelper, read.calls)
+		if !report.SuiteJudged || !report.HelpersJudged || !maps.Equal(report.CallsByHelper, read.calls) {
+			t.Errorf("suite judged %t, helpers judged %t, calls %v, want true, true and %v",
+				report.SuiteJudged, report.HelpersJudged, report.CallsByHelper, read.calls)
 		}
 		if want := []string{"containsAny is called nowhere in the suite (servedTextAssertions). Fix the entry"}; !slices.Equal(report.StaleHelpers, want) {
 			t.Errorf("stale helpers = %q, want %q", report.StaleHelpers, want)
@@ -698,8 +699,9 @@ func TestJudgeHelpers_EachRun_MarksTheSuiteJudgedAndNamesWhatItCan(t *testing.T)
 	t.Run("part of it", func(t *testing.T) {
 		report := classify(nil, stubCatalog(), true)
 		report.judgeHelpers(read, false)
-		if !report.SuiteJudged || len(report.StaleHelpers) != 0 {
-			t.Errorf("suite judged %t, stale helpers %q, want true and none", report.SuiteJudged, report.StaleHelpers)
+		if !report.SuiteJudged || report.HelpersJudged || len(report.StaleHelpers) != 0 {
+			t.Errorf("suite judged %t, helpers judged %t, stale helpers %q, want true, false and none",
+				report.SuiteJudged, report.HelpersJudged, report.StaleHelpers)
 		}
 	})
 }
@@ -732,9 +734,11 @@ func TestReport_Clean_AnAssertionFindingOrAStaleHelper_Fails(t *testing.T) {
 // TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers holds the
 // suite's half of the quiet report, line for line, after the hint count: the
 // assertion rows, the count and its breakdown, then the helper entries that
-// describe no call. The rows and the entries fail the gate and so are printed
-// without -v; the breakdown by kind and the calls by helper fail nothing and
-// are what -v adds.
+// describe no call, then the line saying this narrowed run did not judge the
+// table whole. The rows and the entries fail the gate and so are printed
+// without -v, and so is that line, which is what makes an empty list readable;
+// the breakdown by kind and the calls by helper fail nothing and are what -v
+// adds.
 func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T) {
 	report := classify([]site{
 		{Package: "s", File: "s/a_test.go", Line: 7, Kind: kindAssertion, Value: "use gitlab_demo_list", Resolved: true},
@@ -758,6 +762,7 @@ func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T
 		"=== assertion helpers that describe no call ===",
 		"  s: mentionsAny takes no parameter named substrings (servedTextAssertions). The entry names one parameter " +
 			"for every copy of mentionsAny, so rename this copy's parameter to substrings, or the entry and every copy together.",
+		helpersNotJudgedLine,
 		"",
 	}, "\n")
 	if !strings.HasSuffix(quiet.String(), wantTail) {
@@ -799,11 +804,14 @@ func TestWriteReport_SuiteNotJudged_PrintsNoAssertionSection(t *testing.T) {
 }
 
 // TestWriteSuiteReport_NothingStaleOrCounted_PrintsTheCountAlone holds the
-// two guards of the suite section against the empty lists they guard: no
-// heading over no stale entry, and no breakdown of no calls.
+// three guards of the suite section against the empty lists and the whole
+// verdict they guard: no heading over no stale entry, no breakdown of no
+// calls, and no word about a narrowed run from a run that judged the helper
+// table whole.
 func TestWriteSuiteReport_NothingStaleOrCounted_PrintsTheCountAlone(t *testing.T) {
 	report := classify(nil, stubCatalog(), false)
-	report.judgeHelpers(suiteRead{calls: map[string]int{}}, false)
+	report.SuiteJudged = true
+	report.HelpersJudged = true
 
 	var out bytes.Buffer
 	writeSuiteReport(&out, report, true)

@@ -476,16 +476,19 @@ func TestNewServedCallIdentifier_StandaloneTools_AreNamedWhereTheyAreToolsOfThei
 	}
 }
 
-// TestNewServedCallIdentifier_AgreesWithTheCatalogAssembly holds the index to
+// TestNewServedCallIdentifier_StandaloneActions_AgreeWithTheCatalogAssembly holds the index to
 // the one other place the standalone actions get their canonical ids: the
 // catalog the dynamic surface assembles from the same specs.
 //
 // The index spells an id by hand, domain then action, and the catalog spells
 // it through its own group rules. Were the two ever to differ, a meta or
 // individual span would name an action that the dynamic surface, the coverage
-// record and gitlab://tools all call something else, and every reader joining
-// them would lose the call.
-func TestNewServedCallIdentifier_AgreesWithTheCatalogAssembly(t *testing.T) {
+// record and the dynamic surface's gitlab://tools manifest all call something
+// else, and every reader joining them would lose the call. The meta and
+// individual manifests are not among them: those surfaces register the
+// standalone tools beside a catalog that does not carry them, so their
+// manifests file each one under its tool name rather than under this id.
+func TestNewServedCallIdentifier_StandaloneActions_AgreeWithTheCatalogAssembly(t *testing.T) {
 	assembled, err := surfaces.AddToolCatalog(nil, StandaloneSurfaceToolSpecs(UnboundClient(false)), surfaces.CatalogOptions{})
 	if err != nil {
 		t.Fatalf("assembling the standalone catalog: %v", err)
@@ -511,7 +514,7 @@ func TestNewServedCallIdentifier_AgreesWithTheCatalogAssembly(t *testing.T) {
 	}
 }
 
-// TestNewServedCallIdentifier_KeepsTheDispatchAndTheSharedResolver covers the
+// TestNewServedCallIdentifier_IndexAdded_KeepsTheDispatchAndTheSharedResolver covers the
 // two things the constructor must not lose while it adds the index.
 //
 // The dispatch half is what lets a span end with the route a dispatcher ran
@@ -520,7 +523,7 @@ func TestNewServedCallIdentifier_AgreesWithTheCatalogAssembly(t *testing.T) {
 // The shared half is the resolver every server of one catalog holds: the index
 // is added to a copy, so a caller of [NewCallIdentifier] on the same catalog is
 // answered exactly as before.
-func TestNewServedCallIdentifier_KeepsTheDispatchAndTheSharedResolver(t *testing.T) {
+func TestNewServedCallIdentifier_IndexAdded_KeepsTheDispatchAndTheSharedResolver(t *testing.T) {
 	catalog := buildTestCatalog(t)
 
 	served := NewServedCallIdentifier(catalog, config.ToolSurfaceMeta)
@@ -537,12 +540,12 @@ func TestNewServedCallIdentifier_KeepsTheDispatchAndTheSharedResolver(t *testing
 	}
 }
 
-// TestCatalogIdentifier_TheSurfacesOwnReadingWins pins the order the two
+// TestCatalogIdentifier_SharedToolName_SurfacesOwnReadingWins pins the order the two
 // readings are asked in, on a resolver built by hand because no real catalog
 // tool shares a name with a standalone one: the fallback is consulted only for
 // a tool the surface's reading does not know, so an entry of the index can
 // never take a name the catalog registered.
-func TestCatalogIdentifier_TheSurfacesOwnReadingWins(t *testing.T) {
+func TestCatalogIdentifier_SharedToolName_SurfacesOwnReadingWins(t *testing.T) {
 	identifier := catalogIdentifier{
 		identify: mcpotel.IdentifierFunc(func(tool string, _ any) (mcpotel.Identity, bool) {
 			if tool == "gitlab_shared_name" {
@@ -576,10 +579,10 @@ func TestCatalogIdentifier_TheSurfacesOwnReadingWins(t *testing.T) {
 	}
 }
 
-// TestNewServedCallIdentifier_NilCatalogNamesNothing pins the same degradation
+// TestNewServedCallIdentifier_NilCatalog_NamesNothing pins the same degradation
 // [NewCallIdentifier] makes: a server wired without a catalog loses the action
 // attribute, including for the standalone tools, rather than the process.
-func TestNewServedCallIdentifier_NilCatalogNamesNothing(t *testing.T) {
+func TestNewServedCallIdentifier_NilCatalog_NamesNothing(t *testing.T) {
 	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
 		t.Run(surface, func(t *testing.T) {
 			if identity, ok := NewServedCallIdentifier(nil, surface).Identify("gitlab_discover_project", nil); ok {

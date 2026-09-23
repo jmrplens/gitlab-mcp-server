@@ -127,7 +127,7 @@ Este patrón se aplica mediante un formateador compartido en cada uno de 19 domi
 
 ## Sugerencias correctivas
 
-Cuando se conoce la corrección de un error, el handler la adjunta en el punto de llamada: `WrapErrWithStatusHint` añade la sugerencia solo cuando la respuesta lleva un estado HTTP concreto (un fallo de validación `422`, un `404`, un `409`) y recurre a `WrapErrWithMessage` para cualquier otro estado, mientras que `WrapErrWithHint` la añade siempre, que es lo que necesitan los errores de GraphQL, ya que no llevan código de estado. La sugerencia viaja en el texto del error como `Suggestion: ...`, de modo que el asistente de IA puede corregir su solicitud sin llamadas adicionales a la API.
+Cuando se conoce la corrección de un error, el handler la adjunta en el punto de llamada: `WrapErrWithStatusHint` añade la sugerencia solo cuando la respuesta lleva un estado HTTP concreto (un fallo de validación `422`, un `404`, un `409`) y recurre a `WrapErrWithMessage` para cualquier otro estado, mientras que `WrapErrWithHint` la añade siempre, que es lo que necesita un error de GraphQL notificado dentro de una respuesta `200`, ya que no lleva código de estado. Un rechazo de GraphQL respondido con un estado de error sí lo lleva, y `WrapErrWithStatusHint` lo lee ahí igual que sobre REST. La sugerencia viaja en el texto del error como `Suggestion: ...`, de modo que el asistente de IA puede corregir su solicitud sin llamadas adicionales a la API.
 
 ## Formato de respuesta de error
 
@@ -137,8 +137,8 @@ Cuando un handler responde con un resultado de error en lugar de un error de Go,
 ## ❌ Error: branch/list
 
 **Message**: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal
-**HTTP Status**: 401 (unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal)
-**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
+**HTTP Status**: 401 Unauthorized
+**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 {message: 401 Unauthorized}
 **Request ID**: `abc123def456`
 ```
 
@@ -148,7 +148,7 @@ La respuesta estructurada incluye:
 | --------------- | ------------------------------------------------------------------- |
 | **Encabezado**  | El dominio y la acción que fallaron                                 |
 | **Message**     | El mensaje de error clasificado                                     |
-| **HTTP Status** | El código de estado de GitLab y su clasificación, cuando lo hubo    |
+| **HTTP Status** | El código de estado de GitLab y su texto estándar, cuando lo hubo   |
 | **Details**     | La línea de la petición y el mensaje que devolvió GitLab, si lo hay |
 | **Request ID**  | El `X-Request-Id` de GitLab para tickets de soporte                 |
 

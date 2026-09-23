@@ -20,16 +20,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 18,338 |
-| Unit test functions                                   | 17,137 |
-| E2E test functions                                    |  1,201 |
-| cmd test functions                                    |  3,381 |
-| Test files (internal/)                                |    652 |
-| Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    384 |
+| Total test functions                                  | 18,572 |
+| Unit test functions                                   | 17,268 |
+| E2E test functions                                    |  1,304 |
+| cmd test functions                                    |  3,464 |
+| Test files (internal/)                                |    653 |
+| Test files (cmd/)                                     |    222 |
+| Test files (test/e2e/)                                |    388 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     29 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  99.5% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  99.6% |
 | Overall coverage (`go test ./internal/...`)           |  99.8% |
 | Average package coverage                              |  99.7% |
 
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,464 | 68.0% |
+| `TestFunc_Scenario` (2-part)           | 12,462 | 67.1% |
 | `TestFunc` (no underscore)             |    905 |  4.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,969 | 27.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  5,205 | 28.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,245 |        188 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Core packages           |          3,287 |        189 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            373 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |         10,144 |        448 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,201 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          3,381 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **18,338** |  **1,257** |                                                                                                 |
+| E2E integration         |          1,304 |        388 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          3,464 |        222 | server entry point and developer command utilities                                              |
+| **Total**               |     **18,572** |  **1,263** |                                                                                                 |
 
 ### Core Packages
 
@@ -74,7 +74,7 @@
 | oauth                |        82 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress             |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
 | prompts              |       370 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
-| resources            |       210 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
+| resources            |       211 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
 | serverpool           |       146 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                                                                              |
 | sourcewalk           |         9 |   100.0% | Package sourcewalk answers one question for everything here that walks this repository's tree: which directories below a walk root are this repository's own source, and which are something else that merely lives inside the checkout.                                                                                            |
 | subscriptions        |       107 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
@@ -86,8 +86,8 @@
 | testutil/modelrecord |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
 | testutil/modelscore  |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/shardio     |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil             |     1,039 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**         | **3,245** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil             |     1,080 |    99.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**         | **3,287** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -324,14 +324,14 @@
 | cmd/audit_1to1/internal/sdk      |   100.0% |
 | cmd/audit_1to1/internal/shared   |   100.0% |
 | cmd/audit_1to1/internal/structs  |   100.0% |
-| cmd/audit_action_ids             |    98.0% |
+| cmd/audit_action_ids             |    98.4% |
 | cmd/audit_catalog_first          |    97.4% |
 | cmd/audit_dead_consts            |    94.6% |
 | cmd/audit_discovery_completeness |    99.4% |
 | cmd/audit_doc_coverage           |    99.4% |
 | cmd/audit_doc_tool_names         |    95.3% |
 | cmd/audit_dynamic_aliases        |   100.0% |
-| cmd/audit_e2e_coverage           |    96.2% |
+| cmd/audit_e2e_coverage           |   100.0% |
 | cmd/audit_edition_tier           |    99.6% |
 | cmd/audit_gateway_chars          |   100.0% |
 | cmd/audit_graphql_documents      |    92.9% |
@@ -409,7 +409,7 @@
 | testutil/modelrecord |   100.0% |
 | testutil/modelscore  |   100.0% |
 | testutil/shardio     |   100.0% |
-| toolutil             |    98.8% |
+| toolutil             |    99.7% |
 
 ### Tool Sub-Packages
 
@@ -692,7 +692,7 @@ For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the s
 make test-e2e-ee                  # or its older name, make test-e2e-docker-enterprise
 ```
 
-The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one. The suite this replaced is deleted, along with the build tag that used to select its Enterprise half and the workflow input that used to run it.
+The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every test file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one. The suite this replaced is deleted, along with the build tag that used to select its Enterprise half and the workflow input that used to run it.
 
 The suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. Refusing rather than adapting is the point: a licensed package that quietly downgraded itself on a Free instance would report a pass for scenarios it never ran, which is how the old arrangement hid its Enterprise half for as long as it did.
 
@@ -752,10 +752,8 @@ Docker validation snapshots are written under `dist/e2e-reports/` after `make te
 
 **MCP capability tests**:
 
-- Elicitation: the four guided flows (issue, merge request, release, project) on every surface under one scripted client, with the auto-accept and no-elicitation policies beside them
-- Resource subscriptions: covered by unit tests (`internal/subscriptions/`,
-  `cmd/server/subscriptions_test.go`), not e2e — the e2e client drives
-  tools, and a subscription needs a client that holds one open
+- Elicitation: the four guided flows (issue, merge request, release, project) on every surface, each answered by a scripted client in a private session per test and surface, with the auto-accept and no-elicitation policies beside them
+- Resource subscriptions: `TestSubscriptions_Sweep` subscribes to every subscribable template the shared World binds through the real binary, counting one accepted only once the server acknowledges it, and `TestSubscriptionDelivery_ChangedIssue_NotifiesTheSubscriber` changes an issue it owns and waits for the notification
 
 #### Fixture Cleanup
 
@@ -764,7 +762,7 @@ The fixture builders live in `test/e2e/internal/fixture`, one file per kind, and
 1. Mark the project for deletion (`DELETE /projects/:id`)
 2. Permanently remove it (`DELETE /projects/:id?permanently_remove=true&full_path=...`)
 
-A run cleans up only what carries its own run id, which is what lets two runs share an instance. What an interrupted run left behind is swept separately and by hand, `make e2e-clean-orphans`, which deletes every project, group and user named with `E2E_SWEEP_PREFIX` (default `e2e-`) and skips unless that prefix is set. It is a test of the fixture package because that library is importable only from `test/e2e`, and nothing schedules it: a prefix-wide sweep is not something a run should decide to do to an instance it shares.
+A run cleans up only what carries its own run id, which is what lets two runs share an instance. What an interrupted run left behind is swept separately and by hand, `make e2e-clean-orphans`, which deletes every project and group the token owns whose name or path opens with `E2E_SWEEP_PREFIX`, and every such user when the token is an administrator's. The target defaults the prefix to `e2e-`, and the test it runs skips on an empty prefix, which guards only a bare `go test` of it. It is a test of the fixture package because that library is importable only from `test/e2e`, and nothing schedules it: a prefix-wide sweep is not something a run should decide to do to an instance it shares.
 
 ### Meta-Tool Tests
 
@@ -987,8 +985,11 @@ test/e2e/
 ```
 
 The runtime a test needs is a property of the package it is in rather than of a
-build tag: every file under `gitlab/` and `internal/` carries `e2e` alone, so
-one compile and one analysis pass see all of them.
+build tag: every file under `gitlab/` and `internal/` carries `e2e` alone, with
+two exceptions: the package `doc.go` files carry no constraint, and the
+harness's race seam pair carries `e2e && race` and `e2e && !race`, of which a
+run sees the half its race setting selects. So one compile and one analysis
+pass see all of them.
 
 ### Wizard Test Helpers
 

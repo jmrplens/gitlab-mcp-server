@@ -131,29 +131,35 @@ func sweepCandidates(e *harness.Env, world *fixture.World, readOnly bool) (candi
 // top-level requirement, and one alternative group when the entry requires a
 // choice among several. It returns the arguments and an empty reason on
 // success, or nil and the reason it could not bind.
+//
+// Each parameter is bound for the entry's action, because a name can mean
+// another object in one domain than everywhere else: the release domain's
+// tag_name is the release standing on the World's tag, not the tag.
 func bindEntryParams(world *fixture.World, entry resources.ToolSurfaceEntry) (map[string]any, string) {
 	params := map[string]any{}
-	if missing := bindRequiredGroup(world, entry.RequiredParams, params); missing != "" {
+	if missing := bindRequiredGroup(world, entry.ID, entry.RequiredParams, params); missing != "" {
 		return nil, missing
 	}
 	if len(entry.RequiredParamsAnyOf) > 0 {
-		if missing := bindOneAlternative(world, entry.RequiredParamsAnyOf, params); missing != "" {
+		if missing := bindOneAlternative(world, entry.ID, entry.RequiredParamsAnyOf, params); missing != "" {
 			return nil, missing
 		}
 	}
 	return params, ""
 }
 
-// bindRequiredGroup binds every parameter of one group into params, returning
-// the reason it could not when a parameter is unbound or its World value
-// cannot be spelled in the type the schema declares.
+// bindRequiredGroup binds every parameter of one group of one action's
+// requirements into params, returning the reason it could not when a
+// parameter is unbound or its World value cannot be spelled in the type the
+// schema declares.
 //
-// An unbound parameter's reason is the World's own ([fixture.World.BindParam]),
-// so a parameter an extra would carry is logged with the reason GitLab gave
-// for not making it rather than as a name the World lacks.
-func bindRequiredGroup(world *fixture.World, group []resources.ToolSurfaceRequiredParam, params map[string]any) string {
+// An unbound parameter's reason is the World's own
+// ([fixture.World.BindActionParam]), so a parameter an extra would carry is
+// logged with the reason GitLab gave for not making it rather than as a name
+// the World lacks.
+func bindRequiredGroup(world *fixture.World, action string, group []resources.ToolSurfaceRequiredParam, params map[string]any) string {
 	for _, param := range group {
-		value, bound, reason := world.BindParam(param.Name)
+		value, bound, reason := world.BindActionParam(action, param.Name)
 		if !bound {
 			return "required parameter " + param.Name + " is unbound: " + reason
 		}
@@ -170,11 +176,11 @@ func bindRequiredGroup(world *fixture.World, group []resources.ToolSurfaceRequir
 // fully, returning an empty reason when one did and, when none did, every
 // group's own reason, so an action whose alternatives all stand on an extra
 // the World could not make names that extra's reason too.
-func bindOneAlternative(world *fixture.World, groups [][]resources.ToolSurfaceRequiredParam, params map[string]any) string {
+func bindOneAlternative(world *fixture.World, action string, groups [][]resources.ToolSurfaceRequiredParam, params map[string]any) string {
 	reasons := make([]string, 0, len(groups))
 	for _, group := range groups {
 		candidate := map[string]any{}
-		missing := bindRequiredGroup(world, group, candidate)
+		missing := bindRequiredGroup(world, action, group, candidate)
 		if missing == "" {
 			maps.Copy(params, candidate)
 			return ""

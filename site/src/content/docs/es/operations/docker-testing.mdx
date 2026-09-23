@@ -42,7 +42,7 @@ Para ejecutar la cobertura Enterprise/Premium contra GitLab EE, define `ENTERPRI
 make test-e2e-ee    # o su nombre anterior, make test-e2e-docker-enterprise
 ```
 
-Ese objetivo ejecuta los paquetes `common` y `ee` de la suite bajo `test/e2e/gitlab` contra el binario real del servidor sobre stdio. No existe un build tag Enterprise: cada archivo lleva solo `e2e`, y el paquete decide el runtime, así que `ee` rechaza una instancia sin licencia antes de escribir nada mientras `common` ejecuta también sus acciones Free sobre el catálogo con licencia. La mitad sin licencia es `make test-e2e-ce`, de la que `make test-e2e-docker` es un nombre antiguo.
+Ese objetivo ejecuta los paquetes `common` y `ee` de la suite bajo `test/e2e/gitlab` contra el binario real del servidor sobre stdio. No existe un build tag Enterprise: cada archivo de test lleva solo `e2e`, y el paquete decide el runtime, así que `ee` rechaza una instancia sin licencia antes de escribir nada mientras `common` ejecuta también sus acciones Free sobre el catálogo con licencia. La mitad sin licencia es `make test-e2e-ce`, de la que `make test-e2e-docker` es un nombre antiguo.
 
 Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, así no consumen otra vez el activation code.
 

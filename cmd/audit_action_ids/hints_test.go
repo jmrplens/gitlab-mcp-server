@@ -55,7 +55,7 @@ func TestClassify_HintSpellings_AreKeptApartByRule(t *testing.T) {
 // A hint the type checker could not fold still fails nothing, which is a
 // deliberate departure from how the gate treats its own unfoldable sites. A
 // published ID that cannot be read is an ID nobody can check; an unfoldable
-// hint is still a sentence a reader reads, and the three in the tree carry no
+// hint is still a sentence a reader reads, and the six in the tree carry no
 // tool name between them.
 func TestClassify_Hints_FailTheGateAndTheirUnfoldableSitesDoNot(t *testing.T) {
 	unfoldable := []site{

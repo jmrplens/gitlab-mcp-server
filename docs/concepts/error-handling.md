@@ -93,7 +93,7 @@ The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both an
 - the body carries the RFC 6750 code `invalid_token`, which GitLab's REST API guard writes for an expired, revoked or impersonation-disabled token and nothing else in the REST API writes. The code is a REST signal only.
 - the GraphQL endpoint answered it. That endpoint answers 401 only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}` and no code, and refuses a field the caller may not see with a 200, so a GraphQL 401 has no permission refusal to be confused with. One of those checks is the scope: the endpoint authenticates a token only when it carries `api` or `read_api`, and answers one carrying neither with that same body, where REST answers it 403 `insufficient_scope`, which is why the sentence names the scope. The endpoint is recognised by the request path as sent, escaped, so a REST path parameter that decodes to `api/graphql` does not pass for it. client-go returns such an answer as `*gl.GraphQLResponseError`, which does not unwrap to the response, so `ClassifyError` looks through it to find the status.
 
-The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes. The `DetailedError` card's HTTP Status row describes the status alone, for a REST and a GraphQL 401 alike, so it always carries that sentence, beside a message that may be the narrower verdict.
+The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes. The `DetailedError` card carries the reading once, in its message: the HTTP Status row is the code and its reason phrase (`401 Unauthorized`) and nothing more, for a REST and a GraphQL 401 alike, because a second classification of the status alone would put the sentence naming both causes beside a message that has already ruled one of them out.
 
 ## Error Flow in Tool Handlers
 
@@ -332,9 +332,20 @@ return toolutil.WrapErrWithStatusHint("issueGet", err, http.StatusNotFound,
     "verify issue_iid with gitlab_issue_list")
 ```
 
-GraphQL error sites use `WrapErrWithHint` which always appends the hint (GraphQL errors don't carry HTTP status codes):
+GraphQL error sites mostly use `WrapErrWithHint`, which always appends the hint, because an error GitLab reports inside a `200` response carries no status to match:
 
 ```go
 return toolutil.WrapErrWithHint("list_vulnerabilities", err,
     "verify the project fullPath is correct and your token has access to security features")
 ```
+
+A GraphQL refusal GitLab answers with an error status does carry one: `IsHTTPStatus`, `ExtractGitLabMessage` and the sanitizer read it through client-go's `*gl.GraphQLResponseError` the way `ClassifyError` does, so `WrapErrWithStatusHint` attaches its hint there as it does over REST:
+
+```go
+return toolutil.WrapErrWithStatusHint("create_custom_emoji", err, http.StatusBadRequest,
+    "verify group_path, name is unique, and url points to a valid image")
+```
+
+A 404 never arrives in that type: client-go answers it with the `ErrNotFound` sentinel before it reads a body, so a status hint on 404 over GraphQL matches through the sentinel described under [ClassifyError](#classifyerror) rather than through the wrapper.
+
+That type's rendering carries more than the response's: after it, it appends `(GraphQL errors: ...)` listing every `errors[].message` of the body. The sanitizer swaps the whole of it, and holds the list to what a REST message is held to: flattened onto one line and capped at 300 characters as one list, and dropped altogether when the body carries a top-level key other than `data`, `errors` and `extensions`, since GitLab did not compose that body.

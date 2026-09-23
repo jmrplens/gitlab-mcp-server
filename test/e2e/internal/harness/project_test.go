@@ -499,10 +499,10 @@ func TestProjection_StandaloneGroups_AreTheTwoUtilityKindsAndNothingElse(t *test
 	}
 }
 
-// TestStandaloneGroup_OnlyTheTwoUtilityKinds checks the rule one kind at a
+// TestStandaloneGroup_EachKind_OnlyTheTwoUtilityKindsCount checks the rule one kind at a
 // time, the dynamic controller included, which never reaches a catalog today
 // and would not be a standalone utility if it did.
-func TestStandaloneGroup_OnlyTheTwoUtilityKinds(t *testing.T) {
+func TestStandaloneGroup_EachKind_OnlyTheTwoUtilityKindsCount(t *testing.T) {
 	cases := []struct {
 		kind actioncatalog.SurfaceKind
 		want bool

@@ -202,6 +202,7 @@ func newCollector(dir string, loaded []*packages.Package) (*collector, error) {
 		recorded:    map[ast.Expr]struct{}{},
 		calls:       map[string]int{},
 		mismatches:  map[helperCopy]string{},
+		returned:    map[*ast.UnaryExpr]struct{}{},
 	}, nil
 }
 
@@ -347,6 +348,10 @@ type collector struct {
 	// empty.
 	calls      map[string]int
 	mismatches map[helperCopy]string
+	// returned is every unary expression a return statement of the suite
+	// hands back, so a predicate negated there is known not to be a claim
+	// when the walk reaches it. The suite walk's alone, like the two above.
+	returned map[*ast.UnaryExpr]struct{}
 }
 
 // walk visits every file of every indexed package with one walker per
@@ -776,8 +781,12 @@ func elementRecorder(kind string) recordFunc {
 // An assertion accepts the hint names and the names the helper table declares
 // besides, because what a suite wrapper forwards to one of those helpers is
 // the helper's own argument under the helper's own name: a wrapper taking
-// substrings and passing them on is followed out to its callers rather than
-// reported as a needle nothing folds.
+// substrings and handing them to a helper in a position that asserts is
+// followed out to its callers rather than reported as a needle nothing folds.
+// A wrapper returning a predicate's answer reaches no follow at all, negated
+// or not: an unnegated call is not read, and a negation inside what a return
+// hands back is passed over ([walker.markReturnedNegations]), since in both
+// the wrapper's callers decide whether the needles are claims (see doc.go).
 //
 // It is written as ifs rather than a switch on purpose: a condition in a case
 // clause sits outside every block Go's coverage counts, so mutation testing
@@ -831,7 +840,7 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 		w.recordIDList(kind, call.Args[0])
 		return
 	}
-	if w.isListCopy(call) {
+	if w.isListCopy(kind, call) {
 		return
 	}
 	if w.followReturns(kind, call) {
@@ -845,7 +854,7 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 // loop over a parameter and no literal, so recognizing the copy is the
 // difference between a quiet pass-through and a site reported as unfoldable.
 //
-// Two shapes qualify, and the second is a narrowing rather than a copy:
+// Three shapes qualify, and the second is a narrowing rather than a copy:
 // cloneStrings(spec.RelatedActions) is handed the list itself, and
 // Registry.publishedRelatedActions(entry) is handed the value it hangs off and
 // returns the subset one session may be shown. Both are judged where the IDs
@@ -854,16 +863,70 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 // neither shape can prove is that the body adds no ID of its own, so a literal
 // written inside one is a hole in this audit rather than a finding. That hole
 // was accepted for the copy and is the same size here.
-func (w *walker) isListCopy(call *ast.CallExpr) bool {
-	if len(call.Args) == 0 {
-		return false
-	}
+//
+// The third shape is a merge. An argument may also be a list parameter named
+// as a carrier of this kind of site's values ([walker.carrierParam]), which is
+// a list recorded where its callers write it, so beside a list recorded where
+// it is written it is followed out to them, and the call is then a merge of
+// lists recorded elsewhere. toolutil's ActionRoute.WithRelatedActions is that
+// shape, merging the route's own list with the ones it is handed through a
+// normalizing helper, and following that helper's body instead found two
+// values nothing folds and no ID. A run over the served tree alone never met
+// it, since toolutil was not loaded; a run loading toolutil reported it on
+// every -check. The merge has the copy's hole too, and it is the one this
+// shape adds: a literal the merging body adds of its own is not read.
+//
+// A carrier counts only beside a recorded list and only once every argument
+// has qualified, and nothing is recorded on the way to deciding. A call handed
+// carriers alone merges nothing recorded, so it is followed into as before,
+// which is where an ID the callee appends to what it was handed is written;
+// passing it over dropped that ID without a word. A call that also passes
+// something else is followed into for the same reason.
+func (w *walker) isListCopy(kind string, call *ast.CallExpr) bool {
+	recorded := false
+	var carriers []*ast.Ident
 	for _, arg := range call.Args {
-		if !w.carriesRecordedIDList(arg) {
+		if w.carriesRecordedIDList(arg) {
+			recorded = true
+			continue
+		}
+		param, followable := w.carrierParam(kind, arg)
+		if !followable {
 			return false
 		}
+		carriers = append(carriers, param)
+	}
+	if !recorded {
+		return false
+	}
+	for _, param := range carriers {
+		w.followValues(kind, param, recordListValue)
 	}
 	return true
+}
+
+// carrierParam reports whether an argument is a list parameter whose name says
+// it carries this kind of site's values, the one shape [walker.followParameter]
+// follows out to the callers that write them.
+//
+// The list is part of the shape. A scalar carrier holds one value, which
+// [walker.followReturns] reaches through the callee's body and records one ID
+// at a time; followed from here as a list, each caller's constant was
+// reported as a list nothing folds. A variadic parameter is a list in its
+// function's signature, so it qualifies.
+func (w *walker) carrierParam(kind string, arg ast.Expr) (*ast.Ident, bool) {
+	ident, isIdent := ast.Unparen(arg).(*ast.Ident)
+	if !isIdent {
+		return nil, false
+	}
+	variable, known := variableOf(w.pkg, ident)
+	if !known {
+		return nil, false
+	}
+	if _, isParam := w.prog.params[variable]; !isParam || !isStringSlice(variable.Type()) {
+		return nil, false
+	}
+	return ident, followableParamName(kind, variable.Name())
 }
 
 // carriesRecordedIDList reports whether one argument of a call is an ID list
@@ -1034,7 +1097,7 @@ func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 	if call, isCall := ast.Unparen(expr).(*ast.CallExpr); isCall && w.recordHintCall(kind, call) {
 		return
 	}
-	if value, ok := w.foldProse(expr); ok {
+	if value, ok := w.foldProse(kind, expr); ok {
 		w.addSite(site{Kind: kind, Value: value, Resolved: true}, expr)
 		return
 	}
@@ -1124,7 +1187,17 @@ func (w *walker) readsARecordedHint(kind string, selector *ast.SelectorExpr) boo
 // goes: a space rather than nothing, so two halves cannot be joined into a
 // token neither of them spells. A call is folded the way an ID is, by binding
 // a one-line helper's parameters.
-func (w *walker) foldProse(expr ast.Expr) (string, bool) {
+//
+// The half a concatenation leaves unfolded is recorded on its own, under the
+// kind the whole is recorded as, the way [walker.recordErrorHint] records a
+// whole: a name is followed to the values it carries, a read of a hint field
+// is left to where the field was written, and anything else is a site nothing
+// folds. It is text the reader of the rendered sentence reads, and a value it
+// is handed at run time may be the spelling the rule refuses, so dropping it
+// left a blind spot that neither the findings nor the unfolded count showed. A
+// whole that folds nowhere records nothing here: the caller records it as one
+// site.
+func (w *walker) foldProse(kind string, expr ast.Expr) (string, bool) {
 	if value, ok := w.constantString(expr); ok {
 		return value, true
 	}
@@ -1135,10 +1208,16 @@ func (w *walker) foldProse(expr ast.Expr) (string, bool) {
 		// string, and the only binary operator a string expression can carry
 		// is a concatenation: every other one yields a bool, which no hint
 		// parameter accepts.
-		left, leftFolded := w.foldProse(typed.X)
-		right, rightFolded := w.foldProse(typed.Y)
+		left, leftFolded := w.foldProse(kind, typed.X)
+		right, rightFolded := w.foldProse(kind, typed.Y)
 		if !leftFolded && !rightFolded {
 			return "", false
+		}
+		if !leftFolded {
+			w.recordErrorHint(kind, typed.X)
+		}
+		if !rightFolded {
+			w.recordErrorHint(kind, typed.Y)
 		}
 		return left + " " + right, true
 	case *ast.CallExpr:

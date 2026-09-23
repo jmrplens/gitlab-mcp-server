@@ -463,6 +463,6 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 
 	return toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicNoteDelete",
-		"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_epic_note_list; deletion is irreversible. System-generated notes cannot be removed",
+		"only the note author or a Maintainer/Owner can delete; verify note_id with group.epic_note_list; deletion is irreversible. System-generated notes cannot be removed",
 		mutationDestroyNote, toolutil.FormatGID("Note", input.NoteID))
 }

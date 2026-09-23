@@ -127,7 +127,7 @@ This pattern is applied through a shared formatter in each of 19 domains, so eve
 
 ## Corrective hints
 
-Where the fix for an error is known, the handler attaches it at the call site: `WrapErrWithStatusHint` appends the hint only when the response carries one HTTP status (a `422` validation failure, a `404`, a `409`), falling back to `WrapErrWithMessage` for every other status, and `WrapErrWithHint` always appends it, which is what GraphQL errors need since they carry no status code. The suggestion travels in the error text as `Suggestion: ...`, so the AI assistant can correct its request without additional API calls.
+Where the fix for an error is known, the handler attaches it at the call site: `WrapErrWithStatusHint` appends the hint only when the response carries one HTTP status (a `422` validation failure, a `404`, a `409`), falling back to `WrapErrWithMessage` for every other status, and `WrapErrWithHint` always appends it, which is what a GraphQL error reported inside a `200` response needs, since it carries no status code. A GraphQL refusal answered with an error status carries one, and `WrapErrWithStatusHint` reads it there as it does over REST. The suggestion travels in the error text as `Suggestion: ...`, so the AI assistant can correct its request without additional API calls.
 
 ## Error response format
 
@@ -137,20 +137,20 @@ When a handler answers with an error result rather than a Go error, the response
 ## ❌ Error: branch/list
 
 **Message**: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal
-**HTTP Status**: 401 (unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal)
-**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
+**HTTP Status**: 401 Unauthorized
+**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 {message: 401 Unauthorized}
 **Request ID**: `abc123def456`
 ```
 
 The structured response includes:
 
-| Field           | Description                                                     |
-| --------------- | --------------------------------------------------------------- |
-| **Heading**     | The domain and action that failed                               |
-| **Message**     | The classified error message                                    |
-| **HTTP Status** | GitLab's status code and its classification, when there was one |
-| **Details**     | The request line and the message GitLab returned, when present  |
-| **Request ID**  | GitLab's `X-Request-Id` for support tickets                     |
+| Field           | Description                                                    |
+| --------------- | -------------------------------------------------------------- |
+| **Heading**     | The domain and action that failed                              |
+| **Message**     | The classified error message                                   |
+| **HTTP Status** | GitLab's status code and its reason phrase, when there was one |
+| **Details**     | The request line and the message GitLab returned, when present |
+| **Request ID**  | GitLab's `X-Request-Id` for support tickets                    |
 
 ## Transient vs permanent errors
 

@@ -30,7 +30,10 @@ import (
 // sites are still only reported. Version 5 adds the `e2e_assertions` section,
 // the same rule put to the substrings the e2e suite asserts a served text
 // carries, with `suite_judged` saying whether the run loaded the suite at all
-// and the helper table's own staleness beside it; and it renames the keys the
+// and the helper table's own staleness beside it, `helpers_judged` saying
+// whether that staleness was judged whole, and `served_judged` saying
+// the same of the served tree, which a run naming only suite packages does not
+// load; and it renames the keys the
 // two prose sections share so they say nothing about hints (`read`,
 // `read_by_kind`, `not_folded`, `rows`, `not_folded_sites`). The counts move
 // across every one of these lines, so a reader comparing two runs across any
@@ -91,6 +94,14 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	AliasRefs     []Finding    `json:"alias_references"`
 	Unresolved    []Unresolved `json:"unresolved"`
+	// ServedJudged says whether this run loaded the served tree, for the
+	// reason SuiteJudged says it of the suite: a run naming only
+	// ./test/e2e/gitlab/ee reads no served source, and a summary printing
+	// "judged 0 published ID(s)" and a hint section over 0 hints would read
+	// as a clean tree rather than as one nobody looked at. [classify] sets
+	// it, since what it is handed is the served tree's sites, and the run
+	// clears it when its patterns named no served package.
+	ServedJudged bool `json:"served_judged"`
 	// Hints is the rule over corrective prose. Its findings fail
 	// [Report.Clean] and the sites it could not fold do not.
 	Hints HintReport `json:"hints"`
@@ -110,6 +121,13 @@ type Report struct {
 	// calls of each the suite walk met.
 	StaleHelpers  []string       `json:"stale_assertion_helpers,omitempty"`
 	CallsByHelper map[string]int `json:"assertion_calls_by_helper,omitempty"`
+	// HelpersJudged says whether the helper table was judged whole, which
+	// only a run over the whole suite does: over part of it every entry that
+	// part does not call is called nowhere, so a narrowed run names only the
+	// entries whose helper takes no parameter of the declared name. It is here
+	// for the reason DeclarationsJudged is, since an empty stale list from a
+	// narrowed run would otherwise read as a table found clean.
+	HelpersJudged bool `json:"helpers_judged"`
 	// StaleExemptions are the declarations that excused nothing, of either
 	// table, each named with the table it is in.
 	StaleExemptions []string `json:"stale_exemptions,omitempty"`
@@ -158,6 +176,7 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 			ByKind:             map[string]int{},
 			JudgedByKind:       map[string]int{},
 		},
+		ServedJudged:      true,
 		Hints:             newHintReport(),
 		Assertions:        newHintReport(),
 		usedExemptions:    map[string]struct{}{},
@@ -245,11 +264,13 @@ func (r *Report) finish() {
 // judgeHelpers holds the helper table to what the suite walk met, and marks
 // the run as one that loaded the suite.
 //
-// wholeSuite says whether the suite patterns name the whole suite, the bare
-// run's or one naming it itself ([namesWhole]), which is the only run that can
-// tell a helper nothing calls from a narrowed run.
+// wholeSuite says whether the suite patterns name the whole suite and nothing
+// else ([namesWhole]): the bare run's, one naming it itself, and one naming a
+// wildcard that encloses it, ./... or ./test/.... That is the only run that
+// can tell a helper nothing calls from a narrowed run.
 func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 	r.SuiteJudged = true
+	r.HelpersJudged = wholeSuite
 	r.CallsByHelper = read.calls
 	r.StaleHelpers = staleHelpers(read.calls, read.mismatches, wholeSuite)
 }
@@ -273,8 +294,10 @@ func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 // gate cannot land before the code it judges is clean. Its own unfoldable
 // sites are counted apart and do not fail, which is the one place this departs
 // from the paragraph above, because a hint the type checker cannot fold is
-// text a reader can still read: three sites build one from a function call or
-// a format string and carry no tool name between them.
+// text a reader can still read: the seven sites in that state build one from a
+// function call, a format string or a parameter no rule follows, or read one
+// back out of rendered text, and carry no tool name between them; three of
+// them are the unfolded halves of a concatenation.
 //
 // The last two are the suite's, and joined with issue 902. A quotation naming
 // a tool is a test that passes against a defective server text and breaks the
@@ -352,10 +375,26 @@ func isProseKind(kind string) bool {
 // what fails nothing is shown: the breakdowns by kind, and the prose sites
 // the type checker could not fold.
 //
-// The suite's section is printed only by a run that loaded the suite, which a
-// run over ./internal/tools/... alone does not: its count over nothing would
-// read as a clean suite.
+// Each tree's sections are printed only by a run that loaded it, since a
+// count over nothing reads as a clean tree. A run over ./internal/tools/...
+// alone prints no suite section; a run naming only suite packages prints one
+// line in place of the published-ID summary and the hint section, saying
+// those rules were not run.
 func writeReport(out io.Writer, report Report, verbose bool) {
+	if report.ServedJudged {
+		writeServedReport(out, report, verbose)
+	} else {
+		fmt.Fprintf(out, "%s: no served source loaded: the published-ID and hint rules were not run\n", toolName)
+	}
+	if report.SuiteJudged {
+		writeSuiteReport(out, report, verbose)
+	}
+}
+
+// writeServedReport prints what the run found in the served tree: the
+// findings, the alias references, the sites nothing folded, the declarations
+// that excuse nothing, the summary, and the hint section.
+func writeServedReport(out io.Writer, report Report, verbose bool) {
 	writeGroups(out, report.Findings, findingVerb)
 	if len(report.AliasRefs) > 0 || verbose {
 		fmt.Fprintln(out, "=== registered aliases, not catalog IDs ===")
@@ -365,10 +404,11 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 	writeStale(out, report.StaleExemptions)
 	writeSummary(out, report.Summary, verbose)
 	writeHintReport(out, report.Hints, verbose)
-	if report.SuiteJudged {
-		writeSuiteReport(out, report, verbose)
-	}
 }
+
+// helpersNotJudgedLine is what a run over part of the suite says in place of
+// the helper table's whole verdict.
+const helpersNotJudgedLine = "  the assertion helper table was not judged whole: only a run over the whole suite can tell an entry nothing calls from a narrowed run"
 
 // writeSuiteReport prints what the run found in the e2e suite: its
 // quotations, then the helper table entries that describe no call, which fail
@@ -379,6 +419,10 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 // the two kinds have different ones: an entry nothing calls is the table's to
 // fix, and a copy of a helper that takes no parameter of the entry's name is
 // the helper's (see [staleHelpers]).
+//
+// A run over part of the suite says it did not judge the table whole, as the
+// served summary says it of the declaration tables, since its stale list can
+// hold no entry nothing calls and would otherwise read as a table found clean.
 func writeSuiteReport(out io.Writer, report Report, verbose bool) {
 	writeAssertionReport(out, report.Assertions, verbose)
 	if len(report.StaleHelpers) > 0 {
@@ -386,6 +430,9 @@ func writeSuiteReport(out io.Writer, report Report, verbose bool) {
 		for _, entry := range report.StaleHelpers {
 			fmt.Fprintf(out, "  %s.\n", entry)
 		}
+	}
+	if !report.HelpersJudged {
+		fmt.Fprintln(out, helpersNotJudgedLine)
 	}
 	if verbose && len(report.CallsByHelper) > 0 {
 		fmt.Fprintf(out, "    assertion calls by helper: %s\n", byCount(report.CallsByHelper))

@@ -2,7 +2,7 @@ package epicdiscussions
 
 import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
-var markdownRenderer = toolutil.NewDiscussionRenderer("Epic Discussions", "No epic discussions found.\n", "Use `gitlab_get_epic_discussion` to view full discussion details", "Use `gitlab_add_epic_discussion_note` to reply to this discussion", "Use `gitlab_update_epic_discussion_note` to edit this note")
+var markdownRenderer = toolutil.NewDiscussionRenderer("Epic Discussions", "No epic discussions found.\n", "Use `group.epic_discussion_get` to view full discussion details", "Use `group.epic_discussion_add_note` to reply to this discussion", "Use `group.epic_discussion_update_note` to edit this note")
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {

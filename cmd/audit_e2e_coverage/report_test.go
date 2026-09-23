@@ -114,7 +114,12 @@ func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
 	second.Resources = []string{"gitlab://projects", "gitlab://users", "gitlab://me"}
 	second.ResourceTemplates = []string{"gitlab://project/{project_id}", "gitlab://group/{group_id}", "gitlab://user/{user_id}"}
 	second.Prompts = []string{"summarize_issue"}
-	rows := sessionRows(classify(&runtimeRecords{sessions: []*e2ecalls.Session{first, second}}, fixtureCatalog()))
+	// The second line called a tool and saw no span, which is what marks the
+	// folded shape unobserved.
+	rows := sessionRows(classify(&runtimeRecords{
+		sessions:     []*e2ecalls.Session{first, second},
+		toolSessions: map[*e2ecalls.Session]bool{second: true},
+	}, fixtureCatalog()))
 
 	want := []sessionRow{{
 		Surface: config.ToolSurfaceDynamic, Mode: modeDefault, Sessions: 2,
@@ -382,13 +387,20 @@ func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 		"",
 		"| Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
 		"| --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |",
-		"| `completions`   |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
+		"| `completions`   |        0 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
 		"| `elicitation`   |        1 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          1 |       0 |      0 |      2 |",
 		"| `modes`         |        4 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
 		"| `prompts`       |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
-		"| `resources`     |        3 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      1 |",
+		"| `resources`     |        3 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      1 |",
 		"| `subscriptions` |        2 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |     24 |",
 		"| `tool_manifest` |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      9 |",
+		"",
+		// The fixture sessions list no completion and no gitlab://nowhere,
+		// so those two calls are named apart rather than counted above.
+		"Called outside what any session listed, and so counted in none of the rows above:",
+		"",
+		"- `completions` `summarize_issue project_id` on `full`: asserted, by `TestCompletions`",
+		"- `resources` `gitlab://nowhere` on `full`: error-path-only, by `TestResources`",
 		"",
 		"- Check: FAILED",
 		"  - no test call was recorded on community/free",

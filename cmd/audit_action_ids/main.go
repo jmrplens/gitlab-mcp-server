@@ -19,7 +19,16 @@ const toolName = "audit_action_ids"
 // defaultPatterns is the tree that publishes action IDs. Every surface
 // projects from what these packages declare, so nothing outside them can put
 // an ID in front of a model.
-var defaultPatterns = []string{"./internal/tools/..."}
+//
+// internal/toolutil is part of it although it declares no action, because
+// the walk can follow a value only into a package it loaded: a hint handed to
+// a toolutil helper under a hint-named parameter (NewTemplateRenderer's
+// listHint, NewDiscussionRenderer's hints, ExecGraphQLDestroyNote's hint) is
+// followed out to the domain that wrote it from the helper's own signature,
+// and with toolutil unloaded that parameter was never met. The tree read 1330
+// hints and reported none; loading toolutil read 1355 and found eleven that
+// named a tool the dynamic surface does not register.
+var defaultPatterns = []string{"./internal/tools/...", "./internal/toolutil"}
 
 // defaultSuitePatterns is the e2e suite that quotes what that tree serves: the
 // one corpus that reads the server's hints back to it, and so the one whose
@@ -141,6 +150,7 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 		}
 	}
 	report := classify(append(sites, read.sites...), ids, namesWhole(served, defaultPatterns))
+	report.ServedJudged = len(served) > 0
 	if len(suite) > 0 {
 		report.judgeHelpers(read, namesWhole(suite, defaultSuitePatterns))
 	}
@@ -171,16 +181,27 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 // `./internal/tools/...` therefore reads no suite at all, and says so by
 // printing no assertion section. What holds a table to its tree is that the
 // run covered the tree, which [namesWhole] decides: the bare run does for
-// both, and a run naming one whole tree itself does for that one.
+// both, and a run whose patterns name exactly one whole tree, once the ones a
+// wildcard of the same list encloses are set aside, does for that one, which
+// for the suite includes a run naming a wildcard that encloses it.
 //
 // Each pattern is first read as the relative pattern it names
 // ([relativePattern]), and that spelling is what both the sorting and the
 // load are handed, so the two cannot disagree about which tree a pattern
 // names.
+//
+// A wildcard pattern whose prefix encloses the suite, ./... or ./test/...,
+// goes to the served load as it was given and brings the whole suite into the
+// suite load besides ([enclosesSuite]). Sorted by prefix alone it went to the
+// served load only, which reads no test file and sets no e2e tag, so it found
+// the suite's three packages holding a doc.go each, printed no assertion
+// section and exited 0: the silently clean run the absolute and import path
+// spellings used to give.
 func splitPatterns(root string, patterns []string) (served, suite []string) {
 	if len(patterns) == 0 {
 		return defaultPatterns, defaultSuitePatterns
 	}
+	wholeSuite := false
 	for _, given := range patterns {
 		pattern := relativePattern(root, given)
 		if isSuitePattern(pattern) {
@@ -188,8 +209,22 @@ func splitPatterns(root string, patterns []string) (served, suite []string) {
 			continue
 		}
 		served = append(served, pattern)
+		wholeSuite = wholeSuite || enclosesSuite(pattern)
+	}
+	if wholeSuite {
+		suite = append(suite, defaultSuitePatterns...)
 	}
 	return served, suite
+}
+
+// enclosesSuite reports whether a pattern ending in the ... wildcard matches
+// every package under suiteDir, which go list decides by the prefix in front
+// of the wildcard: ./... has none, ./test/... has test/, and both are a
+// prefix of test/e2e/. A pattern without the wildcard names one package, and
+// one outside the suite encloses none of it.
+func enclosesSuite(pattern string) bool {
+	prefix, wildcard := strings.CutSuffix(normalizePattern(pattern), "...")
+	return wildcard && strings.HasPrefix(suiteDir, prefix)
 }
 
 // relativePattern reads a pattern given in either of the two other spellings
@@ -206,13 +241,23 @@ func splitPatterns(root string, patterns []string) (served, suite []string) {
 // absolute root, and so does an absolute path outside the root, which names
 // nothing of either tree.
 func relativePattern(root, pattern string) string {
-	if rel, err := filepath.Rel(root, pattern); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, err := filepath.Rel(root, pattern); err == nil && !escapesRoot(rel) {
 		return "./" + filepath.ToSlash(rel)
 	}
 	if rest, underModule := strings.CutPrefix(pattern, goprogram.ModulePath+"/"); underModule {
 		return "./" + rest
 	}
 	return pattern
+}
+
+// escapesRoot reports whether a path filepath.Rel related to the root leaves
+// it: the parent itself, or anything below the parent. A name that merely
+// begins with two dots stays inside, and the one that matters is the
+// wildcard: <root>/... relates as ..., which a test for the prefix ".." read
+// as the parent, so the whole module named by its absolute path was handed to
+// the load as typed and never read as the tree enclosing the suite.
+func escapesRoot(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // isSuitePattern reports whether a pattern names part of the e2e suite, read
@@ -238,10 +283,56 @@ func isSuitePattern(pattern string) bool {
 // relative pattern it names ([relativePattern]). A relative pattern without
 // the leading ./ never does: go list reads it as an import path, which
 // matches no package of this module, and the load refuses the run first.
+//
+// The lists are compared once each has set aside the patterns a wildcard of
+// the same list encloses ([outermostPatterns]), because go list loads a
+// package once whatever names it. A wildcard that encloses the suite brings
+// the whole of it into the suite load beside any suite package named with it,
+// so ./... with ./test/e2e/gitlab/ee loads the suite and nothing else, and
+// compared as listed it said it had not. What is compared is still the
+// patterns and not the packages they load: naming the suite's three packages
+// one by one loads what ./test/e2e/gitlab/... loads, and is not judged whole,
+// since no wildcard of that list encloses the others. That errs towards an
+// unjudged table, which the run says, and never towards a judged one.
 func namesWhole(patterns, whole []string) bool {
-	return slices.EqualFunc(patterns, whole, func(given, want string) bool {
-		return normalizePattern(given) == normalizePattern(want)
-	})
+	return slices.Equal(outermostPatterns(patterns), outermostPatterns(whole))
+}
+
+// outermostPatterns is a list of patterns in the spelling the comparisons
+// read, sorted, without the ones another pattern of the list already loads: a
+// repeat, and a pattern a wildcard of the list encloses ([enclosesPattern]).
+func outermostPatterns(patterns []string) []string {
+	normalized := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		normalized = append(normalized, normalizePattern(pattern))
+	}
+	slices.Sort(normalized)
+	normalized = slices.Compact(normalized)
+	outermost := make([]string, 0, len(normalized))
+	for _, pattern := range normalized {
+		enclosed := slices.ContainsFunc(normalized, func(wildcard string) bool {
+			return enclosesPattern(wildcard, pattern)
+		})
+		if !enclosed {
+			outermost = append(outermost, pattern)
+		}
+	}
+	return outermost
+}
+
+// enclosesPattern reports whether a wildcard pattern loads every package
+// another pattern names, both in the spelling the comparisons read. go list
+// matches a pattern ending in /... by the prefix in front of the wildcard and
+// by the directory it names, so test/e2e/gitlab/... loads test/e2e/gitlab,
+// test/e2e/gitlab/ee and test/e2e/gitlab/ee/... alike. A pattern never
+// encloses itself, so a list with its repeats removed keeps every wildcard no
+// other wildcard of the list encloses.
+func enclosesPattern(wildcard, pattern string) bool {
+	prefix, isWildcard := strings.CutSuffix(wildcard, "...")
+	if !isWildcard || wildcard == pattern {
+		return false
+	}
+	return strings.HasPrefix(pattern, prefix) || pattern+"/" == prefix
 }
 
 // normalizePattern is a pattern in the one spelling the comparisons read:

@@ -263,6 +263,45 @@ func TestRenderRecordPage_EntryBeforeTheGrain_NamesTheOlderGrain(t *testing.T) {
 // TestRecordPageOrder_UnknownKey_ComesAfterTheKnownOnes verifies that a key
 // nothing here writes is still drawn, and drawn last: the page is a reading
 // of the record and hiding an entry would make the two disagree.
+// TestRenderUnlistedCapabilities_NamesEachCallApart verifies the list of
+// capability calls made outside what any session listed: nothing at all when
+// there are none, since a heading over an empty list reads as data that went
+// missing, and otherwise one line per call naming its kind, target, where it
+// was counted, its state and the tests behind it.
+func TestRenderUnlistedCapabilities_NamesEachCallApart(t *testing.T) {
+	cases := []struct {
+		name     string
+		unlisted map[string][]cellRow
+		want     string
+	}{
+		{name: "nothing unlisted draws nothing"},
+		{
+			name: "a row at the capability grain names its capability surface",
+			unlisted: map[string][]cellRow{capabilityCompletions: {{
+				Capabilities: "full", Target: "summarize_open_mrs issue_iid", State: stateAsserted,
+				Tests: []string{"TestExcludeTools"},
+			}}},
+			want: "Called outside what any session listed, and so counted in none of the rows above:\n\n" +
+				"- `completions` `summarize_open_mrs issue_iid` on `full`: asserted, by `TestExcludeTools`\n",
+		},
+		{
+			name: "a row counted per shape names the shape too",
+			unlisted: map[string][]cellRow{capabilityToolManifest: {{
+				Surface: "meta", Mode: "safe", Capabilities: "minimal", Target: "gitlab://tools/{id}", State: stateSweepOnly,
+			}}},
+			want: "Called outside what any session listed, and so counted in none of the rows above:\n\n" +
+				"- `tool_manifest` `gitlab://tools/{id}` on `meta` `safe` on `minimal`: sweep-only\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := renderUnlistedCapabilities(tc.unlisted); got != tc.want {
+				t.Errorf("renderUnlistedCapabilities() =\n%s\nwant\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRecordPageOrder_UnknownKey_ComesAfterTheKnownOnes(t *testing.T) {
 	doc := pageFixture(t)
 	doc.Runtimes["self-hosted"] = doc.Runtimes["ce"]

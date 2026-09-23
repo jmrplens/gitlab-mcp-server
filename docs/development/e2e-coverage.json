@@ -3,7 +3,7 @@
  "note": "What the end-to-end suite asserts, per runtime, from the calls it recorded rather than from mentions in its source. Written by `make e2e-coverage-record` after a Docker run of both halves; the page at docs/development/testing/e2e-coverage.md is rendered from this file and `make check-e2e-coverage-record` compares both without a GitLab and without a network. One entry per Docker target: ce is the unlicensed instance, ee the licensed one.",
  "runtimes": {
   "ce": {
-   "retrieved_at": "2026-09-14",
+   "retrieved_at": "2026-09-23",
    "runtime": "community/free",
    "edition": "community",
    "tier": "free",
@@ -12,8 +12,8 @@
      "package": "ce",
      "requirement": "free",
      "status": "started",
-     "run_id": "20260914t191454z-a97711a8e8-ce",
-     "commit": "baf7c4447781a55cc30191d429a914b9c4365234",
+     "run_id": "20260923t212657z-e0d8e8feb0-ce",
+     "commit": "09488ccec445a8460f8eda04ccf0664841a59ccf",
      "gitlab_version": "19.3.1",
      "tier_confirmed": false,
      "fixtures": {
@@ -27,8 +27,8 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20260914t184451z-68a4b9496e-common",
-     "commit": "baf7c4447781a55cc30191d429a914b9c4365234",
+     "run_id": "20260923t205703z-0fd6b057d4-common",
+     "commit": "09488ccec445a8460f8eda04ccf0664841a59ccf",
      "gitlab_version": "19.3.1",
      "tier_confirmed": false,
      "fixtures": {
@@ -43,12 +43,12 @@
     {
      "surface": "dynamic",
      "mode": "default",
-     "sessions": 13,
+     "sessions": 18,
      "tools": 2,
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "dynamic",
@@ -73,7 +73,7 @@
     {
      "surface": "meta",
      "mode": "default",
-     "sessions": 7,
+     "sessions": 12,
      "tools": 34,
      "resources": 8,
      "resource_templates": 37,
@@ -103,7 +103,7 @@
     {
      "surface": "individual",
      "mode": "default",
-     "sessions": 12,
+     "sessions": 13,
      "tools": 865,
      "resources": 8,
      "resource_templates": 37,
@@ -131,64 +131,100 @@
      "dispatch_observed": true
     }
    ],
+   "capability_surfaces": [
+    {
+     "capabilities": "full",
+     "sessions": 35,
+     "shapes": 9,
+     "resources": 43,
+     "prompts": 37,
+     "completions": 129,
+     "subscribable_kinds": 26
+    },
+    {
+     "capabilities": "minimal",
+     "sessions": 16,
+     "shapes": 3,
+     "resources": 0,
+     "prompts": 0,
+     "completions": 1,
+     "subscribable_kinds": 0
+    }
+   ],
    "summary": {
     "catalog_actions": 869,
-    "test_calls": 3423,
+    "test_calls": 3355,
     "l1": 821,
-    "l2": 717,
-    "l3": 700,
+    "l2": 721,
+    "l3": 705,
     "states": {
      "dynamic": {
-      "absent": 88,
-      "asserted": 717,
-      "error-path-only": 10,
-      "refused-only": 18,
-      "skipped": 11,
-      "sweep-only": 25
+      "absent": 76,
+      "asserted": 721,
+      "error-path-only": 12,
+      "refused-only": 17,
+      "skipped": 16,
+      "sweep-only": 27
      },
      "individual": {
-      "absent": 85,
-      "asserted": 719,
+      "absent": 76,
+      "asserted": 723,
       "error-path-only": 10,
       "refused-only": 18,
-      "skipped": 11,
+      "skipped": 16,
       "sweep-only": 22,
       "unservable": 4
      },
      "meta": {
-      "absent": 34,
-      "asserted": 791,
+      "absent": 28,
+      "asserted": 792,
       "error-path-only": 11,
-      "refused-only": 19,
-      "skipped": 11,
-      "sweep-only": 3
+      "refused-only": 18,
+      "skipped": 15,
+      "sweep-only": 5
      }
     },
     "capabilities": {
      "completions": {
-      "asserted": 130
+      "sweep-only": 130
      },
      "elicitation": {
-      "absent": 24,
+      "asserted": 12,
+      "preview-only": 12,
       "unservable": 12
      },
      "modes": {
       "asserted": 12
      },
      "prompts": {
-      "absent": 296,
-      "asserted": 36,
-      "error-path-only": 1
+      "asserted": 37
      },
      "resources": {
-      "absent": 370,
-      "asserted": 31,
-      "error-path-only": 4
+      "error-path-only": 1,
+      "sweep-only": 42
      },
      "subscriptions": {
-      "absent": 222,
-      "asserted": 12
+      "asserted": 1,
+      "error-path-only": 1,
+      "sweep-only": 24
+     },
+     "tool_manifest": {
+      "asserted": 24
      }
+    },
+    "unlisted_capabilities": {
+     "completions": [
+      {
+       "capabilities": "full",
+       "target": "summarize_open_mrs issue_iid",
+       "state": "asserted",
+       "tests": [
+        "TestExcludeTools_RemovesTheActionFromEveryRequestPath"
+       ],
+       "calls": 1,
+       "unlisted": true
+      }
+     ]
     }
    },
    "levels": {
@@ -297,11 +333,7 @@
      "admin.feature_list",
      "admin.feature_list_definitions",
      "admin.feature_set",
-     "admin.import_bitbucket",
      "admin.import_bitbucket_server",
-     "admin.import_cancel_github",
-     "admin.import_gists",
-     "admin.import_github",
      "admin.metadata_get",
      "admin.plan_limits_change",
      "admin.plan_limits_get",
@@ -468,6 +500,10 @@
      "group.unshare_from_group",
      "group.update",
      "group.upload_avatar",
+     "interactive.issue_create",
+     "interactive.mr_create",
+     "interactive.project_create",
+     "interactive.release_create",
      "issue.create",
      "issue.create_todo",
      "issue.delete",
@@ -1203,6 +1239,10 @@
      "group.unshare_from_group",
      "group.update",
      "group.upload_avatar",
+     "interactive.issue_create",
+     "interactive.mr_create",
+     "interactive.project_create",
+     "interactive.release_create",
      "issue.create",
      "issue.create_todo",
      "issue.delete",
@@ -1817,6 +1857,7 @@
      "custom_emoji.create",
      "custom_emoji.delete",
      "custom_emoji.list",
+     "discover_project.resolve",
      "environment.create",
      "environment.delete",
      "environment.deployment_create",
@@ -1909,6 +1950,10 @@
      "group.unshare_from_group",
      "group.update",
      "group.upload_avatar",
+     "interactive.issue_create",
+     "interactive.mr_create",
+     "interactive.project_create",
+     "interactive.release_create",
      "issue.create",
      "issue.create_todo",
      "issue.delete",
@@ -2439,7 +2484,7 @@
    }
   },
   "ee": {
-   "retrieved_at": "2026-09-22",
+   "retrieved_at": "2026-09-23",
    "runtime": "enterprise/ultimate",
    "edition": "enterprise",
    "tier": "ultimate",
@@ -2448,8 +2493,8 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20260922t154604z-7a77f908b5-common",
-     "commit": "17f13ba9088bf07d05305d1760f212bb7594b60c",
+     "run_id": "20260923t195636z-f5892f0f92-common",
+     "commit": "09488ccec445a8460f8eda04ccf0664841a59ccf",
      "gitlab_version": "19.3.1-ee",
      "tier_confirmed": true,
      "fixtures": {
@@ -2463,8 +2508,8 @@
      "package": "ee",
      "requirement": "licensed",
      "status": "started",
-     "run_id": "20260922t162112z-7f7fc75a7c-ee",
-     "commit": "17f13ba9088bf07d05305d1760f212bb7594b60c",
+     "run_id": "20260923t203839z-9c38a172ff-ee",
+     "commit": "09488ccec445a8460f8eda04ccf0664841a59ccf",
      "gitlab_version": "19.3.1-ee",
      "tier_confirmed": true,
      "fixtures": {
@@ -2479,12 +2524,12 @@
     {
      "surface": "dynamic",
      "mode": "default",
-     "sessions": 14,
+     "sessions": 19,
      "tools": 2,
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
-     "dispatch_observed": false
+     "dispatch_observed": true
     },
     {
      "surface": "dynamic",
@@ -2509,7 +2554,7 @@
     {
      "surface": "meta",
      "mode": "default",
-     "sessions": 8,
+     "sessions": 13,
      "tools": 51,
      "resources": 8,
      "resource_templates": 37,
@@ -2539,7 +2584,7 @@
     {
      "surface": "individual",
      "mode": "default",
-     "sessions": 13,
+     "sessions": 14,
      "tools": 1085,
      "resources": 8,
      "resource_templates": 37,
@@ -2567,64 +2612,100 @@
      "dispatch_observed": true
     }
    ],
+   "capability_surfaces": [
+    {
+     "capabilities": "full",
+     "sessions": 38,
+     "shapes": 9,
+     "resources": 43,
+     "prompts": 37,
+     "completions": 129,
+     "subscribable_kinds": 26
+    },
+    {
+     "capabilities": "minimal",
+     "sessions": 16,
+     "shapes": 3,
+     "resources": 0,
+     "prompts": 0,
+     "completions": 1,
+     "subscribable_kinds": 0
+    }
+   ],
    "summary": {
     "catalog_actions": 1089,
-    "test_calls": 4432,
-    "l1": 1012,
-    "l2": 913,
-    "l3": 896,
+    "test_calls": 4417,
+    "l1": 1016,
+    "l2": 917,
+    "l3": 901,
     "states": {
      "dynamic": {
-      "absent": 78,
-      "asserted": 913,
-      "error-path-only": 19,
+      "absent": 71,
+      "asserted": 917,
+      "error-path-only": 21,
       "refused-only": 43,
       "skipped": 11,
-      "sweep-only": 25
+      "sweep-only": 26
      },
      "individual": {
-      "absent": 77,
-      "asserted": 914,
-      "error-path-only": 19,
-      "refused-only": 42,
+      "absent": 72,
+      "asserted": 919,
+      "error-path-only": 18,
+      "refused-only": 43,
       "skipped": 11,
       "sweep-only": 22,
       "unservable": 4
      },
      "meta": {
-      "absent": 30,
-      "asserted": 982,
+      "absent": 24,
+      "asserted": 987,
       "error-path-only": 20,
-      "refused-only": 43,
+      "refused-only": 42,
       "skipped": 11,
-      "sweep-only": 3
+      "sweep-only": 5
      }
     },
     "capabilities": {
      "completions": {
-      "asserted": 130
+      "sweep-only": 130
      },
      "elicitation": {
-      "absent": 24,
+      "asserted": 12,
+      "preview-only": 12,
       "unservable": 12
      },
      "modes": {
       "asserted": 12
      },
      "prompts": {
-      "absent": 296,
-      "asserted": 36,
-      "error-path-only": 1
+      "asserted": 37
      },
      "resources": {
-      "absent": 370,
-      "asserted": 31,
-      "error-path-only": 4
+      "error-path-only": 1,
+      "sweep-only": 42
      },
      "subscriptions": {
-      "absent": 222,
-      "asserted": 12
+      "asserted": 1,
+      "error-path-only": 1,
+      "sweep-only": 24
+     },
+     "tool_manifest": {
+      "asserted": 24
      }
+    },
+    "unlisted_capabilities": {
+     "completions": [
+      {
+       "capabilities": "full",
+       "target": "summarize_open_mrs issue_iid",
+       "state": "asserted",
+       "tests": [
+        "TestExcludeTools_RemovesTheActionFromEveryRequestPath"
+       ],
+       "calls": 1,
+       "unlisted": true
+      }
+     ]
     }
    },
    "levels": {
@@ -3005,6 +3086,10 @@
      "group.wiki_get",
      "group.wiki_list",
      "group_scim.list",
+     "interactive.issue_create",
+     "interactive.mr_create",
+     "interactive.project_create",
+     "interactive.release_create",
      "issue.create",
      "issue.create_todo",
      "issue.delete",
@@ -3936,6 +4021,10 @@
      "group.wiki_get",
      "group.wiki_list",
      "group_scim.list",
+     "interactive.issue_create",
+     "interactive.mr_create",
+     "interactive.project_create",
+     "interactive.release_create",
      "issue.create",
      "issue.create_todo",
      "issue.delete",
@@ -4652,6 +4741,7 @@
      "custom_emoji.delete",
      "custom_emoji.list",
      "dependency.list",
+     "discover_project.resolve",
      "dora_metrics.group",
      "dora_metrics.project",
      "enterprise_user.list",
@@ -4838,6 +4928,10 @@
      "group.wiki_get",
      "group.wiki_list",
      "group_scim.list",
+     "interactive.issue_create",
+     "interactive.mr_create",
+     "interactive.project_create",
+     "interactive.release_create",
      "issue.create",
      "issue.create_todo",
      "issue.delete",

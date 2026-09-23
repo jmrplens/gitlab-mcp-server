@@ -185,12 +185,12 @@ func TestApplyInputSchemaOverrides_AppliesAndSkips(t *testing.T) {
 	}
 }
 
-// TestSchemaApproverIDsOverride_WidensTheItemsToIntegerOrString verifies the
+// TestSchemaApproverIDsOverride_StringItems_WidenedToIntegerOrString verifies the
 // override an approver-IDs filter is registered with: the array keeps its
 // place and its items admit both a numeric user ID and the Any/None literals,
 // where the reflected schema admitted strings only and so refused every
 // numeric ID a caller sends.
-func TestSchemaApproverIDsOverride_WidensTheItemsToIntegerOrString(t *testing.T) {
+func TestSchemaApproverIDsOverride_StringItems_WidenedToIntegerOrString(t *testing.T) {
 	approverIDs := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	schema := map[string]any{"properties": map[string]any{"approver_ids": approverIDs}}
 

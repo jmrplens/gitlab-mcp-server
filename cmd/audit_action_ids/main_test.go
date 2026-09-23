@@ -292,6 +292,28 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 			patterns: []string{filepath.Join(filepath.Dir(root), "elsewhere", "test", "e2e", "gitlab", "...")},
 			served:   []string{filepath.Join(filepath.Dir(root), "elsewhere", "test", "e2e", "gitlab", "...")},
 		},
+		{name: "the whole module", patterns: []string{"./..."}, served: []string{"./..."}, suite: defaultSuitePatterns},
+		{name: "a tree enclosing the suite", patterns: []string{"./test/..."}, served: []string{"./test/..."}, suite: defaultSuitePatterns},
+		{
+			name:     "an enclosing tree before a served package",
+			patterns: []string{"./...", "./internal/tools/issues"},
+			served:   []string{"./...", "./internal/tools/issues"},
+			suite:    defaultSuitePatterns,
+		},
+		{
+			name:     "an enclosing tree as an absolute path",
+			patterns: []string{filepath.Join(root, "...")},
+			served:   []string{"./..."},
+			suite:    defaultSuitePatterns,
+		},
+		{name: "the root's parent as an absolute path", patterns: []string{filepath.Dir(root)}, served: []string{filepath.Dir(root)}},
+		{
+			name:     "a directory of the root whose name begins with two dots",
+			patterns: []string{filepath.Join(root, "..data", "x")},
+			served:   []string{"./..data/x"},
+		},
+		{name: "a single package above the suite", patterns: []string{"./test"}, served: []string{"./test"}},
+		{name: "a tree beside the suite", patterns: []string{"./cmd/..."}, served: []string{"./cmd/..."}},
 	}
 	for _, one := range cases {
 		t.Run(one.name, func(t *testing.T) {
@@ -301,8 +323,8 @@ func TestSplitPatterns_EachSpelling_GoesToItsLoad(t *testing.T) {
 			}
 		})
 	}
-	if !slices.Equal(defaultPatterns, []string{"./internal/tools/..."}) {
-		t.Errorf("defaultPatterns = %v, want the tree that publishes action IDs", defaultPatterns)
+	if !slices.Equal(defaultPatterns, []string{"./internal/tools/...", "./internal/toolutil"}) {
+		t.Errorf("defaultPatterns = %v, want the tree that publishes action IDs and the helpers its hints are handed to", defaultPatterns)
 	}
 	if !slices.Equal(defaultSuitePatterns, []string{"./test/e2e/gitlab/..."}) {
 		t.Errorf("defaultSuitePatterns = %v, want the suite that quotes it", defaultSuitePatterns)
@@ -393,18 +415,103 @@ func TestNamesWhole_EachSpelling_JudgesTheTableOnlyOverTheWholeTree(t *testing.T
 		},
 		{
 			name:     "the served tree in the platform's spelling",
-			patterns: []string{platformPattern("internal", "tools", "...")},
+			patterns: []string{platformPattern("internal", "tools", "..."), platformPattern("internal", "toolutil")},
+			whole:    defaultPatterns,
+			want:     true,
+		},
+		{name: "the served tree without the helpers it hands hints to", patterns: []string{"./internal/tools/..."}, whole: defaultPatterns},
+		{
+			name:     "the served tree in another order",
+			patterns: []string{"./internal/toolutil", "./internal/tools/..."},
+			whole:    defaultPatterns,
+			want:     true,
+		},
+		{
+			name:     "the served tree and a package it encloses",
+			patterns: []string{"./internal/tools/...", "./internal/tools/issues", "./internal/toolutil"},
 			whole:    defaultPatterns,
 			want:     true,
 		},
 		{name: "one package of the suite", patterns: []string{"./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
-		{name: "the suite and a package again", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
+		{
+			name:     "the suite and a package it encloses",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee"},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{
+			name:     "the suite and a package it encloses, that package first",
+			patterns: []string{"./test/e2e/gitlab/ee", "./test/e2e/gitlab/..."},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{
+			name:     "the suite and the directory its wildcard names",
+			patterns: []string{"./test/e2e/gitlab", "./test/e2e/gitlab/..."},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{
+			name:     "the suite and a tree below it",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/ee/..."},
+			whole:    defaultSuitePatterns,
+			want:     true,
+		},
+		{name: "the suite twice", patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlab/..."}, whole: defaultSuitePatterns, want: true},
+		{
+			name:     "the suite and a package beside it",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/internal/harness"},
+			whole:    defaultSuitePatterns,
+		},
+		{
+			name:     "the suite and a directory whose name only begins like it",
+			patterns: []string{"./test/e2e/gitlab/...", "./test/e2e/gitlabx"},
+			whole:    defaultSuitePatterns,
+		},
+		{name: "a package of the suite twice", patterns: []string{"./test/e2e/gitlab/ee", "./test/e2e/gitlab/ee"}, whole: defaultSuitePatterns},
+		{
+			// These load what the suite's wildcard loads, and the patterns
+			// are compared, not the packages: no wildcard of the list
+			// encloses the others, so the run is not judged whole.
+			name:     "the suite's packages one by one",
+			patterns: []string{"./test/e2e/gitlab/ce", "./test/e2e/gitlab/common", "./test/e2e/gitlab/ee"},
+			whole:    defaultSuitePatterns,
+		},
 		{name: "nothing", whole: defaultSuitePatterns},
 	}
 	for _, one := range cases {
 		t.Run(one.name, func(t *testing.T) {
 			if got := namesWhole(one.patterns, one.whole); got != one.want {
 				t.Errorf("namesWhole(%q, %q) = %t, want %t", one.patterns, one.whole, got, one.want)
+			}
+		})
+	}
+}
+
+// TestNamesWhole_AWildcardBesideASuitePackage_JudgesTheSuiteWhole holds the
+// two halves together, as run does: a wildcard enclosing the suite brings the
+// whole of it into the suite load, so naming a suite package beside it, or the
+// suite itself again, loads the suite and nothing else and is judged whole.
+// Compared as listed, both runs loaded the whole suite and reported the helper
+// table unjudged. A suite package outside ./test/e2e/gitlab/... is a load over
+// more than the suite, and stays unjudged.
+func TestNamesWhole_AWildcardBesideASuitePackage_JudgesTheSuiteWhole(t *testing.T) {
+	root := repoRoot(t)
+	cases := []struct {
+		name     string
+		patterns []string
+		want     bool
+	}{
+		{name: "the module and a suite package", patterns: []string{"./...", "./test/e2e/gitlab/ee"}, want: true},
+		{name: "the module and the suite", patterns: []string{"./...", "./test/e2e/gitlab/..."}, want: true},
+		{name: "a tree enclosing the suite and a suite package", patterns: []string{"./test/...", "./test/e2e/gitlab/common"}, want: true},
+		{name: "the module and the harness", patterns: []string{"./...", "./test/e2e/internal/harness"}},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			_, suite := splitPatterns(root, one.patterns)
+			if got := namesWhole(suite, defaultSuitePatterns); got != one.want {
+				t.Errorf("namesWhole(%q) after splitting %q = %t, want %t", suite, one.patterns, got, one.want)
 			}
 		})
 	}
@@ -575,9 +682,12 @@ func TestRun_ServedPatternsOnly_PrintsNoAssertionSection(t *testing.T) {
 }
 
 // TestRun_SuitePatternsOnly_LoadsNoServedTree holds the other narrowing: a run
-// naming a suite package reads that package and no served source, so its
-// published-ID summary judges nothing and its declaration tables stay
-// unjudged, while its suite section is printed and counted.
+// naming a suite package reads that package and no served source, so it says
+// the published-ID and hint rules were not run rather than printing their
+// counts over nothing, which read as a clean tree, while its suite section is
+// printed and counted, and both the report and the work list say the served
+// tree was not judged and the helper table was not judged whole: over one
+// package an empty stale list says nothing about the entries it does not call.
 func TestRun_SuitePatternsOnly_LoadsNoServedTree(t *testing.T) {
 	overlay := suiteOverlay(t, map[string]string{"planted_test.go": `//go:build e2e
 
@@ -590,20 +700,38 @@ func TestOne(t *testing.T) {
 }
 `})
 	var stdout, stderr bytes.Buffer
+	path := filepath.Join(t.TempDir(), "action-ids.json")
 
-	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{suiteFixturePattern}, overlay: overlay, verbose: true}, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{suiteFixturePattern}, overlay: overlay, jsonPath: path, verbose: true}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	for _, want := range []string{
-		"  judged 0 published ID(s) against",
-		"the declaration tables were not judged",
-		"  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read;",
+		toolName + ": no served source loaded: the published-ID and hint rules were not run\n",
 		"  e2e assertions: 0 finding(s) in 0 package(s) over 1 assertion(s) read;",
+		"  the assertion helper table was not judged whole: only a run over the whole suite can tell an entry nothing calls from a narrowed run\n",
 		"    assertion calls by helper: assertMentions 1\n",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(stdout.String(), want) {
 				t.Errorf("stdout = %q, want %q", stdout.String(), want)
+			}
+		})
+	}
+	for _, unwanted := range []string{"published ID(s)", "error hints:", "the declaration tables were not judged"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(stdout.String(), unwanted) {
+				t.Errorf("stdout = %q, want nothing about a served tree the run did not load", stdout.String())
+			}
+		})
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the work list: %v", err)
+	}
+	for _, key := range []string{`"served_judged": false`, `"helpers_judged": false`} {
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(data), key) {
+				t.Errorf("work list = %s, want %s", data, key)
 			}
 		})
 	}

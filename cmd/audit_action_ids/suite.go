@@ -12,10 +12,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
-// e2eBuildTag is the one build constraint every file of the e2e suite
-// carries. The load states it itself, the way cmd/audit_e2e_coverage -static
-// does, so neither make check-action-ids nor CI has to pass a flag the command
-// would otherwise need and could be run without.
+// e2eBuildTag is the one build constraint every test file of the e2e suite
+// carries (the package doc.go files carry none). The load states it itself,
+// the way cmd/audit_e2e_coverage -static does, so neither make
+// check-action-ids nor CI has to pass a flag the command would otherwise need
+// and could be run without.
 const e2eBuildTag = "e2e"
 
 // suiteDir is where the e2e suite lives, relative to the repository root. A
@@ -172,16 +173,48 @@ func suiteVariants(loaded []*packages.Package) []*packages.Package {
 // ast.Inspect reaches a negated call twice, once as the operand of the `!`
 // and once as a call, which is what lets each visit do one job: the call is
 // counted where it is met as a call, and judged where its polarity is known.
+//
+// A negation inside what a return statement hands back is not judged: there
+// the predicate's answer, negated or not, is the wrapper's answer, and
+// whether its needles are claims is decided where the wrapper is called, as
+// it is for a wrapper returning the answer unnegated. It is marked when the
+// return is met, which ast.Inspect does before it reaches the operands.
 func (w *walker) visitSuite(node ast.Node) bool {
 	switch typed := node.(type) {
+	case *ast.ReturnStmt:
+		w.markReturnedNegations(typed)
 	case *ast.CallExpr:
 		w.visitAssertionCall(typed, false)
 	case *ast.UnaryExpr:
+		if _, isReturned := w.returned[typed]; isReturned {
+			return true
+		}
 		if call, isCall := ast.Unparen(typed.X).(*ast.CallExpr); isCall && typed.Op == token.NOT {
 			w.visitAssertionCall(call, true)
 		}
 	}
 	return true
+}
+
+// markReturnedNegations marks every unary expression a return statement hands
+// back as its answer, so a negated predicate there is not read as a claim.
+//
+// A function literal inside the result is not part of the answer: it is code
+// that runs when called, and a negated predicate in its body is in the
+// position every other negation is. Only a `!` is acted on, so marking the
+// other unary operators too costs nothing and asks no question.
+func (w *walker) markReturnedNegations(ret *ast.ReturnStmt) {
+	for _, result := range ret.Results {
+		ast.Inspect(result, func(node ast.Node) bool {
+			switch typed := node.(type) {
+			case *ast.FuncLit:
+				return false
+			case *ast.UnaryExpr:
+				w.returned[typed] = struct{}{}
+			}
+			return true
+		})
+	}
 }
 
 // visitAssertionCall records what one call of a declared helper asserts.
@@ -221,6 +254,14 @@ func (w *walker) visitAssertionCall(call *ast.CallExpr, negated bool) {
 	}
 	if signature.Variadic() && index == signature.Params().Len()-1 {
 		w.recordErrorHintArgs(kindAssertion, call, index)
+		return
+	}
+	// A helper may take its needles as a []string of its own rather than as a
+	// variadic tail, and the argument is then one list. Recorded as one needle
+	// it would fold to nothing, and a needle nothing folds fails nothing, so
+	// every quotation handed to such a helper would pass unread.
+	if isStringSlice(signature.Params().At(index).Type()) {
+		w.recordHintList(kindAssertion, call.Args[index])
 		return
 	}
 	w.recordErrorHint(kindAssertion, call.Args[index])

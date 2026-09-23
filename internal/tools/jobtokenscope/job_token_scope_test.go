@@ -102,15 +102,17 @@ func TestGetAccessSettings_Success(t *testing.T) {
 // apart.
 const gitLabRefusal = "job token scope is not available here"
 
-// detailFor is the parenthesised detail a wrapped error carries for a refusal
-// at status. Everything but a 404 reaches the wrapper as GitLab's own parsed
-// body; a 404 reaches it as client-go's shared ErrNotFound, whose message is
-// the status text.
+// detailFor is the parenthesised group a wrapped error carries for a refusal
+// at status, and empty where it carries none. Everything but a 404 reaches the
+// wrapper as GitLab's own parsed body; a 404 reaches it as client-go's shared
+// ErrNotFound, whose message is only the status text, and a detail that only
+// restates the status is dropped, since the classification beside it already
+// says not found.
 func detailFor(status int) string {
 	if status == http.StatusNotFound {
-		return "Not Found"
+		return ""
 	}
-	return "{message: " + gitLabRefusal + "}"
+	return "({message: " + gitLabRefusal + "})"
 }
 
 // refusingHandler answers every request with status and GitLab's own error
@@ -140,12 +142,15 @@ func refusingHandler(status int) http.Handler {
 // was extracted, so one substring holds both halves. The other leg asserts no
 // suggestion at all, which is what pins the code.
 //
-// What that detail is depends on the status, and the reason is upstream:
-// client-go's CheckResponse answers every 404 with one shared ErrNotFound
-// sentinel before it reads the body, so GitLab's own message survives on the
-// 403 and 400 legs and is replaced by "Not Found" on the 404 ones. Spelling it
-// out here rather than asserting around it keeps the test honest about what a
-// caller really sees when a project id is wrong.
+// Whether there is a detail depends on the status, and the reason is
+// upstream: client-go's CheckResponse answers every 404 with one shared
+// ErrNotFound sentinel before it reads the body, so GitLab's own message
+// survives on the 403 and 400 legs and is lost on the 404 ones, where the
+// sentinel's message is only "Not Found". That restates what the
+// classification already says, so the wrapper drops it, and the 404 legs
+// carry no parenthesised group at all; every leg asserts "(Not Found)" never
+// appears. Spelling it out here rather than asserting around it keeps the
+// test honest about what a caller really sees when a project id is wrong.
 func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) {
 	const otherStatus = http.StatusBadRequest
 
@@ -242,9 +247,12 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			if hinted == nil {
 				t.Fatalf("expected an error from a %d answer", tc.status)
 			}
-			wantHinted := "(" + detailFor(tc.status) + "). Suggestion: " + tc.hint
+			wantHinted := detailFor(tc.status) + ". Suggestion: " + tc.hint
 			if !strings.Contains(hinted.Error(), wantHinted) {
 				t.Errorf("error at %d = %q,\nwant it to carry %q", tc.status, hinted, wantHinted)
+			}
+			if strings.Contains(hinted.Error(), "(Not Found)") {
+				t.Errorf("error at %d = %q, want no detail restating the status the classification names", tc.status, hinted)
 			}
 			if !strings.HasPrefix(hinted.Error(), tc.operation+": ") {
 				t.Errorf("error at %d = %q, want it to open with the operation %q", tc.status, hinted, tc.operation)
@@ -254,7 +262,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			if plain == nil {
 				t.Fatalf("expected an error from a %d answer", otherStatus)
 			}
-			if !strings.Contains(plain.Error(), "("+detailFor(otherStatus)+")") {
+			if !strings.Contains(plain.Error(), detailFor(otherStatus)) {
 				t.Errorf("error at %d = %q, want GitLab's own message in it", otherStatus, plain)
 			}
 			if strings.Contains(plain.Error(), "Suggestion: ") {

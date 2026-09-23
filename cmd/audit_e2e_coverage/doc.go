@@ -51,16 +51,16 @@
 // the session rows cannot be, since they fold both capability surfaces into
 // one row per shape.
 //
-// Completions have no denominator yet, which that row shows as zero: the
-// harness does not write the session line's completion references, so every
-// completion cell is one a call made. The references it has to write are
-// "<prompt> <argument>" for every prompt argument and "<template> <variable>"
-// for every template variable, spelled as its completion verb spells a call's
-// target. On the minimal surface that is one reference, the id of
-// gitlab://tools/{id}, which the completion handler answers with an empty list
-// and no error on every tool surface, so it is servable there and a call to it
-// is credited like any other; it stays a completion rather than a
-// tool_manifest cell, since nothing in the answer depends on the surface.
+// The completion half of that denominator is the session line's completions
+// list. The harness writes it from every argument of every prompt and every
+// variable of every template a session listed, as "<prompt> <argument>" and
+// "<template> <variable>", through the one function its completion verb
+// spells a call's target with, so a call and the reference it is counted
+// against cannot disagree. On the minimal surface that is one reference, the
+// id of gitlab://tools/{id}, which the completion handler answers with an
+// empty list and no error on every tool surface, so it is servable there and
+// a call to it is credited like any other; it stays a completion rather than
+// a tool_manifest cell, since nothing in the answer depends on the surface.
 //
 // # The gates
 //

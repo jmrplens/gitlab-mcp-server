@@ -587,11 +587,11 @@ func TestList_Empty(t *testing.T) {
 // once each domain has a shape of its own.
 const (
 	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_get_snippet_discussion` to view full discussion details\n"
+		"- Use `snippet.discussion_get` to view full discussion details\n"
 	threadHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_add_snippet_discussion_note` to reply to this discussion\n"
+		"- Use `snippet.discussion_add_note` to reply to this discussion\n"
 	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_update_snippet_discussion_note` to edit this note\n"
+		"- Use `snippet.discussion_update_note` to edit this note\n"
 )
 
 // TestFormatListMarkdown_WithData pins the whole list document of a page of

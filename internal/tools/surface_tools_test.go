@@ -14,6 +14,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
 )
 
 // TestRegisterSurfaceTools_UnprojectableSpec_PanicsNamingTheTool verifies the
@@ -53,20 +54,29 @@ var refusalActionID = regexp.MustCompile(`\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b`)
 
 // TestStandaloneSurfaceToolSpecs_GuidedFlowRefusal_NamesAnActionTheCatalogServes
 // verifies that every guided flow, refused on a client that cannot elicit,
-// offers in its place exactly one action this catalog serves, on the Free
-// catalog every flow is served on.
+// names itself by the ID the catalog serves it under and offers in its place
+// exactly one action this catalog serves, on the Free catalog every flow is
+// served on.
 //
-// The alternative is spelled as a catalog ID inside elicitationtools, which
-// imports the four domain packages but never sees the IDs they are aggregated
-// under, since the domain half is added here. No source gate reads the
-// sentence either: it is rendered through toolutil.ErrorResult, which is not
-// one of the error helpers cmd/audit_action_ids reads, and the e2e scenario
-// quotes only the issue flow's. This is where all four meet the catalog. The
-// flows are driven with no request on the context, which is a client without
-// elicitation, so each ends at its first prompt.
+// Both IDs are spelled inside elicitationtools, which imports the four domain
+// packages but never sees the IDs they are aggregated under, since the domain
+// half is added here, and never sees the one the flows themselves are
+// aggregated under either, since internal/tools/surfaces adds that. No source
+// gate reads the sentence: it is rendered through toolutil.ErrorResult, which
+// is not one of the error helpers cmd/audit_action_ids reads, and the e2e
+// scenario quotes only the issue flow's. This is where all four meet the
+// catalog. The flow's ID is held to the one the standalone assembly gives the
+// spec that was driven, not merely to some served ID, because a refusal naming
+// a sibling flow would read as served and be wrong. The flows are driven with
+// no request on the context, which is a client without elicitation, so each
+// ends at its first prompt.
 func TestStandaloneSurfaceToolSpecs_GuidedFlowRefusal_NamesAnActionTheCatalogServes(t *testing.T) {
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{})
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	flowCatalog, err := surfaces.AddToolCatalog(nil, StandaloneSurfaceToolSpecs(client), surfaces.CatalogOptions{})
+	if err != nil {
+		t.Fatalf("assembling the standalone catalog: %v", err)
+	}
 	args := map[string]map[string]any{
 		"gitlab_interactive_issue_create":   {"project_id": "42"},
 		"gitlab_interactive_mr_create":      {"project_id": "42"},
@@ -85,25 +95,51 @@ func TestStandaloneSurfaceToolSpecs_GuidedFlowRefusal_NamesAnActionTheCatalogSer
 			if !known {
 				t.Fatalf("guided flow %s has no arguments in this table, so its refusal is held to nothing: add it", spec.Name)
 			}
-			out, err := spec.Route.Handler(context.Background(), params)
-			if err != nil {
-				t.Fatalf("%s: a client without elicitation got an error instead of the refusal: %v", spec.Name, err)
-			}
-			result := spec.FormatResult(out)
-			if result == nil || !result.IsError {
-				t.Fatalf("%s: result = %+v, want the refusal", spec.Name, result)
-			}
-			text := extractTextContent(result)
+			text := guidedFlowRefusal(t, spec, params)
 			ids := refusalActionID.FindAllString(text, -1)
-			if len(ids) != 1 {
-				t.Fatalf("%s: refusal offers %d action IDs %v, want exactly one:\n%s", spec.Name, len(ids), ids, text)
+			if len(ids) != 2 {
+				t.Fatalf("%s: refusal names %d action IDs %v, want two, the flow's and its alternative's:\n%s", spec.Name, len(ids), ids, text)
 			}
-			if _, served := catalog.Action(actioncatalog.ActionID(ids[0])); !served {
-				t.Errorf("%s: refusal offers %s, which the Free catalog does not serve:\n%s", spec.Name, ids[0], text)
+			assertRefusalNamesItsFlow(t, spec, text, ids[0], flowCatalog)
+			if _, served := catalog.Action(actioncatalog.ActionID(ids[1])); !served {
+				t.Errorf("%s: refusal offers %s, which the Free catalog does not serve:\n%s", spec.Name, ids[1], text)
 			}
 		})
 	}
 	if flows != len(args) {
 		t.Errorf("found %d guided flows, want the %d this table names", flows, len(args))
+	}
+}
+
+// guidedFlowRefusal drives one guided flow with no request on the context,
+// which is a client without elicitation, and returns the text of the refusal
+// it answers with.
+func guidedFlowRefusal(t *testing.T, spec actioncatalog.SurfaceToolSpec, params map[string]any) string {
+	t.Helper()
+	out, err := spec.Route.Handler(context.Background(), params)
+	if err != nil {
+		t.Fatalf("%s: a client without elicitation got an error instead of the refusal: %v", spec.Name, err)
+	}
+	result := spec.FormatResult(out)
+	if result == nil || !result.IsError {
+		t.Fatalf("%s: result = %+v, want the refusal", spec.Name, result)
+	}
+	return extractTextContent(result)
+}
+
+// assertRefusalNamesItsFlow holds the ID a refusal names itself by to the one
+// the standalone assembly serves the refused flow under, and its text to the
+// tool name the meta and individual surfaces register that flow as.
+func assertRefusalNamesItsFlow(t *testing.T, spec actioncatalog.SurfaceToolSpec, text, named string, flowCatalog *actioncatalog.Catalog) {
+	t.Helper()
+	flow := spec.BaseDomain + "." + spec.ActionName
+	if named != flow {
+		t.Errorf("%s: refusal names itself %s, want %s, the ID the flow it refused is served under:\n%s", spec.Name, named, flow, text)
+	}
+	if _, served := flowCatalog.Action(actioncatalog.ActionID(named)); !served {
+		t.Errorf("%s: refusal names itself %s, which the standalone catalog does not serve:\n%s", spec.Name, named, text)
+	}
+	if !strings.Contains(text, spec.Name) {
+		t.Errorf("%s: refusal does not give the tool name the meta and individual surfaces register the flow under:\n%s", spec.Name, text)
 	}
 }
