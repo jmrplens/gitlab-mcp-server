@@ -82,10 +82,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // tool and the dynamic surface runs it by ID, so the text is served on all
 // three, which is why it names every action by canonical ID. It is written as
 // the Usage because that is the line cmd/audit_action_ids holds to that
-// demand; an individual tool's Description is held to nothing, being served,
-// for a domain action, by that one tool alone. The one-line usages the flows
-// carried before were never served, since the surface projection replaced them
-// with the description.
+// demand whatever builds it; the served-prose rule reads a Description for
+// tool names only where it is a constant, and the Description here is the
+// usage handed in, which no rule reads under that name. The one-line usages
+// the flows carried before were never served, since the surface projection
+// replaced them with the description.
 func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTool, usage string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Tags: []string{"interactive", "elicitation"},

@@ -20,11 +20,13 @@ import (
 // model on the individual surface could call, in the one description whose
 // whole job is to send a model somewhere else, and the individual names the
 // "See also" clause held named nothing on meta or on dynamic. A canonical ID
-// resolves on every surface.
+// resolves on every surface, and cmd/audit_action_ids reads the dotted IDs
+// this constant description spells, so one of these going stale is reported
+// rather than silent.
 //
 // It is written as the Usage because that is the line cmd/audit_action_ids
-// holds to that demand, for a tool name as well as for an ID that resolves
-// nowhere. The one-line usage the action carried before was never served,
+// holds to that demand whole, for a tool name as well as for an ID that
+// resolves nowhere. The one-line usage the action carried before was never served,
 // since the surface projection replaced it with this description.
 const discoverProjectDescription = "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. " +
 	"Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\n" +

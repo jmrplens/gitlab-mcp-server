@@ -230,9 +230,9 @@ func TestClassify_NarrowedRun_LeavesTheHintDeclarationUnjudged(t *testing.T) {
 // served-prose rule's finding. Its dotted IDs stay the published-ID section's:
 // judged there once, with the declared alias mentions excused, where judging
 // them in both sections would count a bad ID twice and refuse the issue.update
-// line that names issue.close on purpose. A Description with the same text is
-// not judged for tool names, since an individual tool's Description is served
-// by that tool alone.
+// line that names issue.close on purpose. A Description whose one tool name
+// is in its "See also" clause is read and finds nothing, since the clause is
+// the one part of it a surface rewrites into its own names.
 func TestClassify_UsageLine_IsJudgedForToolNamesAndItsIDsOnce(t *testing.T) {
 	usage := func(line int, value string) site {
 		return site{Package: "p", File: "p/specs.go", Line: line, Kind: kindUsage, Value: value, Resolved: true}
@@ -254,8 +254,32 @@ func TestClassify_UsageLine_IsJudgedForToolNamesAndItsIDsOnce(t *testing.T) {
 	if report.Summary.AliasHits != 0 {
 		t.Errorf("alias references = %+v, want the declared mentions excused", report.AliasRefs)
 	}
-	if report.Hints.ReadByKind[kindUsage] != 3 || report.Hints.Read != 3 {
-		t.Errorf("read by kind = %v over %d, want the three Usage lines and no Description", report.Hints.ReadByKind, report.Hints.Read)
+	if report.Hints.ReadByKind[kindUsage] != 3 || report.Hints.ReadByKind[kindDescription] != 1 || report.Hints.Read != 4 {
+		t.Errorf("read by kind = %v over %d, want the three Usage lines and the Description", report.Hints.ReadByKind, report.Hints.Read)
+	}
+}
+
+// TestClassify_Description_IsJudgedForToolNamesOutsideItsSeeAlsoClause holds
+// the part of an individual tool's Description the served-prose rule reads.
+// gitlab://tools serves a domain action's Description verbatim on the dynamic
+// and meta surfaces as well and rewrites only its "See also" clause, so a
+// tool name anywhere else in it reaches two surfaces that do not register the
+// tool, and a name inside the clause is the one that is right.
+func TestClassify_Description_IsJudgedForToolNamesOutsideItsSeeAlsoClause(t *testing.T) {
+	description := func(line int, value string) site {
+		return site{Package: "p", File: "p/specs.go", Line: line, Kind: kindDescription, Value: value, Resolved: true}
+	}
+	report := classify([]site{
+		description(1, "Ban a user. Reversible via gitlab_demo_list. See also: gitlab_demo_list, gitlab_fetch_demo."),
+		description(2, "List demos. See also: gitlab_demo_list."),
+	}, stubCatalog(), false)
+
+	want := []HintFinding{{Package: "p", File: "p/specs.go", Line: 1, Kind: kindDescription, Rule: ruleToolName, Name: "gitlab_demo_list"}}
+	if !slices.Equal(report.Hints.Rows, want) {
+		t.Errorf("served prose findings = %+v, want the one name outside a clause: %+v", report.Hints.Rows, want)
+	}
+	if report.Hints.ReadByKind[kindDescription] != 2 {
+		t.Errorf("descriptions read = %d, want both", report.Hints.ReadByKind[kindDescription])
 	}
 }
 

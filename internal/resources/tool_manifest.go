@@ -768,7 +768,12 @@ var seeAlsoClause = regexp.MustCompile(`See also: ([a-z0-9_.]+(?:, [a-z0-9_.]+)*
 // The standalone surface tools (the guided flows and project discovery) write
 // theirs in canonical IDs instead, because their description reaches every
 // surface's tools/list and find results verbatim, which this projection never
-// sees; an ID is rewritten here like a tool name is.
+// sees. An ID is rewritten here like a tool name is, which only the dynamic
+// manifest does to theirs, where an ID maps to itself: the meta and individual
+// surfaces register those tools beside a catalog that does not carry them, so
+// their manifests list them as direct entries and serve the description, the
+// clause's canonical IDs included, verbatim, and gitlab://tools/{id} resolves
+// those IDs on every surface.
 //
 // A name the resolver does not know is dropped, not passed through: on this
 // instance the catalog is tier-filtered, so a Free-tier server legitimately

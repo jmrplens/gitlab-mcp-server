@@ -25,12 +25,15 @@ type SurfaceToolSpec struct {
 	// served again under that name. A standalone surface tool is registered
 	// on meta and on individual alike and runs through the dynamic surface
 	// too, so its text is served on all three, and cmd/audit_action_ids holds
-	// a Usage line to that, where it holds an individual tool's Description
-	// to nothing: the Description a domain action's tool serves is served by
-	// that tool alone. Projecting the Description as the Usage put the flows'
-	// descriptions on every surface while the rule read them nowhere, and
-	// every one of them named a tool two surfaces lack. The standalone specs
-	// write their text once, as the Usage and as the Description both.
+	// a Usage line to that whole, folding one assembled at run time. It holds
+	// a Description only where the Description is a constant: its dotted IDs
+	// to the published-ID rule, and its tool names to the served-prose rule
+	// everywhere but its "See also" clause. A Description assembled at run
+	// time, as the flows' is from the usage handed in, is read by neither.
+	// Projecting the Description as the Usage put the flows' descriptions on
+	// every surface while the rule read them nowhere, and every one of them
+	// named a tool two surfaces lack. The standalone specs write their text
+	// once, as the Usage and as the Description both.
 	//
 	// A spec without one projects an action without one. The dynamic
 	// surface's two controllers are the only such specs, and they are

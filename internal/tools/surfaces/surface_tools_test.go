@@ -381,12 +381,12 @@ func TestStandaloneToolSpecs_EverySurface_CarriesItsOwnActionMetadata(t *testing
 // dynamic surface runs it by ID and serves its Usage. So the two are one text
 // written once, and it names actions by canonical ID, since a gitlab_* name
 // is registered on one surface of three. cmd/audit_action_ids judges that
-// text where it is written as the Usage, and holds an individual tool's
-// Description to nothing, which is right for a domain action's tool and was
-// wrong here: the five descriptions named gitlab_issue_create, gitlab_project
-// (action='create') and gitlab_search_projects while the rule read the Usage
-// lines nothing served. Equal texts are what make the rule's reading of the
-// Usage a reading of what every surface serves.
+// text where it is written as the Usage, whatever builds it, and a
+// Description only where it is a constant, which the flows' is not: the five
+// descriptions named gitlab_issue_create, gitlab_project (action='create')
+// and gitlab_search_projects while the rule read the Usage lines nothing
+// served. Equal texts are what make the rule's reading of the Usage a reading
+// of what every surface serves.
 func TestStandaloneToolSpecs_EverySurface_ServesOneTextNamingNoTool(t *testing.T) {
 	toolName := regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
 	for _, spec := range StandaloneToolSpecs(newProjectionClient(t)) {

@@ -172,16 +172,40 @@ func (h *HintReport) judge(at site, ids *actionids.IDs) {
 // are the ID section's to judge, where declaredAliasMentions excuses the
 // issue.close and issue.reopen the issue.update line names on purpose, so
 // judging them here too would count every bad ID twice and refuse those two.
-// A Description is not read here at all: a domain action's individual tool
-// Description is served by that tool alone, on the one surface that registers
-// it, where the name it spells is right. A standalone surface tool's is served
-// on all three, and is read here because it is written as that action's Usage
-// line as well (actioncatalog.SurfaceToolSpec). The verbs of a line a format
-// assembled are masked, as they are for every sentence this section judges.
+// The verbs of a line a format assembled are masked, as they are for every
+// sentence this section judges. A Description is judged by
+// [HintReport.judgeDescription].
 func (h *HintReport) judgeUsage(at site) {
 	h.Read++
 	h.ReadByKind[at.Kind]++
 	h.judgeToolNames(at, maskVerbs(at.Value))
+}
+
+// seeAlsoClause is the cross-reference sentence an individual tool's
+// Description ends with, "See also: gitlab_a, gitlab_b.", spelled as
+// internal/resources spells the pattern that projects it per surface
+// (seeAlsoClause in tool_manifest.go), which is the only part of a
+// Description any surface rewrites.
+var seeAlsoClause = regexp.MustCompile(`See also: ([a-z0-9_.]+(?:, [a-z0-9_.]+)*)\.`)
+
+// judgeDescription holds an individual tool's Description to the tool-name
+// rule everywhere but its "See also" clause.
+//
+// A domain action's Description is not served by its individual tool alone:
+// gitlab://tools serves it verbatim as the description of that action's entry
+// on the dynamic and meta surfaces too, rewriting only the "See also" clause
+// into each surface's names. So a tool name anywhere else in it reaches two
+// surfaces that do not register the tool, as a name in a Usage line does, and
+// the clause is the one part where the individual tool name is right, since
+// it is the part the manifests project. A standalone surface tool's
+// Description is served verbatim on every surface and is read the same way;
+// its clause names canonical IDs, which the published-ID rule judges. Its
+// dotted IDs are that rule's to judge here as well, for the reason
+// [HintReport.judgeUsage] gives.
+func (h *HintReport) judgeDescription(at site) {
+	h.Read++
+	h.ReadByKind[at.Kind]++
+	h.judgeToolNames(at, seeAlsoClause.ReplaceAllString(at.Value, " "))
 }
 
 // judgeToolNames records every gitlab_* name one site's judged text spells,

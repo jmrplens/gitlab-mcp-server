@@ -155,7 +155,7 @@ func TestSurfaceToolSpec_ActionSpec_ProjectsEachFlagOnItsOwn(t *testing.T) {
 // repeated entries from each string list, and copies the icons and the
 // compatibility policy so an edit to the original reaches none of them.
 //
-// Eleven trims and five copies are sixteen plain statements no gate reports
+// Eleven trims and six copies are seventeen plain statements no gate reports
 // on, and a field the copy forgets is one Validate judges untrimmed.
 func TestCloneSurfaceToolSpec_TrimsEveryNameAndOwnsEverySlice(t *testing.T) {
 	icons := []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}

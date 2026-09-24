@@ -28,11 +28,13 @@ import (
 // repository's own rule about scripts allows one for.
 //
 // What makes it safe is not the substitution but what it is applied to. The
-// same token is CORRECT in an individual tool's Description ("See also:
-// gitlab_project_get"), which sits in the same file and often the same
-// declaration block as the hint. So a literal is rewritten only when its text
-// is part of a hint the walk actually folded: a Description is not, and cannot
-// be reached by this pass however often it spells the same tool.
+// same token is CORRECT in the "See also" clause of an individual tool's
+// Description ("See also: gitlab_project_get"), which sits in the same file
+// and often the same declaration block as the hint. So a literal is rewritten
+// only when its text is part of a hint the walk actually folded: a Description
+// is not, and cannot be reached by this pass however often it spells the same
+// tool, and a name the served-prose rule refuses in the rest of one is
+// rewritten by hand.
 
 // writeSource is how a rewritten file reaches the disk, swapped in tests.
 //
@@ -128,15 +130,28 @@ func fixOneFile(dir, pkg, file string, admit candidate, ids *actionids.IDs, repo
 	return nil
 }
 
-// candidate decides which string literals a pass rewrites. The production pass
-// and the test pass ask different questions of the same file shape, and the
-// difference is the whole reason both are safe.
-type candidate func(text string) bool
+// candidate decides which string literals a pass rewrites, and which of a
+// literal's tool names. It answers nil for a literal the pass leaves alone,
+// and otherwise a function saying, for each tool name of the literal's text by
+// its position among them, whether that one is part of the hint the literal
+// was admitted for. The production pass and the test pass ask different
+// questions of the same file shape, and the difference is the whole reason
+// both are safe.
+type candidate func(text string) (inHint func(token int) bool)
+
+// everyToken is the answer for a literal that is itself a piece of a hint:
+// every tool name it spells is in that hint.
+func everyToken(int) bool { return true }
 
 // hintProse admits a literal that is a piece of prose belonging to some hint
 // the walk folded, which is the production rule.
 func hintProse(values []string) candidate {
-	return func(text string) bool { return partOfAHint(text, values) }
+	return func(text string) func(int) bool {
+		if partOfAHint(text, values) {
+			return everyToken
+		}
+		return nil
+	}
 }
 
 // testHintProse admits a test literal that is a piece of a hint the walk
@@ -156,6 +171,11 @@ func hintProse(values []string) candidate {
 // run moves still spells the old name in its value, and a literal renamed to
 // the new one no longer contains it.
 //
+// A literal admitted only for pinning a hint is rewritten only inside the
+// hint it pins ([pinnedTokens]): a card compared whole carries a heading or a
+// row beside its hints, and a tool name there is not part of any sentence the
+// walk folded, which is the one thing that makes a rewrite safe.
+//
 // The narrower rule that suggests itself does not work. Admitting any test
 // literal that spells a tool name the package's own hints had just stopped
 // spelling looks exact and is not: a test asserts an individual tool's name as
@@ -170,24 +190,89 @@ func testHintProse(values []string, ids *actionids.IDs) candidate {
 	for _, value := range values {
 		renamed = append(renamed, renameTools(value, ids))
 	}
-	return func(text string) bool {
-		return partOfAHint(text, values) || pinsAHint(renameTools(text, ids), renamed)
+	return func(text string) func(int) bool {
+		if partOfAHint(text, values) {
+			return everyToken
+		}
+		inside := pinnedTokens(text, renamed, ids)
+		if inside == nil {
+			return nil
+		}
+		return func(token int) bool { return token >= 0 && inside[token] }
 	}
 }
 
-// pinsAHint reports whether a test literal holds a whole folded hint.
+// pinnedTokens reports which tool names of a test literal lie inside a whole
+// folded hint it holds, by their position among the literal's tool names, and
+// nil when it holds none.
 //
-// The hint has to read as a sentence, for the reason [partOfAHint] gives: a
-// value that is one word is contained in any literal that spells it. The
-// literal needs no test of its own, since one holding a sentence holds its
-// space.
-func pinsAHint(text string, values []string) bool {
+// The literal is read as it will be written, its tool names rewritten, and
+// each hint is looked for in that text; a tool name is inside a hint when the
+// ID it is rewritten to lies wholly within an occurrence of one. The hint has
+// to read as a sentence, for the reason [partOfAHint] gives: a value that is
+// one word is contained in any literal that spells it. The literal needs no
+// test of its own, since one holding a sentence holds its space.
+func pinnedTokens(text string, values []string, ids *actionids.IDs) []bool {
+	tokens := toolToken.FindAllStringIndex(text, -1)
+	spans := make([][2]int, len(tokens))
+	var renamed strings.Builder
+	written := 0
+	for index, token := range tokens {
+		renamed.WriteString(text[written:token[0]])
+		name := text[token[0]:token[1]]
+		if id, known := ids.ToolID(name); known {
+			name = id
+		}
+		start := renamed.Len()
+		renamed.WriteString(name)
+		spans[index] = [2]int{start, renamed.Len()}
+		written = token[1]
+	}
+	renamed.WriteString(text[written:])
+	read := renamed.String()
+
+	var inside []bool
 	for _, value := range values {
-		if strings.Contains(value, " ") && strings.Contains(text, value) {
-			return true
+		if !strings.Contains(value, " ") {
+			continue
+		}
+		for from := 0; ; {
+			at := strings.Index(read[from:], value)
+			if at < 0 {
+				break
+			}
+			start := from + at
+			if inside == nil {
+				inside = make([]bool, len(tokens))
+			}
+			for index, span := range spans {
+				if span[0] >= start && span[1] <= start+len(value) {
+					inside[index] = true
+				}
+			}
+			from = start + 1
 		}
 	}
-	return false
+	return inside
+}
+
+// textTokenAt finds the next tool name of a literal's text, at or after from,
+// that spells tool, and returns its position among them and the position to
+// look from for the literal's next tool name, or -1 and from when none does.
+//
+// The source form of a literal and its text spell the same tool names in the
+// same order, save where an escape touches a name: "\ngitlab_x" reads the n as
+// part of the word, so the source form has no name where the text has one,
+// and "gitlab_ab" spells gitlab_a where the text spells gitlab_ab. So
+// each name the source form spells is matched to the next one of the text
+// that spells the same, and one the text never spells is at no position.
+func textTokenAt(textTokens []string, from int, tool string) (position, next int) {
+	for index := from; index < len(textTokens); index++ {
+		if textTokens[index] == tool {
+			return index, index + 1
+		}
+	}
+	return -1, from
 }
 
 // renameTools is a text with every tool name the catalog resolves rewritten to
@@ -317,13 +402,24 @@ func fixHintsInFile(root, pkg, file string, admit candidate, ids *actionids.IDs)
 		// refused by admit anyway, which is why discarding it changes nothing
 		// rather than hiding something.
 		text, _ := strconv.Unquote(lit.Value)
-		if !admit(text) {
+		inHint := admit(text)
+		if inHint == nil {
 			return true
 		}
 		line := fset.Position(lit.Pos()).Line
 		start := fset.Position(lit.Pos()).Offset
+		textTokens := toolToken.FindAllString(text, -1)
+		from := 0
 		for _, match := range toolToken.FindAllStringIndex(lit.Value, -1) {
 			tool := lit.Value[match[0]:match[1]]
+			var position int
+			position, from = textTokenAt(textTokens, from, tool)
+			if !inHint(position) {
+				// A name beside the hint a test literal pins, a card's
+				// heading or a row, is no part of a sentence the walk
+				// folded, and is left as written.
+				continue
+			}
 			if exemptHintTool(tool) || exemptSurfaceMention(surfaceMention{pkg: pkg, tool: tool}) {
 				continue
 			}

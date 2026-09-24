@@ -208,7 +208,7 @@ func decorateDeployTokenMeta(options *toolutil.ActionSpecOptions, actionName str
 func deployTokenDescription(actionName string) string {
 	switch actionName {
 	case "deploy_token_list_all":
-		return "List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of gitlab_deploy_token_list_project or gitlab_deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project."
+		return "List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of access.deploy_token_list_project or access.deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project."
 	case "deploy_token_list_project":
 		return "List deploy tokens owned by a project. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: gitlab_deploy_token_get_project, gitlab_deploy_token_create_project, gitlab_deploy_token_delete_project."
 	case "deploy_token_list_group":

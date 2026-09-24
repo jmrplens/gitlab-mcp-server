@@ -63,7 +63,7 @@ func listSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts.Usage = "List the work item saved views under one group or project namespace, with cursor pagination. Use this to discover a view's numeric ID before getting, updating, subscribing to, or deleting it. Filters are omitted from every entry, so read them with " + actionGet + "."
 	opts.Aliases = append(opts.Aliases, "list work item saved views", "show saved views for namespace", "find saved work item filters")
 	opts.RelatedActions = []string{actionGet, actionCreate, actionWorkItemList}
-	opts.IndividualTool.Description = "List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with gitlab_work_item_saved_view_get. " + experimentalNote + " See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items."
+	opts.IndividualTool.Description = "List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with " + actionGet + ". " + experimentalNote + " See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items."
 	return toolutil.NewReadActionSpec("work_item_saved_view_list", route, opts)
 }
 
