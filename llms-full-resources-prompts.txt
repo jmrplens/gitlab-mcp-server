@@ -274,7 +274,7 @@
 
 - **URI Template**: `gitlab://tools/{id}`
 - **MIME**: application/json
-- **Description**: Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.
+- **Description**: Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_project_get in individual mode.
 
 ## Prompts
 

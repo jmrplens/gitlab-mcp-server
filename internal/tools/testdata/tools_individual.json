@@ -5379,7 +5379,7 @@
   },
   {
     "name": "gitlab_ban_user",
-    "description": "Ban a user. Returns: confirmation with the user ID and action. Reversible via gitlab_unban_user. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.",
+    "description": "Ban a user. Returns: confirmation with the user ID and action. Reversible via user.unban. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -5427,7 +5427,7 @@
   },
   {
     "name": "gitlab_block_user",
-    "description": "Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via gitlab_unblock_user. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.",
+    "description": "Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via user.unblock. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20150,7 +20150,7 @@
   },
   {
     "name": "gitlab_deactivate_user",
-    "description": "Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via gitlab_activate_user. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.",
+    "description": "Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via user.activate. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -23749,7 +23749,7 @@
   },
   {
     "name": "gitlab_deploy_key_list_all",
-    "description": "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of gitlab_deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.",
+    "description": "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of access.deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25144,7 +25144,7 @@
   },
   {
     "name": "gitlab_deploy_token_list_all",
-    "description": "List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of gitlab_deploy_token_list_project or gitlab_deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project.",
+    "description": "List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of access.deploy_token_list_project or access.deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -28063,7 +28063,7 @@
           "type": "array"
         },
         "security_scan_profile_id": {
-          "description": "Persisted scan profile identifier: the profile's numeric database ID (obtained from gitlab_list_project_scan_profile_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, ...) is not accepted by detach",
+          "description": "Persisted scan profile identifier: the profile's numeric database ID (obtained from security_scan_profile.list_project_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, ...) is not accepted by detach",
           "type": "string"
         }
       },
@@ -28238,7 +28238,7 @@
   },
   {
     "name": "gitlab_discover_project",
-    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use search.projects), listing a user's projects (use project.list_user_projects), verifying GitLab connectivity or authentication (use server.status), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.",
+    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use search.projects), listing a user's projects (use project.list_user_projects), verifying GitLab connectivity or authentication (use server.status), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: project.get, server.status, search.projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36537,7 +36537,7 @@
                 ]
               },
               "user_list_id": {
-                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it",
+                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use feature_flags.ff_user_list_list to find it",
                 "type": [
                   "null",
                   "integer"
@@ -37408,7 +37408,7 @@
                 ]
               },
               "user_list_id": {
-                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it",
+                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use feature_flags.ff_user_list_list to find it",
                 "type": [
                   "null",
                   "integer"
@@ -56511,7 +56511,7 @@
           "type": "boolean"
         },
         "with_projects": {
-          "description": "Include the group's projects in the response (deprecated. Prefer gitlab_group_projects)",
+          "description": "Include the group's projects in the response (deprecated. Prefer group.projects)",
           "type": [
             "null",
             "boolean"
@@ -64023,7 +64023,7 @@
           ]
         },
         "milestone_iid": {
-          "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
+          "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
         },
         "order_by": {
@@ -64282,7 +64282,7 @@
           ]
         },
         "milestone_iid": {
-          "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
+          "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
         }
       },
@@ -64339,7 +64339,7 @@
           ]
         },
         "milestone_iid": {
-          "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
+          "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
         }
       },
@@ -64437,7 +64437,7 @@
           ]
         },
         "milestone_iid": {
-          "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
+          "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
         },
         "order_by": {
@@ -64842,7 +64842,7 @@
           ]
         },
         "milestone_iid": {
-          "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
+          "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
         },
         "order_by": {
@@ -65014,7 +65014,7 @@
           ]
         },
         "milestone_iid": {
-          "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
+          "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
         },
         "start_date": {
@@ -78299,7 +78299,7 @@
   },
   {
     "name": "gitlab_interactive_issue_create",
-    "description": "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.\n\nAfter invocation, the tool elicits in order:\n- title (string, required): issue title.\n- description (string, optional, multi-line, Markdown): leave empty to skip.\n- labels (string, optional): comma-separated. Trimmed and deduped server-side.\n- confidential (boolean, optional): yes/no confirmation. Defaults to public when declined.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nBehavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.\n\nWhen to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use gitlab_issue (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming issue.create as the alternative.\n\nReturns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue_create, gitlab_issue_get.",
+    "description": "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.\n\nAfter invocation, the tool elicits in order:\n- title (string, required): issue title.\n- description (string, optional, multi-line, Markdown): leave empty to skip.\n- labels (string, optional): comma-separated. Trimmed and deduped server-side.\n- confidential (boolean, optional): yes/no confirmation. Defaults to public when declined.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nBehavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.\n\nWhen to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use issue.create with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming issue.create as the alternative.\n\nReturns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.\n\nSee also: issue.create, issue.get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -79027,7 +79027,7 @@
   },
   {
     "name": "gitlab_interactive_mr_create",
-    "description": "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the MR.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.\n\nAfter invocation, the tool elicits in order:\n- source_branch (string, required): branch with the changes to merge.\n- target_branch (string, required): branch to merge into (e.g. main, develop).\n- title (string, required): MR title.\n- description (string, optional, multi-line, Markdown): leave empty to skip.\n- labels (string, optional): comma-separated. Trimmed and deduped server-side.\n- remove_source_branch (boolean, optional): yes/no confirmation, default unset.\n- squash (boolean, optional): yes/no confirmation, default unset.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nBehavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.\n\nWhen to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use gitlab_merge_request (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming merge_request.create as the alternative.\n\nReturns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_mr_create, gitlab_branch_create.",
+    "description": "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the MR.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.\n\nAfter invocation, the tool elicits in order:\n- source_branch (string, required): branch with the changes to merge.\n- target_branch (string, required): branch to merge into (e.g. main, develop).\n- title (string, required): MR title.\n- description (string, optional, multi-line, Markdown): leave empty to skip.\n- labels (string, optional): comma-separated. Trimmed and deduped server-side.\n- remove_source_branch (boolean, optional): yes/no confirmation, default unset.\n- squash (boolean, optional): yes/no confirmation, default unset.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nBehavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use merge_request.create with all fields pre-supplied and handle 422 as the expected duplicate case.\n\nWhen to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use merge_request.create with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming merge_request.create as the alternative.\n\nReturns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.\n\nSee also: merge_request.create, branch.create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -79978,7 +79978,7 @@
   },
   {
     "name": "gitlab_interactive_project_create",
-    "description": "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.\n\nInput: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.\n\nAfter invocation, the tool elicits in order:\n- name (string, required): project display name and (when path is omitted) URL slug.\n- description (string, optional): leave empty to skip.\n- visibility (enum, required): one of private, internal, public.\n- initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.\n- default_branch (string, optional): leave empty to use the GitLab default ('main').\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use gitlab_project (action='create') with all fields pre-supplied.\n\nBehavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming project.create as the alternative.\n\nReturns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project_get, gitlab_group_get.",
+    "description": "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.\n\nInput: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.\n\nAfter invocation, the tool elicits in order:\n- name (string, required): project display name and (when path is omitted) URL slug.\n- description (string, optional): leave empty to skip.\n- visibility (enum, required): one of private, internal, public.\n- initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.\n- default_branch (string, optional): leave empty to use the GitLab default ('main').\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.\n\nBehavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming project.create as the alternative.\n\nReturns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: project.get, group.get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -81006,7 +81006,7 @@
   },
   {
     "name": "gitlab_interactive_release_create",
-    "description": "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling or declining any prompt aborts without creating the release.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.\n\nAfter invocation, the tool elicits in order:\n- tag_name (string, required): must reference an existing tag in the project. Create it first via gitlab_tag (action='create').\n- name (string, optional): release title. Answer with an empty value to let GitLab name the release after the tag. Declining the prompt aborts.\n- description (string, optional, multi-line, Markdown): release notes. Leave empty to skip.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop release publishing. NOT for: CI/automated release creation. Use gitlab_release (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming release.create as the alternative.\n\nBehavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Canceling or declining any prompt aborts with no GitLab API call and no side effects. This flow's optional fields take an empty answer rather than a decline. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\nReturns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release_create, gitlab_tag_create.",
+    "description": "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling or declining any prompt aborts without creating the release.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.\n\nAfter invocation, the tool elicits in order:\n- tag_name (string, required): must reference an existing tag in the project. Create it first via tag.create.\n- name (string, optional): release title. Answer with an empty value to let GitLab name the release after the tag. Declining the prompt aborts.\n- description (string, optional, multi-line, Markdown): release notes. Leave empty to skip.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop release publishing. NOT for: CI/automated release creation. Use release.create with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming release.create as the alternative.\n\nBehavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Canceling or declining any prompt aborts with no GitLab API call and no side effects. This flow's optional fields take an empty answer rather than a decline. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\nReturns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: release.create, tag.create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -116983,7 +116983,7 @@
   },
   {
     "name": "gitlab_list_package_protection_rules",
-    "description": "List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use gitlab_registry_protection_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule.",
+    "description": "List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use package.registry_rule_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -124680,7 +124680,7 @@
           "type": "boolean"
         },
         "milestone_iid": {
-          "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
           "type": "integer"
         },
         "project_id": {
@@ -124737,7 +124737,7 @@
       "additionalProperties": false,
       "properties": {
         "milestone_iid": {
-          "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
           "type": "integer"
         },
         "project_id": {
@@ -124836,7 +124836,7 @@
       "additionalProperties": false,
       "properties": {
         "milestone_iid": {
-          "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
           "type": "integer"
         },
         "order_by": {
@@ -125211,7 +125211,7 @@
       "additionalProperties": false,
       "properties": {
         "milestone_iid": {
-          "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
           "type": "integer"
         },
         "order_by": {
@@ -125383,7 +125383,7 @@
           "type": "string"
         },
         "milestone_iid": {
-          "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
           "type": "integer"
         },
         "project_id": {
@@ -129666,7 +129666,7 @@
           ]
         },
         "target_branch": {
-          "description": "Target branch name. If not specified by the user use the project default branch from gitlab_project_get (do NOT assume main)",
+          "description": "Target branch name. If not specified by the user use the project default branch from project.get (do NOT assume main)",
           "type": "string"
         },
         "target_project_id": {
@@ -155562,7 +155562,7 @@
   },
   {
     "name": "gitlab_pages_domain_list_all",
-    "description": "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of gitlab_pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.",
+    "description": "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of project.pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -199869,7 +199869,7 @@
   },
   {
     "name": "gitlab_registry_protection_list",
-    "description": "List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use gitlab_registry_tag_protection_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list.",
+    "description": "List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use package.registry_tag_rule_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -200210,7 +200210,7 @@
   },
   {
     "name": "gitlab_registry_tag_protection_list",
-    "description": "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use gitlab_registry_protection_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags.",
+    "description": "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use package.registry_rule_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -202152,7 +202152,7 @@
                 "type": "string"
               },
               "url": {
-                "description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions. Do not construct package URLs manually.",
+                "description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL package.publish or package.publish_directory returns. Do not construct package URLs manually.",
                 "format": "uri",
                 "pattern": "^(https?|ftp)://",
                 "type": "string"
@@ -227328,7 +227328,7 @@
   },
   {
     "name": "gitlab_upload_user_avatar",
-    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use user.current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -230035,7 +230035,7 @@
   },
   {
     "name": "gitlab_work_item_saved_view_list",
-    "description": "List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with gitlab_work_item_saved_view_get. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items.",
+    "description": "List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with issue.work_item_saved_view_get. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

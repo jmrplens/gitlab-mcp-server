@@ -551,7 +551,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_ban_user
 
-Ban a user. Returns: confirmation with the user ID and action. Reversible via gitlab_unban_user. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.
+Ban a user. Returns: confirmation with the user ID and action. Reversible via user.unban. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.
 
 **Parameters:**
 
@@ -564,7 +564,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_block_user
 
-Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via gitlab_unblock_user. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.
+Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via user.unblock. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.
 
 **Parameters:**
 
@@ -1710,7 +1710,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_deactivate_user
 
-Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via gitlab_activate_user. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.
+Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via user.activate. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.
 
 **Parameters:**
 
@@ -2369,7 +2369,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_deploy_key_list_all
 
-List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of gitlab_deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.
+List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of access.deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.
 
 **Parameters:**
 
@@ -2504,7 +2504,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_deploy_token_list_all
 
-List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of gitlab_deploy_token_list_project or gitlab_deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project.
+List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of access.deploy_token_list_project or access.deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -2639,7 +2639,7 @@ Detach a GitLab security scan profile from one or more projects and/or groups vi
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_ids` (array of integers): Numeric IDs of the groups to detach the profile from
 - `project_ids` (array of integers): Numeric IDs of the projects to detach the profile from
-- `security_scan_profile_id` (string) (required): Persisted scan profile identifier: the profile's numeric database ID (obtained from gitlab_list_project_scan_profile_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, ...) is not accepted by detach
+- `security_scan_profile_id` (string) (required): Persisted scan profile identifier: the profile's numeric database ID (obtained from security_scan_profile.list_project_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, ...) is not accepted by detach
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -4856,7 +4856,7 @@ Get one GitLab group by ID or path. Returns: group metadata, visibility, parent 
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `sort` (string): Sort direction for embedded projects (asc, desc)
 - `with_custom_attributes` (boolean): Include custom attributes in the response
-- `with_projects` (boolean): Include the group's projects in the response (deprecated. Prefer gitlab_group_projects)
+- `with_projects` (boolean): Include the group's projects in the response (deprecated. Prefer group.projects)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -5422,7 +5422,7 @@ List burndown chart events for a group milestone. Returns: dated burndown events
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
 - `order_by` (string): Order results by field (e.g. created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -5454,7 +5454,7 @@ Delete a group milestone permanently. Returns: a success confirmation. See also:
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -5465,7 +5465,7 @@ Get a single group milestone by IID. Returns: milestone metadata, state, start a
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -5476,7 +5476,7 @@ List issues assigned to a group milestone. Returns: assigned issues with state, 
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
 - `order_by` (string): Order results by field (e.g. created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -5522,7 +5522,7 @@ List merge requests assigned to a group milestone. Returns: assigned merge reque
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
 - `order_by` (string): Order results by field (e.g. created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -5541,7 +5541,7 @@ Update an existing group milestone. Returns: the updated milestone with state, d
 - `description` (string): Milestone description
 - `due_date` (string): Due date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `state_event` (string): State transition: activate or close
 - `title` (string): Milestone title
@@ -8411,7 +8411,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_package_protection_rules
 
-List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use gitlab_registry_protection_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule.
+List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use package.registry_rule_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule.
 
 **Parameters:**
 
@@ -8979,7 +8979,7 @@ Delete a milestone permanently from a project by milestone IID. Returns: a succe
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -8990,7 +8990,7 @@ Get a single milestone from a project by milestone IID. Returns: milestone title
 
 **Parameters:**
 
-- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9001,7 +9001,7 @@ List issues assigned to a single milestone with ordering and pagination. Returns
 
 **Parameters:**
 
-- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
 - `order_by` (string): Order results by field (e.g. created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -9040,7 +9040,7 @@ List merge requests assigned to a single milestone with ordering and pagination.
 
 **Parameters:**
 
-- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
 - `order_by` (string): Order results by field (e.g. created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -9059,7 +9059,7 @@ Update an existing milestone's title, description, start/due dates, or state (st
 
 - `description` (string): Milestone description
 - `due_date` (string): Due date (YYYY-MM-DD)
-- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `state_event` (string): State transition: activate or close
@@ -9289,7 +9289,7 @@ Open a new merge request from a source branch into a target branch. Returns: the
 - `reviewer_ids` (array of integers): User IDs to add as reviewers
 - `source_branch` (string) (required): Source branch name
 - `squash` (boolean): Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults
-- `target_branch` (string) (required): Target branch name. If not specified by the user use the project default branch from gitlab_project_get (do NOT assume main)
+- `target_branch` (string) (required): Target branch name. If not specified by the user use the project default branch from project.get (do NOT assume main)
 - `target_project_id` (integer): Target project ID (for cross-project/fork MRs)
 - `title` (string) (required): Merge request title
 
@@ -10417,7 +10417,7 @@ Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 
 **Parameters:**
 
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10430,7 +10430,7 @@ Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, projec
 - `full_path` (string): Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field.
 - `namespace_id` (integer): Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
 - `project_id` (integer): Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10441,7 +10441,7 @@ Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation
 **Parameters:**
 
 - `query` (object) (required): Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10463,7 +10463,7 @@ Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 
 **Parameters:**
 
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10660,7 +10660,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pages_domain_list_all
 
-List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of gitlab_pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.
+List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of project.pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13273,7 +13273,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_registry_protection_list
 
-List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use gitlab_registry_tag_protection_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list.
+List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use package.registry_tag_rule_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list.
 
 **Parameters:**
 
@@ -13322,7 +13322,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_registry_tag_protection_list
 
-List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use gitlab_registry_protection_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags.
+List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use package.registry_rule_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags.
 
 **Parameters:**
 
@@ -15739,7 +15739,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_upload_user_avatar
 
-Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.
+Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use user.current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.
 
 **Parameters:**
 
@@ -15910,7 +15910,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_work_item_saved_view_list
 
-List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with gitlab_work_item_saved_view_get. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items.
+List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with issue.work_item_saved_view_get. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items.
 
 **Parameters:**
 
