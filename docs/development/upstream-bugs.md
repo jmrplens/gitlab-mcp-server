@@ -3285,7 +3285,8 @@ for every one but `security_scans.rb:54` (client-go has no wrapper for it),
 `ee/lib/ee/api/helpers.rb:193` (defined, and called from nowhere at that
 commit) and the two MLflow helpers.
 
-**What**: Grape's `unauthorized!` renders 401, and these sites call it to
+**What**: GitLab's API helper `unauthorized!` (`lib/api/helpers.rb`)
+renders 401 through Grape's `error!`, and these sites call it to
 refuse an **authenticated** user who lacks a permission. Eighteen of them
 guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
 calls it on a falsy service result, which is the same thing one layer down.

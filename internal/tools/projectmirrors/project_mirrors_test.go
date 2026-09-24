@@ -901,10 +901,12 @@ func TestAddEdit_PermissionRefusal_ReadBeforeTheRedaction(t *testing.T) {
 	}
 }
 
-// TestForcePushUpdate_DisabledMirror_NamesTheEnabledFlag verifies the hint
-// the 400 GitLab answers a sync of a disabled mirror with, which used to sit
-// on the 403 beside a role claim.
-func TestForcePushUpdate_DisabledMirror_NamesTheEnabledFlag(t *testing.T) {
+// TestForcePushUpdate_DisabledMirror_NamesEveryCause verifies the hint the
+// 400 GitLab answers a sync of a mirror it considers disabled with, which
+// used to sit on the 403 beside a role claim. GitLab sends the same 400 when
+// the enabled flag is off and when mirroring is unavailable for the project,
+// so the hint has to name both rather than the flag alone.
+func TestForcePushUpdate_DisabledMirror_NamesEveryCause(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Cannot proceed with the push mirroring. Please verify your mirror configuration."}`)
 	}))
@@ -913,7 +915,14 @@ func TestForcePushUpdate_DisabledMirror_NamesTheEnabledFlag(t *testing.T) {
 		t.Fatal("ForcePushUpdate() error = nil, want the 400")
 	}
 	if !strings.Contains(err.Error(), hintForcePushDisabled) {
-		t.Errorf("ForcePushUpdate() error = %q, want the enabled-flag hint", err)
+		t.Errorf("ForcePushUpdate() error = %q, want the disabled-mirror hint", err)
+	}
+	for _, cause := range []string{"enabled=true", "turned off on the instance", "Silent Mode", "pending deletion"} {
+		t.Run(cause, func(t *testing.T) {
+			if !strings.Contains(err.Error(), cause) {
+				t.Errorf("ForcePushUpdate() error = %q, want it to name %q", err, cause)
+			}
+		})
 	}
 	if strings.Contains(err.Error(), hintMirrorPermission) {
 		t.Errorf("ForcePushUpdate() error = %q, must not name the role for a disabled mirror", err)

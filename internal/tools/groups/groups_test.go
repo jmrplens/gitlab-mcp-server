@@ -1724,7 +1724,8 @@ func TestUpdate_CancelledContext(t *testing.T) {
 
 // TestUpdate_PermissionRefusedWith401_NamesTheOwnerRole verifies the group
 // update's hint on both refusals GitLab gives a caller without the Owner
-// role: the 403 of a caller with no role on it at all, and the 401 of one who
+// role: the 403 of a caller who holds neither admin_group nor admin_runners on
+// the group, which is every role below Owner, and the 401 of one who
 // may only administer runners and asked for more than the runner setting
 // (lib/api/groups.rb:90), which the handler scoped out and so never hinted. A
 // 401 GitLab said was about the token itself gets no hint.

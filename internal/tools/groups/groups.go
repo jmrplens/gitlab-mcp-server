@@ -1356,9 +1356,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.UpdateGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		// GitLab refuses a caller with neither role with 403, and one who may
-		// only administer runners and asked for more than the runner setting
-		// with 401 (lib/api/groups.rb:367 and 90); both mean the same thing.
+		// GitLab refuses a caller with neither ability, admin_group or
+		// admin_runners, with 403, which is every member below Owner, and one
+		// who may only administer runners and asked for more than the runner
+		// setting with 401 (lib/api/groups.rb:367 and 90); both mean the same
+		// thing. A caller who cannot see a private group gets find_group!'s
+		// 404 instead.
 		if toolutil.IsPermissionRefusal(err) {
 			return DetailOutput{}, toolutil.WrapErrWithHint("groupUpdate", err,
 				"group updates require the Owner role on the group; a user who may administer the group's runners can change shared_runners_setting alone, sent as the only field")

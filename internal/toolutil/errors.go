@@ -318,8 +318,8 @@ func answeredRequest(glErr *gl.ErrorResponse) *http.Request {
 // known.
 //
 // GitLab answers 401 for two different things. Its API guard answers it for a
-// credential it cannot use, and at a family of routes Grape's unauthorized!
-// answers it for a valid credential that lacks a permission: approving a merge
+// credential it cannot use, and at a family of routes GitLab's API helper
+// unauthorized! answers it for a valid credential that lacks a permission: approving a merge
 // request the caller opened where author approval is prevented, merging
 // without push access, reading remote mirrors or access tokens without the
 // role (entry 55 of docs/development/upstream-bugs.md). The status cannot tell
@@ -567,10 +567,13 @@ func IsHTTPStatus(err error, code int) bool {
 // alone is wrong the other way: [ClassifyError] describes a 401 that GitLab
 // said was about the credential as the token itself being refused, and a role
 // suggestion after that verdict contradicts it. This predicate is false for
-// exactly those answers, for the API guard's 403 about a missing token scope,
-// and for its 403 refusing an account the API will not serve (blocked,
-// deactivated, the Terms of Service not accepted and the like), so the hint
-// follows only a description that leaves a permission refusal open.
+// those answers, for every other 401 or 403 the API guard writes a code on
+// (a DPoP refusal or a restricted language server client, which ClassifyError
+// does not describe as the token being refused, are among them), for its 403
+// about a missing token scope, and for its 403 refusing an account the API
+// will not serve (blocked, deactivated, the Terms of Service not accepted and
+// the like), so the hint follows only a description that leaves a permission
+// refusal open. [gitlabclient.RefusalMayBePermission] holds the full rule.
 //
 // A handler whose route answers a 403 that means something else, a license or
 // an archived project rather than a role, pairs it with IsHTTPStatus to tell

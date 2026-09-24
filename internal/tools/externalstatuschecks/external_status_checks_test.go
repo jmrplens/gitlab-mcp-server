@@ -1180,9 +1180,11 @@ func refusedBy(t *testing.T, status int) *gitlabclient.Client {
 // TestStatusChecks_PermissionRefusedWith401_NameTheUltimateLicense verifies
 // that every status check entry point hints the license GitLab checks before
 // anything else, on the 401 it answers every route with when the project's
-// namespace lacks Ultimate. Only the two lists hinted at all, on a 403 GitLab
-// never sends for it, and they said Premium/Ultimate: status checks are an
-// Ultimate feature, so no error may name Premium.
+// namespace lacks Ultimate. Only the two project lists hinted the license, on
+// a 403 GitLab never sends for it, and they said Premium/Ultimate; the delete
+// hinted the role on a 403 as well, and the merge request list claimed
+// Premium/Ultimate on its 404. Status checks are an Ultimate feature, so no
+// error may name Premium.
 //
 // The project list and the update also refuse a missing Maintainer role with
 // 401 (status_checks.rb:67, update_service.rb:40), so theirs names the role

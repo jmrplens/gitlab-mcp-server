@@ -361,13 +361,14 @@ type twoTenantGitLab struct {
 	revoked atomic.Bool
 	reads   atomic.Int64
 	// vanished, once set, makes GitLab stop finding every token: the
-	// credential probe is answered with the plain 401 Grape's unauthorized!
-	// writes, which is what a deleted personal access token gets. The project
+	// credential probe is answered with the plain 401 GitLab's API helper
+	// unauthorized! writes, which is what a deleted personal access token gets. The project
 	// stays readable, so a watcher's own read cannot be what ends a stream.
 	vanished atomic.Bool
 }
 
-// plainUnauthorizedBody is what Grape's unauthorized! answers with: a valid
+// plainUnauthorizedBody is what GitLab's API helper unauthorized! answers
+// with: a valid
 // credential refused a permission and a token GitLab no longer finds both get
 // it, byte for byte.
 const plainUnauthorizedBody = `{"message":"401 Unauthorized"}`
