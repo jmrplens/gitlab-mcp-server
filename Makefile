@@ -18,6 +18,7 @@
 	check-em-dash check-pr-description \
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
+	audit-sdk-context check-sdk-context \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
@@ -928,27 +929,28 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/21] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/21] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/21] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/21] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/21] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/21] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/21] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/21] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/21] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/21] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/21] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/21] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/21] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/21] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/21] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/21] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/21] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[18/21] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/21] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/21] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/21] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[1/22] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/22] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/22] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/22] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/22] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/22] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/22] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/22] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/22] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/22] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/22] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/22] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/22] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/22] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/22] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/22] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/22] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/22] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/22] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/22] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/22] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/22] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1875,6 +1877,19 @@ audit-dead-consts:
 ## reporting. CI gate.
 check-dead-consts:
 	go run ./cmd/audit_dead_consts/ -check
+
+## audit-sdk-context: report every call into client-go in internal/ and cmd/
+## that does not hand the SDK the caller's context. client-go takes it only as
+## the gl.WithContext request option and otherwise builds the request from
+## context.Background(), so neither the action deadline nor an abandoned HTTP
+## POST reaches it; noctx and contextcheck cannot see an option-carried context.
+audit-sdk-context:
+	go run ./cmd/audit_sdk_context/ -v
+
+## check-sdk-context: the same rule as a gate. Test files, the e2e scenario
+## packages included, are its stated blind spot. CI gate.
+check-sdk-context:
+	go run ./cmd/audit_sdk_context/ -check
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every

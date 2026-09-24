@@ -96,6 +96,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
     opts := &gl.ListXxxOptions{}
     toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
+    // gl.WithContext(ctx) is required on every client-go call: without it the
+    // SDK builds the request from context.Background(), so neither the action
+    // deadline nor an abandoned call can end it. make check-sdk-context gates it.
     items, resp, err := client.GL().Xxx.ListXxx(input.ProjectID.String(), opts, gl.WithContext(ctx))
     if err != nil {
         return ListOutput{}, toolutil.WrapErr("xxxList", err)

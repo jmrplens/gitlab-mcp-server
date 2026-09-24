@@ -78,6 +78,10 @@ func TestCancelOnArrival_CancelsTheContextWhenTheFirstRequestArrives(t *testing.
 // The request carries a body, and respond reads it: the helper drains the
 // body before it waits, and a respond that found it already consumed would
 // answer a request it could no longer see.
+//
+// The call passes no request option on purpose, which is the one shape
+// cmd/audit_sdk_context refuses in library code. Test files are outside that
+// gate, and this is the kind of test that needs to be.
 func TestCancelOnArrival_AnswersARequestThatCarriesNoContext(t *testing.T) {
 	seen := make(chan string, 1)
 	ctx, client := cancelOnArrival(t, func(w http.ResponseWriter, r *http.Request) {

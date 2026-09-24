@@ -29,21 +29,20 @@ const ToolutilPath = ModulePath + "/internal/toolutil"
 // the one string it denotes, and imports so an object has one identity across
 // the packages that share it.
 //
-// NeedDeps is deliberately absent, for one reason that holds for all four
-// callers: each of them only ever reads bodies written inside the patterns it
+// NeedDeps is deliberately absent, for one reason that holds for every
+// caller: each of them only ever reads bodies written inside the patterns it
 // loads, so type-checking the dependency tree from source would cost minutes
 // and change no answer. What a dependency's function returns is judged by its
 // name and its signature, both of which come in through export data, which
 // also gives each of its objects the same identity the packages using them see.
-// NeedForTest is here for the one gate that loads test variants and has to
-// tell the test main the go tool synthesizes from a package this repository
-// wrote. The only thing that distinguishes them on the path is a ".test"
+// NeedForTest is here for a gate that loads test variants and has to tell the
+// test main the go tool synthesizes from a package this repository wrote. The only thing that distinguishes them on the path is a ".test"
 // suffix, which a real package whose directory is named that way carries too,
 // and skipping such a package would drop its declarations and read as clean.
 // ForTest names the package under test and is empty for everything else, so
 // it answers the question the path cannot. It is metadata `go list` already
 // produces for a load that asks for tests: no extra type-checking, and no
-// cost at all for the three callers that load none.
+// cost at all for the callers that load none.
 const LoadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports |
 	packages.NeedForTest
