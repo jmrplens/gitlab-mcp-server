@@ -341,6 +341,20 @@ func TestDestinationPolicy_CheckPrivate_TierBDecisions(t *testing.T) {
 			name:     "redirect with no instance host to compare against",
 			instance: "not a url at all", addr: "10.0.0.1", offOrigin: true, wantRefused: true,
 		},
+		{
+			// The instance's name answers private here, as a rebinding name
+			// would the second time it is asked. For an instance the operator
+			// named that is the private-network exception; for one a caller
+			// named it is the attack, so the hop is refused.
+			name:     "redirect off a caller named instance whose name resolves private",
+			instance: "https://gitlab.internal", callerChosen: true, addr: "10.0.0.5", offOrigin: true,
+			resolves: []string{"10.0.0.1"}, wantRefused: true,
+		},
+		{
+			name:     "redirect off a caller named instance to a private address, opted out",
+			instance: "https://gitlab.internal", callerChosen: true, allowPrivate: true, addr: "10.0.0.5", offOrigin: true,
+			wantRefused: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -728,8 +742,17 @@ func TestDestinationPolicy_PermitsPrivate_IsWhatTheDialerApplies(t *testing.T) {
 		{name: "a hop away from an instance spelled as a public address", instance: "https://203.0.113.1", offOrigin: true, want: false},
 		{name: "a hop away from a public instance, opted out", instance: "https://gitlab.example.com", allowPrivate: true, offOrigin: true, want: true},
 		{
-			name: "a hop away from an instance a caller named", instance: "https://gitlab.internal", callerChosen: true, offOrigin: true,
-			resolves: []string{"10.0.0.1"}, want: true, wantLookups: 1,
+			// The name answers private when the policy asks, which is DNS
+			// rebinding by whoever holds it: a caller-named instance this
+			// client reached answered the dialer with a public address. So
+			// the exception for a private instance is not the caller's, and
+			// the name must not even be asked.
+			name: "a hop away from an instance a caller named that resolves private when asked", instance: "https://gitlab.internal",
+			callerChosen: true, offOrigin: true, resolves: []string{"10.0.0.1"}, want: false, wantLookups: 0,
+		},
+		{
+			name: "a hop away from an instance a caller named, opted out", instance: "https://gitlab.internal",
+			callerChosen: true, allowPrivate: true, offOrigin: true, want: true,
 		},
 	}
 
@@ -821,6 +844,13 @@ func TestDestinationTransport_RoutesByWhatTierBAnswers(t *testing.T) {
 		{name: "a hop away from a public instance", resolves: "203.0.113.1", requestURL: hopRequest, want: "strict"},
 		{name: "a hop away from a private instance", resolves: "10.0.0.1", requestURL: hopRequest, want: "permissive"},
 		{name: "a hop away from a public instance, opted out", allowPrivate: true, requestURL: hopRequest, want: "permissive"},
+		{
+			// The instance's name would answer private if asked, as a
+			// rebinding name does. A hop away from a caller-named instance is
+			// strict whatever it answers, and is routed without asking.
+			name: "a hop away from an instance a caller named", callerChosen: true, resolves: "10.0.0.1",
+			requestURL: hopRequest, want: "strict",
+		},
 		{name: "a client with no policy", noPolicy: true, requestURL: ownRequest, want: "permissive"},
 	}
 

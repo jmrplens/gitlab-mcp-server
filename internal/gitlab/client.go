@@ -595,7 +595,11 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 	opts.Page = 1
 
 	best, found := edition.Free, false
-	for page := 1; page <= namespacePlanMaxPages; page++ {
+	// No bound in the loop header: the page cap below is what ends the walk,
+	// and it has to be the one that does, since it is where the walk says it
+	// stopped short. A second copy of the bound up here could never be reached
+	// first, which is a condition that reads as a limit and decides nothing.
+	for page := 1; ; page++ {
 		namespaces, resp, err := c.inner.Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
 		if err != nil {
 			// A page that fails after an earlier one answered keeps what it
@@ -622,7 +626,8 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 		if best == edition.Ultimate {
 			break
 		}
-		if resp == nil || resp.NextPage <= 0 {
+		next := nextNamespacePage(resp)
+		if next <= 0 {
 			break
 		}
 		if page == namespacePlanMaxPages {
@@ -630,13 +635,27 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 				"pages", namespacePlanMaxPages, "per_page", namespacePlanPageSize)
 			break
 		}
-		opts.Page = resp.NextPage
+		opts.Page = next
 	}
 
 	if found {
 		slog.InfoContext(ctx, "detected GitLab tier from the namespace plan", "tier", best.String())
 	}
 	return best, found
+}
+
+// nextNamespacePage is the page GitLab says follows resp, or zero when it names
+// none.
+//
+// client-go hands back a response with every nil error, so the SDK never
+// brings a nil one here. The check stays so that a change on its side ends the
+// walk instead of panicking in the middle of resolving a tier, and it lives in
+// a function of its own because that is the one place a test can hand it nil.
+func nextNamespacePage(resp *gl.Response) int64 {
+	if resp == nil {
+		return 0
+	}
+	return resp.NextPage
 }
 
 // namespacePlanAnswers reports whether a namespace's plan says anything about

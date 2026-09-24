@@ -295,9 +295,16 @@ most often meets are not the first ones listed.
 
 - **A boundary whose two sides agree at the boundary.** Flipping `>` to `>=`
   where both branches assign the same value at the boundary changes nothing.
-  Six of the retry-clamp mutants in `internal/gitlab` are this shape, and so
-  are three of `cmd/internal/apidocs`' four: `if secs <= 0 { return 0 }` is
-  followed by `return time.Duration(secs) * time.Second`, `if d := time.Until(t);
+  Five of the retry-clamp mutants in `internal/gitlab` are this shape (in
+  `retry.go`, `reset > wait`, both `wait > b.ceiling`, `wait < minWait` and
+  `rateLimitResetWait`'s `wait < 0`; a sixth was the `reset <= 0` guard that
+  the bullet on a guard made unobservable describes deleting), and so are two
+  more there: `limitedBody.Read`'s `int64(len(p)) > b.remaining+1`, where a
+  buffer of exactly that length is cut to the length it already has, and
+  `tierFromNamespaces`' `tier > best`, where a second namespace on the tier
+  already held assigns `best` the value it has and changes nothing but one
+  more debug line. So are three of `cmd/internal/apidocs`' four:
+  `if secs <= 0 { return 0 }` is followed by `return time.Duration(secs) * time.Second`, `if d := time.Until(t);
   d > 0 { return d }` falls through to `return 0`, and `sleepCtx`'s
   `if d <= 0 { return ctx.Err() }` falls through to a zero timer that fires at
   once — at zero, each pair returns the same thing just as promptly.

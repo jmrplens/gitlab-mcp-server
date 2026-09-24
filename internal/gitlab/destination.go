@@ -76,11 +76,12 @@ var cgnatPrefix = netip.MustParsePrefix("100.64.0.0/10")
 // instanceLookupTimeout bounds the one DNS question this guard asks of its own
 // accord: whether the configured instance itself sits on a private address.
 //
-// It is asked the first time a request leaves the instance's own host, since
-// the answer decides which of the [destinationPools] that request is served
-// from, and never again for the same policy. A deployment whose requests never
-// leave the instance, and one whose instance is spelled as an address, never
-// ask it at all.
+// It is asked the first time a request leaves the host of an instance the
+// operator named, since the answer decides which of the [destinationPools]
+// that request is served from, and never again for the same policy. A
+// deployment whose requests never leave the instance, one whose instance is
+// spelled as an address, one that passed --allow-private-instances and a
+// client whose instance a caller named never ask it at all.
 const instanceLookupTimeout = 2 * time.Second
 
 // addressLiteral reports whether host is spelled as an address rather than as
@@ -216,11 +217,12 @@ func (p *destinationPolicy) coversInstance(dest *url.URL) bool {
 // permitsPrivate reports whether tier B lets one request reach a private
 // address at all.
 //
-// It is the one predicate both halves of the guard read: [checkPrivate] when a
-// connection is dialed, and [destinationTransport.RoundTrip] when it chooses
-// the pool a request is served from. They must never disagree, because on a
-// reused connection the pool is all there is: nothing is dialed, so the
-// connection a request is handed carries only the answer it was dialed under.
+// It is the one predicate both halves of the guard read:
+// [destinationPolicy.checkPrivate] when a connection is dialed, and
+// [destinationTransport.RoundTrip] when it chooses the pool a request is
+// served from. They must never disagree, because on a reused connection the
+// pool is all there is: nothing is dialed, so the connection a request is
+// handed carries only the answer it was dialed under.
 // Every input is fixed for the life of the policy, the instance's own privacy
 // included once it has been resolved, so the routing and the dial of one
 // request get the same answer from the same policy.
@@ -234,9 +236,20 @@ func (p *destinationPolicy) permitsPrivate(ctx context.Context, offOrigin bool) 
 	}
 	// A self-managed GitLab redirecting an artifact download to object
 	// storage on the same private network is ordinary, and a deployment whose
-	// instance is already private is inside that network. Tier A still
-	// applies at the dial, so this cannot reach a metadata address.
-	return offOrigin && p.instanceIsPrivate(ctx)
+	// operator named an instance that is already private is inside that
+	// network. Tier A still applies at the dial, so this cannot reach a
+	// metadata address.
+	//
+	// Never for an instance a caller named. Its first hop is refused a private
+	// address, so a caller-named instance this client reached answered the
+	// dialer with a public one, and the only way the lookup here could then
+	// call it private is a name answering differently the second time it is
+	// asked: DNS rebinding, by whoever holds the name. The operator's own name
+	// is exempt from that concern because the operator chose it; a caller's
+	// is not, and granting this would turn --allow-any-gitlab-url into a
+	// redirect onto the private network. A caller-named instance that really
+	// is private is served through --allow-private-instances, answered above.
+	return offOrigin && !p.callerChosen && p.instanceIsPrivate(ctx)
 }
 
 // checkPrivate applies tier B to one candidate address.
@@ -401,23 +414,27 @@ func guardDestination(ctx context.Context, network, address string, _ syscall.Ra
 // opened under the same answer as its own:
 //
 //   - strict carries the requests tier B refuses a private address: an
-//     instance a caller named, and a redirect hop that left a public instance.
-//     Every connection in it was dialed under that refusal, so it leads to a
-//     public address, which every one of those requests may reach.
+//     instance a caller named, a redirect hop that left it, and a redirect hop
+//     that left a public instance the operator named. Every connection in it
+//     was dialed under that refusal, so it leads to a public address, which
+//     every one of those requests may reach.
 //   - permissive carries the requests tier B allows one: the operator's own
 //     instance, a deployment that passed --allow-private-instances, and a hop
-//     from an instance that is itself private. A connection in it may lead to
-//     a private address, and every request routed to it would have been
-//     allowed to dial that address.
+//     from an instance the operator named that is itself private. A
+//     connection in it may lead to a private address, and every request
+//     routed to it would have been allowed to dial that address.
 //
 // Tier A needs no pool of its own, because no request of any policy can open a
 // connection to a metadata address in the first place.
 //
-// The ordinary deployment pays nothing for it. Every request to the instance
-// the operator named is permissive, so first-party traffic shares one idle
-// pool exactly as it did when there was only one; the strict pool holds
-// connections only for a caller-named instance and for redirect hops away
-// from a public one.
+// The ordinary deployment pays nothing for it in idle connections. Every
+// request to the instance the operator named is permissive, so first-party
+// traffic shares one idle pool exactly as it did when there was only one; the
+// strict pool holds connections only for a caller-named instance and the hops
+// away from it, and for redirect hops away from a public one. A client whose
+// requests leave the instance the operator named does pay one memoized lookup
+// of that instance's name, to know which pool the first such hop belongs in:
+// see [instanceLookupTimeout].
 type destinationPools struct {
 	permissive http.RoundTripper
 	strict     http.RoundTripper
