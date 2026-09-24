@@ -131,8 +131,10 @@ type securitySettingsHints struct {
 // never a role: the role is the 401 (project_security_settings.rb:30 and 53,
 // group_security_settings.rb:36), and a 403 is the license or a state of the
 // project, which a role hint would send the caller to fix in the wrong place.
-// A 403 carrying an error code is the API guard's scope refusal and gets
-// neither hint.
+// A 403 carrying an error code is the API guard's scope refusal, and a plain
+// one naming a blocked, deactivated or otherwise refused account is the guard
+// refusing the account itself; neither gets a hint, since no license or role
+// is why.
 func wrapSecuritySettingsErr(operation string, err error, hints securitySettingsHints) error {
 	if toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.IsPermissionRefusal(err) {
 		return toolutil.WrapErrWithHint(operation, err, hints.forbiddenHint)

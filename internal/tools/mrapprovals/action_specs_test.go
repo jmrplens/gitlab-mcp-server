@@ -184,7 +184,7 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 // served usage says what its refusal hint says, which is what GitLab checks:
 // any bot user that may approve the merge request, a service account among
 // them, and no merge request that is already merged
-// (lib/api/merge_request_approvals.rb:147-148). It used to say personal access
+// (lib/api/merge_request_approvals.rb:148-149). It used to say personal access
 // tokens are rejected, which sent a service account, whose token is one, away
 // from a call GitLab serves it.
 func TestActionSpecs_ResetUsage_AgreesWithTheRefusalHint(t *testing.T) {

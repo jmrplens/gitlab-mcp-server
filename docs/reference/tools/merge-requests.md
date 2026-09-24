@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Merge Requests
 > **Individual tools**: 56
-> **Meta-tool**: `gitlab_merge_request` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: `gitlab_merge_request`, `gitlab_merge_train` and `gitlab_external_status_check` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `external_status_check.*`, `merge_request.*`, `merge_train.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html), [Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
 > **Audience**: 👤 End users, AI assistant users

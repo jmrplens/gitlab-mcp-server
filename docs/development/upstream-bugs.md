@@ -3237,9 +3237,11 @@ when the field is nil.
   which keeps the entry when GitLab still accepts the token. A handler's hint
   then names the permission, keyed on `toolutil.IsPermissionRefusal`, which
   reads the same file's `RefusalMayBePermission`: a REST 401 or 403 whose body
-  carries no RFC 6750 error code, so it is never true of an answer the rule
-  above says names the credential, and a hint keyed on it never follows the
-  verdict that the token itself was refused
+  carries no RFC 6750 error code and whose message is not the API guard's
+  refusal of an account it will not serve (blocked, deactivated and the
+  like), so it is never true of an answer the rule above says names the
+  credential, and a hint keyed on it never follows the verdict that the token
+  itself was refused
   ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).
   Two kinds of action are not keyed on it. The four group SAML link actions
   still add their hint to every error, a rejected token included, because the
@@ -3368,10 +3370,13 @@ as well: push mirrors are available on every tier, external status checks
 need Ultimate rather than Premium, a group's security settings need
 Maintainer or Security Manager rather than Owner, the approval reset is
 refused with 401 for a person's token rather than 404 and admits a service
-account's, and a rotation by id is refused whatever the role when the calling
-token is itself a project or group access token. The same reading found two
-status check routes that lose the role refusal entirely, recorded as entries
-56 and 57.
+account's, a rotation by id is refused whatever the role when the calling
+token is itself a project or group access token, and the reads and rotations
+of project and group access tokens are all refused whatever the role when an
+administrator has disabled personal access tokens on the instance. The same
+reading found two status check routes whose role refusal never arrives as a
+401: the delete discards it and answers 204 (entry 56), and the create
+answers it with 500 (entry 57).
 
 ### Deleting an external status check without the role answers 204 and deletes nothing
 

@@ -177,9 +177,10 @@ func TestActionSpecs_Edition_EveryActionIsUltimate(t *testing.T) {
 
 // TestActionSpecs_UpdateUsage_NamesTheRolesGitLabChecks verifies both updates
 // tell a model before the call the roles GitLab lets change secret push
-// protection: the Maintainer, Owner and Security Manager roles, whom
-// enable_secret_push_protection is granted to
-// (ee/lib/api/group_security_settings.rb:36, project_security_settings.rb:53).
+// protection: the Maintainer, Owner and Security Manager roles, whom GitLab
+// grants enable_secret_push_protection on a group
+// (ee/lib/api/group_security_settings.rb:36) and update_security_setting on a
+// project (project_security_settings.rb:53).
 // The group update used to say Owner, which sent a Maintainer who read it away
 // from a call GitLab would have served.
 func TestActionSpecs_UpdateUsage_NamesTheRolesGitLabChecks(t *testing.T) {

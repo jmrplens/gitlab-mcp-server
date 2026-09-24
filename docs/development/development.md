@@ -384,7 +384,7 @@ return Output{}, toolutil.WrapErrWithStatusHint("labelCreate", err, 409,
 ### Helpers
 
 - `IsHTTPStatus(err, code)` — checks if the error chain contains a `gl.ErrorResponse` with the given HTTP status
-- `IsPermissionRefusal(err)`: reports whether GitLab refused a permission the way it does at the routes that answer one with 401: a REST 401 or 403 whose body carries no RFC 6750 error code. Key a hint that names a role, a license or an owner on it rather than on a status, so it is shown on the 401 and never after GitLab said the token itself was refused
+- `IsPermissionRefusal(err)`: reports whether GitLab refused a permission the way it does at the routes that answer one with 401: a REST 401 or 403 whose body carries no RFC 6750 error code and does not refuse the account itself (a blocked or deactivated account, for one). Key a hint that names a role, a license or an owner on it rather than on a status, so it is shown on the 401 and never after GitLab said the token itself was refused
 - `ContainsAny(err, substrs...)` — checks if `err.Error()` contains any of the given substrings
 - `ExtractGitLabMessage(err)` — extracts the specific message from `gl.ErrorResponse.Message`
 

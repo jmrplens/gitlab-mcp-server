@@ -33,25 +33,38 @@ const (
 // keyed on toolutil.IsPermissionRefusal and never on a status alone.
 const (
 	// hintProjectTokenRole names the role reading a project's access tokens
-	// needs (lib/api/resource_access_tokens.rb:32 and 63).
-	hintProjectTokenRole = "reading a project's access tokens needs the Maintainer or Owner role on the project" //#nosec G101 -- error hint, not a credential
-	// hintGroupTokenRole names the role reading a group's access tokens needs.
-	hintGroupTokenRole = "reading a group's access tokens needs the Owner role on the group" //#nosec G101 -- error hint, not a credential
+	// needs (lib/api/resource_access_tokens.rb:32 and 63), and the one rule
+	// that withdraws read_resource_access_tokens whatever the role: an
+	// administrator who disabled personal access tokens on the instance, which
+	// on EE disables project and group access tokens with them
+	// (ee/app/policies/ee/project_policy.rb:1412-1417,
+	// app/policies/project_policy.rb:874-879).
+	hintProjectTokenRole = "reading a project's access tokens needs the Maintainer or Owner role on the project, and GitLab refuses it whatever the role when an administrator has disabled personal access tokens on the instance, which disables project and group access tokens too" //#nosec G101 -- error hint, not a credential
+	// hintGroupTokenRole is [hintProjectTokenRole] for a group
+	// (ee/app/policies/ee/group_policy.rb:1174-1179,
+	// app/policies/group_policy.rb:234-237).
+	hintGroupTokenRole = "reading a group's access tokens needs the Owner role on the group, and GitLab refuses it whatever the role when an administrator has disabled personal access tokens on the instance, which disables project and group access tokens too" //#nosec G101 -- error hint, not a credential
 	// hintProjectTokenRotateRefused is the rotate's answer to a token that is
 	// missing or that the caller may not rotate, which GitLab tells apart
 	// only for an administrator (lib/api/resource_access_tokens.rb:200).
 	// "May not rotate" is manage_resource_access_tokens, which a role grants
-	// and three policy rules withdraw whatever the role: a calling token that
+	// and four policy rules withdraw whatever the role: a calling token that
 	// is itself a project or group bot's (project_policy.rb:886-889), a
 	// top-level group that disallows access token creation (:881-884,
-	// :1089-1094), and on GitLab.com a namespace whose plan lacks the feature
-	// (ee/app/policies/ee/project_policy.rb:1403-1409). A hint naming the role
-	// alone is false for a Maintainer's project access token, which has it.
-	hintProjectTokenRotateRefused = "token_id is not an active access token of this project, or the caller may not rotate it: that needs the Maintainer or Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, or on GitLab.com when the namespace's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_project_list" //#nosec G101 -- error hint, not a credential
+	// :1089-1094), an administrator who disabled personal access tokens on the
+	// instance, which on EE disables project and group access tokens with them
+	// (ee/app/policies/ee/project_policy.rb:1412-1417,
+	// project_policy.rb:874-879), and on GitLab.com a namespace whose plan
+	// lacks the feature (ee/app/policies/ee/project_policy.rb:1403-1409). A
+	// hint naming the role alone is false for a Maintainer's project access
+	// token, which has it.
+	hintProjectTokenRotateRefused = "token_id is not an active access token of this project, or the caller may not rotate it: that needs the Maintainer or Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, when an administrator has disabled personal access tokens on the instance (which disables project and group access tokens too), or on GitLab.com when the namespace's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_project_list" //#nosec G101 -- error hint, not a credential
 	// hintGroupTokenRotateRefused is [hintProjectTokenRotateRefused] for a
-	// group, under the same three rules (group_policy.rb:243-251 and 313-314,
-	// ee/app/policies/ee/group_policy.rb:1166-1171).
-	hintGroupTokenRotateRefused = "token_id is not an active access token of this group, or the caller may not rotate it: that needs the Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, or on GitLab.com when the group's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_group_list" //#nosec G101 -- error hint, not a credential
+	// group, under the same four rules (group_policy.rb:234-251 and 313-314,
+	// ee/app/policies/ee/group_policy.rb:1166-1179): the disabled tokens
+	// withdraw read_resource_access_tokens there, and a group grants
+	// manage_resource_access_tokens only beside it.
+	hintGroupTokenRotateRefused = "token_id is not an active access token of this group, or the caller may not rotate it: that needs the Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, when an administrator has disabled personal access tokens on the instance (which disables project and group access tokens too), or on GitLab.com when the group's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_group_list" //#nosec G101 -- error hint, not a credential
 	// hintPersonalTokenNotFoundOrNotYours is the read-by-id and rotate
 	// answer to a personal access token that is missing or belongs to someone
 	// else (lib/api/personal_access_tokens.rb:73 and 107).

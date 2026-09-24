@@ -184,7 +184,7 @@ GitLab responde a algunos permisos denegados con 401 en lugar de 403: aprobar un
 ❌ mrApprove: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal. Suggestion: you may be the MR author (self-approval not allowed) or lack sufficient permissions
 ```
 
-Toda acción cuya ruta de GitLab deniega un permiso de esta forma lleva una sugerencia que lo nombra: fusionar y cancelar el auto-merge, aprobar y restablecer aprobaciones, añadir a un merge train, los push mirrors, la lectura, el listado y la rotación de tokens de acceso, los external status checks, los ajustes de seguridad, quitar un award emoji, actualizar un grupo y enlazar un fork. La sugerencia se omite cuando GitLab dice que rechazó el propio token, porque el mensaje ya lo ha dicho y un permiso que falta no puede ser la causa.
+Toda acción cuya ruta de GitLab deniega un permiso de esta forma lleva una sugerencia que lo nombra: fusionar y cancelar el auto-merge, aprobar y restablecer aprobaciones, añadir a un merge train, los push mirrors, la lectura, el listado y la rotación de tokens de acceso, los external status checks, los ajustes de seguridad, quitar un award emoji, actualizar un grupo y enlazar un fork. La sugerencia se omite cuando GitLab dice que rechazó el propio token, o que no atiende a la cuenta en absoluto (bloqueada, desactivada, pendiente de aprobación, sin aceptar los términos de servicio y casos similares), porque el mensaje ya lo ha dicho y un permiso que falta no puede ser la causa.
 
 ### Permiso denegado
 

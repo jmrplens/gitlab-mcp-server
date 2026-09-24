@@ -1073,10 +1073,6 @@ var premiumGatingExempt = map[string]string{
 	"gitlab_feature_flag_create": "Feature flags are a Free-tier feature; the Premium/Ultimate wording is legacy and inaccurate.",
 	"gitlab_feature_flag_update": "Feature flags are a Free-tier feature; the Premium/Ultimate wording is legacy and inaccurate.",
 	"gitlab_feature_flag_delete": "Feature flags are a Free-tier feature; the Premium/Ultimate wording is legacy and inaccurate.",
-	// Push (remote) mirror creation is Free per doc/api/remote_mirrors.md (page
-	// tier = Free, Premium, Ultimate); only pull mirroring is Premium. The
-	// "Requires Premium/Ultimate" usage wording is legacy and inaccurate.
-	"gitlab_add_project_mirror": "Push mirroring is Free per remote_mirrors.md; the Premium/Ultimate wording is legacy. Pull mirroring stays Premium.",
 	// Group integration management is Free per doc/api/group_integrations.md
 	// (page tier = Free, Premium, Ultimate); only specific integrations need a
 	// paid tier. The wording references that sub-feature nuance, not the API tier.
@@ -1095,9 +1091,14 @@ var premiumGatingExempt = map[string]string{
 // empty Edition leaks into the CE surface, where it would only 403 at runtime.
 //
 // Actions in premiumGatingExempt are skipped: they are CE features whose
-// Premium/Ultimate text describes only an optional parameter.
+// Premium/Ultimate text describes only an optional parameter. An entry whose
+// action no longer carries that text, or no longer exists ungated, excuses
+// nothing and fails the test too, since it would only hide the wording if it
+// came back: gitlab_add_project_mirror kept one after its usage stopped
+// claiming Premium/Ultimate.
 func TestPremiumDescribedActionsAreEditionGated(t *testing.T) {
 	var leaks []string
+	excused := make(map[string]bool, len(premiumGatingExempt))
 	for _, group := range CollectActionSpecs(nil, true) {
 		for _, spec := range group.Actions {
 			if spec.Edition != "" {
@@ -1112,11 +1113,23 @@ func TestPremiumDescribedActionsAreEditionGated(t *testing.T) {
 					name = group.ToolName + "/" + spec.Name
 				}
 				if _, ok := premiumGatingExempt[name]; ok {
+					excused[name] = true
 					continue
 				}
 				leaks = append(leaks, name)
 			}
 		}
+	}
+	var stale []string
+	for name := range premiumGatingExempt {
+		if !excused[name] {
+			stale = append(stale, name)
+		}
+	}
+	if len(stale) > 0 {
+		sort.Strings(stale)
+		t.Errorf("premiumGatingExempt names %d action(s) that no longer claim Premium/Ultimate while ungated, so the entry excuses nothing; delete it:\n  %s",
+			len(stale), strings.Join(stale, "\n  "))
 	}
 	if len(leaks) > 0 {
 		sort.Strings(leaks)

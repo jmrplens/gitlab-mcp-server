@@ -627,7 +627,8 @@ func TestUpdateGroup_EmptyExclusions(t *testing.T) {
 // no hint for either: their one hint sat on the 404, claimed the license there,
 // and named the Owner role for the group, where GitLab asks for Maintainer or
 // Security Manager. The API guard's 403 about a token scope carries an error
-// code and gets neither hint, and neither does a 401 GitLab said was about the
+// code and gets neither hint, its plain 403 refusing a blocked or deactivated
+// account gets none either, and neither does a 401 GitLab said was about the
 // token itself.
 func TestSecuritySettings_EachStatusEarnsItsOwnHint(t *testing.T) {
 	ctx := context.Background()
@@ -651,6 +652,11 @@ func TestSecuritySettings_EachStatusEarnsItsOwnHint(t *testing.T) {
 		missingScope   = `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`
 		tokenRejected  = `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`
 		licenseMissing = "license does not include this security feature"
+		// The API guard refuses an account the API will not serve with a
+		// plain 403 (lib/api/api_guard.rb:62-63), whose reason is one of
+		// lib/gitlab/auth/user_access_denied_reason.rb's.
+		blockedAccount     = `{"message":"403 Forbidden - Your account has been blocked."}`
+		deactivatedAccount = `{"message":"403 Forbidden - Your account has been deactivated by your administrator. Please log back in from a web browser to reactivate your account at https://gitlab.example.com"}`
 	)
 	tests := []struct {
 		name    string
@@ -670,6 +676,8 @@ func TestSecuritySettings_EachStatusEarnsItsOwnHint(t *testing.T) {
 		{"update group 403 names the license", updateGroup, http.StatusForbidden, forbidden, licenseMissing, "Security Manager"},
 		{"update group 404 names the group only", updateGroup, http.StatusNotFound, `{"message":"404 Group Not Found"}`, "verify group_id with group.get", "license"},
 		{"get project 403 for a token scope gets no hint", getProject, http.StatusForbidden, missingScope, "access denied", "Suggestion"},
+		{"get project 403 for a blocked account gets no license hint", getProject, http.StatusForbidden, blockedAccount, "Your account has been blocked", "Suggestion"},
+		{"update group 403 for a deactivated account gets no license hint", updateGroup, http.StatusForbidden, deactivatedAccount, "Your account has been deactivated", "Suggestion"},
 		{"update group 401 for a rejected token gets no hint", updateGroup, http.StatusUnauthorized, tokenRejected, "authentication failed", "Suggestion"},
 	}
 	for _, tt := range tests {

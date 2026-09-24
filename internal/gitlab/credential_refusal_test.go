@@ -107,11 +107,11 @@ func TestUnauthorizedNamesCredential_PlainOrUnrelatedAnswers_NameNothing(t *test
 	})
 }
 
-// The bodies Grape's permission refusals render, which carry a message and
-// no error code: unauthorized! with a reason (the fork relation's target
-// namespace check), forbidden! bare, and a service's refusal handed to
-// render_api_error!, whose message is a list (the external status check
-// update).
+// The bodies GitLab's API helpers render for a permission refusal, which carry
+// a message and no error code: unauthorized! with a reason (the fork
+// relation's target namespace check), forbidden! bare, and a service's refusal
+// handed to render_api_error!, whose message is a list (the external status
+// check update).
 const (
 	targetNamespaceBody = `{"message":"401 Unauthorized - Target Namespace"}`
 	plainForbiddenBody  = `{"message":"403 Forbidden"}`
@@ -126,6 +126,20 @@ const (
 	dpopErrorBody                = `{"error":"dpop_error","error_description":"DPoP validation error"}`
 	restrictedLanguageClientBody = `{"error":"restricted_language_server_client_error","error_description":"Language server client not allowed"}`
 )
+
+// accountRefusalBodies are the plain 403s the API guard answers an account the
+// API will not serve with, one per reason
+// lib/gitlab/auth/user_access_denied_reason.rb gives, each written the way
+// forbidden! renders it, with the username and URLs an instance fills in.
+var accountRefusalBodies = map[string]string{
+	"an internal user":            `{"message":"403 Forbidden - This action cannot be performed by internal users"}`,
+	"an account pending approval": `{"message":"403 Forbidden - Your account is pending approval from your administrator and hence blocked."}`,
+	"the Terms of Service":        `{"message":"403 Forbidden - You (@alice) must accept the Terms of Service in order to perform this action. To accept these terms, please access GitLab from a web browser at https://gitlab.example.com."}`,
+	"a deactivated account":       `{"message":"403 Forbidden - Your account has been deactivated by your administrator. Please log back in from a web browser to reactivate your account at https://gitlab.example.com"}`,
+	"an unconfirmed email":        `{"message":"403 Forbidden - Your primary email address is not confirmed. Please check your inbox for the confirmation instructions. In case the link is expired, you can request a new confirmation email at https://gitlab.example.com/users/confirmation/new"}`,
+	"a blocked account":           `{"message":"403 Forbidden - Your account has been blocked."}`,
+	"an expired password":         `{"message":"403 Forbidden - Your password expired. Please access GitLab from a web browser to update your password."}`,
+}
 
 // TestRefusalMayBePermission_PlainRESTRefusal_MayBeAPermission verifies the
 // answers a permission hint may follow: a REST 401 or 403 whose body carries
@@ -170,10 +184,12 @@ func TestRefusalMayBePermission_PlainRESTRefusal_MayBeAPermission(t *testing.T) 
 
 // TestRefusalMayBePermission_CredentialOrOtherAnswers_AreNot is the negative
 // half. Every code the API guard writes is a refusal of the credential, on
-// either status; the GraphQL endpoint answers neither status for a permission;
-// and no other status is a refusal of the kind a permission hint is for, the
-// 404 GitLab answers a resource the caller may not see included, since that
-// one carries a hint of its own.
+// either status, the default one it maps a missing token to included although
+// nothing raises it; the guard's plain 403 about an account the API will not
+// serve is one too, and is told apart by its message; the GraphQL endpoint
+// answers neither status for a permission; and no other status is a refusal of
+// the kind a permission hint is for, the 404 GitLab answers a resource the
+// caller may not see included, since that one carries a hint of its own.
 func TestRefusalMayBePermission_CredentialOrOtherAnswers_AreNot(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -185,7 +201,7 @@ func TestRefusalMayBePermission_CredentialOrOtherAnswers_AreNot(t *testing.T) {
 		{name: "a revoked token", status: http.StatusUnauthorized, url: restURL, body: revokedTokenBody},
 		{name: "a DPoP refusal", status: http.StatusUnauthorized, url: restURL, body: dpopErrorBody},
 		{name: "a restricted language server client", status: http.StatusUnauthorized, url: restURL, body: restrictedLanguageClientBody},
-		{name: "the guard's default code", status: http.StatusUnauthorized, url: restURL, body: `{"error":"unauthorized"}`},
+		{name: "the guard's default code, which nothing raises", status: http.StatusUnauthorized, url: restURL, body: `{"error":"unauthorized"}`},
 		{name: "a missing scope", status: http.StatusForbidden, url: restURL, body: insufficientScopeBody},
 		{name: "a missing granular scope", status: http.StatusForbidden, url: restURL, body: insufficientGranularBody},
 		{name: "GraphQL 401", status: http.StatusUnauthorized, url: graphQLURL, body: graphQLInvalidTokenBody},
@@ -199,6 +215,13 @@ func TestRefusalMayBePermission_CredentialOrOtherAnswers_AreNot(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if RefusalMayBePermission(tt.status, requestTo(t, tt.url), []byte(tt.body)) {
 				t.Errorf("RefusalMayBePermission(%d, %s, %q) = true, want false", tt.status, tt.url, tt.body)
+			}
+		})
+	}
+	for name, body := range accountRefusalBodies {
+		t.Run(name, func(t *testing.T) {
+			if RefusalMayBePermission(http.StatusForbidden, requestTo(t, restURL), []byte(body)) {
+				t.Errorf("RefusalMayBePermission(403, %s, %q) = true, want false: the guard refused the account", restURL, body)
 			}
 		})
 	}

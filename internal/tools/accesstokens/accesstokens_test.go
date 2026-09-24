@@ -2701,29 +2701,58 @@ func TestAccessTokens_PermissionRefusedWith401_NameTheRoleOrOwnership(t *testing
 	}
 }
 
-// TestAccessTokens_RotateRefused_NamesWhatOutranksTheRole verifies that the
-// project and group rotations, refused with 401, name the rules GitLab applies
-// whatever the caller's role, beside the role itself. GitLab withdraws
-// manage_resource_access_tokens from a calling token that is a project or group
-// bot's, from a top-level group that disallows access token creation, and on
-// GitLab.com from a plan without the feature (project_policy.rb:881-889,
-// group_policy.rb:243-251), and answers each with the same 401 it gives a
-// missing role, so a hint naming the role alone was false for a Maintainer's
-// project access token.
-func TestAccessTokens_RotateRefused_NamesWhatOutranksTheRole(t *testing.T) {
+// TestAccessTokens_ResourceTokenRefused_NamesWhatOutranksTheRole verifies that
+// the project and group token routes, refused with 401, name the rules GitLab
+// applies whatever the caller's role, beside the role itself. On EE an
+// administrator who disabled personal access tokens on the instance withdraws
+// read_resource_access_tokens and manage_resource_access_tokens from every
+// role (ee/app/policies/ee/project_policy.rb:1412-1417,
+// ee/app/policies/ee/group_policy.rb:1174-1179), which refuses the reads and
+// the rotations alike. The rotations lose manage_resource_access_tokens under
+// three more: a calling token that is a project or group bot's, a top-level
+// group that disallows access token creation, and on GitLab.com a plan
+// without the feature (project_policy.rb:881-889, group_policy.rb:243-251).
+// GitLab answers each with the same 401 it gives a missing role, so a hint
+// naming the role alone was false for a Maintainer's project access token, and
+// for a Maintainer or Owner on an instance with the tokens disabled.
+func TestAccessTokens_ResourceTokenRefused_NamesWhatOutranksTheRole(t *testing.T) {
 	ctx := context.Background()
+	const disabledTokens = "an administrator has disabled personal access tokens on the instance"
+	rotationRules := []string{
+		"the calling token is itself a project or group access token",
+		"the top-level group does not allow access token creation",
+		disabledTokens,
+		"on GitLab.com",
+	}
 	calls := []struct {
 		name string
 		call func(*gitlabclient.Client) error
+		want []string
 	}{
+		{"project list", func(c *gitlabclient.Client) error {
+			_, err := ProjectList(ctx, c, ProjectListInput{ProjectID: "42"})
+			return err
+		}, []string{disabledTokens}},
+		{"group list", func(c *gitlabclient.Client) error {
+			_, err := GroupList(ctx, c, GroupListInput{GroupID: "10"})
+			return err
+		}, []string{disabledTokens}},
+		{"project get", func(c *gitlabclient.Client) error {
+			_, err := ProjectGet(ctx, c, ProjectGetInput{ProjectID: "42", TokenID: 3})
+			return err
+		}, []string{disabledTokens}},
+		{"group get", func(c *gitlabclient.Client) error {
+			_, err := GroupGet(ctx, c, GroupGetInput{GroupID: "10", TokenID: 3})
+			return err
+		}, []string{disabledTokens}},
 		{"project rotate", func(c *gitlabclient.Client) error {
 			_, err := ProjectRotate(ctx, c, ProjectRotateInput{ProjectID: "42", TokenID: 3})
 			return err
-		}},
+		}, rotationRules},
 		{"group rotate", func(c *gitlabclient.Client) error {
 			_, err := GroupRotate(ctx, c, GroupRotateInput{GroupID: "10", TokenID: 3})
 			return err
-		}},
+		}, rotationRules},
 	}
 	for _, tc := range calls {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2734,11 +2763,7 @@ func TestAccessTokens_RotateRefused_NamesWhatOutranksTheRole(t *testing.T) {
 			if err == nil {
 				t.Fatal(errExpectedAPI)
 			}
-			for _, want := range []string{
-				"the calling token is itself a project or group access token",
-				"the top-level group does not allow access token creation",
-				"on GitLab.com",
-			} {
+			for _, want := range tc.want {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf(fmtExpErrContaining, want, err)
 				}
