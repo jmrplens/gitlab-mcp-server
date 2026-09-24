@@ -928,7 +928,13 @@ var sharedDestinationPools = sync.OnceValue(func() destinationPools {
 // which is the only position from which a name that resolves somewhere else
 // than it claims can be judged by what it resolved to. Its timeouts restate
 // net/http's defaults, because replacing DialContext replaces the dialer that
-// carried them.
+// carried them. It is reached through [guardedDial], which is the only place
+// that can tell the guard a dial is to a proxy rather than to a destination.
+//
+// Proxy is kept as the clone carries it, which for net/http's own default is
+// [http.ProxyFromEnvironment]. [destinationTransport] asks that same field
+// which proxy a request goes through, so whatever it holds, the router and the
+// transport read one answer.
 func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
 	var t *http.Transport
 	if def, ok := http.DefaultTransport.(*http.Transport); ok {
@@ -937,7 +943,7 @@ func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
 		t = &http.Transport{}
 	}
 	t.ResponseHeaderTimeout = responseHeaderTimeout
-	t.DialContext = baseDialer().DialContext
+	t.DialContext = guardedDial(baseDialer())
 	if tlsConfig != nil {
 		t.TLSClientConfig = tlsConfig
 	}

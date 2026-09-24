@@ -358,6 +358,8 @@ For those two, a private, loopback, CGNAT, link-local, unique-local or unspecifi
 
 **The cloud metadata addresses are refused on every hop, for every deployment, and `--allow-private-instances` does not permit them**: `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254` and `100.100.100.200`. Nothing legitimate serves a GitLab API or a presigned object-storage URL from one of them.
 
+**Behind an outbound proxy** (`HTTP_PROXY` or `HTTPS_PROXY`), the connection this server opens is to the proxy, which is your own configuration, so it is checked against the metadata addresses alone and may sit on `localhost` or on a private network. The destination behind it is checked only where it is written as an address, and is then refused before anything is sent exactly as it would be without a proxy; a host name is resolved by the proxy, so what it can reach is the proxy's own egress policy. Hosts this server should connect to directly belong in `NO_PROXY`, and only a direct connection is checked after DNS resolution.
+
 For a local deployment against a GitLab on this machine, the hatch is therefore two flags:
 
 ```bash
