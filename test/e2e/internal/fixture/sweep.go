@@ -1,7 +1,7 @@
 //go:build e2e
 
-// sweep.go deletes what a run left behind, and only what this run left
-// behind.
+// sweep.go deletes what runs left behind: at a run's exit only what that run
+// left, and on demand what runs that have ended left.
 //
 // Every name a builder hands out carries the run ID, so a sweep can recognize
 // its own leftovers on an instance three packages share and other people use.
@@ -151,10 +151,14 @@ func SweepRun(ctx context.Context, client *gitlabclient.Client, runID string, ad
 // sweep's default, for the leftovers of runs that were killed and so never
 // reached their own exit sweep.
 //
-// The cutoff is what keeps it off a run still going: a run lives no longer
-// than the test timeout it was given, so a cutoff further back than the
-// longest one reaches only runs that have ended. A run whose identifier
-// E2E_RUN_ID replaced carries no stamp and is never reached here.
+// The cutoff is what keeps it off a run still going. Each package's binary
+// stamps its own start, and lives no longer than its test timeout plus its
+// exit hooks, which run after the timeout's alarm has stopped; under go test
+// it lives no longer than a minute past the timeout, when go test kills it. A
+// cutoff further back than that reaches only runs that have ended. A run
+// whose identifier E2E_RUN_ID replaced carries no stamp, since the harness
+// sets a letter before any stamp an override copies, and is never reached
+// here.
 //
 // No listing can be searched for a shape, so all four are read whole: every
 // project and group the token owns, every snippet of its user, and with an

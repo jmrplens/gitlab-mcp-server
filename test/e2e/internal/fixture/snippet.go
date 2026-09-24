@@ -41,7 +41,8 @@ type Snippet struct {
 // It arms the run's exit sweep like the builders of projects, groups and
 // users do: a package whose only lasting fixture is a personal snippet would
 // otherwise have none, and a deletion that failed would leave the snippet on
-// the instance with nothing to say so.
+// the instance with only a log line of a passing test to say so, and nothing
+// to remove it or fail the run.
 func NewSnippet(e *harness.Env) Snippet {
 	e.T.Helper()
 	armSweep(e)

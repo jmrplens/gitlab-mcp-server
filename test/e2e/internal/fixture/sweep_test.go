@@ -12,6 +12,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -597,6 +600,49 @@ func TestResolveOrphanScope_Settings_PickTheSweep(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSweepMinAge_MakefileDefaults_OutlastEveryPackage holds the floor make
+// e2e-clean-orphans passes by default above the longest a package's binary
+// can live under the timeouts the same Makefile hands go test.
+//
+// The floor is the only thing keeping the default sweep off a run still
+// going, and nothing else ties it to the two timeouts, which are defined
+// hundreds of lines away from it. E2E_GITLAB_TIMEOUT has been raised once
+// already; raised again past the floor, it would let the sweep delete a live
+// package's fixtures with every test green. A binary lives its timeout and
+// then its exit hooks, which run after the timeout's alarm has stopped, so the
+// floor must clear the longer timeout by the two hooks' own budgets, which is
+// also more than the minute go test waits before it kills the binary.
+func TestSweepMinAge_MakefileDefaults_OutlastEveryPackage(t *testing.T) {
+	makefile, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "Makefile"))
+	if err != nil {
+		t.Fatalf("reading the repository Makefile: %v", err)
+	}
+
+	floor := makefileDefault(t, makefile, "E2E_SWEEP_MIN_AGE")
+	longest := max(makefileDefault(t, makefile, "E2E_GITLAB_TIMEOUT"), makefileDefault(t, makefile, "E2E_DOCKER_ENTERPRISE_TIMEOUT"))
+	lifetime := longest + sweepBudget + worldTeardownBudget
+
+	if floor <= lifetime {
+		t.Errorf("E2E_SWEEP_MIN_AGE defaults to %s, want more than %s: the longer suite timeout, %s, plus the exit sweep's %s and the World teardown's %s",
+			floor, lifetime, longest, sweepBudget, worldTeardownBudget)
+	}
+}
+
+// makefileDefault reads the duration a `NAME ?= value` line of the Makefile
+// gives name, and fails the test when there is none or it is not a duration.
+func makefileDefault(t *testing.T, makefile []byte, name string) time.Duration {
+	t.Helper()
+	match := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + ` \?= (\S+)$`).FindSubmatch(makefile)
+	if match == nil {
+		t.Fatalf("the Makefile sets no default for %s", name)
+	}
+	value, err := time.ParseDuration(string(match[1]))
+	if err != nil {
+		t.Fatalf("the Makefile's default for %s is not a duration: %v", name, err)
+	}
+	return value
 }
 
 // TestOrphanScope_Sweep_RunsTheSweepItNames checks each scope runs its own

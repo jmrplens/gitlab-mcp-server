@@ -156,24 +156,29 @@ func TestMintedRunStart_Names_FindTheRunWhereverItSits(t *testing.T) {
 // TestMintedRunStart_OtherShapes_FindNoRun checks what the orphan sweep must
 // leave alone for want of a run it can date: a run whose identifier
 // E2E_RUN_ID replaced, a person's object, and the near misses of the shape,
-// each of which is one character away from an identifier this package mints.
-// A near miss the shape accepted would put an object nobody can date in front
-// of a sweep that deletes by date.
+// each a small departure from an identifier this package mints. A near miss
+// the shape accepted would put an object nobody can date in front of a sweep
+// that deletes by date.
+//
+// The upper-case word is there because the sweep reads display names, which
+// keep their case: a boundary rule written for sanitized names alone would
+// take a capital letter for a separator.
 func TestMintedRunStart_OtherShapes_FindNoRun(t *testing.T) {
 	const stamp, hash = "20260912t101500z", "0123456789"
 	cases := map[string]string{
-		"an overridden run":         "proj-" + configuredRunID(time.Now(), "nightly", "common") + "-abc-1",
-		"a person's project":        "user/real-work",
-		"nothing at all":            "",
-		"a stamp run into a word":   "proj" + stamp + "-" + hash + "-common",
-		"a stamp run into a number": "proj-1" + stamp + "-" + hash + "-common",
-		"a short hash":              "proj-" + stamp + "-" + hash[:9] + "-common",
-		"a hash that is not hex":    "proj-" + stamp + "-" + "012345678g" + "-common",
-		"an upper-case hash":        "proj-" + stamp + "-" + "ABCDEF0123" + "-common",
-		"no package after the hash": "proj-" + stamp + "-" + hash,
-		"a dash for a package":      "proj-" + stamp + "-" + hash + "--common",
-		"a stamp missing its zone":  "proj-20260912t101500-" + hash + "-common",
-		"a month that is not one":   "proj-20261312t101500z-" + hash + "-common",
+		"an overridden run":                   "proj-" + configuredRunID(time.Now(), "nightly", "common") + "-abc-1",
+		"a person's project":                  "user/real-work",
+		"nothing at all":                      "",
+		"a stamp run into a word":             "proj" + stamp + "-" + hash + "-common",
+		"a stamp run into an upper-case word": "PROJ" + stamp + "-" + hash + "-common",
+		"a stamp run into a number":           "proj-1" + stamp + "-" + hash + "-common",
+		"a short hash":                        "proj-" + stamp + "-" + hash[:9] + "-common",
+		"a hash that is not hex":              "proj-" + stamp + "-" + "012345678g" + "-common",
+		"an upper-case hash":                  "proj-" + stamp + "-" + "ABCDEF0123" + "-common",
+		"no package after the hash":           "proj-" + stamp + "-" + hash,
+		"a dash for a package":                "proj-" + stamp + "-" + hash + "--common",
+		"a stamp missing its zone":            "proj-20260912t101500-" + hash + "-common",
+		"a month that is not one":             "proj-20261312t101500z-" + hash + "-common",
 	}
 	for name, s := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -208,6 +213,68 @@ func TestConfiguredRunID_NoOverride_GeneratesOne(t *testing.T) {
 
 	if !strings.HasSuffix(got, "-ce") || !strings.HasPrefix(got, "20260430t120000z-") {
 		t.Fatalf("configuredRunID() = %q, want a generated identifier ending in the package name", got)
+	}
+}
+
+// TestConfiguredRunID_OverrideCopyingAMintedID_CannotBeDated checks that an
+// override shaped like an identifier this package mints does not date the run
+// it names.
+//
+// The identifier every run logs at its start is the value an operator is
+// likeliest to copy into E2E_RUN_ID. Kept as given, its stamp would date the
+// new run by when the old one began, and make e2e-clean-orphans, which takes
+// a run once its stamp is two hours old, would delete the new run's fixtures
+// while it is still going. The cases are the whole logged identifier, a stamp
+// and hash that become a minted identifier only once the package is appended,
+// and a stamp further into the override; each must keep what the operator
+// wrote, with a letter before the stamp, and no name built from it may be
+// dated.
+func TestConfiguredRunID_OverrideCopyingAMintedID_CannotBeDated(t *testing.T) {
+	logged := newRunID(time.Date(2026, 9, 12, 10, 15, 0, 0, time.UTC), "common")
+	cases := []struct {
+		name     string
+		override string
+		want     string
+	}{
+		{name: "the identifier a run logged", override: logged, want: "x" + logged + "-common"},
+		{
+			name:     "a stamp and a hash, the package appended",
+			override: "20260912t101500z-0123456789",
+			want:     "x20260912t101500z-0123456789-common",
+		},
+		{
+			name:     "a stamp inside the override",
+			override: "nightly-20260912t101500z-0123456789-ce",
+			want:     "nightly-x20260912t101500z-0123456789-ce-common",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := configuredRunID(time.Now(), tc.override, "common")
+			if got != tc.want {
+				t.Errorf("configuredRunID(%q) = %q, want %q", tc.override, got, tc.want)
+			}
+			if at, found := MintedRunStart(uniqueName(got, "member-TestX")); found {
+				t.Errorf("MintedRunStart() dated a name of the run %q at %s, want no date", got, at)
+			}
+		})
+	}
+}
+
+// TestUndatable_TwoStampsBackToBack_MarksBoth checks the one input a single
+// pass of the shape would leave half done: a minted identifier whose package
+// part opens a second one. The first match takes the dash and the digit the
+// second stamp opens with, so only a search repeated after each letter finds
+// the second. No override the harness accepts is long enough to hold two, so
+// the function is asked directly.
+func TestUndatable_TwoStampsBackToBack_MarksBoth(t *testing.T) {
+	first := "20260912t101500z-0123456789"
+	second := "20260913t101500z-abcdef0123"
+
+	got := undatable(first + "-" + second + "-common")
+
+	if want := "x" + first + "-x" + second + "-common"; got != want {
+		t.Errorf("undatable() = %q, want %q", got, want)
 	}
 }
 

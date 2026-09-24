@@ -89,7 +89,8 @@ func TestNewSnippet_Detached_IsDeletedWhenItsTestEnds(t *testing.T) {
 //
 // A package whose only lasting fixture is a personal snippet has no other
 // builder to arm it, and without the sweep a snippet whose deletion failed
-// stays on the instance with nothing to say so.
+// stays on the instance with only a log line of a passing test to say so, and
+// nothing to remove it or fail the run.
 func TestNewSnippet_Detached_ArmsTheRunsExitSweep(t *testing.T) {
 	hooks := captureExitHooks(t)
 	stub, client := newStubGitLab(t)
