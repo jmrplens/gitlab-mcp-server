@@ -72,12 +72,14 @@
 // a prompt or a completion as much as a tool call. A session that made no
 // traced call is idle, and is named apart (diagnostics.idle_sessions) rather
 // than holding its row false, since it asked nothing a span could answer; a
-// session started only to compare what it lists, at a pinned tier or on the
-// minimal capability surface, is the usual case. The flag decides no credit.
-// A resource read, a prompt and a completion are credited on their answer,
-// and a tool call on the action its own span named, joined on the trace id; a
-// tool call whose span never came is unobserved on its own terms, whatever
-// its row says.
+// session started only to compare what it lists at a pinned tier is the usual
+// case. The row counts its idle sessions (idle_sessions), and a row whose
+// sessions were all idle reads false, since nothing about its telemetry was
+// seen; its idle count equal to its session count says why. The flag decides
+// no credit. A resource read, a prompt and a completion are credited on their
+// answer, and a tool call on the action its own span named, joined on the
+// trace id; a tool call whose span never came is unobserved on its own terms,
+// whatever its row says.
 //
 // # The gates
 //

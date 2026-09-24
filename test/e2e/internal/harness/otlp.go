@@ -97,12 +97,16 @@ func (d dispatchRecord) carriesFacts() bool {
 // namesCall reports whether the server's span named the tool or the action it
 // ran, which is what a dispatch line is written for.
 //
-// A reader joins a dispatch line to its call on the action, and both readers
-// skip one that names none. A span naming only a tool is still one: it is how
-// the server says a call reached the find tool, which dispatches no action.
-// What falls outside it is the span of every other method, whose record says
-// at most that the call failed, and a line for it would be counted by the
-// coverage command's diagnostics and then skipped by its join.
+// A line naming an action is what both readers of the record join. A line
+// naming only a tool is kept too, as the server's own word that a call reached
+// the find tool, which dispatches no action, even though neither reader joins
+// it today: both skip a line naming no action, so the coverage command's
+// dispatch_lines diagnostic counts these lines and its join passes over them.
+// A line naming neither is dropped because it identifies nothing. That is the
+// span of a method other than tools/call, such as a resource read or a
+// completion, whose record says at most that the call failed, and the span of
+// a tools/call that named no tool, which the server refused before it had
+// anything to name.
 func (d dispatchRecord) namesCall() bool {
 	return d.tool != "" || d.action != ""
 }
@@ -428,10 +432,13 @@ func isGitLabRequest(span *tracepb.Span) bool {
 // again here: they are the server's own, and a second spelling of them would
 // be a record that quietly emptied itself the day one was renamed.
 //
-// The status is read whatever else the span carries, because the server span
-// of a call that named no tool carries nothing else: a tools/call with an
-// empty name gives the middleware no tool to record, and the status is then
-// the whole of the server's account a caller can read.
+// The status is read off every server span, whatever else it carries, so a
+// span that arrived always says how the server classified the call. It is not
+// the refusal: a tools/call with an empty name gives the middleware no tool to
+// record, the server refuses it with -32602, and since the convention counts
+// that code as the caller's fault rather than the server's failure the span's
+// status stays STATUS_CODE_UNSET, the value a success carries. The code itself
+// is on rpc.response.status_code, which this record does not read.
 func spanFacts(span *tracepb.Span) dispatchRecord {
 	facts := dispatchRecord{status: span.GetStatus().GetCode().String()}
 	into := map[string]*string{

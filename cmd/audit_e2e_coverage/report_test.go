@@ -125,6 +125,52 @@ func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
 	}
 }
 
+// TestSessionRows_IdleSessions_CountedAndAnAllIdleShapeReadsUnobserved
+// verifies what a row says about the idle sessions folded into it.
+//
+// The default dynamic shape holds an observed session beside an idle one, and
+// reads observed with one idle session counted. The default meta shape holds
+// one idle session and nothing else: it asked nothing a span could answer, so
+// its row reads false rather than true for want of anything to hold it false,
+// and its idle count equal to its session count is what says the false is for
+// want of a question. The default individual shape has no idle session, and
+// its count is zero, which the record omits.
+func TestSessionRows_IdleSessions_CountedAndAnAllIdleShapeReadsUnobserved(t *testing.T) {
+	beside := fixtureSession(dynamicDefault, false)
+	beside.Idle = true
+	alone := fixtureSession(metaDefault, false)
+	alone.Idle = true
+	rt := &runtimeRecords{sessions: []*e2ecalls.Session{
+		fixtureSession(dynamicDefault, true), beside, alone, fixtureSession(individualDefault, true),
+	}}
+	rows := sessionRows(classify(rt, fixtureCatalog()))
+
+	want := map[shapeKey]struct {
+		sessions, idle int
+		observed       bool
+	}{
+		dynamicDefault:    {sessions: 2, idle: 1, observed: true},
+		metaDefault:       {sessions: 1, idle: 1, observed: false},
+		individualDefault: {sessions: 1, idle: 0, observed: true},
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("sessionRows() = %+v, want one row per shape of %d", rows, len(want))
+	}
+	for _, row := range rows {
+		key := shapeKey{surface: row.Surface, mode: row.Mode}
+		t.Run(key.surface+"/"+key.mode, func(t *testing.T) {
+			expected, known := want[key]
+			if !known {
+				t.Fatalf("a row for %s/%s, which no session opened", key.surface, key.mode)
+			}
+			if row.Sessions != expected.sessions || row.IdleSessions != expected.idle || row.DispatchObserved != expected.observed {
+				t.Errorf("sessions %d, idle_sessions %d, dispatch_observed %t; want %d, %d, %t",
+					row.Sessions, row.IdleSessions, row.DispatchObserved, expected.sessions, expected.idle, expected.observed)
+			}
+		})
+	}
+}
+
 // TestBuildReport_SubscriptionDelivery_Marked verifies that the subscription
 // row a notification reached says so and the others do not, which the report
 // can only find by the key the notification was filed under: the capability

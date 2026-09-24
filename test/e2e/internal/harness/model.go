@@ -126,8 +126,13 @@ type ModelAnswer struct {
 	// Dispatch is what that span said. Read it only when DispatchObserved.
 	//
 	// It can be empty with DispatchObserved true. A tools/call naming no tool
-	// gives the server's span no tool to record, and the span then says that
-	// the server saw the call and how it ended, in Status, and nothing more.
+	// gives the server's span no tool to record, and the span then says only
+	// that the server saw the call. Its Status is STATUS_CODE_UNSET, the value
+	// a success carries too: the server refuses such a call with -32602, which
+	// the convention counts as the caller's fault rather than the server's
+	// failure, so it sets no status and writes the code on
+	// rpc.response.status_code, which DispatchFacts does not carry. The
+	// refusal itself is in Err.
 	Dispatch DispatchFacts
 	// Requests is how many GitLab requests the handler made under this call,
 	// counted from the client spans of the same trace. It is a floor: the

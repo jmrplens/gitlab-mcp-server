@@ -1411,10 +1411,12 @@ func TestAwaitDispatch_ANonToolCall_ReturnsOnceItsServerSpanLands(t *testing.T) 
 //
 // A failed resource read's span arrives carrying error.type and nothing that
 // names the call, and used to be written as a dispatch line naming no tool and
-// no action, which both readers of the record skip. A find call's span names
-// its tool and no action, and is still written, since that is how the record
-// tells a discovery call from an execution. Either way the call is flushed and
-// its session is marked, because the span arrived.
+// no action, which both readers of the record skip. A tools/call that named no
+// tool arrives naming nothing too, and is not written either. A find call's
+// span names its tool and no action, and is still written, as the server's own
+// word that the call reached the find tool, although neither reader of the
+// record joins such a line today. Either way the call is flushed and its
+// session is marked, because the span arrived.
 func TestRecorder_Finish_WritesADispatchLineOnlyForASpanThatNamedTheCall(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -1427,6 +1429,10 @@ func TestRecorder_Finish_WritesADispatchLineOnlyForASpanThatNamedTheCall(t *test
 			name:       "a resource read that failed",
 			method:     methodReadResource,
 			attributes: map[string]string{string(mcpotel.AttrErrorType): "-32603"},
+		},
+		{
+			name:   "a tools/call that named no tool",
+			method: methodCallTool,
 		},
 		{
 			name:         "a find call, which names its tool and no action",

@@ -93,14 +93,22 @@ type sessionRow struct {
 	Resources         int    `json:"resources"`
 	ResourceTemplates int    `json:"resource_templates"`
 	Prompts           int    `json:"prompts"`
-	// DispatchObserved is whether every session of the shape that made a
-	// traced call had the server's own span of at least one of them arrive,
-	// of whatever method. A false row names telemetry that did not reach the
-	// harness for some session of the shape (diagnostics.unobserved_sessions
-	// says which); a session that asked nothing is idle and holds no row
-	// false. It is a statement a reader checks the cells against and decides
-	// no credit: a tool call is credited on the action its own span named.
+	// DispatchObserved is whether at least one session of the shape made a
+	// traced call and every session that did had the server's own span of at
+	// least one of them arrive, of whatever method. A session that asked
+	// nothing is idle and holds no row false on its own. A false row therefore
+	// says one of two things, and IdleSessions tells them apart: fewer idle
+	// sessions than sessions means some session's telemetry did not reach the
+	// harness (diagnostics.unobserved_sessions says which), and as many means
+	// no session of the shape asked anything a span could answer. It is a
+	// statement a reader checks the cells against and decides no credit: a
+	// tool call is credited on the action its own span named.
 	DispatchObserved bool `json:"dispatch_observed"`
+	// IdleSessions counts the sessions of the shape that made no traced call,
+	// which diagnostics.idle_sessions names. It is omitted at zero, so a row
+	// every session of which asked something reads as it did before the count
+	// existed.
+	IdleSessions int `json:"idle_sessions,omitempty"`
 }
 
 // capabilitySurfaceRow is one capability surface, with what its sessions
@@ -267,7 +275,7 @@ func sessionRows(c *classification) []sessionRow {
 		rows = append(rows, sessionRow{
 			Surface: shape.key.surface, Mode: shape.key.mode, Sessions: shape.sessions,
 			Tools: len(shape.tools), Resources: len(shape.resources), ResourceTemplates: len(shape.templates),
-			Prompts: len(shape.prompts), DispatchObserved: shape.observed,
+			Prompts: len(shape.prompts), DispatchObserved: shape.dispatchObserved(), IdleSessions: shape.idle,
 		})
 	}
 	slices.SortFunc(rows, func(a, b sessionRow) int { return compareShapes(a.Surface, a.Mode, b.Surface, b.Mode) })

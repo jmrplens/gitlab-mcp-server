@@ -205,8 +205,10 @@ func stampTraceParent(req mcp.Request, traceParent string) bool {
 type pendingCall struct {
 	// line is the record as the client knows it, before the span arrives.
 	line *e2ecalls.Call
-	// conn is the session the call went to, which the flush marks
-	// dispatch-observed when the span lands.
+	// conn is the session the call went to. Whether it exports spans to this
+	// process decides whether the flush waits for this call's span
+	// ([spanCanArrive]). The receiver, not the flush, marks it
+	// dispatch-observed when the span lands ([spanReceiver.absorbSpan]).
 	conn *sessionConn
 	// wantDispatch is the route the caller declared, empty when the requested
 	// action is what should have run.
@@ -293,9 +295,9 @@ func (r *envRecorder) finish(reporter e2ecalls.Reporter, status string) []e2ecal
 	lines := make([]e2ecalls.Line, 0, len(calls)+len(skips))
 	for _, call := range calls {
 		call.line.TestStatus = status
-		// A dispatch line only for a span that named the call: the server span
-		// of a resource read or a completion arrives too, and says nothing a
-		// reader could join, since both readers skip a line naming no action.
+		// A dispatch line only for a span that named the tool or the action
+		// ([dispatchRecord.namesCall]): the server span of a resource read or a
+		// completion arrives too, and one naming neither identifies nothing.
 		if kept, arrived := dispatchFor(call); arrived && kept.dispatch.namesCall() {
 			call.line.Dispatched = kept.dispatch.action
 			lines = append(lines, dispatchLine(call.line.TraceID, kept))
@@ -1045,14 +1047,18 @@ func lateDispatchLines() []e2ecalls.Line {
 // carries, one per trace whose server span named the tool or the action it
 // ran ([dispatchRecord.namesCall]), which is the rule the flush writes by too.
 //
-// Two kinds of trace are skipped. One holding only GitLab request spans names
-// nothing, so there is nothing for the audit to attribute those requests to.
-// One whose server span belongs to a method other than tools/call, a resource
-// read or a completion, has arrived and names nothing either, even when the
-// span says the call failed. A dispatch line for either would be a record of a
-// call nobody can identify: counted as a dispatch by the coverage command's
-// diagnostics and then skipped by its join, which is a disagreement with no
-// signal behind it.
+// Three kinds of trace are skipped, all for naming neither a tool nor an
+// action. One holding only GitLab request spans names nothing, so there is
+// nothing for the audit to attribute those requests to. One whose server span
+// belongs to a method other than tools/call, such as a resource read or a
+// completion, has arrived and names nothing either, even when the span says
+// the call failed. And one whose server span is a tools/call that named no
+// tool, which the server refused before it had anything to record. A line for
+// any of them would be a record of a call nobody can identify. A trace naming
+// only the find tool is kept, as the server's word that a call reached it,
+// although both readers skip a line naming no action; the coverage command's
+// dispatch_lines diagnostic therefore counts those lines too, and its join
+// passes over them.
 //
 // It is a function of the map rather than a loop inside its caller so that the
 // skip can be tested: its caller reads a package-level receiver that only a

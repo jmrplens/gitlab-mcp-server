@@ -200,12 +200,31 @@ type sessionShape struct {
 	// observed is whether every session of the shape that made a traced call
 	// had the server's span of at least one of them arrive, of whatever
 	// method. An idle session, which made no traced call, does not hold it
-	// false: it asked nothing a span could answer. It decides no credit; the
-	// credit is judged per call, and a tool call's on the action its own span
-	// named.
+	// false: it asked nothing a span could answer. It is true of a shape whose
+	// sessions were all idle, for want of anything to hold it false, which is
+	// why the row publishes [sessionShape.dispatchObserved] rather than this.
+	// It decides no credit; the credit is judged per call, and a tool call's on
+	// the action its own span named.
 	observed bool
 	// sessions counts the session lines folded in.
 	sessions int
+	// idle counts the ones among them that made no traced call.
+	idle int
+}
+
+// dispatchObserved is what the shape's row publishes as dispatch_observed:
+// at least one session of the shape made a traced call, and every one that
+// did had the server's span of one of them arrive.
+//
+// The first half is what keeps the flag a positive claim. A shape whose
+// sessions were all idle asked nothing a span could answer, so nothing about
+// its telemetry was seen either way, and reading it as observed would put it
+// beside a shape whose spans did arrive with nothing to tell the two apart. It
+// reads false instead, and the row's idle count, equal to its session count,
+// says that this false is for want of a question rather than for want of
+// telemetry.
+func (s *sessionShape) dispatchObserved() bool {
+	return s.observed && s.idle < s.sessions
 }
 
 // capabilityShape is what the sessions of one capability surface served,
@@ -364,9 +383,9 @@ type diagnostics struct {
 	UnobservedSessions []string `json:"unobserved_sessions,omitempty"`
 	// IdleSessions names the sessions that made no traced call at all: they
 	// started, listed what they serve, and were asked nothing, which is what
-	// the tier-pin and capability-surface sessions do. Their spans cannot have
-	// arrived, and that is no finding about their telemetry, so they are named
-	// here and hold no shape false.
+	// the tier-pin sessions do. Their spans cannot have arrived, and that is no
+	// finding about their telemetry, so they are named here and hold no shape
+	// false.
 	IdleSessions []string `json:"idle_sessions,omitempty"`
 }
 
@@ -536,16 +555,22 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 // capability surface.
 //
 // A session that was not dispatch-observed holds its shape false unless it
-// was idle. The idle sessions are the ones that asked nothing: while they
-// counted, both runtimes published the default dynamic row as unobserved on
-// the strength of four sessions that only list what the server serves, at a
-// pinned tier or on the minimal capability surface, and made no call at all,
-// which says nothing about whether the row's telemetry worked. Idleness is the
-// session line's own word rather than something inferred from the call lines
-// beside it, because a label is not unique within a shard: the HTTP transport
-// session and a read_api session narrowed to read-only each share theirs with
-// another session of the same process, and a join on the label would lend one
-// the other's calls.
+// was idle. The idle sessions are the ones that asked nothing, and the record
+// committed before this rule shows why they are set apart. Both runtimes
+// published the three default rows as unobserved, and for two causes. On
+// dynamic, three tier-pin sessions only listed what they serve and made no
+// call at all, beside a minimal capability-surface session whose only calls
+// were a resource read and a completion; on meta and individual, the minimal
+// sessions' only calls were reads of the tool manifest. Neither says anything
+// about whether the row's telemetry worked. Setting the idle sessions apart
+// clears the first cause, and counting the server span of every method as
+// arriving, which the harness now does, clears the second, so all three rows
+// should read observed at the next record. Idleness is the session line's own
+// word rather than something inferred from the call lines beside it, because
+// a label is not unique within a shard: the HTTP transport session and a
+// read_api session narrowed to read-only each share theirs with another
+// session of the same process, and a join on the label would lend one the
+// other's calls.
 func (c *classification) foldSessions() {
 	for _, session := range c.rt.sessions {
 		key := shapeKey{surface: session.Surface, mode: session.Mode}
@@ -566,6 +591,7 @@ func (c *classification) foldSessions() {
 		case session.DispatchObserved:
 			// Its telemetry arrived, which is all the flag asks.
 		case session.Idle:
+			shape.idle++
 			c.diagnostics.IdleSessions = append(c.diagnostics.IdleSessions, session.Label)
 		default:
 			shape.observed = false

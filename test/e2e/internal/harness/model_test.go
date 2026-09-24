@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
@@ -471,8 +473,8 @@ func TestDispatchOf_ASessionWhoseSpansCannotArrive_ReportsUnobservedAtOnce(t *te
 	}
 }
 
-// TestCallAsModel_CallWithADeadContext_ReportsATransportError checks that a
-// model call fails nothing when the conversation is already over.
+// TestCallAsModel_CallWithADeadContext_AnswersWithAnErrorAndNoTrace checks
+// that a model call fails nothing when the conversation is already over.
 //
 // The verb asserts nothing by design, so a cancelled context has to come back
 // as an answer rather than as a failed test: a turn budget that ran out is a
@@ -481,7 +483,7 @@ func TestDispatchOf_ASessionWhoseSpansCannotArrive_ReportsUnobservedAtOnce(t *te
 // It also carries no trace, and neither does its call line. The request never
 // left the client, so no span of it can come, and a trace issued for it was
 // waited for twice, here and at the flush, ten seconds each time.
-func TestCallAsModel_CallWithADeadContext_ReportsATransportError(t *testing.T) {
+func TestCallAsModel_CallWithADeadContext_AnswersWithAnErrorAndNoTrace(t *testing.T) {
 	env := newEnv(t, stubInstance(t))
 	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
 
@@ -516,12 +518,20 @@ func TestCallAsModel_CallWithADeadContext_ReportsATransportError(t *testing.T) {
 // model's call with an empty tool name reads as, which moved with the arrival
 // rule.
 //
-// The server spans the call and refuses it, and its span carries the method
-// and a status and no tool, since there was none to record. It used to count as
+// The server spans the call and refuses it with -32602, and its span carries
+// the method and no tool, since there was none to record. It used to count as
 // no span at all, so the answer came back unobserved after the whole budget;
 // the span does arrive, and the answer now says the server saw the call and
 // dispatched nothing. A scorer reads that as an observed call that named no
 // step, which is what it was.
+//
+// The status the answer carries is STATUS_CODE_UNSET, the same value a
+// success gets: the convention counts -32602 as the caller's fault, so the
+// server sets no status, and the code sits on rpc.response.status_code, which
+// the dispatch facts do not carry. The refusal is read from Err. The status is
+// asserted by value because it is what the receiver now reads off every
+// server span: before, a span carrying none of the dispatch facts left it
+// empty.
 func TestCallAsModel_CallNamingNoTool_IsObservedWithOnlyAStatus(t *testing.T) {
 	env := newEnv(t, stubInstance(t))
 	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
@@ -537,7 +547,8 @@ func TestCallAsModel_CallNamingNoTool_IsObservedWithOnlyAStatus(t *testing.T) {
 	if answer.Dispatch.Tool != "" || answer.Dispatch.Action != "" {
 		t.Errorf("Dispatch = %+v, want no tool and no action: the call named neither", answer.Dispatch)
 	}
-	if answer.Dispatch.Status == "" {
-		t.Error("Dispatch.Status is empty: the span's status is the one thing it can say about such a call")
+	if want := tracepb.Status_STATUS_CODE_UNSET.String(); answer.Dispatch.Status != want {
+		t.Errorf("Dispatch.Status = %q, want %q: -32602 is a caller fault, which sets no span status",
+			answer.Dispatch.Status, want)
 	}
 }
