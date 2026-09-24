@@ -12,7 +12,7 @@
 
 ## Overview
 
-The merge requests domain covers the full lifecycle of GitLab merge requests: creation, retrieval, listing (project/group/global), updating, merging, rebasing, approval workflows, deletion, subscriptions, time tracking, dependencies, and context commits. File-level diffs and raw diffs are documented in [mr-review.md](mr-review.md). Merge trains and external status checks (Premium/Ultimate groups without dedicated meta-tools) are also covered here.
+The merge requests domain covers the full lifecycle of GitLab merge requests: creation, retrieval, listing (project/group/global), updating, merging, rebasing, approval workflows, deletion, subscriptions, time tracking, dependencies, and context commits. File-level diffs and raw diffs are documented in [mr-review.md](mr-review.md). Merge trains (Premium) and external status checks (Ultimate), groups without dedicated meta-tools, are also covered here.
 
 On the default dynamic surface, these operations are the `external_status_check.*`, `merge_request.*`, `merge_train.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 

@@ -33,7 +33,7 @@ This directory is a domain-oriented reference, not a one-heading-per-runtime-too
 | Wikis                               |     6 | `gitlab_wiki`                                                                          | [wikis.md](wikis.md)                                     |
 | Snippets                            |    26 | `gitlab_snippet`                                                                       | [snippets.md](snippets.md)                               |
 | Packages & Registry                 |    33 | `gitlab_package`                                                                       | [packages.md](packages.md)                               |
-| Mirrors                             |     7 | `gitlab_project` (enterprise routes)                                                   | [mirrors.md](mirrors.md)                                 |
+| Mirrors                             |     7 | `gitlab_project` (every tier)                                                          | [mirrors.md](mirrors.md)                                 |
 | Dependency Firewall                 |     1 | `gitlab_project` (enterprise routes)                                                   | [dependency-firewall.md](dependency-firewall.md)         |
 | Runners & Resource Groups           |    34 | `gitlab_runner`                                                                        | [runners.md](runners.md)                                 |
 | Security & Feature Flags            |    28 | various                                                                                | [security.md](security.md)                               |

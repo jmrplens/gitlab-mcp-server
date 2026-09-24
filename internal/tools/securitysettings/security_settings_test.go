@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -613,5 +615,78 @@ func TestUpdateGroup_EmptyExclusions(t *testing.T) {
 	}
 	if out.SecretPushProtectionEnabled {
 		t.Error("expected secret_push_protection_enabled to be false")
+	}
+}
+
+// TestSecuritySettings_EachStatusEarnsItsOwnHint verifies that each of the
+// three routes hints each refusal GitLab answers it with as what it is.
+//
+// GitLab refuses a missing role with 401 (project_security_settings.rb:30
+// and 53, group_security_settings.rb:36) and a missing license, an archived
+// project or an instance-enforced setting with a plain 403. The handlers had
+// no hint for either: their one hint sat on the 404, claimed the license there,
+// and named the Owner role for the group, where GitLab asks for Maintainer or
+// Security Manager. The API guard's 403 about a token scope carries an error
+// code and gets neither hint, and neither does a 401 GitLab said was about the
+// token itself.
+func TestSecuritySettings_EachStatusEarnsItsOwnHint(t *testing.T) {
+	ctx := context.Background()
+	getProject := func(c *gitlabclient.Client) error {
+		_, err := GetProject(ctx, c, GetProjectInput{ProjectID: toolutil.StringOrInt("42")})
+		return err
+	}
+	updateProject := func(c *gitlabclient.Client) error {
+		_, err := UpdateProject(ctx, c, UpdateProjectInput{ProjectID: toolutil.StringOrInt("42"), SecretPushProtectionEnabled: true})
+		return err
+	}
+	updateGroup := func(c *gitlabclient.Client) error {
+		_, err := UpdateGroup(ctx, c, UpdateGroupInput{GroupID: toolutil.StringOrInt("5"), SecretPushProtectionEnabled: true})
+		return err
+	}
+	const (
+		refused        = `{"message":"401 Unauthorized"}`
+		forbidden      = `{"message":"403 Forbidden"}`
+		enforced       = `{"message":"403 Forbidden - Secret push protection is enforced for all projects in the instance"}`
+		notFound       = `{"message":"404 Project Not Found"}`
+		missingScope   = `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`
+		tokenRejected  = `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`
+		licenseMissing = "license does not include this security feature"
+	)
+	tests := []struct {
+		name    string
+		call    func(*gitlabclient.Client) error
+		status  int
+		body    string
+		want    string
+		wantNot string
+	}{
+		{"get project 401 names the reading roles", getProject, http.StatusUnauthorized, refused, "Developer, Maintainer, Owner or Security Manager role", licenseMissing},
+		{"get project 403 names the license", getProject, http.StatusForbidden, forbidden, licenseMissing, "Security Manager"},
+		{"get project 404 names the project only", getProject, http.StatusNotFound, notFound, "verify project_id with project.get", "license"},
+		{"update project 401 names the changing roles", updateProject, http.StatusUnauthorized, refused, "Maintainer, Owner or Security Manager role", licenseMissing},
+		{"update project 403 names the license, the archive and the enforcement", updateProject, http.StatusForbidden, enforced, "archived", "Security Manager"},
+		{"update project 404 names the project only", updateProject, http.StatusNotFound, notFound, "verify project_id with project.get", "license"},
+		{"update group 401 names Maintainer, not Owner alone", updateGroup, http.StatusUnauthorized, refused, "Maintainer, Owner or Security Manager role on the group", licenseMissing},
+		{"update group 403 names the license", updateGroup, http.StatusForbidden, forbidden, licenseMissing, "Security Manager"},
+		{"update group 404 names the group only", updateGroup, http.StatusNotFound, `{"message":"404 Group Not Found"}`, "verify group_id with group.get", "license"},
+		{"get project 403 for a token scope gets no hint", getProject, http.StatusForbidden, missingScope, "access denied", "Suggestion"},
+		{"update group 401 for a rejected token gets no hint", updateGroup, http.StatusUnauthorized, tokenRejected, "authentication failed", "Suggestion"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			err := tt.call(client)
+			if err == nil {
+				t.Fatalf("error = nil, want the %d reported", tt.status)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want it to carry %q", err, tt.want)
+			}
+			if strings.Contains(err.Error(), tt.wantNot) {
+				t.Errorf("error = %q, must not carry %q", err, tt.wantNot)
+			}
+		})
 	}
 }

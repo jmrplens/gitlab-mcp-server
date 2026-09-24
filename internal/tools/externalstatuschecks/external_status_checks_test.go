@@ -6,6 +6,7 @@ package externalstatuschecks
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -1120,5 +1121,163 @@ func assertFieldsAbsent(t *testing.T, body map[string]json.RawMessage, fields ..
 				t.Errorf("request body carries %s as %s, want the key absent", field, got)
 			}
 		})
+	}
+}
+
+// statusCheckCalls drives each of the eight status check entry points once,
+// named by what each one's refusals are about: the project routes, which
+// refuse the license and the role alike with 401, and the merge request
+// routes, which refuse the license with 401 and the role with 403.
+func statusCheckCalls() map[string]func(*gitlabclient.Client) error {
+	ctx := context.Background()
+	return map[string]func(*gitlabclient.Client) error{
+		"list (deprecated)": func(c *gitlabclient.Client) error {
+			_, err := ListProjectStatusChecks(ctx, c, ListProjectStatusChecksInput{ProjectID: "1"})
+			return err
+		},
+		"list": func(c *gitlabclient.Client) error {
+			_, err := ListProjectExternalStatusChecks(ctx, c, ListProjectInput{ProjectID: "1"})
+			return err
+		},
+		"create": func(c *gitlabclient.Client) error {
+			_, err := CreateProjectExternalStatusCheck(ctx, c, CreateProjectInput{ProjectID: "1", Name: "QA", ExternalURL: "https://qa.example.com"})
+			return err
+		},
+		"update": func(c *gitlabclient.Client) error {
+			_, err := UpdateProjectExternalStatusCheck(ctx, c, UpdateProjectInput{ProjectID: "1", CheckID: 42})
+			return err
+		},
+		"delete": func(c *gitlabclient.Client) error {
+			return DeleteProjectExternalStatusCheck(ctx, c, DeleteProjectInput{ProjectID: "1", CheckID: 42})
+		},
+		"list merge request checks": func(c *gitlabclient.Client) error {
+			_, err := ListProjectMRExternalStatusChecks(ctx, c, ListProjectMRInput{ProjectID: "1", MRIID: 5})
+			return err
+		},
+		"retry": func(c *gitlabclient.Client) error {
+			return RetryFailedExternalStatusCheckForProjectMR(ctx, c, RetryProjectInput{ProjectID: "1", MRIID: 5, CheckID: 42})
+		},
+		"set status": func(c *gitlabclient.Client) error {
+			return SetProjectMRExternalStatusCheckStatus(ctx, c, SetProjectStatusInput{
+				ProjectID: "1", MRIID: 5, SHA: "abc", ExternalStatusCheckID: 42, Status: "passed",
+			})
+		},
+	}
+}
+
+// refusedBy answers every request with status and Grape's plain refusal body,
+// the one ee/lib/api/status_checks.rb:16 renders for a project whose
+// namespace lacks the Ultimate feature.
+func refusedBy(t *testing.T, status int) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, `{"message":"`+http.StatusText(status)+`"}`)
+	}))
+}
+
+// TestStatusChecks_PermissionRefusedWith401_NameTheUltimateLicense verifies
+// that every status check entry point hints the license GitLab checks before
+// anything else, on the 401 it answers every route with when the project's
+// namespace lacks Ultimate. Only the two lists hinted at all, on a 403 GitLab
+// never sends for it, and they said Premium/Ultimate: status checks are an
+// Ultimate feature, so no error may name Premium.
+//
+// The project list and the update also refuse a missing Maintainer role with
+// 401 (status_checks.rb:67, update_service.rb:40), so theirs names the role
+// too. The delete's does not: that route answers a missing role with 204 and
+// deletes nothing, so a hint naming the role would describe a refusal GitLab
+// never sends.
+func TestStatusChecks_PermissionRefusedWith401_NameTheUltimateLicense(t *testing.T) {
+	namesTheRole := map[string]bool{"list (deprecated)": true, "list": true, "update": true}
+	for name, call := range statusCheckCalls() {
+		t.Run(name, func(t *testing.T) {
+			err := call(refusedBy(t, http.StatusUnauthorized))
+			if err == nil {
+				t.Fatalf("%s error = nil, want the 401", name)
+			}
+			if !strings.Contains(err.Error(), "Ultimate license on the project's namespace") {
+				t.Errorf("%s error = %q, want the Ultimate license named", name, err)
+			}
+			if strings.Contains(err.Error(), "Premium") {
+				t.Errorf("%s error = %q, must not name Premium for an Ultimate feature", name, err)
+			}
+			if got := strings.Contains(err.Error(), "Maintainer"); got != namesTheRole[name] {
+				t.Errorf("%s error = %q names the Maintainer role: %v, want %v", name, err, got, namesTheRole[name])
+			}
+		})
+	}
+}
+
+// TestStatusChecks_MergeRequestRoutesRefusedWith403_NameTheRoleNotTheLicense
+// verifies the merge request routes keep their 403 apart from their 401.
+// Those routes answer a caller whose role on the merge request falls short
+// with 403 from authorize! (status_checks.rb:172, 204 and 235), which is not
+// the license, so the license hint must not follow it; the project routes
+// answer no 403 of their own, so a plain one there is read like their 401.
+func TestStatusChecks_MergeRequestRoutesRefusedWith403_NameTheRoleNotTheLicense(t *testing.T) {
+	roles := map[string]string{
+		"list merge request checks": "Reporter role",
+		"retry":                     "Developer role",
+		"set status":                "permission to approve the merge request",
+	}
+	for name, call := range statusCheckCalls() {
+		t.Run(name, func(t *testing.T) {
+			err := call(refusedBy(t, http.StatusForbidden))
+			if err == nil {
+				t.Fatalf("%s error = nil, want the 403", name)
+			}
+			role, mergeRequestRoute := roles[name]
+			if !mergeRequestRoute {
+				if !strings.Contains(err.Error(), "Ultimate license") {
+					t.Errorf("%s error = %q, want a plain 403 read like the 401", name, err)
+				}
+				return
+			}
+			if !strings.Contains(err.Error(), role) {
+				t.Errorf("%s error = %q, want the role hint %q", name, err, role)
+			}
+			if strings.Contains(err.Error(), "Ultimate license") {
+				t.Errorf("%s error = %q, must not blame the license for a role refusal", name, err)
+			}
+		})
+	}
+}
+
+// TestStatusChecks_CredentialRefused_CarryNoPermissionHint verifies that a
+// 401 GitLab said was about the token itself, and the API guard's 403 about a
+// token scope, get neither the license nor a role hint on any entry point.
+func TestStatusChecks_CredentialRefused_CarryNoPermissionHint(t *testing.T) {
+	bodies := map[int]string{
+		http.StatusUnauthorized: `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`,
+		http.StatusForbidden:    `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`,
+	}
+	for status, body := range bodies {
+		for name, call := range statusCheckCalls() {
+			t.Run(fmt.Sprintf("%s %d", name, status), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, status, body)
+				}))
+				err := call(client)
+				if err == nil {
+					t.Fatalf("%s error = nil, want the %d", name, status)
+				}
+				if strings.Contains(err.Error(), "Suggestion") {
+					t.Errorf("%s error = %q, must carry no hint after a refusal of the credential", name, err)
+				}
+			})
+		}
+	}
+}
+
+// TestDeleteProjectExternalStatusCheck_NotFound_NamesTheCheckList verifies
+// the 404 hint the delete took over from its old 403 hint, which named a
+// role this route never refuses.
+func TestDeleteProjectExternalStatusCheck_NotFound_NamesTheCheckList(t *testing.T) {
+	err := DeleteProjectExternalStatusCheck(context.Background(), refusedBy(t, http.StatusNotFound), DeleteProjectInput{ProjectID: "1", CheckID: 42})
+	if err == nil {
+		t.Fatal("DeleteProjectExternalStatusCheck() error = nil, want the 404")
+	}
+	if !strings.Contains(err.Error(), "external_status_check.list_project") {
+		t.Errorf("DeleteProjectExternalStatusCheck() error = %q, want the check list named", err)
 	}
 }

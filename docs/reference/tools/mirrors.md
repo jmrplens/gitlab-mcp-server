@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Project Mirrors
 > **Individual tools**: 7
-> **Meta-tool**: Routes inside `gitlab_project` (enterprise-only, requires the Enterprise/Premium catalog)
+> **Meta-tool**: Routes inside `gitlab_project` (every tier, Free included)
 > **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Remote Mirrors API](https://docs.gitlab.com/ee/api/remote_mirrors.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -16,7 +16,7 @@ The mirrors domain covers remote mirror management for GitLab projects: listing,
 
 On the default dynamic surface, these operations are the `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `GITLAB_MCP_TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 7 individual tools below are available as enterprise-only routes inside the `gitlab_project` meta-tool.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the 7 individual tools below are routes inside the `gitlab_project` meta-tool. Push mirroring is available on every GitLab tier, Free included; managing a project's push mirrors needs the Maintainer role, and GitLab refuses a caller without it with 401 rather than 403, which the action's error names. Pull mirroring (`project.pull_mirror_get`, `project.pull_mirror_configure` and `project.start_mirroring`) is the Premium feature, and is documented with the project tools.
 
 ### Common Questions
 

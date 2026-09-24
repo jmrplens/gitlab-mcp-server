@@ -2610,3 +2610,201 @@ func TestAccessTokens_UnprocessableEntity_AnsweredWithTheValidationHint(t *testi
 		})
 	}
 }
+
+// The bodies GitLab refuses a token route with: Grape's unauthorized!, which
+// every permission refusal of these routes goes through, and the API guard's
+// answer to a revoked token, which is about the credential and never about a
+// permission.
+const (
+	plainUnauthorizedBody = `{"message":"401 Unauthorized"}`
+	revokedTokenBody      = `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}` //#nosec G101 -- test fixture, not a credential
+)
+
+// tokenRefusalCase is one handler of the token routes GitLab refuses a
+// permission on with 401, and the hint that refusal has to carry.
+type tokenRefusalCase struct {
+	name string
+	call func(*gitlabclient.Client) error
+	hint string
+}
+
+// tokenRefusalCases lists every such handler: the reads and lists, whose
+// refusal is a role (resource_access_tokens.rb:32 and 63), the user_id filter
+// of the personal list (personal_access_tokens_helpers.rb:80), and the
+// by-id rotations and read, whose refusal GitLab cannot tell apart from a
+// missing token for anyone but an administrator
+// (resource_access_tokens.rb:200, personal_access_tokens.rb:73 and 107).
+func tokenRefusalCases() []tokenRefusalCase {
+	ctx := context.Background()
+	return []tokenRefusalCase{
+		{"project list", func(c *gitlabclient.Client) error {
+			_, err := ProjectList(ctx, c, ProjectListInput{ProjectID: "42"})
+			return err
+		}, hintProjectTokenRole},
+		{"group list", func(c *gitlabclient.Client) error {
+			_, err := GroupList(ctx, c, GroupListInput{GroupID: "10"})
+			return err
+		}, hintGroupTokenRole},
+		{"project get", func(c *gitlabclient.Client) error {
+			_, err := ProjectGet(ctx, c, ProjectGetInput{ProjectID: "42", TokenID: 3})
+			return err
+		}, hintProjectTokenRole},
+		{"group get", func(c *gitlabclient.Client) error {
+			_, err := GroupGet(ctx, c, GroupGetInput{GroupID: "10", TokenID: 3})
+			return err
+		}, hintGroupTokenRole},
+		{"personal list of another user", func(c *gitlabclient.Client) error {
+			_, err := PersonalList(ctx, c, PersonalListInput{UserID: 7})
+			return err
+		}, "only an administrator may list another user's tokens"},
+		{"project rotate", func(c *gitlabclient.Client) error {
+			_, err := ProjectRotate(ctx, c, ProjectRotateInput{ProjectID: "42", TokenID: 3})
+			return err
+		}, hintProjectTokenRotateRefused},
+		{"group rotate", func(c *gitlabclient.Client) error {
+			_, err := GroupRotate(ctx, c, GroupRotateInput{GroupID: "10", TokenID: 3})
+			return err
+		}, hintGroupTokenRotateRefused},
+		{"personal get by id", func(c *gitlabclient.Client) error {
+			_, err := PersonalGet(ctx, c, PersonalGetInput{TokenID: 99})
+			return err
+		}, hintPersonalTokenNotFoundOrNotYours},
+		{"personal rotate", func(c *gitlabclient.Client) error {
+			_, err := PersonalRotate(ctx, c, PersonalRotateInput{TokenID: 99})
+			return err
+		}, hintPersonalTokenNotFoundOrNotYours},
+	}
+}
+
+// TestAccessTokens_PermissionRefusedWith401_NameTheRoleOrOwnership verifies
+// that each token route GitLab refuses a permission on with 401 carries the
+// hint naming it. The lists scoped theirs to 403, which GitLab never sends
+// there, and the reads and by-id rotations scoped theirs to 404, which it
+// sends only to an administrator, so a refused caller who is not one saw no
+// suggestion at all.
+func TestAccessTokens_PermissionRefusedWith401_NameTheRoleOrOwnership(t *testing.T) {
+	for _, tc := range tokenRefusalCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusUnauthorized, plainUnauthorizedBody)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf(fmtExpErrContaining, tc.hint, err)
+			}
+		})
+	}
+}
+
+// TestAccessTokens_TokenRejected_CarryNoPermissionHint verifies the other
+// half: a 401 whose body says GitLab refused the token itself is described as
+// that, and no role or ownership hint follows it, since neither can be why.
+func TestAccessTokens_TokenRejected_CarryNoPermissionHint(t *testing.T) {
+	for _, tc := range tokenRefusalCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusUnauthorized, revokedTokenBody)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if strings.Contains(err.Error(), tc.hint) || strings.Contains(err.Error(), "Suggestion") {
+				t.Errorf("error = %q, must carry no hint after GitLab refused the token itself", err)
+			}
+		})
+	}
+}
+
+// TestAccessTokens_MissingTokenAnswered404_SharesTheOwnershipHint verifies
+// that an administrator, whom GitLab answers 404 for a missing token, reads
+// the same hint as everyone else does for the 401, and that the reads keep
+// their own not-found hint.
+func TestAccessTokens_MissingTokenAnswered404_SharesTheOwnershipHint(t *testing.T) {
+	for _, tc := range tokenRefusalCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			missingIsRefusal := tc.hint == hintProjectTokenRotateRefused || tc.hint == hintGroupTokenRotateRefused || tc.hint == hintPersonalTokenNotFoundOrNotYours
+			if got := strings.Contains(err.Error(), tc.hint); got != missingIsRefusal {
+				t.Errorf("error = %q carries %q: %v, want %v", err, tc.hint, got, missingIsRefusal)
+			}
+		})
+	}
+}
+
+// TestSelfRoutes_WrongCredentialKind_HintedOnGitLabsStatus verifies that the
+// routes about the calling token hint the wrong kind of credential on the
+// status GitLab answers it with: 405 for a rotation
+// (resource_access_tokens/self_rotation.rb:40-41,
+// personal_access_tokens/self_rotation.rb:37) and 400 for reading or revoking
+// it (personal_access_tokens/self_information.rb:20-21). All of them used to
+// hint it on 401, which GitLab answers a credential of the wrong kind with on
+// none of these routes. The resource rotation keeps a 401 hint of its own,
+// for the bot token of another project or group that it refuses with 401
+// (:46).
+func TestSelfRoutes_WrongCredentialKind_HintedOnGitLabsStatus(t *testing.T) {
+	ctx := context.Background()
+	projectRotateSelf := func(c *gitlabclient.Client) error {
+		_, err := ProjectRotateSelf(ctx, c, ProjectRotateSelfInput{ProjectID: "42"})
+		return err
+	}
+	groupRotateSelf := func(c *gitlabclient.Client) error {
+		_, err := GroupRotateSelf(ctx, c, GroupRotateSelfInput{GroupID: "10"})
+		return err
+	}
+	personalRotateSelf := func(c *gitlabclient.Client) error {
+		_, err := PersonalRotateSelf(ctx, c, PersonalRotateSelfInput{})
+		return err
+	}
+	personalGetSelf := func(c *gitlabclient.Client) error {
+		_, err := PersonalGet(ctx, c, PersonalGetInput{})
+		return err
+	}
+	personalRevokeSelf := func(c *gitlabclient.Client) error {
+		return PersonalRevokeSelf(ctx, c, PersonalRevokeSelfInput{})
+	}
+	cases := []struct {
+		name    string
+		status  int
+		call    func(*gitlabclient.Client) error
+		want    string
+		wantNot string
+	}{
+		{"project rotate self 405", http.StatusMethodNotAllowed, projectRotateSelf, hintResourceTokenRotateSelfWrongKind, ""},
+		{"group rotate self 405", http.StatusMethodNotAllowed, groupRotateSelf, hintResourceTokenRotateSelfWrongKind, ""},
+		{"project rotate self 401", http.StatusUnauthorized, projectRotateSelf, "not one of this project's access tokens", hintResourceTokenRotateSelfWrongKind},
+		{"group rotate self 401", http.StatusUnauthorized, groupRotateSelf, "not one of this group's access tokens", hintResourceTokenRotateSelfWrongKind},
+		{"personal rotate self 405", http.StatusMethodNotAllowed, personalRotateSelf, hintNotAPersonalToken, ""},
+		{"personal rotate self 401", http.StatusUnauthorized, personalRotateSelf, "already been rotated or revoked", hintNotAPersonalToken},
+		{"personal get self 400", http.StatusBadRequest, personalGetSelf, hintNotAPersonalToken, ""},
+		{"personal get self 401", http.StatusUnauthorized, personalGetSelf, "", hintNotAPersonalToken},
+		{"personal revoke self 400", http.StatusBadRequest, personalRevokeSelf, hintNotAPersonalToken, ""},
+		{"personal revoke self 401", http.StatusUnauthorized, personalRevokeSelf, "", hintNotAPersonalToken},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"as GitLab said"}`)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf(fmtExpErrContaining, tc.want, err)
+			}
+			if tc.wantNot != "" && strings.Contains(err.Error(), tc.wantNot) {
+				t.Errorf("error = %q, must not carry %q on a %d", err, tc.wantNot, tc.status)
+			}
+		})
+	}
+}

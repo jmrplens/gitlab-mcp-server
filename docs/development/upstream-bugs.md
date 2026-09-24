@@ -128,6 +128,7 @@ readable without opening the tracker:
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
+| 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -3233,23 +3234,38 @@ when the field is nil.
   the entry at once, and one naming nothing is first put to the credential
   probe (`GET /api/v4/user`, at most once per 30 seconds per credential),
   which keeps the entry when GitLab still accepts the token. A handler's hint
-  then names the permission; the handlers of these routes that scope that
-  hint to 403 or carry none are
-  [issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908). What
-  retires it is GitLab answering 403 at these sites, after which a REST 401
-  without that code would again mean an unusable credential alone and the
-  probe would have nothing left to tell apart.
+  then names the permission, keyed on `toolutil.IsPermissionRefusal`, which
+  reads the same file's `RefusalMayBePermission`: a REST 401 or 403 whose body
+  carries no RFC 6750 error code, so it is never true of an answer the rule
+  above says names the credential, and a hint never follows the verdict that
+  the token itself was refused
+  ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).
+  `TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint` in
+  `internal/tools/action_catalog_test.go` holds every served action of the
+  Where list below to it, one row per action and site. What retires it is
+  GitLab answering 403 at these sites, after which a REST 401 without that
+  code would again mean an unusable credential alone and the probe would have
+  nothing left to tell apart; the handlers need no change then, since the
+  predicate reads a plain 403 the same way.
 
 **Where**: `lib/api/merge_request_approvals.rb:105` and 148,
 `lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
 `lib/api/resource_access_tokens.rb:32`, 63 and 200,
+`lib/api/resource_access_tokens/self_rotation.rb:46`,
 `lib/api/personal_access_tokens.rb:73` and 107,
-`ee/lib/api/status_checks.rb:67`, `ee/lib/api/security_scans.rb:54`,
+`lib/api/helpers/personal_access_tokens_helpers.rb:80`,
+`lib/api/award_emoji.rb:124`, `lib/api/groups.rb:90`,
+`lib/api/projects.rb:925`, `ee/lib/api/status_checks.rb:16` and 67,
+`ee/app/services/external_status_checks/update_service.rb:40`,
+`ee/lib/api/merge_trains.rb:168`, `ee/lib/api/security_scans.rb:54`,
 `ee/lib/api/project_security_settings.rb:30` and 53,
 `ee/lib/api/group_security_settings.rb:36`, `ee/lib/api/saml_group_links.rb`
 (four sites), `ee/lib/ee/api/helpers.rb:193`, and
 `lib/api/ml/mlflow/api_helpers.rb:15` and 23. Read at 19.4.0-pre
-(`b183f4fad4bd`, 2026-09-22).
+(`b183f4fad4bd`, 2026-09-22). Of these thirty, this server serves an action
+for every one but `security_scans.rb:54` (client-go has no wrapper for it),
+`ee/lib/ee/api/helpers.rb:193` (defined, and called from nowhere at that
+commit) and the two MLflow helpers.
 
 **What**: Grape's `unauthorized!` renders 401, and these sites call it to
 refuse an **authenticated** user who lacks a permission. Eighteen of them
@@ -3259,9 +3275,24 @@ The three sites read on the second pass, `resource_access_tokens.rb:200`
 and `personal_access_tokens.rb:73` and 107 (rotating a resource access token,
 and reading or rotating a personal access token by id), refuse the same way
 behind `Ability.allowed?`, and tell only an administrator `not_found!`
-instead. RFC 9110 gives 401 for a request that lacks valid authentication
-credentials and 403 for one the server understood and refuses to authorize,
-so every one of these is the second answered as the first.
+instead. The eight read on the third pass, while fixing the handlers
+([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)),
+are the same refusal under other guards: `personal_access_tokens_helpers.rb:80`
+behind `Ability.allowed?` for a `user_id` naming someone else; `groups.rb:90`
+behind the group permission check a runner administrator passes only for the
+runner setting; `award_emoji.rb:124` for an award somebody else gave;
+`projects.rb:925` for a fork target namespace, with the reason
+`Target Namespace`; `merge_trains.rb:168` for a service that said
+`:forbidden`; `resource_access_tokens/self_rotation.rb:46` for a bot token
+that is not one of the resource's; `update_service.rb:40`, a service that
+builds its own 401 for a missing role and hands it to `render_api_error!`;
+and `status_checks.rb:16`, a before-block that answers every external status
+check route with 401 when the project's namespace lacks the licensed feature,
+which is a license rather than a role and is reachable on GitLab.com, where
+the plan is the namespace's. RFC 9110 gives 401 for a request that lacks
+valid authentication credentials and 403 for one the server understood and
+refuses to authorize, so every one of these is the second answered as the
+first.
 
 It is not accidental, at least at the approve endpoint, whose own `desc` block
 declares the failure:
@@ -3292,9 +3323,9 @@ POST /api/v4/projects/109/merge_requests/1/approve: 401 {message: 401 Unauthoriz
 which this server rendered as `authentication failed: GITLAB_TOKEN may be
 invalid or expired` followed by the hint that contradicts it. The list above
 is not a corner: it covers merge, cancel auto-merge, approve, reset approvals,
-project mirrors, access token reads and rotation, external status checks,
-security scans, security settings and group SAML links, all of which this
-server serves.
+adding to a merge train, project mirrors, access token reads, lists and
+rotation, external status checks, security settings, group SAML links, award
+emoji removal, group updates and fork links, all of which this server serves.
 
 **Our half of it.** `httpStatusDescriptions` in `internal/toolutil/errors.go`
 mapped 401 to a sentence about the token, which was right for a genuine
@@ -3308,5 +3339,52 @@ subscriptions with a false "re-authenticate" and counted a revocation that
 never happened; that is fixed
 ([issue 907](https://github.com/jmrplens/gitlab-mcp-server/issues/907)) by
 confirming a 401 that names nothing with the credential probe before the
-entry goes, as the Workaround field describes. The handlers' own hints are
-still tracked ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).
+entry goes, as the Workaround field describes. The handlers' own hints were
+the third: most of the handlers behind these sites scoped their permission
+hint to the 403 GitLab never sends there, or carried none, and the one that
+hinted on any 401 (the approve) followed the rejected-token verdict with a
+self-approval suggestion. They are fixed
+([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)) by
+keying each hint on `toolutil.IsPermissionRefusal`, and reading the fix
+against GitLab's source corrected what several hints said as well: push
+mirrors are available on every tier, external status checks need Ultimate
+rather than Premium, a group's security settings need Maintainer or Security
+Manager rather than Owner, and the approval reset is refused with 401 for a
+person's token rather than 404.
+
+### Deleting an external status check without the role answers 204 and deletes nothing
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, but the answer is false: a caller told the check was
+  deleted goes on as if it were.
+- **Workaround**: partial. Nothing on the wire tells this refusal apart from
+  a real deletion, so the handler cannot report it. The action's served usage
+  says so instead, and asks the caller to confirm a deletion with
+  `external_status_check.list_project`; and
+  `DeleteProjectExternalStatusCheck` in
+  `internal/tools/externalstatuschecks/external_status_checks.go` hints only
+  the license on a refusal, never the role, since GitLab never refuses the
+  role there. What retires it is GitLab rendering the service's refusal.
+
+**What**: `DELETE /projects/:id/external_status_checks/:check_id`
+(`ee/lib/api/status_checks.rb:122-132`) wraps
+`ExternalStatusChecks::DestroyService#execute` in `destroy_conditionally!`.
+The service refuses a caller without `delete_external_status_check`, which
+is the Maintainer role, by returning an error response with
+`http_status: :unauthorized`
+(`ee/app/services/external_status_checks/destroy_service.rb:8` and 27-33).
+`destroy_conditionally!` (`lib/api/helpers.rb:53-65`) sets the status to 204
+and the body to empty **before** it yields, and discards what the block
+returns, so the refusal never reaches the response: a Developer's delete is
+answered 204 and the check is still there. The update beside it hands the
+same kind of service error to `render_api_error!` and answers 401 correctly
+(`status_checks.rb:106-110`), which is the shape the delete is missing. Read
+at 19.4.0-pre (`b183f4fad4bd`, 2026-09-22).
+
+**How we found it**: reading every 401 the status check routes can answer
+while fixing their hints
+([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)). The
+delete's service builds a 401 like the update's, and following it to the
+response showed it goes nowhere.

@@ -150,7 +150,7 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get the SSH public key for an SSH-authenticated push mirror. Returns: the public key to register on the remote. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
 	},
 	"gitlab_add_project_mirror": {
-		Usage:   "Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires GitLab Premium/Ultimate and Maintainer+ role. Supply credentials inline in the URL or via SSH auth. Sends the whole repository to the host in url from then on, so it needs explicit confirmation: pass confirm=true only after the user approves that destination.",
+		Usage:   "Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires the Maintainer role, and push mirrors are available on every tier. Supply credentials inline in the URL or via SSH auth. Sends the whole repository to the host in url from then on, so it needs explicit confirmation: pass confirm=true only after the user approves that destination.",
 		Aliases: []string{"add project mirror", "create push mirror", "set up remote mirror"},
 		Related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey},
 		Guidance: map[string]toolutil.ParameterGuidance{

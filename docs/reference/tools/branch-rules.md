@@ -102,7 +102,7 @@ Each branch rule includes:
 
 - Branch rules are read-only via GraphQL — to modify branch protections, use the REST-based `gitlab_branch_protect` and `gitlab_protected_branch_update` tools
 - The `matching_branches_count` field shows how many actual branches match wildcard patterns (e.g. `release/*`)
-- Approval rules and external status checks are only available on GitLab Premium/Ultimate
+- Approval rules are only available on GitLab Premium/Ultimate, and external status checks on Ultimate
 
 ## Related
 

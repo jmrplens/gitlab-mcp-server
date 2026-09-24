@@ -362,6 +362,43 @@ func TestGetMergeRequestOnMergeTrain(t *testing.T) {
 	}
 }
 
+// TestAddMergeRequestToMergeTrain_PermissionRefusedWith401_NamesTheMergeRight
+// verifies that the 401 GitLab answers a caller who may not merge the request
+// (ee/lib/api/merge_trains.rb:168) names the merge right, which the handler
+// had no hint for, and that neither the route's 403, which is the merge train
+// read check, nor a 401 GitLab said was about the token itself gets it. Every
+// error keeps the operation name the end-to-end suite matches on.
+func TestAddMergeRequestToMergeTrain_PermissionRefusedWith401_NamesTheMergeRight(t *testing.T) {
+	const mergeRight = "right to merge it into its target branch"
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"401 from unauthorized!", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+		{"403 from the read check", http.StatusForbidden, `{"message":"403 Forbidden"}`, false},
+		{"401 for a revoked token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := AddMergeRequestToMergeTrain(context.Background(), client, AddInput{ProjectID: "42", MergeRequestID: 5})
+			if err == nil {
+				t.Fatalf("AddMergeRequestToMergeTrain() error = nil, want the %d", tt.status)
+			}
+			if got := strings.Contains(err.Error(), mergeRight); got != tt.wantHint {
+				t.Errorf("AddMergeRequestToMergeTrain() error = %q carries the merge right: %v, want %v", err, got, tt.wantHint)
+			}
+			if !strings.Contains(err.Error(), "merge_train") {
+				t.Errorf("AddMergeRequestToMergeTrain() error = %q, want the operation name the end-to-end suite matches", err)
+			}
+		})
+	}
+}
+
 // TestAddMergeRequestToMergeTrain validates the AddMergeRequestToMergeTrain handler.
 // Covers success, missing project_id, a zero and a negative merge_request_iid,
 // and a 422 from GitLab. The optional fields are asserted by

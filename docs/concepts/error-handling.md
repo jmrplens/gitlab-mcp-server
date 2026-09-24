@@ -84,7 +84,7 @@ Maps HTTP status codes to actionable guidance:
 
 ### Why a 401 names two causes
 
-GitLab answers 401 for two different things. Its API guard answers it for a credential it cannot use, and at a family of REST routes Grape's `unauthorized!` answers it for a **valid** credential that lacks a permission: merging, cancelling auto-merge, approving and resetting approvals, remote mirrors, access token reads and rotation, external status checks, security scans, security settings and group SAML links. Approving a merge request you opened, on an instance that prevents approval by the author, is the common one. The upstream half is [entry 55 of the upstream bugs register](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403).
+GitLab answers 401 for two different things. Its API guard answers it for a credential it cannot use, and at a family of REST routes Grape's `unauthorized!` answers it for a **valid** credential that lacks a permission: merging, cancelling auto-merge, approving and resetting approvals, adding to a merge train, remote mirrors, access token reads, lists and rotation, external status checks, security settings, group SAML links, award emoji removal, group updates and fork links. Approving a merge request you opened, on an instance that prevents approval by the author, is the common one. The upstream half is [entry 55 of the upstream bugs register](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403).
 
 The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both and ends with the test that separates them: if the same token works for other calls, the 401 is a permission refusal. It opens with "unauthorized" rather than "authentication failed", because for a permission refusal authentication succeeded.
 
@@ -94,6 +94,8 @@ The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both an
 - the GraphQL endpoint answered it. That endpoint answers 401 only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}` and no code, and refuses a field the caller may not see with a 200, so a GraphQL 401 has no permission refusal to be confused with. One of those checks is the scope: the endpoint authenticates a token only when it carries `api` or `read_api`, and answers one carrying neither with that same body, where REST answers it 403 `insufficient_scope`, which is why the sentence names the scope. The endpoint is recognised by the request path as sent, escaped, so a REST path parameter that decodes to `api/graphql` does not pass for it. client-go returns such an answer as `*gl.GraphQLResponseError`, which does not unwrap to the response, so `ClassifyError` looks through it to find the status.
 
 The opposite verdict cannot be read off a response: a token GitLab has no record of at all is answered through `unauthorized!` too, byte for byte like a permission refusal, so a REST 401 without the code keeps the sentence that names both causes.
+
+What the handler adds after that sentence is the permission itself, and it is keyed on the same reading rather than on the status: see [A permission hint on a 401](#a-permission-hint-on-a-401).
 
 The rule is not `ClassifyError`'s own. It is `UnauthorizedNamesCredential` in `internal/gitlab/credential_refusal.go`, and it has a second reader: in HTTP mode the client's innermost transport applies it to every 401 GitLab answers, and the credential pool ends a caller's pooled entry at once only when it says the credential was refused. A 401 it cannot place is confirmed with `GET /api/v4/user` first, and the entry is kept when GitLab still accepts the token (see [Refused calls](../guides/http-server-mode.md#refused-calls)). One rule is what keeps the two from disagreeing, so a permission refusal is never described to a model as a missing permission while the pool treats it as a revoked token. The `DetailedError` card carries the reading once, in its message: the HTTP Status row is the code and its reason phrase (`401 Unauthorized`) and nothing more, for a REST and a GraphQL 401 alike, because a second classification of the status alone would put the sentence naming both causes beside a message that has already ruled one of them out.
 
@@ -169,15 +171,32 @@ return toolutil.WrapErrWithStatusHint("issueGet", err, 404,
 
 For handlers that need different hints per status code, use a `switch` over `IsHTTPStatus` checks instead — each branch carries genuinely different context.
 
+### A permission hint on a 401
+
+A hint that names a role, a license or an owner is keyed on `IsPermissionRefusal(err)`, never on a status alone. At the routes [entry 55](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403) lists, GitLab refuses a missing permission with 401, so a hint scoped to 403 is never shown there; and a hint keyed on 401 alone follows the verdict that GitLab rejected the token itself, which it then contradicts. `IsPermissionRefusal` is true for a REST 401 or 403 whose body carries no RFC 6750 error code, which is what Grape's `unauthorized!` and `forbidden!` render, and false for every answer the API guard gives about the credential (`invalid_token`, `insufficient_scope` and the others) and for every GraphQL answer. The rule is `RefusalMayBePermission` in `internal/gitlab/credential_refusal.go`, beside the rule that decides the description, so the two cannot drift apart.
+
+```go
+if toolutil.IsPermissionRefusal(err) {
+    return toolutil.WrapErrWithHint("mrMerge", err,
+        "merging needs the right to push to the merge request's target branch (read it with branch.get_protected)")
+}
+return toolutil.WrapErrWithMessage("mrMerge", err)
+```
+
+It is a predicate and not another wrapper on purpose: `make check-action-ids` reads a hint where it is passed to `WrapErrWithHint`, `WrapErrWithStatusHint` or `NotFoundResult`, so a hint passed through a new wrapper would escape the gate.
+
+A route whose 403 means something other than the permission its 401 refuses pairs the predicate with `IsHTTPStatus` to tell them apart. The external status check routes of a merge request answer the license with 401 and the caller's role on the merge request with 403; the fork link answers the target namespace with 401 and the role on either project with 403; the security settings answer the role with 401 and the license, an archived project or an instance-enforced setting with 403, so that handler reads the 403 first.
+
 ### Error Function Decision Tree
 
-| Scenario                                    | Function                | Example                                                                       |
-| ------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
-| Read-only operation (list, get, search)     | `WrapErr`               | `WrapErr("listBranches", err)`                                                |
-| Get operation returning 404                 | `NotFoundResult`        | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")` |
-| Mutating operation (create, update, delete) | `WrapErrWithMessage`    | `WrapErrWithMessage("fileCreate", err)`                                       |
-| Specific error with known corrective action | `WrapErrWithHint`       | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")`   |
-| Single-status hint (the common case)        | `WrapErrWithStatusHint` | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")`             |
+| Scenario                                    | Function                                  | Example                                                                          |
+| ------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| Read-only operation (list, get, search)     | `WrapErr`                                 | `WrapErr("listBranches", err)`                                                   |
+| Get operation returning 404                 | `NotFoundResult`                          | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")`    |
+| Mutating operation (create, update, delete) | `WrapErrWithMessage`                      | `WrapErrWithMessage("fileCreate", err)`                                          |
+| Specific error with known corrective action | `WrapErrWithHint`                         | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")`      |
+| Single-status hint (the common case)        | `WrapErrWithStatusHint`                   | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")`                |
+| A permission refused with 401 or 403        | `IsPermissionRefusal` + `WrapErrWithHint` | `if toolutil.IsPermissionRefusal(err) { WrapErrWithHint("mrMerge", err, hint) }` |
 
 ### NotFoundResult — Informational 404 Responses
 
@@ -290,12 +309,13 @@ testutil.RespondJSON(w, http.StatusBadRequest, map[string]string{
 
 ## File Reference
 
-| File                             | Purpose                                                                                                                                                                           |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `internal/toolutil/errors.go`    | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
-| `internal/toolutil/not_found.go` | NotFoundResult — informational 404 pattern for get handlers                                                                                                                       |
-| `internal/toolutil/confirm.go`   | Destructive action confirmation flow                                                                                                                                              |
-| `internal/toolutil/output.go`    | SuccessResult, ErrorResult helpers                                                                                                                                                |
+| File                                    | Purpose                                                                                                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `internal/toolutil/errors.go`           | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, IsPermissionRefusal, ContainsAny |
+| `internal/gitlab/credential_refusal.go` | UnauthorizedNamesCredential and RefusalMayBePermission, the two readings of a refusal the description, the hints and the HTTP pool share                                                               |
+| `internal/toolutil/not_found.go`        | NotFoundResult, the informational 404 pattern for get handlers                                                                                                                                         |
+| `internal/toolutil/confirm.go`          | Destructive action confirmation flow                                                                                                                                                                   |
+| `internal/toolutil/output.go`           | SuccessResult, ErrorResult helpers                                                                                                                                                                     |
 
 ## LLM Ergonomics Hint Rollout
 

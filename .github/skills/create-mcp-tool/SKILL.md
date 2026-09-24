@@ -141,6 +141,7 @@ Error handling rules:
 - `WrapErrWithHint(op, err, hint)` — when a recovery action is known
 - `WrapErrWithStatusHint(op, err, code, hint)` — when the hint applies to one HTTP status only (`IsHTTPStatus` + `WrapErrWithHint` in one call)
 - `NotFoundResult(resource, identifier, hints...)` — in get handlers on `IsHTTPStatus(err, 404)`: an informational `IsError` result logged at INFO, with `nil` error
+- `IsPermissionRefusal(err)` + `WrapErrWithHint`: for a hint that names a role, a license or an owner. GitLab refuses a missing permission with 401 at many routes, so do not scope such a hint to 403, and do not key it on 401 alone, which also matches a token GitLab rejected
 - Validate required inputs before calling GitLab and check `ctx.Err()` first, as the real handlers do (`internal/tools/branches/branches.go`); the tests below expect the empty-`project_id` error
 
 ## Step 3: Add ActionSpecs

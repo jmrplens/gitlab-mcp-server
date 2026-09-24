@@ -47,7 +47,7 @@ func externalStatusCheckOptions(individualTool string) toolutil.ActionSpecOption
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute externalstatuschecks domain action.", Tags: []string{"external_status_check", "status_check"},
 		OpenWorld:      true,
-		Edition:        "premium",
+		Edition:        "ultimate",
 		OwnerPackage:   "externalstatuschecks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
@@ -97,49 +97,49 @@ const (
 // to its discovery metadata.
 var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntry{
 	"gitlab_list_project_status_checks": {
-		usage:       "List a project's external status check services (deprecated path). Prefer gitlab_list_project_external_status_checks. Use this only when matching the legacy endpoint. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "List a project's external status check services (deprecated path). Prefer gitlab_list_project_external_status_checks. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.",
 		aliases:     []string{"list project status checks", "show project external status checks", "external status check services"},
 		related:     []string{actionListProject, actionCreateProject, actionListProjectMR},
 		description: "List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.",
 	},
 	"gitlab_list_project_external_status_checks": {
-		usage:       "List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires Maintainer role and a Premium/Ultimate license. Supports order_by, sort, and keyset pagination.",
+		usage:       "List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and keyset pagination.",
 		aliases:     []string{"list project external status checks", "show project status check services", "project status checks"},
 		related:     []string{actionCreateProject, actionUpdateProject, actionDeleteProject, actionListProjectMR},
 		description: "List a project's external status check services. Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_create_project_external_status_check, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check, gitlab_list_project_mr_external_status_checks.",
 	},
 	"gitlab_list_project_mr_external_status_checks": {
-		usage:       "List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires Maintainer role and a Premium/Ultimate license. Supports order_by, sort, and keyset pagination.",
+		usage:       "List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and keyset pagination.",
 		aliases:     []string{"list merge request status checks", "show mr external status checks", "status checks for a merge request"},
 		related:     []string{actionListProject, "external_status_check.set_project_mr_status", "external_status_check.retry_project"},
 		description: "List the external status checks for a merge request and their status. Returns: each check with id, name, external_url, status, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_set_project_mr_external_status_check_status, gitlab_retry_failed_external_status_check_for_project_mr.",
 	},
 	"gitlab_create_project_external_status_check": {
-		usage:       "Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license.",
 		aliases:     []string{"create external status check", "add project status check", "register external status check service"},
 		related:     []string{actionListProject, actionUpdateProject, actionDeleteProject},
 		description: "Create an external status check service for a project. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.",
 	},
 	"gitlab_update_project_external_status_check": {
-		usage:       "Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.",
 		aliases:     []string{"update external status check", "edit project status check", "modify external status check service"},
 		related:     []string{actionListProject, actionCreateProject, actionDeleteProject},
 		description: "Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
 	},
 	"gitlab_delete_project_external_status_check": {
-		usage:       "Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab answers a caller without the role with success and deletes nothing, so confirm the deletion with external_status_check.list_project.",
 		aliases:     []string{"delete external status check", "remove project status check", "remove external status check service"},
 		related:     []string{actionListProject, actionCreateProject, actionUpdateProject},
 		description: "Delete a project external status check service permanently. Returns: a success confirmation. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_update_project_external_status_check.",
 	},
 	"gitlab_retry_failed_external_status_check_for_project_mr": {
-		usage:       "Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires at least the Developer role and an Ultimate license.",
 		aliases:     []string{"retry failed status check", "re-run merge request status check", "retry external status check"},
 		related:     []string{actionListProjectMR, "external_status_check.set_project_mr_status"},
 		description: "Retry a failed external status check for a merge request. Returns: a success confirmation. See also: gitlab_list_project_mr_external_status_checks, gitlab_set_project_mr_external_status_check_status.",
 	},
 	"gitlab_set_project_mr_external_status_check_status": {
-		usage:       "Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check.",
+		usage:       "Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.",
 		aliases:     []string{"set merge request status check status", "report external status check result", "pass or fail status check"},
 		related:     []string{actionListProjectMR, "external_status_check.retry_project"},
 		description: "Set the status of an external status check for a merge request. Returns: a success confirmation. See also: gitlab_list_project_mr_external_status_checks, gitlab_retry_failed_external_status_check_for_project_mr.",

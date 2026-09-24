@@ -373,15 +373,24 @@ func Reset(ctx context.Context, client *gitlabclient.Client, input ResetInput) e
 	}
 	_, err := client.GL().MergeRequestApprovals.ResetApprovalsOfMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return toolutil.WrapErrWithHint("mrApprovalReset", err,
-				"endpoint requires a bot user backed by a project/group access token; verify project_id + merge_request_iid and that the caller authenticates with a project or group access token (PATs from human users are not accepted)")
+		// GitLab refuses a caller who may not reset with 401, and the only 404
+		// this route answers is a merge request it cannot find, so the bot rule
+		// belongs to the refusal and the 404 names the identifiers alone.
+		if toolutil.IsPermissionRefusal(err) {
+			return toolutil.WrapErrWithHint("mrApprovalReset", err, hintResetRefused)
 		}
-		return toolutil.WrapErrWithStatusHint("mrApprovalReset", err, http.StatusForbidden,
-			"requires Maintainer role; resets all approvals on the MR. Cannot be undone; verify project_id + merge_request_iid")
+		return toolutil.WrapErrWithStatusHint("mrApprovalReset", err, http.StatusNotFound,
+			"verify project_id and merge_request_iid with merge_request.get")
 	}
 	return nil
 }
+
+// hintResetRefused is what a refused reset needs: GitLab lets only a bot user
+// that may approve the merge request reset its approvals, which is a project
+// or group access token or a service account, and refuses a person's token
+// and a merge request that is already merged with the same 401
+// (lib/api/merge_request_approvals.rb:148).
+const hintResetRefused = "only a bot user that may approve this merge request can reset its approvals, meaning a project or group access token or a service account; a person's token is refused, and so is a merge request that is already merged (check its state with merge_request.get)"
 
 // CreateRule creates a new approval rule on a merge request.
 func CreateRule(ctx context.Context, client *gitlabclient.Client, input CreateRuleInput) (RuleOutput, error) {

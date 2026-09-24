@@ -6564,6 +6564,10 @@ func TestStatusHints_EachStatusEarnsItsOwnHint(t *testing.T) {
 		_, err := CreateTodo(context.Background(), c, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
 		return err
 	}
+	merge := func(c *gitlabclient.Client) error {
+		_, err := Merge(context.Background(), c, MergeInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
 	runStatusHintCases(t, []statusHintCase{
 		{"rebase 403", http.StatusForbidden, rebase, "rebase_in_progress", ""},
 		{"rebase 409", http.StatusConflict, rebase, "rebase_in_progress", ""},
@@ -6575,8 +6579,69 @@ func TestStatusHints_EachStatusEarnsItsOwnHint(t *testing.T) {
 		{"create dependency 500 keeps GitLab's message", http.StatusInternalServerError, createDependency, "as GitLab said", "cycle"},
 		{"cancel auto merge 405", http.StatusMethodNotAllowed, cancelAutoMerge, "auto_merge_enabled", ""},
 		{"cancel auto merge 406", http.StatusNotAcceptable, cancelAutoMerge, "auto_merge_enabled", ""},
+		{"cancel auto merge 401", http.StatusUnauthorized, cancelAutoMerge, hintCancelAutoMergeRefused, "auto_merge_enabled"},
+		{"cancel auto merge 404 is not a refusal", http.StatusNotFound, cancelAutoMerge, hintVerifyMR, hintCancelAutoMergeRefused},
+		{"merge 401", http.StatusUnauthorized, merge, hintMergeRefused, ""},
+		{"merge 403", http.StatusForbidden, merge, hintMergeRefused, ""},
+		{"merge 409 keeps GitLab's message", http.StatusConflict, merge, "as GitLab said", hintMergeRefused},
 		{"create todo 404 is not an existing todo", http.StatusNotFound, createTodo, hintVerifyMR, "pending todo"},
 	})
+}
+
+// TestPermissionHints_CredentialRefused_CarryNoPermissionHint verifies that
+// a refusal GitLab said was about the credential, rather than about a
+// permission, gets none of the permission hints above.
+//
+// Approve used to hint on any 401, so an expired or revoked token was
+// described as "GitLab rejected the token itself" and then told the author may
+// not approve their own merge request. The same holds for the API guard's 403
+// about a token scope, which is not a role either. Merge and the auto-merge
+// cancel are held to it too, since they now hint on a refusal where they
+// hinted on nothing.
+func TestPermissionHints_CredentialRefused_CarryNoPermissionHint(t *testing.T) {
+	const (
+		revokedTokenBody = `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`
+		missingScopeBody = `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`
+	)
+	approve := func(c *gitlabclient.Client) error {
+		_, err := Approve(context.Background(), c, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	merge := func(c *gitlabclient.Client) error {
+		_, err := Merge(context.Background(), c, MergeInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	cancelAutoMerge := func(c *gitlabclient.Client) error {
+		_, err := CancelAutoMerge(context.Background(), c, GetInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		call   func(*gitlabclient.Client) error
+		reject string
+	}{
+		{"approve with a revoked token", http.StatusUnauthorized, revokedTokenBody, approve, "self-approval"},
+		{"approve without the api scope", http.StatusForbidden, missingScopeBody, approve, "self-approval"},
+		{"merge with a revoked token", http.StatusUnauthorized, revokedTokenBody, merge, hintMergeRefused},
+		{"merge without the api scope", http.StatusForbidden, missingScopeBody, merge, hintMergeRefused},
+		{"cancel auto merge with a revoked token", http.StatusUnauthorized, revokedTokenBody, cancelAutoMerge, hintCancelAutoMergeRefused},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			err := tt.call(client)
+			if err == nil {
+				t.Fatalf("error = nil, want the %d reported", tt.status)
+			}
+			if strings.Contains(err.Error(), tt.reject) || strings.Contains(err.Error(), "Suggestion") {
+				t.Errorf("error = %q, must carry no permission hint after a refusal of the credential", err)
+			}
+		})
+	}
 }
 
 // dropConnectionHandler hijacks the connection and closes it without writing

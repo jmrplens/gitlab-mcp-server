@@ -2171,6 +2171,60 @@ func TestDeleteAwardEmoji_NotFoundHints(t *testing.T) {
 	}
 }
 
+// TestDeleteAwardEmoji_PermissionRefusedWith401_NamesTheAwarder verifies
+// that each of the six delete actions hints who may remove an award on the
+// 401 GitLab refuses anyone else with (lib/api/award_emoji.rb:124), which the
+// handlers scoped to 403 and so never hinted; a plain 403 keeps the same hint,
+// and a 401 GitLab said was about the token itself gets none.
+func TestDeleteAwardEmoji_PermissionRefusedWith401_NamesTheAwarder(t *testing.T) {
+	deletes := map[string]func(context.Context, *gitlabclient.Client) error{
+		"issue": func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteIssueAwardEmoji(ctx, c, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+		},
+		"issue note": func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteIssueNoteAwardEmoji(ctx, c, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+		},
+		"merge request": func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteMRAwardEmoji(ctx, c, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+		},
+		"merge request note": func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteMRNoteAwardEmoji(ctx, c, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+		},
+		"snippet": func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteSnippetAwardEmoji(ctx, c, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+		},
+		"snippet note": func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteSnippetNoteAwardEmoji(ctx, c, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+		},
+	}
+	answers := []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"401 from unauthorized!", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+		{"a plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+		{"401 for a revoked token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`, false},
+	}
+	for _, answer := range answers {
+		for name, call := range deletes {
+			t.Run(answer.name+" on "+name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, answer.status, answer.body)
+				}))
+				err := call(t.Context(), client)
+				if err == nil {
+					t.Fatalf("delete on %s error = nil, want the %d", name, answer.status)
+				}
+				if got := strings.Contains(err.Error(), hintEmojiOwnerOnly); got != answer.wantHint {
+					t.Errorf("delete on %s error = %q carries the awarder hint: %v, want %v", name, err, got, answer.wantHint)
+				}
+			})
+		}
+	}
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

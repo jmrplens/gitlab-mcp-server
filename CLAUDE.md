@@ -250,7 +250,7 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 - `WrapErrWithStatusHint(op, err, code, hint)` — combines `IsHTTPStatus` check + `WrapErrWithHint` in a single call. Use when the hint applies only to a specific HTTP status code; returns `WrapErrWithMessage` for all other codes.
 - `NotFoundResult(resource, identifier, hints...)` — for get handlers when `IsHTTPStatus(err, 404)`. Returns an informational `CallToolResult` with `IsError: true` and domain-specific hints instead of a Go error. Logged at INFO level. Used by the get handlers of 19 domains, each through a helper in its `markdown.go`. Defined in `internal/toolutil/not_found.go`.
 
-Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
+Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. A hint that names a role, a license or an owner is keyed on `IsPermissionRefusal(err)` instead of a status: GitLab refuses a missing permission with 401 at the routes of [entry 55](docs/development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403), so a hint scoped to 403 is never shown there, and a hint keyed on 401 alone would follow the verdict that the token itself was refused. The predicate is true for a REST 401 or 403 whose body carries no RFC 6750 error code (`gitlabclient.RefusalMayBePermission`), and a route whose 403 means something else pairs it with `IsHTTPStatus`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
 ### encoding/json/v2: selectively, never as a migration
 
@@ -856,7 +856,7 @@ The tier affects tool registration (input/output schemas and tool lists) through
 
 **Individual mode** (`GITLAB_MCP_TOOL_SURFACE=individual`) — gates Enterprise/Premium actions through catalog metadata:
 
-- projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, dependencyfirewall, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityattributes, securitycategories, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
+- projects (push rules, pull mirroring), mergetrains, auditevents, dorametrics, dependencies, dependencyfirewall, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityattributes, securitycategories, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
 
 **Meta-tool mode** (`GITLAB_MCP_TOOL_SURFACE=meta`) — gates 17 dedicated Enterprise/Premium catalog groups:
 
@@ -864,7 +864,7 @@ The tier affects tool registration (input/output schemas and tool lists) through
 
 Plus enterprise-only routes injected into 3 base meta-tools:
 
-- `gitlab_project` → push_rule_*, mirror_*, security_settings_*, dependency_firewall_evaluate
+- `gitlab_project` → push_rule_*, pull_mirror_*, start_mirroring, security_settings_*, dependency_firewall_evaluate (the push mirror routes, mirror_*, are Free)
 - `gitlab_group` → iterations, epics, wikis, protected branches/envs, releases, LDAP, SAML, SSH certs, credentials, analytics, service accounts
 - `gitlab_issue` → iterations
 

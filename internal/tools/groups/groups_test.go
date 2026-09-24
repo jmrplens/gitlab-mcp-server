@@ -1722,6 +1722,40 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestUpdate_PermissionRefusedWith401_NamesTheOwnerRole verifies the group
+// update's hint on both refusals GitLab gives a caller without the Owner
+// role: the 403 of a caller with no role on it at all, and the 401 of one who
+// may only administer runners and asked for more than the runner setting
+// (lib/api/groups.rb:90), which the handler scoped out and so never hinted. A
+// 401 GitLab said was about the token itself gets no hint.
+func TestUpdate_PermissionRefusedWith401_NamesTheOwnerRole(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"401 from unauthorized!", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+		{"403 from authorize_any!", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+		{"401 for an expired token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := Update(context.Background(), client, UpdateInput{GroupID: "99", Name: "x"})
+			if err == nil {
+				t.Fatalf("Update() error = nil, want the %d", tt.status)
+			}
+			hinted := strings.Contains(err.Error(), "Owner role") && strings.Contains(err.Error(), "shared_runners_setting")
+			if hinted != tt.wantHint {
+				t.Errorf("Update() error = %q carries the Owner and runner setting hint: %v, want %v", err, hinted, tt.wantHint)
+			}
+		})
+	}
+}
+
 // TestUpdate_AllOptionalFields verifies the Update_AllOptionalFields handler.
 // The mock GitLab API at /api/v4/groups/99 (PUT) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
