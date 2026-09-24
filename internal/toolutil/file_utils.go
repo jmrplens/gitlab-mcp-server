@@ -194,19 +194,6 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 	return f, opened, nil
 }
 
-// CreateDownloadOutputFile creates the destination a download writes to,
-// refusing a symlink at the leaf where the platform can.
-//
-// [CanonicalDownloadOutputPath] refuses a destination that is already a
-// symlink, but it refuses a path, and the file is created by a later syscall:
-// a local principal who can write in an allowed root can put a symlink there
-// in between and redirect the write to whatever the server may overwrite. The
-// creation is the only place that race can be closed, so it happens here
-// rather than at the call site.
-func CreateDownloadOutputFile(path string) (*os.File, error) {
-	return createLeafNoFollow(path)
-}
-
 // CanonicalLocalFilePath resolves a caller-supplied path to an existing local
 // file and returns it canonicalized, provided the resolved path lies under the
 // working directory, the OS temporary directory, or a directory listed in
@@ -265,15 +252,19 @@ func CanonicalLocalDirPath(path string) (string, error) {
 // The destination does not exist yet and neither may its parents, so the
 // deepest existing ancestor is what gets resolved through symlinks; the
 // segments below it cannot be symlinks because they do not exist. A leaf that
-// does exist must be a regular file: a symlink there would redirect the write
-// to whatever it names, which is how an "output path" becomes a way to
-// overwrite an SSH key.
+// does exist must be a regular file: a symlink there would redirect a write
+// that opened the path to whatever it names, which is how an "output path"
+// becomes a way to overwrite an SSH key. [WriteDownloadOutputFile] never opens
+// the destination, but the refusal stays, since a caller who named a link
+// meant something else and is better told than having the link replaced.
 //
 // Call it again after creating the parent directories. The second call
 // resolves a parent that now exists, which is what turns the check from a
 // promise about the path into a check on the directory being written to.
+// [WriteDownloadOutputFile] makes both calls, and is how a download should
+// reach the destination this returns.
 //
-// An existing regular file is overwritten, deliberately, and there is no
+// An existing regular file is replaced, deliberately, and there is no
 // caller opt-in to refuse it. The audit that produced the symlink check asked
 // for one, and the trade is not worth taking: an opt-in is a new field on
 // DownloadInput, which is a served input schema, so it lands in the tool

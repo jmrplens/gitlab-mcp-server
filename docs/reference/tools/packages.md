@@ -54,6 +54,10 @@ Download a file from the GitLab Generic Package Registry and save it to a local 
 
 The read is of the registry, but the write is to this machine's disk, so the action is classified as mutating rather than read-only: `--read-only` removes it, `--safe-mode` previews it, a `read_api` token is not served it, and a client that auto-approves `readOnlyHint: true` no longer auto-approves a file write. `output_path` must resolve under the working directory, the OS temporary directory, or a directory named in `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`; a server reached over HTTP refuses every local path, since the caller has no files on this machine.
 
+`output_path` is written only once the whole file has arrived. The body goes to a temporary file in the same directory (named `.gitlab-mcp-server-download-*.partial`), which is synced and then renamed over `output_path`. A download that fails, whether GitLab answers an error, the connection drops partway or the call is cancelled or reaches the action timeout, removes that temporary file and leaves `output_path` exactly as it was: still absent if it was absent, holding its previous content if it held a file. When the temporary file itself cannot be removed, the error says so beside the reason the download failed. Directories created on the way to `output_path` stay, since they are empty and a retry needs them, and a server killed outright can leave a `.partial` file behind but never a partial `output_path`.
+
+A file already at `output_path` is replaced rather than written through: the result is a new file readable and writable by its owner alone, whatever the old file allowed, and a hard link to the old file keeps the old content. On Unix the replacement is a single atomic rename. On Windows it fails while another process holds `output_path` open without allowing it to be deleted, as a running program does, or when the file is marked read-only, and `output_path` then keeps its previous content.
+
 | Annotation | **Update** |
 | ---------- | ---------- |
 
