@@ -283,8 +283,9 @@ func TestIsPrivateAddress_ClassifiesTheRefusedRanges(t *testing.T) {
 //
 // A case whose instance is spelled as a name says what that name resolves to,
 // in `resolves`, because the branch it lands in asks: an off-origin hop to a
-// private address is refused only where the instance itself is not private,
-// and answering that means resolving the instance host. Left to the real
+// private address is refused unless the operator named the instance and it is
+// itself private, and answering that for an operator-named instance means
+// resolving its host. Left to the real
 // resolver, the one case that reaches it paid a two-second
 // [instanceLookupTimeout] and then passed on the lookup having failed, which
 // is the same verdict for a different reason — a resolver that started
@@ -489,8 +490,9 @@ func TestDestinationPolicy_InstanceIsPrivate(t *testing.T) {
 				t.Fatalf("instanceIsPrivate() = %v, want %v", got, tt.want)
 			}
 			// Asked again, the answer is memoized: the resolver is consulted
-			// whenever a hop that leaves the instance is routed, and a client
-			// whose downloads keep leaving it must not keep paying for DNS.
+			// the first time a hop that leaves an operator-named instance is
+			// routed, and never again, since a client whose downloads keep
+			// leaving it must not keep paying for DNS.
 			if got := policy.instanceIsPrivate(t.Context()); got != tt.want {
 				t.Fatalf("instanceIsPrivate() on the second call = %v, want %v", got, tt.want)
 			}
@@ -792,10 +794,11 @@ func TestDestinationPolicy_PermitsPrivate_IsWhatTheDialerApplies(t *testing.T) {
 //
 // The answer is memoized for the life of the client and is asked when a
 // redirect hop is routed, which net/http does without checking whether the
-// hop's context has already ended. Inheriting that cancellation made the
-// lookup fail, the failure was recorded as "not private", and a self-managed
-// GitLab whose object store sits beside it on a private network then had every
-// later artifact download refused, for a request nobody was waiting on.
+// hop's context has already ended. Inheriting that cancellation would make
+// the lookup fail, the failure would be recorded as "not private", and a
+// self-managed GitLab whose object store sits beside it on a private network
+// would then have every later artifact download refused, for a request nobody
+// was waiting on.
 func TestDestinationPolicy_InstanceIsPrivate_OutlivesTheCallersCancellation(t *testing.T) {
 	policy := newDestinationPolicy("https://gitlab.internal", false, false)
 	policy.lookupIP = func(ctx context.Context, _ string) ([]netip.Addr, error) {
