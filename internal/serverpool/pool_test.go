@@ -3622,7 +3622,11 @@ func revalidationEntry(t *testing.T, pool *ServerPool, baseURL, token string, va
 // path did not.
 //
 // The retained rows also assert lastValidated did not move, so a transient
-// failure cannot pass for a successful check and postpone the real one.
+// failure cannot pass for a successful check and postpone the real one. And
+// every row that warns is held to what its warning says: the status GitLab
+// answered with, 0 when none arrived, and on the warning that keeps an entry
+// why no verdict was reached, since that one can repeat on every round and is
+// all an operator has to tell a 500 from an instance that never answered.
 func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -3664,6 +3668,7 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 			pool := New(testConfig(stubGitLabBase), testFactory())
 			validatedAt := time.Now().Add(-30 * time.Minute)
 			key := revalidationEntry(t, pool, baseURL, "tok-"+tt.name, validatedAt)
+			captured := captureLogs(t)
 
 			pool.revalidateAll(context.Background())
 
@@ -3677,7 +3682,41 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 					t.Errorf("lastValidated moved = %v, want %v", moved, tt.wantRevalid)
 				}
 			}
+			switch {
+			case tt.wantFailed > 0:
+				assertRevalidationWarning(t, captured, revalidationRefusedMessage, tt.status, false)
+			case tt.wantTransient > 0:
+				assertRevalidationWarning(t, captured, revalidationNoVerdictMessage, tt.status, true)
+			}
 		})
+	}
+}
+
+// The two warnings a revalidation round writes, as revalidateAll spells them.
+const (
+	revalidationRefusedMessage   = "server pool: gitlab rejected a pooled credential, evicting entry"
+	revalidationNoVerdictMessage = "server pool: token revalidation could not reach a verdict, keeping entry"
+)
+
+// assertRevalidationWarning holds one revalidation warning to the status it
+// reports and, where wantCause, to carrying the non-nil error that says why no
+// verdict was reached.
+func assertRevalidationWarning(t *testing.T, captured *capturedRecords, message string, wantStatus int, wantCause bool) {
+	t.Helper()
+	record, found := captured.find(message)
+	if !found {
+		t.Errorf("no %q warning was logged", message)
+		return
+	}
+	if status, ok := logAttr(record, "status"); !ok || status.Int64() != int64(wantStatus) {
+		t.Errorf("warning %q status = %v (present %t), want %d", message, status, ok, wantStatus)
+	}
+	if !wantCause {
+		return
+	}
+	cause, ok := logAttr(record, "error")
+	if err, isErr := cause.Any().(error); !ok || !isErr || err == nil {
+		t.Errorf("warning %q error = %v (present %t), want the cause no verdict was reached", message, cause, ok)
 	}
 }
 

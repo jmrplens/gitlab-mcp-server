@@ -768,8 +768,9 @@ const (
 // that its credential was just checked is only honest on a real answer, and a
 // 500 read as "accepted" would push back the credential-age ceiling on the
 // strength of a question GitLab never answered. The pool's periodic
-// revalidation reads all three: it evicts on a refusal, stamps the entry on an
-// acceptance, and counts anything else as no verdict, since treating a
+// revalidation reads all three, through [Client.CheckCredentialDetail] so it
+// can log what each was read from: it evicts on a refusal, stamps the entry on
+// an acceptance, and counts anything else as no verdict, since treating a
 // briefly unreachable GitLab as a refusal would evict every tenant at once.
 //
 // It issues GET /api/v4/user through the raw health client rather than the SDK
@@ -784,21 +785,52 @@ const (
 // The probe URL is built from the normalized base URL the operator configured,
 // never from a request.
 func (c *Client) CheckCredential(ctx context.Context) CredentialVerdict {
+	return c.CheckCredentialDetail(ctx).Verdict
+}
+
+// CredentialCheck is one credential probe's verdict together with what it was
+// read from, for a caller that has to say why no verdict was reached.
+type CredentialCheck struct {
+	// Verdict is what [Client.CheckCredential] reports.
+	Verdict CredentialVerdict
+	// Status is the HTTP status GitLab answered the probe with, and 0 when no
+	// response arrived.
+	Status int
+	// Err is nil when GitLab answered with a verdict. Otherwise it says why
+	// there was none: the error that stopped the request from being built or
+	// answered (a refused connection, a TLS failure, a timeout), or, when a
+	// response arrived with a status that is neither verdict, that status.
+	Err error
+}
+
+// CheckCredentialDetail is [Client.CheckCredential] with the cause kept.
+//
+// The verdict alone serves admission and the pool's confirmation of a 401,
+// which act on it and log nothing about the probe. The pool's periodic
+// revalidation logs every round that reaches no verdict, and a warning that
+// cannot say whether GitLab answered 500, 429 or a redirect, or never
+// answered at all, gives an operator who sees it on every round nothing to go
+// on.
+func (c *Client) CheckCredentialDetail(ctx context.Context) CredentialCheck {
 	probeURL := strings.TrimRight(c.baseURL, "/") + "/api/v4/user"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, http.NoBody)
 	if err != nil {
-		return CredentialUnanswered
+		return CredentialCheck{Err: fmt.Errorf("build the credential probe: %w", err)}
 	}
 	c.setAuthHeader(req)
 
 	resp, err := c.healthClient.Do(req)
 	if err != nil {
-		return CredentialUnanswered
+		return CredentialCheck{Err: err}
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
 
-	return credentialVerdictFor(resp.StatusCode)
+	check := CredentialCheck{Verdict: credentialVerdictFor(resp.StatusCode), Status: resp.StatusCode}
+	if check.Verdict == CredentialUnanswered {
+		check.Err = fmt.Errorf("the credential probe was answered HTTP %d, which is neither an acceptance nor a refusal", resp.StatusCode)
+	}
+	return check
 }
 
 // credentialVerdictFor reads the status the credential probe was answered

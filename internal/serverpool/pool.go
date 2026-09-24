@@ -1764,8 +1764,11 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 }
 
 // revalidateAll checks each pool entry's token with the credential probe,
-// [gitlabclient.Client.CheckCredential]. Entries GitLab refuses are evicted;
-// entries whose check could not reach a verdict are left alone.
+// [gitlabclient.Client.CheckCredentialDetail]. Entries GitLab refuses are
+// evicted; entries whose check could not reach a verdict are left alone. Both
+// warnings carry the status GitLab answered with, and the one that keeps an
+// entry carries why no verdict was reached as well, since that warning can
+// repeat on every round and is what an operator diagnoses the instance from.
 //
 // The probe and not an SDK call, because the probe's answer is read by status
 // alone and never reported to the unauthorized hook. An SDK call's 401 is, and
@@ -1792,13 +1795,14 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		}
 
 		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		verdict := entry.client.CheckCredential(checkCtx)
+		check := entry.client.CheckCredentialDetail(checkCtx)
 		cancel()
 
-		switch verdict {
+		switch check.Verdict {
 		case gitlabclient.CredentialRefused:
 			slog.WarnContext(ctx,
 				"server pool: gitlab rejected a pooled credential, evicting entry",
+				"status", check.Status,
 				"age", time.Since(entry.createdAt).Round(time.Second),
 			)
 			p.metrics.RevalidationsFailed.Add(1)
@@ -1813,6 +1817,8 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		default:
 			slog.WarnContext(ctx,
 				"server pool: token revalidation could not reach a verdict, keeping entry",
+				"status", check.Status,
+				"error", check.Err,
 				"age", time.Since(entry.createdAt).Round(time.Second),
 			)
 			p.metrics.RevalidationsTransient.Add(1)
