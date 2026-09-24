@@ -426,9 +426,8 @@ func TestWriteDownloadOutputFile_DirectoryChangedAfterItWasMade_Refused(t *testi
 			wantMsg: "not a regular file",
 		},
 		{
-			// Named after the file the destination resolves to, which is
-			// the destination here, rather than the random temporary name
-			// the caller never saw.
+			// Named after the file the destination resolves to rather than
+			// the random temporary name the caller never saw.
 			name:         "the new directory removed again",
 			after:        func(dir, _ string) error { return os.Remove(dir) },
 			wantMsg:      "create a temporary file beside output path ",

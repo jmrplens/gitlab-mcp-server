@@ -119,8 +119,9 @@ func createPartialDownload(path string) (*partialDownload, error) {
 	file, err := createNewLeafNoFollow(name)
 	if err != nil {
 		// Named after the file output_path resolves to, whose directory is
-		// the one the permission is needed on, and which is output_path
-		// itself unless the path was relative or its leaf a link; the
+		// the one the permission is needed on. It differs from output_path
+		// wherever the path was relative or unclean, or any existing
+		// component of it, the leaf or a directory above it, is a link; the
 		// refusals canonicalDownloadOutputPath makes once it has resolved
 		// the path name it the same way. The random name is left to the
 		// wrapped error, because the caller never saw it.
