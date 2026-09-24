@@ -744,7 +744,10 @@ coverage-conditions:
 # root, so the script runs that command, with the tags and -coverpkg it reads
 # out of GREMLINS_FLAGS or gremlins' own GREMLINS_UNLEASH_TAGS and
 # GREMLINS_UNLEASH_COVERPKG, and --integration from the flag alone, since
-# gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. It runs
+# gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. The flag
+# is the only source of it the script can read: integration set in a
+# .gremlins.yaml, where a YAML bool does pass that assertion, reaches gremlins
+# and not the baseline, so an integration run is asked for with -i. It runs
 # it once untimed, which is the gate below and warms the build cache the way
 # gremlins' run will find it, and once under bash's `time`. It used to read the
 # duration off go test's summary line, which is the test binary's run without
@@ -752,7 +755,9 @@ coverage-conditions:
 # reached gremlins and not the baseline left the harness printing `[no test
 # files]`, and the guess turned 114 seconds of tests into a deadline of 95
 # hours per mutant (issue 915). A package with no test file under its tags is
-# refused instead, since every mutant of it would be reported NOT COVERED.
+# refused instead, since each mutant runs only that package's tests and so none
+# could be killed, unless GREMLINS_FLAGS asks for an integration run with a
+# -coverpkg, under which the module's other tests cover and kill its mutants.
 #
 # The budget has to cover a compile as well as a run, which is why it is five
 # minutes. gremlins copies the module into a directory per worker, and Go keys
@@ -780,13 +785,18 @@ coverage-conditions:
 # rather than silently: a run told to use one second and given ten should say
 # so, or the printed budget is a second lie on top of the first.
 #
-# MUTANT_DEADLINE_MAX bounds each mutant's deadline outright, in seconds: the
-# coefficient is held at the ceiling's multiple of the baseline, so a mutant
-# that makes the tests hang is reported TIMED OUT within it instead of holding
-# a worker for as long as the coefficient allows. It answers to the floor as
+# MUTANT_DEADLINE_MAX holds each mutant's deadline to about its value, in
+# seconds: the coefficient is held at the ceiling's multiple of the baseline,
+# so a mutant that makes the tests hang is reported TIMED OUT within about that
+# long instead of holding a worker for as long as the coefficient allows. About,
+# because gremlins multiplies the coefficient by its own coverage run rather
+# than by the script's baseline, and a run of that command a few percent slower
+# gives a deadline a few percent over the ceiling. It answers to the floor as
 # the budget does, and a baseline longer than half of it is refused, since no
 # mutant could run the suite twice inside it. At an hour it binds only on a
 # baseline over 450 seconds, where the floor of 8 would otherwise exceed it.
+# All three knobs are written in seconds as a plain number; anything else is
+# refused, since awk would read 2h as 2.
 #
 # -count=1 is what makes the coefficient mean what the line above says, and it
 # is a second defect rather than the same one. The coefficient is not applied to

@@ -213,26 +213,37 @@ since it could be hiding a tag. `--integration` is read from the flag alone
 (`-i` in `GREMLINS_FLAGS`): gremlins v0.6.0 binds
 `GREMLINS_UNLEASH_INTEGRATION` too, but reads it back with a bool type
 assertion that the string an environment variable arrives as never passes, so
-the variable widens nothing, and the script says so when it is set. It runs
+the variable widens nothing, and the script says so when it is set. The flag
+is the only source of it the script can read: integration set in a
+`.gremlins.yaml`, where a YAML bool does pass that assertion, reaches gremlins
+and not the baseline, so ask for an integration run with `-i`. It runs
 the command twice: once untimed, which is the pass/fail gate and leaves the
 build cache as warm as gremlins' run will find it, and once under bash's
-`time` in the C locale (under a comma-decimal locale `time`
-writes `0,940`, which awk reads as 0). Measured after a content edit, the
+`time` in the C locale (under a comma-decimal locale `time` writes `0,940`,
+which the script's positive-number check refuses, so every run there would
+stop). Measured after a content edit, the
 timed base and gremlins' own figure now agree: 1.017 s against 1.045 s on
 `elicitationtools`, 1.026 s against 1.038 s on `cmd/audit_dynamic_aliases`. A
 package with no test file under the tags it was given is refused, naming them,
-since every mutant of it would be reported NOT COVERED. A tag set only in a
+since each mutant runs only that package's tests and none could be killed; the
+exception is an integration run with a `-coverpkg`
+(`GREMLINS_FLAGS='-i --coverpkg <pattern>'`), under which the module's other
+tests cover the package and gremlins runs them against each mutant. A tag set only in a
 `.gremlins.yaml` reaches gremlins and not the script, and that refusal stops
 such a run only when it would find no test file at all: a package with some
 untagged test files passes it and is measured against a baseline that runs
 fewer tests than gremlins times. Pass the tag through `GREMLINS_FLAGS`.
 
-`MUTANT_DEADLINE_MAX` (3600 s) is a ceiling on each mutant's deadline, applied
-through the coefficient because gremlins offers no other handle: a ceiling
-below the floor is raised to it and the run says so, and a baseline longer than
-half the ceiling is refused. A mutant that hangs is then reported TIMED OUT
-within the hour at most rather than blocking a run for days, and TIMED OUT is
-not part of the gate: it is a reading to explain, as the paragraphs below do.
+`MUTANT_DEADLINE_MAX` (3600 s) holds each mutant's deadline to about its value,
+applied through the coefficient because gremlins offers no other handle: a
+ceiling below the floor is raised to it and the run says so, and a baseline
+longer than half the ceiling is refused. About, because the cap is derived from
+the script's baseline while gremlins multiplies the coefficient by its own
+coverage run, which can come in a few percent longer. A mutant that hangs is
+then reported TIMED OUT within about an hour rather than blocking a run for
+days, and TIMED OUT is not part of the gate: it is a reading to explain, as the
+paragraphs below do. The three knobs are seconds written as a plain number,
+and anything else (`2h`) is refused rather than read as its leading digits.
 
 **The budget has to cover a compile, not only a run.** gremlins copies the
 module into a directory per worker, and Go keys a compile on the package's
@@ -247,9 +258,10 @@ before, and `elicitationtools` keeps its 133 killed and none timed out. That is
 why the default is 300 s. A timeout figure taken before this change is not
 comparable with one taken after it, since the deadlines themselves moved.
 
-A timeout that survives a budget that size is a finding rather than a setting:
+A timeout that survives the 300 s budget is a finding rather than a setting:
 the mutant made the package pathologically slow instead of wrong. Eight of
-`cmd/internal/mcpsurface`'s fourteen outlast 147 s, because what they mutate is
+`cmd/internal/mcpsurface`'s fourteen outlasted 147 s under the deadlines in use
+before issue 915, because what they mutate is
 the memo in front of a catalog of some 1091 tools, so each lookup rebuilds it.
 That the suite tolerates this says the tests benefit from the memo and none of
 them asserts it, which is killed by a test that counts the builds, not by more
