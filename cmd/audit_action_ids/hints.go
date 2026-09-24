@@ -172,10 +172,12 @@ func (h *HintReport) judge(at site, ids *actionids.IDs) {
 // are the ID section's to judge, where declaredAliasMentions excuses the
 // issue.close and issue.reopen the issue.update line names on purpose, so
 // judging them here too would count every bad ID twice and refuse those two.
-// A Description is not read here at all: an individual tool's Description is
-// served by that tool alone, on the one surface that registers it, where the
-// name it spells is right. The verbs of a line a format assembled are masked,
-// as they are for every sentence this section judges.
+// A Description is not read here at all: a domain action's individual tool
+// Description is served by that tool alone, on the one surface that registers
+// it, where the name it spells is right. A standalone surface tool's is served
+// on all three, and is read here because it is written as that action's Usage
+// line as well (actioncatalog.SurfaceToolSpec). The verbs of a line a format
+// assembled are masked, as they are for every sentence this section judges.
 func (h *HintReport) judgeUsage(at site) {
 	h.Read++
 	h.ReadByKind[at.Kind]++

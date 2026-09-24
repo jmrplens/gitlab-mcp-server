@@ -1786,9 +1786,10 @@ func (w *walker) isFormatCall(call *ast.CallExpr) bool {
 // tool name handed to a sentence as its argument.
 //
 // Every other argument is one of two things. A name that says it carries hint
-// prose, a parameter named for a message where this kind follows one, or a
-// read of a field this walk records, is prose the sentence is assembled from,
-// and is followed or left to where it is written, as a hint is. Anything else
+// prose, a parameter named for a message where this kind follows one, a read
+// of a field this walk records, or, in a Usage line alone, a call of a helper
+// declared in the load, is prose the sentence is assembled from, and is
+// followed or left to where it is written, as a hint is. Anything else
 // is a value the sentence reports: an ID, a path, a count, GitLab's own
 // message, the error it wraps. Those are passed over and counted, which is a
 // deliberate exception to the rule that a blind spot is listed: a format is
@@ -1798,8 +1799,10 @@ func (w *walker) isFormatCall(call *ast.CallExpr) bool {
 // followed as a message's argument, because in a format it is almost always
 // GitLab's message spelled into a sentence the server writes around it
 // (glMsg); a parameter so named is the server's own sentence handed on by a
-// helper (requireProject(op, missingProjectMsg)), and passing it over would
-// leave every caller's sentence unread.
+// helper, and passing it over would leave every caller's sentence unread. No
+// helper in the tree spells one into a format today (files' missingProjectMsg
+// and projects' missingUserMsg go to errors.New), so the shape is the one the
+// fixture pins, requireProject(op, missingProjectMsg).
 //
 // A format that does not fold is a sentence the walk cannot read, and the
 // call is left to be recorded as one site nothing folds.
@@ -1831,10 +1834,21 @@ func (w *walker) foldFormat(kind string, call *ast.CallExpr) (string, bool) {
 // read of a field this walk records is a copy of prose recorded where it was
 // written, and a call of a sink is prose its own visit reads.
 //
-// The last is not a nicety. An error wrapped in the error it causes,
+// The sink is not a nicety. An error wrapped in the error it causes,
 // fmt.Errorf("...: %w", fmt.Errorf("...")), is visited outer first, and the
 // inner call is the very expression its own visit records, so passing it over
 // here would record it first and leave the inner sentence unread.
+//
+// A Usage line's format is the one kind whose other calls are prose as well:
+// a call of a function declared in the load is followed to every branch it
+// returns from, as a whole Usage line handed to such a helper is
+// ([walker.recordErrorHint]). badges assembles its twelve lines from a format
+// whose last argument is badgeScopeBoundary(scope), a helper returning one of
+// two sentences, and both named a meta tool while the call was passed over as
+// a value the line reports. A hint's or a message's format is left alone,
+// since its calls are the values it reports (err.Error(), a joined list, an
+// escaped field), and following those would read toolutil's escaping as
+// sentences nothing folds, which is why a whole hint is not followed either.
 func (w *walker) formatArgIsProse(kind string, arg ast.Expr) bool {
 	switch typed := ast.Unparen(arg).(type) {
 	case *ast.Ident:
@@ -1850,8 +1864,10 @@ func (w *walker) formatArgIsProse(kind string, arg ast.Expr) bool {
 		if !ok {
 			return false
 		}
-		_, isSink := proseSinks[callee.FullName()]
-		return isSink
+		if _, isSink := proseSinks[callee.FullName()]; isSink {
+			return true
+		}
+		return kind == kindUsage && w.followReturns(kind, typed, recordHintValue)
 	default:
 		return false
 	}

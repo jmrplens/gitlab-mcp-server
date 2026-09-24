@@ -144,8 +144,13 @@
 // schemas from. A Usage line, whose dotted IDs the published-ID rule judges,
 // is judged here for tool names too, and one assembled at run time is folded
 // as a hint is, a helper that picks it by the action's name followed to every
-// branch it returns from. An individual tool's Description is not: only that
-// tool serves it, and the tool name is right there. Three spellings are
+// branch it returns from, and a call a Usage format is handed is followed the
+// same way, which is how badges' scope boundary is read. A domain action's
+// individual tool Description is not read: only that tool serves it, and the
+// tool name is right there. A standalone surface tool's is served on every
+// surface, as its tool's description on meta and individual and as its Usage
+// on dynamic, so the guided flows and project discovery write their one text
+// as the Usage too, where it is read. Three spellings are
 // reported: a gitlab_* tool name, a registered alias, and a dotted ID that
 // resolves nowhere. A tool the package's own surface registers is declared
 // (declaredSurfaceToolMentions), which is dynamic's two tools in dynamic's own
@@ -191,10 +196,11 @@
 // is the one place this departs from the rule above. A sentence the type
 // checker cannot fold is still text a reader can read, and the twenty-three
 // in the tree build one from a helper that branches, a map read, a call into
-// another module, a parameter no rule follows or a Description copied into a
-// Usage line, or read one back out of rendered text (toolutil's safe-mode
-// preview parser). Six came with the run-time Usage lines and the map schemas
-// this rule used to pass in silence. A sentence concatenated
+// another module (accesstokens' operation phrase, whose last branch spells the
+// action's name) or a parameter no rule follows, or read one back out of
+// rendered text (toolutil's safe-mode preview parser). Five came with the
+// run-time Usage lines and the map schemas this rule used to pass in silence,
+// and one with following a Usage format's helper calls. A sentence concatenated
 // from a literal and a value is folded to its literal halves, and the half it
 // leaves unfolded is read on its own: a name is followed to the values it is
 // handed, where a tool name is judged, and anything else is counted with the
@@ -211,10 +217,12 @@
 // 'list'") is not read at all, having neither the gitlab_ prefix nor a dot,
 // and naming the ID it means needs the domain the sentence belongs to, which
 // it does not spell, so it is rewritten to toolutil.HintAction by hand; a
-// merge's body adds prose unread, as above; an individual tool's Description
-// assembled at run time is read by no rule; and internal/prompts and
-// internal/resources are outside the load, the review prompt being held to the
-// catalog by a test of its own.
+// merge's body adds prose unread, as above; a domain action's individual tool
+// Description assembled at run time is read by no rule; and internal/prompts
+// and internal/resources are outside the load, the review prompt being held to
+// the catalog by a test of its own and the resource manifests projecting only
+// a description's "See also" clause per surface, with no gate over the names
+// the rest of their prose spells.
 //
 // The dotted-ID half of it was never large: the five unresolvable IDs the
 // first run found were one constant in internal/tools/workitemsavedviews

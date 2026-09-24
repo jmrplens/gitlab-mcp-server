@@ -15,9 +15,27 @@ import (
 type SurfaceToolSpec struct {
 	Name  string
 	Title string
-	// Description is this one action's own description, the text the
-	// individual surface serves for it.
+	// Description is this one action's own description, the text the tool
+	// serves for it on the surfaces that register it as a tool.
 	Description string
+	// Usage is the action's Usage line, which the dynamic surface serves in
+	// its find and describe results.
+	//
+	// It is its own field, projected as the Usage, rather than the Description
+	// served again under that name. A standalone surface tool is registered
+	// on meta and on individual alike and runs through the dynamic surface
+	// too, so its text is served on all three, and cmd/audit_action_ids holds
+	// a Usage line to that, where it holds an individual tool's Description
+	// to nothing: the Description a domain action's tool serves is served by
+	// that tool alone. Projecting the Description as the Usage put the flows'
+	// descriptions on every surface while the rule read them nowhere, and
+	// every one of them named a tool two surfaces lack. The standalone specs
+	// write their text once, as the Usage and as the Description both.
+	//
+	// A spec without one projects an action without one. The dynamic
+	// surface's two controllers are the only such specs, and they are
+	// registered as tools of their own and never projected into a catalog.
+	Usage string
 	// GroupDescription is what the group tool this action belongs to says
 	// about itself, which is not the same sentence and must not be derived
 	// from one action's.
@@ -96,7 +114,7 @@ func (spec SurfaceToolSpec) ActionSpec() (toolutil.ActionSpec, error) {
 	return toolutil.NewActionSpec(spec.ActionName, spec.Route, toolutil.ActionSpecOptions{
 		Aliases:        spec.Aliases,
 		Tags:           spec.Tags,
-		Usage:          spec.Description,
+		Usage:          spec.Usage,
 		RelatedActions: spec.RelatedActions,
 		Compatibility:  spec.Compatibility,
 		ReadOnly:       spec.ReadOnly,
@@ -117,6 +135,7 @@ func CloneSurfaceToolSpec(spec SurfaceToolSpec) SurfaceToolSpec {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Title = strings.TrimSpace(spec.Title)
 	spec.Description = strings.TrimSpace(spec.Description)
+	spec.Usage = strings.TrimSpace(spec.Usage)
 	spec.GroupDescription = strings.TrimSpace(spec.GroupDescription)
 	spec.GroupToolName = strings.TrimSpace(spec.GroupToolName)
 	spec.BaseDomain = strings.TrimSpace(spec.BaseDomain)

@@ -221,6 +221,7 @@ When a "get" operation targets a resource that does not exist the server returns
 
 The branch **"nonexistent" in project 42** does not exist or is not accessible with your current permissions.
 
+---
 💡 **Next steps:**
 - Use action 'branch.list' to list the project's branches
 - Verify the branch name is spelled correctly (case-sensitive)

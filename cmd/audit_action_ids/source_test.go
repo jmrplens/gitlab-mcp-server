@@ -2769,6 +2769,88 @@ func fromAnotherModule(raw string) toolutil.ActionSpecOptions {
 	}
 }
 
+// TestCollectSites_AUsageFormatHandedAHelperCall_ReadsEveryBranch holds the
+// one kind whose format follows a call argument into the helper it names: a
+// Usage line assembled as fmt.Sprintf("%s ... %s", describe(verb),
+// boundary(scope)), which is how badges writes its twelve lines. Both helpers
+// pick a sentence by a parameter, and each branch they return is read, the
+// constant whole and the format folded with its own value passed over. The
+// call used to be passed over as a value the line reports, and both of the
+// boundary's sentences named a meta tool that way.
+//
+// Two calls stay values. One into another module has no body to follow, and
+// the same helper handed to a hint's format is passed over, because a hint's
+// calls are what it reports: following them read toolutil's escaping as
+// sentences nothing folds.
+func TestCollectSites_AUsageFormatHandedAHelperCall_ReadsEveryBranch(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func boundary(scope string) string {
+	if scope == "group" {
+		return "Group badges only. Project badges belong to gitlab_demo_project."
+	}
+	return "Do not use gitlab_demo_group for project badges."
+}
+
+func describe(verb string) string {
+	switch verb {
+	case "add":
+		return fmt.Sprintf("Add a %s badge.", verb)
+	default:
+		return "Manage badges."
+	}
+}
+
+func hintBoundary(scope string) string {
+	return "not read gitlab_demo_hint " + scope
+}
+
+func fromHelpers(verb, scope, idParam string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: fmt.Sprintf("%s Use %s. %s", describe(verb), idParam, boundary(scope))}
+}
+
+func fromAnotherModule(name string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: fmt.Sprintf("Use %s.", strings.ToUpper(name))}
+}
+
+func hinted(scope string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, fmt.Sprintf("retry: %s", hintBoundary(scope)))
+}
+`)
+
+	want := []string{
+		"%s Use %s. %s",
+		"Add a %s badge.",
+		"Do not use gitlab_demo_group for project badges.",
+		"Group badges only. Project badges belong to gitlab_demo_project.",
+		"Manage badges.",
+		"Use %s.",
+	}
+	if got := valuesOfKind(sites, kindUsage); !slices.Equal(got, want) {
+		t.Errorf("usage values = %v, want %v", got, want)
+	}
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, []string{"retry: %s"}) {
+		t.Errorf("error hint values = %v, want the hint's format alone", got)
+	}
+	wantPassed := []string{"hintBoundary(scope)", "idParam", "strings.ToUpper(name)", "verb"}
+	if got := passedOverExprs(sites); !slices.Equal(got, wantPassed) {
+		t.Errorf("passed over = %v, want %v", got, wantPassed)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
 // TestCollectSites_AMessageParameterInAFormat_IsFollowedToItsCallers holds
 // the one name a format argument is followed under besides a hint's: a
 // parameter named for a message, which is a helper handing on the sentence

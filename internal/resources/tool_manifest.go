@@ -356,7 +356,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot *toolSurfaceSnaps
 		Name:        "tool_detail",
 		Title:       "Tool Detail",
 		MIMEType:    mimeJSON,
-		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.",
+		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_project_get in individual mode.",
 		Annotations: toolutil.ResourceMachineDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -741,11 +741,13 @@ func actionDescription(action actioncatalog.Action, resolve seeAlsoResolver) str
 	return rewriteSeeAlso(description, resolve)
 }
 
-// seeAlsoResolver maps an individual-surface tool name to the identifier
-// the active surface's entries are invoked by, reporting whether the name
-// is known. A nil resolver leaves descriptions untouched (the individual
-// surface, whose namespace the hand-written clauses already use).
-type seeAlsoResolver func(individualName string) (string, bool)
+// seeAlsoResolver maps a name a "See also:" clause spells, an
+// individual-surface tool name or a canonical action ID, to the identifier
+// the active surface's entries are invoked by, reporting whether the name is
+// known. A nil resolver leaves descriptions untouched (the individual
+// surface, whose namespace a domain action's clause already uses, and where
+// a canonical ID resolves as it does on every surface).
+type seeAlsoResolver func(name string) (string, bool)
 
 // seeAlsoClause matches the trailing cross-reference sentence the action
 // specs write for the individual surface — "See also: gitlab_a, gitlab_b."
@@ -763,6 +765,10 @@ var seeAlsoClause = regexp.MustCompile(`See also: ([a-z0-9_.]+(?:, [a-z0-9_.]+)*
 // dynamic and meta surfaces those names are not invocable, and the manifest
 // instructions tell the model to pass entry IDs — so emitting the
 // individual names there contradicts the same document two lines later.
+// The standalone surface tools (the guided flows and project discovery) write
+// theirs in canonical IDs instead, because their description reaches every
+// surface's tools/list and find results verbatim, which this projection never
+// sees; an ID is rewritten here like a tool name is.
 //
 // A name the resolver does not know is dropped, not passed through: on this
 // instance the catalog is tier-filtered, so a Free-tier server legitimately
@@ -813,14 +819,18 @@ func aliasPrimaries(catalog *actioncatalog.Catalog) map[string]actioncatalog.Act
 	return aliases
 }
 
-// newSeeAlsoIndex indexes a catalog's actions by their individual-surface
-// tool name, the namespace the hand-written clauses are addressed in.
+// newSeeAlsoIndex indexes a catalog's actions by the two namespaces the
+// hand-written clauses are addressed in: the individual-surface tool name a
+// domain action's clause spells, and the canonical ID a standalone surface
+// tool's spells. The two cannot collide, since a tool name carries no dot and
+// an ID carries one.
 func newSeeAlsoIndex(catalog *actioncatalog.Catalog) map[string]actioncatalog.Action {
 	if catalog == nil {
 		return nil
 	}
 	index := make(map[string]actioncatalog.Action)
 	for _, action := range catalog.Actions() {
+		index[string(action.ID)] = action
 		if action.IndividualTool.Name != "" {
 			index[action.IndividualTool.Name] = action
 		}

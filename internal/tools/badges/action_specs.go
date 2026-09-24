@@ -168,11 +168,16 @@ func badgeIndividualDescription(verb, scope string) string {
 	}
 }
 
+// badgeScopeBoundary is the closing sentence of every badge Usage line, which
+// sends a model that picked the wrong scope to the other scope's actions. It
+// names them by canonical ID, because the line is served on every surface and
+// the meta tools it used to name (gitlab_project, gitlab_group) are registered
+// on one of them.
 func badgeScopeBoundary(scope string) string {
 	if scope == "group" {
-		return "Use only when the task says group badge. Project badge CRUD belongs to gitlab_project."
+		return "Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete."
 	}
-	return "Use when the task says project badge. Do not use gitlab_group for project badge CRUD."
+	return "Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete."
 }
 
 func badgeActionDescription(verb, scope string) string {

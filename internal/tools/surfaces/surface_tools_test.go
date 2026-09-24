@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -151,6 +152,9 @@ func assertSurfaceMatchesAction(t *testing.T, spec actioncatalog.SurfaceToolSpec
 	}
 	if spec.Description != source.IndividualTool.Description {
 		t.Errorf("Description = %.40q…, want the action's own description %.40q…", spec.Description, source.IndividualTool.Description)
+	}
+	if spec.Usage != source.Usage {
+		t.Errorf("Usage = %.40q…, want the action's own usage %.40q…", spec.Usage, source.Usage)
 	}
 	if spec.ActionName != source.Name {
 		t.Errorf("ActionName = %q, want %q", spec.ActionName, source.Name)
@@ -365,6 +369,34 @@ func TestStandaloneToolSpecs_EverySurface_CarriesItsOwnActionMetadata(t *testing
 				t.Fatalf("surface tool %q has no action spec behind it", spec.Name)
 			}
 			assertSurfaceMatchesAction(t, spec, source)
+		})
+	}
+}
+
+// TestStandaloneToolSpecs_EverySurface_ServesOneTextNamingNoTool holds the
+// text a standalone surface tool serves to the demand every surface puts on
+// it.
+//
+// Meta and individual register the tool and serve its description; the
+// dynamic surface runs it by ID and serves its Usage. So the two are one text
+// written once, and it names actions by canonical ID, since a gitlab_* name
+// is registered on one surface of three. cmd/audit_action_ids judges that
+// text where it is written as the Usage, and holds an individual tool's
+// Description to nothing, which is right for a domain action's tool and was
+// wrong here: the five descriptions named gitlab_issue_create, gitlab_project
+// (action='create') and gitlab_search_projects while the rule read the Usage
+// lines nothing served. Equal texts are what make the rule's reading of the
+// Usage a reading of what every surface serves.
+func TestStandaloneToolSpecs_EverySurface_ServesOneTextNamingNoTool(t *testing.T) {
+	toolName := regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
+	for _, spec := range StandaloneToolSpecs(newProjectionClient(t)) {
+		t.Run(spec.Name, func(t *testing.T) {
+			if spec.Usage != spec.Description {
+				t.Errorf("Usage = %.60q…, want the description it is served beside, %.60q…", spec.Usage, spec.Description)
+			}
+			if names := toolName.FindAllString(spec.Description, -1); len(names) != 0 {
+				t.Errorf("description names %v, want canonical action IDs: the text is served on every surface", names)
+			}
 		})
 	}
 }

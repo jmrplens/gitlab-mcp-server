@@ -1847,12 +1847,15 @@ check-md-escaping:
 ## instance and for GitLab.com together, so the Orbit family does not read as
 ## dead. It reads the served prose besides, for a gitlab_* tool name, an alias
 ## or an ID that resolves nowhere: error hints and messages (errors.New,
-## fmt.Errorf, toolutil.ErrorResult), next steps (WriteHints, WriteListFooter,
-## Card.End), NextSteps and message fields, parameter guidance, jsonschema tag
-## descriptions and Usage lines. And it reads the substrings the e2e suite
-## asserts a served text carries (assertMentions, mentionsAny, containsAny and
-## harness.ExpectToolError), loaded from ./test/e2e/gitlab/... under the e2e
-## tag the command states itself. The work list lands in plan/action-ids.json.
+## fmt.Errorf, toolutil.ErrorResult, toolutil.CancelledResult), next steps
+## (WriteHints, WriteListFooter, Card.End), NextSteps and message fields,
+## parameter guidance, jsonschema tag descriptions and the description entry of
+## a schema written as a map (an input schema override), and Usage lines, the
+## text a standalone surface tool serves on every surface included. And it
+## reads the substrings the e2e suite asserts a served text carries
+## (assertMentions, mentionsAny, containsAny and harness.ExpectToolError),
+## loaded from ./test/e2e/gitlab/... under the e2e tag the command states
+## itself. The work list lands in plan/action-ids.json.
 audit-action-ids:
 	go run ./cmd/audit_action_ids/ -v -json plan/action-ids.json
 
