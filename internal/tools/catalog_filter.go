@@ -86,12 +86,18 @@ func FilterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 // The count is the point. Removal already worked on the dynamic and meta
 // surfaces, but the only line an operator saw came from the registered-tool
 // filter, which counts registered tool names: on the dynamic surface there are
-// two of them and neither is ever an exclusion target, so a working exclusion
+// two of them and neither is a catalog action, so a working catalog exclusion
 // logged "excluded=0" and was indistinguishable from one that matched nothing.
 //
 // The warning is raised here because every surface's catalog passes through
-// this function once per configuration: [FilterActionCatalog] for the dynamic
-// and meta surfaces, the individual assembler directly. An entry this catalog
+// this function whenever a shared catalog is built: [FilterActionCatalog] for
+// the dynamic and meta surfaces, the individual assembler directly. That is
+// once per catalog key rather than once per deployment, and the key carries
+// the tier, the instance class and the part of the credential's scopes that
+// narrows the catalog, so in HTTP mode, where the tier is detected per pool
+// entry unless it is pinned, one deployment can write the warning several
+// times, and an entry reported as naming nothing for a Free caller may still
+// remove actions for an Ultimate one. An entry this catalog
 // does not match may still name a standalone utility, which no surface keeps
 // in this catalog, so what is left is put to [ExcludedStandaloneTools] before
 // anything is reported. The warning used to be computed against this catalog

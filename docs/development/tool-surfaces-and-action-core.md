@@ -224,11 +224,15 @@ client. The relevant policies are:
 
 - Enterprise/Premium and GitLab.com-only catalog selection.
 - `ExcludeTools` configuration, one rule for catalog and standalone actions. An
-  entry that names neither is reported once per configuration by
-  `tools.ExcludeFromCatalog` with a WARN, never refused, since one
-  configuration is reused across tiers. The WARN is written when the catalog
-  for a configuration is first built: at startup on stdio, on the first
-  request for that configuration in HTTP mode. It also names the dynamic
+  entry that names neither is reported by `tools.ExcludeFromCatalog` with a
+  WARN, never refused, since one configuration is reused across tiers. The
+  WARN is written whenever a shared catalog is built, which is once per
+  catalog key: at startup on stdio, and in HTTP mode the first time each key
+  is built. The key carries the tier (detected per pool entry unless `--tier`
+  pins it), the instance class and the part of the credential's scopes that
+  narrows the catalog, so one HTTP deployment can write the WARN several
+  times, and an entry reported as naming nothing for one caller's tier may
+  still remove actions for another's. It also names the dynamic
   surface's own `gitlab_find_action` and `gitlab_execute_action`, although the
   pass over registered tools removes them there by name, because
   `ExcludeFromCatalog` knows no surface and on the other two those names do
