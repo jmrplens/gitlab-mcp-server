@@ -251,7 +251,7 @@ func teardownWorld(client *gitlabclient.Client, world *World) error {
 	// The personal snippet belongs to the user, so neither deletion below
 	// takes it along.
 	if world.Snippet.ID != 0 {
-		if err := deletePersonalSnippet(ctx, client, world.Snippet.ID); err != nil {
+		if err := deletePersonalSnippet(ctx, client, world.Snippet.ID, world.Snippet.Title); err != nil {
 			failures = append(failures, fmt.Errorf("tearing down the World's personal snippet: %w", err))
 		}
 	}

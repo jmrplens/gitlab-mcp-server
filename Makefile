@@ -455,16 +455,29 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
 	  -- -tags e2e -p 1 -count=1 -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/...'
 
-## e2e-clean-orphans: delete what earlier runs left on a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project and group the token owns whose name or path opens with E2E_SWEEP_PREFIX (default e2e-), and every such user when the token is an administrator's.
-# Run by hand and by nothing else: a run sweeps only what carries its own run
-# ID, and this is the prefix-wide sweep for the leftovers of a run that could
-# not clean up. It is a test of the fixture package because that library is
-# importable only from test/e2e. The test skips when the prefix is empty, which
-# guards a bare go test run; this target always passes one.
-E2E_SWEEP_PREFIX ?= e2e-
+## e2e-clean-orphans: delete what earlier runs left on a GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project and group the token owns, every personal snippet of its user and, with an administrator's token, every user, whose name carries the ID of a run that started more than E2E_SWEEP_MIN_AGE (default 2h) ago; E2E_SWEEP_PREFIX=<prefix> sweeps by name prefix instead, whatever run and however recent.
+# Run by hand and by nothing else. A run sweeps only what carries its own run
+# ID, at its own exit, and a run that was killed never gets there; this is the
+# sweep for what such a run left. It knows no run ID, so it reads the one a name
+# carries and the second that run started, and takes it only once that is
+# E2E_SWEEP_MIN_AGE ago. The default, 2h, is longer than any run can last: go
+# test ends a package's binary at E2E_GITLAB_TIMEOUT or
+# E2E_DOCKER_ENTERPRISE_TIMEOUT (3600s each) and its exit hooks take minutes
+# more, so a run still going is never touched. Raise it whenever either
+# timeout is raised, and set it to 0 only when no run is going. A run started with E2E_RUN_ID
+# carries no date in its names, so this default never reaches it: sweep its
+# leftovers with E2E_SWEEP_PREFIX, which applies one prefix to all four kinds,
+# reaches the token user's own objects as readily as the suite's, and would
+# reach a run still going. Names open with their kind (proj-, grp-, snippet-,
+# the World's e2e-world-), so a prefix picks a kind rather than a run. It is a
+# test of the fixture package because that library is importable only from
+# test/e2e. The test skips when neither variable is set, which guards a bare go
+# test run; this target always passes the age.
+E2E_SWEEP_MIN_AGE ?= 2h
+E2E_SWEEP_PREFIX ?=
 e2e-clean-orphans:
 	bash -o pipefail -c 'if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
-	  E2E_SWEEP_PREFIX=$(E2E_SWEEP_PREFIX) go test -tags e2e -count=1 -v -run "^TestSweepPrefix_Orphans_OnDemand$$" ./test/e2e/internal/fixture/'
+	  E2E_SWEEP_MIN_AGE=$(E2E_SWEEP_MIN_AGE) E2E_SWEEP_PREFIX=$(E2E_SWEEP_PREFIX) go test -tags e2e -count=1 -v -run "^TestSweepOrphans_Leftovers_OnDemand$$" ./test/e2e/internal/fixture/'
 
 ## test-e2e-gitlab-com: end-to-end live test of the Orbit knowledge graph
 ## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,

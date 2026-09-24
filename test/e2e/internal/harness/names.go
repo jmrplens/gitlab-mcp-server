@@ -57,8 +57,10 @@ func sanitizeNamePart(name string, maxLength int) string {
 	sanitized = strings.ReplaceAll(sanitized, "_", "-")
 	sanitized = unsafeChars.ReplaceAllString(sanitized, "")
 	sanitized = strings.Trim(sanitized, "-")
-	if maxLength > 0 && len(sanitized) > maxLength {
-		sanitized = strings.Trim(sanitized[:maxLength], "-")
+	if maxLength > 0 {
+		// A name already within the cap is sliced whole and trimmed of the
+		// dashes it no longer has, so one expression serves both lengths.
+		sanitized = strings.Trim(sanitized[:min(len(sanitized), maxLength)], "-")
 	}
 	return sanitized
 }
@@ -89,6 +91,36 @@ func sanitizeNamePrefix(prefix string) string {
 func newRunID(now time.Time, pkg string) string {
 	source := fmt.Sprintf("%d-%d-%d", now.UnixNano(), os.Getpid(), runIDCounter.Add(1))
 	return withPackage(now.UTC().Format(e2ecalls.RunIDStampLayout)+"-"+shortStableHash(source), pkg)
+}
+
+// mintedRunID matches a run identifier [newRunID] minted, wherever it sits in
+// a name or a path: the stamp, the hash, and the first character of the
+// package name. The stamp is the layout with each digit read as any digit and
+// the hash is stableHashLength hexadecimal characters, so the shape is built
+// from the same two constants the identifier is, and the one cannot change
+// without the other following it.
+//
+// The character before the stamp must not be a letter or a digit: the stamp
+// opens a name part, after a dash or a slash or at the start, and a stamp run
+// into a longer word is not one this package wrote.
+var mintedRunID = regexp.MustCompile(`(?:^|[^0-9a-z])(` +
+	regexp.MustCompile(`\d`).ReplaceAllLiteralString(regexp.QuoteMeta(e2ecalls.RunIDStampLayout), `\d`) +
+	fmt.Sprintf(`)-[0-9a-f]{%d}-[a-z0-9]`, stableHashLength))
+
+// MintedRunStart finds a run identifier [newRunID] minted inside a name or a
+// path and returns when that run started, which is what lets a sweep tell the
+// leftovers of a run that has ended from the objects of one still going
+// without knowing either run's identifier.
+//
+// It reports false for a string carrying none, and that includes every
+// identifier E2E_RUN_ID replaced: an override carries no stamp, so nothing in
+// it says when its run began.
+func MintedRunStart(s string) (time.Time, bool) {
+	match := mintedRunID.FindStringSubmatch(s)
+	if match == nil {
+		return time.Time{}, false
+	}
+	return e2ecalls.RunIDDate(match[1] + "-")
 }
 
 // configuredRunID returns the sanitized override when one was given, and a

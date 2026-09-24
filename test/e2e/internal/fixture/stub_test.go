@@ -17,11 +17,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,8 +68,19 @@ type stubGitLab struct {
 	projects map[int64]*stubObject
 	groups   map[int64]*stubObject
 	users    map[int64]string
+	// snippets is what the snippet listing answers. It holds nothing unless
+	// a test adds to it, so every test that never thinks about snippets
+	// still sees a sweep that finds none.
+	snippets map[int64]stubSnippet
 	// deletes records every DELETE the stub answered, as "kind id params".
 	deletes []string
+	// listings records every listing the stub answered, which is how a test
+	// sees what a sweep searched by.
+	listings []stubRequest
+	// refusals is the status a request path is refused with, for a test of
+	// what a sweep does when it cannot read a kind at all or cannot delete
+	// one object of it. The listings and a user's deletion answer it.
+	refusals map[string]int
 	// branchMisses is how many branch reads answer 404 before the branch
 	// appears, which is how a stub says "not yet".
 	branchMisses int
@@ -104,6 +117,13 @@ type stubGitLab struct {
 	server *httptest.Server
 }
 
+// stubSnippet is a snippet the listing answers with. A zero ProjectID is a
+// personal snippet, which GitLab answers with a null project_id.
+type stubSnippet struct {
+	Title     string
+	ProjectID int64
+}
+
 // scriptedAnswer is one answer the stub was told to give.
 type scriptedAnswer struct {
 	status int
@@ -129,6 +149,7 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 		projects: map[int64]*stubObject{},
 		groups:   map[int64]*stubObject{},
 		users:    map[int64]string{},
+		snippets: map[int64]stubSnippet{},
 		state:    map[string]any{},
 		scripted: map[string][]scriptedAnswer{},
 	}
@@ -139,6 +160,10 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 	mux.HandleFunc("/api/v4/groups/{id}", stub.group)
 	mux.HandleFunc("/api/v4/users", stub.listUsers)
 	mux.HandleFunc("/api/v4/users/{id}", stub.user)
+	// A snippet's deletion is left to the script, under the catch-all
+	// below: a sweep that deletes a snippet nothing scripted fails its test,
+	// which is the strictness a sweep's test wants.
+	mux.HandleFunc("/api/v4/snippets", stub.listSnippets)
 	mux.HandleFunc("/api/v4/sidekiq/job_stats", stub.sidekiq)
 	mux.HandleFunc("/api/v4/runners/all", stub.listRunners)
 	mux.HandleFunc("/api/v4/projects/{id}/repository/branches/{branch...}", stub.branch)
@@ -218,11 +243,44 @@ func (s *stubGitLab) addUser(id int64, username string) {
 	s.users[id] = username
 }
 
+// addSnippet registers a snippet with the stub's listing: a personal one
+// when projectID is zero, and otherwise one written in that project.
+func (s *stubGitLab) addSnippet(id int64, title string, projectID int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.snippets[id] = stubSnippet{Title: title, ProjectID: projectID}
+}
+
 // recordedDeletes returns what the stub was asked to delete, in order.
 func (s *stubGitLab) recordedDeletes() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.deletes...)
+}
+
+// recordedListings returns the listings the stub answered, in order.
+func (s *stubGitLab) recordedListings() []stubRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]stubRequest(nil), s.listings...)
+}
+
+// recordListing notes one listing the stub is answering, and reports true
+// when a test asked for that listing to be refused, having answered the
+// refusal itself; the caller holds the lock.
+func (s *stubGitLab) recordListing(w http.ResponseWriter, r *http.Request) bool {
+	s.listings = append(s.listings, stubRequest{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query()})
+	return s.refuse(w, r)
+}
+
+// refuse answers the refusal a test asked for on the request's path, and
+// reports whether there was one; the caller holds the lock.
+func (s *stubGitLab) refuse(w http.ResponseWriter, r *http.Request) bool {
+	status, refused := s.refusals[r.URL.Path]
+	if refused {
+		writeError(w, status, strconv.Itoa(status)+" refused by the stub")
+	}
+	return refused
 }
 
 // remaining returns the paths of the projects and groups still there.
@@ -285,6 +343,9 @@ func (s *stubGitLab) listProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.recordListing(w, r) {
+		return
+	}
 	search := r.URL.Query().Get("search")
 	var out []map[string]any
 	for _, p := range s.projects {
@@ -304,6 +365,9 @@ func (s *stubGitLab) listGroups(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.recordListing(w, r) {
+		return
+	}
 	search := r.URL.Query().Get("search")
 	var out []map[string]any
 	for _, g := range s.groups {
@@ -318,12 +382,44 @@ func (s *stubGitLab) listGroups(w http.ResponseWriter, r *http.Request) {
 func (s *stubGitLab) listUsers(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.recordListing(w, r) {
+		return
+	}
 	search := r.URL.Query().Get("search")
 	var out []map[string]any
 	for id, username := range s.users {
 		if strings.Contains(username, search) {
 			out = append(out, map[string]any{"id": id, "username": username, "name": username})
 		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// listSnippets answers the snippet listing in ID order, with the null
+// project_id GitLab gives a personal snippet, and a creation from the script,
+// like the project listing.
+//
+// GitLab's snippet listing takes no search, so neither does this one: a
+// sweep that searched it would be sending a parameter GitLab ignores, and the
+// recorded query is what shows it did not.
+func (s *stubGitLab) listSnippets(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		s.scriptedRoute(w, r)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.recordListing(w, r) {
+		return
+	}
+	out := []map[string]any{}
+	for _, id := range slices.Sorted(maps.Keys(s.snippets)) {
+		snippet := s.snippets[id]
+		var projectID any
+		if snippet.ProjectID != 0 {
+			projectID = snippet.ProjectID
+		}
+		out = append(out, map[string]any{"id": id, "title": snippet.Title, "project_id": projectID})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -335,6 +431,9 @@ func (s *stubGitLab) user(w http.ResponseWriter, r *http.Request) {
 	id := pathID(r, "id")
 	if r.Method != http.MethodDelete {
 		writeError(w, http.StatusMethodNotAllowed, "stub: only DELETE is answered for users")
+		return
+	}
+	if s.refuse(w, r) {
 		return
 	}
 	if _, ok := s.users[id]; !ok {

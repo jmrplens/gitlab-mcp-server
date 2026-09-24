@@ -9,6 +9,7 @@ package fixture
 import (
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -81,9 +82,48 @@ func TestNewSnippet_Detached_IsDeletedWhenItsTestEnds(t *testing.T) {
 	}
 }
 
+// TestNewSnippet_Detached_ArmsTheRunsExitSweep checks the builder arms the
+// run's exit sweep, once however many snippets it makes, and that what it
+// arms is the sweep of its own run: a leftover titled after the run is
+// deleted when the hook runs, and one of another run is not.
+//
+// A package whose only lasting fixture is a personal snippet has no other
+// builder to arm it, and without the sweep a snippet whose deletion failed
+// stays on the instance with nothing to say so.
+func TestNewSnippet_Detached_ArmsTheRunsExitSweep(t *testing.T) {
+	hooks := captureExitHooks(t)
+	stub, client := newStubGitLab(t)
+	stub.answers(http.MethodPost, "/api/v4/snippets", stubCreated(map[string]any{"id": 10, "title": "as-answered"}))
+	stub.answers(http.MethodDelete, "/api/v4/snippets/10", stubNoContent())
+	var runID string
+
+	t.Run("made twice", func(t *testing.T) {
+		e := harness.NewDetached(t, client)
+		runID = e.RunID()
+		NewSnippet(e)
+		NewSnippet(e)
+	})
+
+	if len(*hooks) != 1 {
+		t.Fatalf("NewSnippet() registered %d exit hooks, want the one exit sweep", len(*hooks))
+	}
+	leftover := "snippet-leftover-" + runID + "-abc-1"
+	stub.addSnippet(20, leftover, 0)
+	stub.addSnippet(21, "snippet-leftover-20260911t090000z-9999999999-common-abc-1", 0)
+	stub.answers(http.MethodDelete, "/api/v4/snippets/20", stubNoContent())
+
+	if err := (*hooks)[0](); err != nil {
+		t.Fatalf("the exit sweep NewSnippet armed failed: %v", err)
+	}
+	sent := sentPaths(stub)
+	if got := sent[len(sent)-1]; got != "DELETE /api/v4/snippets/20" {
+		t.Errorf("the exit sweep sent %v last, want the deletion of the run's leftover %q", got, leftover)
+	}
+}
+
 // TestDeletePersonalSnippet_Endings_ToleratesOneACaseDeleted checks that a
 // snippet a case already deleted is not a cleanup failure and any other
-// refusal is, named by the snippet.
+// refusal is, named by the snippet's ID and title.
 func TestDeletePersonalSnippet_Endings_ToleratesOneACaseDeleted(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -99,12 +139,12 @@ func TestDeletePersonalSnippet_Endings_ToleratesOneACaseDeleted(t *testing.T) {
 			stub, client := newStubGitLab(t)
 			stub.answers(http.MethodDelete, "/api/v4/snippets/10", tc.answer)
 
-			err := deletePersonalSnippet(t.Context(), client, 10)
+			err := deletePersonalSnippet(t.Context(), client, 10, "snippet-run")
 			if (err != nil) != tc.wantErr {
 				t.Errorf("deletePersonalSnippet() error = %v, wantErr = %t", err, tc.wantErr)
 			}
-			if tc.wantErr && !IsStatus(err, http.StatusForbidden) {
-				t.Errorf("deletePersonalSnippet() error = %v, want GitLab's 403 carried", err)
+			if tc.wantErr && (!IsStatus(err, http.StatusForbidden) || !strings.Contains(err.Error(), "deleting snippet 10 (snippet-run): ")) {
+				t.Errorf("deletePersonalSnippet() error = %v, want GitLab's 403 carried under the snippet's ID and title", err)
 			}
 		})
 	}

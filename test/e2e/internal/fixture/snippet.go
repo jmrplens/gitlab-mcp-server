@@ -5,7 +5,8 @@
 // resource reads.
 //
 // A personal snippet belongs to the user rather than to a project or a group,
-// so nothing that is torn down takes it along: whoever makes one deletes it.
+// so nothing that is torn down takes it along: whoever makes one deletes it,
+// and the sweep is what finds one whose deletion never ran.
 
 package fixture
 
@@ -36,8 +37,14 @@ type Snippet struct {
 
 // NewSnippet creates a private personal snippet with one file and registers
 // its deletion on the Env.
+//
+// It arms the run's exit sweep like the builders of projects, groups and
+// users do: a package whose only lasting fixture is a personal snippet would
+// otherwise have none, and a deletion that failed would leave the snippet on
+// the instance with nothing to say so.
 func NewSnippet(e *harness.Env) Snippet {
 	e.T.Helper()
+	armSweep(e)
 
 	title := e.Name("snippet")
 	snippet, err := retryTransient(e, "create snippet "+title, createRetries, func() (Snippet, error) {
@@ -50,7 +57,7 @@ func NewSnippet(e *harness.Env) Snippet {
 	e.Defer("snippet "+title, func(ctx context.Context) error {
 		ctx, cancel := withCleanupTimeout(ctx)
 		defer cancel()
-		return deletePersonalSnippet(ctx, e.Client(), snippet.ID)
+		return deletePersonalSnippet(ctx, e.Client(), snippet.ID, snippet.Title)
 	})
 	return snippet
 }
@@ -72,10 +79,12 @@ func createPersonalSnippet(ctx context.Context, client *gitlabclient.Client, tit
 }
 
 // deletePersonalSnippet removes the snippet and tolerates one a case deleted.
-func deletePersonalSnippet(ctx context.Context, client *gitlabclient.Client, id int64) error {
+// A refusal names the snippet by its title as well as its ID, since the title
+// is what says which run and which test it belonged to.
+func deletePersonalSnippet(ctx context.Context, client *gitlabclient.Client, id int64, title string) error {
 	_, err := client.GL().Snippets.DeleteSnippet(id, gl.WithContext(ctx))
 	if err != nil && !IsStatus(err, http.StatusNotFound) {
-		return fmt.Errorf("deleting snippet %d: %w", id, err)
+		return fmt.Errorf("deleting snippet %d (%s): %w", id, title, err)
 	}
 	return nil
 }
