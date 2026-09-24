@@ -280,6 +280,26 @@ func TestCellRows_CapabilityGrain_CarriesOnlyItsCoordinates(t *testing.T) {
 	}
 }
 
+// TestSummarize_UnlistedCapabilities_NamesOnlyTheKindsWithACall verifies
+// that the summary lists a capability kind under unlisted_capabilities only
+// when a call of that kind was made outside what the sessions listed: the
+// fixture's completion and resource read that no session offered, and none of
+// the kinds whose calls all landed on something served. A kind named with no
+// row under it would publish an empty entry in the JSON, which reads as calls
+// that were looked for and not found.
+func TestSummarize_UnlistedCapabilities_NamesOnlyTheKindsWithACall(t *testing.T) {
+	unlisted := fixtureReport().Summary.UnlistedCapabilities
+
+	if got, want := sortedKeys(unlisted), []string{capabilityCompletions, capabilityResources}; !slices.Equal(got, want) {
+		t.Errorf("unlisted kinds = %q, want %q", got, want)
+	}
+	for kind, rows := range unlisted {
+		if len(rows) == 0 {
+			t.Errorf("unlisted %s carries no row", kind)
+		}
+	}
+}
+
 // TestCellRows_Order_ShapeThenCapabilitySurfaceThenTarget verifies the order
 // the cell rows are published in, which is what lets two reports of one
 // classification be compared line by line: the surfaces in level order, the
