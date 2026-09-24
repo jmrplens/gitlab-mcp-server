@@ -453,7 +453,7 @@ func (f *facts) noteAssignment(info *types.Info, lhs, rhs []ast.Expr) {
 			continue
 		}
 		f.requestOf[call] = obj
-		if receiver := requestRebinding(info, call); receiver == obj {
+		if requestRebinding(info, call) == obj {
 			f.rebound[obj] = true
 		}
 	}
