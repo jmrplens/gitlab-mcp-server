@@ -244,7 +244,14 @@ func TestGetOrCreate_APermissionRefusalWith401_KeepsTheEntry(t *testing.T) {
 	g := newRefusingGitLab(t, plainUnauthorizedBody)
 	var evicted atomic.Int32
 	pool, entry, _ := refusedEntry(t, g, WithOnEvict(func(*Entry, EvictionCause) { evicted.Add(1) }))
-	before := lastValidatedOf(pool, entry)
+	// The baseline is moved a minute back rather than read as it stands:
+	// insertEntry stamps time.Now() and the probe stamps it again moments
+	// later, and on a clock that advances in ticks (Windows) both readings can
+	// be equal, which would fail the After check below with the fix in place.
+	pool.mu.Lock()
+	entry.lastValidated = entry.lastValidated.Add(-time.Minute)
+	before := entry.lastValidated
+	pool.mu.Unlock()
 
 	approve(t, entry)
 	awaitCondition(t, "the pool confirming the 401 and keeping the entry", func() bool {
