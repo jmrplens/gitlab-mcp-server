@@ -22,10 +22,15 @@ const (
 	// hintTokenAlreadyRevoked is returned when revoking a token that the API
 	// reports as not found.
 	hintTokenAlreadyRevoked = "token already revoked or never existed. Nothing to do" //#nosec G101 -- error hint, not a credential
-	// Operation names for the two rotations that report under one name from
-	// their request, their hint and their capture alike.
-	opRotateGroupToken    = "rotate group access token"    //#nosec G101 -- operation name, not a credential
-	opRotatePersonalToken = "rotate personal access token" //#nosec G101 -- operation name, not a credential
+	// Operation names for the handlers that report under one name from their
+	// hint, their plain refusal and their capture alike.
+	opRotateGroupToken        = "rotate group access token"         //#nosec G101 -- operation name, not a credential
+	opRotatePersonalToken     = "rotate personal access token"      //#nosec G101 -- operation name, not a credential
+	opListProjectTokens       = "list project access tokens"        //#nosec G101 -- operation name, not a credential
+	opListGroupTokens         = "list group access tokens"          //#nosec G101 -- operation name, not a credential
+	opListPersonalTokens      = "list personal access tokens"       //#nosec G101 -- operation name, not a credential
+	opGetPersonalToken        = "get personal access token"         //#nosec G101 -- operation name, not a credential
+	opSelfRotatePersonalToken = "self-rotate personal access token" //#nosec G101 -- operation name, not a credential
 )
 
 // The hints a refused caller is given. GitLab refuses each of these with 401
@@ -258,13 +263,13 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	tokens, resp, err := client.GL().ProjectAccessTokens.ListProjectAccessTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsPermissionRefusal(err) {
-			return ListOutput{}, toolutil.WrapErrWithHint("list project access tokens", err, hintProjectTokenRole)
+			return ListOutput{}, toolutil.WrapErrWithHint(opListProjectTokens, err, hintProjectTokenRole)
 		}
-		return ListOutput{}, toolutil.WrapErrWithMessage("list project access tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithMessage(opListProjectTokens, err)
 	}
 	extras, err := toolutil.CapturedResourceTokens(captured, len(tokens))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list project access tokens", err)
+		return ListOutput{}, toolutil.WrapErr(opListProjectTokens, err)
 	}
 
 	items := make([]Output, len(tokens))
@@ -640,13 +645,13 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 	tokens, resp, err := client.GL().GroupAccessTokens.ListGroupAccessTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsPermissionRefusal(err) {
-			return ListOutput{}, toolutil.WrapErrWithHint("list group access tokens", err, hintGroupTokenRole)
+			return ListOutput{}, toolutil.WrapErrWithHint(opListGroupTokens, err, hintGroupTokenRole)
 		}
-		return ListOutput{}, toolutil.WrapErrWithMessage("list group access tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithMessage(opListGroupTokens, err)
 	}
 	extras, err := toolutil.CapturedResourceTokens(captured, len(tokens))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list group access tokens", err)
+		return ListOutput{}, toolutil.WrapErr(opListGroupTokens, err)
 	}
 
 	items := make([]Output, len(tokens))
@@ -1030,14 +1035,14 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 		// lib/api/helpers/personal_access_tokens_helpers.rb:80). The routes
 		// about the calling token are mounted apart and do not run it.
 		if toolutil.IsPermissionRefusal(err) {
-			return ListOutput{}, toolutil.WrapErrWithHint("list personal access tokens", err,
+			return ListOutput{}, toolutil.WrapErrWithHint(opListPersonalTokens, err,
 				"only an administrator may list another user's tokens, so user_id must be left out or name the caller; without it a non-administrator is answered their own tokens")
 		}
-		return ListOutput{}, toolutil.WrapErrWithMessage("list personal access tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithMessage(opListPersonalTokens, err)
 	}
 	extras, err := toolutil.CapturedTokens(captured, len(tokens))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list personal access tokens", err)
+		return ListOutput{}, toolutil.WrapErr(opListPersonalTokens, err)
 	}
 
 	items := make([]Output, len(tokens))
@@ -1077,13 +1082,13 @@ func PersonalGet(ctx context.Context, client *gitlabclient.Client, input Persona
 	t, _, err := client.GL().PersonalAccessTokens.GetSinglePersonalAccessTokenByID(input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		if tokenNotFoundOrNotYours(err) {
-			return Output{}, toolutil.WrapErrWithHint("get personal access token", err, hintPersonalTokenNotFoundOrNotYours)
+			return Output{}, toolutil.WrapErrWithHint(opGetPersonalToken, err, hintPersonalTokenNotFoundOrNotYours)
 		}
-		return Output{}, toolutil.WrapErrWithMessage("get personal access token", err)
+		return Output{}, toolutil.WrapErrWithMessage(opGetPersonalToken, err)
 	}
 	out, err := capturedPersonalOutput(t, captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("get personal access token", err)
+		return Output{}, toolutil.WrapErr(opGetPersonalToken, err)
 	}
 	return out, nil
 }
@@ -1182,14 +1187,14 @@ func PersonalRotateSelf(ctx context.Context, client *gitlabclient.Client, input 
 		// 405 (lib/api/personal_access_tokens/self_rotation.rb:37); its only 401
 		// is its API guard's, for a token that no longer works.
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) {
-			return Output{}, toolutil.WrapErrWithHint("self-rotate personal access token", err, hintNotAPersonalToken)
+			return Output{}, toolutil.WrapErrWithHint(opSelfRotatePersonalToken, err, hintNotAPersonalToken)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("self-rotate personal access token", err, http.StatusUnauthorized,
+		return Output{}, toolutil.WrapErrWithStatusHint(opSelfRotatePersonalToken, err, http.StatusUnauthorized,
 			"the token has already been rotated or revoked; a rotation revokes the token it replaces, so use the token it returned")
 	}
 	out, err := capturedPersonalOutput(token, captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("self-rotate personal access token", err)
+		return Output{}, toolutil.WrapErr(opSelfRotatePersonalToken, err)
 	}
 	return out, nil
 }
