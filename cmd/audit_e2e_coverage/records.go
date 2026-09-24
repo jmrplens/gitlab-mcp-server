@@ -47,8 +47,11 @@ type runtimeRecords struct {
 	// skips are the skip lines.
 	skips []*e2ecalls.Skip
 	// dispatches is how many dispatch lines the shards carried, kept for the
-	// diagnostics: a runtime with calls and no dispatch lines never saw a
-	// span, which is a harness failure and not a coverage figure.
+	// diagnostics: a runtime with tool calls and no dispatch lines never saw a
+	// span that named a tool or an action, which is a harness failure and not
+	// a coverage figure. A dispatch line is written only for such a span, so
+	// the count says nothing about the spans of other methods; whether any
+	// span of a session arrived is what diagnostics.unobserved_sessions says.
 	dispatches int
 	// lateJoins counts the calls whose dispatched action came from a separate
 	// dispatch line rather than the call line itself.

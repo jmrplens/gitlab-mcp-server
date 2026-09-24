@@ -34,7 +34,16 @@ const (
 	// written under another one rather than guessing which fields it holds:
 	// these shards are read by a command in the same tree, so a mismatch means
 	// a stale artifact and not an old peer to be tolerated.
-	SchemaVersion = 1
+	//
+	// Version 2 (issue 920) changed what a session line's DispatchObserved
+	// means, a server span of any method now counting where only one carrying
+	// the dispatch facts did, and added Idle, whose absence carries meaning
+	// too. A version 1 line cannot be told apart from a non-idle one, and its
+	// false DispatchObserved said only that no fact-carrying span arrived, so
+	// folding it under the new reading would mark sessions unobserved that
+	// were only never asked a tool. Such shards are refused, to be re-recorded
+	// rather than re-folded.
+	SchemaVersion = 2
 
 	// ShardPattern is the [os.CreateTemp] pattern a shard file is named with.
 	// One process writes one shard, so package binaries running side by side
@@ -349,15 +358,18 @@ type Session struct {
 	// span named, joined on the trace id; this is the statement about the
 	// session a reader checks those against.
 	DispatchObserved bool `json:"dispatch_observed"`
-	// Idle is whether the session made no call a span could answer: it was
-	// started, listed what it serves, and was never asked anything carrying a
-	// trace. Its DispatchObserved is then false for want of a question rather
-	// than for want of telemetry, and a reader folding sessions sets it apart
-	// instead of letting it read as a session whose spans never came.
+	// Idle is whether the session issued no trace: it was started, listed what
+	// it serves, and made no call that carried one (a subscribe on protocol
+	// 2026-07-28 carries none). Its DispatchObserved is then false for want of
+	// a traced call rather than for want of telemetry, and a reader folding
+	// sessions sets it apart instead of letting it read as a session whose
+	// spans never came.
 	//
-	// It is written only when true, so a line written before the harness
-	// recorded it reads as not idle, which is the reading that leaves such a
-	// line's DispatchObserved meaning what it always meant.
+	// It is written only when true. A line written before the field existed
+	// cannot be told apart from a non-idle one, and its false DispatchObserved
+	// said only that no fact-carrying span arrived, which is why
+	// [SchemaVersion] moved to 2 with it: such a line is refused rather than
+	// read under the new meaning.
 	Idle bool `json:"idle,omitempty"`
 }
 

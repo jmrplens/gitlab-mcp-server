@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -134,7 +135,10 @@ func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
 // its row reads false rather than true for want of anything to hold it false,
 // and its idle count equal to its session count is what says the false is for
 // want of a question. The default individual shape has no idle session, and
-// its count is zero, which the record omits.
+// its count is zero, which the record omits: each row is marshaled and
+// held to carrying idle_sessions exactly when the count is not zero, since a
+// zero spelled out on every committed row would say nothing and churn the
+// record.
 func TestSessionRows_IdleSessions_CountedAndAnAllIdleShapeReadsUnobserved(t *testing.T) {
 	beside := fixtureSession(dynamicDefault, false)
 	beside.Idle = true
@@ -166,6 +170,17 @@ func TestSessionRows_IdleSessions_CountedAndAnAllIdleShapeReadsUnobserved(t *tes
 			if row.Sessions != expected.sessions || row.IdleSessions != expected.idle || row.DispatchObserved != expected.observed {
 				t.Errorf("sessions %d, idle_sessions %d, dispatch_observed %t; want %d, %d, %t",
 					row.Sessions, row.IdleSessions, row.DispatchObserved, expected.sessions, expected.idle, expected.observed)
+			}
+			encoded, err := json.Marshal(row)
+			if err != nil {
+				t.Fatalf("json.Marshal(row): %v", err)
+			}
+			wantKey := `"idle_sessions":` + strconv.Itoa(expected.idle)
+			if carries := strings.Contains(string(encoded), `"idle_sessions"`); carries != (expected.idle != 0) {
+				t.Errorf("the row encodes as %s; want idle_sessions present only when the count is not zero", encoded)
+			}
+			if expected.idle != 0 && !strings.Contains(string(encoded), wantKey) {
+				t.Errorf("the row encodes as %s; want it to carry %s", encoded, wantKey)
 			}
 		})
 	}

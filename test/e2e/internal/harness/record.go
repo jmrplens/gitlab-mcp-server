@@ -336,9 +336,10 @@ func testStatus(t *testing.T) string {
 // It is a ceiling and not what a flush costs: the wait ends when the server
 // span of every traced call has landed, which is about one export interval
 // after the last call, whatever the calls' methods were. It was what a flush
-// cost while only a tools/call span counted as arriving, since every resource
-// read, prompt or completion then waited here for a span that had already
-// come and been dropped.
+// cost while only a span carrying the dispatch facts counted as arriving,
+// which is a tools/call span or the span of a call that failed on the
+// server's side, since every successful resource read, prompt or completion
+// then waited here for a span that had already come and been dropped.
 const dispatchWait = 10 * time.Second
 
 // dispatchGrace is what a run whose spans have never arrived waits instead.
@@ -1020,8 +1021,8 @@ func sessionLines() []e2ecalls.Line {
 	return lines
 }
 
-// lateDispatchLines writes every trace the receiver holds that the server
-// spoke about.
+// lateDispatchLines writes every trace the receiver holds whose server span
+// named the tool or the action it ran ([dispatchRecord.namesCall]).
 //
 // A call whose span arrived after its test's flush was written with no
 // dispatched action, and this is what lets the audit join one to it anyway.

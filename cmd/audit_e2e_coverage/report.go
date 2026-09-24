@@ -95,12 +95,12 @@ type sessionRow struct {
 	Prompts           int    `json:"prompts"`
 	// DispatchObserved is whether at least one session of the shape made a
 	// traced call and every session that did had the server's own span of at
-	// least one of them arrive, of whatever method. A session that asked
-	// nothing is idle and holds no row false on its own. A false row therefore
+	// least one of them arrive, of whatever method. A session that issued no
+	// trace is idle and holds no row false on its own. A false row therefore
 	// says one of two things, and IdleSessions tells them apart: fewer idle
 	// sessions than sessions means some session's telemetry did not reach the
 	// harness (diagnostics.unobserved_sessions says which), and as many means
-	// no session of the shape asked anything a span could answer. It is a
+	// no session of the shape made a call that carried a trace. It is a
 	// statement a reader checks the cells against and decides no credit: a
 	// tool call is credited on the action its own span named.
 	DispatchObserved bool `json:"dispatch_observed"`

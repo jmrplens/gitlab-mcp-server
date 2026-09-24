@@ -44,7 +44,7 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 	}
 	nested := filepath.Join(root, "ee")
 	writeShard(t, nested, "calls-ee.jsonl",
-		`{"schema":1,"type":"skip","skip":{"test":"TestEE_Epics","reason":"no license"}}`,
+		`{"schema":2,"type":"skip","skip":{"test":"TestEE_Epics","reason":"no license"}}`,
 		"",
 	)
 	writeShard(t, root, "notes.txt", "not a shard")
@@ -83,11 +83,11 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 func TestReadShards_KeepsTheFileBoundaries(t *testing.T) {
 	root := t.TempDir()
 	common := writeShard(t, root, "calls-common.jsonl",
-		`{"schema":1,"type":"call","call":{"test":"TestIssue_List","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok","test_status":"passed"}}`,
-		`{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+		`{"schema":2,"type":"call","call":{"test":"TestIssue_List","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok","test_status":"passed"}}`,
+		`{"schema":2,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
 	)
 	ee := writeShard(t, filepath.Join(root, "ee"), "calls-ee.jsonl",
-		`{"schema":1,"type":"run","run":{"package":"ee","requirement":"enterprise","edition":"enterprise","tier":"ultimate","run_id":"r","status":"started"}}`,
+		`{"schema":2,"type":"run","run":{"package":"ee","requirement":"enterprise","edition":"enterprise","tier":"ultimate","run_id":"r","status":"started"}}`,
 	)
 
 	shardFiles, err := ReadShards(root)

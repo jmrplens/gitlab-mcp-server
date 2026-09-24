@@ -511,10 +511,10 @@ func TestRun_Static_CatalogFromBuilder(t *testing.T) {
 func TestRun_Static_WithCalls_ReachesTheClassification(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "calls-x.jsonl"), strings.Join([]string{
-		`{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
-		`{"schema":1,"type":"session","session":{"label":"d","surface":"dynamic","mode":"default","capabilities":"full","transport":"stdio","tools":["gitlab_execute_action"],"dispatch_observed":true}}`,
-		`{"schema":1,"type":"call","call":{"test":"TestPlanted_DiscardedResult_Reported","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.get","dispatched":"issue.get","outcome":"ok","test_status":"passed"}}`,
-		`{"schema":1,"type":"skip","skip":{"test":"TestPlanted_HelperConstant_Resolved","reason":"no runner"}}`,
+		`{"schema":2,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+		`{"schema":2,"type":"session","session":{"label":"d","surface":"dynamic","mode":"default","capabilities":"full","transport":"stdio","tools":["gitlab_execute_action"],"dispatch_observed":true}}`,
+		`{"schema":2,"type":"call","call":{"test":"TestPlanted_DiscardedResult_Reported","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.get","dispatched":"issue.get","outcome":"ok","test_status":"passed"}}`,
+		`{"schema":2,"type":"skip","skip":{"test":"TestPlanted_HelperConstant_Resolved","reason":"no runner"}}`,
 	}, "\n")+"\n")
 	opts := fixtureOptions(t)
 	opts.calls = dir
@@ -680,9 +680,9 @@ func TestRun_Baseline_Unjudged_IsAUsageError(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	writeFile(t, filepath.Join(dir, "calls-old.jsonl"), strings.Join([]string{
-		`{"schema":1,"type":"run","run":{"package":"suite","requirement":"any","edition":"community","tier":"free","run_id":"20260901t100000z-old","status":"started"}}`,
-		`{"schema":1,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","tools":["gitlab_execute_action","gitlab_find_action"],"dispatch_observed":true}}`,
-		`{"schema":1,"type":"call","call":{"test":"TestOld_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.list","dispatched":"issue.list","outcome":"ok"}}`,
+		`{"schema":2,"type":"run","run":{"package":"suite","requirement":"any","edition":"community","tier":"free","run_id":"20260901t100000z-old","status":"started"}}`,
+		`{"schema":2,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","tools":["gitlab_execute_action","gitlab_find_action"],"dispatch_observed":true}}`,
+		`{"schema":2,"type":"call","call":{"test":"TestOld_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.list","dispatched":"issue.list","outcome":"ok"}}`,
 		"",
 	}, "\n"))
 	opts := fixtureOptions(t)

@@ -165,6 +165,31 @@ func TestReadRuntimes_ChildThatCannotBeListed_Refused(t *testing.T) {
 	}
 }
 
+// TestReadRuntimes_ShardOfSchemaOne_IsRefused verifies that a shard written
+// before issue 920 is refused rather than folded under the new reading.
+//
+// Such a shard's session lines carry no idle flag, and their false
+// dispatch_observed said only that no span carrying the dispatch facts
+// arrived. Folded as if written now, the tier-pin and minimal sessions of a
+// 2026-09-22 run read as sessions whose telemetry never came, and the dynamic
+// default row flipped to unobserved on a run nothing was wrong with. The line
+// here is that shape, so the refusal is what keeps it out.
+func TestReadRuntimes_ShardOfSchemaOne_IsRefused(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "calls-old.jsonl"), strings.Join([]string{
+		`{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+		`{"schema":1,"type":"session","session":{"label":"dynamic-default-full-free","surface":"dynamic","mode":"default","capabilities":"full","transport":"stdio","tools":["gitlab_execute_action","gitlab_find_action"],"dispatch_observed":false}}`,
+		"",
+	}, "\n"))
+	runtimes, err := readRuntimes(dir)
+	if err == nil {
+		t.Fatalf("readRuntimes() = %d runtimes, want a refusal of the schema 1 shard", len(runtimes))
+	}
+	if !strings.Contains(err.Error(), "schema 1 is not 2") {
+		t.Errorf("readRuntimes() error = %v, want it to name the schema mismatch", err)
+	}
+}
+
 // TestReadRuntimes_DeeperShards_ReadAsOne verifies that shards two levels
 // down, with no shard at the first level, are read as one runtime.
 func TestReadRuntimes_DeeperShards_ReadAsOne(t *testing.T) {
@@ -173,7 +198,7 @@ func TestReadRuntimes_DeeperShards_ReadAsOne(t *testing.T) {
 	if err := os.MkdirAll(deep, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	writeFile(t, filepath.Join(deep, "calls-x.jsonl"), `{"schema":1,"type":"run","run":{"package":"p","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`+"\n")
+	writeFile(t, filepath.Join(deep, "calls-x.jsonl"), `{"schema":2,"type":"run","run":{"package":"p","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`+"\n")
 	runtimes, err := readRuntimes(dir)
 	if err != nil {
 		t.Fatalf("readRuntimes() error = %v", err)
