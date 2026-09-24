@@ -45,12 +45,13 @@
 // constructors are held to the same rule, since (*gl.Client).Do sends
 // whatever request it is handed: retryablehttp.NewRequest builds from
 // context.Background() and passes only when rebound, and
-// NewRequestWithContext passes on a context that can end. The constructor is
+// NewRequestWithContext passes on a context that can end, or when rebound. The constructor is
 // judged rather than the send, so a request a helper built is judged where it
 // was built and not again where it is sent.
 //
 // gl.WithContext(context.Background()) and context.TODO() are reported
-// wherever they sit among a call's options, whatever else the call passes:
+// wherever they sit among a call's options, written there directly, appended
+// or held in a variable, whatever else the call passes:
 // client-go applies the options in order and a later WithContext replaces an
 // earlier one, so one placed after the caller's context detaches the request
 // and one placed before it does nothing while reading like the fix. The same
@@ -67,10 +68,14 @@
 // the branch, and it is a limit rather than a guarantee; none of the shapes it
 // would pass wrongly exists in the tree, and a fixture holds each of them.
 //
-// What the walk cannot trace is treated as carrying nothing, so the call is
-// reported rather than passed: options kept in a struct field, built by a
-// function or a method, or handed over as another call's results. The answer
-// is to pass gl.WithContext(ctx) beside them.
+// What the walk cannot trace is treated as carrying nothing: options kept in
+// a struct field, built by a function or a method, or handed over as another
+// call's results. It fails the call only when no other option carries the
+// context, and the answer then is to pass gl.WithContext(ctx) beside them.
+// The same reading is a stated limit in the other direction: a detaching
+// option a helper builds, placed beside the caller's gl.WithContext(ctx), is
+// not seen, although client-go applies it after the caller's and the request
+// ends unbounded.
 //
 // # Declarations
 //

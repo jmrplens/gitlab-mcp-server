@@ -108,10 +108,12 @@ func (r Report) write(out io.Writer, verbose bool) {
 	if verbose || !r.ok() {
 		fmt.Fprintln(out)
 	}
-	fmt.Fprintf(out, "%s: %d calls building or sending a request in %d packages, %d without the caller's context "+
-		"(%d forwarded to their own caller, %d rebound after they were built, %d excused by a declaration)\n",
-		toolName, r.Summary.Calls, r.Summary.Packages, r.Summary.Findings,
-		r.Summary.Forwarded, r.Summary.Rebound, r.Summary.Excused)
+	fmt.Fprintf(out, "%s: %d calls building or sending a request in %d packages "+
+		"(%d clean by forwarding to their own caller, %d by rebinding after they were built); "+
+		"%d without the caller's context, %d excused by a declaration\n",
+		toolName, r.Summary.Calls, r.Summary.Packages,
+		r.Summary.Forwarded, r.Summary.Rebound,
+		r.Summary.Findings, r.Summary.Excused)
 }
 
 // sortFindings puts findings in a stable order: by file, then by line, and two
