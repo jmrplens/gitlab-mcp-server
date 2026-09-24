@@ -3,6 +3,7 @@ package externalstatuschecks
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -97,10 +98,12 @@ type ListProjectStatusChecksInput struct {
 
 // The hints a refused caller is given. Every status check route answers a
 // project whose namespace lacks the Ultimate feature with 401 from one
-// before-block (ee/lib/api/status_checks.rb:16), and the project routes answer
-// a missing role with 401 too (:67, and
+// before-block (ee/lib/api/status_checks.rb:16), and the project list and the
+// update answer a missing role with 401 too (:67, and
 // ee/app/services/external_status_checks/update_service.rb:40), so these are
-// keyed on toolutil.IsPermissionRefusal rather than on a status.
+// keyed on toolutil.IsPermissionRefusal rather than on a status. The create
+// and the delete lose the role refusal on the way out, answering it with 500
+// and with 204 (entries 57 and 56 of docs/development/upstream-bugs.md).
 const (
 	// hintStatusCheckLicense is the license every route checks first.
 	hintStatusCheckLicense = "external status checks need an Ultimate license on the project's namespace (on GitLab.com, the plan of its top-level group), and GitLab answers a project without it with 401 on every status check route"
@@ -115,6 +118,23 @@ const (
 // the two are told apart by status, not read as one refusal.
 func refusedForLicense(err error) bool {
 	return toolutil.IsHTTPStatus(err, http.StatusUnauthorized) && toolutil.IsPermissionRefusal(err)
+}
+
+// hintStatusCheckCreateRole is what a create refused for the role needs. The
+// role is not refused with 401 there, nor with 403: the create service builds
+// its refusal without a status, so GitLab answers it with 500 and the body
+// {"message":["Not allowed"]} (entry 57 of docs/development/upstream-bugs.md),
+// which reads as a fault of the instance unless the hint says otherwise.
+const hintStatusCheckCreateRole = "creating an external status check needs the Maintainer role on the project, and GitLab answers a caller without it with a server error saying \"Not allowed\" rather than a refusal. Verify project_id with project.get"
+
+// createRefusedForRole reports whether err is the answer a create gets from
+// GitLab for a caller without the Maintainer role: a 500 carrying the create
+// service's "Not allowed" (ee/app/services/external_status_checks/create_service.rb:32-38,
+// rendered by ee/lib/api/status_checks.rb:53 with no status). The message
+// is what tells it apart from a 500 the instance answers for any other fault.
+func createRefusedForRole(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusInternalServerError) &&
+		strings.Contains(toolutil.ExtractGitLabMessage(err), "Not allowed")
 }
 
 // refusedForRole reports whether err is the 403 a merge request's status
@@ -259,6 +279,9 @@ func CreateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	if err != nil {
 		if toolutil.IsPermissionRefusal(err) {
 			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckLicense)
+		}
+		if createRefusedForRole(err) {
+			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckCreateRole)
 		}
 		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("createProjectExternalStatusCheck", err, http.StatusBadRequest,
 			"name must be unique within the project; external_url must be a valid HTTPS URL reachable from GitLab; protected_branch_ids must be IDs (not names) from branch.list_protected")

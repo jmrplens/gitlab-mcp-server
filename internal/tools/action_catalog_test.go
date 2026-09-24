@@ -1463,7 +1463,7 @@ func entry55Answer(t *testing.T, route entry55Route, status int, body string) st
 // ties entry 55 to the served surface. Every action whose GitLab route
 // refuses a valid credential a permission with 401 is driven through its
 // catalog handler against Grape's own refusal body, and must hand the model a
-// suggestion: before issue 908 two thirds of them carried none, because their
+// suggestion: before issue 908, 39 of these 46 carried none, because their
 // hints were scoped to the 403 GitLab never sends there.
 //
 // Driven again with a body GitLab's API guard writes for a revoked token, the

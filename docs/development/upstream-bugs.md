@@ -129,6 +129,7 @@ readable without opening the tracker:
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
+| 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -3237,16 +3238,31 @@ when the field is nil.
   then names the permission, keyed on `toolutil.IsPermissionRefusal`, which
   reads the same file's `RefusalMayBePermission`: a REST 401 or 403 whose body
   carries no RFC 6750 error code, so it is never true of an answer the rule
-  above says names the credential, and a hint never follows the verdict that
-  the token itself was refused
+  above says names the credential, and a hint keyed on it never follows the
+  verdict that the token itself was refused
   ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).
+  Two kinds of action are not keyed on it. The four group SAML link actions
+  still add their hint to every error, a rejected token included, because the
+  licensed end-to-end suite quotes that wording; and the two self-rotations
+  keep a 401 hint about the calling token, which agrees with that verdict
+  rather than contradicting it.
   `TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint` in
-  `internal/tools/action_catalog_test.go` holds every served action of the
-  Where list below to it, one row per action and site. What retires it is
+  `internal/tools/action_catalog_test.go` drives every served action of the
+  Where list below, one row per action and site: all of them must carry a
+  suggestion on Grape's refusal, and all but those six must carry none after
+  a revoked token, the six being exempt from that half. What retires it is
   GitLab answering 403 at these sites, after which a REST 401 without that
   code would again mean an unusable credential alone and the probe would have
-  nothing left to tell apart; the handlers need no change then, since the
-  predicate reads a plain 403 the same way.
+  nothing left to tell apart. A handler that keys one hint on the predicate
+  alone needs no change then, since the predicate reads a plain 403 the same
+  way. The handlers that pair it with a status do, because each reads the
+  status as the cause: the three security settings routes read a 403 first as
+  the license, an archive or an enforced setting, so a role refusal moved to
+  403 would get the license hint; the three external status check merge
+  request routes read a 403 as the role, so the license refusal moved to 403
+  would get the role hint; the fork link would give a target namespace refusal
+  the Owner hint; and the merge train add would lose its hint. They are the
+  ones to revisit when this entry is retired.
 
 **Where**: `lib/api/merge_request_approvals.rb:105` and 148,
 `lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
@@ -3345,12 +3361,17 @@ hint to the 403 GitLab never sends there, or carried none, and the one that
 hinted on any 401 (the approve) followed the rejected-token verdict with a
 self-approval suggestion. They are fixed
 ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)) by
-keying each hint on `toolutil.IsPermissionRefusal`, and reading the fix
-against GitLab's source corrected what several hints said as well: push
-mirrors are available on every tier, external status checks need Ultimate
-rather than Premium, a group's security settings need Maintainer or Security
-Manager rather than Owner, and the approval reset is refused with 401 for a
-person's token rather than 404.
+keying each hint on `toolutil.IsPermissionRefusal`, except the group SAML
+links and the self-rotations the Workaround field names, and reading the fix
+against GitLab's source corrected what several hints and served usages said
+as well: push mirrors are available on every tier, external status checks
+need Ultimate rather than Premium, a group's security settings need
+Maintainer or Security Manager rather than Owner, the approval reset is
+refused with 401 for a person's token rather than 404 and admits a service
+account's, and a rotation by id is refused whatever the role when the calling
+token is itself a project or group access token. The same reading found two
+status check routes that lose the role refusal entirely, recorded as entries
+56 and 57.
 
 ### Deleting an external status check without the role answers 204 and deletes nothing
 
@@ -3388,3 +3409,47 @@ while fixing their hints
 ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)). The
 delete's service builds a 401 like the update's, and following it to the
 response showed it goes nowhere.
+
+### Creating an external status check without the role answers 500
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The check is correctly not created. What breaks is the
+  answer: a refusal of the caller arrives as a fault of the instance, which a
+  client retries or reports as an outage.
+- **Workaround**: yes. `CreateProjectExternalStatusCheck` in
+  `internal/tools/externalstatuschecks/external_status_checks.go` reads a 500
+  whose message carries the service's `Not allowed` as the role refusal it is
+  (`createRefusedForRole`) and hints the Maintainer role, and
+  `TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole`
+  holds it, beside a 500 without that message, which names no role. What
+  retires it is the service giving its refusal a status.
+
+**Where**: `ee/app/services/external_status_checks/create_service.rb:32-38`,
+rendered by `ee/lib/api/status_checks.rb:53`. Read at 19.4.0-pre
+(`b183f4fad4bd`, 2026-09-22).
+
+**What**: `POST /projects/:id/external_status_checks` runs
+`ExternalStatusChecks::CreateService#execute`, which refuses a caller without
+`create_external_status_check`, granted to the Maintainer role
+(`config/authz/roles/maintainer.yml:84`), with `access_denied_error`: a `ServiceResponse.error`
+carrying `reason: :access_denied`, the errors `['Not allowed']`, and no
+`http_status`, which `ServiceResponse.error` defaults to `nil`
+(`app/services/service_response.rb:13`). The route hands that status to
+`render_api_error!(response.payload[:errors], response.http_status)`, which
+reaches Grape's `error!` with a `nil` status (`lib/api/helpers.rb:720-733`),
+and Grape 2.4.0 answers a `nil` status with its default error status, 500.
+So a Developer's create is answered `500 {"message":["Not allowed"]}`. The
+update beside it builds its refusal with `http_status: :unauthorized` and is
+answered 401 (`ee/app/services/external_status_checks/update_service.rb:40`),
+and the delete loses it the other way (entry 56). The route's own spec
+(`ee/spec/requests/api/status_checks_spec.rb`, "when feature is disabled,
+unlicensed or user has permission") drives only the owner and a user who is
+not a member, whom `user_project` answers 404 before the service runs, so no
+test of GitLab's reaches the service's refusal.
+
+**How we found it**: reviewing the fix for
+[issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908), by
+reading where each status check route's role refusal ends up, after entry 56
+had shown one of them going nowhere.

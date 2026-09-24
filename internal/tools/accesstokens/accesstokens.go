@@ -40,9 +40,18 @@ const (
 	// hintProjectTokenRotateRefused is the rotate's answer to a token that is
 	// missing or that the caller may not rotate, which GitLab tells apart
 	// only for an administrator (lib/api/resource_access_tokens.rb:200).
-	hintProjectTokenRotateRefused = "token_id is not an active access token of this project, or rotating it needs the Maintainer or Owner role; GitLab answers both the same unless you are an administrator. Check token_id with access.token_project_list" //#nosec G101 -- error hint, not a credential
-	// hintGroupTokenRotateRefused is [hintProjectTokenRotateRefused] for a group.
-	hintGroupTokenRotateRefused = "token_id is not an active access token of this group, or rotating it needs the Owner role; GitLab answers both the same unless you are an administrator. Check token_id with access.token_group_list" //#nosec G101 -- error hint, not a credential
+	// "May not rotate" is manage_resource_access_tokens, which a role grants
+	// and three policy rules withdraw whatever the role: a calling token that
+	// is itself a project or group bot's (project_policy.rb:886-889), a
+	// top-level group that disallows access token creation (:881-884,
+	// :1089-1094), and on GitLab.com a namespace whose plan lacks the feature
+	// (ee/app/policies/ee/project_policy.rb:1403-1409). A hint naming the role
+	// alone is false for a Maintainer's project access token, which has it.
+	hintProjectTokenRotateRefused = "token_id is not an active access token of this project, or the caller may not rotate it: that needs the Maintainer or Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, or on GitLab.com when the namespace's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_project_list" //#nosec G101 -- error hint, not a credential
+	// hintGroupTokenRotateRefused is [hintProjectTokenRotateRefused] for a
+	// group, under the same three rules (group_policy.rb:243-251 and 313-314,
+	// ee/app/policies/ee/group_policy.rb:1166-1171).
+	hintGroupTokenRotateRefused = "token_id is not an active access token of this group, or the caller may not rotate it: that needs the Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, or on GitLab.com when the group's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_group_list" //#nosec G101 -- error hint, not a credential
 	// hintPersonalTokenNotFoundOrNotYours is the read-by-id and rotate
 	// answer to a personal access token that is missing or belongs to someone
 	// else (lib/api/personal_access_tokens.rb:73 and 107).
@@ -1003,8 +1012,10 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 	tokens, resp, err := client.GL().PersonalAccessTokens.ListPersonalAccessTokens(opts, gl.WithContext(ctx))
 	if err != nil {
 		// GitLab refuses a user_id naming someone else with 401, from a check
-		// every personal access token route runs first
-		// (lib/api/helpers/personal_access_tokens_helpers.rb:80).
+		// the personal access tokens API's before-block runs
+		// (lib/api/personal_access_tokens.rb:11, which calls
+		// lib/api/helpers/personal_access_tokens_helpers.rb:80). The routes
+		// about the calling token are mounted apart and do not run it.
 		if toolutil.IsPermissionRefusal(err) {
 			return ListOutput{}, toolutil.WrapErrWithHint("list personal access tokens", err,
 				"only an administrator may list another user's tokens, so user_id must be left out or name the caller; without it a non-administrator is answered their own tokens")

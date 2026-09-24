@@ -85,10 +85,12 @@ func UnauthorizedNamesCredential(req *http.Request, body []byte) bool {
 // either of which may be nil.
 //
 // Only a REST 401 or 403 whose body carries no RFC 6750 error code qualifies.
-// Grape's unauthorized! and forbidden!, which every permission refusal goes
-// through (the 401 ones are entry 55 of docs/development/upstream-bugs.md),
-// render {"message": ...} and nothing else. GitLab's API guard, which refuses
-// the credential rather than the call, writes a code on every answer it gives:
+// Grape's unauthorized!, forbidden! and render_api_error!, which every
+// permission refusal goes through (the 401 ones are entry 55 of
+// docs/development/upstream-bugs.md), render {"message": ...} and nothing
+// else. GitLab's API guard, which refuses the credential rather than the call,
+// writes a code on every answer it gives: unauthorized for a missing token (the
+// default code of the rack-oauth2 error it raises with no arguments),
 // invalid_token, dpop_error and restricted_language_server_client_error on a
 // 401, insufficient_scope and insufficient_granular_scope on a 403
 // (lib/api/api_guard.rb). A role or license hint after one of those sends the

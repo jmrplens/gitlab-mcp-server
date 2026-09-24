@@ -166,7 +166,7 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_reset": {
-		Usage:   "Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user). Personal access tokens are rejected. Use when approvals must be re-collected after changes.",
+		Usage:   "Reset (clear) all existing approvals on a merge request. Only a bot user that may approve it can: a project or group access token, or a service account's token. A person's token is refused, and so is a merge request that is already merged. Use when approvals must be re-collected after changes.",
 		Aliases: []string{"reset mr approvals", "clear merge request approvals", "remove all mr approvals"},
 		Related: []string{actionApprovalState, actionApprovalConfig, actionMRUnapprove},
 		Guidance: map[string]toolutil.ParameterGuidance{

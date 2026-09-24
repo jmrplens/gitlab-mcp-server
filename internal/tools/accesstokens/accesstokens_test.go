@@ -2679,9 +2679,11 @@ func tokenRefusalCases() []tokenRefusalCase {
 // TestAccessTokens_PermissionRefusedWith401_NameTheRoleOrOwnership verifies
 // that each token route GitLab refuses a permission on with 401 carries the
 // hint naming it. The lists scoped theirs to 403, which GitLab never sends
-// there, and the reads and by-id rotations scoped theirs to 404, which it
-// sends only to an administrator, so a refused caller who is not one saw no
-// suggestion at all.
+// there. The project and group reads carried only a not-found hint, on the 404
+// GitLab answers a caller who may read tokens when the token is missing, so it
+// never followed a refused role. The by-id rotations and the personal read
+// scoped theirs to 404, which on those routes GitLab sends only to an
+// administrator. A refused caller who is not one saw no suggestion at all.
 func TestAccessTokens_PermissionRefusedWith401_NameTheRoleOrOwnership(t *testing.T) {
 	for _, tc := range tokenRefusalCases() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2694,6 +2696,52 @@ func TestAccessTokens_PermissionRefusedWith401_NameTheRoleOrOwnership(t *testing
 			}
 			if !strings.Contains(err.Error(), tc.hint) {
 				t.Errorf(fmtExpErrContaining, tc.hint, err)
+			}
+		})
+	}
+}
+
+// TestAccessTokens_RotateRefused_NamesWhatOutranksTheRole verifies that the
+// project and group rotations, refused with 401, name the rules GitLab applies
+// whatever the caller's role, beside the role itself. GitLab withdraws
+// manage_resource_access_tokens from a calling token that is a project or group
+// bot's, from a top-level group that disallows access token creation, and on
+// GitLab.com from a plan without the feature (project_policy.rb:881-889,
+// group_policy.rb:243-251), and answers each with the same 401 it gives a
+// missing role, so a hint naming the role alone was false for a Maintainer's
+// project access token.
+func TestAccessTokens_RotateRefused_NamesWhatOutranksTheRole(t *testing.T) {
+	ctx := context.Background()
+	calls := []struct {
+		name string
+		call func(*gitlabclient.Client) error
+	}{
+		{"project rotate", func(c *gitlabclient.Client) error {
+			_, err := ProjectRotate(ctx, c, ProjectRotateInput{ProjectID: "42", TokenID: 3})
+			return err
+		}},
+		{"group rotate", func(c *gitlabclient.Client) error {
+			_, err := GroupRotate(ctx, c, GroupRotateInput{GroupID: "10", TokenID: 3})
+			return err
+		}},
+	}
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusUnauthorized, plainUnauthorizedBody)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			for _, want := range []string{
+				"the calling token is itself a project or group access token",
+				"the top-level group does not allow access token creation",
+				"on GitLab.com",
+			} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf(fmtExpErrContaining, want, err)
+				}
 			}
 		})
 	}

@@ -1126,8 +1126,10 @@ func assertFieldsAbsent(t *testing.T, body map[string]json.RawMessage, fields ..
 
 // statusCheckCalls drives each of the eight status check entry points once,
 // named by what each one's refusals are about: the project routes, which
-// refuse the license and the role alike with 401, and the merge request
-// routes, which refuse the license with 401 and the role with 403.
+// refuse the license with 401 and, for the lists and the update, the role too
+// (the create answers the role with 500 and the delete with 204), and the
+// merge request routes, which refuse the license with 401 and the role with
+// 403.
 func statusCheckCalls() map[string]func(*gitlabclient.Client) error {
 	ctx := context.Background()
 	return map[string]func(*gitlabclient.Client) error{
@@ -1203,6 +1205,39 @@ func TestStatusChecks_PermissionRefusedWith401_NameTheUltimateLicense(t *testing
 			}
 			if got := strings.Contains(err.Error(), "Maintainer"); got != namesTheRole[name] {
 				t.Errorf("%s error = %q names the Maintainer role: %v, want %v", name, err, got, namesTheRole[name])
+			}
+		})
+	}
+}
+
+// TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole
+// verifies the create names the role on the answer GitLab gives a caller
+// without it, which is neither 401 nor 403: the create service builds its
+// refusal with no status, so Grape answers it 500 with the service's "Not
+// allowed" (create_service.rb:32-38, status_checks.rb:53). Without the hint a
+// model reads a fault of the instance and retries. A 500 without that message
+// is the instance's own and names no role.
+func TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole(t *testing.T) {
+	create := statusCheckCalls()["create"]
+	cases := []struct {
+		name      string
+		body      string
+		wantsRole bool
+	}{
+		{"the create service refused the role", `{"message":["Not allowed"]}`, true},
+		{"the instance failed", `{"message":"500 Internal Server Error"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusInternalServerError, tc.body)
+			}))
+			err := create(client)
+			if err == nil {
+				t.Fatal("create error = nil, want the 500")
+			}
+			if got := strings.Contains(err.Error(), "needs the Maintainer role"); got != tc.wantsRole {
+				t.Errorf("create error = %q names the Maintainer role: %v, want %v", err, got, tc.wantsRole)
 			}
 		})
 	}

@@ -574,7 +574,12 @@ func IsHTTPStatus(err error, code int) bool {
 // A handler whose route answers a 403 that means something else, a license or
 // an archived project rather than a role, pairs it with IsHTTPStatus to tell
 // the two apart. The 403 is kept here because it is what these routes would
-// answer if GitLab retired entry 55, and then no handler needs to change.
+// answer if GitLab retired entry 55, and then a handler that keys one hint on
+// this predicate alone needs no change. The handlers that pair it with a
+// status do, since each reads the status as the cause: the security settings
+// routes, the three external status check merge request routes, the fork link
+// and the merge train add. Those are the ones to revisit when entry 55 is
+// retired.
 func IsPermissionRefusal(err error) bool {
 	glErr, ok := gitLabResponseOf(err)
 	return ok && gitlabclient.RefusalMayBePermission(answeredStatus(glErr), answeredRequest(glErr), glErr.Body)
