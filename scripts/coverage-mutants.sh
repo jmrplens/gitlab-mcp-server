@@ -216,26 +216,42 @@ tag_args=()
 [ -z "$tags" ] || tag_args=(-tags "$tags")
 cover_args=()
 [ -z "$coverpkg" ] || cover_args=(-coverpkg "$coverpkg")
+root=$(go list -m -f '{{.Dir}}')
+
+# covered_by_coverpkg reports whether the -coverpkg patterns name the package
+# whose import path it is given. They are resolved the way gremlins' coverage
+# run resolves them: a comma-separated list, from the module root, under the
+# same tags. A pattern that matches nothing lists nothing, which is a no.
+covered_by_coverpkg() {
+  local patterns listed
+  IFS=, read -r -a patterns <<<"$coverpkg"
+  listed=$(cd "$root" && go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.ImportPath}}' "${patterns[@]}") || return 1
+  grep -qxF -- "$1" <<<"$listed"
+}
 
 # The package is loaded under those tags, and -e keeps one go cannot load
 # (every file behind a tag nobody passed, a path that is not there) from ending
 # the script with go's own message, which does not say what to do about it.
 #
 # A package with no test file under its tags is refused unless the run is an
-# integration run with a -coverpkg. Each mutant runs only this package's tests
-# unless --integration is given, so without it no mutant of such a package can
-# be killed, and without a -coverpkg nothing covers its blocks and every mutant
-# is reported NOT COVERED. Before this check its baseline passed having run
-# nothing, printed no duration, and handed gremlins a coefficient of 3001.
-# Under both, the module's other tests cover its blocks and gremlins runs them
-# against each mutant, so it is measured, and the run says so.
+# integration run with a -coverpkg that names the package. Each mutant runs
+# only this package's tests unless --integration is given, so without it no
+# mutant of such a package can be killed, and unless a -coverpkg names it
+# nothing covers its blocks and every mutant is reported NOT COVERED: a
+# -coverpkg naming only other packages leaves it exactly as uncovered as none.
+# Before this check its baseline passed having run nothing, printed no
+# duration, and handed gremlins a coefficient of 3001. Under both, the module's
+# other tests cover its blocks and gremlins runs them against each mutant, so
+# it is measured, and the run says so.
 listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Name}}
 {{.Dir}}
+{{.ImportPath}}
 {{len .TestGoFiles}} {{len .XTestGoFiles}}
 {{with .Error}}{{.}}{{end}}' "$PKG")
 {
   IFS= read -r pkgname
   IFS= read -r pkgdir
+  IFS= read -r pkgpath
   read -r tests xtests
   listerr=$(cat)
 } <<<"$listing"
@@ -243,18 +259,19 @@ refusal=""
 if [ -n "$listerr" ]; then
   refusal="go cannot load $PKG under build tags ${tags:-(none)}: $listerr"
 elif [ "$tests $xtests" = "0 0" ]; then
-  if [ -n "$integration" ] && [ -n "$coverpkg" ]; then
-    echo "gremlins: $PKG has no test files under build tags ${tags:-(none)}; measuring it through the module's other tests, which --integration runs against each mutant and -coverpkg $coverpkg lets cover it"
-  else
+  if [ -z "$integration" ] || [ -z "$coverpkg" ]; then
     refusal="$PKG has no test files under build tags ${tags:-(none)}, so no mutant of it could be killed: each mutant runs only this package's tests without --integration, and without a -coverpkg every one is reported NOT COVERED; refusing to measure"
+  elif ! covered_by_coverpkg "$pkgpath"; then
+    refusal="$PKG has no test files under build tags ${tags:-(none)}, and -coverpkg $coverpkg does not name $pkgpath, so nothing would cover its blocks and every mutant would be reported NOT COVERED; refusing to measure"
+  else
+    echo "gremlins: $PKG has no test files under build tags ${tags:-(none)}; measuring it through the module's other tests, which --integration runs against each mutant and -coverpkg $coverpkg lets cover it"
   fi
 fi
 if [ -n "$refusal" ]; then
   echo "gremlins: $refusal" >&2
-  echo "gremlins: a package behind a build tag is measured with GREMLINS_FLAGS='--tags <tag>', which reaches this baseline and gremlins alike; a tag set only in a .gremlins.yaml reaches gremlins and not the baseline. One tested only from elsewhere in the module is measured with GREMLINS_FLAGS='-i --coverpkg <pattern>'" >&2
+  echo "gremlins: a package behind a build tag is measured with GREMLINS_FLAGS='--tags <tag>', which reaches this baseline and gremlins alike; a tag set only in a .gremlins.yaml reaches gremlins and not the baseline. One tested only from elsewhere in the module is measured with GREMLINS_FLAGS='-i --coverpkg <pattern>', a pattern that names it" >&2
   exit 1
 fi
-root=$(go list -m -f '{{.Dir}}')
 
 # The staging directory is removed whatever happens. Left behind it is a second
 # copy of the package inside the module, which every tree-wide `go build ./...`

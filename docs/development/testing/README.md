@@ -226,9 +226,12 @@ timed base and gremlins' own figure now agree: 1.017 s against 1.045 s on
 `elicitationtools`, 1.026 s against 1.038 s on `cmd/audit_dynamic_aliases`. A
 package with no test file under the tags it was given is refused, naming them,
 since each mutant runs only that package's tests and none could be killed; the
-exception is an integration run with a `-coverpkg`
+exception is an integration run with a `-coverpkg` that names the package
 (`GREMLINS_FLAGS='-i --coverpkg <pattern>'`), under which the module's other
-tests cover the package and gremlins runs them against each mutant. A tag set only in a
+tests cover the package and gremlins runs them against each mutant. The pattern
+is resolved from the module root under the same tags, and one naming only other
+packages is refused as well, since it leaves every mutant as uncovered as no
+`-coverpkg` would. A tag set only in a
 `.gremlins.yaml` reaches gremlins and not the script, and that refusal stops
 such a run only when it would find no test file at all: a package with some
 untagged test files passes it and is measured against a baseline that runs

@@ -90,6 +90,26 @@ def render(template, fields):
     return template
 
 
+def import_path(directory):
+    below = os.path.relpath(directory, env["STUB_ROOT"])
+    return "example.com/m" if below == "." else "example.com/m/" + below.replace(os.sep, "/")
+
+
+def import_paths(pattern):
+    """The packages a pattern names, as go list resolves it from the working
+    directory: a directory, or one ending in /... that takes every package
+    below it. A pattern matching nothing names nothing."""
+    recursive = pattern.endswith("/...")
+    base = os.path.normpath(os.path.join(os.getcwd(), pattern[:-4] if recursive else pattern))
+    found = []
+    for directory, _, files in os.walk(base):
+        if any(name.endswith(".go") for name in files):
+            found.append(import_path(directory))
+        if not recursive:
+            break
+    return found
+
+
 entry = {"argv": args, "cwd": os.getcwd(), "goflags": env.get("GOFLAGS", "")}
 try:
     entry["stdout"] = os.readlink("/proc/self/fd/1")
@@ -99,6 +119,11 @@ except OSError:
 status = 0
 if args[:2] == ["list", "-m"]:
     print(render(args[args.index("-f") + 1], {"{{.Dir}}": env["STUB_ROOT"]}))
+elif args[:1] == ["list"] and args[args.index("-f") + 1] == "{{.ImportPath}}":
+    # The -coverpkg resolution: every pattern after the template.
+    for pattern in args[args.index("-f") + 2:]:
+        for listed in import_paths(pattern):
+            print(listed)
 elif args[:1] == ["list"]:
     pkgdir = os.path.normpath(os.path.join(os.getcwd(), args[-1]))
     name = env.get("STUB_PKG_NAME") or os.path.basename(pkgdir)
@@ -123,6 +148,7 @@ elif args[:1] == ["list"]:
         print(render(args[args.index("-f") + 1], {
             "{{.Name}}": name,
             "{{.Dir}}": shown,
+            "{{.ImportPath}}": import_path(pkgdir),
             "{{len .TestGoFiles}}": tests,
             "{{len .XTestGoFiles}}": xtests,
             "{{with .Error}}{{.}}{{end}}": error,
@@ -453,8 +479,12 @@ class CoverageMutantsTest(unittest.TestCase):
     def test_package_whose_tests_are_elsewhere_is_measured_under_integration_and_coverpkg(self):
         # Under both, the module's other tests cover the package's blocks and
         # gremlins runs them against each mutant, so a mutant can be killed
-        # and the run is measured rather than refused.
-        for flags in ("-i --coverpkg ./...", "--integration --coverpkg=./internal/..."):
+        # and the run is measured rather than refused. The -coverpkg names the
+        # package in each spelling go test reads one in: a pattern enclosing
+        # it, the package itself, and a comma-separated list whose second
+        # entry is the one naming it.
+        for flags in ("-i --coverpkg ./...", "--integration --coverpkg=./internal/...",
+                      "-i --coverpkg ./internal/pkg", "-i --coverpkg ./cmd/...,./internal/pkg"):
             with self.subTest(flags=flags):
                 proc, calls = self.run_script("./internal/pkg", flags=flags, env={"STUB_TEST_FILES": "0 0"})
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -463,6 +493,30 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.gremlins(proc, calls)
                 for call in self.of(calls, "test"):
                     self.assertEqual(call["argv"][-1], "./...")
+        with self.subTest("the pattern is resolved from the root under the tags gremlins is given"):
+            proc, calls = self.run_script("./internal/pkg", flags="--tags e2e -i --coverpkg ./internal/...",
+                                          env={"STUB_TEST_FILES": "0 0"})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            resolutions = [c for c in self.package_lists(calls) if "{{.ImportPath}}" in c["argv"]]
+            self.assertEqual(len(resolutions), 1, calls)
+            self.assertEqual(resolutions[0]["cwd"], self.root)
+            self.assertEqual(self.tags_of(resolutions[0]["argv"]), "e2e")
+            self.assertEqual(resolutions[0]["argv"][-1], "./internal/...")
+
+    def test_coverpkg_that_does_not_name_the_package_is_refused(self):
+        # A -coverpkg that names only other packages leaves this one's blocks
+        # exactly as uncovered as none would, so every mutant would be NOT
+        # COVERED: the outcome the refusal exists to prevent, which the run
+        # used to proceed into while saying the -coverpkg let it be covered.
+        for flags in ("-i --coverpkg ./cmd/...", "-i --coverpkg ./internal/other/...",
+                      "--integration --coverpkg=./cmd/tool,./internal/pkg/sub"):
+            with self.subTest(flags=flags):
+                proc, calls = self.run_script("./internal/pkg", flags=flags, env={"STUB_TEST_FILES": "0 0"})
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(self.of(calls, "test"), [])
+                self.assertIn("does not name example.com/m/internal/pkg", proc.stderr)
+                self.assertNotIn("measuring it through the module's other tests", proc.stdout)
+                self.assertIn("GREMLINS_FLAGS='-i --coverpkg <pattern>', a pattern that names it", proc.stderr)
 
     def test_package_with_test_files_of_either_kind_is_measured(self):
         # internal/cachehints is the shape of the second case: its one test
