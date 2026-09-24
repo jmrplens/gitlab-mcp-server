@@ -13,8 +13,8 @@ import (
 //
 // GitLab answers 401 for two different things, and they must not be acted on
 // alike. Its API guard answers it for a credential it cannot use, and at a
-// family of REST routes Grape's unauthorized! answers it for a valid credential
-// that lacks a permission (entry 55 of docs/development/upstream-bugs.md). The
+// family of REST routes GitLab's API helper unauthorized! (lib/api/helpers.rb)
+// answers it for a valid credential that lacks a permission (entry 55 of docs/development/upstream-bugs.md). The
 // first is a reason to stop serving the credential; the second is an ordinary
 // refusal of one call, and ending the caller's subscriptions over it tells them
 // to re-authenticate a token that works.
@@ -48,8 +48,9 @@ const invalidTokenCode = "invalid_token"
 //     answers an expired, revoked or impersonation-disabled token with
 //     rack-oauth2's body carrying that code (lib/api/api_guard.rb, pinned by
 //     spec/requests/api/api_guard_spec.rb), and nothing else in the REST API
-//     writes it. Grape's unauthorized!, which the permission refusals call,
-//     renders {"message":"401 Unauthorized"} instead.
+//     writes it. GitLab's API helper unauthorized! (lib/api/helpers.rb), which
+//     the permission refusals call, renders {"message":"401 Unauthorized"}
+//     instead.
 //   - Any 401 from the GraphQL endpoint. It answers 401 only from its
 //     authentication checks (GraphqlController#authorize_access_api! renders
 //     {"errors":[{"message":"Invalid token"}]} for a token it could not use,
@@ -69,11 +70,10 @@ const invalidTokenCode = "invalid_token"
 // described as to a model. A copy in either would let the server end a
 // credential while telling the model a permission was missing, or the reverse.
 //
-// It is not [IsCredentialRejection], whose rule is the opposite and is right
-// where it is used: that judges the answer to GET /version, a route with no
-// permission to refuse, where any 401 or 403 is about the credential; the
-// credential probe's GET /user is read by the same status-only rule in
-// [credentialVerdictFor].
+// It is not the rule the credential probe's answer is read by,
+// [credentialVerdictFor], which is the opposite and is right where it is
+// used: GET /user asks about the credential and nothing else, so any 401 or
+// 403 there is about the credential.
 func UnauthorizedNamesCredential(req *http.Request, body []byte) bool {
 	return answeredByGraphQL(req) || carriesInvalidToken(body)
 }

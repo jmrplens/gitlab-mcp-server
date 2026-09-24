@@ -1702,45 +1702,6 @@ func assertAuthScheme(t *testing.T, path, bearer, private, token string, wantBea
 	}
 }
 
-// TestIsCredentialRejection_OnlyOn401And403 verifies that only GitLab's own
-// verdict on a credential counts as a rejection, and that every other way a
-// request can fail is reported as "no verdict".
-//
-// The distinction is what keeps a briefly unreachable instance, or one
-// answering 500 for a few seconds, from reading as a mass revocation and
-// evicting every pooled tenant at once.
-func TestIsCredentialRejection_OnlyOn401And403(t *testing.T) {
-	statusErr := func(code int) error {
-		return &gl.ErrorResponse{StatusCode: code, Message: strconv.Itoa(code)}
-	}
-
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil},
-		{name: "plain error", err: errors.New("dial tcp: connection refused")},
-		{name: "unauthorized", err: statusErr(http.StatusUnauthorized), want: true},
-		{name: "forbidden", err: statusErr(http.StatusForbidden), want: true},
-		{name: "wrapped unauthorized", err: fmt.Errorf("gitlab ping failed: %w", statusErr(http.StatusUnauthorized)), want: true},
-		{name: "not found", err: statusErr(http.StatusNotFound)},
-		{name: "sdk not found sentinel", err: gl.ErrNotFound},
-		{name: "server error", err: statusErr(http.StatusInternalServerError)},
-		{name: "bad gateway", err: statusErr(http.StatusBadGateway)},
-		{name: "too many requests", err: statusErr(http.StatusTooManyRequests)},
-		{name: "nil error response", err: (*gl.ErrorResponse)(nil)},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsCredentialRejection(tt.err); got != tt.want {
-				t.Errorf("IsCredentialRejection(%v) = %v, want %v", tt.err, got, tt.want)
-			}
-		})
-	}
-}
-
 // redirectProbeToken is the fake personal access token the redirect tests look
 // for on the far side of a hop.
 const redirectProbeToken = "glpat-REDIRECT-PROBE"

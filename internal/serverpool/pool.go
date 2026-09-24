@@ -59,7 +59,8 @@ type Entry struct {
 	// 401 that named no cause, as the [time.Now] reading the claim was made
 	// at, monotonic reading included, and nil until the first.
 	// It is apart from lastValidated on purpose: that one is set when the entry
-	// is built and on every successful revalidation, so measuring the window
+	// is built, on every successful revalidation and by a confirmation GitLab
+	// accepted ([ServerPool.keepConfirmedEntry]), so measuring the window
 	// from it would skip the confirmation of every refusal in the first
 	// window after either, which is where a token deleted in the meantime is
 	// most likely to be refused first. See [Entry.claimConfirmation].
@@ -642,7 +643,7 @@ func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) 
 	p.mu.RLock()
 	cached, ok := p.entries[key]
 	// Read under the same lock that guards the field: lastValidated is
-	// written by the revalidation goroutine.
+	// written by the revalidation and confirmation goroutines.
 	stale := ok && p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
 	rejected := ok && cached.rejected.Load()
 	p.mu.RUnlock()
@@ -865,7 +866,9 @@ func (p *ServerPool) handleUnauthorized(key string, entry *Entry, answer gitlabc
 // The check and the claim are one compare-and-swap, which is what makes the
 // confirmation a single flight: of any number of refusals arriving together,
 // exactly one replaces the claim and the rest find the window taken. An entry
-// starts with no claim, so the first 401 it meets is always confirmed.
+// starts with no claim, so the first unexplained 401 it meets always claims
+// the window, and is confirmed unless no probe slot is free or the entry was
+// replaced first; an entry already marked rejected claims nothing.
 //
 // The window is the difference of two [time.Time] values rather than of two
 // Unix timestamps, because between two readings of [time.Now] that difference
@@ -1098,7 +1101,7 @@ func (p *ServerPool) Admitted(token, gitlabURL string) bool {
 		return false
 	}
 	// Read under the same lock that guards it: lastValidated is written by the
-	// revalidation goroutine.
+	// revalidation and confirmation goroutines.
 	return p.maxCredentialAge <= 0 || time.Since(entry.lastValidated) <= p.maxCredentialAge
 }
 
@@ -1760,9 +1763,15 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 	}()
 }
 
-// revalidateAll checks each pool entry's token by calling the GitLab version
-// endpoint. Entries GitLab refuses are evicted; entries whose check could not
-// reach a verdict are left alone.
+// revalidateAll checks each pool entry's token with the credential probe,
+// [gitlabclient.Client.CheckCredential]. Entries GitLab refuses are evicted;
+// entries whose check could not reach a verdict are left alone.
+//
+// The probe and not an SDK call, because the probe's answer is read by status
+// alone and never reported to the unauthorized hook. An SDK call's 401 is, and
+// the one a deleted token gets names no cause, so the hook would claim the
+// confirmation window and send a second probe about an entry this sweep is
+// already evicting.
 //
 // The classification matters as much as the check. Evicting on any error at
 // all makes a GitLab that is briefly unreachable, or answers 500 for ten
@@ -1783,33 +1792,30 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		}
 
 		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		_, err := entry.client.Ping(checkCtx)
+		verdict := entry.client.CheckCredential(checkCtx)
 		cancel()
 
-		if err != nil {
-			if !gitlabclient.IsCredentialRejection(err) {
-				slog.WarnContext(ctx,
-					"server pool: token revalidation could not reach a verdict, keeping entry",
-					"error", err,
-					"age", time.Since(entry.createdAt).Round(time.Second),
-				)
-				p.metrics.RevalidationsTransient.Add(1)
-				continue
-			}
+		switch verdict {
+		case gitlabclient.CredentialRefused:
 			slog.WarnContext(ctx,
 				"server pool: gitlab rejected a pooled credential, evicting entry",
-				"error", err,
 				"age", time.Since(entry.createdAt).Round(time.Second),
 			)
 			p.metrics.RevalidationsFailed.Add(1)
 			p.evictByKey(key)
-		} else {
+		case gitlabclient.CredentialAccepted:
 			p.metrics.RevalidationsSucceeded.Add(1)
 			p.mu.Lock()
 			if e, ok := p.entries[key]; ok {
 				e.lastValidated = time.Now()
 			}
 			p.mu.Unlock()
+		default:
+			slog.WarnContext(ctx,
+				"server pool: token revalidation could not reach a verdict, keeping entry",
+				"age", time.Since(entry.createdAt).Round(time.Second),
+			)
+			p.metrics.RevalidationsTransient.Add(1)
 		}
 	}
 }
