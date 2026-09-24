@@ -262,7 +262,7 @@ Rules:
 
 - Register all formatters in `init()` via `toolutil.RegisterMarkdown` (`RegisterMarkdownPair` / `RegisterMarkdownTriple` bundle several); `TestAllMarkdownFormattersRegistered` in `internal/tools` checks every output type has one
 - `HintPreserveLinks` as first hint in list formatters with clickable links; `toolutil.MdTitleLink(title, url)` renders the link cell
-- A hint names an action by its canonical ID, through `toolutil.HintAction(id, purpose)` or the ID itself, never by a `gitlab_*` tool name, and so does every other sentence a model reads: an error's message, a refusal, a `Usage` line, parameter guidance and a field's `jsonschema` description. A tool name is right on one surface of three, and `make check-action-ids` fails on it
+- A hint names an action by its canonical ID, through `toolutil.HintAction(id, purpose)` or the ID itself, never by a `gitlab_*` tool name, and so does every other sentence a model reads: an error's message, a refusal, a `Usage` line, parameter guidance and a field's description, in a `jsonschema` tag or a schema override map. A tool name is right on one surface of three, and `make check-action-ids` fails on it. A bare meta action name (`Use action 'list'`) resolves on the meta surface alone and no gate reads it, so write `toolutil.HintAction("package.list", ...)` instead
 - Markdown table separator rows come from `toolutil.MarkdownTableSeparator(columns)`; single-record fields use the `toolutil.FmtMd*` format constants (`FmtMdID`, ...)
 - Empty state: always handle `len(items) == 0`
 
