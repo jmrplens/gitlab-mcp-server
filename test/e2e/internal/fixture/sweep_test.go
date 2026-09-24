@@ -642,8 +642,10 @@ func TestResolveOrphanScope_Settings_PickTheSweep(t *testing.T) {
 // The floor is the only thing keeping the default sweep off a run still
 // going, and nothing else ties it to the two timeouts, which are defined
 // hundreds of lines away from it. E2E_GITLAB_TIMEOUT has been raised once
-// already; raised again past the floor, it would let the sweep delete a live
-// package's fixtures with every test green. The timeout's alarm is a fatal
+// already; raised again until it plus the exit hooks' budgets reached the
+// floor, it would let the sweep delete a live package's fixtures with every
+// test green. This test fails from that point on, which at the 2h default is
+// a timeout of 112 minutes or more. The timeout's alarm is a fatal
 // panic, so the exit hooks run only after tests that ended in time, and then
 // under their own budgets: the floor must clear the longer timeout by those
 // two budgets. go test's backstop, a SIGQUIT a tenth of the timeout past it
