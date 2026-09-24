@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -523,8 +524,9 @@ func TestDotUnescape_Transport(t *testing.T) {
 }
 
 // TestBuildBaseTransport_DefaultAndTLS verifies that [buildBaseTransport]
-// returns http.DefaultTransport when TLS verification is enabled, and a
-// custom transport with InsecureSkipVerify when disabled.
+// returns the shared permissive transport, a clone of http.DefaultTransport,
+// when TLS verification is enabled, and a custom transport with
+// InsecureSkipVerify when disabled.
 func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
 	defTransport, ok := buildBaseTransport(false).(*http.Transport)
 	if !ok {
@@ -556,6 +558,96 @@ func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
 	}
 	if ht.ResponseHeaderTimeout != responseHeaderTimeout {
 		t.Errorf("ResponseHeaderTimeout = %v, want %v", ht.ResponseHeaderTimeout, responseHeaderTimeout)
+	}
+}
+
+// destinationPoolTransports holds a pair of pools to what every pair must be,
+// whoever it was built for, and returns its two transports.
+//
+// The two must be different transports, since one transport is one idle pool
+// and a pair of the same transport is the defect the pair exists to close.
+// Each must be a clone rather than [http.DefaultTransport], carry the response
+// header timeout, and dial through the guard.
+func destinationPoolTransports(t *testing.T, pools destinationPools) (permissive, strict *http.Transport) {
+	t.Helper()
+	permissive, ok := pools.permissive.(*http.Transport)
+	if !ok {
+		t.Fatalf("permissive = %T, want *http.Transport", pools.permissive)
+	}
+	strict, ok = pools.strict.(*http.Transport)
+	if !ok {
+		t.Fatalf("strict = %T, want *http.Transport", pools.strict)
+	}
+	if permissive == strict {
+		t.Fatal("the two pools are one transport, so a request the guard refuses can be handed a connection one it permits opened")
+	}
+	for name, transport := range map[string]*http.Transport{"permissive": permissive, "strict": strict} {
+		t.Run(name, func(t *testing.T) {
+			if transport == http.DefaultTransport {
+				t.Error("this pool is http.DefaultTransport itself; mutating it would leak into the whole process")
+			}
+			if transport.ResponseHeaderTimeout != responseHeaderTimeout {
+				t.Errorf("ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, responseHeaderTimeout)
+			}
+			conn, err := transport.DialContext(t.Context(), "tcp", "169.254.169.254:80")
+			if conn != nil {
+				_ = conn.Close()
+			}
+			if !errors.Is(err, ErrDestinationRefused) {
+				t.Errorf("this pool dialed a metadata address: %v", err)
+			}
+		})
+	}
+	return permissive, strict
+}
+
+// skipsVerification reports whether a transport accepts any certificate.
+func skipsVerification(transport *http.Transport) bool {
+	return transport.TLSClientConfig != nil && transport.TLSClientConfig.InsecureSkipVerify
+}
+
+// TestBuildDestinationPools_Verified_OnePairSharedAndLent verifies the pair
+// every verifying client routes its requests between.
+//
+// It must be one pair per process, since the connection pool is why the
+// transports are shared at all, and its permissive half must be the transport
+// [HTTPTransport] lends, so that an unstamped borrower keeps the pool it
+// always had.
+func TestBuildDestinationPools_Verified_OnePairSharedAndLent(t *testing.T) {
+	permissive, strict := destinationPoolTransports(t, buildDestinationPools(false))
+
+	again := buildDestinationPools(false)
+	if again.permissive != permissive || again.strict != strict {
+		t.Error("buildDestinationPools(false) built a fresh pair; the connection pools must be shared")
+	}
+	if HTTPTransport(false) != permissive {
+		t.Error("HTTPTransport(false) is not the shared permissive pool, so an unstamped borrower moved pools")
+	}
+	if skipsVerification(permissive) || skipsVerification(strict) {
+		t.Error("a shared pool skips certificate verification")
+	}
+}
+
+// TestBuildDestinationPools_SkipTLSVerify_APairOfTheClientsOwn verifies the
+// pair a client that skips certificate verification gets: its own, as the one
+// transport such a client got always was, with both halves skipping
+// verification above the TLS 1.2 floor.
+func TestBuildDestinationPools_SkipTLSVerify_APairOfTheClientsOwn(t *testing.T) {
+	permissive, strict := destinationPoolTransports(t, buildDestinationPools(true))
+
+	if !skipsVerification(permissive) || !skipsVerification(strict) {
+		t.Fatal("a pool of a client that skips verification verifies")
+	}
+	if permissive.TLSClientConfig.MinVersion != tls.VersionTLS12 || strict.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Error("skipping verification lowered the TLS floor below 1.2")
+	}
+	shared := buildDestinationPools(false)
+	if permissive == shared.permissive || strict == shared.strict {
+		t.Error("a client that skips verification was given a verified pool")
+	}
+	other := buildDestinationPools(true)
+	if other.permissive == permissive || other.strict == strict {
+		t.Error("two clients that skip verification share a pool")
 	}
 }
 

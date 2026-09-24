@@ -6,11 +6,13 @@ package gitlab
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -472,9 +474,9 @@ func TestDestinationPolicy_InstanceIsPrivate(t *testing.T) {
 			if got := policy.instanceIsPrivate(t.Context()); got != tt.want {
 				t.Fatalf("instanceIsPrivate() = %v, want %v", got, tt.want)
 			}
-			// Asked again, the answer is memoized: the resolver is consulted on
-			// the refusal path, and a client that keeps meeting refusals must
-			// not keep paying for DNS.
+			// Asked again, the answer is memoized: the resolver is consulted
+			// whenever a hop that leaves the instance is routed, and a client
+			// whose downloads keep leaving it must not keep paying for DNS.
 			if got := policy.instanceIsPrivate(t.Context()); got != tt.want {
 				t.Fatalf("instanceIsPrivate() on the second call = %v, want %v", got, tt.want)
 			}
@@ -627,16 +629,22 @@ func TestDestinationTransport_StampsThePolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &Client{}
 			if tt.policy != nil {
+				// Routing a hop that left the instance asks whether the
+				// instance is itself private; the answer is irrelevant to the
+				// stamp, and the real resolver is never what decides a unit
+				// test.
+				tt.policy.lookupIP = resolverAnswering("203.0.113.1")
 				client.destination.Store(tt.policy)
 			}
 			var seen *dialTarget
+			record := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if target, ok := dialTargetFrom(req.Context()); ok {
+					seen = &target
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+			})
 			transport := &destinationTransport{
-				base: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					if target, ok := dialTargetFrom(req.Context()); ok {
-						seen = &target
-					}
-					return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
-				}),
+				pools:  destinationPools{permissive: record, strict: record},
 				client: client,
 			}
 
@@ -665,6 +673,333 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 // RoundTrip calls the wrapped function.
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+// resolverAnswering is a stand-in for the instance lookup that answers every
+// name with addrs.
+func resolverAnswering(addrs ...string) func(context.Context, string) ([]netip.Addr, error) {
+	return func(context.Context, string) ([]netip.Addr, error) {
+		parsed := make([]netip.Addr, 0, len(addrs))
+		for _, raw := range addrs {
+			parsed = append(parsed, netip.MustParseAddr(raw))
+		}
+		return parsed, nil
+	}
+}
+
+// TestDestinationPolicy_PermitsPrivate_IsWhatTheDialerApplies walks every way
+// tier B can answer the one question the pool is chosen by, and holds the
+// dialer to the same answer.
+//
+// The agreement is the property the routing rests on. A request is served from
+// the strict pool exactly when this answers false, and a connection is only
+// safe to hand it if that connection was dialed under a false answer too; a
+// predicate the dialer and the router each kept a copy of could drift, and the
+// drift would reopen reuse as a way past the guard. So each row also asks the
+// dialer's check about a private address, which must be refused exactly when
+// this answers false, and about a public one, which no answer refuses.
+//
+// The lookups are counted because asking is not free: a request that stays on
+// the operator's own instance, or a deployment that opted out, must not pay a
+// DNS question to be routed, and one that does ask must ask once however many
+// times its policy is consulted.
+func TestDestinationPolicy_PermitsPrivate_IsWhatTheDialerApplies(t *testing.T) {
+	tests := []struct {
+		name         string
+		instance     string
+		callerChosen bool
+		allowPrivate bool
+		offOrigin    bool
+		resolves     []string
+		want         bool
+		wantLookups  int
+	}{
+		{name: "the operator's own instance", instance: "https://gitlab.example.com", want: true},
+		{name: "an instance a caller named", instance: "https://gitlab.example.com", callerChosen: true, want: false},
+		{name: "an instance a caller named, opted out", instance: "https://gitlab.example.com", callerChosen: true, allowPrivate: true, want: true},
+		{
+			name: "a hop away from a public instance", instance: "https://gitlab.example.com", offOrigin: true,
+			resolves: []string{"203.0.113.1"}, want: false, wantLookups: 1,
+		},
+		{
+			name: "a hop away from a private instance", instance: "https://gitlab.internal", offOrigin: true,
+			resolves: []string{"10.0.0.1"}, want: true, wantLookups: 1,
+		},
+		{name: "a hop away from an instance spelled as a private address", instance: "https://10.0.0.1", offOrigin: true, want: true},
+		{name: "a hop away from an instance spelled as a public address", instance: "https://203.0.113.1", offOrigin: true, want: false},
+		{name: "a hop away from a public instance, opted out", instance: "https://gitlab.example.com", allowPrivate: true, offOrigin: true, want: true},
+		{
+			name: "a hop away from an instance a caller named", instance: "https://gitlab.internal", callerChosen: true, offOrigin: true,
+			resolves: []string{"10.0.0.1"}, want: true, wantLookups: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := newDestinationPolicy(tt.instance, tt.callerChosen, tt.allowPrivate)
+			lookups := 0
+			policy.lookupIP = func(ctx context.Context, host string) ([]netip.Addr, error) {
+				lookups++
+				if len(tt.resolves) == 0 {
+					t.Errorf("the policy resolved %q, and this case expects no question to be asked", host)
+					return nil, errors.New("undeclared lookup")
+				}
+				return resolverAnswering(tt.resolves...)(ctx, host)
+			}
+
+			if got := policy.permitsPrivate(t.Context(), tt.offOrigin); got != tt.want {
+				t.Fatalf("permitsPrivate() = %v, want %v", got, tt.want)
+			}
+			privateErr := policy.checkPrivate(t.Context(), netip.MustParseAddr("10.0.0.1"), tt.offOrigin)
+			if refused := errors.Is(privateErr, ErrDestinationRefused); refused == tt.want {
+				t.Errorf("the dialer refused a private address = %v while the router permits one = %v; the two must be one answer", refused, tt.want)
+			}
+			if err := policy.checkPrivate(t.Context(), netip.MustParseAddr("203.0.113.1"), tt.offOrigin); err != nil {
+				t.Errorf("the dialer refused a public address: %v", err)
+			}
+			if lookups != tt.wantLookups {
+				t.Errorf("the instance was resolved %d times, want %d", lookups, tt.wantLookups)
+			}
+		})
+	}
+}
+
+// TestDestinationPolicy_InstanceIsPrivate_OutlivesTheCallersCancellation
+// verifies that the first request to ask whether the instance is private
+// cannot decide the answer by having given up.
+//
+// The answer is memoized for the life of the client and is asked when a
+// redirect hop is routed, which net/http does without checking whether the
+// hop's context has already ended. Inheriting that cancellation made the
+// lookup fail, the failure was recorded as "not private", and a self-managed
+// GitLab whose object store sits beside it on a private network then had every
+// later artifact download refused, for a request nobody was waiting on.
+func TestDestinationPolicy_InstanceIsPrivate_OutlivesTheCallersCancellation(t *testing.T) {
+	policy := newDestinationPolicy("https://gitlab.internal", false, false)
+	policy.lookupIP = func(ctx context.Context, _ string) ([]netip.Addr, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return []netip.Addr{netip.MustParseAddr("10.0.0.1")}, nil
+	}
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if !policy.instanceIsPrivate(cancelled) {
+		t.Fatal("instanceIsPrivate() = false: the lookup inherited a cancelled caller and recorded its failure as the answer")
+	}
+	if !policy.instanceIsPrivate(t.Context()) {
+		t.Error("instanceIsPrivate() on a later request = false, want the answer the first one recorded")
+	}
+}
+
+// TestDestinationTransport_RoutesByWhatTierBAnswers verifies which pool each
+// kind of request is served from.
+//
+// The operator's own instance is the row that protects the cost: it is every
+// first-party request of every ordinary deployment, and it must stay on the
+// one pool those requests always shared. The strict rows are the ones that
+// protect the guard, since a request routed to the permissive pool can be
+// handed a connection to a private address without a dial.
+func TestDestinationTransport_RoutesByWhatTierBAnswers(t *testing.T) {
+	const (
+		instanceURL = "https://gitlab.example.com"
+		ownRequest  = "https://gitlab.example.com/api/v4/version"
+		hopRequest  = "https://storage.example.net/artifact"
+	)
+	tests := []struct {
+		name         string
+		noPolicy     bool
+		callerChosen bool
+		allowPrivate bool
+		resolves     string
+		requestURL   string
+		want         string
+	}{
+		{name: "the operator's own instance", requestURL: ownRequest, want: "permissive"},
+		{name: "an instance a caller named", callerChosen: true, requestURL: ownRequest, want: "strict"},
+		{name: "an instance a caller named, opted out", callerChosen: true, allowPrivate: true, requestURL: ownRequest, want: "permissive"},
+		{name: "a hop away from a public instance", resolves: "203.0.113.1", requestURL: hopRequest, want: "strict"},
+		{name: "a hop away from a private instance", resolves: "10.0.0.1", requestURL: hopRequest, want: "permissive"},
+		{name: "a hop away from a public instance, opted out", allowPrivate: true, requestURL: hopRequest, want: "permissive"},
+		{name: "a client with no policy", noPolicy: true, requestURL: ownRequest, want: "permissive"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &Client{}
+			if !tt.noPolicy {
+				policy := newDestinationPolicy(instanceURL, tt.callerChosen, tt.allowPrivate)
+				policy.lookupIP = func(context.Context, string) ([]netip.Addr, error) {
+					if tt.resolves == "" {
+						t.Error("routing resolved the instance, and this case expects no question to be asked")
+						return nil, errors.New("undeclared lookup")
+					}
+					return []netip.Addr{netip.MustParseAddr(tt.resolves)}, nil
+				}
+				client.destination.Store(policy)
+			}
+			served := ""
+			poolNamed := func(name string) http.RoundTripper {
+				return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					served = name
+					return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+				})
+			}
+			transport := &destinationTransport{
+				pools:  destinationPools{permissive: poolNamed("permissive"), strict: poolNamed("strict")},
+				client: client,
+			}
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.requestURL, http.NoBody)
+			if err != nil {
+				t.Fatalf("http.NewRequestWithContext() unexpected error: %v", err)
+			}
+			resp, err := transport.RoundTrip(req)
+			if err != nil {
+				t.Fatalf("RoundTrip() unexpected error: %v", err)
+			}
+			_ = resp.Body.Close()
+
+			if served != tt.want {
+				t.Errorf("served from the %s pool, want the %s pool", served, tt.want)
+			}
+		})
+	}
+}
+
+// versionAnswer is what the loopback stubs below answer every request with: a
+// version document, which is all [Client.Ping] asks for.
+func versionAnswer(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+}
+
+// connCountingServer starts a loopback server that counts the connections
+// opened to it, which is how the tests below tell a reused connection from a
+// dialed one.
+func connCountingServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *atomic.Int64) {
+	t.Helper()
+	var opened atomic.Int64
+	server := httptest.NewUnstartedServer(handler)
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			opened.Add(1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+	return server, &opened
+}
+
+// leaveIdleConnection pings url twice through an operator-named client, and
+// fails unless the second ping reused the connection the first one opened.
+//
+// That premise is asserted rather than assumed because the tests below can
+// only fail if there is an idle connection for the guard to be walked past: a
+// transport that stopped keeping connections alive would make them pass for a
+// reason that has nothing to do with the routing.
+func leaveIdleConnection(t *testing.T, url string, opened *atomic.Int64) {
+	t.Helper()
+	holder, err := NewClientWithTokenRetries(url, "glpat-holder", false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries() unexpected error: %v", err)
+	}
+	for range 2 {
+		if _, err = holder.Ping(t.Context()); err != nil {
+			t.Fatalf("the operator-named client was refused its own instance: %v", err)
+		}
+	}
+	if n := opened.Load(); n != 1 {
+		t.Fatalf("two pings opened %d connections, want 1 reused: with no idle connection left behind, nothing here tests reuse", n)
+	}
+}
+
+// TestDestinationPools_CallerNamedClient_IsNotHandedAnOperatorNamedConnection
+// is the reuse the destination guard used to miss, on the first hop.
+//
+// An operator-named client for a loopback GitLab leaves a connection idle, and
+// a client for the same URL whose instance a caller named asks the same host.
+// The dialer would refuse the second, since a caller-named instance on a
+// private address is tier B's own case; but on one shared pool nothing was
+// dialed, and the idle connection answered. The connection count is the other
+// half of the claim: a refusal happens before the connect, so the loopback
+// server must see no second connection.
+func TestDestinationPools_CallerNamedClient_IsNotHandedAnOperatorNamedConnection(t *testing.T) {
+	t.Setenv(AllowPrivateInstancesEnv, "")
+	gitlab, opened := connCountingServer(t, versionAnswer)
+	leaveIdleConnection(t, gitlab.URL, opened)
+
+	caller, err := NewClientWithTokenRetries(gitlab.URL, "glpat-caller", false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries() unexpected error: %v", err)
+	}
+	caller.MarkInstanceCallerNamed()
+
+	_, err = caller.Ping(t.Context())
+
+	if !errors.Is(err, ErrDestinationRefused) {
+		t.Fatalf("err = %v, want a refusal: a caller-named instance on loopback was served the operator-named client's idle connection", err)
+	}
+	if n := opened.Load(); n != 1 {
+		t.Errorf("the loopback server saw %d connections, want the 1 the operator-named client opened", n)
+	}
+}
+
+// TestDestinationPools_RedirectOffAPublicInstance_IsNotHandedAnotherClientsConnection
+// is the same reuse on a redirect hop, which is the shape that reaches it on a
+// deployment nobody misconfigured.
+//
+// One client holds an idle connection to a private object store it was
+// configured for. Another client's instance is public, and answers with a
+// redirect to that store; the hop leaves the instance for a private address,
+// which tier B refuses, and before the split the hop was served the first
+// client's connection instead. The public instance is spelled as a name and
+// told that name resolves publicly, because an instance spelled as a loopback
+// address would be private and would rightly permit the hop.
+func TestDestinationPools_RedirectOffAPublicInstance_IsNotHandedAnotherClientsConnection(t *testing.T) {
+	t.Setenv(AllowPrivateInstancesEnv, "")
+	store, opened := connCountingServer(t, versionAnswer)
+	leaveIdleConnection(t, store.URL, opened)
+
+	var redirects atomic.Int64
+	// Every request is sent to the store's version document, which is the
+	// one thing Ping asks for; a target built from the request would be an
+	// open redirect in the stub itself.
+	storeVersion := store.URL + versionAPIPath
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirects.Add(1)
+		http.Redirect(w, r, storeVersion, http.StatusFound)
+	}))
+	t.Cleanup(instance.Close)
+	_, port, err := net.SplitHostPort(instance.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("net.SplitHostPort() unexpected error: %v", err)
+	}
+	instanceURL := "http://localhost:" + port
+
+	public, err := NewClientWithTokenRetries(instanceURL, "glpat-public", false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries() unexpected error: %v", err)
+	}
+	policy := newDestinationPolicy(instanceURL, false, false)
+	policy.lookupIP = resolverAnswering("203.0.113.1")
+	public.destination.Store(policy)
+
+	_, err = public.Ping(t.Context())
+
+	if !errors.Is(err, ErrDestinationRefused) {
+		t.Fatalf("err = %v, want a refusal: a redirect off a public instance was served another client's idle connection to a private address", err)
+	}
+	if !strings.Contains(err.Error(), "redirect") {
+		t.Errorf("refusal = %v, want the redirect named as its cause", err)
+	}
+	if n := redirects.Load(); n != 1 {
+		t.Errorf("the public instance answered %d requests, want the 1 whose redirect was refused", n)
+	}
+	if n := opened.Load(); n != 1 {
+		t.Errorf("the private store saw %d connections, want the 1 the client configured for it opened", n)
+	}
+}
 
 // TestAllowPrivateInstances_ReadsTheEnvironment verifies the tier B opt-out,
 // including the decision that a value which does not parse leaves the guard on.
