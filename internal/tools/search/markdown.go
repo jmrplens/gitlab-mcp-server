@@ -38,7 +38,7 @@ func FormatCodeMarkdown(out CodeOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use gitlab_repository action 'file_get' with path to read a found file")
+		toolutil.HintAction("repository.file_get", "read a found file by its path"))
 	return b.String()
 }
 
@@ -64,7 +64,7 @@ func FormatMRsMarkdown(out MergeRequestsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_merge_request action 'get' with project_id and merge_request_iid to see full details")
+		toolutil.HintAction("merge_request.get", "see full details, with project_id and merge_request_iid"))
 	return b.String()
 }
 
@@ -100,7 +100,7 @@ func FormatIssuesMarkdown(out IssuesOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_issue action 'get' with project_id and issue_iid to see full details")
+		toolutil.HintAction("issue.get", "see full details, with project_id and issue_iid"))
 	return b.String()
 }
 
@@ -122,7 +122,7 @@ func FormatCommitsMarkdown(out CommitsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_repository action 'commit_get' with short_id to see full commit details")
+		toolutil.HintAction("repository.commit_get", "see full commit details, with short_id"))
 	return b.String()
 }
 
@@ -148,7 +148,7 @@ func FormatMilestonesMarkdown(out MilestonesOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_project action 'milestone_get' with project_id and milestone_id to see full details")
+		toolutil.HintAction("project.milestone_get", "see full details, with project_id and milestone_id"))
 	return b.String()
 }
 
@@ -171,7 +171,7 @@ func FormatNotesMarkdown(out NotesOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use the note's parent tool (gitlab_issue note actions or gitlab_mr_review note actions) to see full note")
+		"Use `issue.note_get` or `mr_review.note_get`, whichever the note's parent is, to see the full note")
 	return b.String()
 }
 
@@ -188,7 +188,7 @@ func FormatProjectsMarkdown(out ProjectsOutput) string {
 	}
 	return formatSearchResultList("Project", out.Pagination, "projects", [4]string{"Name", "Path", "Visibility", "Default Branch"}, rows,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_project action 'get' with the project path to see full details")
+		toolutil.HintAction("project.get", "see full details, with the project path"))
 }
 
 // searchResultRow is one row of a four-column search result table, carried as
@@ -241,7 +241,7 @@ func FormatSnippetsMarkdown(out SnippetsOutput) string {
 	}
 	return formatSearchResultList("Snippet", out.Pagination, "snippets", [4]string{"Title", "File", "Visibility", "Author"}, rows,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_snippet action 'get' with snippet_id to see full content")
+		toolutil.HintAction("snippet.get", "see full content, with snippet_id"))
 }
 
 // FormatUsersMarkdown renders a paginated list of user search results.
@@ -261,7 +261,7 @@ func FormatUsersMarkdown(out UsersOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_user action 'get' with user_id to see full profile")
+		toolutil.HintAction("user.get", "see full profile, with user_id"))
 	return b.String()
 }
 
@@ -287,7 +287,7 @@ func FormatWikiMarkdown(out WikiOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use gitlab_wiki action 'get' with slug to read the full wiki page")
+		toolutil.HintAction("wiki.get", "read the full wiki page, with slug"))
 	return b.String()
 }
 

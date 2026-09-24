@@ -67,7 +67,7 @@ func FormatListMarkdown(o ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&b, o.Pagination, false,
-		"Use `gitlab_project_upload_delete` with an ID from the table to remove one")
+		"Use `project.upload_delete` with an ID from the table to remove one")
 	return b.String()
 }
 

@@ -46,7 +46,7 @@ func FormatLabelEventMarkdown(out LabelEventOutput) string {
 	c.Field("User", eventUsername(out.User))
 	writeEventResource(c, out.ResourceType, out.ResourceID)
 	c.Time("Created", out.CreatedAt)
-	c.End("Use `gitlab_issue_label_event_list` or `gitlab_mr_label_event_list` to see all label changes")
+	c.End("Use `issue.event_issue_label_list` or `merge_request.event_mr_label_list` to see all label changes")
 	return b.String()
 }
 
@@ -83,7 +83,7 @@ func FormatMilestoneEventMarkdown(out MilestoneEventOutput) string {
 	c.Field("User", eventUsername(out.User))
 	writeEventResource(c, out.ResourceType, out.ResourceID)
 	c.Time("Created", out.CreatedAt)
-	c.End("Use `gitlab_issue_milestone_event_list` or `gitlab_mr_milestone_event_list` to see all milestone changes")
+	c.End("Use `issue.event_issue_milestone_list` or `merge_request.event_mr_milestone_list` to see all milestone changes")
 	return b.String()
 }
 
@@ -116,7 +116,7 @@ func FormatStateEventMarkdown(out StateEventOutput) string {
 	c.Field("User", eventUsername(out.User))
 	writeEventResource(c, out.ResourceType, out.ResourceID)
 	c.Time("Created", out.CreatedAt)
-	c.End("Use `gitlab_issue_state_event_list` or `gitlab_mr_state_event_list` to see all state changes")
+	c.End("Use `issue.event_issue_state_list` or `merge_request.event_mr_state_list` to see all state changes")
 	return b.String()
 }
 
@@ -153,7 +153,7 @@ func FormatIterationEventMarkdown(out IterationEventOutput) string {
 	c.Field("User", eventUsername(out.User))
 	writeEventResource(c, out.ResourceType, out.ResourceID)
 	c.Time("Created", out.CreatedAt)
-	c.End("Use `gitlab_issue_iteration_event_list` to see all iteration changes")
+	c.End("Use `issue.event_issue_iteration_list` to see all iteration changes")
 	return b.String()
 }
 

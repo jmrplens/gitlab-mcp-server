@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,8 +23,11 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -122,6 +126,55 @@ func TestReviewMRPrompt_Success(t *testing.T) {
 	}
 	if !strings.Contains(text, "Lines added") {
 		t.Errorf("expected metrics section")
+	}
+}
+
+// TestReviewMR_NamesActionsByCanonicalID verifies that the review_mr prompt
+// names the actions it tells a model to call by their canonical catalog IDs,
+// and that each of those IDs is one the catalog builds.
+//
+// The prompt is served on every surface, and it used to name the meta tool
+// gitlab_mr_review, which the default dynamic surface and the individual one
+// do not register. cmd/audit_action_ids holds served prose to canonical IDs,
+// but it reads internal/tools and internal/toolutil and never this package,
+// so this test is what holds the prompt to the catalog: a tool-shaped name in
+// the text fails it, and so does an ID the catalog has stopped building.
+func TestReviewMR_NamesActionsByCanonicalID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pathMR5:
+			respondJSON(w, http.StatusOK, `{"id":55,"iid":5,"title":"Add feature X","source_branch":"feature-x","target_branch":"main","author":{"username":"alice"}}`)
+		case pathMR5Diffs:
+			respondJSON(w, http.StatusOK, `[{"old_path":"handler.go","new_path":"handler.go","diff":"@@ -1 +1 @@\n-a\n+b","new_file":false,"renamed_file":false,"deleted_file":false}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "review_mr",
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if names := regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`).FindAllString(text, -1); len(names) > 0 {
+		t.Errorf("review_mr names tools %v, which only one surface of three registers; name the canonical action IDs", names)
+	}
+
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	for _, id := range []string{actionDraftNoteCreate, actionDraftNotePublishAll, actionDiscussionCreate, actionDiscussionReply, actionNoteCreate} {
+		t.Run(id, func(t *testing.T) {
+			if !strings.Contains(text, "`"+id+"`") {
+				t.Errorf("review_mr does not name %s", id)
+			}
+			if _, ok := catalog.Action(actioncatalog.ActionID(id)); !ok {
+				t.Errorf("%s is not an action the catalog builds", id)
+			}
+		})
 	}
 }
 

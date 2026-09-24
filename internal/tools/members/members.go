@@ -146,7 +146,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("projectMembersList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("projectMembersList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.ListProjectMembersOptions{}

@@ -266,10 +266,10 @@ func TestRemove_Error(t *testing.T) {
 // and this server exposes no such action.
 const (
 	secureFileListHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_show_secure_file` to view details of a specific file\n"
+		"- Use `admin.secure_file_get` to view details of a specific file\n"
 	secureFileCardHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_list_secure_files` to see the other secure files in this project\n" +
-		"- Use `gitlab_remove_secure_file` to delete it\n"
+		"- Use `admin.secure_file_list` to see the other secure files in this project\n" +
+		"- Use `admin.secure_file_delete` to delete it\n"
 	secureFileTableHeader = "| ID | Name | Checksum Algorithm | Expires At |\n| --- | --- | --- | --- |\n"
 )
 

@@ -97,7 +97,7 @@ var pipelineTriggerActionMeta = map[string]toolutil.ActionMetaEntry{
 		Guidance: map[string]toolutil.ParameterGuidance{
 			"trigger_id": {
 				SemanticRole:     "trigger_id",
-				ValueSource:      "Numeric trigger token id, usually from a prior pipeline_trigger.list result.",
+				ValueSource:      "Numeric trigger token id, usually from a prior pipeline.trigger_list result.",
 				ExampleBinding:   "params.trigger_id:10",
 				CommonConfusions: []string{"trigger_id is the token's numeric id, not the token secret string."},
 			},
@@ -142,7 +142,7 @@ var pipelineTriggerActionMeta = map[string]toolutil.ActionMetaEntry{
 			},
 			"token": {
 				SemanticRole:     "trigger_token",
-				ValueSource:      "Trigger token secret string from pipeline_trigger.create or pipeline_trigger.list.",
+				ValueSource:      "Trigger token secret string from pipeline.trigger_create or pipeline.trigger_list.",
 				ExampleBinding:   `params.token:"glptt-..."`,
 				CommonConfusions: []string{"token is the secret string, not the numeric trigger_id."},
 			},

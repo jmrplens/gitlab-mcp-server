@@ -63,8 +63,8 @@ func FormatOutputMarkdown(out Output) string {
 	c.Secret("Token", out.Token)
 	writeGranularScopes(c, out.GranularScopes)
 	c.End(
-		"Use `gitlab_project_access_token_revoke`, `gitlab_group_access_token_revoke`, or `gitlab_personal_access_token_revoke` to revoke this token from the matching scope",
-		"Use `gitlab_project_access_token_rotate`, `gitlab_group_access_token_rotate`, or `gitlab_personal_access_token_rotate` to rotate this token from the matching scope",
+		"Use `access.token_project_revoke`, `access.token_group_revoke`, or `access.token_personal_revoke` to revoke this token from the matching scope",
+		"Use `access.token_project_rotate`, `access.token_group_rotate`, or `access.token_personal_rotate` to rotate this token from the matching scope",
 	)
 	return b.String()
 }

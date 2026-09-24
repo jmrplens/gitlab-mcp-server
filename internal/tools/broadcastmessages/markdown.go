@@ -51,7 +51,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	// The table carries no link, so the footer carries no instruction to keep
 	// links it does not have.
 	toolutil.WriteListFooter(&sb, out.Pagination, false,
-		"Use `gitlab_get_broadcast_message` to view details of a specific message")
+		"Use `admin.broadcast_message_get` to view details of a specific message")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -80,7 +80,7 @@ func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 	// to drop them, so a message shown to maintainers alone read as one shown
 	// to everybody.
 	c.Field("Target Access Levels", targetAccessLevels(item.TargetAccessLevels))
-	c.End("Use `gitlab_update_broadcast_message` to modify this message")
+	c.End("Use `admin.broadcast_message_update` to modify this message")
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 

@@ -130,7 +130,7 @@ var (
 		description: "List registered runner controllers (admin-only, experimental API) with offset or keyset pagination. Returns: controllers with id, description, state, created/updated timestamps, plus pagination metadata. See also: gitlab_runner_controller_get, gitlab_runner_controller_create, gitlab_runner_controller_update.",
 	}
 	getControllerMeta = runnerControllerActionMetaEntry{
-		usage:       "Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after gitlab_runner_controller_list to inspect a specific controller before updating or deleting it.",
+		usage:       "Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after runner.controller_list to inspect a specific controller before updating or deleting it.",
 		aliases:     []string{"get runner controller", "runner controller details", "runner controller connection status"},
 		related:     []string{actionControllerList, actionControllerUpdate, actionControllerDelete},
 		description: "Get one runner controller by controller_id (admin-only, experimental API). Returns: the controller with id, description, state, connected flag, and created/updated timestamps. See also: gitlab_runner_controller_list, gitlab_runner_controller_update, gitlab_runner_controller_delete.",
@@ -148,7 +148,7 @@ var (
 		description: "Update a runner controller's description or state (enabled/disabled/dry_run) by controller_id (admin-only, experimental API). Returns: the updated controller with id, description, state, and timestamps. See also: gitlab_runner_controller_get, gitlab_runner_controller_list, gitlab_runner_controller_delete.",
 	}
 	deleteControllerMeta = runnerControllerActionMetaEntry{
-		usage:       "Permanently remove a runner controller by controller_id (destructive, admin-only, experimental API). Use to decommission a controller from the runner control plane. Verify the controller_id with gitlab_runner_controller_list first.",
+		usage:       "Permanently remove a runner controller by controller_id (destructive, admin-only, experimental API). Use to decommission a controller from the runner control plane. Verify the controller_id with runner.controller_list first.",
 		aliases:     []string{"delete runner controller", "remove runner controller", "decommission runner controller"},
 		related:     []string{actionControllerGet, actionControllerList, actionControllerUpdate},
 		description: "Delete a runner controller by controller_id (destructive, admin-only, experimental API). Returns: a success confirmation. See also: gitlab_runner_controller_list, gitlab_runner_controller_get, gitlab_runner_controller_update.",

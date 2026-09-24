@@ -80,7 +80,7 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
 	},
 	"gitlab_download_attestation": {
-		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after gitlab_list_attestations identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.",
+		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after attestation.list identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.",
 		aliases: []string{
 			"download build attestation",
 			"download slsa provenance bundle",
@@ -98,7 +98,7 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 			},
 			"attestation_iid": {
 				SemanticRole:     "attestation_iid",
-				ValueSource:      "Project-scoped attestation IID returned by gitlab_list_attestations.",
+				ValueSource:      "Project-scoped attestation IID returned by attestation.list.",
 				ExampleBinding:   "params.attestation_iid:1",
 				CommonConfusions: []string{"attestation_iid is the per-project IID from the list action, not the global id field and not the artifact subject digest."},
 			},

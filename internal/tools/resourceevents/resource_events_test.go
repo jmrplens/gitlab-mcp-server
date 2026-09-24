@@ -992,15 +992,15 @@ const (
 	labelListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use filters to narrow down label events by date or action\n"
 	labelCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_issue_label_event_list` or `gitlab_mr_label_event_list` to see all label changes\n"
+		"- Use `issue.event_issue_label_list` or `merge_request.event_mr_label_list` to see all label changes\n"
 	milestoneListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use filters to narrow down milestone events by date or action\n"
 	milestoneCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_issue_milestone_event_list` or `gitlab_mr_milestone_event_list` to see all milestone changes\n"
+		"- Use `issue.event_issue_milestone_list` or `merge_request.event_mr_milestone_list` to see all milestone changes\n"
 	stateListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use filters to narrow down state events by date or action\n"
 	stateCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_issue_state_event_list` or `gitlab_mr_state_event_list` to see all state changes\n"
+		"- Use `issue.event_issue_state_list` or `merge_request.event_mr_state_list` to see all state changes\n"
 )
 
 // TestFormatLabelEventsMarkdown_Empty pins the whole response of an issue with

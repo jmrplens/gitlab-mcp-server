@@ -946,7 +946,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.FullPath == "" {
-		return ListOutput{}, errors.New("epicList: full_path is required. Use gitlab_group_list to find the group path first")
+		return ListOutput{}, errors.New("epicList: full_path is required. Use group.list to find the group path first")
 	}
 	if err := validateListOrdering(input); err != nil {
 		return ListOutput{}, err
@@ -1143,7 +1143,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.FullPath == "" {
-		return Output{}, errors.New("epicGet: full_path is required. Use gitlab_group_list to find the group path first")
+		return Output{}, errors.New("epicGet: full_path is required. Use group.list to find the group path first")
 	}
 	if input.IID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicGet", "epic_iid")
@@ -1164,7 +1164,7 @@ func GetLinks(ctx context.Context, client *gitlabclient.Client, input GetLinksIn
 		return LinksOutput{}, err
 	}
 	if input.FullPath == "" {
-		return LinksOutput{}, errors.New("epicGetLinks: full_path is required. Use gitlab_group_list to find the group path first")
+		return LinksOutput{}, errors.New("epicGetLinks: full_path is required. Use group.list to find the group path first")
 	}
 	if input.IID <= 0 {
 		return LinksOutput{}, toolutil.ErrRequiredInt64("epicGetLinks", "epic_iid")
@@ -1187,7 +1187,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.FullPath == "" {
-		return Output{}, errors.New("epicCreate: full_path is required. Use gitlab_group_list to find the group path first")
+		return Output{}, errors.New("epicCreate: full_path is required. Use group.list to find the group path first")
 	}
 	if input.Title == "" {
 		return Output{}, errors.New("epicCreate: title is required")
@@ -1268,7 +1268,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.FullPath == "" {
-		return Output{}, errors.New("epicUpdate: full_path is required. Use gitlab_group_list to find the group path first")
+		return Output{}, errors.New("epicUpdate: full_path is required. Use group.list to find the group path first")
 	}
 	if input.IID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "epic_iid")
@@ -1343,7 +1343,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.FullPath == "" {
-		return errors.New("epicDelete: full_path is required. Use gitlab_group_list to find the group path first")
+		return errors.New("epicDelete: full_path is required. Use group.list to find the group path first")
 	}
 	if input.IID <= 0 {
 		return toolutil.ErrRequiredInt64("epicDelete", "epic_iid")

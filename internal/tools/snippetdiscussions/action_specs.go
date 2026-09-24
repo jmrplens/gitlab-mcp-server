@@ -84,7 +84,7 @@ func snippetScopeGuidance() map[string]toolutil.ParameterGuidance {
 		},
 		"snippet_id": {
 			SemanticRole:     "snippet_id",
-			ValueSource:      "Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response.",
+			ValueSource:      "Numeric snippet id within the project, usually from a prior snippet.project_list response.",
 			ExampleBinding:   "params.snippet_id:42",
 			CommonConfusions: []string{"Use the project snippet id, not a personal snippet id or the discussion id."},
 		},
@@ -94,7 +94,7 @@ func snippetScopeGuidance() map[string]toolutil.ParameterGuidance {
 // discussionIDGuidance returns the parameter guidance for the discussion_id
 // parameter used by discussion-scoped actions.
 func discussionIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior gitlab_list_snippet_discussions response.")
+	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior snippet.discussion_list response.")
 }
 
 // noteIDGuidance returns the parameter guidance for the note_id parameter used
@@ -109,7 +109,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateSnippetDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_snippet_discussions":
-		options.Usage = "List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with gitlab_add_snippet_discussion_note. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with snippet.discussion_add_note. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"gitlab_list_snippet_discussions", "list snippet discussions", "show snippet comment threads", "get snippet conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionSnippetGet, actionSnippetNoteList}
 		options.ParameterGuidance = snippetScopeGuidance()
@@ -121,14 +121,14 @@ func decorateSnippetDiscussionMeta(options *toolutil.ActionSpecOptions, individu
 		}
 		options.IndividualTool.Description = "List discussion threads on a project snippet with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_snippet_discussion, gitlab_create_snippet_discussion, gitlab_project_snippet_get, gitlab_snippet_note_list."
 	case "gitlab_get_snippet_discussion":
-		options.Usage = "Fetch one discussion thread on a project snippet by its discussion_id, returning every note in the thread. Use this after gitlab_list_snippet_discussions when the target thread is already known."
+		options.Usage = "Fetch one discussion thread on a project snippet by its discussion_id, returning every note in the thread. Use this after snippet.discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_snippet_discussion", "get snippet discussion", "show snippet discussion thread", "fetch snippet discussion"}
 		options.RelatedActions = []string{actionDiscussionList, actionDiscussionAddNote, actionSnippetGet}
 		options.ParameterGuidance = snippetScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.IndividualTool.Description = "Get a single snippet discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state). See also: gitlab_list_snippet_discussions, gitlab_add_snippet_discussion_note, gitlab_project_snippet_get."
 	case "gitlab_create_snippet_discussion":
-		options.Usage = "Open a new discussion thread on a project snippet with an initial note. Use this to start a threaded conversation rather than a flat comment (use gitlab_snippet_note_create for a non-threaded note). Supports backdating via created_at for admins/owners."
+		options.Usage = "Open a new discussion thread on a project snippet with an initial note. Use this to start a threaded conversation rather than a flat comment (use snippet.note_create for a non-threaded note). Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_create_snippet_discussion", "create snippet discussion", "start snippet discussion thread", "open snippet discussion"}
 		options.RelatedActions = []string{actionDiscussionAddNote, actionDiscussionList, actionSnippetNoteList, actionSnippetGet}
 		options.ParameterGuidance = snippetScopeGuidance()
@@ -139,7 +139,7 @@ func decorateSnippetDiscussionMeta(options *toolutil.ActionSpecOptions, individu
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a project snippet with an initial note. Returns: the created thread with its first note. See also: gitlab_add_snippet_discussion_note, gitlab_list_snippet_discussions, gitlab_snippet_note_create."
 	case "gitlab_add_snippet_discussion_note":
-		options.Usage = "Reply to an existing snippet discussion thread by adding a note. Use this after gitlab_list_snippet_discussions or gitlab_create_snippet_discussion to continue a thread. Supports backdating via created_at for admins/owners."
+		options.Usage = "Reply to an existing snippet discussion thread by adding a note. Use this after snippet.discussion_list or snippet.discussion_create to continue a thread. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_add_snippet_discussion_note", "reply to snippet discussion", "add note to snippet discussion", "comment on snippet thread"}
 		options.RelatedActions = []string{actionDiscussionCreate, actionDiscussionGet, actionDiscussionUpdateNote, actionSnippetNoteList}
 		options.ParameterGuidance = snippetScopeGuidance()

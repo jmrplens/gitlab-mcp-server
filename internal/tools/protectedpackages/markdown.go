@@ -24,8 +24,8 @@ func FormatOutputMarkdown(r Output) string {
 	c.Field("Min Push Level", r.MinimumAccessLevelForPush)
 	c.Field("Min Delete Level", r.MinimumAccessLevelForDelete)
 	c.End(
-		"Use `gitlab_update_package_protection_rule` to modify this rule",
-		"Use `gitlab_delete_package_protection_rule` to remove it",
+		"Use `package.protection_rule_update` to modify this rule",
+		"Use `package.protection_rule_delete` to remove it",
 	)
 	return b.String()
 }
@@ -51,7 +51,7 @@ func FormatListMarkdown(out ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use `gitlab_create_package_protection_rule` to add a new rule")
+		"Use `package.protection_rule_create` to add a new rule")
 	return b.String()
 }
 

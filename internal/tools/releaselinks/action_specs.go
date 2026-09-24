@@ -137,7 +137,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 					"Do not call link_create once per asset when several are requested. Pass them all in the links array of link_create_batch.",
 					"Do not put a single name and url at top level. Each link goes inside the links array.",
 					"Prefer direct_asset_path over the deprecated filepath when setting a direct asset link.",
-					"For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.",
+					"For package assets, use the package URLs package.publish and package.publish_directory return instead of constructing URLs manually.",
 				},
 			},
 		}

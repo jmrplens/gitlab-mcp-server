@@ -610,7 +610,7 @@ const (
 	depListHeader = "| Name | Version | Package Manager | Vulns | Licenses | Malware |\n" +
 		"| --- | --- | --- | --- | --- | --- |\n"
 	depListHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_create_dependency_list_export` to export the whole list as a CycloneDX SBOM\n"
+		"- Use `dependency.export_create` to export the whole list as a CycloneDX SBOM\n"
 )
 
 // TestFormatListMarkdown validates Markdown rendering for dependency lists,
@@ -700,7 +700,7 @@ func TestFormatExportMarkdown(t *testing.T) {
 	const (
 		heading = "## Dependency List Export\n\n"
 		hints   = "\n---\n💡 **Next steps:**\n" +
-			"- Use `gitlab_download_dependency_list_export` once the export has finished\n"
+			"- Use `dependency.export_download` once the export has finished\n"
 	)
 	tests := []struct {
 		name  string

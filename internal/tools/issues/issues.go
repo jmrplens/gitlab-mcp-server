@@ -382,7 +382,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("issueCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("issueCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts, err := buildCreateOpts(input)
 	if err != nil {
@@ -472,7 +472,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("issueGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("issueGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.IssueIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issueGet", "issue_iid")
@@ -541,7 +541,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("issueList: project_id is required. Use gitlab_project_list to find the project ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("issueList: project_id is required. Use project.list to find the project ID first, then pass it as project_id")
 	}
 	opts := &gl.ListProjectIssuesOptions{
 		State:               optStr(input.State),
@@ -652,7 +652,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("issueUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("issueUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.IssueIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issueUpdate", "issue_iid")
@@ -680,7 +680,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("issueDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("issueDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.IssueIID <= 0 {
 		return toolutil.ErrRequiredInt64("issueDelete", "issue_iid")
@@ -712,7 +712,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListGroupOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ListGroupOutput{}, errors.New("issueListGroup: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return ListGroupOutput{}, errors.New("issueListGroup: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := &gl.ListGroupIssuesOptions{

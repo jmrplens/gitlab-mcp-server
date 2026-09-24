@@ -22,7 +22,7 @@ func FormatDownloadMarkdown(o DownloadOutput) string {
 	c.Field("Filename", o.Filename)
 	c.Field("Size", fmt.Sprintf("%d bytes", o.SizeBytes))
 	c.Note("_Content is base64-encoded in the structured JSON output._")
-	c.End("Use `gitlab_package_list` to browse available model packages")
+	c.End("Use `package.list` to browse available model packages")
 	return sb.String()
 }
 

@@ -281,9 +281,9 @@ func TestDelete_Error(t *testing.T) {
 const (
 	listTableHeader = "| ID | Message | Type | Active | Starts | Ends |\n| --- | --- | --- | --- | --- | --- |\n"
 	listHints       = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_get_broadcast_message` to view details of a specific message\n"
+		"- Use `admin.broadcast_message_get` to view details of a specific message\n"
 	messageHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_update_broadcast_message` to modify this message\n"
+		"- Use `admin.broadcast_message_update` to modify this message\n"
 )
 
 // markdownText returns the one text block a formatter's result carries.

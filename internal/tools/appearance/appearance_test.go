@@ -123,11 +123,11 @@ func TestUpdate_Error(t *testing.T) {
 
 // getHints is the guidance section the read card ends with.
 const getHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use `gitlab_update_appearance` to modify appearance settings\n"
+	"- Use `admin.appearance_update` to modify appearance settings\n"
 
 // updateHints is the guidance section the update card ends with.
 const updateHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use `gitlab_get_appearance` to read the settings back\n"
+	"- Use `admin.appearance_get` to read the settings back\n"
 
 // markdownText returns the one text block a formatter's result carries.
 func markdownText(t *testing.T, result *mcp.CallToolResult) string {

@@ -224,7 +224,7 @@ func userIDGuidance(valueSource string) toolutil.ParameterGuidance {
 		SemanticRole:     "user_id",
 		ValueSource:      valueSource,
 		ExampleBinding:   "params.user_id:42",
-		CommonConfusions: []string{"Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first."},
+		CommonConfusions: []string{"Use the numeric user ID, not the username. Resolve usernames with user.list first."},
 	}
 }
 
@@ -369,7 +369,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		related: []string{actionBillableMembers, actionBillableMemberRemove, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
-			"user_id":  userIDGuidance("Numeric user ID of the billable member whose memberships to list. From gitlab_list_billable_group_members."),
+			"user_id":  userIDGuidance("Numeric user ID of the billable member whose memberships to list. From group.group_billable_members_list."),
 		},
 		description: "List the memberships of a billable group member (Premium/Ultimate). Returns: each membership's source id, source full name, source members URL, access level (numeric + string), created/expiry dates, plus pagination. See also: gitlab_list_billable_group_members, gitlab_remove_billable_group_member, gitlab_group_members_list.",
 	},
@@ -379,7 +379,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		related: []string{actionBillableMembers, actionBillableMemberships, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
-			"user_id":  userIDGuidance("Numeric user ID of the removable billable member. Check the 'removable' flag from gitlab_list_billable_group_members first."),
+			"user_id":  userIDGuidance("Numeric user ID of the removable billable member. Check the 'removable' flag from group.group_billable_members_list first."),
 		},
 		description: "Remove a billable member from a group, freeing a seat (Premium/Ultimate, destructive, requires confirmation). Returns: a removal confirmation. See also: gitlab_list_billable_group_members, gitlab_list_billable_member_memberships, gitlab_group_members_list.",
 	},

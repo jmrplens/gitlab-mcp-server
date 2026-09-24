@@ -753,14 +753,14 @@ func TestList_OrderingAndPaging_ReachTheQueryAndThePageComesBack(t *testing.T) {
 // so each expectation below can pin the whole rendered document.
 const (
 	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_get_commit_discussion` with discussion_id to view full discussion details\n" +
-		"- Use `gitlab_create_commit_discussion` to start a new discussion on this commit\n"
+		"- Use `repository.commit_discussion_get` with discussion_id to view full discussion details\n" +
+		"- Use `repository.commit_discussion_create` to start a new discussion on this commit\n"
 	threadHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_add_commit_discussion_note` to reply to this discussion\n" +
-		"- Use `gitlab_update_commit_discussion_note` to edit a note\n"
+		"- Use `repository.commit_discussion_add_note` to reply to this discussion\n" +
+		"- Use `repository.commit_discussion_update_note` to edit a note\n"
 	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_update_commit_discussion_note` with note_id to edit this note\n" +
-		"- Use `gitlab_add_commit_discussion_note` with discussion_id to reply to this discussion\n"
+		"- Use `repository.commit_discussion_update_note` with note_id to edit this note\n" +
+		"- Use `repository.commit_discussion_add_note` with discussion_id to reply to this discussion\n"
 )
 
 // TestFormatListMarkdownString_WithData pins the whole list document of a page

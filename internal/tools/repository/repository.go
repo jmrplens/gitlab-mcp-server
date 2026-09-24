@@ -51,7 +51,7 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 		return TreeOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return TreeOutput{}, errors.New("repositoryTree: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return TreeOutput{}, errors.New("repositoryTree: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.ListTreeOptions{}
@@ -121,7 +121,7 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 		return CompareOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return CompareOutput{}, errors.New("repositoryCompare: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return CompareOutput{}, errors.New("repositoryCompare: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.CompareOptions{

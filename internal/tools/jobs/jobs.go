@@ -157,7 +157,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("jobList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("jobList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.PipelineID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("jobList", "pipeline_id")
@@ -195,7 +195,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("jobGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("jobGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	if input.JobID <= 0 {
@@ -237,7 +237,7 @@ func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (
 		return TraceOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return TraceOutput{}, errors.New("jobTrace: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return TraceOutput{}, errors.New("jobTrace: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	if input.JobID <= 0 {
@@ -290,7 +290,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("jobCancel: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("jobCancel: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	if input.JobID <= 0 {
@@ -325,7 +325,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("jobRetry: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("jobRetry: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	if input.JobID <= 0 {

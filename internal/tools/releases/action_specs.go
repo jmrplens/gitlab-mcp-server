@@ -167,7 +167,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 				SemanticRole:     roleGitTag,
 				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
-				CommonConfusions: []string{"Deleting the release does not delete the Git tag. Use gitlab_tag_delete to remove the tag."},
+				CommonConfusions: []string{"Deleting the release does not delete the Git tag. Use tag.delete to remove the tag."},
 			},
 		}
 		options.IndividualTool.Description = "Delete a release by tag_name (the Git tag itself is preserved). Returns: the deleted release details. See also: gitlab_release_get, gitlab_release_list, gitlab_tag_delete."

@@ -431,7 +431,7 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 		return NotesOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return NotesOutput{}, errors.New("searchNotes: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return NotesOutput{}, errors.New("searchNotes: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.Query == "" {
 		return NotesOutput{}, errors.New("searchNotes: query is required")

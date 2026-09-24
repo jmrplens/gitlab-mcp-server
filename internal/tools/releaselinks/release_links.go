@@ -18,7 +18,7 @@ type CreateInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TagName         string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
 	Name            string               `json:"name"       jsonschema:"Name of the link,required"`
-	URL             string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by gitlab_package_publish. Never construct URLs manually,required"`
+	URL             string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by package.publish. Never construct URLs manually,required"`
 	DirectAssetPath string               `json:"direct_asset_path,omitempty" jsonschema:"Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath."`
 	FilePath        string               `json:"filepath,omitempty" jsonschema:"Deprecated alias of direct_asset_path. Prefer direct_asset_path."`
 	LinkType        string               `json:"link_type,omitempty" jsonschema:"Type of the link (runbook, package, image, other)"`
@@ -132,7 +132,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("Create: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("Create: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.CreateReleaseLinkOptions{
 		Name: new(input.Name),
@@ -163,7 +163,7 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 		return CreateBatchOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return CreateBatchOutput{}, errors.New("CreateBatch: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return CreateBatchOutput{}, errors.New("CreateBatch: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.TagName == "" {
 		return CreateBatchOutput{}, errors.New("CreateBatch: tag_name is required")
@@ -221,7 +221,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return DeletedOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DeletedOutput{}, errors.New("Delete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DeletedOutput{}, errors.New("Delete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.LinkID <= 0 {
 		return DeletedOutput{}, toolutil.ErrRequiredInt64("Delete", "link_id")
@@ -240,7 +240,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("Get: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("Get: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.LinkID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("Get", "link_id")
@@ -259,7 +259,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("Update: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("Update: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.LinkID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("Update", "link_id")
@@ -295,7 +295,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("List: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("List: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListReleaseLinksOptions{
 		OrderBy: input.OrderBy, Sort: input.Sort,

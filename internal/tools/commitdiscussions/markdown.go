@@ -80,8 +80,8 @@ func FormatNoteMarkdownString(n NoteOutput) string {
 	c.Markdown("Position", notePosition(n.Position))
 	c.Text("Body", n.Body)
 	c.End(
-		"Use `gitlab_update_commit_discussion_note` with note_id to edit this note",
-		"Use `gitlab_add_commit_discussion_note` with discussion_id to reply to this discussion",
+		"Use `repository.commit_discussion_update_note` with note_id to edit this note",
+		"Use `repository.commit_discussion_add_note` with discussion_id to reply to this discussion",
 	)
 	return b.String()
 }
@@ -109,8 +109,8 @@ func FormatMarkdownString(d Output) string {
 		s.Text("Body", n.Body)
 	}
 	c.End(
-		"Use `gitlab_add_commit_discussion_note` to reply to this discussion",
-		"Use `gitlab_update_commit_discussion_note` to edit a note",
+		"Use `repository.commit_discussion_add_note` to reply to this discussion",
+		"Use `repository.commit_discussion_update_note` to edit a note",
 	)
 	return b.String()
 }
@@ -135,8 +135,8 @@ func FormatListMarkdownString(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use `gitlab_get_commit_discussion` with discussion_id to view full discussion details",
-		"Use `gitlab_create_commit_discussion` to start a new discussion on this commit",
+		"Use `repository.commit_discussion_get` with discussion_id to view full discussion details",
+		"Use `repository.commit_discussion_create` to start a new discussion on this commit",
 	)
 	return b.String()
 }

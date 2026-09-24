@@ -156,7 +156,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ListOutput{}, errors.New("groupEpicBoardList: group_id is required. Use gitlab_group_list to find the group ID first")
+		return ListOutput{}, errors.New("groupEpicBoardList: group_id is required. Use group.list to find the group ID first")
 	}
 	opts := &gl.ListGroupEpicBoardsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -183,7 +183,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.GroupID == "" {
-		return Output{}, errors.New("groupEpicBoardGet: group_id is required. Use gitlab_group_list to find the group ID first")
+		return Output{}, errors.New("groupEpicBoardGet: group_id is required. Use group.list to find the group ID first")
 	}
 	if input.BoardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("groupEpicBoardGet", "board_id")

@@ -29,7 +29,7 @@ func FormatListMarkdown(out ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&sb, out.Pagination, false,
-		"Use `gitlab_create_dependency_list_export` to export the whole list as a CycloneDX SBOM")
+		"Use `dependency.export_create` to export the whole list as a CycloneDX SBOM")
 	return sb.String()
 }
 
@@ -59,7 +59,7 @@ func FormatExportMarkdown(e ExportOutput) string {
 	c.Bool("Finished", e.HasFinished)
 	c.Field("Self", e.Self)
 	c.Field("Download", e.Download)
-	c.End("Use `gitlab_download_dependency_list_export` once the export has finished")
+	c.End("Use `dependency.export_download` once the export has finished")
 	return sb.String()
 }
 

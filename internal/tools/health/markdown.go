@@ -54,8 +54,8 @@ func FormatMarkdownString(s Output) string {
 	c.Field("Response Time", strconv.FormatInt(s.ResponseTimeMS, 10)+" ms")
 	c.Text("Error", s.Error)
 	c.End(
-		"Use gitlab_project action 'list' to explore available projects",
-		"Use gitlab_user action 'me' to see current user details",
+		toolutil.HintAction("project.list", "explore available projects"),
+		toolutil.HintAction("user.me", "see current user details"),
 	)
 	return b.String()
 }

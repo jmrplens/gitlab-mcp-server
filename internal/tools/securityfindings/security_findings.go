@@ -391,7 +391,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	if resp.Data.Project.Pipeline == nil {
 		return ListOutput{}, fmt.Errorf(
-			"list_security_findings: pipeline_iid %q not found in project %q. Suggestion: verify pipeline_iid with gitlab_pipeline action 'list' or 'latest'; security findings require a pipeline with security scan report artifacts",
+			"list_security_findings: pipeline_iid %q not found in project %q. Suggestion: verify pipeline_iid with pipeline.list or pipeline.latest; security findings require a pipeline with security scan report artifacts",
 			input.PipelineIID,
 			input.ProjectPath,
 		)

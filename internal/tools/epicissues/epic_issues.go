@@ -297,7 +297,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.FullPath == "" {
-		return ListOutput{}, errors.New("epicIssueList: full_path is required. Use gitlab_group_list to find the group path first")
+		return ListOutput{}, errors.New("epicIssueList: full_path is required. Use group.list to find the group path first")
 	}
 	if input.IID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("epicIssueList", "epic_iid")

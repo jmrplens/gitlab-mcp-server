@@ -178,15 +178,17 @@ func TestActionSpecs_EveryToolCarriesItsOwnDiscoveryMetadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_MarkdownHintsNameRegisteredTools verifies each tool the two
-// formatters tell a model to reach for is one this package registers. The card
-// and table assertions compare whole strings, so they would follow a rename
-// straight into a hint that names nothing, and a model reading it is told to
-// call a tool the server does not serve.
-func TestActionSpecs_MarkdownHintsNameRegisteredTools(t *testing.T) {
-	registered := map[string]bool{}
+// TestActionSpecs_MarkdownHintsNameActionsThisPackageDefines verifies each
+// action the two formatters tell a model to reach for is one this package
+// defines, named by its canonical ID. The card and table assertions compare
+// whole strings, so they would follow a rename straight into a hint that
+// names nothing, and a model reading it is told to call an action the server
+// does not serve. A tool name fails too: it is registered on the individual
+// surface alone, and the hint is served on all three.
+func TestActionSpecs_MarkdownHintsNameActionsThisPackageDefines(t *testing.T) {
+	defined := map[string]bool{}
 	for _, spec := range ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))) {
-		registered[spec.IndividualTool.Name] = true
+		defined[catalogDomainPrefix+spec.Name] = true
 	}
 
 	rendered := map[string]string{
@@ -197,17 +199,21 @@ func TestActionSpecs_MarkdownHintsNameRegisteredTools(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			named := 0
 			for field := range strings.FieldsSeq(md) {
-				tool := strings.Trim(field, "`")
-				if !strings.HasPrefix(tool, "gitlab_") {
+				word := strings.Trim(field, "`")
+				if strings.HasPrefix(word, "gitlab_") {
+					t.Errorf("hint names the tool %q rather than an action ID", word)
+					continue
+				}
+				if !strings.HasPrefix(word, catalogDomainPrefix) {
 					continue
 				}
 				named++
-				if !registered[tool] {
-					t.Errorf("hint names %q, which this package does not register", tool)
+				if !defined[word] {
+					t.Errorf("hint names %q, which this package does not define", word)
 				}
 			}
 			if named == 0 {
-				t.Error("no tool named in the hints; the scan found nothing to check")
+				t.Error("no action named in the hints; the scan found nothing to check")
 			}
 		})
 	}

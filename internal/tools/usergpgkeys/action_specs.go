@@ -72,7 +72,7 @@ var userGPGActionMeta = map[string]userGPGMeta{
 		description: "List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.",
 	},
 	"gitlab_list_gpg_keys_for_user": {
-		usage:       "List every GPG key registered on a specific user's account by user_id. Use after resolving a user with gitlab_get_user. Viewing another user's GPG keys may require an admin token.",
+		usage:       "List every GPG key registered on a specific user's account by user_id. Use after resolving a user with user.get. Viewing another user's GPG keys may require an admin token.",
 		aliases:     []string{"list gpg keys for user", "show another user's gpg keys", "get user gpg keys"},
 		related:     []string{actionUserGetGPGKeyForUser, actionUserAddGPGKeyForUser, actionUserDeleteGPGKeyForUser, "user.get"},
 		description: "List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",

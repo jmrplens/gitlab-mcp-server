@@ -180,7 +180,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	var sb strings.Builder
 	if len(out.WorkItems) == 0 {
 		sb.WriteString(toolutil.EmptyMessage("work items"))
-		toolutil.WriteHints(&sb, "If work items were expected, verify full_path with `gitlab_project_list` or `gitlab_group_list`: a namespace that does not exist, or that the token cannot read, also lists no work items")
+		toolutil.WriteHints(&sb, "If work items were expected, verify full_path with `project.list` or `group.list`: a namespace that does not exist, or that the token cannot read, also lists no work items")
 		return toolutil.ToolResultWithMarkdown(sb.String())
 	}
 	// A cursor connection counts nothing it has not walked, so the heading

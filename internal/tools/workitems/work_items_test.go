@@ -539,7 +539,7 @@ func TestList_NamespaceNotFound(t *testing.T) {
 		t.Fatalf("expected 0 work items, got %d", len(out.WorkItems))
 	}
 	md := extractText(t, FormatListMarkdown(out))
-	if !strings.Contains(md, "gitlab_project_list") {
+	if !strings.Contains(md, "project.list") {
 		t.Fatalf("expected actionable hint, got %q", md)
 	}
 }
@@ -1178,7 +1178,7 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 func TestFormatListMarkdown_EmptyReturnsMessage(t *testing.T) {
 	want := "No work items found.\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- If work items were expected, verify full_path with `gitlab_project_list` or `gitlab_group_list`: a namespace that does not exist, or that the token cannot read, also lists no work items\n"
+		"- If work items were expected, verify full_path with `project.list` or `group.list`: a namespace that does not exist, or that the token cannot read, also lists no work items\n"
 	if got := extractText(t, FormatListMarkdown(ListOutput{})); got != want {
 		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", got, want)
 	}

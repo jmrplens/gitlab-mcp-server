@@ -73,7 +73,7 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 		return UploadOutput{}, fmt.Errorf(fmtContextCanceled, err)
 	}
 	if input.ProjectID == "" {
-		return UploadOutput{}, errors.New("projectUpload: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return UploadOutput{}, errors.New("projectUpload: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	reader, err := toolutil.ReadFileOrBase64("projectUpload", input.FilePath, input.ContentBase64)

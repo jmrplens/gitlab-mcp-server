@@ -34,7 +34,7 @@ type ResponseFormatInput struct {
 	// downstream markdown formatter pretty-prints the envelope). Callers
 	// who want the compact TOON text can pass response_format="llm"
 	// explicitly.
-	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty."`
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty."`
 }
 
 // StatusInput holds parameters for retrieving Orbit cluster status.

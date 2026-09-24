@@ -50,7 +50,7 @@ const (
 	tagGroup               = "group"
 	paramSearch            = "search"
 	paramHookID            = "hook_id"
-	hintHookIDSource       = "Numeric hook ID from gitlab_group_hook_list."
+	hintHookIDSource       = "Numeric hook ID from group.hook_list."
 	toolGroupHookAdd       = "gitlab_group_hook_add"
 	toolGroupHookTest      = "gitlab_group_hook_test"
 	toolGroupHookResend    = "gitlab_group_hook_resend_event"
@@ -433,7 +433,7 @@ func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path whose provisioned users are listed.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Lists users provisioned via the group's SAML/SCIM provider, not all members. Use gitlab_group_members_list for membership."},
+				CommonConfusions: []string{"Lists users provisioned via the group's SAML/SCIM provider, not all members. Use group.members for membership."},
 			},
 			paramSearch: {
 				ValueSource:    "Name, username, or email keywords to filter provisioned users.",
@@ -536,7 +536,7 @@ func groupCreateUpdateEnumOverrides(includeUpdateOnly bool) []toolutil.InputSche
 func applyGroupShareTransferMetadata(individualTool string, options *toolutil.ActionSpecOptions) bool {
 	switch individualTool {
 	case "gitlab_group_share_with_group":
-		options.Usage = "Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (gitlab_group_share is the GroupMembers-API equivalent.)"
+		options.Usage = "Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (group.group_member_share is the GroupMembers-API equivalent.)"
 		options.Aliases = []string{"share group via groups api", "grant another group access to this group", "create group-to-group share link"}
 		options.RelatedActions = []string{actionGroupSharedWith, actionGroupUnshare, actionGroupGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -552,14 +552,14 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 		}
 		options.IndividualTool.Description = "Share a GitLab group with another group (Groups API). Returns: a confirmation with the granted access role. See also: gitlab_group_shared_with_list, gitlab_group_unshare_from_group, gitlab_group_get."
 	case "gitlab_group_unshare_from_group":
-		options.Usage = "Revoke a group-to-group share via the Groups API, removing the shared group's access. Destructive. Send group_id and shared_group_id. Requires Owner role. (gitlab_group_unshare is the GroupMembers-API equivalent.)"
+		options.Usage = "Revoke a group-to-group share via the Groups API, removing the shared group's access. Destructive. Send group_id and shared_group_id. Requires Owner role. (group.group_member_unshare is the GroupMembers-API equivalent.)"
 		options.Aliases = []string{"unshare group from group via groups api", "revoke group-to-group share link", "remove shared group access link"}
 		options.RelatedActions = []string{actionGroupSharedWith, "group.share_with_group", actionGroupGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"shared_group_id": {
 				ValueSource:      "Numeric ID of the group whose share is removed.",
 				ExampleBinding:   `params.shared_group_id:123`,
-				CommonConfusions: []string{"Use gitlab_group_shared_with_list to find the shared group IDs first."},
+				CommonConfusions: []string{"Use group.shared_with to find the shared group IDs first."},
 			},
 		}
 		options.IndividualTool.Description = "Revoke a group-to-group share (Groups API). Returns: a success confirmation. See also: gitlab_group_share_with_group, gitlab_group_shared_with_list, gitlab_group_get."
@@ -572,12 +572,12 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path whose shared projects are listed.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Lists projects shared *into* the group. Use gitlab_group_projects for the group's own projects."},
+				CommonConfusions: []string{"Lists projects shared *into* the group. Use group.projects for the group's own projects."},
 			},
 		}
 		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: shared projects with path, visibility, and archived status. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
 	case "gitlab_group_transfer":
-		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use gitlab_group_transfer_locations first to find valid parents. Requires Owner role on both ends."
+		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends."
 		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}
 		options.RelatedActions = []string{actionGroupTransferLocs, actionGroupGet, actionGroupSubgroups}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -637,7 +637,7 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
 	switch individualTool {
 	case "gitlab_group_transfer_project":
-		options.Usage = "Move an existing project into this group's namespace. Use when the user wants to relocate a project under a group. To discover which groups a group itself can be transferred into, use gitlab_group_transfer_locations instead."
+		options.Usage = "Move an existing project into this group's namespace. Use when the user wants to relocate a project under a group. To discover which groups a group itself can be transferred into, use group.transfer_locations instead."
 		options.Aliases = []string{"transfer project to group", "move project into group", "relocate project namespace"}
 		options.RelatedActions = []string{actionGroupGet, actionGroupTransferLocs, actionGroupProjects}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -688,7 +688,7 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path that would be moved.",
 				ExampleBinding:   `params.group_id:"my-org/legacy-team"`,
-				CommonConfusions: []string{"This lists destinations for moving the *group itself*. To move a project into a group, use gitlab_group_transfer_project."},
+				CommonConfusions: []string{"This lists destinations for moving the *group itself*. To move a project into a group, use group.transfer_project."},
 			},
 		}
 		options.IndividualTool.Description = "List candidate parent groups for transferring a GitLab group. Returns: eligible destination groups with id, name, and full path. See also: gitlab_group_transfer_project, gitlab_group_get, gitlab_subgroups_list."

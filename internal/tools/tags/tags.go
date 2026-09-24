@@ -152,7 +152,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("tagCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("tagCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.CreateTagOptions{
 		TagName: new(input.TagName),
@@ -181,7 +181,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("tagDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("tagDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	_, err := client.GL().Tags.DeleteTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
@@ -197,7 +197,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("tagList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("tagList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListTagsOptions{}
 	if input.Search != "" {
@@ -234,7 +234,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("tagGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("tagGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	t, _, err := client.GL().Tags.GetTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))

@@ -43,7 +43,7 @@ type ListInput struct {
 // GetInput defines parameters for getting a single group milestone.
 type GetInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
 }
 
 // CreateInput defines parameters for creating a group milestone.
@@ -58,7 +58,7 @@ type CreateInput struct {
 // UpdateInput defines parameters for updating a group milestone.
 type UpdateInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"              jsonschema:"Group ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"         jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"         jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
 	Title        string               `json:"title,omitempty"       jsonschema:"Milestone title"`
 	Description  string               `json:"description,omitempty" jsonschema:"Milestone description"`
 	StartDate    string               `json:"start_date,omitempty"  jsonschema:"Start date (YYYY-MM-DD)"`
@@ -69,13 +69,13 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting a group milestone.
 type DeleteInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
 }
 
 // GetIssuesInput defines parameters for listing issues assigned to a group milestone.
 type GetIssuesInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -85,7 +85,7 @@ type GetIssuesInput struct {
 // GetMergeRequestsInput defines parameters for listing merge requests assigned to a group milestone.
 type GetMergeRequestsInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -95,7 +95,7 @@ type GetMergeRequestsInput struct {
 // GetBurndownChartEventsInput defines parameters for listing burndown chart events for a group milestone.
 type GetBurndownChartEventsInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput

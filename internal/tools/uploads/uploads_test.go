@@ -1290,7 +1290,7 @@ func TestList_NoPaginationInput_SendsNoPaginationParameters(t *testing.T) {
 
 // uploadListHints is the guidance the upload list closes with.
 const uploadListHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use `gitlab_project_upload_delete` with an ID from the table to remove one\n"
+	"- Use `project.upload_delete` with an ID from the table to remove one\n"
 
 // TestFormatListMarkdown_Empty verifies an empty list is the one sentence and
 // nothing else: no heading counting zero above it.

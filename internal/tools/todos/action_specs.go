@@ -72,7 +72,7 @@ var todoActionMeta = map[string]todoActionMetaEntry{
 		description: "List the authenticated user's to-do items with optional filtering and pagination. Returns: to-do items with action, target object, project, author, state, and pagination metadata. See also: gitlab_todo_mark_done, gitlab_todo_mark_all_done.",
 	},
 	"gitlab_todo_mark_done": {
-		usage:       "Mark a single pending to-do item as done by its ID. Find the ID with gitlab_todo_list first.",
+		usage:       "Mark a single pending to-do item as done by its ID. Find the ID with user.todo_list first.",
 		aliases:     []string{"mark todo done", "complete todo", "dismiss todo"},
 		related:     []string{actionList, actionMarkAllDone},
 		description: "Mark a single to-do item as done. Returns: a confirmation naming the to-do item ID. See also: gitlab_todo_list, gitlab_todo_mark_all_done.",

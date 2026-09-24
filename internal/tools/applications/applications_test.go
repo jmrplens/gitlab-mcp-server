@@ -250,7 +250,7 @@ func TestDelete_Error(t *testing.T) {
 // appListHints is the guidance section every application list ends with. The
 // table carries no link, so the preserve-links reminder is not written.
 const appListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use `gitlab_create_application` to register a new application\n"
+	"- Use `admin.application_create` to register a new application\n"
 
 // TestFormatListMarkdown pins the whole list document: the heading counting
 // what the page shows, the table with the confidential flag as a glyph, and

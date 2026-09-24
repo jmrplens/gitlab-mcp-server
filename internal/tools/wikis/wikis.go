@@ -89,7 +89,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("wikiList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("wikiList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.ListWikisOptions{}
@@ -121,10 +121,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("wikiGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("wikiGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.Slug == "" {
-		return Output{}, errors.New("wikiGet: slug is required. Use gitlab_wiki_list to find available pages first")
+		return Output{}, errors.New("wikiGet: slug is required. Use wiki.list to find available pages first")
 	}
 
 	opts := &gl.GetWikiPageOptions{}
@@ -154,7 +154,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("wikiCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("wikiCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.Title == "" {
 		return Output{}, errors.New("wikiCreate: title is required")
@@ -193,10 +193,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("wikiUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("wikiUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.Slug == "" {
-		return Output{}, errors.New("wikiUpdate: slug is required. Use gitlab_wiki_list to find available pages first")
+		return Output{}, errors.New("wikiUpdate: slug is required. Use wiki.list to find available pages first")
 	}
 
 	opts := &gl.EditWikiPageOptions{}
@@ -229,10 +229,10 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("wikiDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("wikiDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.Slug == "" {
-		return errors.New("wikiDelete: slug is required. Use gitlab_wiki_list to find available pages first")
+		return errors.New("wikiDelete: slug is required. Use wiki.list to find available pages first")
 	}
 
 	_, err := client.GL().Wikis.DeleteWikiPage(string(input.ProjectID), input.Slug, gl.WithContext(ctx))

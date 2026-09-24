@@ -82,13 +82,13 @@ func epicScopeGuidance() map[string]toolutil.ParameterGuidance {
 	return map[string]toolutil.ParameterGuidance{
 		"full_path": {
 			SemanticRole:     "scope_group",
-			ValueSource:      "Full path of the group that owns the epic, from a prior gitlab_group_list or gitlab_epic_list response.",
+			ValueSource:      "Full path of the group that owns the epic, from a prior group.list or group.epic_list response.",
 			ExampleBinding:   `params.full_path:"my-group/sub-group"`,
 			CommonConfusions: []string{"Use the group full path here, not a project path or a numeric group ID. Epics live on groups, not projects."},
 		},
 		"epic_iid": {
 			SemanticRole:     "epic_iid",
-			ValueSource:      "Epic number visible within the group, usually from the epic URL or a prior gitlab_epic_list response.",
+			ValueSource:      "Epic number visible within the group, usually from the epic URL or a prior group.epic_list response.",
 			ExampleBinding:   "params.epic_iid:42",
 			CommonConfusions: []string{"Use epic_iid for the group-scoped epic number, not the global epic ID or a work item GID."},
 		},
@@ -98,7 +98,7 @@ func epicScopeGuidance() map[string]toolutil.ParameterGuidance {
 // discussionIDGuidance returns the parameter guidance for the discussion_id
 // parameter used by discussion-scoped actions.
 func discussionIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.DiscussionIDParamGuidance("Discussion thread id (hex hash or full Discussion GID) from a prior gitlab_list_epic_discussions response.")
+	return toolutil.DiscussionIDParamGuidance("Discussion thread id (hex hash or full Discussion GID) from a prior group.epic_discussion_list response.")
 }
 
 // noteIDGuidance returns the parameter guidance for the note_id parameter used
@@ -123,20 +123,20 @@ func bodyGuidance(valueSource, example string) toolutil.ParameterGuidance {
 func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_epic_discussions":
-		options.Usage = "List all discussion threads on one group epic, including system notes and threaded replies, via the Work Items GraphQL API. Use this when the prompt asks for an epic's comment threads or conversation history, or before replying to a thread with gitlab_add_epic_discussion_note. Supports cursor-based keyset pagination. Pages forward only: this GitLab connection takes first and after, and rejects last and before."
+		options.Usage = "List all discussion threads on one group epic, including system notes and threaded replies, via the Work Items GraphQL API. Use this when the prompt asks for an epic's comment threads or conversation history, or before replying to a thread with group.epic_discussion_add_note. Supports cursor-based keyset pagination. Pages forward only: this GitLab connection takes first and after, and rejects last and before."
 		options.Aliases = []string{"gitlab_list_epic_discussions", "list epic discussions", "show epic comment threads", "get epic conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionEpicGet, actionEpicNoteList}
 		options.ParameterGuidance = epicScopeGuidance()
 		options.IndividualTool.Description = "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list."
 	case "gitlab_get_epic_discussion":
-		options.Usage = "Fetch one discussion thread on a group epic by its discussion_id, returning every note in the thread. Use this after gitlab_list_epic_discussions when the target thread is already known."
+		options.Usage = "Fetch one discussion thread on a group epic by its discussion_id, returning every note in the thread. Use this after group.epic_discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_epic_discussion", "get epic discussion", "show epic discussion thread", "fetch epic discussion"}
 		options.RelatedActions = []string{actionDiscussionList, actionDiscussionAddNote, actionEpicGet}
 		options.ParameterGuidance = epicScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.IndividualTool.Description = "Get a single epic discussion thread by its discussion id. Returns: the thread with every note (id, author username, body, system flag, timestamps). See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note, gitlab_epic_get."
 	case "gitlab_create_epic_discussion":
-		options.Usage = "Open a new discussion thread on a group epic with an initial note via the createNote GraphQL mutation. Use this to start a threaded conversation rather than a flat comment (use gitlab_epic_note_create for a non-threaded note)."
+		options.Usage = "Open a new discussion thread on a group epic with an initial note via the createNote GraphQL mutation. Use this to start a threaded conversation rather than a flat comment (use group.epic_note_create for a non-threaded note)."
 		options.Aliases = []string{"gitlab_create_epic_discussion", "create epic discussion", "start epic discussion thread", "open epic discussion"}
 		options.RelatedActions = []string{actionDiscussionAddNote, actionDiscussionList, actionEpicNoteList, actionEpicGet}
 		options.ParameterGuidance = epicScopeGuidance()
@@ -146,7 +146,7 @@ func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualT
 		)
 		options.IndividualTool.Description = "Create a new discussion thread on a group epic with an initial note. Returns: the created thread (discussion id) with its first note. See also: gitlab_add_epic_discussion_note, gitlab_list_epic_discussions, gitlab_epic_note_create."
 	case "gitlab_add_epic_discussion_note":
-		options.Usage = "Reply to an existing epic discussion thread by adding a note via the createNote GraphQL mutation. Use this after gitlab_list_epic_discussions or gitlab_create_epic_discussion to continue a thread. Cannot reply to a system-generated discussion."
+		options.Usage = "Reply to an existing epic discussion thread by adding a note via the createNote GraphQL mutation. Use this after group.epic_discussion_list or group.epic_discussion_create to continue a thread. Cannot reply to a system-generated discussion."
 		options.Aliases = []string{"gitlab_add_epic_discussion_note", "reply to epic discussion", "add note to epic discussion", "comment on epic thread"}
 		options.RelatedActions = []string{actionDiscussionCreate, actionDiscussionGet, actionDiscussionUpdateNote, actionEpicNoteList}
 		options.ParameterGuidance = epicScopeGuidance()

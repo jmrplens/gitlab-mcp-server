@@ -58,7 +58,7 @@ func attachSpec(name string, route toolutil.ActionRoute, individualTool, descrip
 func detachSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := scanProfileOptions(individualTool, description)
 	options.InputSchemaOverrides = targetSchemaOverrides()
-	options.Usage = "Detach a security scan profile from one or more projects and/or groups, disabling that scanning configuration on the targets. Supply security_scan_profile_id (the persisted profile's numeric ID from gitlab_list_project_scan_profile_statuses, not a scan-type name) and at least one of project_ids or group_ids. This is reversible with attach."
+	options.Usage = "Detach a security scan profile from one or more projects and/or groups, disabling that scanning configuration on the targets. Supply security_scan_profile_id (the persisted profile's numeric ID from security_scan_profile.list_project_statuses, not a scan-type name) and at least one of project_ids or group_ids. This is reversible with attach."
 	options.Aliases = []string{"detach security scan profile", "disable scan profile on project", "remove scan profile from group", "unassign security scan configuration"}
 	options.RelatedActions = []string{actionAttach, actionListProjectStatuses, actionProjectGet}
 	return toolutil.NewDeleteActionSpec(name, route, options)

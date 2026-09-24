@@ -70,7 +70,7 @@ func GetPushRules(ctx context.Context, client *gitlabclient.Client, input GetPus
 		return PushRuleOutput{}, err
 	}
 	if input.GroupID == "" {
-		return PushRuleOutput{}, errors.New("groupGetPushRules: group_id is required. Use gitlab_group_list to find the ID, then pass it as group_id")
+		return PushRuleOutput{}, errors.New("groupGetPushRules: group_id is required. Use group.list to find the ID, then pass it as group_id")
 	}
 	rule, _, err := client.GL().Groups.GetGroupPushRules(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
@@ -167,7 +167,7 @@ func AddPushRule(ctx context.Context, client *gitlabclient.Client, input AddPush
 		return PushRuleOutput{}, err
 	}
 	if input.GroupID == "" {
-		return PushRuleOutput{}, errors.New("groupAddPushRule: group_id is required. Use gitlab_group_list to find the ID, then pass it as group_id")
+		return PushRuleOutput{}, errors.New("groupAddPushRule: group_id is required. Use group.list to find the ID, then pass it as group_id")
 	}
 	if !hasAddPushRuleSetting(input) {
 		return PushRuleOutput{}, errors.New("groupAddPushRule: at least one push rule setting is required. Include params.commit_message_regex for commit message regex tasks, or another setting such as reject_unsigned_commits, prevent_secrets, branch_name_regex, deny_delete_tag, member_check, or max_file_size")
@@ -253,7 +253,7 @@ func EditPushRule(ctx context.Context, client *gitlabclient.Client, input EditPu
 		return PushRuleOutput{}, err
 	}
 	if input.GroupID == "" {
-		return PushRuleOutput{}, errors.New("groupEditPushRule: group_id is required. Use gitlab_group_list to find the ID, then pass it as group_id")
+		return PushRuleOutput{}, errors.New("groupEditPushRule: group_id is required. Use group.list to find the ID, then pass it as group_id")
 	}
 	opts := &gl.EditGroupPushRuleOptions{}
 	applyEditPushRuleOptions(input, opts)
@@ -280,7 +280,7 @@ func DeletePushRule(ctx context.Context, client *gitlabclient.Client, input Dele
 		return err
 	}
 	if input.GroupID == "" {
-		return errors.New("groupDeletePushRule: group_id is required. Use gitlab_group_list to find the ID, then pass it as group_id")
+		return errors.New("groupDeletePushRule: group_id is required. Use group.list to find the ID, then pass it as group_id")
 	}
 	_, err := client.GL().Groups.DeleteGroupPushRule(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
