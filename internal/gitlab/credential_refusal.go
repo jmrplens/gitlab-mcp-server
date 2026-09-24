@@ -70,8 +70,10 @@ const invalidTokenCode = "invalid_token"
 // credential while telling the model a permission was missing, or the reverse.
 //
 // It is not [IsCredentialRejection], whose rule is the opposite and is right
-// where it is used: that judges the answer to GET /version or GET /user, routes
-// with no permission to refuse, where any 401 or 403 is about the credential.
+// where it is used: that judges the answer to GET /version, a route with no
+// permission to refuse, where any 401 or 403 is about the credential; the
+// credential probe's GET /user is read by the same status-only rule in
+// [credentialVerdictFor].
 func UnauthorizedNamesCredential(req *http.Request, body []byte) bool {
 	return answeredByGraphQL(req) || carriesInvalidToken(body)
 }

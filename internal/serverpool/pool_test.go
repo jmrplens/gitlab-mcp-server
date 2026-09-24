@@ -410,10 +410,16 @@ func TestGetOrCreate_AnUnexplained401InsideTheCooldown_DoesNotProbe(t *testing.T
 	approve(t, entry)
 	awaitCondition(t, "the first refusal being confirmed", func() bool { return pool.Stats().UnauthorizedKept == 1 })
 	claimed := entry.lastConfirmProbe.Load()
+	// The claim a real refusal makes carries the monotonic reading, which is
+	// what keeps a step of the system clock from holding the window shut:
+	// [time.Time.String] prints it as a final "m=" field only when it is there.
+	if claimed == nil || !strings.Contains(claimed.String(), " m=") {
+		t.Errorf("the claim = %v, want a time.Now reading with its monotonic clock", claimed)
+	}
 
 	approve(t, entry)
 	if got := entry.lastConfirmProbe.Load(); got != claimed {
-		t.Errorf("a refusal inside the window claimed it again (%d, was %d)", got, claimed)
+		t.Errorf("a refusal inside the window claimed it again (%v, was %v)", got, claimed)
 	}
 	time.Sleep(50 * time.Millisecond)
 	if got := g.userCalls.Load(); got != 1 {
@@ -435,8 +441,8 @@ func TestHandleUnauthorized_AnEntryAlreadyRejected_IsNotProbedAgain(t *testing.T
 
 	pool.handleUnauthorized(key, entry, gitlabclient.UnauthorizedUnexplained)
 
-	if got := entry.lastConfirmProbe.Load(); got != 0 {
-		t.Errorf("a rejected entry claimed the confirmation window (%d)", got)
+	if got := entry.lastConfirmProbe.Load(); got != nil {
+		t.Errorf("a rejected entry claimed the confirmation window (%v)", got)
 	}
 	time.Sleep(50 * time.Millisecond)
 	if got := g.userCalls.Load(); got != 0 {
@@ -563,21 +569,28 @@ func TestConfirmUnexplainedRefusal_AcceptedAfterTheEntryWasReplaced_CountsNothin
 
 // TestClaimConfirmation_WindowEdges verifies the confirmation window at its
 // edges: an entry that never confirmed may, one exactly a cooldown after its
-// last claim may, and one a nanosecond short of that may not. A claim that
-// succeeds moves the window to the moment it was made.
+// last claim may, and one a nanosecond short of that, or at the same instant,
+// may not. A claim that succeeds replaces the last one with the moment it was
+// made, and one that fails leaves the last one in place.
+//
+// The first row is a brand-new entry meeting its first refusal: nothing marks
+// it as having claimed, so it is confirmed however soon after the entry was
+// built the refusal arrives. The times are [time.Now] readings, so the window
+// is measured between two monotonic readings, as it is when a refusal makes
+// the claim.
 func TestClaimConfirmation_WindowEdges(t *testing.T) {
 	const cooldown = 30 * time.Second
-	start := time.Unix(1_900_000_000, 0)
+	start := time.Now()
 	tests := []struct {
 		name string
-		last int64
+		last *time.Time
 		now  time.Time
 		want bool
 	}{
-		{name: "never confirmed", last: 0, now: start, want: true},
-		{name: "exactly a cooldown later", last: start.UnixNano(), now: start.Add(cooldown), want: true},
-		{name: "a nanosecond short", last: start.UnixNano(), now: start.Add(cooldown - time.Nanosecond), want: false},
-		{name: "at the same instant", last: start.UnixNano(), now: start, want: false},
+		{name: "a brand-new entry that never confirmed", last: nil, now: start, want: true},
+		{name: "exactly a cooldown later", last: &start, now: start.Add(cooldown), want: true},
+		{name: "a nanosecond short", last: &start, now: start.Add(cooldown - time.Nanosecond), want: false},
+		{name: "at the same instant", last: &start, now: start, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -586,12 +599,15 @@ func TestClaimConfirmation_WindowEdges(t *testing.T) {
 			if got := entry.claimConfirmation(tt.now, cooldown); got != tt.want {
 				t.Errorf("claimConfirmation() = %v, want %v", got, tt.want)
 			}
-			want := tt.last
-			if tt.want {
-				want = tt.now.UnixNano()
+			got := entry.lastConfirmProbe.Load()
+			if !tt.want {
+				if got != tt.last {
+					t.Errorf("a refused claim replaced the last one: %v, was %v", got, tt.last)
+				}
+				return
 			}
-			if got := entry.lastConfirmProbe.Load(); got != want {
-				t.Errorf("lastConfirmProbe = %d after the claim, want %d", got, want)
+			if got == nil || got == tt.last || !got.Equal(tt.now) {
+				t.Errorf("the claim = %v after it succeeded, want a new one at %v", got, tt.now)
 			}
 		})
 	}
