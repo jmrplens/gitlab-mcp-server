@@ -231,7 +231,11 @@ exception is an integration run with a `-coverpkg` that names the package
 tests cover the package and gremlins runs them against each mutant. The pattern
 is resolved from the module root under the same tags, and one naming only other
 packages is refused as well, since it leaves every mutant as uncovered as no
-`-coverpkg` would. A tag set only in a
+`-coverpkg` would, as is one `go list` cannot resolve at all. The exception
+covers only an importable package measured where it is: a package main, or a
+package measured through a staged copy (`<dir>.mutants-<name>`), is linked by
+no other package's test, and gremlins matches the copy's files by their own
+path, so either is refused whatever `-i` and `-coverpkg` say. A tag set only in a
 `.gremlins.yaml` reaches gremlins and not the script, and that refusal stops
 such a run only when it would find no test file at all: a package with some
 untagged test files passes it and is measured against a baseline that runs

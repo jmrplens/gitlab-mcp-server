@@ -764,6 +764,9 @@ coverage-conditions:
 # could be killed, unless GREMLINS_FLAGS asks for an integration run with a
 # -coverpkg that names the package, under which the module's other tests cover
 # and kill its mutants; a -coverpkg naming only other packages is refused too.
+# The exception covers only an importable package measured where it is: a
+# package main, or one measured through a staged copy, is linked by no other
+# package's test, so it is refused whatever -i and -coverpkg say.
 #
 # The budget has to cover a compile as well as a run, which is why it is five
 # minutes. gremlins copies the module into a directory per worker, and Go keys

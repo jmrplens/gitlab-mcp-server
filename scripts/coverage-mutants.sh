@@ -217,15 +217,24 @@ tag_args=()
 cover_args=()
 [ -z "$coverpkg" ] || cover_args=(-coverpkg "$coverpkg")
 root=$(go list -m -f '{{.Dir}}')
+# go list prints native paths, which carry backslashes on Windows. Every path
+# below is cut against the root and written into a pattern or a target, and a
+# strip that expects a slash strips nothing on a backslash, so the root and
+# the package directory are written with slashes once, here, which go and Git
+# Bash both read on every platform.
+root=${root//\\//}
 
 # covered_by_coverpkg reports whether the -coverpkg patterns name the package
-# whose import path it is given. They are resolved the way gremlins' coverage
-# run resolves them: a comma-separated list, from the module root, under the
-# same tags. A pattern that matches nothing lists nothing, which is a no.
+# whose import path it is given: 0 when they do, 1 when they resolve and miss
+# it, and 2 when go list could not resolve them at all (an empty entry in the
+# list, or one go reads as a flag), which is not the same answer and is not
+# reported as one. They are resolved the way gremlins' coverage run resolves
+# them: a comma-separated list, from the module root, under the same tags. A
+# pattern that matches nothing lists nothing, which is a no.
 covered_by_coverpkg() {
   local patterns listed
   IFS=, read -r -a patterns <<<"$coverpkg"
-  listed=$(cd "$root" && go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.ImportPath}}' "${patterns[@]}") || return 1
+  listed=$(cd "$root" && go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.ImportPath}}' "${patterns[@]}") || return 2
   grep -qxF -- "$1" <<<"$listed"
 }
 
@@ -234,15 +243,23 @@ covered_by_coverpkg() {
 # the script with go's own message, which does not say what to do about it.
 #
 # A package with no test file under its tags is refused unless the run is an
-# integration run with a -coverpkg that names the package. Each mutant runs
-# only this package's tests unless --integration is given, so without it no
-# mutant of such a package can be killed, and unless a -coverpkg names it
-# nothing covers its blocks and every mutant is reported NOT COVERED: a
-# -coverpkg naming only other packages leaves it exactly as uncovered as none.
-# Before this check its baseline passed having run nothing, printed no
-# duration, and handed gremlins a coefficient of 3001. Under both, the module's
-# other tests cover its blocks and gremlins runs them against each mutant, so
-# it is measured, and the run says so.
+# integration run with a -coverpkg that names the package, and the package is
+# one another package's test can link. Each mutant runs only this package's
+# tests unless --integration is given, so without it no mutant of such a
+# package can be killed, and unless a -coverpkg names it nothing covers its
+# blocks and every mutant is reported NOT COVERED: a -coverpkg naming only
+# other packages leaves it exactly as uncovered as none. Before this check its
+# baseline passed having run nothing, printed no duration, and handed gremlins
+# a coefficient of 3001. Under both, the module's other tests cover its blocks
+# and gremlins runs them against each mutant, so it is measured, and the run
+# says so.
+#
+# That holds only for an importable package measured where it is. No other
+# package's test can link a package main, and a package staged below as
+# <dir>.mutants-<name> is a copy nothing imports, whose files gremlins matches
+# against the profile by their module-relative path, the copy's and never the
+# original's. So either is refused whatever -i and -coverpkg say, since every
+# mutant of it would be reported NOT COVERED.
 listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Name}}
 {{.Dir}}
 {{.ImportPath}}
@@ -255,21 +272,46 @@ listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Name}}
   read -r tests xtests
   listerr=$(cat)
 } <<<"$listing"
+pkgdir=${pkgdir//\\//}
+# Staged when gremlins cannot resolve the package where it is (see below).
+stage=""
+case "$(basename "$pkgdir")" in
+  *"$pkgname") ;;
+  *) stage=1 ;;
+esac
 refusal=""
+# Whether the refusal may suggest measuring through the module's other tests,
+# which is no suggestion for a package they cannot link.
+elsewhere=1
 if [ -n "$listerr" ]; then
   refusal="go cannot load $PKG under build tags ${tags:-(none)}: $listerr"
 elif [ "$tests $xtests" = "0 0" ]; then
-  if [ -z "$integration" ] || [ -z "$coverpkg" ]; then
+  covered=1
+  if [ "$pkgname" = main ] || [ -n "$stage" ]; then
+    elsewhere=""
+    refusal="$PKG has no test files under build tags ${tags:-(none)}, and it is a package main or one measured through a staged copy, which no other package's test can link, so no -coverpkg covers it and every mutant would be reported NOT COVERED; refusing to measure"
+  elif [ -z "$integration" ] || [ -z "$coverpkg" ]; then
     refusal="$PKG has no test files under build tags ${tags:-(none)}, so no mutant of it could be killed: each mutant runs only this package's tests without --integration, and without a -coverpkg every one is reported NOT COVERED; refusing to measure"
-  elif ! covered_by_coverpkg "$pkgpath"; then
-    refusal="$PKG has no test files under build tags ${tags:-(none)}, and -coverpkg $coverpkg does not name $pkgpath, so nothing would cover its blocks and every mutant would be reported NOT COVERED; refusing to measure"
+  elif covered_by_coverpkg "$pkgpath"; then
+    covered=0
   else
+    covered=$?
+  fi
+  if [ -z "$refusal" ] && [ "$covered" = 2 ]; then
+    refusal="go list could not resolve -coverpkg $coverpkg (its own message is above); refusing to measure"
+  elif [ -z "$refusal" ] && [ "$covered" = 1 ]; then
+    refusal="$PKG has no test files under build tags ${tags:-(none)}, and -coverpkg $coverpkg does not name $pkgpath, so nothing would cover its blocks and every mutant would be reported NOT COVERED; refusing to measure"
+  elif [ -z "$refusal" ]; then
     echo "gremlins: $PKG has no test files under build tags ${tags:-(none)}; measuring it through the module's other tests, which --integration runs against each mutant and -coverpkg $coverpkg lets cover it"
   fi
 fi
 if [ -n "$refusal" ]; then
   echo "gremlins: $refusal" >&2
-  echo "gremlins: a package behind a build tag is measured with GREMLINS_FLAGS='--tags <tag>', which reaches this baseline and gremlins alike; a tag set only in a .gremlins.yaml reaches gremlins and not the baseline. One tested only from elsewhere in the module is measured with GREMLINS_FLAGS='-i --coverpkg <pattern>', a pattern that names it" >&2
+  hint="gremlins: a package behind a build tag is measured with GREMLINS_FLAGS='--tags <tag>', which reaches this baseline and gremlins alike; a tag set only in a .gremlins.yaml reaches gremlins and not the baseline."
+  if [ -n "$elsewhere" ]; then
+    hint="$hint One tested only from elsewhere in the module is measured with GREMLINS_FLAGS='-i --coverpkg <pattern>', a pattern that names it"
+  fi
+  echo "$hint" >&2
   exit 1
 fi
 
@@ -294,31 +336,28 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 target=$PKG
-case "$(basename "$pkgdir")" in
-  *"$pkgname")
-    : # gremlins resolves this one on its own.
-    ;;
-  *)
-    # The copy is a sibling of the original rather than somewhere tidy like
-    # dist/, because Go's internal rule is about the path: a copy of a cmd/
-    # command staged under dist/ cannot import cmd/internal/... and fails at
-    # setup. Beside it, every import the package already makes is still legal.
-    # ".mutants-" is in the name so the path cannot be one somebody meant to
-    # keep, and an existing one is refused rather than removed: this script
-    # deletes what it creates and nothing else, and a leftover means a previous
-    # run was killed hard enough to skip its own trap, which a person should
-    # see rather than have quietly overwritten.
-    staged="$(dirname "$pkgdir")/$(basename "$pkgdir").mutants-${pkgname}"
-    if [ -e "$staged" ]; then
-      echo "gremlins: ${staged#"$root"/} is already there, which means a previous staged run did not clean up after itself; remove it and try again" >&2
-      staged=""
-      exit 1
-    fi
-    echo "gremlins: $PKG is package $pkgname in a directory that does not end in \"$pkgname\", which gremlins cannot resolve (issue 872); measuring a staged copy at ${staged#"$root"/}"
-    cp -R "$pkgdir" "$staged"
-    target="./${staged#"$root"/}"
-    ;;
-esac
+# A package whose directory ends in its name is one gremlins resolves on its
+# own, and is run where it is.
+if [ -n "$stage" ]; then
+  # The copy is a sibling of the original rather than somewhere tidy like
+  # dist/, because Go's internal rule is about the path: a copy of a cmd/
+  # command staged under dist/ cannot import cmd/internal/... and fails at
+  # setup. Beside it, every import the package already makes is still legal.
+  # ".mutants-" is in the name so the path cannot be one somebody meant to
+  # keep, and an existing one is refused rather than removed: this script
+  # deletes what it creates and nothing else, and a leftover means a previous
+  # run was killed hard enough to skip its own trap, which a person should
+  # see rather than have quietly overwritten.
+  staged="$(dirname "$pkgdir")/$(basename "$pkgdir").mutants-${pkgname}"
+  if [ -e "$staged" ]; then
+    echo "gremlins: ${staged#"$root"/} is already there, which means a previous staged run did not clean up after itself; remove it and try again" >&2
+    staged=""
+    exit 1
+  fi
+  echo "gremlins: $PKG is package $pkgname in a directory that does not end in \"$pkgname\", which gremlins cannot resolve (issue 872); measuring a staged copy at ${staged#"$root"/}"
+  cp -R "$pkgdir" "$staged"
+  target="./${staged#"$root"/}"
+fi
 
 # The run gremlins times: its coverage step, from the module root, over the
 # target's subtree, or over the whole module under --integration.
@@ -327,15 +366,12 @@ dir=$pkgdir
 if [ -n "$integration" ] || [ "$dir" = "$root" ]; then
   scan=./...
 else
-  # go list prints native paths, which carry backslashes on Windows, and a
-  # strip that expects a slash after the root strips nothing there and leaves a
+  # The root and the package directory were written with slashes when they
+  # were read, so the cut after the root works on Windows as well; a strip
+  # expecting a slash on a native path used to strip nothing there and leave a
   # pattern naming a directory that does not exist, which go test fails and
-  # this script would then report as a failing suite. The path is cut after
-  # the root whatever separator follows it and written with slashes, which go
-  # reads on every platform.
-  rel=${dir#"$root"}
-  rel=${rel#[\\/]}
-  scan="./${rel//\\//}/..."
+  # this script would then report as a failing suite.
+  scan="./${dir#"$root"/}/..."
 fi
 out=$(mktemp)
 profile=$(mktemp)
@@ -392,9 +428,10 @@ fi
 # cache answers that instantly for an unchanged package, so GOFLAGS carries
 # -count=1 below to make what it multiplies a real measurement. The ceiling's
 # multiple is clamped at 6000 too, although no comparison below can tell 6000
-# from more, because awk prints an integer past 2^31 in exponent form
-# (3.33333e+09 for a ceiling of 1e9 s over a base of 0.3 s), which bash's -lt
-# cannot compare.
+# from more, because older mawk builds (1.3.4 20200120, the awk Debian 12
+# installs) print an integer past 2^31 in exponent form (3.33333e+09 for a
+# ceiling of 1e9 s over a base of 0.3 s), which bash's -lt cannot compare.
+# gawk, BWK awk, busybox awk and current mawk print the integer.
 read -r coeff cap <<<"$(awk -v b="$base" -v f="$budget" -v m="$ceiling" 'BEGIN{
   c = int(f / b) + 1; if (c < 8) c = 8; if (c > 6000) c = 6000
   k = int(m / b); if (k > 6000) k = 6000
