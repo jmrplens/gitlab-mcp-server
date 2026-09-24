@@ -523,3 +523,31 @@ func TestStreamDownload_DeadBranches(t *testing.T) {
 		t.Fatalf("checksum = %q, want %q", checksum, want)
 	}
 }
+
+// TestDownload_ContextCancelledMidFlight_AbandonsTheRequest verifies that the
+// download request carries the caller's context, so the action deadline and
+// an abandoned HTTP POST end a transfer nothing else bounds.
+//
+// The download builds its request by hand through NewRequest, which takes the
+// context as a request option like every other client-go call and falls back
+// to context.Background() without one; it was built with none. The context is
+// cancelled once the GET has arrived, since the guard at the top of Download
+// answers one cancelled up front before any request exists.
+func TestDownload_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(headerContentType, testOctetStream)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("package-bytes"))
+	})
+
+	_, err := Download(ctx, nil, client, DownloadInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: testPkgVersion,
+		FileName:       testAppBin,
+		OutputPath:     filepath.Join(t.TempDir(), testOutputBin),
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Download() error = %v after the context was cancelled mid-flight, want context.Canceled", err)
+	}
+}

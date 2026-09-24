@@ -4,11 +4,13 @@ package groupsshcerts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -428,5 +430,47 @@ func TestDelete_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for 403 response, got nil")
+	}
+}
+
+// TestGroupSSHCerts_ContextCancelledMidFlight_AbandonsTheRequest verifies
+// that each call hands the caller's context to the request it sends, so the
+// action deadline and an abandoned HTTP POST end it rather than leaving it
+// running against GitLab.
+//
+// client-go takes that context only as the gl.WithContext request option and
+// builds the request from context.Background() without it. List passed it
+// and Create and Delete did not; List stays in the table as the case that
+// already held, so the three are held to one assertion. The context is
+// cancelled once the request has arrived, since the guard at the top of each
+// handler answers one cancelled up front before any request exists.
+func TestGroupSSHCerts_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		call   func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", http.StatusOK, `[]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{GroupID: "mygroup"})
+			return err
+		}},
+		{"create", http.StatusCreated, `{"id":10,"title":"cert","key":"ssh-rsa AAA"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{GroupID: "mygroup", Key: "ssh-rsa AAA", Title: "cert"})
+			return err
+		}},
+		{"delete", http.StatusNoContent, "", func(ctx context.Context, c *gitlabclient.Client) error {
+			return Delete(ctx, c, DeleteInput{GroupID: "mygroup", CertificateID: 10})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			})
+			if err := tt.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Fatalf("error = %v after the context was cancelled mid-flight, want context.Canceled", err)
+			}
+		})
 	}
 }

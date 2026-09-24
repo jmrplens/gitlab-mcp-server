@@ -179,7 +179,7 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, in ListPATsInput
 	opts.CreatedBefore = parseISODate(in.CreatedBefore)
 	opts.LastUsedAfter = parseISODate(in.LastUsedAfter)
 	opts.LastUsedBefore = parseISODate(in.LastUsedBefore)
-	tokens, resp, err := client.GL().GroupCredentials.ListGroupPersonalAccessTokens(in.GroupID.String(), opts)
+	tokens, resp, err := client.GL().GroupCredentials.ListGroupPersonalAccessTokens(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return PATListOutput{}, toolutil.WrapErrWithStatusHint("list group PATs", err, http.StatusNotFound, groupCredentialInventoryHint)
 	}
@@ -211,7 +211,7 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, in ListSSHKey
 	opts.CreatedBefore = parseISODate(in.CreatedBefore)
 	opts.ExpiresAfter = parseISODate(in.ExpiresAfter)
 	opts.ExpiresBefore = parseISODate(in.ExpiresBefore)
-	keys, resp, err := client.GL().GroupCredentials.ListGroupSSHKeys(in.GroupID.String(), opts)
+	keys, resp, err := client.GL().GroupCredentials.ListGroupSSHKeys(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH keys", err, http.StatusNotFound, groupCredentialInventoryHint)
 	}
@@ -234,7 +234,7 @@ func RevokePAT(ctx context.Context, client *gitlabclient.Client, in RevokePATInp
 	if in.TokenID == 0 {
 		return toolutil.ErrFieldRequired("token_id")
 	}
-	_, err := client.GL().GroupCredentials.RevokeGroupPersonalAccessToken(in.GroupID.String(), in.TokenID)
+	_, err := client.GL().GroupCredentials.RevokeGroupPersonalAccessToken(in.GroupID.String(), in.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("revoke group PAT", err, http.StatusNotFound, groupCredentialTokenHint)
 	}
@@ -252,7 +252,7 @@ func DeleteSSHKey(ctx context.Context, client *gitlabclient.Client, in DeleteSSH
 	if in.KeyID == 0 {
 		return toolutil.ErrFieldRequired("key_id")
 	}
-	_, err := client.GL().GroupCredentials.DeleteGroupSSHKey(in.GroupID.String(), in.KeyID)
+	_, err := client.GL().GroupCredentials.DeleteGroupSSHKey(in.GroupID.String(), in.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete group SSH key", err, http.StatusNotFound, groupCredentialSSHKeyHint)
 	}

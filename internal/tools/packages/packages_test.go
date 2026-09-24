@@ -1625,3 +1625,56 @@ func TestPackages_PaginationComesFromTheResponseHeaders(t *testing.T) {
 		})
 	}
 }
+
+// TestPackages_ContextCancelledMidFlight_AbandonsTheRequest verifies that the
+// upload and the three package-file calls hand the caller's context to the
+// request they send, so the action deadline and an abandoned HTTP POST end
+// them rather than leaving them running against GitLab.
+//
+// client-go takes that context only as the gl.WithContext request option and
+// builds the request from context.Background() without it, which is how all
+// four shipped; the upload is the one that matters most, since its body may
+// run to the configured upload ceiling and nothing else bounds the transfer.
+// The download, which builds its request by hand, is held in
+// packages_stream_test.go. The context is cancelled once the request has
+// arrived, since the guard at the top of each handler answers one cancelled up
+// front before any request exists.
+func TestPackages_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		call   func(context.Context, *gitlabclient.Client) error
+	}{
+		{"publish", http.StatusCreated, publishResponseJSON, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Publish(ctx, nil, c, PublishInput{
+				ProjectID:      "42",
+				PackageName:    testPackageName,
+				PackageVersion: "1.0.0",
+				FileName:       testFileName,
+				ContentBase64:  testBase64Content,
+			})
+			return err
+		}},
+		{"file_list", http.StatusOK, `[]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := FileList(ctx, c, FileListInput{ProjectID: "42", PackageID: "10"})
+			return err
+		}},
+		{"delete", http.StatusNoContent, "", func(ctx context.Context, c *gitlabclient.Client) error {
+			return Delete(ctx, nil, c, DeleteInput{ProjectID: "42", PackageID: "10"})
+		}},
+		{"file_delete", http.StatusNoContent, "", func(ctx context.Context, c *gitlabclient.Client) error {
+			return FileDelete(ctx, nil, c, FileDeleteInput{ProjectID: "42", PackageID: "10", PackageFileID: "20"})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			})
+			if err := tt.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Fatalf("error = %v after the context was cancelled mid-flight, want context.Canceled", err)
+			}
+		})
+	}
+}

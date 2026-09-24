@@ -90,7 +90,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, in GetProjectI
 	if in.ProjectID.String() == "" {
 		return ProjectOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	settings, _, err := client.GL().ProjectSecuritySettings.ListProjectSecuritySettings(in.ProjectID.String())
+	settings, _, err := client.GL().ProjectSecuritySettings.ListProjectSecuritySettings(in.ProjectID.String(), gl.WithContext(ctx))
 	if err != nil {
 		return ProjectOutput{}, wrapSecuritySettingsErr("get project security settings", err, securitySettingsHints{
 			forbiddenHint: hintSecuritySettingsLicense,
@@ -157,7 +157,7 @@ func UpdateProject(ctx context.Context, client *gitlabclient.Client, in UpdatePr
 	opts := gl.UpdateProjectSecuritySettingsOptions{
 		SecretPushProtectionEnabled: new(in.SecretPushProtectionEnabled),
 	}
-	settings, _, err := client.GL().ProjectSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.ProjectID.String(), opts)
+	settings, _, err := client.GL().ProjectSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.ProjectID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProjectOutput{}, wrapSecuritySettingsErr("update project security settings", err, securitySettingsHints{
 			forbiddenHint: hintSecuritySettingsLicense + ", or the project or one of its parent groups is archived, " +
@@ -185,7 +185,7 @@ func UpdateGroup(ctx context.Context, client *gitlabclient.Client, in UpdateGrou
 	if len(in.ProjectsToExclude) > 0 {
 		opts.ProjectsToExclude = new(in.ProjectsToExclude)
 	}
-	settings, _, err := client.GL().GroupSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.GroupID.String(), opts)
+	settings, _, err := client.GL().GroupSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return GroupOutput{}, wrapSecuritySettingsErr("update group security settings", err, securitySettingsHints{
 			forbiddenHint: hintSecuritySettingsLicense,

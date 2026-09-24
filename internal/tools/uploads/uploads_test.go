@@ -7,6 +7,7 @@ package uploads
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -193,38 +194,22 @@ func TestProjectUpload_FullURL_IsTheInstanceRootPlusFullPath(t *testing.T) {
 // request carries the context. The SDK takes it as a request option, and the
 // upload call was the one in this package that passed none.
 func TestProjectUpload_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	arrived := make(chan struct{})
-	var once sync.Once
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		once.Do(func() { close(arrived) })
-		select {
-		case <-r.Context().Done():
-		case <-time.After(5 * time.Second):
-			testutil.RespondJSON(w, http.StatusCreated, `{
-				"alt": "dk",
-				"url": "/uploads/abc/dk.png",
-				"full_path": "/-/project/1234/uploads/abc/dk.png",
-				"markdown": "![dk](/uploads/abc/dk.png)"
-			}`)
-		}
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"alt": "dk",
+			"url": "/uploads/abc/dk.png",
+			"full_path": "/-/project/1234/uploads/abc/dk.png",
+			"markdown": "![dk](/uploads/abc/dk.png)"
+		}`)
 	})
-	client := testutil.NewTestClient(t, handler)
-
-	go func() {
-		<-arrived
-		cancel()
-	}()
 
 	_, err := Upload(ctx, nil, client, UploadInput{
 		ProjectID:     "42",
 		Filename:      "dk.png",
 		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
 	})
-	if err == nil {
-		t.Fatal("Upload() error = nil after the context was cancelled mid-flight, want the cancellation")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Upload() error = %v after the context was cancelled mid-flight, want context.Canceled", err)
 	}
 }
 
@@ -1086,29 +1071,13 @@ func TestDelete_CancelledContext(t *testing.T) {
 // The sibling DeleteBySecret passed the context and this one did not, which is
 // the asymmetry the sweep found.
 func TestDelete_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	arrived := make(chan struct{})
-	var once sync.Once
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		once.Do(func() { close(arrived) })
-		select {
-		case <-r.Context().Done():
-		case <-time.After(5 * time.Second):
-			w.WriteHeader(http.StatusNoContent)
-		}
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
-	client := testutil.NewTestClient(t, handler)
-
-	go func() {
-		<-arrived
-		cancel()
-	}()
 
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", UploadID: 7})
-	if err == nil {
-		t.Fatal("Delete() error = nil after the context was cancelled mid-flight, want the cancellation")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Delete() error = %v after the context was cancelled mid-flight, want context.Canceled", err)
 	}
 }
 

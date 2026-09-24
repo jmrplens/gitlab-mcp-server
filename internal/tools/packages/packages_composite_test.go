@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -726,10 +727,21 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 }
 
 // TestPackagePublishDirectory_CancelledDuringLoop verifies PublishDirectory
-// returns partial output if cancellation happens after one file is published.
+// returns partial output when the call is cancelled partway through the
+// directory: the first file is published, the upload in flight when the
+// cancellation lands is abandoned and reported against its file, and the loop
+// stops before the third.
+//
+// The cancellation is made while the second upload is on the wire, and the
+// handler holds that upload until the client abandons it, which the client
+// does only because the upload carries the caller's context. A cancel issued
+// inside the first upload's handler, as this test once did, raced the answer
+// it was about to give: the test client does not retry, so nothing after the
+// transport looks at the context again, and whichever of the answer and the
+// cancellation the transport saw first decided the result.
 func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{"a.bin", "b.bin"} {
+	for _, name := range []string{"a.bin", "b.bin", "c.bin"} {
 		t.Run(name, func(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
 				t.Fatalf("write file: %v", err)
@@ -738,15 +750,25 @@ func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	callCount := 0
+	t.Cleanup(cancel)
+	var callCount atomic.Int32
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/packages/generic/") {
-			callCount++
+			if callCount.Add(1) == 2 {
+				// Drained first, since the server only notices a client that
+				// went away once the body has been read to its end.
+				_, _ = io.Copy(io.Discard, r.Body)
+				cancel()
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
+			}
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id": 1, "package_id": 10, "file_name": "a.bin",
 				"size": 7, "file_sha256": "hash", "file_md5": "md5", "file_sha1": "sha1", "file_store": 1
 			}`)
-			cancel()
 			return
 		}
 		http.NotFound(w, r)
@@ -759,16 +781,19 @@ func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
 		DirectoryPath:  dir,
 	})
 	if err == nil {
-		t.Fatal("expected cancellation error after first file")
+		t.Fatal("expected cancellation error after the second file")
 	}
-	if !strings.Contains(err.Error(), "context canceled after 1 of 2 files") {
+	if !strings.Contains(err.Error(), "context canceled after 2 of 3 files") {
 		t.Fatalf("error = %q, want partial cancellation message", err.Error())
 	}
 	if out.TotalFiles != 0 || len(out.Published) != 1 {
 		t.Fatalf("partial output = %+v, want one published item before totals", out)
 	}
-	if callCount != 1 {
-		t.Fatalf("callCount = %d, want 1", callCount)
+	if len(out.Errors) != 1 || !strings.HasPrefix(out.Errors[0], "b.bin: ") || !strings.Contains(out.Errors[0], context.Canceled.Error()) {
+		t.Fatalf("errors = %q, want the abandoned b.bin upload reported as cancelled", out.Errors)
+	}
+	if got := callCount.Load(); got != 2 {
+		t.Fatalf("callCount = %d, want 2", got)
 	}
 }
 

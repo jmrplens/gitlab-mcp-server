@@ -5,6 +5,7 @@ package securitysettings
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"strings"
@@ -694,6 +695,48 @@ func TestSecuritySettings_EachStatusEarnsItsOwnHint(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), tt.wantNot) {
 				t.Errorf("error = %q, must not carry %q", err, tt.wantNot)
+			}
+		})
+	}
+}
+
+// TestSecuritySettings_ContextCancelledMidFlight_AbandonsTheRequest verifies
+// that each of the three calls hands the caller's context to the request it
+// sends, so the action deadline and an abandoned HTTP POST end it rather than
+// leaving it running against GitLab.
+//
+// client-go takes that context only as the gl.WithContext request option and
+// builds the request from context.Background() without it, which is how all
+// three shipped: they answered correctly, passed every other test here, and
+// could not be cancelled. The context is cancelled once the request has
+// arrived, since the guard at the top of each handler answers one cancelled
+// up front before any request exists.
+func TestSecuritySettings_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		respond string
+		call    func(context.Context, *gitlabclient.Client) error
+	}{
+		{"get_project", projectSecurityJSON, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetProject(ctx, c, GetProjectInput{ProjectID: "42"})
+			return err
+		}},
+		{"update_project", projectSecurityJSON, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateProject(ctx, c, UpdateProjectInput{ProjectID: "42", SecretPushProtectionEnabled: true})
+			return err
+		}},
+		{"update_group", `{"secret_push_protection_enabled":true}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateGroup(ctx, c, UpdateGroupInput{GroupID: "7", SecretPushProtectionEnabled: true})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.respond)
+			})
+			if err := tt.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Fatalf("error = %v after the context was cancelled mid-flight, want context.Canceled", err)
 			}
 		})
 	}
