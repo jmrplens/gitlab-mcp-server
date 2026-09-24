@@ -517,8 +517,12 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 # e2e-world- and world-snippet-), never with the run ID, so a prefix picks
 # what some tests named across every run; reaching an E2E_RUN_ID run that way
 # takes one sweep per prefix its tests used, and each also reaches other runs,
-# live ones included. It is a test of the fixture package because that
-# library is importable only from test/e2e. The test skips when neither
+# live ones included. The prefix is read from the make command line or the
+# environment only, never from .env: the recipe hands make's value on even
+# when it is empty, so one left in .env is dropped rather than turning every
+# later clean into a sweep by name that reaches live runs. It is a test of
+# the fixture package because that library is importable only from
+# test/e2e. The test skips when neither
 # variable is set, which guards a bare go test run; this target always passes
 # the age.
 E2E_SWEEP_MIN_AGE ?= 2h
