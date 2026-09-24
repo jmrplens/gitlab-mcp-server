@@ -80,7 +80,7 @@ readable without opening the tracker:
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
-| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours follows it | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes |
+| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours, [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293), open | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user | Yes, theirs, open | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open | No | No | None taken |
@@ -182,8 +182,9 @@ is in `v19.4.0-ee` and `v19.4.1-ee`, the first `gitlab-org/gitlab` row of this
 table to reach a release, so its declaration now waits only on the live record
 being taken again from a 19.4 image, which is deferred until the work in flight
 has landed. Row 8 moved as well: the keep-alive option it asked for was merged
-upstream by somebody else, for the listen stream alone, and ours follows on the
-shape agreed on the issue. Rows 8 and 14 now count another user's merged pull
+upstream by somebody else, for the listen stream alone, and ours,
+[modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293),
+was opened the same day on the shape agreed on the issue. Rows 8 and 14 now count another user's merged pull
 request as In review, and row 14 the issue that pull request fixed as Reported,
 which is the reading row 9 already took and the one the Merged field implies.
 Row 17 had read In review on the strength of its open issue, which the schema
@@ -1093,14 +1094,14 @@ of change whose test is one assertion on the built URL.
   not answered since. A note of 2026-09-24 in the reviewer's documentation
   thread records that the documentation half,
   [gitlab-org/gitlab!254538](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254538),
-  merged and is live, and asks him for that review.
+  merged and is live, and asks @fforster for that review.
   [gitlab-org/api/client-go!3052](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3052)
-  (the `Package` fields) was handed to @PatrickRice on 2026-09-14. He asked on
-  2026-09-16 whether `CreatorID` should be a primitive rather than a pointer,
-  which it became the same day (`2cc7e540`), and that thread, still unresolved
-  and his to close, is the one thing between it and his approval. It was not
-  asked again from here on 2026-09-24, because the bot had reminded him of it
-  that morning.
+  (the `Package` fields) was handed to @PatrickRice on 2026-09-14, who asked
+  on 2026-09-16 whether `CreatorID` should be a primitive rather than a
+  pointer, which it became the same day (`2cc7e540`). That thread, still
+  unresolved and the reviewer's to close, is the one thing between it and an
+  approval. It was not asked again from here on 2026-09-24, because the bot
+  had sent a reminder about it that morning.
 - **Merged**: `gitlab-org/api/client-go!3042` (`BroadcastMessage.Color`) in
   **v3.1.0**, tagged on 2026-09-09 eighteen minutes after the merge; then
   `gitlab-org/api/client-go!3040` (`Appearance.SiteName`) and
@@ -2206,12 +2207,16 @@ somebody else before we got to it.
   since closed by the merge below).
 - **In review**: yes, theirs,
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232),
-  merged on 2026-09-21. Ours is not opened yet. The shape was settled on the
-  issue on 2026-09-18, where a contributor prefers extending the write
-  deadline on every write, added as an option on top of
+  merged on 2026-09-21. Ours is
+  [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293),
+  opened on 2026-09-24 on the shape settled on the issue on 2026-09-18, where
+  a contributor preferred extending the write deadline on every write once
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
-  once that merged, and we said we would open that pull request then. It has
-  merged, so the next step is ours.
+  had merged: every write to a stream that runs a keep-alive, which today
+  means `subscriptions/listen`, moves `http.Server.WriteTimeout`'s deadline
+  out by twice the keep-alive interval, extended rather than cleared so a
+  peer that stopped reading still fails. Its test fails against `main` every
+  time and waits for review.
 - **Merged**: in part, and by somebody else:
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
@@ -2303,6 +2308,14 @@ passing if the SDK ever fixes this and the filter is removed.
   would otherwise swallow the interface and reinstate the response. The
   narrowest reading of the clause was chosen deliberately: `notDone` still
   writes a response when the caller's own context ended for any other reason.
+  A POST whose every call was cancelled ends with nothing written, and since
+  2026-09-20, on a contributor's review, it is answered 204 No Content in
+  both JSON and SSE mode rather than an empty 200. It was rebased on
+  2026-09-24 after
+  [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
+  conflicted in `deliverLocked`, and the 204 now keys on the `lastWrite`
+  field that pull request added, which says the headers are still
+  uncommitted. It is mergeable and waits for review.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
