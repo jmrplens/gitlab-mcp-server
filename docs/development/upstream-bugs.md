@@ -89,7 +89,7 @@ readable without opening the tracker:
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
-| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | No | No | Was yes | Yes |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
@@ -140,14 +140,16 @@ terms the next paragraph sets out.
 
 Re-verified in full on 2026-09-22, every merge request, pull request and issue
 the file links, against the trackers rather than against memory. One row moved:
-go-sdk `#1274` merged on the 21st and row 50 still read open. Four of the nine
+`modelcontextprotocol/go-sdk#1274` merged on the 21st and row 50 still read
+open. Four of the nine
 documentation merge requests had also landed since the last check, which is
 recorded in row 34's section rather than in the table, since that row counts
 the client-go structs and not the pages. A merged pull request was held to the
 tags that contain its merge commit rather than to its merge date, which is the
 rule the client-go section already states and which matters here: go-sdk
 v1.8.0 was tagged on 2026-09-14 and contains **none** of the six merges,
-`#1242` from the 6th included, so every one of them is merged and unreleased.
+`modelcontextprotocol/go-sdk#1242` from the 6th included, so every one of them
+is merged and unreleased.
 
 Every `client-go` row was then re-read against the **v3.12.0** source on
 2026-09-19, when the pin moved there, rather than against the tracker: for each
@@ -181,9 +183,11 @@ has landed. Row 8 moved as well: the keep-alive option it asked for was merged
 upstream by somebody else, for the listen stream alone, and ours follows on the
 shape agreed on the issue. Rows 8 and 14 now count another user's merged pull
 request as In review, and row 14 the issue that pull request fixed as Reported,
-which is the reading row 9 already took and the one the Merged field implies. Rows 35 to 37
-and 41 to 44 now read Reported through
-the umbrella issue, whose field lists carry a block for each of those structs,
+which is the reading row 9 already took and the one the Merged field implies.
+Row 17 had read In review on the strength of its open issue, which the schema
+does not count, and now reads no, since no fix has been opened upstream. Rows
+35 to 37 and 41 to 44 now read Reported through the umbrella issue, whose field
+lists carry a block for each of those structs,
 which is the reading row 34 already took; the table had said no since the rows
 were added. The sections of rows 15 and 21 each carried two Merged bullets that
 contradicted each other, and row 14's still named v1.8.0-pre.2 as the newest
@@ -209,15 +213,20 @@ morning.
   open, from this repository's maintainer. The same team member routed it with
   the issue and set milestone 19.5 on it, which is a target and not a release.
   It was readied on 2026-09-24 with a bare `@gitlab-bot ready`, the form every
-  earlier backend merge request here had been readied with: the bot
-  requested a backend coach, and seconds later the documentation automation
-  requested the page's technical writer and took the coach off the reviewer
-  field in the same step. So it carries a writer and no backend reviewer yet,
-  though the coach was named in the bot's note and so still notified. Read the
-  same day: the fork pipeline on `b183f4fa` is green, it has no conflicts, and
-  it has no approval yet against the six maintainer code-owner rules its files
-  fall under. The bot's reply also turned the ready into an unresolved thread,
-  so it fails `DISCUSSIONS_NOT_RESOLVED` until that thread is resolved.
+  earlier backend merge request here had been readied with, except
+  gitlab-org/gitlab!254698, which went through the contributor platform's
+  review request: the bot requested a backend coach, and seconds later the
+  documentation automation requested the page's technical writer and took the
+  coach off the reviewer field in the same step. Read the same day: the fork
+  pipeline on `b183f4fa` is green, it has no conflicts, and it has no approval
+  yet against the six maintainer code-owner rules its files fall under. The
+  bot's reply also turned the ready into an unresolved thread. The writer
+  reviewed it the same day, at 11:03 UTC, with four suggestions that reword the
+  `plan` description in the GraphQL type, the GraphQL reference and both
+  introspection files, so the next step is ours: apply them, then resolve the
+  ready's thread, since `DISCUSSIONS_NOT_RESOLVED` fails until all five threads
+  are resolved. At 11:16 UTC the writer requested the backend coach again, so
+  the reviewer field now carries both.
 - **Merged**: no.
 - **Blocking**: no. The tier can always be pinned with `--tier` or
   `GITLAB_MCP_TIER`, which skips detection entirely.
@@ -1081,30 +1090,36 @@ of change whose test is one assertion on the built URL.
   and his to close, is the one thing between it and his approval. It was not
   asked again from here on 2026-09-24, because the bot had reminded him of it
   that morning.
-- **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
-  2026-09-09 eighteen minutes after the merge; then `!3040`
-  (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
-  **v3.2.0** the same day; then `!3043` (`Agent.IsReceptive`) and `!3045`
-  (`SecureFile.FileExtension`) in **v3.3.0**, and `!3047`
-  (`GroupServiceAccount.PublicEmail` and `UnconfirmedEmail`) in **v3.4.0**,
-  all on 2026-09-10; then `!3053` (the four `Snippet` fields) in **v3.5.0**
-  and `!3049` (`LastUsedAt` and `UsageType` on both deploy key structs) in
-  **v3.6.0**, both on 2026-09-11; then `!3044` (`LicenseTemplate.Popular`) in
-  **v3.7.0** and `!3041` (`Topic.OrganizationID`) in **v3.9.0**, merged on
-  2026-09-12 and 2026-09-13; then `!3050` (`Imported`, `ImportedFrom` and
-  `WikiPage` on both event structs) in **v3.10.0** on 2026-09-14; and finally
-  `!3051` (the eight `Namespace` fields) in **v3.11.0** on 2026-09-16. `!3051`
-  was merged on the 14th, nineteen minutes after v3.10.0 was cut, and this
-  register recorded it as in no tag until the next release carried it. Do not
-  read a merge as a release: `!3040` sat merged and in no tag for hours, so the
+- **Merged**: `gitlab-org/api/client-go!3042` (`BroadcastMessage.Color`) in
+  **v3.1.0**, tagged on 2026-09-09 eighteen minutes after the merge; then
+  `gitlab-org/api/client-go!3040` (`Appearance.SiteName`) and
+  `gitlab-org/api/client-go!3046` (the `GroupSCIMIdentity` json tag) in
+  **v3.2.0** the same day; then `gitlab-org/api/client-go!3043`
+  (`Agent.IsReceptive`) and `gitlab-org/api/client-go!3045`
+  (`SecureFile.FileExtension`) in **v3.3.0**, and
+  `gitlab-org/api/client-go!3047` (`GroupServiceAccount.PublicEmail` and
+  `UnconfirmedEmail`) in **v3.4.0**, all on 2026-09-10; then
+  `gitlab-org/api/client-go!3053` (the four `Snippet` fields) in **v3.5.0**
+  and `gitlab-org/api/client-go!3049` (`LastUsedAt` and `UsageType` on both
+  deploy key structs) in **v3.6.0**, both on 2026-09-11; then
+  `gitlab-org/api/client-go!3044` (`LicenseTemplate.Popular`) in **v3.7.0**
+  and `gitlab-org/api/client-go!3041` (`Topic.OrganizationID`) in **v3.9.0**,
+  merged on 2026-09-12 and 2026-09-13; then `gitlab-org/api/client-go!3050`
+  (`Imported`, `ImportedFrom` and `WikiPage` on both event structs) in
+  **v3.10.0** on 2026-09-14; and finally `gitlab-org/api/client-go!3051` (the
+  eight `Namespace` fields) in **v3.11.0** on 2026-09-16.
+  `gitlab-org/api/client-go!3051` was merged on the 14th, nineteen minutes
+  after v3.10.0 was cut, and this register recorded it as in no tag until the
+  next release carried it. Do not read a merge as a release:
+  `gitlab-org/api/client-go!3040` sat merged and in no tag for hours, so the
   version is read from which tags contain the merge commit rather than from the
   newest tag. Eleven releases in eight days is why: the newest tag was wrong
   for five of the first six, and when this was first written
   `gitlab-org/api/client-go!3044` was in three tags while
   `gitlab-org/api/client-go!3041` was in one.
-- **What review asked for, and what it cost**: `!3051` was merged on the
-  second push. A maintainer asked for the five numeric fields as plain `int64`
-  rather than pointers, on the convention that a response struct uses
+- **What review asked for, and what it cost**: `gitlab-org/api/client-go!3051`
+  was merged on the second push. A maintainer asked for the five numeric
+  fields as plain `int64` rather than pointers, on the convention that a response struct uses
   primitives unless a null carries something the zero value does not, and the
   three date fields stayed pointers. The merge request's own reasoning had
   argued the opposite, so the description was corrected along with the code
@@ -1128,7 +1143,8 @@ of change whose test is one assertion on the built URL.
   - `deploykeys` takes `last_used_at` and `usage_type` from the SDK on both
     structs, and keeps a capture for `projects_with_write_access` and
     `projects_with_readonly_access`, which client-go models on
-    `InstanceDeployKey` alone. That half was never `!3049`'s: the bullet below
+    `InstanceDeployKey` alone. That half was never
+    `gitlab-org/api/client-go!3049`'s: the bullet below
     records why `ProjectDeployKey` must not gain them.
   - `namespaces` takes `projects_count`, `root_repository_size`,
     `additional_purchased_storage_ends_on`, `max_seats_used_changed_at` and
@@ -1142,12 +1158,13 @@ of change whose test is one assertion on the built URL.
     the surface less true rather than more.
 
   The two open merge requests keep their workarounds whole: `systemhooks`
-  still reads the seven `Hook` fields of `!3048` off the capture, and
-  `packages` the `Package` fields of `!3052`. Both were checked against the
-  v3.12.0 source rather than against the tracker, and neither struct carries
-  them. `projectserviceaccounts` keeps its read of `public_email` too, since
-  `!3047` added the pair to `GroupServiceAccount` and `ProjectServiceAccount`
-  was outside it.
+  still reads the seven `Hook` fields of `gitlab-org/api/client-go!3048` off
+  the capture, and `packages` the `Package` fields of
+  `gitlab-org/api/client-go!3052`. Both were checked against the v3.12.0
+  source rather than against the tracker, and neither struct carries them.
+  `projectserviceaccounts` keeps its read of `public_email` too, since
+  `gitlab-org/api/client-go!3047` added the pair to `GroupServiceAccount` and
+  `ProjectServiceAccount` was outside it.
 
 **What**: one field per struct, each exposed by the rendering entity with no
 condition at all, so every response of every endpoint that renders it carries
@@ -2184,15 +2201,16 @@ somebody else before we got to it.
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
   since v1.8.0 predates it. It keeps the `subscriptions/listen` response
-  stream alone alive, every 30s by default; a streamed POST response and the
-  standalone GET stream are untouched, so it does not reach the case this
-  entry describes.
+  stream alone alive, every 30s by default: every other streamed POST
+  response, a slow tool call's for one, and the standalone GET stream are
+  untouched, so it covers one stream of the case this entry describes and not
+  the rest.
 - **Blocking**: no.
 - **Workaround**: yes, and it covers more than the requested option would.
   `sseAwareWriter` in `cmd/server/main.go` emits a comment frame every 25s on
   **any** response that commits to `text/event-stream`, guarding its writes with
-  the same mutex the handler's writes take. It would stay even if the option
-  landed.
+  the same mutex the handler's writes take. It stays now that the option has
+  merged, since that option covers the listen stream alone.
 
 **What**: the SDK emits keep-alives only on the standalone GET stream, not on
 streamed POST responses, and offers no option to configure the interval. An idle
@@ -2300,8 +2318,9 @@ seconds into a hanging GitLab call: the client's `notifications/cancelled` at
   cancelling with an error that carries the reason and unwraps to
   `context.Canceled`, a debug log line with the id and the reason, and two
   tests. Chosen as the first contribution to that SDK because the maintainers
-  had already accepted the cause plumbing it builds on (their #1100), it adds
-  no exported API, and it answers a SHOULD of the specification.
+  had already accepted the cause plumbing it builds on (their
+  [modelcontextprotocol/go-sdk#1100](https://github.com/modelcontextprotocol/go-sdk/issues/1100)),
+  it adds no exported API, and it answers a SHOULD of the specification.
 - **Merged**: **yes, upstream, on 2026-09-14, and in no released version yet.**
   v1.8.0 was published that morning and the merge landed after it, so the
   released SDK still drops the reason: its `canceller.Preempt` reads
@@ -2734,8 +2753,8 @@ neither, and the ADR now says so.
 
 - **Reported**: yes,
   [openai/codex#38979](https://github.com/openai/codex/issues/38979).
-- **In review**: yes, the issue is open and labelled `bug`, `mcp`, `CLI`,
-  `tool-calls`. No fix has been proposed upstream.
+- **In review**: no. The issue is open and labelled `bug`, `mcp`, `CLI`,
+  `tool-calls`, and no fix has been proposed upstream.
 - **Merged**: no.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
@@ -2872,7 +2891,13 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   passed, and the next pipeline runs it against the refreshed snapshot. The
   merge request's description and a correction in the `danger-review` thread
   set out the router's timeline, and it was readied the same day naming
-  @marc_shaw for the re-review it now waits on.
+  @marc_shaw for the re-review it now waits on. Until a new pipeline runs,
+  which takes a new push to the branch or a maintainer starting one in the
+  canonical project, it fails `CI_MUST_PASS`, and it needs a maintainer
+  approval for each of the `/config/`, `/lib/` and `/spec/` code-owner rules.
+  It fails `DISCUSSIONS_NOT_RESOLVED` too: the four threads of his 2026-09-16
+  review are answered and wait on him, and the ready became a fifth, ours to
+  resolve, when the bot answered inside it.
   `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
   `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
   section then.
