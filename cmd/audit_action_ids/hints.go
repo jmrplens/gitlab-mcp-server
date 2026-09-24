@@ -21,6 +21,29 @@ import (
 // already share, and moving it there is the consolidation still open.
 var toolToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
 
+// printfVerb matches one verb of a fmt format, flags, width, precision and
+// argument index included.
+//
+// The space flag is left out on purpose. It is valid Go ("% d") and nothing in
+// this tree writes it, while prose writes "50% of" constantly, which with the
+// flag reads as the verb "% o" and loses the word after it; before a tool name
+// ("% gitlab_x") it would hide the name, which is the opposite of the point.
+var printfVerb = regexp.MustCompile(`%[-+#0]*(?:\[\d+\])?(?:\d+|\*)?(?:\.(?:\d+|\*)?)?(?:\[\d+\])?[a-zA-Z%]`)
+
+// maskVerbs replaces every printf verb of a text with a space, which is what
+// a format is judged as.
+//
+// A format is kept verbatim in a site's value, for the fixer, and read as
+// written it misleads both rules: "%s.get" spells the dotted token s.get,
+// whose right half is an action name the catalog uses, and "%sgitlab_x" hides
+// the tool name behind a word character. A space in the verb's place is what
+// the verb is to a reader, a word the sentence does not spell, and it is only
+// the judged text that is masked: the value the fixer matches literals
+// against keeps its verbs.
+func maskVerbs(text string) string {
+	return printfVerb.ReplaceAllString(text, " ")
+}
+
 // The three ways a hint can name a capability that the session reading it
 // cannot look up.
 const (
@@ -90,27 +113,40 @@ type HintReport struct {
 	// Unfolded is how many sites the type checker could not fold. They are
 	// this rule's own blind spot, named rather than passed over, and unlike the
 	// ID gate's they fail nothing.
-	Unfolded  int           `json:"not_folded"`
-	Rows      []HintFinding `json:"rows,omitempty"`
-	NotFolded []Unresolved  `json:"not_folded_sites,omitempty"`
+	Unfolded int `json:"not_folded"`
+	// PassedOver is how many values a sentence reports were deliberately not
+	// read: the arguments of a format that are neither constants nor named as
+	// prose, and the writes of a message field that read another struct's
+	// field. It is a count and never a list, because the list would be
+	// GitLab's data from end to end (see [walker.foldFormat]); a figure that
+	// moves is what says the walk reads less than it did.
+	PassedOver int           `json:"values_passed_over"`
+	Rows       []HintFinding `json:"rows,omitempty"`
+	NotFolded  []Unresolved  `json:"not_folded_sites,omitempty"`
 	// StaleDeclarations are the tool-name declarations that excused nothing,
-	// filled only by a run over the whole tree, since over one package every
-	// entry excuses nothing and reporting them all would be an answer about
-	// the patterns rather than about the declarations. The suite's section
-	// never fills it: the table describes the served source.
+	// of both tables, filled only by a run over the whole tree, since over one
+	// package every entry excuses nothing and reporting them all would be an
+	// answer about the patterns rather than about the declarations. The
+	// suite's section never fills it: the tables describe the served source.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
-	// usedToolExemptions is what the run excused, which the stale list is
-	// computed against. Each section keeps its own, so a quotation spelling a
-	// declared token cannot keep that declaration alive for the served source.
-	usedToolExemptions map[string]struct{}
+	// usedToolExemptions and usedSurfaceMentions are what the run excused,
+	// which the stale list is computed against. Each section keeps its own, so
+	// a quotation spelling a declared token cannot keep that declaration alive
+	// for the served source.
+	usedToolExemptions  map[string]struct{}
+	usedSurfaceMentions map[surfaceMention]struct{}
 }
 
 // judge records what one site names.
 //
 // A site that could not be folded is kept apart from the ID gate's own
 // unfolded list, so that this rule's blind spot cannot fail a build the gate
-// would have passed.
+// would have passed, and a value passed over is counted and not judged.
 func (h *HintReport) judge(at site, ids *actionids.IDs) {
+	if at.PassedOver {
+		h.PassedOver++
+		return
+	}
 	if !at.Resolved {
 		h.NotFolded = append(h.NotFolded, Unresolved{
 			Package: at.Package, File: at.File, Line: at.Line, Kind: at.Kind, Expression: at.Expr,
@@ -119,21 +155,43 @@ func (h *HintReport) judge(at site, ids *actionids.IDs) {
 	}
 	h.Read++
 	h.ReadByKind[at.Kind]++
-	h.judgeToolNames(at)
-	h.judgeIDs(at, ids)
+	text := maskVerbs(at.Value)
+	h.judgeToolNames(at, text)
+	h.judgeIDs(at, text, ids)
 }
 
-// judgeToolNames records every gitlab_* name one site spells, once each: a
-// sentence naming the same tool twice is one thing to fix.
-func (h *HintReport) judgeToolNames(at site) {
+// judgeUsage holds a Usage line to the tool-name rule, and to nothing else.
+//
+// A Usage line is served on every surface (the dynamic find and describe
+// results, the meta tool's description and gitlab://tools), so a tool name in
+// it is wrong for two surfaces of three, exactly as in a hint. Its dotted IDs
+// are the ID section's to judge, where declaredAliasMentions excuses the
+// issue.close and issue.reopen the issue.update line names on purpose, so
+// judging them here too would count every bad ID twice and refuse those two.
+// A Description is not read here at all: an individual tool's Description is
+// served by that tool alone, on the one surface that registers it, where the
+// name it spells is right.
+func (h *HintReport) judgeUsage(at site) {
+	h.Read++
+	h.ReadByKind[at.Kind]++
+	h.judgeToolNames(at, at.Value)
+}
+
+// judgeToolNames records every gitlab_* name one site's judged text spells,
+// once each: a sentence naming the same tool twice is one thing to fix.
+func (h *HintReport) judgeToolNames(at site, text string) {
 	seen := map[string]struct{}{}
-	for _, name := range toolToken.FindAllString(at.Value, -1) {
+	for _, name := range toolToken.FindAllString(text, -1) {
 		if _, repeated := seen[name]; repeated {
 			continue
 		}
 		seen[name] = struct{}{}
 		if exemptHintTool(name) {
 			h.usedToolExemptions[name] = struct{}{}
+			continue
+		}
+		if mention := (surfaceMention{pkg: at.Package, tool: name}); exemptSurfaceMention(mention) {
+			h.usedSurfaceMentions[mention] = struct{}{}
 			continue
 		}
 		h.addFinding(at, ruleToolName, name, HintFinding{})
@@ -153,14 +211,17 @@ func (h *HintReport) judgeToolNames(at site) {
 // does not. A hint is prose the server writes, and it writes canonical IDs; a
 // quotation is whatever the server wrote, and a Usage line may name one of
 // those aliases by design, so a test quoting that line would otherwise be
-// refused for quoting it faithfully.
-func (h *HintReport) judgeIDs(at site, ids *actionids.IDs) {
-	for _, token := range ids.Candidates(at.Value) {
+// refused for quoting it faithfully. A schema description consults it too,
+// for the reason the Usage line does: the one that names an alias is the
+// description of dynamic execute's action parameter, whose subject is that
+// execute accepts one.
+func (h *HintReport) judgeIDs(at site, text string, ids *actionids.IDs) {
+	for _, token := range ids.Candidates(text) {
 		if ids.IsID(token) || exemptProse(token) {
 			continue
 		}
 		if canonical, isAlias := ids.Alias(token); isAlias {
-			if at.Kind == kindAssertion && exemptAliasMention(token) {
+			if mayNameAlias(at.Kind) && exemptAliasMention(token) {
 				continue
 			}
 			h.addFinding(at, ruleAlias, token, HintFinding{Canonical: canonical})
@@ -168,6 +229,12 @@ func (h *HintReport) judgeIDs(at site, ids *actionids.IDs) {
 		}
 		h.addFinding(at, ruleUnknownID, token, HintFinding{Closest: ids.Closest(token)})
 	}
+}
+
+// mayNameAlias reports whether a site of this kind may name one of the
+// declared aliases on purpose.
+func mayNameAlias(kind string) bool {
+	return kind == kindAssertion || kind == kindSchemaDescription
 }
 
 // addFinding records one finding, taking its position from the site and
@@ -185,7 +252,8 @@ func (h *HintReport) addFinding(at site, rule, name string, detail HintFinding) 
 // only run that can hold the declaration table to it.
 func (h *HintReport) finish(declarationsJudged bool) {
 	if declarationsJudged {
-		h.StaleDeclarations = staleHintDeclarations(h.usedToolExemptions)
+		h.StaleDeclarations = append(staleHintDeclarations(h.usedToolExemptions),
+			staleSurfaceMentions(h.usedSurfaceMentions)...)
 	}
 	slices.SortFunc(h.Rows, func(left, right HintFinding) int {
 		return cmp.Or(
@@ -208,9 +276,10 @@ func (h *HintReport) finish(declarationsJudged bool) {
 // newHintReport prepares the counters one run fills.
 func newHintReport() HintReport {
 	return HintReport{
-		ReadByKind:         map[string]int{},
-		ByRule:             map[string]int{},
-		usedToolExemptions: map[string]struct{}{},
+		ReadByKind:          map[string]int{},
+		ByRule:              map[string]int{},
+		usedToolExemptions:  map[string]struct{}{},
+		usedSurfaceMentions: map[surfaceMention]struct{}{},
 	}
 }
 
@@ -218,8 +287,8 @@ func newHintReport() HintReport {
 // sites nothing folded under -v alone. Each is written only over a list that
 // has something in it, so a run that found nothing announces no section.
 const (
-	hintRowsHeading           = "=== capabilities named in a hint by a spelling no listing publishes ==="
-	hintNotFoldedHeading      = "=== hints not folded ==="
+	hintRowsHeading           = "=== capabilities named in served prose by a spelling no listing publishes ==="
+	hintNotFoldedHeading      = "=== served prose not folded ==="
 	assertionRowsHeading      = "=== e2e assertions quoting a spelling no listing publishes ==="
 	assertionNotFoldedHeading = "=== e2e assertions not folded ==="
 )
@@ -242,8 +311,8 @@ type proseLabels struct {
 // hintLabels and assertionLabels are the two sections the report prints.
 var (
 	hintLabels = proseLabels{
-		count: "error hints", unit: "hint(s)",
-		byRule: "hint findings by rule", byKind: "hints read by kind",
+		count: "served prose", unit: "sentence(s)",
+		byRule: "served prose findings by rule", byKind: "served prose read by kind",
 		rowsHeading: hintRowsHeading, notFoldedHeading: hintNotFoldedHeading,
 	}
 	assertionLabels = proseLabels{
@@ -253,7 +322,7 @@ var (
 	}
 )
 
-// writeHintReport prints what the rule over error hints found.
+// writeHintReport prints what the rule over served prose found.
 func writeHintReport(out io.Writer, hints HintReport, verbose bool) {
 	writeProseSection(out, hintLabels, hints, verbose)
 }
@@ -287,8 +356,8 @@ func writeProseSection(out io.Writer, labels proseLabels, section HintReport, ve
 	for _, entry := range section.StaleDeclarations {
 		fmt.Fprintf(out, "  %s. Remove the entry.\n", entry)
 	}
-	fmt.Fprintf(out, "  %s: %d finding(s) in %d package(s) over %d %s read; %d not folded (reported, not gated)\n",
-		labels.count, section.Findings, section.Packages, section.Read, labels.unit, section.Unfolded)
+	fmt.Fprintf(out, "  %s: %d finding(s) in %d package(s) over %d %s read; %d not folded (reported, not gated); %d value(s) passed over\n",
+		labels.count, section.Findings, section.Packages, section.Read, labels.unit, section.Unfolded, section.PassedOver)
 	if len(section.ByRule) > 0 {
 		fmt.Fprintf(out, "    %s: %s\n", labels.byRule, byCount(section.ByRule))
 	}

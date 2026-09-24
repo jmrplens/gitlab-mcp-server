@@ -149,10 +149,10 @@ Like `WrapErrWithMessage` but appends an actionable suggestion that tells the LL
 ```go
 if toolutil.IsHTTPStatus(err, 409) {
     return toolutil.WrapErrWithHint("branchProtect", err,
-        "protected branch rule already exists — use gitlab_protected_branch_get to view current rules")
+        "protected branch rule already exists, use branch.get_protected to view current rules")
 }
 // Result: "branchProtect: conflict: the resource already exists or there is a state conflict (Protected branch rule already exists).
-//          Suggestion: protected branch rule already exists — use gitlab_protected_branch_get to view current rules: <original>"
+//          Suggestion: protected branch rule already exists, use branch.get_protected to view current rules: <original>"
 ```
 
 ### WrapErrWithStatusHint
@@ -162,11 +162,11 @@ Convenience wrapper that compresses the dominant single-status pattern into one 
 ```go
 // Equivalent to:
 //   if toolutil.IsHTTPStatus(err, 404) {
-//       return toolutil.WrapErrWithHint("issueGet", err, "verify issue_iid with gitlab_issue_list")
+//       return toolutil.WrapErrWithHint("issueGet", err, "verify issue_iid with issue.list")
 //   }
 //   return toolutil.WrapErrWithMessage("issueGet", err)
 return toolutil.WrapErrWithStatusHint("issueGet", err, 404,
-    "verify issue_iid with gitlab_issue_list")
+    "verify issue_iid with issue.list")
 ```
 
 For handlers that need different hints per status code, use a `switch` over `IsHTTPStatus` checks instead — each branch carries genuinely different context.
@@ -183,7 +183,17 @@ if toolutil.IsPermissionRefusal(err) {
 return toolutil.WrapErrWithMessage("mrMerge", err)
 ```
 
-It is a predicate and not another wrapper on purpose: `make check-action-ids` reads a hint where it is passed to `WrapErrWithHint`, `WrapErrWithStatusHint` or `NotFoundResult`, so a hint passed through a new wrapper would escape the gate.
+It is a predicate and not another wrapper on purpose: `make check-action-ids` reads a hint where it is passed to `WrapErrWithHint`, `WrapErrWithStatusHint` or `NotFoundResult`, so a hint passed through a new wrapper would escape the gate unless the wrapper takes it under a parameter named for a hint.
+
+### Every sentence a model reads names actions by their canonical ID
+
+A hint is not the only prose a model reads. The message of an error a handler returns (`errors.New`, `fmt.Errorf`), the refusal `toolutil.ErrorResult` answers with, a field named for a message, the next steps a formatter writes through `toolutil.WriteHints`, `WriteListFooter` or a card's `End`, the `NextSteps` a meta tool's JSON carries, a spec's `Usage` line and parameter guidance (`ValueSource`, `CommonConfusions`), and the `jsonschema` description of every input and output field all reach it, and all of them are served on every surface. A `gitlab_*` tool name in any of them is right for one surface of three: the default dynamic surface registers only `gitlab_find_action` and `gitlab_execute_action`, and meta registers the bare domain tools. So every one of them names an action by its canonical ID, `project.list` rather than `gitlab_project_list`, which each surface resolves:
+
+```go
+return Output{}, errors.New("commitCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
+```
+
+`make check-action-ids` reads all of these and fails on a tool name, a registered alias or an ID that resolves nowhere. The one exception is `internal/tools/dynamic`, whose text is returned only by the two tools of the surface that registers them, so it may name those two. An individual tool's own `Description` is the other place a tool name is right, since only that tool serves it, and it is not read.
 
 A route whose 403 means something other than the permission its 401 refuses pairs the predicate with `IsHTTPStatus` to tell them apart. The external status check routes of a merge request answer the license with 401 and the caller's role on the merge request with 403; the fork link answers the target namespace with 401 and the role on either project with 403; the security settings answer the role with 401 and the license, an archived project or an instance-enforced setting with 403, so that handler reads the 403 first.
 
@@ -192,9 +202,9 @@ A route whose 403 means something other than the permission its 401 refuses pair
 | Scenario                                    | Function                                  | Example                                                                          |
 | ------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
 | Read-only operation (list, get, search)     | `WrapErr`                                 | `WrapErr("listBranches", err)`                                                   |
-| Get operation returning 404                 | `NotFoundResult`                          | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")`    |
+| Get operation returning 404                 | `NotFoundResult`                          | `NotFoundResult("Branch", "main in project 42", "Use branch.list...")`           |
 | Mutating operation (create, update, delete) | `WrapErrWithMessage`                      | `WrapErrWithMessage("fileCreate", err)`                                          |
-| Specific error with known corrective action | `WrapErrWithHint`                         | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")`      |
+| Specific error with known corrective action | `WrapErrWithHint`                         | `WrapErrWithHint("branchDelete", err, "use branch.unprotect first")`             |
 | Single-status hint (the common case)        | `WrapErrWithStatusHint`                   | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")`                |
 | A permission refused with 401 or 403        | `IsPermissionRefusal` + `WrapErrWithHint` | `if toolutil.IsPermissionRefusal(err) { WrapErrWithHint("mrMerge", err, hint) }` |
 
@@ -221,7 +231,7 @@ route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
 // that output into the informational error result.
 func formatBranchNotFound(out branchNotFoundOutput) *mcp.CallToolResult {
     return toolutil.NotFoundResult("Branch", out.Identifier,
-        "Use gitlab_branch_list with project_id to list available branches",
+        toolutil.HintAction("branch.list", "list the project's branches"),
         "Verify the branch name is spelled correctly (case-sensitive)",
     )
 }
@@ -351,7 +361,7 @@ REST error sites use `WrapErrWithStatusHint` which checks a single HTTP status c
 
 ```go
 return toolutil.WrapErrWithStatusHint("issueGet", err, http.StatusNotFound,
-    "verify issue_iid with gitlab_issue_list")
+    "verify issue_iid with issue.list")
 ```
 
 GraphQL error sites mostly use `WrapErrWithHint`, which always appends the hint, because an error GitLab reports inside a `200` response carries no status to match:

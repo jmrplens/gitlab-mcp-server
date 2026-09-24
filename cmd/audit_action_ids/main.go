@@ -45,9 +45,9 @@ func main() {
 	dir := flag.String("dir", ".", "repository root the patterns are resolved against")
 	jsonPath := flag.String("json", defaultJSONPath, "write the work list here; empty writes none")
 	verbose := flag.Bool("v", false, "also print what fails nothing: the alias references of a clean run, what was judged by kind, the prose sites nothing could fold and the calls read per assertion helper")
-	check := flag.Bool("check", false, "exit non-zero when a published ID is not a canonical catalog ID, names a registered alias, sits at a site the type checker could not fold, or is excused by a declaration that excuses nothing; when a hint, or a substring the e2e suite asserts a served text carries, names a tool; or when an assertion helper declaration matches no call")
-	fixHintNames := flag.Bool("fix-hints", false, "rewrite each gitlab_* tool name a folded hint spells to the canonical ID of the action that tool projects, then report what moved")
-	fixHintTests := flag.Bool("fix-hints-tests", false, "with -fix-hints, rewrite the test files too, so an assertion pinning a hint moves with the hint")
+	check := flag.Bool("check", false, "exit non-zero when a published ID is not a canonical catalog ID, names a registered alias, sits at a site the type checker could not fold, or is excused by a declaration that excuses nothing; when served prose (an error hint or message, a next step, parameter guidance, a schema description or a Usage line), or a substring the e2e suite asserts a served text carries, names a tool; or when an assertion helper declaration matches no call")
+	fixHintNames := flag.Bool("fix-hints", false, "rewrite each gitlab_* tool name a folded sentence of served prose spells to the canonical ID of the action that tool projects, then report what moved")
+	fixHintTests := flag.Bool("fix-hints-tests", false, "with -fix-hints, rewrite the test files too, so an assertion pinning a sentence moves with it")
 	flag.Parse()
 
 	os.Exit(run(auditConfig{
@@ -80,13 +80,14 @@ type auditConfig struct {
 	// -check: the gate answers whether the tree is clean and this changes the
 	// tree, and a flag that could do either would be one somebody runs in CI.
 	fixHints bool
-	// fixHintTests extends the rewrite to the test files of the same packages,
-	// and has to run in the same pass as the production rewrite rather than
-	// after it. What decides whether a literal belongs to a hint is the hint
-	// text the walk folded, and once the production hint has been rewritten no
-	// test literal spelling the old tool name is part of any hint any more, so
-	// a second run finds nothing. Off by default so a reviewer can read the
-	// production half of the diff on its own.
+	// fixHintTests extends the rewrite to the test files of the same packages:
+	// a literal that is a piece of a folded sentence, or that holds a whole one
+	// once its tool names are rewritten, which is how a formatter's test pins
+	// the bullet a hint renders as. The second is judged against the text the
+	// literal will have, so it moves an assertion left pinning the old
+	// spelling whether the production text moved in this run or an earlier
+	// one. Off by default so a reviewer can read the production half of the
+	// diff on its own.
 	fixHintTests bool
 }
 
@@ -164,9 +165,9 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 	}
 	if cfg.check && !report.Clean() {
 		fmt.Fprintf(stderr,
-			"\nERROR: %d published ID(s) resolve to no action, %d name a registered alias rather than a catalog ID, %d site(s) could not be folded, %d declaration(s) excuse nothing, %d hint(s) name a tool rather than an action, %d e2e assertion(s) name a tool rather than an action, %d assertion helper declaration(s) match no call\n",
+			"\nERROR: %d published ID(s) resolve to no action, %d name a registered alias rather than a catalog ID, %d site(s) could not be folded, %d declaration(s) excuse nothing, %d finding(s) in served prose name a tool, an alias or no action, %d served-prose declaration(s) excuse nothing, %d e2e assertion(s) name a tool rather than an action, %d assertion helper declaration(s) match no call\n",
 			report.Summary.Findings, report.Summary.AliasHits, report.Summary.Unresolved, report.Summary.Stale, report.Hints.Findings,
-			report.Assertions.Findings, len(report.StaleHelpers))
+			len(report.Hints.StaleDeclarations), report.Assertions.Findings, len(report.StaleHelpers))
 		return 1
 	}
 	return 0

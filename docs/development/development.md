@@ -25,7 +25,7 @@ gitlab-mcp-server/
 │   │   ├── main.go              # Signal handling, transport selection
 │   │   └── main_test.go         # Server startup and HTTP handler tests
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk)
-│   ├── audit_action_ids/        # Every action ID the server publishes to a model is one the catalog has
+│   ├── audit_action_ids/        # Every action ID the server publishes to a model is one the catalog has, and its served prose names no tool
 │   ├── audit_catalog_first/     # ActionSpec catalog coverage inventory
 │   ├── audit_dead_consts/       # Every unexported constant is one something reads, which unused cannot say inside a const group
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
@@ -369,7 +369,7 @@ flowchart TD
 ```go
 if toolutil.IsHTTPStatus(err, 409) {
     return Output{}, toolutil.WrapErrWithHint("labelCreate", err,
-        "label with this name already exists — use gitlab_label_update to modify it")
+        "label with this name already exists, use project.label_update to modify it")
 }
 return Output{}, toolutil.WrapErrWithMessage("labelCreate", err)
 ```
@@ -379,8 +379,10 @@ return Output{}, toolutil.WrapErrWithMessage("labelCreate", err)
 ```go
 // Equivalent to the above but in a single call — returns WrapErrWithMessage for non-409 errors
 return Output{}, toolutil.WrapErrWithStatusHint("labelCreate", err, 409,
-    "label with this name already exists — use gitlab_label_update to modify it")
+    "label with this name already exists, use project.label_update to modify it")
 ```
+
+A hint names an action by its canonical ID, never by a tool name, and so does every other sentence a handler hands a model: the message of an error it returns, a refusal, a next step, a spec's `Usage` line and parameter guidance, and a field's `jsonschema` description. A tool name is right for one surface of three, and `make check-action-ids` fails on one.
 
 ### Helpers
 

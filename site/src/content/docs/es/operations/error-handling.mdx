@@ -73,8 +73,10 @@ El servidor usa cinco funciones de manejo de errores, elegidas según el tipo de
 
     ```text
     branchProtect: conflict — Protected branch rule already exists.
-    Suggestion: use gitlab_protected_branch_get to view current rules
+    Suggestion: use branch.get_protected to view current rules
     ```
+
+    Una sugerencia nombra la acción por su ID canónico (`branch.get_protected`), que todas las superficies de herramientas resuelven, y no por un nombre de herramienta, que solo una de ellas registra.
 
   </TabItem>
 </Tabs>
@@ -119,7 +121,7 @@ Branch `feature/old` was not found in the project.
 
 💡 **Next steps:**
 
-- Use `gitlab_branch_list` to see available branches
+- Use action 'branch.list' to list the project's branches
 - Check branch name spelling and case sensitivity
 ```
 
@@ -198,7 +200,7 @@ Detail: 403 Forbidden
 
 ```text
 ❌ branchProtect: conflict — Protected branch rule already exists
-💡 Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify
+💡 Use branch.get_protected to view current rules, or branch.update_protected to modify them
 ```
 
 ### Error de validación

@@ -85,49 +85,47 @@ func fixHints(dir string, sites []site, ids *actionids.IDs, includeTests bool) (
 }
 
 // fixHintsInPackage rewrites one package: its production files first, and its
-// test files after, under the same rule.
+// test files after, the test files under a rule of their own ([testHintProse]).
 //
-// The order is not cosmetic. What decides whether a literal belongs to a hint
-// is the hint text the walk folded, and the production rewrite is what makes
-// that text stop naming the tool, so a test pass run afterwards would find
-// nothing to match. They have to be one pass over one set of values.
+// The test pass is not tied to the production one. A test literal is judged
+// against the text it will have once rewritten, which the production text
+// answers for whether it was rewritten in this run or in an earlier one, so a
+// run over a tree whose production prose is already canonical still moves the
+// assertions left pinning the old spelling, and one over a tree whose tests
+// already agree moves nothing.
 func fixHintsInPackage(dir, pkg string, values []string, ids *actionids.IDs, includeTests bool, report *hintFixReport) error {
-	admit := hintProse(values)
 	production, tests, err := goFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)))
 	if err != nil {
 		return err
 	}
-	rewritten := 0
 	for _, file := range production {
-		fixes, fixErr := fixOneFile(dir, file, admit, ids, report)
-		if fixErr != nil {
+		if fixErr := fixOneFile(dir, pkg, file, hintProse(values), ids, report); fixErr != nil {
 			return fixErr
 		}
-		rewritten += fixes
 	}
-	if !includeTests || rewritten == 0 {
+	if !includeTests {
 		return nil
 	}
 	for _, file := range tests {
-		if _, fixErr := fixOneFile(dir, file, admit, ids, report); fixErr != nil {
+		if fixErr := fixOneFile(dir, pkg, file, testHintProse(values, ids), ids, report); fixErr != nil {
 			return fixErr
 		}
 	}
 	return nil
 }
 
-// fixOneFile rewrites one file into the report and says how many names moved.
-func fixOneFile(dir, file string, admit candidate, ids *actionids.IDs, report *hintFixReport) (int, error) {
-	changed, fixes, unresolved, err := fixHintsInFile(dir, file, admit, ids)
+// fixOneFile rewrites one file into the report.
+func fixOneFile(dir, pkg, file string, admit candidate, ids *actionids.IDs, report *hintFixReport) error {
+	changed, fixes, unresolved, err := fixHintsInFile(dir, pkg, file, admit, ids)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	report.Fixes = append(report.Fixes, fixes...)
 	report.Unresolved = append(report.Unresolved, unresolved...)
 	if changed {
 		report.Files++
 	}
-	return len(fixes), nil
+	return nil
 }
 
 // candidate decides which string literals a pass rewrites. The production pass
@@ -141,16 +139,58 @@ func hintProse(values []string) candidate {
 	return func(text string) bool { return partOfAHint(text, values) }
 }
 
-// A test file is held to the SAME prose rule as production, and the narrower
-// rule that suggests itself does not work. Admitting any test literal that
-// spells a tool name the package's own hints had just stopped spelling looks
-// exact and is not: a test asserts an individual tool's name as often as it
-// asserts a hint, in the same file and with the same literal, and measured on
-// this tree that rule turned 98 failing assertions into 351. The suite caught
-// it, which is the argument for running it rather than for keeping the rule.
-// What the prose rule leaves behind is the assertion written as the bare
-// token, and that one is a judgement each time: whether the sentence moved or
-// the name did is not something the text says.
+// testHintProse admits a test literal that is a piece of a hint the walk
+// folded, as production does, or that pins one: a literal which, once its tool
+// names are rewritten, holds a whole folded hint.
+//
+// The second half is the shape a formatter's test is written in, and the
+// production rule cannot see it. A test pins a rendered bullet ("- Use
+// `gitlab_x` to ...\n") or the whole card around it, and that literal is
+// never contained in the hint; it contains it. Read as it will be written, it
+// contains the hint exactly when the assertion is about that sentence, and
+// the production text is what vouches for the rewrite: it already reads that
+// way, or it does after this run.
+//
+// The narrower rule that suggests itself does not work. Admitting any test
+// literal that spells a tool name the package's own hints had just stopped
+// spelling looks exact and is not: a test asserts an individual tool's name as
+// often as it asserts a hint, in the same file and with the same literal, and
+// measured on this tree that rule turned 98 failing assertions into 351. The
+// suite caught it, which is the argument for running it rather than for
+// keeping the rule. What both halves here leave behind is the assertion
+// written as the bare token, and that one is a judgement each time: whether
+// the sentence moved or the name did is not something the text says.
+func testHintProse(values []string, ids *actionids.IDs) candidate {
+	return func(text string) bool {
+		return partOfAHint(text, values) || pinsAHint(renameTools(text, ids), values)
+	}
+}
+
+// pinsAHint reports whether a test literal holds a whole folded hint.
+//
+// The hint has to read as a sentence, for the reason [partOfAHint] gives: a
+// value that is one word is contained in any literal that spells it. The
+// literal needs no test of its own, since one holding a sentence holds its
+// space.
+func pinsAHint(text string, values []string) bool {
+	for _, value := range values {
+		if strings.Contains(value, " ") && strings.Contains(text, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// renameTools is a text with every tool name the catalog resolves rewritten to
+// the canonical ID of the action it projects, which is what the fixer writes.
+func renameTools(text string, ids *actionids.IDs) string {
+	return toolToken.ReplaceAllStringFunc(text, func(tool string) string {
+		if id, known := ids.ToolID(tool); known {
+			return id
+		}
+		return tool
+	})
+}
 
 // hintValuesByPackage groups every hint text the walk folded under the package
 // it was written in, and returns the packages in order so a run rewrites the
@@ -171,7 +211,7 @@ func hintProse(values []string) candidate {
 func hintValuesByPackage(sites []site) (packages []string, values map[string][]string) {
 	values = map[string][]string{}
 	for _, at := range sites {
-		if !isHintKind(at.Kind) || !at.Resolved || at.Package == "" || at.Value == "" {
+		if !feedsFixer(at.Kind) || !at.Resolved || at.Package == "" || at.Value == "" {
 			continue
 		}
 		if _, seen := values[at.Package]; !seen {
@@ -181,6 +221,22 @@ func hintValuesByPackage(sites []site) (packages []string, values map[string][]s
 	}
 	sort.Strings(packages)
 	return packages, values
+}
+
+// feedsFixer reports whether a site's value is served prose whose literals the
+// fixer may rewrite: every kind the served-prose rule judges, and the Usage
+// line, whose tool names that rule judges too.
+//
+// A schema description is the exception. It is written as part of a struct
+// tag, one literal that also carries the field's json name, so no literal of
+// the file is ever the description or a piece of it and the tag is fixed by
+// hand; admitting its text would only let it admit, by containment, some other
+// literal that happens to repeat a phrase of it.
+func feedsFixer(kind string) bool {
+	if kind == kindUsage {
+		return true
+	}
+	return isHintKind(kind) && kind != kindSchemaDescription
 }
 
 // goFilesOf splits one directory's Go source into the production files and
@@ -220,8 +276,14 @@ type replacement struct {
 	with  string
 }
 
-// fixHintsInFile rewrites one file and says what it changed.
-func fixHintsInFile(root, file string, admit candidate, ids *actionids.IDs) (changed bool, fixes, unresolved []hintFix, err error) {
+// fixHintsInFile rewrites one file of one package and says what it changed.
+//
+// A token the rule declares correct is left alone and not reported: a
+// template family spelled like a tool, and a tool the package's own surface
+// registers. Reported, they filled the list of names the fixer left for a
+// reader with names nobody has to touch, which is the list a reader is sent
+// to for the hand fixes.
+func fixHintsInFile(root, pkg, file string, admit candidate, ids *actionids.IDs) (changed bool, fixes, unresolved []hintFix, err error) {
 	source, readErr := os.ReadFile(file) //#nosec G304 -- a Go file of a package this run audits
 	if readErr != nil {
 		return false, nil, nil, fmt.Errorf("read %s: %w", file, readErr)
@@ -251,6 +313,9 @@ func fixHintsInFile(root, file string, admit candidate, ids *actionids.IDs) (cha
 		start := fset.Position(lit.Pos()).Offset
 		for _, match := range toolToken.FindAllStringIndex(lit.Value, -1) {
 			tool := lit.Value[match[0]:match[1]]
+			if exemptHintTool(tool) || exemptSurfaceMention(surfaceMention{pkg: pkg, tool: tool}) {
+				continue
+			}
 			id, known := ids.ToolID(tool)
 			if !known {
 				unresolved = append(unresolved, hintFix{File: shown, Line: line, Tool: tool})

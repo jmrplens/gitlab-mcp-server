@@ -91,7 +91,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
         return ListOutput{}, err
     }
     if input.ProjectID == "" {
-        return ListOutput{}, errors.New("xxxList: project_id is required. Use gitlab_project_list to find the ID first")
+        return ListOutput{}, errors.New("xxxList: project_id is required. Use project.list to find the ID first")
     }
     opts := &gl.ListXxxOptions{}
     toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -227,8 +227,8 @@ func FormatOutputMarkdown(out Output) string {
     fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
     fmt.Fprintf(&sb, "- **Name**: %s\n", out.Name)
     toolutil.WriteHints(&sb,
-        "Use `gitlab_{domain}_update` to modify this resource",
-        "Use `gitlab_{domain}_delete` to remove it",
+        toolutil.HintAction("{domain}.update", "modify this resource"),
+        toolutil.HintAction("{domain}.delete", "remove it"),
     )
     return sb.String()
 }
@@ -247,7 +247,7 @@ func FormatListMarkdown(out ListOutput) string {
     }
     toolutil.WriteHints(&sb,
         toolutil.HintPreserveLinks,
-        "Use `gitlab_{domain}_get` with the ID for details",
+        toolutil.HintAction("{domain}.get", "see one in full, with its ID"),
     )
     return sb.String()
 }
@@ -262,6 +262,7 @@ Rules:
 
 - Register all formatters in `init()` via `toolutil.RegisterMarkdown` (`RegisterMarkdownPair` / `RegisterMarkdownTriple` bundle several); `TestAllMarkdownFormattersRegistered` in `internal/tools` checks every output type has one
 - `HintPreserveLinks` as first hint in list formatters with clickable links; `toolutil.MdTitleLink(title, url)` renders the link cell
+- A hint names an action by its canonical ID, through `toolutil.HintAction(id, purpose)` or the ID itself, never by a `gitlab_*` tool name, and so does every other sentence a model reads: an error's message, a refusal, a `Usage` line, parameter guidance and a field's `jsonschema` description. A tool name is right on one surface of three, and `make check-action-ids` fails on it
 - Markdown table separator rows come from `toolutil.MarkdownTableSeparator(columns)`; single-record fields use the `toolutil.FmtMd*` format constants (`FmtMdID`, ...)
 - Empty state: always handle `len(items) == 0`
 

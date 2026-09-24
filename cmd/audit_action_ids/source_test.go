@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"go/ast"
 	"go/parser"
@@ -14,6 +15,8 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // fixtureDir is the directory the in-memory fixture package pretends to live
@@ -86,11 +89,13 @@ func valuesOfKind(sites []site, kind string) []string {
 	return values
 }
 
-// unresolvedExprs is every expression the walk could not fold, sorted.
+// unresolvedExprs is every expression the walk could not fold, sorted. A value
+// the walk passed over is not one of them: it was declined on purpose, and
+// [passedOverExprs] lists those.
 func unresolvedExprs(sites []site) []string {
 	var exprs []string
 	for _, at := range sites {
-		if !at.Resolved {
+		if !at.Resolved && !at.PassedOver {
 			exprs = append(exprs, at.Expr)
 		}
 	}
@@ -1040,17 +1045,21 @@ func TestIsRelatedParamName_NamedSpellings_AreFollowed(t *testing.T) {
 }
 
 // TestReadsAsHintProse_Kinds_AreRead holds which kinds are folded as a
-// sentence: the two hint sites and the suite's quotation of one, and none of
-// the four that publish an ID.
+// sentence: the six kinds of served prose and the suite's quotation of it, and
+// none of the four that publish an ID.
 func TestReadsAsHintProse_Kinds_AreRead(t *testing.T) {
 	cases := map[string]bool{
-		kindErrorHint:   true,
-		kindHintField:   true,
-		kindAssertion:   true,
-		kindRelated:     false,
-		kindHint:        false,
-		kindUsage:       false,
-		kindDescription: false,
+		kindErrorHint:         true,
+		kindHintField:         true,
+		kindMessage:           true,
+		kindNextStep:          true,
+		kindParamGuidance:     true,
+		kindSchemaDescription: true,
+		kindAssertion:         true,
+		kindRelated:           false,
+		kindHint:              false,
+		kindUsage:             false,
+		kindDescription:       false,
 	}
 	for kind, want := range cases {
 		t.Run(kind, func(t *testing.T) {
@@ -1080,7 +1089,20 @@ func TestFollowableParamName_EachKind_FollowsItsOwnNames(t *testing.T) {
 		{kind: kindAssertion, name: "related", want: false},
 		{kind: kindErrorHint, name: "hint", want: true},
 		{kind: kindErrorHint, name: "substrings", want: false},
+		{kind: kindErrorHint, name: "missingProjectMsg", want: false},
 		{kind: kindHintField, name: "needles", want: false},
+		{kind: kindMessage, name: "missingProjectMsg", want: true},
+		{kind: kindMessage, name: "emptyMessage", want: true},
+		{kind: kindMessage, name: "hint", want: true},
+		{kind: kindMessage, name: "valueSource", want: false},
+		{kind: kindMessage, name: "substrings", want: false},
+		{kind: kindParamGuidance, name: "valueSource", want: true},
+		{kind: kindParamGuidance, name: "commonConfusions", want: true},
+		{kind: kindParamGuidance, name: "hints", want: true},
+		{kind: kindParamGuidance, name: "message", want: false},
+		{kind: kindNextStep, name: "hints", want: true},
+		{kind: kindNextStep, name: "message", want: false},
+		{kind: kindNextStep, name: "valueSource", want: false},
 		{kind: kindRelated, name: "related", want: true},
 		{kind: kindRelated, name: "hint", want: false},
 		{kind: kindRelated, name: "contains", want: false},
@@ -1246,10 +1268,52 @@ func fromConcatenation(scope string) error {
 }
 
 // TestCollectSites_HintNothingCanFold_IsReported holds this rule's blind spot
-// as a row rather than as a silence. A hint built by a formatter carries no
-// literal a reader could have got wrong, but a rule whose blind spot says
+// as a row rather than as a silence. A hint built by a helper that branches
+// carries no literal the fold can pick, but a rule whose blind spot says
 // nothing is one a future site steps into, so the site is named.
 func TestCollectSites_HintNothingCanFold_IsReported(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func build(value string) string {
+	if value == "" {
+		return "nothing"
+	}
+	return value
+}
+
+func unfoldable(value string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, build(value))
+}
+`)
+
+	want := []string{`build(value)`}
+	if got := unresolvedExprs(sites); !slices.Equal(got, want) {
+		t.Errorf("unresolved = %v, want %v", got, want)
+	}
+	if got := valuesOfKind(sites, kindErrorHint); len(got) != 0 {
+		t.Errorf("error hint values = %v, want nothing folded", got)
+	}
+}
+
+// TestCollectSites_FormatSentence_FoldsToItsFormatAndCountsItsValues holds
+// the format fold: a sentence built by fmt.Sprintf or fmt.Errorf is read as
+// the format it is written as, a constant argument is read with it, a name
+// that says it carries a hint is followed, and every other argument is a value
+// the sentence reports, counted and not listed.
+//
+// The format is kept verbatim, verbs and all, because the fixer finds the
+// literal to rewrite by its being contained in the folded value; a rendered
+// format contains no literal of its own. The verbs are masked where the value
+// is judged, which [TestClassify_FormatVerbs_AreMaskedBeforeJudging] holds.
+func TestCollectSites_FormatSentence_FoldsToItsFormatAndCountsItsValues(t *testing.T) {
 	sites := collectFixture(t, `package fixture
 
 import (
@@ -1259,19 +1323,54 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+const listTool = "list with gitlab_demo_list"
+
 var errDemo = errors.New("demo")
 
-func unfoldable(value string) error {
-	return toolutil.WrapErrWithHint("demo_get", errDemo, fmt.Sprintf("built from %s", value))
+func fromSprintf(value string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, fmt.Sprintf("built from %s, then %s", value, listTool))
+}
+
+func fromErrorf(id int, err error) error {
+	return fmt.Errorf("demo %d: use gitlab_demo_get: %w", id, err)
+}
+
+func fromCarrier(hint string, err error) error {
+	return fmt.Errorf("demo: %w%s", err, hint)
+}
+
+func callsCarrier() error {
+	return fromCarrier(" (see gitlab_demo_carrier)", errDemo)
+}
+
+func fromFormatNothingFolds(format string) error {
+	return fmt.Errorf(format, 1)
 }
 `)
 
-	want := []string{`fmt.Sprintf("built from %s", value)`}
-	if got := unresolvedExprs(sites); !slices.Equal(got, want) {
-		t.Errorf("unresolved = %v, want %v", got, want)
+	if got, want := valuesOfKind(sites, kindErrorHint), []string{"built from %s, then %s list with gitlab_demo_list"}; !slices.Equal(got, want) {
+		t.Errorf("error hint values = %v, want the format and the constant it is handed: %v", got, want)
 	}
-	if got := valuesOfKind(sites, kindErrorHint); len(got) != 0 {
-		t.Errorf("error hint values = %v, want nothing folded", got)
+	messages := valuesOfKind(sites, kindMessage)
+	for _, want := range []string{"demo %d: use gitlab_demo_get: %w", "demo: %w%s", " (see gitlab_demo_carrier)"} {
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(messages, want) {
+				t.Errorf("message values = %q, want %q", messages, want)
+			}
+		})
+	}
+	passed := 0
+	for _, at := range sites {
+		if at.PassedOver {
+			passed++
+		}
+	}
+	// value, id, err and the err handed to fromCarrier's format.
+	if passed != 4 {
+		t.Errorf("values passed over = %d, want the four arguments that are values", passed)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"fmt.Errorf(format, 1)"}) {
+		t.Errorf("unresolved = %v, want only the format nothing folds", got)
 	}
 }
 
@@ -1314,15 +1413,18 @@ func spreadsAList() {
 // rather than a silence.
 //
 // Two of them are declined on purpose and produce nothing: a nil list and a
-// make, which allocate no prose between them. The rest are values this walk
-// cannot follow, and each is named with the expression as it was written,
-// since naming what could not be read is the only honest alternative to
-// passing over it.
+// make, which allocate no prose between them. A helper declared here that
+// returns a list is not declined: its returns are followed, which is how a
+// formatter's hint builder is read, and this one returns an empty list. The
+// rest are values this walk cannot follow, and each is named with the
+// expression as it was written, since naming what could not be read is the
+// only honest alternative to passing over it.
 func TestCollectSites_HintShapesNothingCanRead_AreReportedOneByOne(t *testing.T) {
 	sites := collectFixture(t, `package fixture
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1349,6 +1451,7 @@ var (
 	allocated = carrier{Hints: make([]string, 0, 2)}
 	indexed   = carrier{Hints: table["a"]}
 	called    = carrier{Hints: build()}
+	split     = carrier{Hints: strings.Fields("split gitlab_demo_split")}
 	noted     = carrier{Hints: other.Notes}
 	named     = carrier{notFoundHint: other.Label}
 	other     = carrier{Label: "label gitlab_demo_label"}
@@ -1392,12 +1495,12 @@ func fromFieldOfAnotherType(o odd) error {
 		t.Errorf("hint field values = %v, want the one list written as a literal", got)
 	}
 	want := []string{
-		"build()",
 		"describe(toolutil.HintPreserveLinks)",
 		"left + right",
 		"other.Label",
 		"other.Notes",
 		"render(o.hint)",
+		`strings.Fields("split gitlab_demo_split")`,
 		`table["a"]`,
 		"values",
 	}
@@ -1416,14 +1519,46 @@ func TestIsHintName_NamedSpellings_AreRead(t *testing.T) {
 		"Hints":          true,
 		"notFoundHint":   true,
 		"badRequestHint": true,
+		"NextSteps":      true,
+		"NextStep":       true,
 		"hintAction":     false,
 		"usage":          false,
 		"related":        false,
+		"nextStepCount":  false,
 	}
 	for name, want := range cases {
 		t.Run(name, func(t *testing.T) {
 			if got := isHintName(name); got != want {
 				t.Errorf("isHintName(%q) = %t, want %t", name, got, want)
+			}
+		})
+	}
+}
+
+// TestProseFieldKind_EachName_IsRecordedUnderItsOwnKind holds the field rule's
+// three carriers and the order they are asked in: the hint name first, since a
+// field named for a hint is server prose wherever it is written, and a message
+// last, since a message field is GitLab's text as often as the server's.
+func TestProseFieldKind_EachName_IsRecordedUnderItsOwnKind(t *testing.T) {
+	cases := map[string]string{
+		"Hint":              kindHintField,
+		"NextSteps":         kindHintField,
+		"messageHint":       kindHintField,
+		"ValueSource":       kindParamGuidance,
+		"CommonConfusions":  kindParamGuidance,
+		"Message":           kindMessage,
+		"missingProjectMsg": kindMessage,
+		"EmptyMessage":      kindMessage,
+		"SemanticRole":      "",
+		"ExampleBinding":    "",
+		"Messages":          "",
+		"Label":             "",
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, carries := proseFieldKind(name)
+			if got != want || carries != (want != "") {
+				t.Errorf("proseFieldKind(%q) = %q, %t; want %q", name, got, carries, want)
 			}
 		})
 	}
@@ -1716,6 +1851,545 @@ func spellsTheElements() toolutil.ActionSpecOptions {
 	}
 	if got := unresolvedExprs(sites); len(got) != 0 {
 		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// passedOverExprs is every expression the walk passed over as a value, sorted.
+func passedOverExprs(sites []site) []string {
+	var exprs []string
+	for _, at := range sites {
+		if at.PassedOver {
+			exprs = append(exprs, at.Expr)
+		}
+	}
+	sort.Strings(exprs)
+	return exprs
+}
+
+// TestCollectSites_ErrorConstructorsAndRefusals_AreReadAsMessages holds the
+// message sinks: an error a handler returns reaches a model as the sentence it
+// was built with, and so does the refusal ErrorResult answers with.
+// ErrorResultAnnotated is not one, since its callers hand it Markdown another
+// sink already wrote, so its argument is no site at all.
+func TestCollectSites_ErrorConstructorsAndRefusals_AreReadAsMessages(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo: use gitlab_demo_list to find one")
+
+func refuse() any { return toolutil.ErrorResult("refused: use gitlab_demo_get first") }
+
+func annotated(md string) any { return toolutil.ErrorResultAnnotated(md, nil) }
+
+func wrapped(id int) error { return fmt.Errorf("demo %d: use gitlab_demo_get: %w", id, errDemo) }
+`)
+
+	want := []string{"demo %d: use gitlab_demo_get: %w", "demo: use gitlab_demo_list to find one", "refused: use gitlab_demo_get first"}
+	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, want) {
+		t.Errorf("message values = %v, want %v", got, want)
+	}
+	if got := passedOverExprs(sites); !slices.Equal(got, []string{"errDemo", "id"}) {
+		t.Errorf("passed over = %v, want the format's two values", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none: the annotated refusal's Markdown is no site", got)
+	}
+}
+
+// nextStepFixture writes every shape a result's next steps are written in: the
+// three toolutil writers called directly, a domain wrapper that hands its own
+// hints parameter to one, a hint escaped on its way through, and a helper
+// that builds the list and returns it from either branch.
+const nextStepFixture = `package fixture
+
+import (
+	"errors"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func list(b *strings.Builder, p toolutil.PaginationOutput) {
+	toolutil.WriteListFooter(b, p, false, "footer gitlab_demo_footer")
+}
+
+func card(b *strings.Builder) {
+	toolutil.NewCard(b, "Demo").End("card gitlab_demo_card")
+}
+
+func written(b *strings.Builder) {
+	toolutil.WriteHints(b, "written gitlab_demo_written")
+}
+
+func wrapper(b *strings.Builder, hints ...string) {
+	toolutil.NewCard(b, "Demo").End(hints...)
+}
+
+func callsWrapper(b *strings.Builder) {
+	wrapper(b, "wrapped gitlab_demo_wrapped")
+}
+
+func builder(on bool) []string {
+	if on {
+		return []string{"on gitlab_demo_on"}
+	}
+	return []string{"off gitlab_demo_off"}
+}
+
+func fromBuilder(b *strings.Builder) {
+	toolutil.WriteHints(b, builder(true)...)
+}
+
+func escaped(hint string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, toolutil.EscapeMdTableCell(hint))
+}
+
+func callsEscaped() error {
+	return escaped("escaped gitlab_demo_escaped")
+}
+`
+
+// TestCollectSites_NextStepWriters_AreReadWhereTheyAreWritten holds the
+// next-step sinks, and holds them twice: with toolutil loaded from source, and
+// narrowed to the one domain package, which loads toolutil from export data.
+//
+// The second run is why WriteListFooter and Card.End are sinks of their own
+// rather than read through their forwarding to WriteHints: the forwarding is
+// a body, and a narrowed run has no body to follow, so it would read none of
+// a formatter's next steps. The first run is why the filter the list footer
+// hands WriteHints is no site nothing folds: its argument is the footer's own
+// hints parameter, a carrier recorded where its callers write it.
+func TestCollectSites_NextStepWriters_AreReadWhereTheyAreWritten(t *testing.T) {
+	want := []string{
+		"card gitlab_demo_card",
+		"footer gitlab_demo_footer",
+		"off gitlab_demo_off",
+		"on gitlab_demo_on",
+		"wrapped gitlab_demo_wrapped",
+		"written gitlab_demo_written",
+	}
+
+	t.Run("toolutil from source", func(t *testing.T) {
+		root := repoRoot(t)
+		overlay := map[string][]byte{filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(nextStepFixture)}
+		sites, err := collectSites(root, fixturePatterns, overlay)
+		if err != nil {
+			t.Fatalf("collect sites: %v", err)
+		}
+		var own []site
+		for _, at := range sites {
+			if at.Package == fixtureDir {
+				own = append(own, at)
+			}
+			if at.Package == "internal/toolutil" && !at.Resolved && strings.Contains(at.Expr, "withoutPreserveLinks") {
+				t.Errorf("the list footer's filter is a site nothing folds: %+v", at)
+			}
+		}
+		if got := valuesOfKind(own, kindNextStep); !slices.Equal(got, want) {
+			t.Errorf("next step values = %v, want %v", got, want)
+		}
+		if got := valuesOfKind(own, kindErrorHint); !slices.Equal(got, []string{"escaped gitlab_demo_escaped"}) {
+			t.Errorf("error hint values = %v, want the escaped parameter followed to its caller", got)
+		}
+		if got := unresolvedExprs(own); len(got) != 0 {
+			t.Errorf("unresolved = %v, want none", got)
+		}
+	})
+
+	t.Run("narrowed to the domain package", func(t *testing.T) {
+		root := repoRoot(t)
+		overlay := map[string][]byte{filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(nextStepFixture)}
+		sites, err := collectSites(root, []string{"./" + fixtureDir + "/..."}, overlay)
+		if err != nil {
+			t.Fatalf("collect sites: %v", err)
+		}
+		if got := valuesOfKind(sites, kindNextStep); !slices.Equal(got, want) {
+			t.Errorf("next step values = %v, want %v", got, want)
+		}
+	})
+}
+
+// TestCollectSites_ASinkArgument_KeepsTheSinksKindWhateverTheWalkMeetsFirst
+// holds the kind of a site reached two ways.
+//
+// toolutil's sink bodies forward their prose to other sinks: WrapErrWithHint
+// hands its hint to a format through hintedError, and NotFoundResult hands its
+// hints to Card.End. Followed back out, those parameters reach every caller's
+// argument a second time under the other sink's kind, and the first route to
+// arrive kept its kind, so the answer depended on which package the walk met
+// first. The walk here meets toolutil first, which is the order that used to
+// file an error hint as a message.
+func TestCollectSites_ASinkArgument_KeepsTheSinksKindWhateverTheWalkMeetsFirst(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func hinted() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, "hinted gitlab_demo_hinted")
+}
+
+func notFound() any {
+	return toolutil.NotFoundResult("Demo", "id", "missing gitlab_demo_missing")
+}
+`),
+	}
+	loaded, err := goprogram.Load(root, fixturePatterns, overlay)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	slices.SortStableFunc(loaded, func(left, right *packages.Package) int {
+		return cmp.Compare(boolRank(left.PkgPath != goprogram.ToolutilPath), boolRank(right.PkgPath != goprogram.ToolutilPath))
+	})
+	collect, err := newCollector(root, loaded)
+	if err != nil {
+		t.Fatalf("collector: %v", err)
+	}
+	collect.walk((*walker).visit)
+
+	var own []site
+	for _, at := range collect.sites {
+		if at.Package == fixtureDir {
+			own = append(own, at)
+		}
+	}
+	if got := valuesOfKind(own, kindErrorHint); !slices.Equal(got, []string{"hinted gitlab_demo_hinted", "missing gitlab_demo_missing"}) {
+		t.Errorf("error hint values = %v, want both arguments under the sink's own kind", got)
+	}
+	for _, kind := range []string{kindMessage, kindNextStep} {
+		t.Run(kind, func(t *testing.T) {
+			for _, value := range valuesOfKind(own, kind) {
+				if strings.Contains(value, "gitlab_demo_") {
+					t.Errorf("%s holds %q, which a sink argument reached through another sink's body", kind, value)
+				}
+			}
+		})
+	}
+}
+
+// boolRank orders false before true.
+func boolRank(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+// TestCollectSites_MessageCarriers_AreFollowedAndGitLabValuesPassedOver holds
+// the message's carriers and what a message field is not.
+//
+// A parameter or field named for a message is followed to what it is given,
+// which is how a helper shared by twenty handlers takes their sentence. A read
+// of another module's field into a message field is GitLab's text (a commit's
+// message, a title dereferenced from its option), counted as passed over and
+// not listed; a read of a message field this walk records is a copy of prose
+// judged where it was written.
+func TestCollectSites_MessageCarriers_AreFollowedAndGitLabValuesPassedOver(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"fmt"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+)
+
+type args struct {
+	missingProjectMsg string
+}
+
+type output struct {
+	Message      string
+	AwardMessage string
+}
+
+var shared = args{missingProjectMsg: "mr: project_id is required. Use gitlab_demo_list first"}
+
+func missing(missingMsg string) error { return errors.New(missingMsg) }
+
+func callsMissing() error { return missing("project_id is required. Use gitlab_demo_list") }
+
+func fromArgs(a args) error { return errors.New(a.missingProjectMsg) }
+
+func emptyOf(emptyMessage string) output { return output{Message: emptyMessage} }
+
+func callsEmpty() output { return emptyOf("No demos found. Use gitlab_demo_create") }
+
+func formatted(name string) output {
+	return output{Message: fmt.Sprintf("Demo %s deleted. Use gitlab_demo_restore", name)}
+}
+
+func fromCommit(c *gl.Commit) output { return output{Message: c.Message} }
+
+func fromOption(o *gl.CreateIssueOptions) output { return output{AwardMessage: *o.Title} }
+
+func copied(o output) output { return output{Message: o.Message} }
+`)
+
+	want := []string{
+		"Demo %s deleted. Use gitlab_demo_restore",
+		"No demos found. Use gitlab_demo_create",
+		"mr: project_id is required. Use gitlab_demo_list first",
+		"project_id is required. Use gitlab_demo_list",
+	}
+	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, want) {
+		t.Errorf("message values = %v, want %v", got, want)
+	}
+	if got := passedOverExprs(sites); !slices.Equal(got, []string{"*o.Title", "c.Message", "name"}) {
+		t.Errorf("passed over = %v, want GitLab's two values and the format's argument", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestCollectSites_GuidanceAndNextStepFields_AreRead holds the two field rules
+// the served prose added: a parameter's guidance, which every surface serves
+// beside the schema, and the next steps a meta tool's JSON carries.
+//
+// The guidance constructor in toolutil takes the domain's sentence under the
+// field's own name, so the parameter is followed out to the domain that wrote
+// it; SemanticRole is a token rather than a sentence and is not read; and a
+// copy of a guidance list through a conversion and an append is a copy, not a
+// site nothing folds.
+func TestCollectSites_GuidanceAndNextStepFields_AreRead(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+type result struct {
+	toolutil.HintableOutput
+}
+
+func guidance() map[string]toolutil.ParameterGuidance {
+	return map[string]toolutil.ParameterGuidance{
+		"id": {SemanticRole: "demo_id", ValueSource: "From gitlab_demo_list.", CommonConfusions: []string{"Not gitlab_demo_other."}},
+	}
+}
+
+func viaConstructor() toolutil.ParameterGuidance {
+	return toolutil.DiscussionIDParamGuidance("Thread id from gitlab_demo_threads.")
+}
+
+func withSteps(r result) result {
+	r.NextSteps = []string{"then gitlab_demo_next"}
+	return r
+}
+
+func copiedGuidance(g toolutil.ParameterGuidance) toolutil.ParameterGuidance {
+	g.CommonConfusions = append([]string(nil), g.CommonConfusions...)
+	return g
+}
+`)
+
+	want := []string{"From gitlab_demo_list.", "Not gitlab_demo_other.", "Thread id from gitlab_demo_threads."}
+	if got := valuesOfKind(sites, kindParamGuidance); !slices.Equal(got, want) {
+		t.Errorf("guidance values = %v, want %v", got, want)
+	}
+	if got := valuesOfKind(sites, kindHintField); !slices.Equal(got, []string{"then gitlab_demo_next"}) {
+		t.Errorf("hint field values = %v, want the next step", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestCollectSites_SchemaTags_AreReadAsServed holds the schema description: a
+// field's jsonschema tag is read as the text every surface serves beside it,
+// with the required marker the schema builder strips stripped here too, and a
+// field whose tag describes nothing is no site.
+func TestCollectSites_SchemaTags_AreReadAsServed(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+type Input struct {
+	ID    int    `+"`json:\"id\" jsonschema:\"Demo ID. Use gitlab_demo_list to find it,required\"`"+`
+	Name  string `+"`json:\"name\"`"+`
+	Blank string `+"`json:\"blank\" jsonschema:\"\"`"+`
+	Plain int
+}
+
+var anonymous = struct {
+	Scope string `+"`jsonschema:\"Scope, see gitlab_demo_scopes\"`"+`
+}{}
+`)
+
+	want := []string{"Demo ID. Use gitlab_demo_list to find it", "Scope, see gitlab_demo_scopes"}
+	if got := valuesOfKind(sites, kindSchemaDescription); !slices.Equal(got, want) {
+		t.Errorf("schema descriptions = %v, want %v", got, want)
+	}
+	if got := len(sites); got != len(want) {
+		t.Errorf("sites = %+v, want one per described field", sites)
+	}
+}
+
+// TestCollectSites_AFormatInsideAOneLineHelper_FoldsForProseAndNotForAnID
+// holds the prose flag the fold carries. A one-line helper returning a format
+// is a sentence when prose asks for it, and the constant its caller hands it is
+// read with it, which is the shape of dynamic's queryTooLongMessage. The same
+// helper building an ID stays a site nothing folds: judged as its format, the
+// ID would be "demo.%s", which is neither true nor useful.
+func TestCollectSites_AFormatInsideAOneLineHelper_FoldsForProseAndNotForAnID(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"fmt"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+func tooLong(tool, query string) string {
+	return fmt.Sprintf("%s: query is too long (%d characters)", tool, len(query))
+}
+
+func refuse(q string) any { return toolutil.ErrorResult(tooLong("gitlab_demo_find", q)) }
+
+func idOf(name string) string { return fmt.Sprintf("demo.%s", name) }
+
+var Spec = toolutil.ActionSpecOptions{RelatedActions: []string{idOf("get")}}
+`)
+
+	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, []string{"%s: query is too long (%d characters) gitlab_demo_find"}) {
+		t.Errorf("message values = %v, want the format and the tool name its caller handed it", got)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{`idOf("get")`}) {
+		t.Errorf("unresolved = %v, want the ID a format builds reported", got)
+	}
+}
+
+// TestCollectSites_AnErrorWrappedInAFormat_IsReadWhereItIsWritten holds the
+// format argument that is a sink call of its own. The outer format is visited
+// first, and the inner call is the expression the inner sink's visit records,
+// so the outer fold must leave it to that visit rather than pass it over, or
+// the inner sentence is never read. A call that is no sink is a value, and so
+// is one whose callee is a function value the type checker cannot name.
+func TestCollectSites_AnErrorWrappedInAFormat_IsReadWhereItIsWritten(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+)
+
+var lookup = func() string { return "x" }
+
+func wrapped() error {
+	return fmt.Errorf("outer: %w", fmt.Errorf("inner: use gitlab_demo_inner"))
+}
+
+func withConstructor() error {
+	return fmt.Errorf("outer %s: %w", strconv.Itoa(1), errors.New("constructed: use gitlab_demo_constructed"))
+}
+
+func withFunctionValue() error {
+	return fmt.Errorf("outer %s", lookup())
+}
+`)
+
+	want := []string{"constructed: use gitlab_demo_constructed", "inner: use gitlab_demo_inner", "outer %s", "outer %s: %w", "outer: %w"}
+	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, want) {
+		t.Errorf("message values = %v, want %v", got, want)
+	}
+	if got := passedOverExprs(sites); !slices.Equal(got, []string{"lookup()", "strconv.Itoa(1)"}) {
+		t.Errorf("passed over = %v, want the two calls that are values", got)
+	}
+}
+
+// TestCollectSites_ALocalHandedToAHelper_IsNoCarrier holds the carrier rule's
+// one requirement besides the name: a carrier is a parameter, followed out to
+// the callers that write it. A local handed to a helper is not one, and the
+// helper's answer is a site nothing folds.
+func TestCollectSites_ALocalHandedToAHelper_IsNoCarrier(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func trimmed(input string) error {
+	hint := input + " "
+	return toolutil.WrapErrWithHint("demo_get", errDemo, strings.TrimSpace(hint))
+}
+`)
+
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"strings.TrimSpace(hint)"}) {
+		t.Errorf("unresolved = %v, want the helper's answer reported", got)
+	}
+}
+
+// TestCollectSites_AFormatAHelperCannotFold_LeavesTheCallUnfolded holds the
+// format fold inside a one-line helper when the format itself is what the
+// caller does not bind: nothing is read, and the call is a site nothing folds.
+func TestCollectSites_AFormatAHelperCannotFold_LeavesTheCallUnfolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"fmt"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+func render(format string) string { return fmt.Sprintf(format, 1) }
+
+func refuse(format string) any { return toolutil.ErrorResult(render(format)) }
+`)
+
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"render(format)"}) {
+		t.Errorf("unresolved = %v, want the helper call reported", got)
+	}
+}
+
+// TestAddSite_OneExpressionReachedTwice_IsOneSite holds the invariant every
+// route of the walk leans on: an expression is one site however many routes
+// reach it. None of today's shapes reaches one twice, since a sink's own
+// parameters are no longer followed out, and the guard is what keeps a route
+// added tomorrow from counting a sentence twice.
+func TestAddSite_OneExpressionReachedTwice_IsOneSite(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte("package fixture\n\nconst hint = \"one sentence\"\n"),
+	}
+	loaded, err := goprogram.Load(root, []string{"./" + fixtureDir + "/..."}, overlay)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	collect, err := newCollector(root, loaded)
+	if err != nil {
+		t.Fatalf("collector: %v", err)
+	}
+	w := &walker{collector: collect, pkg: loaded[0]}
+	var literal ast.Expr
+	ast.Inspect(loaded[0].Syntax[0], func(node ast.Node) bool {
+		if lit, ok := node.(*ast.BasicLit); ok {
+			literal = lit
+		}
+		return true
+	})
+
+	w.addSite(site{Kind: kindMessage, Value: "one sentence", Resolved: true}, literal)
+	w.addSite(site{Kind: kindNextStep, Value: "one sentence", Resolved: true}, literal)
+	if len(collect.sites) != 1 || collect.sites[0].Kind != kindMessage {
+		t.Errorf("sites = %+v, want the first route's one site", collect.sites)
 	}
 }
 

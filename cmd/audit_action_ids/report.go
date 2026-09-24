@@ -35,10 +35,14 @@ import (
 // the same of the served tree, which a run naming only suite packages does not
 // load; and it renames the keys the
 // two prose sections share so they say nothing about hints (`read`,
-// `read_by_kind`, `not_folded`, `rows`, `not_folded_sites`). The counts move
-// across every one of these lines, so a reader comparing two runs across any
-// of them is comparing two rules.
-const schemaVersion = 5
+// `read_by_kind`, `not_folded`, `rows`, `not_folded_sites`). Version 6 widens
+// the `hints` section from the error helpers to the served prose: the kinds
+// `message`, `next_step`, `param_guidance`, `schema_description` and `usage`
+// in `read_by_kind`, the `values_passed_over` count both prose sections
+// carry, and the dynamic surface's declarations in `stale_declarations`,
+// which now fail the run. The counts move across every one of these lines, so
+// a reader comparing two runs across any of them is comparing two rules.
+const schemaVersion = 6
 
 // Finding is one published action ID that is not a canonical catalog ID.
 type Finding struct {
@@ -102,8 +106,10 @@ type Report struct {
 	// it, since what it is handed is the served tree's sites, and the run
 	// clears it when its patterns named no served package.
 	ServedJudged bool `json:"served_judged"`
-	// Hints is the rule over corrective prose. Its findings fail
-	// [Report.Clean] and the sites it could not fold do not.
+	// Hints is the rule over served prose, under the key it had when it read
+	// only the error helpers' hints. Its findings and its stale declarations
+	// fail [Report.Clean]; the sites it could not fold and the values it passed
+	// over do not.
 	Hints HintReport `json:"hints"`
 	// SuiteJudged says whether this run loaded the e2e suite, and it is here
 	// for the reason DeclarationsJudged is in the summary: a run over
@@ -157,9 +163,11 @@ type Report struct {
 // Those two are declared in declaredAliasMentions, which only a prose site
 // consults.
 //
-// A hint site is judged by neither of those rules and lands in [HintReport]
-// instead, since it is corrective prose rather than a published ID and the
-// question is what it names rather than whether it is one. An assertion site
+// A site of served prose is judged by neither of those rules and lands in
+// [HintReport] instead, since it is a sentence rather than a published ID and
+// the question is what it names rather than whether it is one. A Usage line is
+// the one site judged in both: its IDs here, and its tool names there
+// ([HintReport.judgeUsage]), since it is served on every surface. An assertion site
 // lands in a second [HintReport], because it is that prose quoted back by the
 // e2e suite: it is held to the same spellings, and kept apart so a reader can
 // tell a defect of the server from a defect of its tests.
@@ -196,6 +204,9 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 				Package: at.Package, File: at.File, Line: at.Line, Kind: at.Kind, Expression: at.Expr,
 			})
 			continue
+		}
+		if at.Kind == kindUsage {
+			report.Hints.judgeUsage(at)
 		}
 		for _, candidate := range candidateIDs(at, ids) {
 			report.judge(at, candidate, ids)
@@ -277,11 +288,12 @@ func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 
 // Clean reports whether this run found nothing the gate refuses.
 //
-// Seven things fail it, and the reason each is here rather than reported is
+// Eight things fail it, and the reason each is here rather than reported is
 // the same one: a published ID that is not a canonical catalog ID, an ID that
 // resolves only as an alias, a declaration that excuses nothing, a site the
-// type checker could not fold, a hint that names a tool, an e2e assertion that
-// quotes one, and a helper table entry that describes no call.
+// type checker could not fold, served prose that names a tool, a declaration
+// of the served-prose rule that excuses nothing, an e2e assertion that quotes
+// a tool, and a helper table entry that describes no call.
 //
 // The unfoldable site is the one that needs saying out loud. It is the audit's
 // own blind spot rather than a defect of the tree, and it fails anyway,
@@ -291,13 +303,14 @@ func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 //
 // The hint rule joined them when its count reached zero, which is the order
 // this had to happen in: it opened at 785 findings across 137 packages, and a
-// gate cannot land before the code it judges is clean. Its own unfoldable
-// sites are counted apart and do not fail, which is the one place this departs
-// from the paragraph above, because a hint the type checker cannot fold is
-// text a reader can still read: the seven sites in that state build one from a
-// function call, a format string or a parameter no rule follows, or read one
-// back out of rendered text, and carry no tool name between them; three of
-// them are the unfolded halves of a concatenation.
+// gate cannot land before the code it judges is clean. It was widened from
+// the error helpers to the rest of the served prose the same way, with the
+// tree rewritten in the change below the one that widened it. Its own
+// unfoldable sites are counted apart and do not fail, which is the one place
+// this departs from the paragraph above, because a sentence the type checker
+// cannot fold is text a reader can still read, and neither do the values it
+// passes over, which are GitLab's data rather than the server's prose. Its
+// declarations fail when they excuse nothing, as every other table's do.
 //
 // The last two are the suite's, and joined with issue 902. A quotation naming
 // a tool is a test that passes against a defective server text and breaks the
@@ -310,7 +323,7 @@ func (r *Report) judgeHelpers(read suiteRead, wholeSuite bool) {
 func (r *Report) Clean() bool {
 	return r.Summary.Findings == 0 && r.Summary.AliasHits == 0 &&
 		r.Summary.Unresolved == 0 && r.Summary.Stale == 0 &&
-		r.Hints.Findings == 0 &&
+		r.Hints.Findings == 0 && len(r.Hints.StaleDeclarations) == 0 &&
 		r.Assertions.Findings == 0 && len(r.StaleHelpers) == 0
 }
 
@@ -384,7 +397,7 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 	if report.ServedJudged {
 		writeServedReport(out, report, verbose)
 	} else {
-		fmt.Fprintf(out, "%s: no served source loaded: the published-ID and hint rules were not run\n", toolName)
+		fmt.Fprintf(out, "%s: no served source loaded: the published-ID and served-prose rules were not run\n", toolName)
 	}
 	if report.SuiteJudged {
 		writeSuiteReport(out, report, verbose)

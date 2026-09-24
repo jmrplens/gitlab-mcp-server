@@ -151,7 +151,7 @@ func wrapDestinationRefused(operation string, err error) error {
 // sentence, not the composition.
 //
 // A hint goes the same way, for the same reason. It advises about GitLab state
-// ("use gitlab_branch_unprotect first"), and nothing was asked of GitLab.
+// ("use branch.unprotect first"), and nothing was asked of GitLab.
 //
 // The chain is kept, so errors.Is and errors.As behave exactly as before.
 func wrapUnattributed(operation string, err error) error {
@@ -1037,10 +1037,12 @@ func WrapErrWithMessage(operation string, err error) error {
 // that tells the LLM what to do next, after the classification and GitLab's
 // message and before the cause:
 //
-//	"branchDelete: conflict: the resource already exists or there is a state conflict ({message: Cannot delete: protected branch}). Suggestion: use gitlab_branch_unprotect first, then retry deletion: DELETE https://gitlab.example.com/api/v4/projects/1/repository/branches/main: 409 {message: Cannot delete: protected branch}"
+//	"branchDelete: conflict: the resource already exists or there is a state conflict ({message: Cannot delete: protected branch}). Suggestion: use branch.unprotect first, then retry deletion: DELETE https://gitlab.example.com/api/v4/projects/1/repository/branches/main: 409 {message: Cannot delete: protected branch}"
 //
 // The hint should be a concise suggestion starting with a verb (e.g., "use
-// gitlab_branch_list to verify the branch name").
+// branch.list to verify the branch name"), and names an action by its
+// canonical ID rather than by a tool name, which only one surface of three
+// registers; cmd/audit_action_ids fails on one.
 func WrapErrWithHint(operation string, err error, hint string) error {
 	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
 		return unattributed

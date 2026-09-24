@@ -376,6 +376,16 @@ and keeps one a filter withheld, because asking for that one is answered with
 the narrowing rather than with `unknown action`. A cross-link that resolves is
 published under its canonical ID whatever spelling it was written in.
 
+The same demand holds for every sentence a model reads, not only the fields
+that carry IDs: a hint, the message of an error a handler returns, a refusal,
+the next steps of a result, a `Usage` line, parameter guidance (`ValueSource`,
+`CommonConfusions`) and a field's `jsonschema` description all name an action
+by its canonical ID. Each is served on every surface, and a tool name is right
+on one of three. `cmd/audit_action_ids` reads them all, and its one exception is
+`internal/tools/dynamic`, whose text only the two tools of the dynamic surface
+return, so it may name those two. An individual tool's `Description` keeps its
+tool names, since only that tool serves it.
+
 ## When Adding A GitLab Action
 
 1. Add or update the typed handler in the appropriate domain package.
