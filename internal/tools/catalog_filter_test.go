@@ -252,13 +252,13 @@ func TestExcludeFromCatalog_LogsExactlyWhatItRemoved(t *testing.T) {
 // TestExcludeFromCatalog_StandaloneEntries_AreNotReportedAsNamingNothing
 // covers the warning an operator reads about their own --exclude-tools file.
 //
-// The standalone utilities are in no surface's catalog, so an entry naming
-// one was always unmatched here, and the warning used to name it beside the
-// dead entries with a note excusing them all as filtered elsewhere. That was
-// false of the canonical ID on every surface and made every standalone entry,
-// working or not, read the same. The warning now names only what neither the
-// catalog nor a standalone utility answers, in the operator's order, and is
-// absent when that is nothing.
+// The standalone utilities are in none of the catalogs this function
+// filters, so an entry naming one was always unmatched here, and the warning
+// used to name it beside the dead entries with a note excusing them all as
+// filtered elsewhere. That was false of the canonical ID on every surface and
+// made every standalone entry, working or not, read the same. The warning now
+// names only what neither the catalog nor a standalone utility answers, in
+// the operator's order, and is absent when that is nothing.
 //
 // Sequential: the logger it captures is process-wide.
 func TestExcludeFromCatalog_StandaloneEntries_AreNotReportedAsNamingNothing(t *testing.T) {
@@ -300,15 +300,15 @@ func TestExcludeFromCatalog_StandaloneEntries_AreNotReportedAsNamingNothing(t *t
 			warnings := strings.Count(logged, `"level":"WARN"`)
 			if tc.wantEntries == "" {
 				if warnings != 0 {
-					t.Errorf("startup log = %s, want no warning when every entry named something", logged)
+					t.Errorf("log = %s, want no warning when every entry named something", logged)
 				}
 				return
 			}
 			if warnings != 1 || !strings.Contains(logged, `"entries":"`+tc.wantEntries+`"`) {
-				t.Errorf("startup log = %s, want one warning naming exactly %q", logged, tc.wantEntries)
+				t.Errorf("log = %s, want one warning naming exactly %q", logged, tc.wantEntries)
 			}
 			if strings.Contains(logged, `"note"`) {
-				t.Errorf("startup log = %s, want no note excusing the standalone entries", logged)
+				t.Errorf("log = %s, want no note excusing the standalone entries", logged)
 			}
 		})
 	}

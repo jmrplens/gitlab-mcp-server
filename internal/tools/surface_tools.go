@@ -38,9 +38,11 @@ func StandaloneSurfaceToolSpecs(client *gitlabclient.Client) []actioncatalog.Sur
 // (interactive.issue_create) remove the same tools everywhere.
 //
 // Three callers ask it: the pass over registered tools on the meta and
-// individual surfaces, the startup warning, which must not report an entry a
-// standalone utility answers, and the end-to-end harness, which has to
-// expect what the binary serves rather than a copy of its rule.
+// individual surfaces, the warning about entries that named nothing, which
+// must not report an entry a standalone utility answers, and the end-to-end
+// harness, which has to expect what the binary serves rather than a copy of
+// its rule. The resolution runs on every call, over a spec list built once
+// per process (see standaloneSpecs).
 //
 // It panics when the specs cannot be assembled, which only a malformed
 // declared spec can cause: those tools are part of the declared surface, and

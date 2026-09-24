@@ -1440,11 +1440,12 @@ func helpEntry(help, flagName string) string {
 // curated help describes an exclusion entry the way the server reads one: a
 // tool name, a group name or a canonical action ID, on every surface.
 //
-// It said "tool names" alone, and on the default surface a tool name is the
-// one spelling that names almost nothing, since that surface registers two
-// tools and reaches every action by its canonical ID. An operator reading the
-// help had no way to learn the spelling that works everywhere, which is the
-// spelling issue 911 made work for the standalone utilities too.
+// It said "tool names" alone, which hid the other two spellings the server
+// accepts: the group name and the canonical action ID. The canonical ID is
+// the one spelling that means the same thing on every surface, since the
+// default surface reaches every action by it, and issue 911 made it work for
+// the standalone utilities too, so an operator reading the help had no way
+// to learn the spelling that works everywhere.
 func TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts(t *testing.T) {
 	stdout := captureStdout(t)
 
@@ -1455,9 +1456,11 @@ func TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			entry := helpEntry(help, name)
 			for _, spelling := range []string{"tool names", "group names", "canonical action IDs", "every surface"} {
-				if !strings.Contains(entry, spelling) {
-					t.Errorf("help for %s = %q, want it to say %q", name, entry, spelling)
-				}
+				t.Run(spelling, func(t *testing.T) {
+					if !strings.Contains(entry, spelling) {
+						t.Errorf("help for %s = %q, want it to say %q", name, entry, spelling)
+					}
+				})
 			}
 		})
 	}

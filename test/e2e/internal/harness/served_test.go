@@ -551,8 +551,12 @@ func assertServesTheStandaloneActions(t *testing.T, expected surfaceExpectation)
 // issue 911 the pass on these two surfaces matched registered names exactly,
 // so both removed nothing here while the dynamic surface honored the group
 // name, and the harness followed the binary. Both now remove what they name
-// on every surface, by the catalog's own rule, and the harness asks the
-// resolver the pass asks, so these cases fail if either stops agreeing.
+// on every surface, by the catalog's own rule. These cases pin the answers
+// that rule's resolver gives, as the harness receives them, so they fail if
+// the resolver or the harness's use of it changes. They cannot see the
+// visibility pass drift away from the resolver: that is held by the
+// toolvisibility TestApply_ExcludeTools_* tests and by cmd/server's
+// TestCreateServer_StandaloneUtilities_ExcludedByEveryNameOnEverySurface.
 func TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass(t *testing.T) {
 	made := freeProjection(t)
 	everything := standaloneActionIDs

@@ -571,7 +571,7 @@ func TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed(t *testing.
 // them, and the entries it returns are the ones that reached none, in the
 // order the operator wrote them.
 //
-// The unmatched half is what the startup warning is built from, so an entry
+// The unmatched half is what the exclusion warning is built from, so an entry
 // reported there that did remove something accuses a working configuration,
 // and one left out hides a dead entry.
 func TestExcludedToolSpecs_ReportsWhatItRemovedAndWhatNamedNothing(t *testing.T) {

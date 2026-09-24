@@ -79,13 +79,12 @@ func NewCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.C
 // name or its canonical action ID (see [ExcludedStandaloneTools]), and, in
 // read-only mode (a read_api token's narrowing included), every tool that
 // does not read, and the index still names the removed ones. A call to one of
-// them is therefore
-// attributed to the action the client asked for, and the server then refuses
-// it as a tool it does not serve. The individual surface already treats a
-// catalog tool read-only removed that way, since its catalog is narrowed by
-// exclusions and scopes only; the dynamic surface does not, because its
-// catalog is filtered before anything is registered, so an action withheld
-// there is named by nothing.
+// them is therefore attributed to the action the client asked for, and the
+// server then refuses it as a tool it does not serve. The individual surface
+// already treats a catalog tool read-only removed that way, since its catalog
+// is narrowed by exclusions and scopes only; the dynamic surface does not,
+// because its catalog is filtered before anything is registered, so an action
+// withheld there is named by nothing.
 //
 // It is a separate constructor rather than a change to [NewCallIdentifier]
 // because that one answers what a catalog names, and the model evaluation's

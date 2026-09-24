@@ -742,6 +742,11 @@ func (c *Catalog) FilterAllowedToolNames(toolNames []string) *Catalog {
 }
 
 // Filter applies all catalog-level filters in a deterministic order.
+//
+// Its exclusion step is [Catalog.FilterExcludedTools], whose warning is
+// computed against this catalog alone, so it is not how the server applies
+// or reports --exclude-tools; see that method for why. The server calls
+// tools.ExcludeFromCatalog instead.
 func (c *Catalog) Filter(opts FilterOptions) *Catalog {
 	if c == nil {
 		return nil

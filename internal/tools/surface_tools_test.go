@@ -147,9 +147,9 @@ func assertRefusalNamesItsFlow(t *testing.T, spec actioncatalog.SurfaceToolSpec,
 }
 
 // TestExcludedStandaloneTools_EverySpelling_ResolvesToTheRegisteredNames
-// verifies the resolver the meta and individual visibility pass, the startup
-// warning and the end-to-end harness all ask, against the standalone
-// utilities the server actually registers.
+// verifies the resolver the meta and individual visibility pass, the warning
+// about entries that named nothing and the end-to-end harness all ask,
+// against the standalone utilities the server actually registers.
 //
 // Each spelling an operator may write for a standalone utility is held to the
 // tools it removes: the group name every guided flow, a tool name or a
