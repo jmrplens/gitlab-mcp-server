@@ -9,11 +9,11 @@
 // deleted another package's live projects.
 //
 // Two sweeps exist for a person to run on purpose, and nothing runs either by
-// itself. The default one takes what a run left once that run is certainly
-// over: it knows no run ID, so it reads the one each name carries and the
-// second that run started, and leaves every run younger than the floor it is
-// given. The prefix one is the explicit override, for whatever the default
-// cannot date.
+// itself. The default one takes what a run left once that run is over, which
+// the floor it is given has to outlast the run's timeout to guarantee: it
+// knows no run ID, so it reads the one each name carries and the second that
+// run started, and leaves every run younger than the floor. The prefix one is
+// the explicit override, for whatever the default cannot date.
 
 package fixture
 
@@ -152,13 +152,16 @@ func SweepRun(ctx context.Context, client *gitlabclient.Client, runID string, ad
 // reached their own exit sweep.
 //
 // The cutoff is what keeps it off a run still going. Each package's binary
-// stamps its own start, and lives no longer than its test timeout plus its
-// exit hooks, which run after the timeout's alarm has stopped; under go test
-// it lives no longer than a minute past the timeout, when go test kills it. A
-// cutoff further back than that reaches only runs that have ended. A run
-// whose identifier E2E_RUN_ID replaced carries no stamp, since the harness
-// sets a letter before any stamp an override copies, and is never reached
-// here.
+// stamps its own start, and its fixtures are in use no longer than its test
+// timeout plus its exit hooks: the timeout's alarm is a fatal panic, so the
+// hooks run only after tests that ended in time, and each runs under a budget
+// of its own, this sweep's and the World teardown's. go test's backstop, a
+// SIGQUIT a tenth of the timeout past it and never less than a minute, only
+// shortens that. A cutoff further back than the longest timeout any run was
+// given, plus those budgets, reaches only runs that have ended; one given no
+// timeout at all is safe only from a sweep not run while it goes. A run whose
+// identifier E2E_RUN_ID replaced carries no stamp, since the harness sets a
+// letter before any stamp an override copies, and is never reached here.
 //
 // No listing can be searched for a shape, so all four are read whole: every
 // project and group the token owns, every snippet of its user, and with an
@@ -391,6 +394,21 @@ var (
 	sweepOnce        = new(sync.Once)
 	registerExitHook = harness.AtExit
 )
+
+// ArmRunSweep arms the run's exit sweep for a test that creates something
+// lasting through the server rather than through a builder here, which is
+// what arms it otherwise.
+//
+// A scenario that makes a personal snippet with the snippet create action is
+// the case: its deletion is registered on the Env, and a failed one is only
+// logged. Run alone, or beside tests whose builders all skipped, the package
+// then has no exit sweep, so that snippet would stay on the instance with
+// nothing to remove it or fail the run until someone ran make
+// e2e-clean-orphans. Call it before the create, so a test that stops between
+// the create and its Defer is covered too.
+func ArmRunSweep(e *harness.Env) {
+	armSweep(e)
+}
 
 // armSweep registers the run-scoped sweep as an exit hook, once per process.
 func armSweep(e *harness.Env) {

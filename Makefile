@@ -158,9 +158,11 @@ ORBIT_FIXTURES_MIRROR ?= false
 # two sharing it. E2E_GITLAB_TIMEOUT below is the same flag for the CE run.
 #
 # E2E_SWEEP_MIN_AGE, at e2e-clean-orphans, must stay above this timeout plus
-# the exit hooks' budgets, which also covers go test's one-minute kill grace:
-# it is the only thing that keeps the orphan sweep off a package still running.
-# TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when it does not.
+# the exit hooks' budgets: it is the only thing that keeps the orphan sweep off
+# a package still running.
+# TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when this default
+# is raised past it; a run given a longer timeout on the command line is one
+# that test cannot see, and e2e-clean-orphans below says what to do then.
 E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # Where the e2e Docker fixture is reached from the machine running the suite.
 # Docker itself follows DOCKER_HOST or the active context, so the fixture can
@@ -413,10 +415,12 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # rather than to cap a suite that is doing its work.
 #
 # Raising it has a second consequence: E2E_SWEEP_MIN_AGE, at
-# e2e-clean-orphans, must stay above this timeout plus the exit hooks' budgets
-# (which also covers go test's one-minute kill grace), or make
-# e2e-clean-orphans could delete the fixtures of a package still running.
-# TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when it does not.
+# e2e-clean-orphans, must stay above this timeout plus the exit hooks'
+# budgets, or make e2e-clean-orphans could delete the fixtures of a package
+# still running. TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails
+# when this default is raised past it; raising it for one run on the command
+# line (E2E_GITLAB_TIMEOUT=3h) is invisible to that test, and
+# e2e-clean-orphans below says what to do then.
 E2E_GITLAB_TIMEOUT ?= 3600s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
@@ -471,25 +475,43 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 # ID, at its own exit, and a run that was killed never gets there; this is the
 # sweep for what such a run left. It knows no run ID, so it reads the one a name
 # carries and the second that run started, and takes it only once that is
-# E2E_SWEEP_MIN_AGE ago. The default, 2h, is longer than any package's binary
-# can last: each package stamps its own start, its tests end by
-# E2E_GITLAB_TIMEOUT or E2E_DOCKER_ENTERPRISE_TIMEOUT (3600s each), its exit
-# hooks then run on budgets of their own, and go test kills the binary a
-# minute past the timeout whatever they are doing, so a run still going is
-# never touched. TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails
-# when a timeout is raised past it; set it to 0 only when no run is going. A
-# run started with E2E_RUN_ID carries no date in its names, so this default
-# never reaches it. E2E_SWEEP_PREFIX sweeps by name prefix instead: it applies one
-# prefix to all four kinds, reaches the token user's own objects as readily as
-# the suite's, and would reach a run still going. It cannot pick one run
-# either. A name opens with the prefix its test chose (adm-alert-, mergetrain-,
-# member-, snippet-, the World's e2e-world- and world-snippet-), never with the
-# run ID, so a prefix picks what some tests named across every run; reaching
-# an E2E_RUN_ID run that way takes one sweep per prefix its tests used, and
-# each also reaches other runs, live ones included. It is a test of the
-# fixture package because that library is importable only from test/e2e. The
-# test skips when neither variable is set, which guards a bare go test run;
-# this target always passes the age.
+# E2E_SWEEP_MIN_AGE ago.
+#
+# The default, 2h, outlasts every package of a run started with the default
+# timeouts above. Each package stamps its own start, and its tests end by its
+# timeout, E2E_GITLAB_TIMEOUT or E2E_DOCKER_ENTERPRISE_TIMEOUT (3600s each),
+# since the binary's own alarm at that moment is a fatal panic. The exit hooks
+# therefore run only after tests that ended in time, and then on the exit
+# sweep's 5m and the World teardown's 3m budgets, which bound how long the
+# package's fixtures are in use: its timeout plus 8m. go test's own backstop
+# only shortens that: it sends SIGQUIT max(1m, timeout/10) past the timeout,
+# 6m at 3600s, and kills the binary up to timeout/10 after that.
+# TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when a default
+# timeout is raised past the floor. It cannot see a run started with a longer
+# timeout on the command line or through a go test of its own: after such a
+# run, set E2E_SWEEP_MIN_AGE above that timeout plus 8m, and while a run
+# started with -timeout 0 is going, do not run this at all. Set it to 0 only
+# when no run is going.
+#
+# A self-hosted run going at the same time is not failed by this either. Such
+# a run fails at its end when a group or project it saw at its start is gone
+# or renamed, and it leaves out of that check every object named after a run,
+# so an older run's leftover deleted here does not count against it.
+#
+# A run started with E2E_RUN_ID carries no date in its names, so this default
+# never reaches it. E2E_SWEEP_PREFIX sweeps by name prefix instead: it applies
+# one prefix to all four kinds, reaches the token user's own objects as
+# readily as the suite's, and would reach a run still going. It cannot pick
+# one run either. A name opens with the prefix its test or its builder chose
+# (a test's own such as adm-alert- or member-, a builder's such as snippet-
+# and mergetrain-, proj- and grp- when a test names none, and the World's
+# e2e-world- and world-snippet-), never with the run ID, so a prefix picks
+# what some tests named across every run; reaching an E2E_RUN_ID run that way
+# takes one sweep per prefix its tests used, and each also reaches other runs,
+# live ones included. It is a test of the fixture package because that
+# library is importable only from test/e2e. The test skips when neither
+# variable is set, which guards a bare go test run; this target always passes
+# the age.
 E2E_SWEEP_MIN_AGE ?= 2h
 E2E_SWEEP_PREFIX ?=
 e2e-clean-orphans:

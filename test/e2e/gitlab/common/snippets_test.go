@@ -26,6 +26,9 @@ import (
 // Replaces: TestMeta_StorageMoves
 func TestSnippet_CreateAndDelete_GoneAfterwards(t *testing.T) {
 	e := harness.New(t)
+	// The snippets are made through the server, so no builder arms the exit
+	// sweep that removes one whose deletion failed.
+	fixture.ArmRunSweep(e)
 
 	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
 		s := e.On(surface)

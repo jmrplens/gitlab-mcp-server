@@ -2,7 +2,7 @@
 
 // sweep_test.go checks that a sweep deletes exactly what belongs to it: the
 // run's own leftovers and nothing another run, or another person, owns, and
-// for the on-demand sweep only what runs that have certainly ended left.
+// for the on-demand sweep only what runs started before its floor left.
 
 package fixture
 
@@ -559,6 +559,39 @@ func TestArmSweep_Builders_RegisterOneExitSweepPerProcess(t *testing.T) {
 	}
 }
 
+// TestArmRunSweep_ServerMadeSnippet_ArmsTheSweepThatRemovesIt checks the
+// arming a scenario asks for when it makes a personal snippet through the
+// server rather than through NewSnippet: one exit sweep however often it is
+// asked, and that sweep deletes a snippet named after the run and leaves one
+// named after another run.
+func TestArmRunSweep_ServerMadeSnippet_ArmsTheSweepThatRemovesIt(t *testing.T) {
+	hooks := captureExitHooks(t)
+	stub, client := newStubGitLab(t)
+	var runID string
+
+	t.Run("asked on every surface", func(t *testing.T) {
+		e := harness.NewDetached(t, client)
+		runID = e.RunID()
+		ArmRunSweep(e)
+		ArmRunSweep(e)
+	})
+
+	if len(*hooks) != 1 {
+		t.Fatalf("ArmRunSweep() twice registered %d exit hooks, want the one exit sweep", len(*hooks))
+	}
+	stub.addSnippet(20, "snippet-"+runID+"-abc-1", 0)
+	stub.addSnippet(21, "snippet-20260911t090000z-9999999999-common-abc-1", 0)
+	stub.answers(http.MethodDelete, "/api/v4/snippets/20", stubNoContent())
+
+	if err := (*hooks)[0](); err != nil {
+		t.Fatalf("the exit sweep ArmRunSweep armed failed: %v", err)
+	}
+	deletions := slices.DeleteFunc(sentPaths(stub), func(sent string) bool { return !strings.HasPrefix(sent, http.MethodDelete) })
+	if want := []string{"DELETE /api/v4/snippets/20"}; !slices.Equal(deletions, want) {
+		t.Errorf("the exit sweep sent the deletions %v, want %v", deletions, want)
+	}
+}
+
 // TestResolveOrphanScope_Settings_PickTheSweep checks which on-demand sweep
 // each setting asks for: none when neither is set, which is what keeps a bare
 // go test of this package from deleting anything; the prefix when it is set,
@@ -603,17 +636,21 @@ func TestResolveOrphanScope_Settings_PickTheSweep(t *testing.T) {
 }
 
 // TestSweepMinAge_MakefileDefaults_OutlastEveryPackage holds the floor make
-// e2e-clean-orphans passes by default above the longest a package's binary
-// can live under the timeouts the same Makefile hands go test.
+// e2e-clean-orphans passes by default above the longest a package's fixtures
+// can be in use under the default timeouts the same Makefile hands go test.
 //
 // The floor is the only thing keeping the default sweep off a run still
 // going, and nothing else ties it to the two timeouts, which are defined
 // hundreds of lines away from it. E2E_GITLAB_TIMEOUT has been raised once
 // already; raised again past the floor, it would let the sweep delete a live
-// package's fixtures with every test green. A binary lives its timeout and
-// then its exit hooks, which run after the timeout's alarm has stopped, so the
-// floor must clear the longer timeout by the two hooks' own budgets, which is
-// also more than the minute go test waits before it kills the binary.
+// package's fixtures with every test green. The timeout's alarm is a fatal
+// panic, so the exit hooks run only after tests that ended in time, and then
+// under their own budgets: the floor must clear the longer timeout by those
+// two budgets. go test's backstop, a SIGQUIT a tenth of the timeout past it
+// and never less than a minute, only shortens that. What this reads is the
+// Makefile's defaults, so a timeout raised for one run on the command line,
+// or passed to a go test of its own, is outside it; the Makefile says what to
+// set the floor to then.
 func TestSweepMinAge_MakefileDefaults_OutlastEveryPackage(t *testing.T) {
 	makefile, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "Makefile"))
 	if err != nil {
@@ -622,11 +659,11 @@ func TestSweepMinAge_MakefileDefaults_OutlastEveryPackage(t *testing.T) {
 
 	floor := makefileDefault(t, makefile, "E2E_SWEEP_MIN_AGE")
 	longest := max(makefileDefault(t, makefile, "E2E_GITLAB_TIMEOUT"), makefileDefault(t, makefile, "E2E_DOCKER_ENTERPRISE_TIMEOUT"))
-	lifetime := longest + sweepBudget + worldTeardownBudget
+	inUse := longest + sweepBudget + worldTeardownBudget
 
-	if floor <= lifetime {
+	if floor <= inUse {
 		t.Errorf("E2E_SWEEP_MIN_AGE defaults to %s, want more than %s: the longer suite timeout, %s, plus the exit sweep's %s and the World teardown's %s",
-			floor, lifetime, longest, sweepBudget, worldTeardownBudget)
+			floor, inUse, longest, sweepBudget, worldTeardownBudget)
 	}
 }
 
