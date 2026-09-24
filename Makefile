@@ -730,12 +730,14 @@ coverage-conditions:
 # which is what mutating a memo does, and the answer is a test that asserts the
 # memo.
 #
-# The baseline is the run gremlins multiplies, timed by the clock. gremlins
-# multiplies the coefficient by the wall time of its own `go test [-tags T]
-# [-coverpkg P] -cover -coverprofile F ./<pkg>/...` from the module root, so
-# the script runs exactly that, with the tags, -coverpkg and --integration it
-# reads out of GREMLINS_FLAGS or gremlins' own GREMLINS_UNLEASH_* variables:
-# once untimed, which is the gate below and warms the build cache the way
+# The baseline is a run of the same command gremlins times, timed by the clock.
+# gremlins multiplies the coefficient by the wall time of its own `go test
+# [-tags T] [-coverpkg P] -cover -coverprofile F ./<pkg>/...` from the module
+# root, so the script runs that command, with the tags and -coverpkg it reads
+# out of GREMLINS_FLAGS or gremlins' own GREMLINS_UNLEASH_TAGS and
+# GREMLINS_UNLEASH_COVERPKG, and --integration from the flag alone, since
+# gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. It runs
+# it once untimed, which is the gate below and warms the build cache the way
 # gremlins' run will find it, and once under bash's `time`. It used to read the
 # duration off go test's summary line, which is the test binary's run without
 # the build, and to guess 0.010s when that line carried none. A tag that

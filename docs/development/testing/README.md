@@ -183,41 +183,49 @@ gremlins under `GOFLAGS=-count=1`, so what it multiplies is always a real
 measurement. `go build` ignores a flag it does not know, so the same setting is
 harmless for the compile around each mutant.
 
-**The baseline is the run gremlins multiplies, and it is timed by the clock.**
-The recipe used to read the duration off the last line `go test` printed, and
-to fall back to a guess of 0.010 s when that line carried none, a guess meant
-for a cached result that `-count=1` had already made impossible. What it read
-was wrong three ways, each measured. The tags: `GREMLINS_FLAGS='--tags e2e'`
-reached gremlins and not the baseline, so on `test/e2e/internal/harness`, where
-every file but `doc.go` carries `//go:build e2e`, the baseline printed
-`[no test files]` and exited 0. The guess gave a coefficient of 3001, gremlins'
-own coverage run took 114 s, and every mutant got `go test -timeout
-94h59m45s`. The INVERT_LOGICAL mutant of `missing == 0 ||
-time.Now().After(deadline)` in `awaitTraces` makes the span wait loop for as
-long as a span is missing, and it ran for over an hour before it was killed by
-hand; `test/e2e/internal/fixture` got 8 h 44 min per mutant the same way. The
-units: a duration it could read was the test binary's own run, without the
-build and link gremlins' wall clock includes, so `internal/tools/elicitationtools`
-read 0.105 s against gremlins' 0.94 s and gave each mutant about 269 s instead
-of the 30 s it printed. And the shape: a `-cover` run ends in a coverage figure,
-whose last field is no duration at all.
+**The baseline is a run of the same command gremlins times, and it is timed by
+the clock.** The recipe used to read the duration off the last line `go test`
+printed, and to fall back to a guess of 0.010 s when that line carried none, a
+guess meant for a cached result that `-count=1` had already made impossible.
+What it read was wrong two ways, each measured. The tags:
+`GREMLINS_FLAGS='--tags e2e'` reached gremlins and not the baseline, so on
+`test/e2e/internal/harness`, where every file but `doc.go` carries
+`//go:build e2e`, the baseline printed `[no test files]` and exited 0. The
+guess gave a coefficient of 3001, gremlins' own coverage run took 114 s, and
+every mutant got `go test -timeout 94h59m45s`. The INVERT_LOGICAL mutant of
+`missing == 0 || time.Now().After(deadline)` in `awaitTraces` makes the span
+wait loop for as long as a span is missing, and it ran for over an hour before
+it was killed by hand; `test/e2e/internal/fixture` got 8 h 44 min per mutant
+the same way. The units: a duration it could read was the test binary's own
+run, without the build and link gremlins' wall clock includes, so
+`internal/tools/elicitationtools` read 0.105 s against gremlins' 0.94 s and
+gave each mutant about 269 s instead of the 30 s it printed. Nor could a parse
+of that line be kept for the new command: the run gremlins times is a `-cover`
+run, whose summary ends in a coverage figure rather than a duration.
 
 `scripts/coverage-mutants.sh` therefore runs the command gremlins' coverage step
 runs, `go test -count=1 [-tags T] [-coverpkg P] -cover -coverprofile F
-./<pkg>/...` from the module root (`./...` under `--integration`). The tags,
-the `-coverpkg` and `--integration` come from `GREMLINS_FLAGS`, read the way
-pflag reads it (`-dte2e` included), or from gremlins' own `GREMLINS_UNLEASH_*`
-variables, and a flag the script cannot read is refused, since it could be
-hiding a tag. It runs the command twice: once untimed, which is the pass/fail
-gate and leaves the build cache as warm as gremlins' run will find it, and
-once under bash's `time` in the C locale (under a comma-decimal locale `time`
+./<pkg>/...` from the module root (`./...` under `--integration`). The tags and
+the `-coverpkg` come from `GREMLINS_FLAGS`, read the way pflag reads it
+(`-dte2e` included), or from gremlins' own `GREMLINS_UNLEASH_TAGS` and
+`GREMLINS_UNLEASH_COVERPKG`, and a flag the script cannot read is refused,
+since it could be hiding a tag. `--integration` is read from the flag alone
+(`-i` in `GREMLINS_FLAGS`): gremlins v0.6.0 binds
+`GREMLINS_UNLEASH_INTEGRATION` too, but reads it back with a bool type
+assertion that the string an environment variable arrives as never passes, so
+the variable widens nothing, and the script says so when it is set. It runs
+the command twice: once untimed, which is the pass/fail gate and leaves the
+build cache as warm as gremlins' run will find it, and once under bash's
+`time` in the C locale (under a comma-decimal locale `time`
 writes `0,940`, which awk reads as 0). Measured after a content edit, the
 timed base and gremlins' own figure now agree: 1.017 s against 1.045 s on
 `elicitationtools`, 1.026 s against 1.038 s on `cmd/audit_dynamic_aliases`. A
 package with no test file under the tags it was given is refused, naming them,
-since every mutant of it would be reported NOT COVERED; a tag set only in a
-`.gremlins.yaml` reaches gremlins and not the script, and that refusal is what
-stops such a run.
+since every mutant of it would be reported NOT COVERED. A tag set only in a
+`.gremlins.yaml` reaches gremlins and not the script, and that refusal stops
+such a run only when it would find no test file at all: a package with some
+untagged test files passes it and is measured against a baseline that runs
+fewer tests than gremlins times. Pass the tag through `GREMLINS_FLAGS`.
 
 `MUTANT_DEADLINE_MAX` (3600 s) is a ceiling on each mutant's deadline, applied
 through the coefficient because gremlins offers no other handle: a ceiling

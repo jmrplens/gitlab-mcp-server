@@ -859,9 +859,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
-      # Still needed by the installer and packaging tests below, which are
-      # Python because what they test is. The auditor no longer is, so nothing
-      # here installs a package at run time any more.
+      # Still needed by the script tests below. The auditor no longer is
+      # Python, so nothing here installs a package at run time any more.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.x"

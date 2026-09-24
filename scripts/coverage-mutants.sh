@@ -74,21 +74,31 @@ fi
 # directory before gremlins ever saw it.
 read -r -a gremlins_flags <<<"${GREMLINS_FLAGS:-}"
 
-# The baseline has to be the run gremlins times, so it has to see what gremlins
-# sees: the build tags, a -coverpkg, and whether --integration widens the run
-# to the whole module. Each comes from a flag or from gremlins' own environment
-# binding, and a flag wins, so the environment is read first and the flags over
-# it in order, the last of a repeated one winning as it does in pflag. They are
-# read the way pflag reads them, shorthand clusters such as -dte2e included,
-# because the measured failure was a tag that reached gremlins and not the
-# baseline. A word this cannot read could be hiding a -t, so it is refused
-# rather than guessed at. A tag set only in a .gremlins.yaml is out of reach,
-# and the test-file check below is what stops the run that would then measure
-# nothing.
+# The baseline has to be a run of the command gremlins times, so it has to see
+# what gremlins sees: the build tags, a -coverpkg, and whether --integration
+# widens the run to the whole module. The tags and -coverpkg come from a flag
+# or from gremlins' own environment binding, and a flag wins, so the
+# environment is read first and the flags over it in order, the last of a
+# repeated one winning as it does in pflag. They are read the way pflag reads
+# them, shorthand clusters such as -dte2e included, because the measured
+# failure was a tag that reached gremlins and not the baseline. A word this
+# cannot read could be hiding a -t, so it is refused rather than guessed at. A
+# tag set only in a .gremlins.yaml is out of reach, and the test-file check
+# below stops such a run only where it would find no test file at all.
 tags=${GREMLINS_UNLEASH_TAGS:-}
 coverpkg=${GREMLINS_UNLEASH_COVERPKG:-}
-integration=${GREMLINS_UNLEASH_INTEGRATION:-false}
 excluded=${GREMLINS_UNLEASH_EXCLUDE_FILES:+yes}
+
+# --integration is read from the flag alone, because that is the only place
+# gremlins reads it from. It binds GREMLINS_UNLEASH_INTEGRATION like the rest,
+# but takes the value back with a bool type assertion (configuration.Get[bool],
+# v0.6.0), and viper hands an environment value over as the string it was, so
+# the assertion fails and gremlins runs one subtree whatever the variable says.
+# Reading it here would time the whole module against a run of one package.
+integration=false
+if [ -n "${GREMLINS_UNLEASH_INTEGRATION:-}" ]; then
+  echo "gremlins: GREMLINS_UNLEASH_INTEGRATION is set, and gremlins v0.6.0 never reads it, so this is not an integration run; GREMLINS_FLAGS=-i makes one"
+fi
 unreadable() {
   echo "gremlins: GREMLINS_FLAGS: cannot read $1 the way gremlins would, so the baseline could run under other build tags than gremlins does; refusing to measure" >&2
   exit 1
@@ -108,7 +118,8 @@ while [ "$i" -lt "${#gremlins_flags[@]}" ]; do
       case "$name" in
         *=*) value=${name#*=}; name=${name%%=*}; inline=yes ;;
       esac
-      # pflag reads `_` and `.` in a flag name as `-`, and gremlins lets it.
+      # gremlins installs a pflag normalize function (cmd/unleash.go,
+      # setFlagsOnCmd) that reads `_` and `.` in a flag name as `-`.
       name=${name//[._]/-}
       case "$name" in
         tags | coverpkg | exclude-files | output-statuses | diff | output | threshold-efficacy | threshold-mcover | workers | test-cpu | timeout-coefficient | config)
@@ -130,15 +141,16 @@ while [ "$i" -lt "${#gremlins_flags[@]}" ]; do
       esac
       ;;
     -?*)
-      # gremlins' shorthands: d and i are switches, the rest take a value,
-      # written after `=`, joined to the letter, or as the next word.
+      # gremlins' shorthands: d, i, the root command's persistent -s
+      # (--silent) and cobra's -h are switches, the rest take a value, written
+      # after `=`, joined to the letter, or as the next word.
       cluster=${word#-}
       while [ -n "$cluster" ]; do
         letter=${cluster:0:1}
         cluster=${cluster:1}
         value=true
         case "$letter" in
-          d | i)
+          d | i | s | h)
             if [ "${#cluster}" -gt 1 ] && [ "${cluster:0:1}" = "=" ]; then
               value=${cluster:1}
               cluster=""

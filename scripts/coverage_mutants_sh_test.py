@@ -275,8 +275,9 @@ class CoverageMutantsTest(unittest.TestCase):
         coefficient = self.coefficient(proc, calls)
         self.assertEqual(coefficient, expected_coefficient(DEFAULT_BUDGET, base, DEFAULT_CEILING))
         # The budget is what each mutant gets, give or take one multiple of
-        # the base, rather than the thirty-fold or hundred-fold of it a
-        # misread base used to hand gremlins.
+        # the base, rather than the multiple of it a misread base used to hand
+        # gremlins: about 9 times the budget on elicitationtools, and about
+        # 11,400 times on the e2e harness.
         deadline = self.printed_deadline(proc)
         self.assertAlmostEqual(deadline, base * coefficient, delta=0.1)
         self.assertGreaterEqual(deadline, DEFAULT_BUDGET)
@@ -298,6 +299,9 @@ class CoverageMutantsTest(unittest.TestCase):
             ("--tags other --tags e2e", {}),
             ("", {"GREMLINS_UNLEASH_TAGS": "e2e"}),
             ("--tags e2e", {"GREMLINS_UNLEASH_TAGS": "other"}),
+            # pflag stops at `--`, so what follows it is no flag of gremlins'
+            # and must not reach the baseline as one.
+            ("--tags e2e -- -tother", {}),
         ]
         for flags, env in cases:
             with self.subTest(flags=flags, env=env):
@@ -388,15 +392,23 @@ class CoverageMutantsTest(unittest.TestCase):
             ("", {"GREMLINS_UNLEASH_COVERPKG": "./..."}, ["-coverpkg", "./..."], pkg),
             ("-i", {}, [], "./..."),
             ("-di", {}, [], "./..."),
+            ("-i=false", {}, [], pkg),
+            ("-di=true", {}, [], "./..."),
             ("--integration", {}, [], "./..."),
             ("--integration=true", {}, [], "./..."),
-            ("", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], "./..."),
+            # gremlins v0.6.0 reads the variable back as a string and asserts
+            # a bool, so it never widens gremlins' run and must not widen the
+            # baseline's.
+            ("", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], pkg),
             ("--integration=false", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], pkg),
+            ("-i", {"GREMLINS_UNLEASH_INTEGRATION": "false"}, [], "./..."),
         ]
         for flags, env, extra, scan in cases:
             with self.subTest(flags=flags, env=env):
                 proc, calls = self.run_script("./internal/pkg", flags=flags, env=env)
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual("GREMLINS_UNLEASH_INTEGRATION is set" in proc.stdout,
+                                 "GREMLINS_UNLEASH_INTEGRATION" in env, proc.stdout)
                 sequence = [c["argv"][0] for c in calls if c["argv"][:1] != ["list"]]
                 # Downloads first and one untimed run, so the timed one finds
                 # the cache as warm as gremlins' own run will.
@@ -458,8 +470,15 @@ class CoverageMutantsTest(unittest.TestCase):
             ("-E x", {}, False),
             ("--exclude-files=x", {}, False),
             ("--exclude-files x", {}, False),
+            # gremlins reads `_` and `.` in a flag name as `-`.
+            ("--exclude_files x", {}, False),
             ("-dE x", {}, False),
             ("", {"GREMLINS_UNLEASH_EXCLUDE_FILES": "x"}, False),
+            # The root command's --silent and cobra's --help are switches
+            # gremlins accepts in either spelling, so they pass through.
+            ("-s", {}, True),
+            ("-h", {}, True),
+            ("-sdE x", {}, False),
         ]
         for flags, env, default in cases:
             with self.subTest(flags=flags, env=env):
