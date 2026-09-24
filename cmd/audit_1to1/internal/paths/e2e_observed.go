@@ -63,7 +63,13 @@ type E2EObservation struct {
 // readE2ECalls is a seam: the shards are written by a Docker run this process
 // cannot perform, so a test hands the reader its own directory or its own
 // failure.
-var readE2ECalls = e2ecalls.Read
+//
+// It reads through the schema-tolerant reader rather than the strict one,
+// because this folds dispatch lines alone and version 2 of the record changed
+// none that it reads: the strict reader refused every version 1 shard whole,
+// the old suite's permanent baseline under the default directory included, and
+// turned the observation into a bare error.
+var readE2ECalls = e2ecalls.ReadForCalls
 
 // e2eObservation folds the dispatch lines of a recorded run into the per-action
 // answer, held against the catalog so an id nothing registers is named rather

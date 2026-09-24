@@ -564,7 +564,7 @@ func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
 }
 
 // TestClassify_Sessions_IdleSessionIsNamedApartAndHoldsNoShapeUnobserved
-// verifies the fold of a session that asked nothing.
+// verifies the fold of a session that issued no trace.
 //
 // Every shape here has one observed session beside a second one. On the
 // default dynamic shape the second is idle, the way a session started only to

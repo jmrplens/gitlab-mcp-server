@@ -87,8 +87,9 @@ type dispatchRecord struct {
 // and it is no longer the arrival test. It used to be both, and the span of a
 // successful resource read, prompt, completion or subscribe carries none of
 // these: such a call is spanned with mcp.method.name and the attributes of
-// what it addressed, and only a call of any method that failed with a code
-// the server counts as its own failure carries error.type. So the span of a
+// what it addressed, and only a call of any method that failed on the
+// server's side carries error.type: a JSON-RPC code the server counts as its
+// own failure, or an error carrying no code, which reads _OTHER. So the span of a
 // call that succeeded, or that failed through the caller's fault, was dropped
 // as saying nothing, its trace never arrived, and every flush that held one
 // waited the whole budget for a span that had come and gone.

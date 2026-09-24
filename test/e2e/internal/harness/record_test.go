@@ -1513,13 +1513,13 @@ func TestRecorder_Finish_WritesADispatchLineOnlyForASpanThatNamedTheCall(t *test
 // Neither transport writes such a request, so no server ever spans it, and a
 // trace issued for it was waited for twice, once by CallAsModel and once at
 // the flush, the whole budget each time. A live request is stamped, issued
-// under the session it went to, and marks that session as one that asked
-// something; a dead one is recorded with no trace and marks nothing. So is a
+// under the session it went to, and marks that session as one that issued a
+// trace; a dead one is recorded with no trace and marks nothing. So is a
 // request whose params cannot carry the trace at all, which is the other way
 // a call leaves with nothing a span could be joined on. A live request in a
 // process whose receiver never started is still stamped and still marks its
-// session, since it asked something a span could answer; there is only no
-// receiver to issue the trace to.
+// session, since it carries a trace a span could be joined on; there is only
+// no receiver to issue the trace to.
 func TestRecordSending_TraceIsIssuedOnlyForARequestThatWillBeSent(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -1690,15 +1690,15 @@ func TestRecorder_NonToolCallsOnTheRealBinary_FlushWithoutTheBudgetAndObserveThe
 	}
 }
 
-// TestSessionLines_Idle_SaysWhetherTheSessionAskedAnything checks the field
-// that keeps a session asked nothing from reading as one whose telemetry never
-// arrived.
+// TestSessionLines_Idle_SaysWhetherTheSessionIssuedATrace checks the field
+// that keeps a session that issued no trace from reading as one whose
+// telemetry never arrived.
 //
 // Both sessions here are unobserved. One of them issued a trace and saw no
 // span of it, which is a finding about its telemetry; the other issued none,
 // and its line has to say so, or the coverage command folds it into its shape
-// as unobserved for want of a question.
-func TestSessionLines_Idle_SaysWhetherTheSessionAskedAnything(t *testing.T) {
+// as unobserved for want of a traced call.
+func TestSessionLines_Idle_SaysWhetherTheSessionIssuedATrace(t *testing.T) {
 	asked := &sessionConn{label: "test-idle-asked"}
 	asked.issuedTrace.Store(true)
 	never := &sessionConn{label: "test-idle-never"}
