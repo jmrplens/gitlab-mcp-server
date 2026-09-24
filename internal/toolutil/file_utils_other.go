@@ -1,8 +1,9 @@
 //go:build !unix
 
 // file_utils_other.go carries the leaf-open primitives for platforms with no
-// O_NOFOLLOW, where the surrounding Lstat and post-open Stat checks in
-// file_utils.go are all the containment there is.
+// O_NOFOLLOW. The read primitive relies on the surrounding Lstat and
+// post-open Stat checks in file_utils.go alone; the exclusive create needs no
+// such caveat, since O_EXCL refuses anything already at the name.
 
 package toolutil
 

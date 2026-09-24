@@ -405,10 +405,10 @@ func TestComputeSHA256_ViaToolutil(t *testing.T) {
 // has a regular file where a directory belongs is refused.
 //
 // The refusal comes from the confinement rather than from opening the file:
-// CanonicalDownloadOutputPath resolves the longest existing prefix and gets
-// ENOTDIR, so neither MkdirAll nor the create below it ever runs. The comment
-// here used to say os.Create failed, which gobco refutes: that arm is never
-// taken. TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked states the
+// toolutil.WriteDownloadOutputFile resolves the longest existing prefix and
+// gets ENOTDIR, so neither MkdirAll nor the create below it ever runs. The
+// comment here used to say os.Create failed, which gobco refutes: that arm is
+// never taken. TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked states the
 // same rule with the message it is actually refused by.
 func TestStreamDownload_UnwritablePath(t *testing.T) {
 	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))

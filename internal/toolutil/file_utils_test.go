@@ -981,8 +981,8 @@ func TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError(t *testing.T) {
 	if _, err := CanonicalLocalFilePath("upload.txt"); err == nil || !strings.HasPrefix(err.Error(), "resolve file path: ") {
 		t.Errorf("CanonicalLocalFilePath(relative, deleted cwd) error = %v, want the 'resolve file path' refusal", err)
 	}
-	if _, err := CanonicalDownloadOutputPath("artifact.bin"); err == nil || !strings.HasPrefix(err.Error(), "resolve output path: ") {
-		t.Errorf("CanonicalDownloadOutputPath(relative, deleted cwd) error = %v, want the 'resolve output path' refusal", err)
+	if _, err := canonicalDownloadOutputPath("artifact.bin"); err == nil || !strings.HasPrefix(err.Error(), "resolve output path: ") {
+		t.Errorf("canonicalDownloadOutputPath(relative, deleted cwd) error = %v, want the 'resolve output path' refusal", err)
 	}
 }
 
@@ -1162,10 +1162,10 @@ func TestCanonicalDownloadOutputPath_Containment(t *testing.T) {
 				t.Skip("symlinks unsupported on this platform")
 			}
 			_, beforeErr := os.Lstat(tt.path)
-			got, err := CanonicalDownloadOutputPath(tt.path)
+			got, err := canonicalDownloadOutputPath(tt.path)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("CanonicalDownloadOutputPath(%q) = %q, want refusal", tt.path, got)
+					t.Fatalf("canonicalDownloadOutputPath(%q) = %q, want refusal", tt.path, got)
 				}
 				_, afterErr := os.Lstat(tt.path)
 				if errors.Is(beforeErr, os.ErrNotExist) && !errors.Is(afterErr, os.ErrNotExist) {
@@ -1174,7 +1174,7 @@ func TestCanonicalDownloadOutputPath_Containment(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("CanonicalDownloadOutputPath(%q) error = %v, want success", tt.path, err)
+				t.Fatalf("canonicalDownloadOutputPath(%q) error = %v, want success", tt.path, err)
 			}
 			if _, statErr := os.Lstat(filepath.Dir(got)); !errors.Is(statErr, os.ErrNotExist) {
 				t.Errorf("os.Lstat(parent of %q) error = %v, want the parent still uncreated", got, statErr)
@@ -1183,26 +1183,64 @@ func TestCanonicalDownloadOutputPath_Containment(t *testing.T) {
 	}
 }
 
-// TestCanonicalDownloadOutputPath_RejectsNonRegularDestination verifies that a
-// destination that already exists as something other than a regular file — a
-// symlink, most importantly — is refused rather than followed.
-func TestCanonicalDownloadOutputPath_RejectsNonRegularDestination(t *testing.T) {
+// TestCanonicalDownloadOutputPath_SymlinkDestination_ResolvedOrRefused
+// verifies what the documentation says of a destination that is already a
+// symlink: one naming a regular file inside the roots is resolved to that
+// file, and one that dangles, names a directory, or leads outside the roots
+// is refused.
+//
+// The dangling link and the link to a directory are the two cases the leaf
+// check refuses. The link leading outside is refused by the containment
+// check instead, since resolution replaces it with its target before the
+// leaf is looked at; asserting the message is what tells the two apart.
+func TestCanonicalDownloadOutputPath_SymlinkDestination_ResolvedOrRefused(t *testing.T) {
 	root := t.TempDir()
 	allowed := filepath.Join(root, "workspace")
 	outside := filepath.Join(root, "home")
 	makeDirs(t, allowed, outside)
-	target := filepath.Join(outside, "authorized_keys")
-	if err := os.WriteFile(target, []byte("ssh-ed25519 AAAA\n"), 0o600); err != nil {
+	confineLocalPathRoots(t, allowed)
+	outsideTarget := filepath.Join(outside, "authorized_keys")
+	insideTarget := filepath.Join(allowed, "real.bin")
+	if err := errors.Join(
+		os.WriteFile(outsideTarget, []byte("content\n"), 0o600),
+		os.WriteFile(insideTarget, []byte("content\n"), 0o600),
+	); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	link := filepath.Join(allowed, "artifact.bin")
-	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("symlink unsupported: %v", err)
+	canonicalInsideTarget, evalErr := filepath.EvalSymlinks(insideTarget)
+	if evalErr != nil {
+		t.Fatalf("EvalSymlinks(%q) error = %v", insideTarget, evalErr)
 	}
-	confineLocalPathRoots(t, allowed)
 
-	if got, err := CanonicalDownloadOutputPath(link); err == nil {
-		t.Fatalf("CanonicalDownloadOutputPath(symlink) = %q, want refusal", got)
+	tests := []struct {
+		name    string
+		link    string
+		target  string
+		want    string
+		wantMsg string
+	}{
+		{name: "a link to a regular file inside the roots is resolved to that file", link: "to-real.bin", target: insideTarget, want: canonicalInsideTarget},
+		{name: "a dangling link inside the roots is refused", link: "dangling.bin", target: filepath.Join(allowed, "missing.bin"), wantMsg: "already exists and is not a regular file"},
+		{name: "a link to a directory inside the roots is refused", link: "to-directory.bin", target: allowed, wantMsg: "already exists and is not a regular file"},
+		{name: "a link to a file outside the roots is refused", link: "to-outside.bin", target: outsideTarget, wantMsg: "outside allowed directories"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			link := filepath.Join(allowed, tt.link)
+			if symlinkErr := os.Symlink(tt.target, link); symlinkErr != nil {
+				t.Skipf("symlink unsupported: %v", symlinkErr)
+			}
+			got, err := canonicalDownloadOutputPath(link)
+			if tt.wantMsg != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantMsg) {
+					t.Errorf("canonicalDownloadOutputPath(%q) = %q, %v, want a refusal naming %q", link, got, err, tt.wantMsg)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Errorf("canonicalDownloadOutputPath(%q) = %q, %v, want %q", link, got, err, tt.want)
+			}
+		})
 	}
 }
 
@@ -1237,12 +1275,12 @@ func TestCanonicalDownloadOutputPath_UnusablePath_RefusedBeforeContainment(t *te
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CanonicalDownloadOutputPath(tt.path)
+			got, err := canonicalDownloadOutputPath(tt.path)
 			if err == nil || !strings.HasPrefix(err.Error(), tt.wantPrefix) {
-				t.Fatalf("CanonicalDownloadOutputPath(%q) = (%q, %v), want an error starting %q", tt.path, got, err, tt.wantPrefix)
+				t.Fatalf("canonicalDownloadOutputPath(%q) = (%q, %v), want an error starting %q", tt.path, got, err, tt.wantPrefix)
 			}
 			if got != "" {
-				t.Errorf("CanonicalDownloadOutputPath(%q) = %q beside the error, want the empty string", tt.path, got)
+				t.Errorf("canonicalDownloadOutputPath(%q) = %q beside the error, want the empty string", tt.path, got)
 			}
 		})
 	}
@@ -1357,8 +1395,8 @@ func TestCanonicalDownloadOutputPath_HTTPTransport_Refused(t *testing.T) {
 	SetLocalFilesystemAccess(false)
 	t.Cleanup(func() { SetLocalFilesystemAccess(true) })
 
-	if got, err := CanonicalDownloadOutputPath(filepath.Join(dir, "artifact.bin")); err == nil {
-		t.Fatalf("CanonicalDownloadOutputPath() = %q in HTTP mode, want refusal", got)
+	if got, err := canonicalDownloadOutputPath(filepath.Join(dir, "artifact.bin")); err == nil {
+		t.Fatalf("canonicalDownloadOutputPath() = %q in HTTP mode, want refusal", got)
 	}
 }
 

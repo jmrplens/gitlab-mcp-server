@@ -5,9 +5,11 @@
 package toolutil
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -94,6 +96,32 @@ func useMkdirAll(t *testing.T, fn func(string, fs.FileMode) error) {
 	mkdirAll = fn
 	t.Cleanup(func() { mkdirAll = original })
 }
+
+// useSyncDownloadDirectory replaces the directory sync that follows a
+// download's rename for the duration of the test, since no directory a test
+// can make refuses to be synced.
+func useSyncDownloadDirectory(t *testing.T, fn func(string) error) {
+	t.Helper()
+	original := syncDownloadDirectory
+	syncDownloadDirectory = fn
+	t.Cleanup(func() { syncDownloadDirectory = original })
+}
+
+// captureDebugLog redirects slog to a buffer at debug level for the duration
+// of the test, which is the level a directory that cannot be synced is
+// reported at.
+func captureDebugLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buf
+}
+
+// directoryNotSyncedLog is the part of the log line a download writes when it
+// is in place but its directory could not be synced.
+const directoryNotSyncedLog = "its directory could not be synced"
 
 // TestWriteDownloadOutputFile_CompleteWrite_PutsEveryByteAtTheDestination
 // verifies that a write that returns nil ends with the destination holding
@@ -431,10 +459,12 @@ func TestWriteDownloadOutputFile_DirectoryChangedAfterItWasMade_Refused(t *testi
 }
 
 // TestWriteDownloadOutputFile_ReplacedDestination_IsANewOwnerOnlyFile verifies
-// the two properties of a replacement the documentation states: the
+// the two properties of a replacement the documentation states for Unix: the
 // destination is a new file readable by the owner alone whatever mode the old
 // one had, and a hard link to the old file keeps the old content, which is
-// what tells a rename from a write through the old file.
+// what tells a rename from a write through the old file. On Windows the new
+// file takes the directory's inheritable ACL instead, which no mode bits
+// describe, so there is nothing here to compare.
 func TestWriteDownloadOutputFile_ReplacedDestination_IsANewOwnerOnlyFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows has no Unix permission bits to compare")
@@ -469,5 +499,100 @@ func TestWriteDownloadOutputFile_ReplacedDestination_IsANewOwnerOnlyFile(t *test
 	}
 	if got, readErr := os.ReadFile(link); readErr != nil || string(got) != "old" {
 		t.Errorf("os.ReadFile(%q) = %q, %v, want the old content kept by the hard link", link, got, readErr)
+	}
+}
+
+// TestWriteDownloadOutputFile_LinkToAFileInTheRoots_ReplacesTheFileAndKeepsTheLink
+// verifies what the documentation says of a destination named through a
+// symlink to a regular file inside the allowed roots: the link is resolved,
+// the file it names is what gets replaced, and the link itself stays a link,
+// now naming the new file. Nothing refuses it and nothing tells the caller,
+// which is why the documentation has to.
+func TestWriteDownloadOutputFile_LinkToAFileInTheRoots_ReplacesTheFileAndKeepsTheLink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real.bin")
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(dir, "artifact.bin")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	if _, err := WriteDownloadOutputFile(link, writeChunks([]string{"new"})); err != nil {
+		t.Fatalf("WriteDownloadOutputFile(%q) error = %v, want nil", link, err)
+	}
+
+	if info, err := os.Lstat(link); err != nil || info.Mode()&fs.ModeSymlink == 0 {
+		t.Errorf("os.Lstat(%q) = %v, %v, want the link kept", link, info, err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Errorf("os.ReadFile(%q) = %q, %v, want the file the link names replaced", target, got, err)
+	}
+	assertNoPartialDownloads(t, dir)
+}
+
+// TestWriteDownloadOutputFile_Committed_SyncsTheDirectoryAfterTheRename
+// verifies that a download ends by syncing the directory it was renamed into,
+// once, and only after the rename: syncing the file makes its bytes durable
+// but not the name now pointing at them, so without this a crash soon after
+// the tool reports success can bring back the file the rename replaced.
+func TestWriteDownloadOutputFile_Committed_SyncsTheDirectoryAfterTheRename(t *testing.T) {
+	logs := captureDebugLog(t)
+	dir := t.TempDir()
+	destination := prepareDestination(t, filepath.Join(dir, "artifact.bin"), true).path
+	canonicalDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q) error = %v", dir, err)
+	}
+	var synced []string
+	var heldAtSync string
+	useSyncDownloadDirectory(t, func(d string) error {
+		synced = append(synced, d)
+		got, readErr := os.ReadFile(destination)
+		if readErr != nil {
+			t.Errorf("os.ReadFile(%q) at the directory sync error = %v", destination, readErr)
+		}
+		heldAtSync = string(got)
+		return syncDirectory(d)
+	})
+
+	if _, err = WriteDownloadOutputFile(destination, writeChunks([]string{"new"})); err != nil {
+		t.Fatalf("WriteDownloadOutputFile(%q) error = %v, want nil", destination, err)
+	}
+
+	if len(synced) != 1 || synced[0] != canonicalDir {
+		t.Errorf("directories synced = %q, want exactly [%q]", synced, canonicalDir)
+	}
+	if heldAtSync != "new" {
+		t.Errorf("destination held %q when its directory was synced, want %q: the sync must follow the rename", heldAtSync, "new")
+	}
+	if strings.Contains(logs.String(), directoryNotSyncedLog) {
+		t.Errorf("log = %s, want no report of a directory that could not be synced", logs)
+	}
+}
+
+// TestWriteDownloadOutputFile_DirectorySyncFails_TheDownloadStillSucceeds
+// verifies that a directory the filesystem refuses to sync does not turn a
+// download that is already in place into a failure, which would tell the
+// caller the file is absent while it sits at the destination, and that the
+// refusal is logged rather than swallowed.
+func TestWriteDownloadOutputFile_DirectorySyncFails_TheDownloadStillSucceeds(t *testing.T) {
+	logs := captureDebugLog(t)
+	dir := t.TempDir()
+	destination := filepath.Join(dir, "artifact.bin")
+	errDirectorySync := errors.New("this filesystem cannot sync a directory")
+	useSyncDownloadDirectory(t, func(string) error { return errDirectorySync })
+
+	size, err := WriteDownloadOutputFile(destination, writeChunks([]string{"new"}))
+	if err != nil || size != int64(len("new")) {
+		t.Fatalf("WriteDownloadOutputFile(%q) = %d, %v, want %d, nil", destination, size, err, len("new"))
+	}
+	if got, readErr := os.ReadFile(destination); readErr != nil || string(got) != "new" {
+		t.Errorf("os.ReadFile(%q) = %q, %v, want the download in place", destination, got, readErr)
+	}
+	assertNoPartialDownloads(t, dir)
+	if got := logs.String(); !strings.Contains(got, directoryNotSyncedLog) || !strings.Contains(got, errDirectorySync.Error()) {
+		t.Errorf("log = %s, want it to carry %q and the refusal %q", got, directoryNotSyncedLog, errDirectorySync)
 	}
 }

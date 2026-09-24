@@ -210,7 +210,8 @@ which writes rather than reads.
   under a random name, and renames it over `output_path` once the whole body
   has arrived. A rename replaces the name rather than following it, so a
   symlink planted at `output_path` after the check is replaced instead of
-  written through, on Windows as well, where no open can refuse a link. A
+  written through, on Windows as well, where Go offers no `O_NOFOLLOW` and
+  opening a path that already exists follows a link planted there. A
   download that fails or is cancelled removes its temporary file and leaves
   `output_path` as it was, so nothing that looks like a download is left for
   the next reader to trust.

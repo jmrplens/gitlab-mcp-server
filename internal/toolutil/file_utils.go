@@ -243,7 +243,7 @@ func CanonicalLocalDirPath(path string) (string, error) {
 	return canonicalPath, nil
 }
 
-// CanonicalDownloadOutputPath resolves a caller-supplied destination for a
+// canonicalDownloadOutputPath resolves a caller-supplied destination for a
 // file the server is about to write and returns it canonicalized, provided it
 // lies under the working directory, the OS temporary directory, or a directory
 // listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. It refuses every path when the
@@ -251,18 +251,23 @@ func CanonicalLocalDirPath(path string) (string, error) {
 //
 // The destination does not exist yet and neither may its parents, so the
 // deepest existing ancestor is what gets resolved through symlinks; the
-// segments below it cannot be symlinks because they do not exist. A leaf that
-// does exist must be a regular file: a symlink there would redirect a write
-// that opened the path to whatever it names, which is how an "output path"
-// becomes a way to overwrite an SSH key. [WriteDownloadOutputFile] never opens
-// the destination, but the refusal stays, since a caller who named a link
-// meant something else and is better told than having the link replaced.
+// segments below it cannot be symlinks because they do not exist. A symlink
+// at the destination is resolved with the rest. A link to a regular file
+// inside the roots is resolved to that file, which is what gets replaced
+// while the link stays; a dangling link, one naming a non-regular file, or
+// one leading outside the roots is refused. What is left at the leaf after
+// resolution must be absent or a regular file, because a dangling link there
+// would redirect a write that opened the path to whatever it later names,
+// which is how an "output path" becomes a way to overwrite an SSH key.
 //
-// Call it again after creating the parent directories. The second call
-// resolves a parent that now exists, which is what turns the check from a
-// promise about the path into a check on the directory being written to.
-// [WriteDownloadOutputFile] makes both calls, and is how a download should
-// reach the destination this returns.
+// It is unexported because a path it returns is only safe to write through
+// the rename [WriteDownloadOutputFile] makes: opening it, as a download once
+// did, truncates the destination before a byte has arrived and, on Windows,
+// follows a link planted there after the check. It is called twice, the
+// second time after creating the parent directories, which resolves a parent
+// that now exists and so turns the check from a promise about the path into
+// a check on the directory being written to. [WriteDownloadOutputFile] makes
+// both calls.
 //
 // An existing regular file is replaced, deliberately, and there is no
 // caller opt-in to refuse it. The audit that produced the symlink check asked
@@ -278,7 +283,7 @@ func CanonicalLocalDirPath(path string) (string, error) {
 // write and can overwrite that same file directly. The opt-in would be one
 // bool plus a regeneration pass if the calculus ever changes, but the residual
 // risk it removes is smaller than the surface it adds.
-func CanonicalDownloadOutputPath(path string) (string, error) {
+func canonicalDownloadOutputPath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("output path is required")
 	}
