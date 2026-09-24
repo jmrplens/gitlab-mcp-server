@@ -381,7 +381,7 @@ func TestDispatchOf_NoSpanArrives_ReportsUnobservedWithinTheGrace(t *testing.T) 
 	// the original is put back before anything else runs.
 	previous := startedSpans.Load()
 	t.Cleanup(func() { startedSpans.Store(previous) })
-	startedSpans.Store(&spanReceiver{issued: map[string]struct{}{}, seen: map[string]traceSpans{}})
+	startedSpans.Store(&spanReceiver{issued: map[string]*sessionConn{}, seen: map[string]traceSpans{}})
 
 	// The give-up flag is what turns the budget down, and it is restored for
 	// the same reason the receiver is. It is process-wide and set once: left
@@ -394,7 +394,7 @@ func TestDispatchOf_NoSpanArrives_ReportsUnobservedWithinTheGrace(t *testing.T) 
 	dispatchGaveUp.Store(true)
 
 	started := time.Now()
-	facts, requests, observed := dispatchOf("00000000000000000000000000000001")
+	facts, requests, observed := dispatchOf("00000000000000000000000000000001", &sessionConn{exportsSpans: true})
 	elapsed := time.Since(started)
 
 	if observed {
@@ -421,7 +421,7 @@ func TestDispatchOf_NoSpanArrives_ReportsUnobservedWithinTheGrace(t *testing.T) 
 // its whole time limit for no information.
 func TestDispatchOf_NoTraceAndNoReceiver_ReportsUnobservedAtOnce(t *testing.T) {
 	t.Run("no trace", func(t *testing.T) {
-		if _, _, observed := dispatchOf(""); observed {
+		if _, _, observed := dispatchOf("", &sessionConn{exportsSpans: true}); observed {
 			t.Error("observed = true, want false for a call that carried no trace")
 		}
 	})
@@ -431,10 +431,44 @@ func TestDispatchOf_NoTraceAndNoReceiver_ReportsUnobservedAtOnce(t *testing.T) {
 		t.Cleanup(func() { startedSpans.Store(previous) })
 		startedSpans.Store(nil)
 
-		if _, _, observed := dispatchOf("00000000000000000000000000000002"); observed {
+		if _, _, observed := dispatchOf("00000000000000000000000000000002", &sessionConn{exportsSpans: true}); observed {
 			t.Error("observed = true, want false for a run with no receiver")
 		}
 	})
+}
+
+// TestDispatchOf_ASessionWhoseSpansCannotArrive_ReportsUnobservedAtOnce holds
+// the model verb to the flush's rule about which calls are worth a wait.
+//
+// A traced call to a session whose server exports nothing to this process, or
+// to no session at all, has a span with nowhere to go. The flush has never
+// waited for one; this used to wait the whole budget, on a receiver that has
+// seen spans and so grants the full one, which is what the timing here would
+// catch.
+func TestDispatchOf_ASessionWhoseSpansCannotArrive_ReportsUnobservedAtOnce(t *testing.T) {
+	cases := []struct {
+		name string
+		conn *sessionConn
+	}{
+		{name: "a session exporting no spans", conn: &sessionConn{}},
+		{name: "no session", conn: nil},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			received := useWaitingReceiver(t)
+			received.issue(testTraceID, testCase.conn)
+			started := time.Now()
+
+			_, _, observed := dispatchOf(testTraceID, testCase.conn)
+
+			if observed {
+				t.Error("observed = true, want false: no span of this call can arrive")
+			}
+			if waited := time.Since(started); waited > time.Second {
+				t.Errorf("dispatchOf waited %s for a span with nowhere to go", waited)
+			}
+		})
+	}
 }
 
 // TestCallAsModel_CallWithADeadContext_ReportsATransportError checks that a
@@ -443,6 +477,10 @@ func TestDispatchOf_NoTraceAndNoReceiver_ReportsUnobservedAtOnce(t *testing.T) {
 // The verb asserts nothing by design, so a cancelled context has to come back
 // as an answer rather than as a failed test: a turn budget that ran out is a
 // fact about the attempt and is recorded as one.
+//
+// It also carries no trace, and neither does its call line. The request never
+// left the client, so no span of it can come, and a trace issued for it was
+// waited for twice, here and at the flush, ten seconds each time.
 func TestCallAsModel_CallWithADeadContext_ReportsATransportError(t *testing.T) {
 	env := newEnv(t, stubInstance(t))
 	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
@@ -460,5 +498,46 @@ func TestCallAsModel_CallWithADeadContext_ReportsATransportError(t *testing.T) {
 	}
 	if answer.DispatchObserved {
 		t.Error("DispatchObserved = true, want false: the call never reached a dispatcher")
+	}
+	if answer.TraceID != "" {
+		t.Errorf("TraceID = %q, want none: the request never left, so a trace for it is one nothing can join",
+			answer.TraceID)
+	}
+	lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
+	if len(lines) != 1 {
+		t.Fatalf("the flush wrote %s, want the one call line", describeLines(lines))
+	}
+	if call, isCall := lines[0].(*e2ecalls.Call); !isCall || call.TraceID != "" {
+		t.Errorf("the call line is %+v, want it recorded with no trace", lines[0])
+	}
+}
+
+// TestCallAsModel_CallNamingNoTool_IsObservedWithOnlyAStatus pins what a
+// model's call with an empty tool name reads as, which moved with the arrival
+// rule.
+//
+// The server spans the call and refuses it, and its span carries the method
+// and a status and no tool, since there was none to record. It used to count as
+// no span at all, so the answer came back unobserved after the whole budget;
+// the span does arrive, and the answer now says the server saw the call and
+// dispatched nothing. A scorer reads that as an observed call that named no
+// step, which is what it was.
+func TestCallAsModel_CallNamingNoTool_IsObservedWithOnlyAStatus(t *testing.T) {
+	env := newEnv(t, stubInstance(t))
+	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
+
+	answer := session.CallAsModel(env.Ctx, ModelCall{Arguments: modelArguments(t, map[string]any{})})
+
+	if answer.Err == nil {
+		t.Fatalf("Err = nil, want the server's refusal of a call naming no tool (outcome %q)", answer.Outcome)
+	}
+	if !answer.DispatchObserved {
+		t.Fatalf("DispatchObserved = false, want true: the server spanned the call (trace %q)", answer.TraceID)
+	}
+	if answer.Dispatch.Tool != "" || answer.Dispatch.Action != "" {
+		t.Errorf("Dispatch = %+v, want no tool and no action: the call named neither", answer.Dispatch)
+	}
+	if answer.Dispatch.Status == "" {
+		t.Error("Dispatch.Status is empty: the span's status is the one thing it can say about such a call")
 	}
 }

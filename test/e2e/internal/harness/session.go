@@ -602,10 +602,20 @@ type sessionConn struct {
 	// for, keyed by the token each call minted.
 	progress *progressCollector
 
-	// dispatchObserved is set the first time a span of this session's own
-	// arrives. While it is false every call of the session is a claim about
-	// what was asked for and not about what ran, and the session line says so.
+	// dispatchObserved is set the first time the server span of one of this
+	// session's calls arrives, of whatever method: the receiver sets it when
+	// the span lands, flush or no flush. While it is false no call of the
+	// session was seen by the server's own account, so each of its tool calls
+	// is a claim about what was asked for and not about what ran, and the
+	// session line says so. It is false as well for a session that asked
+	// nothing a span could answer, which is what issuedTrace tells apart.
 	dispatchObserved atomic.Bool
+	// issuedTrace is set the first time a call of this session is stamped with
+	// a trace. A session that never issued one made no call its server could
+	// report on, so its dispatchObserved being false says nothing about its
+	// telemetry, and the session line marks it idle rather than letting it
+	// read as a session whose spans never came.
+	issuedTrace atomic.Bool
 	// exportsSpans says whether the server behind this session exports its
 	// spans to this process's receiver, which only a child started with the
 	// receiver's endpoint in its environment does. A test's flush waits for

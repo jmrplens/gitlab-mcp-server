@@ -93,7 +93,14 @@ type sessionRow struct {
 	Resources         int    `json:"resources"`
 	ResourceTemplates int    `json:"resource_templates"`
 	Prompts           int    `json:"prompts"`
-	DispatchObserved  bool   `json:"dispatch_observed"`
+	// DispatchObserved is whether every session of the shape that made a
+	// traced call had the server's own span of at least one of them arrive,
+	// of whatever method. A false row names telemetry that did not reach the
+	// harness for some session of the shape (diagnostics.unobserved_sessions
+	// says which); a session that asked nothing is idle and holds no row
+	// false. It is a statement a reader checks the cells against and decides
+	// no credit: a tool call is credited on the action its own span named.
+	DispatchObserved bool `json:"dispatch_observed"`
 }
 
 // capabilitySurfaceRow is one capability surface, with what its sessions

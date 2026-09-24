@@ -334,10 +334,31 @@ type Session struct {
 	// SubscribableKinds are the resource kinds the session accepts a
 	// subscription for.
 	SubscribableKinds []string `json:"subscribable_kinds,omitempty"`
-	// DispatchObserved is whether the harness ever saw a span from this
-	// session. When it is false every call of the session is a claim about
-	// what was asked for and not about what ran.
+	// DispatchObserved is whether the server's own span arrived for at least
+	// one call this session made, of whatever method: a resource read, a
+	// prompt or a completion counts as much as a tool call, since each says
+	// the session's telemetry reaches the harness.
+	//
+	// It is false when that telemetry never arrived, and then every tool call
+	// of the session is a claim about what was asked for and not about what
+	// ran. It is also false for a session that made no traced call at all,
+	// which Idle says.
+	//
+	// It decides no credit. A resource read, a prompt and a completion are
+	// judged on their answer, and a tool call is judged on the action its own
+	// span named, joined on the trace id; this is the statement about the
+	// session a reader checks those against.
 	DispatchObserved bool `json:"dispatch_observed"`
+	// Idle is whether the session made no call a span could answer: it was
+	// started, listed what it serves, and was never asked anything carrying a
+	// trace. Its DispatchObserved is then false for want of a question rather
+	// than for want of telemetry, and a reader folding sessions sets it apart
+	// instead of letting it read as a session whose spans never came.
+	//
+	// It is written only when true, so a line written before the harness
+	// recorded it reads as not idle, which is the reading that leaves such a
+	// line's DispatchObserved meaning what it always meant.
+	Idle bool `json:"idle,omitempty"`
 }
 
 // Call is one MCP call a test made.

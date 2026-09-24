@@ -114,12 +114,7 @@ func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
 	second.Resources = []string{"gitlab://projects", "gitlab://users", "gitlab://me"}
 	second.ResourceTemplates = []string{"gitlab://project/{project_id}", "gitlab://group/{group_id}", "gitlab://user/{user_id}"}
 	second.Prompts = []string{"summarize_issue"}
-	// The second line called a tool and saw no span, which is what marks the
-	// folded shape unobserved.
-	rows := sessionRows(classify(&runtimeRecords{
-		sessions:     []*e2ecalls.Session{first, second},
-		toolSessions: map[*e2ecalls.Session]bool{second: true},
-	}, fixtureCatalog()))
+	rows := sessionRows(classify(&runtimeRecords{sessions: []*e2ecalls.Session{first, second}}, fixtureCatalog()))
 
 	want := []sessionRow{{
 		Surface: config.ToolSurfaceDynamic, Mode: modeDefault, Sessions: 2,

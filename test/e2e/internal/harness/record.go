@@ -290,10 +290,13 @@ func (r *envRecorder) finish(reporter e2ecalls.Reporter, status string) []e2ecal
 
 	awaitDispatch(calls)
 
-	lines := make([]e2ecalls.Line, 0, len(calls)*2+len(skips))
+	lines := make([]e2ecalls.Line, 0, len(calls)+len(skips))
 	for _, call := range calls {
 		call.line.TestStatus = status
-		if kept, arrived := dispatchFor(call); arrived {
+		// A dispatch line only for a span that named the call: the server span
+		// of a resource read or a completion arrives too, and says nothing a
+		// reader could join, since both readers skip a line naming no action.
+		if kept, arrived := dispatchFor(call); arrived && kept.dispatch.namesCall() {
 			call.line.Dispatched = kept.dispatch.action
 			lines = append(lines, dispatchLine(call.line.TraceID, kept))
 			assertDispatch(reporter, call, kept.dispatch)
@@ -327,6 +330,13 @@ func testStatus(t *testing.T) string {
 // dispatchWait is how long a test's flush waits for the spans of the calls it
 // made. The children export every hundred milliseconds, so this is generous
 // for the loopback hop and short enough that a stalled exporter is noticed.
+//
+// It is a ceiling and not what a flush costs: the wait ends when the server
+// span of every traced call has landed, which is about one export interval
+// after the last call, whatever the calls' methods were. It was what a flush
+// cost while only a tools/call span counted as arriving, since every resource
+// read, prompt or completion then waited here for a span that had already
+// come and been dropped.
 const dispatchWait = 10 * time.Second
 
 // dispatchGrace is what a run whose spans have never arrived waits instead.
@@ -346,27 +356,33 @@ var dispatchGaveUp atomic.Bool
 // awaitDispatch waits until the server has reported on every call of this
 // test whose span can arrive, or until the budget runs out.
 //
-// A call to a session whose server exports nothing to this process's receiver
-// is not waited for ([pendingCall.awaitsSpan]): an in-process server a test
-// assembles has no exporter, so its span never comes. Waiting for one cost
-// the whole budget at every flush once any earlier test of the process had
-// started the receiver, which is how the harness's own tests came to spend
-// most of their time waiting.
+// Every method's span is waited for, and every one arrives: the server spans
+// each request it handles, and a resource read's span counts the moment it
+// lands even though it names no action ([spanReceiver.lookup]). What is not
+// waited for is a call whose span cannot come ([spanCanArrive]): a call that
+// carries no trace, and a call to a session whose server exports nothing to
+// this process's receiver, which is every in-process server a test assembles.
+// Waiting for either cost the whole budget at every flush once any earlier test
+// of the process had started the receiver, which is how the harness's own
+// tests came to spend most of their time waiting.
 func awaitDispatch(calls []*pendingCall) {
 	pending := make([]string, 0, len(calls))
 	for _, call := range calls {
-		if call.awaitsSpan() {
+		if spanCanArrive(call.line.TraceID, call.conn) {
 			pending = append(pending, call.line.TraceID)
 		}
 	}
 	awaitTraces(pending)
 }
 
-// awaitsSpan reports whether a span of this call can still arrive: the call
-// carries a trace, and the session it went to exports its spans to this
-// process's receiver.
-func (call *pendingCall) awaitsSpan() bool {
-	return call.line.TraceID != "" && call.conn != nil && call.conn.exportsSpans
+// spanCanArrive reports whether the server span of a call can still arrive:
+// the call carries a trace, and the session it went to exports its spans to
+// this process's receiver.
+//
+// The flush and [Session.CallAsModel] both ask it, so the two cannot disagree
+// about which calls are worth a wait.
+func spanCanArrive(traceID string, conn *sessionConn) bool {
+	return traceID != "" && conn != nil && conn.exportsSpans
 }
 
 // awaitTraces waits for the server's own span of each of these traces.
@@ -406,18 +422,20 @@ func awaitTraces(pending []string) {
 	}
 }
 
-// dispatchFor returns what the receiver kept about one call, marking its
-// session dispatch-observed when the server's span arrived.
+// dispatchFor returns what the receiver kept about one call, and whether the
+// server's span arrived.
+//
+// It does not mark the session: the receiver did that when the span landed
+// ([spanReceiver.absorbSpan]), which is what lets a span that arrives after
+// this flush still say the session's telemetry works. A call that carries no
+// trace needs no guard of its own here, since the receiver keeps nothing under
+// the empty id.
 func dispatchFor(call *pendingCall) (traceSpans, bool) {
 	received := receiverIfStarted()
-	if received == nil || call.line.TraceID == "" {
+	if received == nil {
 		return traceSpans{}, false
 	}
-	kept, arrived := received.lookup(call.line.TraceID)
-	if arrived && call.conn != nil {
-		call.conn.dispatchObserved.Store(true)
-	}
-	return kept, arrived
+	return received.lookup(call.line.TraceID)
 }
 
 // assertDispatch fails the test when the server ran something other than what
@@ -485,6 +503,15 @@ func dispatchLine(traceID string, kept traceSpans) *e2ecalls.Dispatch {
 // It runs on the caller's goroutine, between the verb and the wire, which is
 // the only place that holds all three of the attribution, the request as it
 // will be sent, and the answer as it comes back.
+//
+// A request whose context has already ended is recorded and given no trace.
+// Neither transport writes one: the stdio connection refuses a done context
+// before it writes, and the HTTP client fails before it dials, so no server
+// ever sees the request and no span of it can come. Issued anyway, its trace
+// was waited for twice, once by [Session.CallAsModel] and once at the flush,
+// the whole budget each time. Only a context that ended before the request
+// left is exempt; one that ends while the request is out may still produce a
+// span, and is waited for like any other.
 func (c *sessionConn) recordSending() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -493,12 +520,7 @@ func (c *sessionConn) recordSending() mcp.Middleware {
 				return next(ctx, method, req)
 			}
 
-			traceID, traceParent := newTraceParent()
-			if !stampTraceParent(req, traceParent) {
-				traceID = ""
-			} else if received := receiverIfStarted(); received != nil {
-				received.issue(traceID)
-			}
+			traceID := c.stampTrace(ctx, req)
 			// After the stamp and not before it: a request whose params could
 			// not carry the trace has no trace, and a caller told otherwise
 			// would wait the whole budget for a span that was never issued.
@@ -516,6 +538,29 @@ func (c *sessionConn) recordSending() mcp.Middleware {
 			return result, err
 		}
 	}
+}
+
+// stampTrace mints a trace for one request on this session, writes it into
+// the request, and returns its id, or the empty id when the request can carry
+// none or will never be sent.
+//
+// A trace it returns is one this session issued, which is what tells a session
+// that asked something a span could answer from one that asked nothing
+// ([sessionConn.issuedTrace]), and it is registered with the receiver under
+// this session, which the server's span marks when it lands.
+func (c *sessionConn) stampTrace(ctx context.Context, req mcp.Request) string {
+	if ctx.Err() != nil {
+		return ""
+	}
+	traceID, traceParent := newTraceParent()
+	if !stampTraceParent(req, traceParent) {
+		return ""
+	}
+	c.issuedTrace.Store(true)
+	if received := receiverIfStarted(); received != nil {
+		received.issue(traceID, c)
+	}
+	return traceID
 }
 
 // callRecord builds the client half of one call line.
@@ -966,6 +1011,7 @@ func sessionLines() []e2ecalls.Line {
 			Prompts:           slices.Clone(conn.served.prompts),
 			Completions:       completionReferences(conn.served),
 			DispatchObserved:  conn.dispatchObserved.Load(),
+			Idle:              !conn.issuedTrace.Load(),
 		})
 		return true
 	})
@@ -996,13 +1042,17 @@ func lateDispatchLines() []e2ecalls.Line {
 }
 
 // dispatchLinesOf turns what a receiver holds into the dispatch lines a record
-// carries, one per trace that named an action.
+// carries, one per trace whose server span named the tool or the action it
+// ran ([dispatchRecord.namesCall]), which is the rule the flush writes by too.
 //
-// A trace holding only GitLab request spans is skipped. It names no action, so
-// there is nothing for the audit to attribute those requests to, and a dispatch
-// line with an empty action would be a record of a call nobody can identify —
-// counted as a dispatch by the coverage command's diagnostics and then skipped
-// by its join, which is a disagreement with no signal behind it.
+// Two kinds of trace are skipped. One holding only GitLab request spans names
+// nothing, so there is nothing for the audit to attribute those requests to.
+// One whose server span belongs to a method other than tools/call, a resource
+// read or a completion, has arrived and names nothing either, even when the
+// span says the call failed. A dispatch line for either would be a record of a
+// call nobody can identify: counted as a dispatch by the coverage command's
+// diagnostics and then skipped by its join, which is a disagreement with no
+// signal behind it.
 //
 // It is a function of the map rather than a loop inside its caller so that the
 // skip can be tested: its caller reads a package-level receiver that only a
@@ -1010,7 +1060,7 @@ func lateDispatchLines() []e2ecalls.Line {
 func dispatchLinesOf(all map[string]traceSpans) []e2ecalls.Line {
 	lines := make([]e2ecalls.Line, 0, len(all))
 	for traceID, kept := range all {
-		if !kept.dispatch.carriesFacts() {
+		if !kept.dispatch.namesCall() {
 			continue
 		}
 		lines = append(lines, dispatchLine(traceID, kept))

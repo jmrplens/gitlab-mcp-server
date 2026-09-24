@@ -37,6 +37,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
@@ -79,30 +80,47 @@ type dispatchRecord struct {
 	status string
 }
 
-// carriesFacts reports whether a span said anything this record is for.
+// carriesFacts reports whether a span carried any of the five dispatch
+// attributes.
 //
-// A trace holds more than the MCP server span: every GitLab request the
-// handler made is a child span of it, and none of those carries any of these
-// attributes. Merging one would overwrite the facts with emptiness, so a span
-// that carries none of them is dropped instead.
-//
-// It is also the arrival test [spanReceiver.lookup] answers with, which is why
-// the request count is deliberately not part of it: a trace whose GitLab calls
-// have landed and whose server span has not has not been dispatch-observed,
-// and saying it had would flush the call line with no dispatched action and no
-// assertion about what ran.
+// It is one of the two ways [isServerSpan] recognizes the server's own span,
+// and it is no longer the arrival test. It used to be both, and a span of any
+// method but tools/call carries none of these: a resource read, a prompt, a
+// completion or a subscribe is spanned with mcp.method.name and the attributes
+// of what it addressed, so its span was dropped as saying nothing, its trace
+// never arrived, and every flush that held one waited the whole budget for a
+// span that had come and gone.
 func (d dispatchRecord) carriesFacts() bool {
 	return d.tool != "" || d.action != "" || d.domain != "" || d.refusalReason != "" || d.errorType != ""
 }
 
-// traceSpans is everything the receiver kept about one trace: what the server
-// said it dispatched, and how many GitLab requests it made under it.
+// namesCall reports whether the server's span named the tool or the action it
+// ran, which is what a dispatch line is written for.
 //
-// The two are held in one entry rather than in two maps so that a reader can
-// never take a count from one moment and a dispatch from another, and they are
-// separate fields rather than one merged record because they arrive from
-// different spans and answer different questions.
+// A reader joins a dispatch line to its call on the action, and both readers
+// skip one that names none. A span naming only a tool is still one: it is how
+// the server says a call reached the find tool, which dispatches no action.
+// What falls outside it is the span of every other method, whose record says
+// at most that the call failed, and a line for it would be counted by the
+// coverage command's diagnostics and then skipped by its join.
+func (d dispatchRecord) namesCall() bool {
+	return d.tool != "" || d.action != ""
+}
+
+// traceSpans is everything the receiver kept about one trace: whether the
+// server's own span arrived and what it said, and how many GitLab requests the
+// handler made under it.
+//
+// The three are held in one entry rather than in several maps so that a reader
+// can never take a count from one moment and a dispatch from another, and the
+// count is a field of its own rather than part of the merged record because it
+// arrives from different spans and answers a different question.
 type traceSpans struct {
+	// served is whether the MCP server span of this trace has arrived, whatever
+	// its method. It is the arrival test, and it is a field of its own because
+	// what the span said can be nothing at all: a resource read that succeeded
+	// carries none of the dispatch facts.
+	served bool
 	// dispatch is what the MCP server span said.
 	dispatch dispatchRecord
 	// requests counts the GitLab client spans of this trace.
@@ -140,12 +158,19 @@ type spanReceiver struct {
 	// url is the base endpoint a child is pointed at.
 	url string
 
-	mu     sync.Mutex
-	issued map[string]struct{}
+	mu sync.Mutex
+	// issued is every trace the harness stamped into a call, with the session
+	// the call went to, which the server's span marks dispatch-observed the
+	// moment it lands. The session is nil for a trace issued by a test that
+	// has no session to name.
+	issued map[string]*sessionConn
 	seen   map[string]traceSpans
 
-	// observed is set the first time any dispatch arrives, so a run whose
+	// observed is set the first time any server span arrives, so a run whose
 	// telemetry never worked can stop waiting for spans that are not coming.
+	// Any method's span sets it: a run whose first calls were all resource
+	// reads has working telemetry, and a flag that waited for a tools/call to
+	// say so gave up on it and told the log that nothing had arrived.
 	observed atomic.Bool
 
 	server   *http.Server
@@ -197,7 +222,7 @@ func startSpanReceiver() (*spanReceiver, error) {
 
 	received := &spanReceiver{
 		url:      "http://" + listener.Addr().String(),
-		issued:   map[string]struct{}{},
+		issued:   map[string]*sessionConn{},
 		seen:     map[string]traceSpans{},
 		listener: listener,
 	}
@@ -232,28 +257,30 @@ func closeSpanReceiver() {
 	_ = receiver.server.Close()
 }
 
-// issue records a trace id the harness stamped into a call, so the spans of
-// that call are the ones the receiver keeps.
-func (r *spanReceiver) issue(traceID string) {
+// issue records a trace id the harness stamped into a call on one session, so
+// the spans of that call are the ones the receiver keeps and the session is
+// the one its server span marks.
+func (r *spanReceiver) issue(traceID string, conn *sessionConn) {
 	if traceID == "" {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.issued[traceID] = struct{}{}
+	r.issued[traceID] = conn
 }
 
 // lookup returns what the receiver kept about one trace, and whether the
 // server's own span has arrived.
 //
-// Arrival is the dispatch half alone. An entry made by a GitLab request span
-// and nothing else says the handler called out and not which action it was
-// running, which is the fact every caller of this is waiting for.
+// Arrival is the server span, of whatever method, and nothing else. An entry
+// made by a GitLab request span alone says the handler called out and not
+// that the server has reported on the call, and a caller told it had would
+// flush a tools/call with no dispatched action and no assertion about what ran.
 func (r *spanReceiver) lookup(traceID string) (traceSpans, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	kept := r.seen[traceID]
-	return kept, kept.dispatch.carriesFacts()
+	return kept, kept.served
 }
 
 // all returns everything the receiver has kept, keyed by trace id.
@@ -294,27 +321,21 @@ func (r *spanReceiver) absorb(export *coltracepb.ExportTraceServiceRequest) {
 	}
 }
 
-// absorbSpan keeps one span's facts, if the harness issued its trace and the
-// span carries any.
+// absorbSpan keeps one span, if the harness issued its trace and the span is
+// one of the two kinds this record is made of.
 //
-// Two kinds of span are kept and they are kept apart. The MCP server span says
-// what ran; a GitLab client span says the handler called out, and is counted
-// rather than merged. Counting it is the whole of the per-action observation
-// this record exists to make possible, and keeping it out of the merge is what
-// stops a failed GitLab call from writing its own error.type over the server's.
+// The two are kept apart. The MCP server span says the server reported on the
+// call and, for a tool call, what ran; a GitLab client span says the handler
+// called out, and is counted rather than merged. Counting it is the whole of
+// the per-action observation this record exists to make possible, and keeping
+// it out of the merge is what stops a failed GitLab call from writing its own
+// error.type over the server's.
 //
-// Every other client span is dropped, and the rule is the span kind rather
-// than "is it GitLab" for a reason the GitLab case makes visible only by
-// accident. The outbound transport is not the server's only producer of client
-// spans: [mcpotel.SendingMiddleware] opens one per server-initiated request —
-// an elicitation, a sampling call, a progress notification — and a failed one
-// carries error.type and no http.request.method, so a rule that merged
-// whatever is not a GitLab request would write that error over the server's
-// facts, mark the trace dispatch-observed before the server span landed, and
-// have [spanReceiver.lookup] report arrival from a span that names no action.
-// The merge wants the server span; asking for SPAN_KIND_SERVER outright is the
-// cleaner spelling of that and is not what this does, because a span built by
-// hand leaves Kind unset and every stub in the tests would stop being merged.
+// The server span's arrival is also where the session the call went to is
+// marked dispatch-observed, at the moment the span lands rather than at the
+// flush of the test that made the call: a span that came after that flush
+// still says the session's telemetry works, and its dispatch line is joined
+// to the call all the same.
 func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	traceID := hex.EncodeToString(span.GetTraceId())
 	if traceID == "" {
@@ -322,13 +343,14 @@ func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	}
 	request := isGitLabRequest(span)
 	facts := spanFacts(span)
-	if !request && !facts.carriesFacts() {
+	if !request && !isServerSpan(span, facts) {
 		return
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, issued := r.issued[traceID]; !issued {
+	conn, issued := r.issued[traceID]
+	if !issued {
 		return
 	}
 	kept := r.seen[traceID]
@@ -337,12 +359,54 @@ func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 		r.seen[traceID] = kept
 		return
 	}
-	if span.GetKind() == tracepb.Span_SPAN_KIND_CLIENT {
-		return
-	}
+	kept.served = true
 	kept.dispatch = kept.dispatch.merge(facts)
 	r.seen[traceID] = kept
 	r.observed.Store(true)
+	if conn != nil {
+		conn.dispatchObserved.Store(true)
+	}
+}
+
+// isServerSpan reports whether a span is the MCP server's own account of one
+// call.
+//
+// The server opens one for every request it handles, of every method, and
+// every one carries mcp.method.name: the convention marks it Required, and
+// the middleware writes it before it knows anything else about the request.
+// That attribute is what makes a resource read's span recognizable at all,
+// since it carries none of the dispatch facts. A span carrying those facts is
+// taken too, which is what a span built by hand in this package's tests is,
+// and what keeps a tool call's span arriving should the method attribute ever
+// go missing.
+//
+// A client span is never the server span, whatever it carries, and the rule
+// is the span kind for a reason the GitLab case makes visible only by
+// accident. The outbound transport is not the server's only producer of client
+// spans: [mcpotel.SendingMiddleware] opens one per server-initiated request
+// (an elicitation, a sampling call, a progress notification), and it carries
+// mcp.method.name on the trace of the tools/call that provoked it, plus
+// error.type when it failed. Taken for the server span, it would mark the trace
+// arrived before the tools/call's own span landed, the flush would write that
+// call with no dispatched action, and the assertion about what ran would be
+// skipped. Asking for SPAN_KIND_SERVER outright is the cleaner spelling and is
+// not what this does, because a span built by hand leaves Kind unset.
+func isServerSpan(span *tracepb.Span, facts dispatchRecord) bool {
+	if span.GetKind() == tracepb.Span_SPAN_KIND_CLIENT {
+		return false
+	}
+	return facts.carriesFacts() || hasAttribute(span, mcpotel.AttrMCPMethodName)
+}
+
+// hasAttribute reports whether a span carries an attribute under this key,
+// whatever its value.
+func hasAttribute(span *tracepb.Span, key attribute.Key) bool {
+	for _, kv := range span.GetAttributes() {
+		if kv.GetKey() == string(key) {
+			return true
+		}
+	}
+	return false
 }
 
 // isGitLabRequest reports whether a span is one outbound GitLab call.
@@ -354,24 +418,22 @@ func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 // into _meta rather than into a header. The span kind is what separates them
 // for good, and it is the kind the round tripper asks for by name.
 func isGitLabRequest(span *tracepb.Span) bool {
-	if span.GetKind() != tracepb.Span_SPAN_KIND_CLIENT {
-		return false
-	}
-	for _, attribute := range span.GetAttributes() {
-		if attribute.GetKey() == string(mcpotel.AttrHTTPRequestMethod) {
-			return true
-		}
-	}
-	return false
+	return span.GetKind() == tracepb.Span_SPAN_KIND_CLIENT && hasAttribute(span, mcpotel.AttrHTTPRequestMethod)
 }
 
-// spanFacts reads the attributes the record is made of off one span.
+// spanFacts reads the attributes the record is made of off one span, and its
+// status.
 //
 // The attribute keys come from internal/mcpotel rather than being spelled
 // again here: they are the server's own, and a second spelling of them would
 // be a record that quietly emptied itself the day one was renamed.
+//
+// The status is read whatever else the span carries, because the server span
+// of a call that named no tool carries nothing else: a tools/call with an
+// empty name gives the middleware no tool to record, and the status is then
+// the whole of the server's account a caller can read.
 func spanFacts(span *tracepb.Span) dispatchRecord {
-	var facts dispatchRecord
+	facts := dispatchRecord{status: span.GetStatus().GetCode().String()}
 	into := map[string]*string{
 		string(mcpotel.AttrGenAIToolName): &facts.tool,
 		string(mcpotel.AttrActionID):      &facts.action,
@@ -379,15 +441,11 @@ func spanFacts(span *tracepb.Span) dispatchRecord {
 		string(mcpotel.AttrRefusalReason): &facts.refusalReason,
 		string(mcpotel.AttrErrorType):     &facts.errorType,
 	}
-	for _, attribute := range span.GetAttributes() {
-		if target, wanted := into[attribute.GetKey()]; wanted {
-			*target = attribute.GetValue().GetStringValue()
+	for _, kv := range span.GetAttributes() {
+		if target, wanted := into[kv.GetKey()]; wanted {
+			*target = kv.GetValue().GetStringValue()
 		}
 	}
-	if !facts.carriesFacts() {
-		return facts
-	}
-	facts.status = span.GetStatus().GetCode().String()
 	return facts
 }
 

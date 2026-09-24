@@ -466,6 +466,7 @@ func TestRecordJSON_SpellsEveryKeyAndValueAShardCarries(t *testing.T) {
 				Completions:       []string{"completions-ref/prompt"},
 				SubscribableKinds: []string{"subscribable_kinds-issue"},
 				DispatchObserved:  true,
+				Idle:              true,
 			},
 			wantType: "session",
 			wantKey:  "session",
@@ -482,6 +483,7 @@ func TestRecordJSON_SpellsEveryKeyAndValueAShardCarries(t *testing.T) {
 				"completions":        []any{"completions-ref/prompt"},
 				"subscribable_kinds": []any{"subscribable_kinds-issue"},
 				"dispatch_observed":  true,
+				"idle":               true,
 			},
 		},
 		{
