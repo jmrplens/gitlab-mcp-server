@@ -327,8 +327,9 @@ func (p *destinationPolicy) resolveInstancePrivate(ctx context.Context) bool {
 // dialTarget is what one request tells the dialer.
 //
 // It travels on the request context rather than on the transport because the
-// transports are shared: every client in the process is routed between the
-// same two, [sharedDestinationPools], and a transport per client would give
+// transports are shared: every client that verifies certificates is routed
+// between the same two, [sharedDestinationPools] (a client that skips
+// verification has a pair of its own), and a transport per client would give
 // each of up to --max-http-clients pool entries its own idle-connection set,
 // which is the cost sharing them exists to avoid.
 type dialTarget struct {
@@ -366,7 +367,8 @@ func dialTargetFrom(ctx context.Context) (dialTarget, bool) {
 // and the connection, because this IS the connection.
 //
 // It is also the one place that covers the first request and every redirect
-// hop with the same code, since both reach the same dialer.
+// hop with the same code, since every transport this package builds dials
+// through a dialer carrying it ([baseDialer]).
 //
 // # What it cannot see, and what covers that
 //

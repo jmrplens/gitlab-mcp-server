@@ -283,9 +283,9 @@ func TestIsPrivateAddress_ClassifiesTheRefusedRanges(t *testing.T) {
 //
 // A case whose instance is spelled as a name says what that name resolves to,
 // in `resolves`, because the branch it lands in asks: an off-origin hop to a
-// private address is refused unless the operator named the instance and it is
-// itself private, and answering that for an operator-named instance means
-// resolving its host. Left to the real
+// private address is refused unless --allow-private-instances is set, or the
+// operator named the instance and it is itself private; answering the second
+// half for an operator-named instance means resolving its host. Left to the real
 // resolver, the one case that reaches it paid a two-second
 // [instanceLookupTimeout] and then passed on the lookup having failed, which
 // is the same verdict for a different reason — a resolver that started
