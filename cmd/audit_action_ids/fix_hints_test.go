@@ -229,6 +229,41 @@ func TestFixHints_ATestPinningARenderedHint_MovesAfterProductionAlreadyDid(t *te
 	}
 }
 
+// TestFixHints_ATestPinningARenderedHint_MovesInTheRunThatMovesProduction
+// holds the other order: the production text still spells the tool, and one
+// run moves it and the test that pins it.
+//
+// The values the fixer judges a test literal against are the ones the walk
+// folded before anything was rewritten, so they still spell the old name. A
+// test literal read with its tool names rewritten no longer contains a value
+// that spells the old one, and was left pinning a sentence the same run had
+// just moved; the value is read with its tool names rewritten too.
+func TestFixHints_ATestPinningARenderedHint_MovesInTheRunThatMovesProduction(t *testing.T) {
+	const hint = "verify demo_id with gitlab_fetch_demo first"
+	root := stagePackage(t, "demo", map[string]string{
+		"demo.go":      "package demo\n\nconst notFound = \"" + hint + "\"\n",
+		"demo_test.go": "package demo\n\nconst wantBullet = \"\\n---\\n- verify demo_id with gitlab_fetch_demo first\\n\"\n",
+	})
+
+	report, err := fixHints(root, []site{fixerSite(hint)}, fixerCatalog(), true)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	for file, want := range map[string]string{
+		"demo.go":      `"verify demo_id with demo.get first"`,
+		"demo_test.go": `"\n---\n- verify demo_id with demo.get first\n"`,
+	} {
+		t.Run(file, func(t *testing.T) {
+			if body := readStaged(t, root, "demo", file); !strings.Contains(body, want) {
+				t.Errorf("%s did not move:\n%s", file, body)
+			}
+		})
+	}
+	if report.Files != 2 || len(report.Fixes) != 2 {
+		t.Errorf("report = %+v, want the production file and its test, one name each", report)
+	}
+}
+
 // TestFixHints_AOneWordHint_AdmitsNoTestLiteral holds the second half of the
 // sentence test for the pinning rule: a folded value with no space in it is a
 // name rather than a hint, and a literal containing it is not one pinning it.

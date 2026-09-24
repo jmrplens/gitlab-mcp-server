@@ -148,7 +148,7 @@ func FormatMilestonesMarkdown(out MilestonesOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintPreserveLinks,
-		toolutil.HintAction("project.milestone_get", "see full details, with project_id and milestone_id"))
+		toolutil.HintAction("project.milestone_get", "see full details, with project_id and milestone_iid (the IID column)"))
 	return b.String()
 }
 

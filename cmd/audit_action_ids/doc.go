@@ -131,20 +131,26 @@
 // The sinks are a table keyed by a function's full name (proseSinks), each
 // with the argument its prose starts at and the kind of site it is counted
 // under: the hint of toolutil.WrapErrWithHint, WrapErrWithStatusHint and
-// NotFoundResult (error_hint); the message of errors.New, fmt.Errorf and
-// toolutil.ErrorResult (message); and the next steps toolutil.WriteHints,
-// WriteListFooter and Card.End write (next_step). Fields are read by their
-// names: a hint's, NextSteps included (hint_field), a message's where what is
-// written into it folds (message), and ParameterGuidance's ValueSource and
-// CommonConfusions (param_guidance). The jsonschema tag of every struct field
-// is read as the description the schema serves (schema_description), and a
-// Usage line, whose dotted IDs the published-ID rule judges, is judged here
-// for tool names too. An individual tool's Description is not: only that tool
-// serves it, and the tool name is right there. Three spellings are reported: a
-// gitlab_* tool name, a registered alias, and a dotted ID that resolves
-// nowhere. A tool the package's own surface registers is declared
+// NotFoundResult (error_hint); the message of errors.New, fmt.Errorf,
+// toolutil.ErrorResult and toolutil.CancelledResult (message); and the next
+// steps toolutil.WriteHints, WriteListFooter and Card.End write (next_step).
+// Fields are read by their names: a hint's, NextSteps included (hint_field),
+// a message's where what is written into it folds (message), and
+// ParameterGuidance's ValueSource and CommonConfusions (param_guidance). The
+// jsonschema tag of every struct field is read as the description the schema
+// serves (schema_description), and so is the description entry of a schema
+// written as a map, which is what an input schema override is
+// (toolutil.SchemaPropertyOverride) and what toolutil and dynamic build whole
+// schemas from. A Usage line, whose dotted IDs the published-ID rule judges,
+// is judged here for tool names too, and one assembled at run time is folded
+// as a hint is, a helper that picks it by the action's name followed to every
+// branch it returns from. An individual tool's Description is not: only that
+// tool serves it, and the tool name is right there. Three spellings are
+// reported: a gitlab_* tool name, a registered alias, and a dotted ID that
+// resolves nowhere. A tool the package's own surface registers is declared
 // (declaredSurfaceToolMentions), which is dynamic's two tools in dynamic's own
-// package and nowhere else.
+// package and nowhere else, and dynamic's schema descriptions alone may name
+// a declared alias (declaredAliasMentions), which keeps the declaration alive.
 //
 // A sink's own prose parameters are not followed back out, since the sink's
 // visit reads every call of it; toolutil's sinks forward their prose to one
@@ -154,13 +160,25 @@
 // A format folds to its format as written, verbs and all, followed by each
 // constant argument, and its verbs are masked only in the text judged, so the
 // fixer still finds the literal inside the value. An argument named for a hint
-// is followed, a read of a recorded field is a copy, and a sink call is read
-// by its own visit. Every other argument is a value the sentence reports, and
-// is passed over and counted rather than listed (values_passed_over), which
-// is the rule's one deliberate exception to naming its blind spots: with some
-// four hundred formats in the tree the list would be GitLab data from end to
-// end. A message field written from another struct's field is passed over on
-// the same terms.
+// is followed, and so is a parameter named for a message where the site's
+// kind follows one (a helper handing on its caller's sentence); a local or a
+// field named for a message is GitLab's text (glMsg) and is not. A read of a
+// recorded field is a copy, and a sink call is read by its own visit. Every
+// other argument is a value the sentence reports, and is passed over and
+// counted rather than listed (values_passed_over), which is the rule's one
+// deliberate exception to naming its blind spots: with some four hundred
+// formats in the tree the list would be GitLab data from end to end. Inside a
+// one-line helper such a value is passed over without being counted, since
+// the fold reads the helper's body once per call and the value has no site of
+// its own to count at (dynamic's queryTooLongMessage). A message field written
+// from another struct's field is passed over and counted on the same terms.
+//
+// A helper handed only parameters named for this kind of prose, and no
+// recorded read beside them, is followed into as well as out, which is where
+// one that appends a sentence of its own to what it was handed writes it; the
+// value variable of a range over a list of strings is followed to that list,
+// which is how toolutil's list-footer filter reads. A helper handed a recorded
+// read is a copy or a merge, and a sentence its body adds is not read.
 //
 // It **gates**. The first whole-tree run of the hint rule reported 785
 // findings across 137 packages, and -fix-hints closed 712 of them; the run
@@ -171,10 +189,12 @@
 //
 // Its own blind spots are counted beside the findings and do NOT fail, which
 // is the one place this departs from the rule above. A sentence the type
-// checker cannot fold is still text a reader can read, and the seventeen in
-// the tree build one from a helper that branches, a range variable, a call
-// into another module or a parameter no rule follows, or read one back out of
-// rendered text (toolutil's safe-mode preview parser). A sentence concatenated
+// checker cannot fold is still text a reader can read, and the twenty-three
+// in the tree build one from a helper that branches, a map read, a call into
+// another module, a parameter no rule follows or a Description copied into a
+// Usage line, or read one back out of rendered text (toolutil's safe-mode
+// preview parser). Six came with the run-time Usage lines and the map schemas
+// this rule used to pass in silence. A sentence concatenated
 // from a literal and a value is folded to its literal halves, and the half it
 // leaves unfolded is read on its own: a name is followed to the values it is
 // handed, where a tool name is judged, and anything else is counted with the
@@ -184,8 +204,15 @@
 //
 // Its limits: a package-level map of prose read through a local, as
 // mergerequests' mergeStatusHints is, carries no name the walk follows; the
-// operation label a wrapper prefixes an error with is not read, since it names
-// what failed rather than inviting a call; and internal/prompts and
+// operation label a WrapErr* or ErrRequired* call prefixes an error with is
+// not read, although some hundred of them spell it as a tool name, since it
+// names what failed rather than inviting a call; a value a format reports is
+// counted rather than read, as above; a bare meta action name ("Use action
+// 'list'") is not read at all, having neither the gitlab_ prefix nor a dot,
+// and naming the ID it means needs the domain the sentence belongs to, which
+// it does not spell, so it is rewritten to toolutil.HintAction by hand; a
+// merge's body adds prose unread, as above; an individual tool's Description
+// assembled at run time is read by no rule; and internal/prompts and
 // internal/resources are outside the load, the review prompt being held to the
 // catalog by a test of its own.
 //

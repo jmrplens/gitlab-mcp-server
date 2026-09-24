@@ -141,7 +141,8 @@ func hintProse(values []string) candidate {
 
 // testHintProse admits a test literal that is a piece of a hint the walk
 // folded, as production does, or that pins one: a literal which, once its tool
-// names are rewritten, holds a whole folded hint.
+// names are rewritten, holds a whole folded hint with its tool names rewritten
+// the same way.
 //
 // The second half is the shape a formatter's test is written in, and the
 // production rule cannot see it. A test pins a rendered bullet ("- Use
@@ -149,7 +150,11 @@ func hintProse(values []string) candidate {
 // never contained in the hint; it contains it. Read as it will be written, it
 // contains the hint exactly when the assertion is about that sentence, and
 // the production text is what vouches for the rewrite: it already reads that
-// way, or it does after this run.
+// way, or it does after this run. Both halves of the comparison are read as
+// they will be written, because the values are the ones the walk folded
+// before this run rewrote anything: a hint whose production text this same
+// run moves still spells the old name in its value, and a literal renamed to
+// the new one no longer contains it.
 //
 // The narrower rule that suggests itself does not work. Admitting any test
 // literal that spells a tool name the package's own hints had just stopped
@@ -161,8 +166,12 @@ func hintProse(values []string) candidate {
 // written as the bare token, and that one is a judgement each time: whether
 // the sentence moved or the name did is not something the text says.
 func testHintProse(values []string, ids *actionids.IDs) candidate {
+	renamed := make([]string, 0, len(values))
+	for _, value := range values {
+		renamed = append(renamed, renameTools(value, ids))
+	}
 	return func(text string) bool {
-		return partOfAHint(text, values) || pinsAHint(renameTools(text, ids), values)
+		return partOfAHint(text, values) || pinsAHint(renameTools(text, ids), renamed)
 	}
 }
 
@@ -227,11 +236,13 @@ func hintValuesByPackage(sites []site) (packages []string, values map[string][]s
 // fixer may rewrite: every kind the served-prose rule judges, and the Usage
 // line, whose tool names that rule judges too.
 //
-// A schema description is the exception. It is written as part of a struct
+// A schema description is the exception. Most are written as part of a struct
 // tag, one literal that also carries the field's json name, so no literal of
-// the file is ever the description or a piece of it and the tag is fixed by
-// hand; admitting its text would only let it admit, by containment, some other
-// literal that happens to repeat a phrase of it.
+// the file is the description or a piece of it and the tag is fixed by hand;
+// admitting its text would only let it admit, by containment, some other
+// literal that happens to repeat a phrase of it. The few written as a map
+// entry of a hand-built schema are one kind with the tags and are fixed by
+// hand with them.
 func feedsFixer(kind string) bool {
 	if kind == kindUsage {
 		return true

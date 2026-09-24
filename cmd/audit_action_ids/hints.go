@@ -132,9 +132,13 @@ type HintReport struct {
 	// usedToolExemptions and usedSurfaceMentions are what the run excused,
 	// which the stale list is computed against. Each section keeps its own, so
 	// a quotation spelling a declared token cannot keep that declaration alive
-	// for the served source.
+	// for the served source. usedAliasMentions is the declared aliases the
+	// served prose named where it may ([HintReport.excusesAlias]), which the
+	// published-ID section's stale judgement of declaredAliasMentions counts
+	// beside its own Usage lines.
 	usedToolExemptions  map[string]struct{}
 	usedSurfaceMentions map[surfaceMention]struct{}
+	usedAliasMentions   map[string]struct{}
 }
 
 // judge records what one site names.
@@ -170,11 +174,12 @@ func (h *HintReport) judge(at site, ids *actionids.IDs) {
 // judging them here too would count every bad ID twice and refuse those two.
 // A Description is not read here at all: an individual tool's Description is
 // served by that tool alone, on the one surface that registers it, where the
-// name it spells is right.
+// name it spells is right. The verbs of a line a format assembled are masked,
+// as they are for every sentence this section judges.
 func (h *HintReport) judgeUsage(at site) {
 	h.Read++
 	h.ReadByKind[at.Kind]++
-	h.judgeToolNames(at, at.Value)
+	h.judgeToolNames(at, maskVerbs(at.Value))
 }
 
 // judgeToolNames records every gitlab_* name one site's judged text spells,
@@ -211,17 +216,18 @@ func (h *HintReport) judgeToolNames(at site, text string) {
 // does not. A hint is prose the server writes, and it writes canonical IDs; a
 // quotation is whatever the server wrote, and a Usage line may name one of
 // those aliases by design, so a test quoting that line would otherwise be
-// refused for quoting it faithfully. A schema description consults it too,
-// for the reason the Usage line does: the one that names an alias is the
-// description of dynamic execute's action parameter, whose subject is that
-// execute accepts one.
+// refused for quoting it faithfully. The schema descriptions of
+// internal/tools/dynamic consult it too, for the reason the Usage line does:
+// the one that names an alias is the description of dynamic execute's action
+// parameter, whose subject is that execute accepts one
+// ([HintReport.excusesAlias]).
 func (h *HintReport) judgeIDs(at site, text string, ids *actionids.IDs) {
 	for _, token := range ids.Candidates(text) {
 		if ids.IsID(token) || exemptProse(token) {
 			continue
 		}
 		if canonical, isAlias := ids.Alias(token); isAlias {
-			if mayNameAlias(at.Kind) && exemptAliasMention(token) {
+			if h.excusesAlias(at, token) {
 				continue
 			}
 			h.addFinding(at, ruleAlias, token, HintFinding{Canonical: canonical})
@@ -231,10 +237,31 @@ func (h *HintReport) judgeIDs(at site, text string, ids *actionids.IDs) {
 	}
 }
 
-// mayNameAlias reports whether a site of this kind may name one of the
-// declared aliases on purpose.
-func mayNameAlias(kind string) bool {
-	return kind == kindAssertion || kind == kindSchemaDescription
+// excusesAlias reports whether a site may name a registered alias because
+// declaredAliasMentions declares it, and records the use where the site is
+// one the declaration is written about.
+//
+// Two sites may. A quotation consults the table without keeping an entry
+// alive, since what it quotes is the served source and the entry is about
+// that. A schema description of internal/tools/dynamic keeps its entry alive,
+// because that description is one the entry now names as its reason: were the
+// Usage line that first asked for the entry rewritten, the entry would read as
+// stale while dynamic's description still needed it, and removing it would
+// fail the description instead. The description is scoped to that package, as
+// [declaredSurfaceToolMentions] is: anywhere else a description naming an
+// alias is a sentence in a spelling no listing publishes.
+func (h *HintReport) excusesAlias(at site, token string) bool {
+	if !exemptAliasMention(token) {
+		return false
+	}
+	if at.Kind == kindAssertion {
+		return true
+	}
+	if at.Kind != kindSchemaDescription || at.Package != dynamicPackage {
+		return false
+	}
+	h.usedAliasMentions[token] = struct{}{}
+	return true
 }
 
 // addFinding records one finding, taking its position from the site and
@@ -280,6 +307,7 @@ func newHintReport() HintReport {
 		ByRule:              map[string]int{},
 		usedToolExemptions:  map[string]struct{}{},
 		usedSurfaceMentions: map[surfaceMention]struct{}{},
+		usedAliasMentions:   map[string]struct{}{},
 	}
 }
 

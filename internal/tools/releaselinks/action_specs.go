@@ -144,7 +144,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("links", map[string]any{"description": "Array of release asset links. Each item supports name, url, link_type, direct_asset_path, and the deprecated filepath."}),
 			toolutil.SchemaPropertyOverride("links.url", map[string]any{
-				"description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions. Do not construct package URLs manually.",
+				"description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL package.publish or package.publish_directory returns. Do not construct package URLs manually.",
 				"format":      "uri",
 				"pattern":     "^(https?|ftp)://",
 			}),

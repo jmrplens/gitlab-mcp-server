@@ -382,7 +382,7 @@ return Output{}, toolutil.WrapErrWithStatusHint("labelCreate", err, 409,
     "label with this name already exists, use project.label_update to modify it")
 ```
 
-A hint names an action by its canonical ID, never by a tool name, and so does every other sentence a handler hands a model: the message of an error it returns, a refusal, a next step, a spec's `Usage` line and parameter guidance, and a field's `jsonschema` description. A tool name is right for one surface of three, and `make check-action-ids` fails on one.
+A hint names an action by its canonical ID, never by a tool name, and so does every other sentence a handler hands a model: the message of an error it returns, a refusal, a next step, a spec's `Usage` line and parameter guidance, and a field's description, in a `jsonschema` tag or a schema map's `description` entry. A tool name is right for one surface of three, and `make check-action-ids` fails on one. The rule's limits are [stated with it](cmd-utilities.md#the-rule-over-served-prose): it does not read the operation label a `WrapErr*` or `ErrRequired*` call prefixes an error with, a value a format reports, a bare meta action name (`Use action 'list'`), or `internal/prompts` and `internal/resources`, so this gate does not hold a sentence written in one of those places (the review prompt's action IDs are held by a test of their own).
 
 ### Helpers
 

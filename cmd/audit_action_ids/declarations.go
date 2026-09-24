@@ -54,9 +54,11 @@ var proseNonDomains = map[string]string{
 // It stays a table of two because a run also refuses an entry that no longer
 // resolves as an alias: if the spelling is retired, or promoted to a canonical
 // ID of its own, the entry excuses nothing and is reported stale. Whether one
-// is used is decided by the Usage lines alone. The served-prose rule consults
-// the table for a schema description and the suite's for a quotation, and
-// neither keeps an entry alive: the entries are written about the Usage line.
+// is used is decided by the Usage lines and by the schema descriptions of
+// internal/tools/dynamic, the two places the reasons below name; a schema
+// description anywhere else may not name one at all. The suite's quotations
+// consult the table without keeping an entry alive, since what they quote is
+// the served source the entries are written about.
 var declaredAliasMentions = map[string]string{
 	"issue.close":  "the gitlab_issue_update Usage line, which exists to tell a model that dynamic execute accepts this spelling and fills state_event from it; dynamic execute's own action description names it as its example of an alias for the same reason",
 	"issue.reopen": "the other half of that same sentence",
@@ -107,9 +109,13 @@ type surfaceMention struct {
 // does not register. A run over the whole tree reports an entry that excused
 // nothing, and the gate fails on it, as on every declaration table here.
 var declaredSurfaceToolMentions = map[surfaceMention]string{
-	{pkg: "internal/tools/dynamic", tool: "gitlab_find_action"}:    "the dynamic surface's search tool, named in the text that surface's two tools return",
-	{pkg: "internal/tools/dynamic", tool: "gitlab_execute_action"}: "the dynamic surface's execute tool, named in the text that surface's two tools return",
+	{pkg: dynamicPackage, tool: "gitlab_find_action"}:    "the dynamic surface's search tool, named in the text that surface's two tools return",
+	{pkg: dynamicPackage, tool: "gitlab_execute_action"}: "the dynamic surface's execute tool, named in the text that surface's two tools return",
 }
+
+// dynamicPackage is the one package that is a surface of its own, so the
+// served-prose declarations scoped to a package are scoped to it.
+const dynamicPackage = "internal/tools/dynamic"
 
 // exemptSurfaceMention reports whether a tool name is declared correct in the
 // served prose of the package that spells it.

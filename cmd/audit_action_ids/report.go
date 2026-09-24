@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -200,6 +201,14 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 			continue
 		}
 		if !at.Resolved {
+			if at.Kind == kindUsage {
+				// A Usage line is folded as a sentence, so what it leaves
+				// unfolded, and a value a format of it reports, is the
+				// served-prose section's to count: a sentence a reader still
+				// reads rather than a published ID nobody can.
+				report.Hints.judge(at, ids)
+				continue
+			}
 			report.Unresolved = append(report.Unresolved, Unresolved{
 				Package: at.Package, File: at.File, Line: at.Line, Kind: at.Kind, Expression: at.Expr,
 			})
@@ -263,6 +272,9 @@ func (r *Report) finish() {
 	r.Summary.AliasHits = len(r.AliasRefs)
 	r.Summary.Unresolved = len(r.Unresolved)
 	if r.Summary.DeclarationsJudged {
+		// An alias entry stays alive while dynamic's schema description names
+		// it, as well as while a Usage line does ([HintReport.excusesAlias]).
+		maps.Copy(r.usedAliasMentions, r.Hints.usedAliasMentions)
 		r.StaleExemptions = staleDeclarations(r.usedExemptions, r.usedAliasMentions)
 	}
 	r.Summary.Stale = len(r.StaleExemptions)
@@ -368,7 +380,11 @@ func candidateIDs(at site, ids *actionids.IDs) []string {
 		}
 		return []string{at.Value}
 	default:
-		return ids.Candidates(at.Value)
+		// A Usage line assembled by a format keeps its verbs in the value, for
+		// the fixer, and they are masked here for the reason [maskVerbs]
+		// gives: "%s.get" spells a dotted token whose right half is an action
+		// name.
+		return ids.Candidates(maskVerbs(at.Value))
 	}
 }
 

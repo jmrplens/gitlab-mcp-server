@@ -86,8 +86,8 @@ type proseSink struct {
 // WrapErrWithStatusHint(op, err, code, hint) and NotFoundResult(resource,
 // identifier, hints...); the next-step writers take their hints as a variadic
 // tail, WriteHints(b, hints...), WriteListFooter(b, p, linked, hints...) and
-// Card.End(hints...); and the message is the one argument of errors.New and
-// toolutil.ErrorResult.
+// Card.End(hints...); and the message is the one argument of errors.New,
+// toolutil.ErrorResult and toolutil.CancelledResult.
 //
 // WriteListFooter and Card.End are sinks of their own although both forward
 // to WriteHints, because the forwarding is read only when toolutil is loaded
@@ -95,10 +95,16 @@ type proseSink struct {
 // data, and would read none of that package's next steps. The route through
 // WriteHints reaches the same expressions and records none of them twice.
 //
-// ErrorResultAnnotated is deliberately not one. Its callers hand it rendered
-// Markdown (a not-found card, a detailed error, a safe-mode preview), each
-// written through a sink this table already reads, so as a sink it would add
-// three sites nothing folds and read no sentence ErrorResult does not.
+// ErrorResultAnnotated is deliberately not one, because nothing reaches it
+// that a sink here does not read already or that is a sentence of the
+// server's. Most of its callers hand it rendered Markdown (a not-found card, a
+// detailed error, a safe-mode preview), each written through a sink this
+// table reads; CancelledResult hands it the refusal a declined confirmation
+// answers with, which is read as that function's own argument; and toolutil's
+// rate-limit refusal hands it a sentence built around the name of the tool
+// the caller called, which is a value the refusal reports. As a sink it would
+// add those sites to the ones nothing folds and read no sentence the others
+// do not.
 var proseSinks = map[string]proseSink{
 	toolutilFullName("WrapErrWithHint"):       {first: 2, kind: kindErrorHint},
 	toolutilFullName("WrapErrWithStatusHint"): {first: 3, kind: kindErrorHint},
@@ -107,6 +113,7 @@ var proseSinks = map[string]proseSink{
 	toolutilFullName("WriteListFooter"):       {first: 3, kind: kindNextStep},
 	toolutilMethodFullName("Card", "End"):     {first: 0, kind: kindNextStep},
 	toolutilFullName("ErrorResult"):           {first: 0, kind: kindMessage},
+	toolutilFullName("CancelledResult"):       {first: 0, kind: kindMessage},
 	"errors.New":                              {first: 0, kind: kindMessage},
 	"fmt.Errorf":                              {first: 0, kind: kindMessage, format: true},
 }
@@ -156,11 +163,23 @@ var hintNameSuffixes = []string{"hint", "hints", "nextstep", "nextsteps"}
 //
 // They are a weaker claim than a hint's name. A message field is as often
 // GitLab's own text (a commit's message, a broadcast message) as it is the
-// server's, so a write of one is judged where it folds and passed over where
-// it does not ([walker.recordMessageField]), and a format argument named for a
-// message is read as a value (glMsg is GitLab's message, spelled into a
-// sentence the server writes around it).
+// server's, so a write of one is judged where it folds, passed over and
+// counted where it reads another struct's field, and listed with the sites
+// nothing folds otherwise ([walker.recordMessageField]). A format argument
+// named for a message is followed only where it is a parameter, a helper
+// handing its caller's sentence on; a local or a field so named is read as a
+// value (glMsg is GitLab's message, spelled into a sentence the server writes
+// around it).
 var messageNameSuffixes = []string{"msg", "message"}
+
+// descriptionNameSuffixes and usageNameSuffixes are the endings that make a
+// parameter a carrier of a schema description and of a Usage line, matched
+// without case, so a helper handed one is followed out to the callers that
+// write it (see [followableParamName]).
+var (
+	descriptionNameSuffixes = []string{"description"}
+	usageNameSuffixes       = []string{"usage"}
+)
 
 // guidanceFieldNames are the fields of toolutil.ParameterGuidance that are
 // prose a model reads beside an action's schema, matched without case, so the
@@ -178,9 +197,12 @@ var guidanceFieldNames = map[string]struct{}{
 // jsonschemaTagKey is the struct tag the input and output schemas take their
 // field descriptions from, and requiredTagSuffix the marker the schema
 // builder strips off one before it serves it (toolutil/meta_tool.go).
+// schemaDescriptionKey is the key a schema written as a map gives the same
+// text under.
 const (
-	jsonschemaTagKey  = "jsonschema"
-	requiredTagSuffix = ",required"
+	jsonschemaTagKey     = "jsonschema"
+	requiredTagSuffix    = ",required"
+	schemaDescriptionKey = "description"
 )
 
 // idListFieldNames are the fields whose every element is a canonical action
@@ -244,6 +266,11 @@ type program struct {
 	// recorded is all of them: the question here is which IDs a variable can
 	// carry, and the answer is the union.
 	values map[*types.Var][]ast.Expr
+	// ranges maps the value variable of a range over a list of strings to the
+	// list it walks, which is every value that variable is given. It is kept
+	// apart from values because the expression is the list rather than one
+	// value, and is read as a list.
+	ranges map[*types.Var]ast.Expr
 	// params maps a function parameter to the function and position it sits
 	// at, and callers maps a function to every call of it, which together
 	// answer what a parameter can hold.
@@ -335,6 +362,7 @@ func indexProgram(root string, loaded []*packages.Package) *program {
 		pkgs:    loaded,
 		decls:   map[*types.Func]funcDecl{},
 		values:  map[*types.Var][]ast.Expr{},
+		ranges:  map[*types.Var]ast.Expr{},
 		params:  map[*types.Var]paramRef{},
 		callers: map[*types.Func][]callSite{},
 	}
@@ -399,7 +427,8 @@ func (p *program) indexCall(pkg *packages.Package, node ast.Node) {
 }
 
 // indexValues records the expressions assigned to a variable, by a short
-// declaration, an assignment or a var declaration alike.
+// declaration, an assignment or a var declaration alike, and the list a range
+// statement hands its value variable.
 func (p *program) indexValues(pkg *packages.Package, node ast.Node) {
 	switch typed := node.(type) {
 	case *ast.AssignStmt:
@@ -416,7 +445,30 @@ func (p *program) indexValues(pkg *packages.Package, node ast.Node) {
 		for index, name := range typed.Names {
 			p.recordValue(pkg, name, typed.Values[index])
 		}
+	case *ast.RangeStmt:
+		p.recordRange(pkg, typed)
 	}
+}
+
+// recordRange records the list a range over strings walks as what its value
+// variable holds.
+//
+// A filter is written that way (toolutil's withoutPreserveLinks appends each
+// element it keeps to the list it returns), and without it the element was a
+// value nothing followed: the filter's own body read as a site nothing folds
+// wherever a helper handed it hints to follow. Only a list of strings is
+// recorded. Over a map the variable is a map's value, and over anything else
+// it is not text, and neither is a list a rule here reads.
+func (p *program) recordRange(pkg *packages.Package, loop *ast.RangeStmt) {
+	ident, named := loop.Value.(*ast.Ident)
+	if !named || !isStringSlice(pkg.TypesInfo.TypeOf(loop.X)) {
+		return
+	}
+	variable, ok := variableOf(pkg, ident)
+	if !ok {
+		return
+	}
+	p.ranges[variable] = loop.X
 }
 
 // recordValue records one expression as a value the named variable can hold.
@@ -578,6 +630,60 @@ func (w *walker) visitStructTags(structType *ast.StructType) {
 	}
 }
 
+// isStringKeyedMap reports whether a type is a map keyed by a string, the
+// shape a JSON schema is written in by hand. A composite literal the type
+// checker recorded no type for is no map.
+func isStringKeyedMap(typ types.Type) bool {
+	if typ == nil {
+		return false
+	}
+	mapType, ok := types.Unalias(typ).Underlying().(*types.Map)
+	return ok && isString(mapType.Key())
+}
+
+// visitSchemaMap records the description a string-keyed map literal gives,
+// which is the text a schema serves beside the property it describes.
+//
+// A tag is not the only place a served schema is described. An input schema
+// override is a map (toolutil.SchemaPropertyOverride("links.url",
+// map[string]any{"description": ...})) applied to the one schema every surface
+// serves, and toolutil and dynamic build whole schemas out of maps. Reading
+// tags alone left all of those out, and one of them still told a model to use
+// a meta tool the other two surfaces do not register.
+//
+// The entry is found by its constant key. Its value is a description only
+// when it is text: a map whose key happens to spell description and holds a
+// schema of its own, or a parameter's guidance, is a property named
+// description rather than one, and is left alone.
+func (w *walker) visitSchemaMap(lit *ast.CompositeLit) {
+	for _, element := range lit.Elts {
+		// Every element of a map literal is a key and a value, since Go
+		// accepts no other form for one.
+		pair := element.(*ast.KeyValueExpr) //nolint:errcheck,forcetypeassert // a map literal's elements are pairs
+		key, isConstant := w.constantString(pair.Key)
+		if !isConstant || key != schemaDescriptionKey || !isString(w.pkg.TypesInfo.TypeOf(pair.Value)) {
+			continue
+		}
+		w.recordSchemaMapDescription(pair.Value)
+	}
+}
+
+// recordSchemaMapDescription records one description a map literal gives, on
+// the terms a message field's write is recorded on ([walker.recordMessageField]).
+//
+// A map keyed by description is as often a GraphQL input carrying GitLab's
+// text (securityattributes hands an attribute's own description to a
+// mutation that way) as it is a schema, so the two are told apart by what is
+// written: a constant is judged, a name is followed to what it is given, and
+// a read of another struct's field is a value, passed over and counted.
+func (w *walker) recordSchemaMapDescription(value ast.Expr) {
+	if selector, isSelector := ast.Unparen(value).(*ast.SelectorExpr); isSelector && !w.readsARecordedHint(kindSchemaDescription, selector) {
+		w.passOver(kindSchemaDescription, value)
+		return
+	}
+	w.recordErrorHint(kindSchemaDescription, value)
+}
+
 // recordErrorHintArgs records the corrective prose one call hands a model,
 // from the argument the hint starts at to the end.
 //
@@ -618,9 +724,15 @@ func (w *walker) callee(call *ast.CallExpr) (*types.Func, bool) {
 }
 
 // visitCompositeLit records the published fields set by a struct literal,
-// which is where the metadata tables write their lists and their prose.
+// which is where the metadata tables write their lists and their prose, and
+// the description a map literal gives a schema property.
 func (w *walker) visitCompositeLit(lit *ast.CompositeLit) {
-	structType, ok := w.structType(w.pkg.TypesInfo.Types[lit].Type)
+	litType := w.pkg.TypesInfo.Types[lit].Type
+	if isStringKeyedMap(litType) {
+		w.visitSchemaMap(lit)
+		return
+	}
+	structType, ok := w.structType(litType)
 	if !ok {
 		return
 	}
@@ -936,6 +1048,10 @@ func (w *walker) recordListIdent(kind string, ident *ast.Ident) {
 // index knows nothing about still lands in the unresolved bucket. A variable
 // is followed once per run, which is what stops a list that names itself in
 // its own append from looping.
+//
+// The value variable of a range over a list of strings holds each element of
+// that list in turn, so it is followed to the list, read as one: an element
+// of a list of hints is a hint, and one of a list of IDs an ID.
 func (w *walker) followValues(kind string, ident *ast.Ident, record recordFunc) bool {
 	variable, ok := variableOf(w.pkg, ident)
 	if !ok {
@@ -951,7 +1067,26 @@ func (w *walker) followValues(kind string, ident *ast.Ident, record recordFunc) 
 		}
 		return true
 	}
+	if list, walked := w.prog.ranges[variable]; walked {
+		w.visitedVars[variable] = struct{}{}
+		listRecorder(kind)(w, kind, list)
+		return true
+	}
 	return w.followParameter(kind, variable, record)
+}
+
+// listRecorder is how the list a range walks is read, by the kind of site its
+// element was reached from: a sentence's kinds read a list of sentences, and
+// the published IDs a list of IDs.
+//
+// A Usage line is a sentence here although [readsAsHintProse] leaves it out:
+// that test decides which kinds are the served-prose section's to judge, and
+// a Usage line is judged in both sections, but it is folded as prose.
+func listRecorder(kind string) recordFunc {
+	if kind == kindUsage || readsAsHintProse(kind) {
+		return recordHintListValue
+	}
+	return recordListValue
 }
 
 // followParameter records the argument every caller passes for one parameter.
@@ -1049,7 +1184,12 @@ func elementRecorder(kind string) recordFunc {
 // what a helper taking one calls it (missingProjectMsg, missingUserMsg,
 // emptyMessage), and parameter guidance the names of its own prose fields,
 // because that is what a guidance constructor calls the text it is handed
-// (DiscussionIDParamGuidance's valueSource).
+// (DiscussionIDParamGuidance's valueSource). A schema description accepts a
+// name ending in description, which is what a helper building a property's
+// schema calls the text its callers hand it (branches'
+// branchProtectionAccessLevelSchema), and a Usage line only a name ending in
+// usage, since an options builder taking the line calls it that and a Usage
+// line is no hint.
 //
 // It is written as ifs rather than a switch on purpose: a condition in a case
 // clause sits outside every block Go's coverage counts, so mutation testing
@@ -1063,6 +1203,12 @@ func followableParamName(kind, name string) bool {
 	}
 	if kind == kindParamGuidance {
 		return isHintName(name) || isGuidanceName(name)
+	}
+	if kind == kindSchemaDescription {
+		return isHintName(name) || hasSuffixFold(name, descriptionNameSuffixes)
+	}
+	if kind == kindUsage {
+		return hasSuffixFold(name, usageNameSuffixes)
 	}
 	if isHintKind(kind) {
 		return isHintName(name)
@@ -1339,15 +1485,42 @@ func (w *walker) recordID(kind string, expr ast.Expr) {
 // recordProse folds a model-facing string and records it whole. Its candidate
 // IDs are picked out later, because deciding which dotted token is meant as an
 // action ID needs the catalog's domains.
+//
+// A Usage line is folded as a sentence ([walker.recordUsage]). An individual
+// tool's Description is read only where it is a constant, and one assembled
+// at run time is neither judged nor listed: only the published-ID rule reads
+// a Description, and doc.go names this as one of its limits.
 func (w *walker) recordProse(kind string, expr ast.Expr) {
+	if kind == kindUsage {
+		w.recordUsage(expr)
+		return
+	}
 	value, ok := w.constantString(expr)
 	if !ok {
-		// A prose line assembled at run time is not judged and is not a blind
-		// spot worth reporting either: it carries no literal ID a reader could
-		// have got wrong, and what it renders is whatever it is handed.
 		return
 	}
 	w.addSite(site{Kind: kind, Value: value, Resolved: true}, expr)
+}
+
+// recordUsage records a Usage line, folded the way a hint is.
+//
+// A Usage line is judged twice, for its IDs by the published-ID rule and for
+// its tool names by the served-prose rule, and both have to read what it
+// renders. A constant is most of them. One assembled at run time used to be
+// passed over in silence, on the grounds that it carried no literal ID a
+// reader could get wrong, which stopped being true the day the tool-name rule
+// read the same line: its literal halves are exactly where a tool name is
+// spelled. So it is folded as a hint is: a concatenation keeps its literal
+// halves, a local is followed to what it is given, a parameter named for a
+// Usage line to its callers, a format to its format and constant arguments,
+// and a helper that returns one to every branch it returns from
+// (ffuserlists' userListUsage). A read of another Usage field is a copy of a
+// line recorded where it was written (runners' options.Usage = meta.usage).
+// What still folds nowhere, and a value a format reports, is the served-prose
+// section's to count, never the published-ID gate's ([classify]): it is a
+// sentence a reader can read, not an ID nobody can.
+func (w *walker) recordUsage(expr ast.Expr) {
+	w.recordErrorHint(kindUsage, expr)
 }
 
 // recordErrorHint records one hint string, folding what it can of a sentence
@@ -1360,6 +1533,14 @@ func (w *walker) recordProse(kind string, expr ast.Expr) {
 // that is read out of a field or followed to the values a local carries is
 // recorded where it was written instead, and anything left is reported rather
 // than passed over, like every other site here.
+//
+// A call of a Usage line is followed into the helper it calls, to every
+// branch it returns from, and a call of any other kind is not. A Usage line
+// is picked by a helper keyed by the action's name (ffuserlists'
+// userListUsage), whose branches are constants; the helpers a hint is handed
+// through build their sentence from values (levelHint, searchNextStep) or
+// escape it (toolutil.EscapeMdTableCell), and following those read the
+// escaping as ten sites nothing folds where the call had been one.
 func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 	// A hint constructor is asked about before the fold, not after it.
 	// toolutil.HintAction is a one-line helper, so binding its parameters
@@ -1382,6 +1563,10 @@ func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 		if w.readsARecordedHint(kind, typed) {
 			return
 		}
+	case *ast.CallExpr:
+		if kind == kindUsage && w.followReturns(kind, typed, recordHintValue) {
+			return
+		}
 	}
 	w.recordUnresolved(kind, expr)
 }
@@ -1393,9 +1578,9 @@ func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
 // ask for, and in the served walk its ID is judged as an ID at this same call
 // site, so there is nothing the prose rule can add. toolutil.ListHints is a
 // list of hints spelled as its arguments. And a call handed nothing but hints
-// read off fields hands back prose recorded where it was written, which is the
-// bargain [walker.isListCopy] already makes for a list of IDs, with the same
-// hole: what such a body adds of its own is invisible here.
+// recorded elsewhere, read off fields or handed on by a parameter named for
+// them, is read the way [walker.isListCopy] reads a list of IDs
+// ([walker.carriesRecordedHints]).
 //
 // A quotation is the exception to the first shape. The suite walk dispatches
 // through [walker.visitSuite], which never reaches [walker.visitCall], so a
@@ -1424,24 +1609,30 @@ func (w *walker) recordHintCall(kind string, call *ast.CallExpr) bool {
 
 // carriesRecordedHints reports whether a call was handed nothing but hints
 // recorded where they are written: hints read off fields this walk records,
-// and list parameters named as carriers of this kind of prose, which are
-// followed out to the callers that write them.
+// and string or list parameters named as carriers of this kind of prose,
+// which are followed out to the callers that write them. Nothing is recorded
+// or followed until every argument has qualified.
 //
-// The parameter is the merge shape [walker.isListCopy] accepts for a list of
-// IDs, and toolutil's list footer is why it is needed here: WriteListFooter
-// hands WriteHints withoutPreserveLinks(hints), a filter of its own hints
-// parameter, and without the carrier the filter was a site nothing folds on
-// every run that loaded toolutil. Unlike the ID shape a string parameter
-// qualifies too, which is a hint escaped or trimmed on its way to a sink:
-// badges hands NotFoundResult toolutil.EscapeMdTableCell(hint). As with the ID
-// shape, nothing is recorded or followed until every argument has qualified.
+// What the call is then depends on what it was handed, on the terms
+// [walker.isListCopy] sets for a list of IDs. Handed a recorded read, alone or
+// beside carriers, it is a copy or a merge of prose recorded where it was
+// written, and passed over with the hole those shapes carry: a sentence the
+// body adds of its own is not read. Handed carriers alone it merges nothing
+// recorded, so it is followed into as well ([walker.followCarrierCallee]),
+// which is where a helper appending a sentence of its own to what it was
+// handed writes it; passing it over dropped that sentence without a word.
+// toolutil's list footer is that shape, WriteHints(b,
+// withoutPreserveLinks(hints)...), and its filter is read through the range
+// over what it was handed.
 func (w *walker) carriesRecordedHints(kind string, call *ast.CallExpr) bool {
 	if len(call.Args) == 0 {
 		return false
 	}
+	recorded := false
 	var carriers []*ast.Ident
 	for _, arg := range call.Args {
 		if selector, isSelector := ast.Unparen(arg).(*ast.SelectorExpr); isSelector && w.readsARecordedHint(kind, selector) {
+			recorded = true
 			continue
 		}
 		param, followable := w.hintCarrierParam(kind, arg)
@@ -1453,7 +1644,28 @@ func (w *walker) carriesRecordedHints(kind string, call *ast.CallExpr) bool {
 	for _, param := range carriers {
 		w.followValues(kind, param, hintRecorderFor(w.pkg.TypesInfo.TypeOf(param)))
 	}
+	if !recorded {
+		w.followCarrierCallee(kind, call)
+	}
 	return true
+}
+
+// followCarrierCallee reads what a call handed carriers alone returns, from
+// the body of the function it calls.
+//
+// The carriers are followed already, so what this adds is the callee's own
+// prose: a literal it appends to what it was handed, a format it spells the
+// carrier into. A callee whose body the load does not hold is another
+// module's (strings.TrimSpace), or toolutil read from export data by a run
+// narrowed to one domain, and writes no sentence of this repository's; a call
+// with no callee to name, of a function value, could do anything with what it
+// is handed and is listed with the sites nothing folds.
+func (w *walker) followCarrierCallee(kind string, call *ast.CallExpr) {
+	if _, named := w.callee(call); !named {
+		w.recordUnresolved(kind, call)
+		return
+	}
+	w.followReturns(kind, call, hintRecorderFor(w.pkg.TypesInfo.TypeOf(call)))
 }
 
 // hintCarrierParam reports whether an argument is a string or list parameter
@@ -1574,16 +1786,20 @@ func (w *walker) isFormatCall(call *ast.CallExpr) bool {
 // tool name handed to a sentence as its argument.
 //
 // Every other argument is one of two things. A name that says it carries hint
-// prose, or a read of a field this walk records, is prose the sentence is
-// assembled from, and is followed or left to where it is written, as a hint
-// is. Anything else is a value the sentence reports: an ID, a path, a count,
-// GitLab's own message, the error it wraps. Those are passed over and counted,
-// which is a deliberate exception to the rule that a blind spot is listed: a
-// format is how a handler reports what it was given, and with some four
-// hundred of them in the served tree the list would be GitLab data from end to
-// end. A name for a message is a value here although it is followed as a
-// message's argument, because in a format it is almost always GitLab's
-// message spelled into a sentence the server writes around it (glMsg).
+// prose, a parameter named for a message where this kind follows one, or a
+// read of a field this walk records, is prose the sentence is assembled from,
+// and is followed or left to where it is written, as a hint is. Anything else
+// is a value the sentence reports: an ID, a path, a count, GitLab's own
+// message, the error it wraps. Those are passed over and counted, which is a
+// deliberate exception to the rule that a blind spot is listed: a format is
+// how a handler reports what it was given, and with some four hundred of them
+// in the served tree the list would be GitLab data from end to end. A local
+// or a field named for a message is a value here although it would be
+// followed as a message's argument, because in a format it is almost always
+// GitLab's message spelled into a sentence the server writes around it
+// (glMsg); a parameter so named is the server's own sentence handed on by a
+// helper (requireProject(op, missingProjectMsg)), and passing it over would
+// leave every caller's sentence unread.
 //
 // A format that does not fold is a sentence the walk cannot read, and the
 // call is left to be recorded as one site nothing folds.
@@ -1610,18 +1826,19 @@ func (w *walker) foldFormat(kind string, call *ast.CallExpr) (string, bool) {
 
 // formatArgIsProse reports whether one argument of a format is prose the
 // sentence is assembled from rather than a value it reports, recording it
-// where it is: a name that says it carries a hint is followed to what it is
-// given, a read of a field this walk records is a copy of prose recorded where
-// it was written, and a call of a sink is prose its own visit reads.
+// where it is: a name that says it carries a hint, or a parameter named for a
+// message where this kind follows one, is followed to what it is given, a
+// read of a field this walk records is a copy of prose recorded where it was
+// written, and a call of a sink is prose its own visit reads.
 //
-// The third is not a nicety. An error wrapped in the error it causes,
+// The last is not a nicety. An error wrapped in the error it causes,
 // fmt.Errorf("...: %w", fmt.Errorf("...")), is visited outer first, and the
 // inner call is the very expression its own visit records, so passing it over
 // here would record it first and leave the inner sentence unread.
 func (w *walker) formatArgIsProse(kind string, arg ast.Expr) bool {
 	switch typed := ast.Unparen(arg).(type) {
 	case *ast.Ident:
-		if !isHintName(typed.Name) {
+		if !isHintName(typed.Name) && !w.isMessageParam(kind, typed) {
 			return false
 		}
 		w.recordErrorHint(kind, typed)
@@ -1638,6 +1855,24 @@ func (w *walker) formatArgIsProse(kind string, arg ast.Expr) bool {
 	default:
 		return false
 	}
+}
+
+// isMessageParam reports whether a name is a parameter named for a message
+// that this kind of site follows out to its callers.
+//
+// The parameter is the whole distinction. A helper taking missingProjectMsg
+// and spelling it into a format hands on a sentence each of its callers
+// wrote, which is prose; a local or a field of the same name holds what a
+// response carried (glMsg), which is a value. A name that is no variable at
+// all is no parameter either, which the lookup answers without a question of
+// its own: variableOf yields nil for it, and nil indexes no parameter.
+func (w *walker) isMessageParam(kind string, ident *ast.Ident) bool {
+	if !isMessageName(ident.Name) || !followableParamName(kind, ident.Name) {
+		return false
+	}
+	variable, _ := variableOf(w.pkg, ident)
+	_, isParam := w.prog.params[variable]
+	return isParam
 }
 
 // recordHintList records every hint of a list of them: the []string a
@@ -1720,7 +1955,7 @@ func (w *walker) isHintRead(selector *ast.SelectorExpr) bool {
 		return false
 	}
 	_, isProse := proseFieldKind(field.Name())
-	return isProse
+	return isProse || proseFieldNames[strings.ToLower(field.Name())] == kindUsage
 }
 
 // recordUnresolved records a site the audit could not fold.

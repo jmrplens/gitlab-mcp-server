@@ -1103,6 +1103,16 @@ func TestFollowableParamName_EachKind_FollowsItsOwnNames(t *testing.T) {
 		{kind: kindNextStep, name: "hints", want: true},
 		{kind: kindNextStep, name: "message", want: false},
 		{kind: kindNextStep, name: "valueSource", want: false},
+		{kind: kindSchemaDescription, name: "description", want: true},
+		{kind: kindSchemaDescription, name: "levelDescription", want: true},
+		{kind: kindSchemaDescription, name: "hint", want: true},
+		{kind: kindSchemaDescription, name: "usage", want: false},
+		{kind: kindSchemaDescription, name: "message", want: false},
+		{kind: kindUsage, name: "usage", want: true},
+		{kind: kindUsage, name: "leadUsage", want: true},
+		{kind: kindUsage, name: "hint", want: false},
+		{kind: kindUsage, name: "description", want: false},
+		{kind: kindUsage, name: "related", want: false},
 		{kind: kindRelated, name: "related", want: true},
 		{kind: kindRelated, name: "hint", want: false},
 		{kind: kindRelated, name: "contains", want: false},
@@ -1885,12 +1895,19 @@ var errDemo = errors.New("demo: use gitlab_demo_list to find one")
 
 func refuse() any { return toolutil.ErrorResult("refused: use gitlab_demo_get first") }
 
+func declined() any { return toolutil.CancelledResult("declined: ask before gitlab_demo_delete") }
+
 func annotated(md string) any { return toolutil.ErrorResultAnnotated(md, nil) }
 
 func wrapped(id int) error { return fmt.Errorf("demo %d: use gitlab_demo_get: %w", id, errDemo) }
 `)
 
-	want := []string{"demo %d: use gitlab_demo_get: %w", "demo: use gitlab_demo_list to find one", "refused: use gitlab_demo_get first"}
+	want := []string{
+		"declined: ask before gitlab_demo_delete",
+		"demo %d: use gitlab_demo_get: %w",
+		"demo: use gitlab_demo_list to find one",
+		"refused: use gitlab_demo_get first",
+	}
 	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, want) {
 		t.Errorf("message values = %v, want %v", got, want)
 	}
@@ -1966,7 +1983,8 @@ func callsEscaped() error {
 // a body, and a narrowed run has no body to follow, so it would read none of
 // a formatter's next steps. The first run is why the filter the list footer
 // hands WriteHints is no site nothing folds: its argument is the footer's own
-// hints parameter, a carrier recorded where its callers write it.
+// hints parameter, a carrier recorded where its callers write it, and the
+// filter's body, which the call is followed into, ranges over that list.
 func TestCollectSites_NextStepWriters_AreReadWhereTheyAreWritten(t *testing.T) {
 	want := []string{
 		"card gitlab_demo_card",
@@ -2413,5 +2431,446 @@ func TestCollectSites_ARootItCannotResolve_IsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no working directory") {
 		t.Errorf("error = %v, want the reason the root could not be resolved", err)
+	}
+}
+
+// TestCollectSites_SchemaMaps_AreReadAsServed holds the half of the served
+// schema a tag cannot carry: an input schema override and a hand-built
+// schema are maps, and the description one gives a property is served
+// exactly as a tag's is.
+//
+// The entry is found by its constant key and read only where it is text. A
+// property that is itself named description holds a schema rather than one,
+// and a guidance table keyed by that parameter holds its guidance; a key that
+// is not a constant, and a map keyed by anything but a string, describe
+// nothing. A description handed to a helper under a name ending in
+// description is followed out to the callers that write it, a read of another
+// module's field is GitLab's text and passed over (securityattributes hands an
+// attribute's own description to a mutation that way), and a read of a field
+// this walk records is a copy of prose judged where it was written.
+func TestCollectSites_SchemaMaps_AreReadAsServed(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+type output struct {
+	Hint string
+}
+
+var override = toolutil.SchemaPropertyOverride("links.url", map[string]any{
+	"description": "Use the URL gitlab_demo_publish returns",
+	"format":      "uri",
+})
+
+var nested = map[string]any{
+	"properties": map[string]any{
+		"description": map[string]any{"type": "string"},
+	},
+}
+
+var guidance = map[string]toolutil.ParameterGuidance{
+	"description": {SemanticRole: "label"},
+}
+
+var byNumber = map[int]string{1: "description"}
+
+func keyed(key string) map[string]string {
+	return map[string]string{key: "not read gitlab_demo_key"}
+}
+
+func levelSchema(name, levelDescription string) toolutil.InputSchemaOverride {
+	return toolutil.SchemaPropertyOverride(name, map[string]any{"description": levelDescription})
+}
+
+var level = levelSchema("level", "Level, see gitlab_demo_levels")
+
+func fromGitLab(c *gl.Commit) map[string]any {
+	return map[string]any{"description": c.Title}
+}
+
+func copied(o output) map[string]any {
+	return map[string]any{"description": o.Hint}
+}
+`)
+
+	want := []string{"Level, see gitlab_demo_levels", "Use the URL gitlab_demo_publish returns"}
+	if got := valuesOfKind(sites, kindSchemaDescription); !slices.Equal(got, want) {
+		t.Errorf("schema descriptions = %v, want %v", got, want)
+	}
+	if got := passedOverExprs(sites); !slices.Equal(got, []string{"c.Title"}) {
+		t.Errorf("passed over = %v, want GitLab's own text", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestIsStringKeyedMap_NoTypeAtAll_IsNoMap holds the one input the walk hands
+// it that no fixture can: a composite literal the type checker recorded no
+// type for.
+func TestIsStringKeyedMap_NoTypeAtAll_IsNoMap(t *testing.T) {
+	if isStringKeyedMap(nil) {
+		t.Error("a missing type was read as a map keyed by a string")
+	}
+}
+
+// TestCollectSites_ACallHandedCarriersAlone_IsFollowedIntoItsCallee holds
+// what a call handed only a parameter named for a hint is: the carrier is
+// followed out to the callers that write it, and the callee is followed into,
+// which is where a helper appending a sentence of its own writes it. Passing
+// the call over as a copy dropped that sentence without a word.
+//
+// A call whose callee this load holds no body for, another module's, writes
+// no sentence of this repository's and adds nothing; a call of a function
+// value could do anything with what it is handed and is listed. A call handed
+// a recorded read beside the carrier is a merge, passed over with the hole a
+// merge carries: the sentence its body adds is not read, which is pinned here
+// so that the day it is read is a day this test is changed on purpose.
+func TestCollectSites_ACallHandedCarriersAlone_IsFollowedIntoItsCallee(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+type output struct {
+	Hint string
+}
+
+func withList(hint string) string { return hint + ". Use gitlab_demo_list to find it" }
+
+func wrapped(hint string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, withList(hint))
+}
+
+func callsWrapped() error { return wrapped("demo not found") }
+
+func merged(first, hint string) string { return first + hint + " (merge adds gitlab_demo_merged)" }
+
+func withMerge(o output, hint string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, merged(o.Hint, hint))
+}
+
+func callsWithMerge(o output) error { return withMerge(o, "merge carrier") }
+
+func trimmed(hint string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, strings.TrimSpace(hint))
+}
+
+func callsTrimmed() error { return trimmed("trimmed gitlab_demo_trimmed") }
+
+func throughValue(transform func(string) string, hint string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, transform(hint))
+}
+
+func callsThroughValue() error { return throughValue(strings.ToUpper, "value carrier") }
+`)
+
+	want := []string{
+		" . Use gitlab_demo_list to find it",
+		"demo not found",
+		"merge carrier",
+		"trimmed gitlab_demo_trimmed",
+		"value carrier",
+	}
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, want) {
+		t.Errorf("error hint values = %v, want %v", got, want)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"transform(hint)"}) {
+		t.Errorf("unresolved = %v, want the call of a function value", got)
+	}
+}
+
+// TestCollectSites_ARangeOverAList_IsFollowedToTheList holds the value
+// variable of a range over a list of strings: it holds each element in turn,
+// so it is followed to the list, read as one. A filter over the hints it is
+// handed (toolutil's withoutPreserveLinks is the shape) is read through its
+// range to its callers rather than listed, and an element of a list of IDs is
+// an ID.
+//
+// Nothing else is read that way: a range over a map hands its variable a
+// map's value, a range naming no value variable has nothing to follow, and a
+// blank one names no variable at all.
+func TestCollectSites_ARangeOverAList_IsFollowedToTheList(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+func keep(hints []string) []string {
+	out := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		if hint != "" {
+			out = append(out, hint)
+		}
+	}
+	return out
+}
+
+func footer(b *strings.Builder, hints ...string) {
+	toolutil.WriteHints(b, keep(hints)...)
+}
+
+func callsFooter(b *strings.Builder) {
+	footer(b, "kept gitlab_demo_kept")
+}
+
+func build(relatedIDs []string) toolutil.ActionSpecOptions {
+	var out []string
+	for _, id := range relatedIDs {
+		out = append(out, id)
+	}
+	return toolutil.ActionSpecOptions{RelatedActions: out}
+}
+
+func callsBuild() toolutil.ActionSpecOptions {
+	return build([]string{"demo.from_a_range"})
+}
+
+func overAMap(b *strings.Builder, table map[string]string) {
+	for _, hint := range table {
+		toolutil.WriteHints(b, hint)
+	}
+}
+
+func keysOnly(b *strings.Builder, hints []string) {
+	for index := range hints {
+		toolutil.WriteHints(b, hints[index])
+	}
+}
+
+func blank(hints []string) int {
+	count := 0
+	for _, _ = range hints {
+		count++
+	}
+	return count
+}
+`)
+
+	if got := valuesOfKind(sites, kindNextStep); !slices.Equal(got, []string{"kept gitlab_demo_kept"}) {
+		t.Errorf("next step values = %v, want the filtered hint read at its caller", got)
+	}
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.from_a_range"}) {
+		t.Errorf("related values = %v, want the ranged ID read at its caller", got)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"hint", "hints[index]"}) {
+		t.Errorf("unresolved = %v, want the map's value and the index read", got)
+	}
+}
+
+// TestCollectSites_AUsageLineAssembledAtRunTime_IsFoldedAsProse holds a Usage
+// line the type checker cannot fold whole. It used to be passed over in
+// silence, which the tool-name rule it is now judged by cannot afford: its
+// literal halves are where a tool name is spelled.
+//
+// So it is folded as a hint is. A local is followed to every value it is
+// given, a concatenation keeps its literal halves, a format its format, a
+// helper that picks a line by name is followed to every branch it returns
+// from, and a parameter named for a Usage line to its callers. A read of
+// another Usage field is a copy of a line recorded where it was written. What
+// still folds nowhere is listed, and a value a format reports is passed over.
+func TestCollectSites_AUsageLineAssembledAtRunTime_IsFoldedAsProse(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+type meta struct {
+	usage string
+}
+
+var table = map[string]meta{
+	"list": {usage: "List demos. Prefer gitlab_demo_search"},
+}
+
+func fromLocal(list bool) toolutil.ActionSpecOptions {
+	usage := "Get one demo."
+	if list {
+		usage = "List demos with gitlab_demo_list."
+	}
+	return toolutil.ActionSpecOptions{Usage: usage}
+}
+
+func fromConcatenation(name string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: "Use gitlab_demo_get for " + name}
+}
+
+func fromFormat(name string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: fmt.Sprintf("Use demo.%s after gitlab_demo_list", name)}
+}
+
+func pick(action string) string {
+	switch action {
+	case "list":
+		return "List demos, then gitlab_demo_get."
+	default:
+		return "Get a demo."
+	}
+}
+
+func fromHelper(action string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: pick(action)}
+}
+
+func fromParameter(leadUsage string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: leadUsage}
+}
+
+func callsParameter() toolutil.ActionSpecOptions { return fromParameter("Lead with gitlab_demo_lead.") }
+
+func fromCopy(options *toolutil.ActionSpecOptions, m meta) {
+	options.Usage = m.usage
+}
+
+func fromLookup(leads map[string]string, action string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: leads[action]}
+}
+
+func fromAnotherModule(raw string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{Usage: strings.TrimSpace(raw)}
+}
+`)
+
+	want := []string{
+		"Get a demo.",
+		"Get one demo.",
+		"Lead with gitlab_demo_lead.",
+		"List demos with gitlab_demo_list.",
+		"List demos, then gitlab_demo_get.",
+		"List demos. Prefer gitlab_demo_search",
+		"Use demo.%s after gitlab_demo_list",
+		"Use gitlab_demo_get for  ",
+	}
+	if got := valuesOfKind(sites, kindUsage); !slices.Equal(got, want) {
+		t.Errorf("usage values = %v, want %v", got, want)
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, []string{"leads[action]", "name", "strings.TrimSpace(raw)"}) {
+		t.Errorf("unresolved = %v, want the map lookup, the concatenated value and the call no body answers for", got)
+	}
+	if got := passedOverExprs(sites); !slices.Equal(got, []string{"name"}) {
+		t.Errorf("passed over = %v, want the format's value", got)
+	}
+}
+
+// TestCollectSites_AMessageParameterInAFormat_IsFollowedToItsCallers holds
+// the one name a format argument is followed under besides a hint's: a
+// parameter named for a message, which is a helper handing on the sentence
+// each of its callers wrote. A local of the same name is GitLab's message
+// spelled into a sentence the server writes around it, and a parameter so
+// named where the site's kind follows no message (a hint's format) is a value
+// on the same terms; both are passed over, and the sentence handed to the
+// second is not read.
+func TestCollectSites_AMessageParameterInAFormat_IsFollowedToItsCallers(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func requireProject(op, missingProjectMsg string) error {
+	return fmt.Errorf("%s: %s", op, missingProjectMsg)
+}
+
+func callsRequire() error {
+	return requireProject("demo_get", "project_id is required. Use gitlab_demo_list")
+}
+
+func fromGitLab(err error) error {
+	glMsg := err.Error()
+	return fmt.Errorf("demo failed: %s", glMsg)
+}
+
+func hinted(detailMsg string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, fmt.Sprintf("retry: %s", detailMsg))
+}
+
+func callsHinted() error { return hinted("not read gitlab_demo_detail") }
+`)
+
+	want := []string{"%s: %s", "demo", "demo failed: %s", "project_id is required. Use gitlab_demo_list"}
+	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, want) {
+		t.Errorf("message values = %v, want %v", got, want)
+	}
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, []string{"retry: %s"}) {
+		t.Errorf("error hint values = %v, want the format alone", got)
+	}
+	if got := passedOverExprs(sites); !slices.Equal(got, []string{"detailMsg", "glMsg", "op"}) {
+		t.Errorf("passed over = %v, want the operation, GitLab's message and the hint's value", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestListRecorder_EachKind_ReadsTheListItsElementBelongsTo holds how the list
+// a range walks is read: as sentences for every prose kind, a Usage line
+// included although it is judged in both sections, and as IDs for the
+// published IDs.
+//
+// The element is a literal concatenated with a value, which is where the two
+// readings part: a sentence keeps its literal half and lists the value on its
+// own, and an ID folds whole or not at all, so it is one site nothing folds.
+func TestListRecorder_EachKind_ReadsTheListItsElementBelongsTo(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte("package fixture\n\nfunc list(name string) []string { return []string{\"read \" + name} }\n"),
+	}
+	loaded, err := goprogram.Load(root, []string{"./" + fixtureDir + "/..."}, overlay)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	var list ast.Expr
+	ast.Inspect(loaded[0].Syntax[0], func(node ast.Node) bool {
+		if lit, ok := node.(*ast.CompositeLit); ok {
+			list = lit
+		}
+		return true
+	})
+	asSentence := []site{{Value: "read  ", Resolved: true}, {Expr: "name"}}
+	asID := []site{{Expr: `"read " + name`}}
+	for kind, want := range map[string][]site{
+		kindUsage:     asSentence,
+		kindNextStep:  asSentence,
+		kindAssertion: asSentence,
+		kindRelated:   asID,
+		kindHint:      asID,
+	} {
+		t.Run(kind, func(t *testing.T) {
+			collect, collectErr := newCollector(root, loaded)
+			if collectErr != nil {
+				t.Fatalf("collector: %v", collectErr)
+			}
+			listRecorder(kind)(&walker{collector: collect, pkg: loaded[0]}, kind, list)
+			got := make([]site, 0, len(collect.sites))
+			for _, at := range collect.sites {
+				got = append(got, site{Value: at.Value, Expr: at.Expr, Resolved: at.Resolved})
+			}
+			slices.SortFunc(got, func(left, right site) int { return cmp.Compare(left.Expr, right.Expr) })
+			if !slices.Equal(got, want) {
+				t.Errorf("sites = %+v, want %+v", got, want)
+			}
+		})
 	}
 }

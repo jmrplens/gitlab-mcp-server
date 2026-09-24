@@ -1472,7 +1472,7 @@ func TestFormatMilestonesMarkdown_WithResults(t *testing.T) {
 		"| IID | Title | State | Due Date |\n| --- | --- | --- | --- |\n" +
 		"| 1 | v1.0 | active | 1 Jun 2026 |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use action 'project.milestone_get' to see full details, with project_id and milestone_id")
+			"Use action 'project.milestone_get' to see full details, with project_id and milestone_iid (the IID column)")
 	if got != want {
 		t.Errorf("milestone search:\n got %q\nwant %q", got, want)
 	}
@@ -1489,7 +1489,7 @@ func TestFormatMilestonesMarkdown_NoDueDate(t *testing.T) {
 		"| IID | Title | State | Due Date |\n| --- | --- | --- | --- |\n" +
 		"| 2 | v2.0 | active | \u2014 |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use action 'project.milestone_get' to see full details, with project_id and milestone_id")
+			"Use action 'project.milestone_get' to see full details, with project_id and milestone_iid (the IID column)")
 	if got != want {
 		t.Errorf("milestone search without a due date:\n got %q\nwant %q", got, want)
 	}

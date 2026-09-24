@@ -230,14 +230,14 @@ Available meta-tool domains: `access`, `achievement`, `admin`, `branch`, `ci_cat
 
 ## Error Handling
 
-All tools return actionable error messages that guide toward solutions:
+All tools return actionable error messages that guide toward solutions. A project that does not exist, asked for as `999`, answers on every surface with:
 
 ```json
 {
   "isError": true,
   "content": [{
     "type": "text",
-    "text": "Project not found: '999'. Verify the project ID exists and your token has access. Use gitlab_project_list to find valid project IDs."
+    "text": "## ❓ Project Not Found\n\nThe project **999** does not exist or is not accessible with your current permissions.\n\n---\n💡 **Next steps:**\n- Use project.list to search for projects by name or path\n- Verify the project ID or URL-encoded path is correct (e.g. 'group%2Fproject')\n- The project may have been deleted or you may lack access\n"
   }]
 }
 ```

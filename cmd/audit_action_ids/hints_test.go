@@ -259,13 +259,44 @@ func TestClassify_UsageLine_IsJudgedForToolNamesAndItsIDsOnce(t *testing.T) {
 	}
 }
 
-// TestClassify_UnfoldedUsageLine_IsNoServedProse holds that a Usage line the
-// type checker could not fold is the published-ID section's blind spot and
-// nothing the served-prose section counts as read.
-func TestClassify_UnfoldedUsageLine_IsNoServedProse(t *testing.T) {
-	report := classify([]site{{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Expr: "build()"}}, stubCatalog(), false)
-	if report.Hints.Read != 0 || len(report.Unresolved) != 1 {
-		t.Errorf("served prose read %d, unresolved %+v; want the site in the published-ID section only", report.Hints.Read, report.Unresolved)
+// TestClassify_UsageLineNothingFolds_IsServedProseNotFolded holds where a
+// Usage line folded as a sentence leaves what it cannot read: the half of it
+// nothing folds is listed with the served prose nothing folds, and a value a
+// format of it reports is counted as passed over. Neither is a published ID
+// nobody can read, so neither fails the gate, and neither is counted as read.
+func TestClassify_UsageLineNothingFolds_IsServedProseNotFolded(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Expr: "leads[action]"},
+		{Package: "p", File: "p/specs.go", Line: 2, Kind: kindUsage, Expr: "name", PassedOver: true},
+	}, stubCatalog(), false)
+
+	if len(report.Unresolved) != 0 || !report.Clean() {
+		t.Errorf("published-ID unresolved = %+v, clean %t; want neither site in that section", report.Unresolved, report.Clean())
+	}
+	if report.Hints.Unfolded != 1 || report.Hints.NotFolded[0].Expression != "leads[action]" {
+		t.Errorf("served prose not folded = %+v, want the one half nothing folds", report.Hints.NotFolded)
+	}
+	if report.Hints.PassedOver != 1 || report.Hints.Read != 0 {
+		t.Errorf("passed over %d, read %d; want the format's value counted and nothing read", report.Hints.PassedOver, report.Hints.Read)
+	}
+}
+
+// TestClassify_UsageLineFromAFormat_IsJudgedWithItsVerbsMasked holds both
+// rules a Usage line is judged by to the masking every other sentence gets.
+// The line keeps its verbs for the fixer; unmasked, "%s.get" is the dotted
+// token s.get, which the published-ID rule would refuse, and
+// "%sgitlab_demo_list" hides the tool name the served-prose rule refuses.
+func TestClassify_UsageLineFromAFormat_IsJudgedWithItsVerbsMasked(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Value: "Read %s.get after %sgitlab_demo_list.", Resolved: true},
+	}, stubCatalog(), false)
+
+	want := []HintFinding{{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Rule: ruleToolName, Name: "gitlab_demo_list"}}
+	if !slices.Equal(report.Hints.Rows, want) {
+		t.Errorf("served prose findings = %+v, want the tool name the verb hid: %+v", report.Hints.Rows, want)
+	}
+	if report.Summary.Findings != 0 {
+		t.Errorf("published-ID findings = %+v, want none from a verb", report.Findings)
 	}
 }
 
@@ -310,20 +341,53 @@ func TestMaskVerbs_OnlyVerbsAreMasked(t *testing.T) {
 	}
 }
 
-// TestClassify_SchemaDescription_MayNameADeclaredAlias holds the one served
-// kind that consults the declared alias mentions: the description of dynamic
-// execute's action parameter, whose subject is that execute accepts an alias,
-// names issue.close as its example. Any other served prose naming it is
-// refused.
-func TestClassify_SchemaDescription_MayNameADeclaredAlias(t *testing.T) {
+// TestClassify_SchemaDescription_MayNameADeclaredAliasInDynamicAlone holds
+// the one served sentence that consults the declared alias mentions: the
+// description of dynamic execute's action parameter, whose subject is that
+// execute accepts an alias, names issue.close as its example.
+//
+// Two things are held. The allowance is dynamic's: a schema description in
+// any other package naming the alias is refused like any other sentence. And
+// the use keeps the declaration alive, because the declaration now gives that
+// description as its reason: with no Usage line naming issue.close, the entry
+// is still in use, while issue.reopen, which no sentence here names, is stale.
+func TestClassify_SchemaDescription_MayNameADeclaredAliasInDynamicAlone(t *testing.T) {
 	report := classify([]site{
-		{Package: "p", File: "p/a.go", Line: 1, Kind: kindSchemaDescription, Value: "An ID, or an alias such as issue.close.", Resolved: true},
-		{Package: "p", File: "p/a.go", Line: 2, Kind: kindMessage, Value: "then call issue.close", Resolved: true},
-	}, stubCatalog("issue.update"), false)
+		{Package: dynamicPackage, File: "internal/tools/dynamic/register.go", Line: 1, Kind: kindSchemaDescription, Value: "An ID, or an alias such as issue.close.", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindSchemaDescription, Value: "An alias such as issue.close.", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 3, Kind: kindMessage, Value: "then call issue.close", Resolved: true},
+	}, stubCatalog("issue.update"), true)
 
-	want := []HintFinding{{Package: "p", File: "p/a.go", Line: 2, Kind: kindMessage, Rule: ruleAlias, Name: "issue.close", Canonical: "issue.update"}}
+	want := []HintFinding{
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindSchemaDescription, Rule: ruleAlias, Name: "issue.close", Canonical: "issue.update"},
+		{Package: "p", File: "p/a.go", Line: 3, Kind: kindMessage, Rule: ruleAlias, Name: "issue.close", Canonical: "issue.update"},
+	}
 	if !slices.Equal(report.Hints.Rows, want) {
-		t.Errorf("findings = %+v, want only the message's alias: %+v", report.Hints.Rows, want)
+		t.Errorf("findings = %+v, want every alias outside dynamic: %+v", report.Hints.Rows, want)
+	}
+	stale := strings.Join(report.StaleExemptions, "\n")
+	if strings.Contains(stale, "issue.close") {
+		t.Errorf("stale = %v, want issue.close kept alive by dynamic's description", report.StaleExemptions)
+	}
+	if !strings.Contains(stale, "issue.reopen") {
+		t.Errorf("stale = %v, want issue.reopen named: the judgement ran and nothing used it", report.StaleExemptions)
+	}
+}
+
+// TestClassify_AQuotedAlias_KeepsNoDeclarationAlive holds the other site that
+// consults the declared alias mentions. A quotation of issue.close is excused,
+// since the Usage line it quotes names it on purpose, and it keeps no entry
+// alive, since the entry is about the served source and not about its test.
+func TestClassify_AQuotedAlias_KeepsNoDeclarationAlive(t *testing.T) {
+	report := classify([]site{
+		{Package: "test/e2e/gitlab/common", File: "test/e2e/gitlab/common/issues_test.go", Line: 1, Kind: kindAssertion, Value: "issue.close", Resolved: true},
+	}, stubCatalog("issue.update"), true)
+
+	if len(report.Assertions.Rows) != 0 {
+		t.Errorf("assertion findings = %+v, want the quoted alias excused", report.Assertions.Rows)
+	}
+	if !strings.Contains(strings.Join(report.StaleExemptions, "\n"), "issue.close") {
+		t.Errorf("stale = %v, want issue.close stale: a quotation keeps nothing alive", report.StaleExemptions)
 	}
 }
 

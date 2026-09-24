@@ -1333,6 +1333,10 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 // branch that does not exist: a result marked as an error, naming the branch
 // and the project and the action that lists the ones that do exist. It renders
 // the card directly and contacts no GitLab.
+//
+// The next step is pinned as the whole line toolutil.HintAction writes,
+// because docs/reference/output-format.md and docs/concepts/error-handling.md
+// quote this formatter as their worked example of one.
 func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	result := toolutil.MarkdownForResult(branchNotFoundOutput{Identifier: `"missing" in project 42`})
 	if result == nil {
@@ -1345,7 +1349,7 @@ func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	if !ok {
 		t.Fatalf("content type = %T, want TextContent", result.Content[0])
 	}
-	for _, want := range []string{"Branch Not Found", `"missing" in project 42`, actionBranchList} {
+	for _, want := range []string{"Branch Not Found", `"missing" in project 42`, "- Use action '" + actionBranchList + "' to list the project's branches\n"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(content.Text, want) {
 				t.Fatalf("markdown missing %q:\n%s", want, content.Text)
