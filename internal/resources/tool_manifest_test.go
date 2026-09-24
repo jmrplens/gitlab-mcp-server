@@ -1201,6 +1201,97 @@ func isStandaloneSurfaceTool(kind actioncatalog.SurfaceKind) bool {
 	return kind == actioncatalog.SurfaceKindRuntimeUtility || kind == actioncatalog.SurfaceKindInteractiveUtility
 }
 
+// descriptionToolName matches a tool-name-shaped token in a description, as
+// cmd/audit_action_ids spells the token its served-prose rule refuses.
+var descriptionToolName = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
+
+// descriptionTokensNamingNoTool are the gitlab_-shaped tokens a description
+// may spell because they name no tool, each with what they name instead. It
+// holds what cmd/audit_action_ids declares in hintToolExemptions, for the same
+// reason: GitLab's own template families are the class.
+var descriptionTokensNamingNoTool = map[string]string{
+	"gitlab_ci_ymls": "a GitLab template family and API path segment (templates/gitlab_ci_ymls)",
+}
+
+// TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause
+// holds every individual tool Description the catalog carries to the rule
+// cmd/audit_action_ids holds a constant one to: outside its "See also" clause
+// it names no gitlab_* tool.
+//
+// gitlab://tools serves a domain action's Description verbatim as its entry's
+// description on the dynamic and meta surfaces and rewrites only that clause,
+// so a tool name anywhere else reaches two surfaces that do not register the
+// tool. The gate reads a Description only where it is a constant, and several
+// are assembled when the catalog is built: a switch over the action name in
+// deploykeys and deploytokens, a map read in pages, the guided flows' text
+// handed in. Putting a tool name back into one of those passed every gate, so
+// this test reads what the catalog carries rather than the source that built
+// it, and so reads those too.
+//
+// The catalog is the one cmd/internal/actionids builds: Ultimate, for a
+// self-managed instance and for GitLab.com, since Orbit's group is contributed
+// only for GitLab.com, with the standalone surface tools added the way the
+// dynamic surface adds them.
+func TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause(t *testing.T) {
+	classes := []struct {
+		name   string
+		dotcom bool
+	}{
+		{name: "self-managed", dotcom: false},
+		{name: "GitLab.com", dotcom: true},
+	}
+	for _, class := range classes {
+		t.Run(class.name, func(t *testing.T) {
+			base, err := gitlabtools.SharedBaseCatalog(class.dotcom, gitlabtools.ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+			if err != nil {
+				t.Fatalf("SharedBaseCatalog(%t): %v", class.dotcom, err)
+			}
+			catalog, err := dynamictools.AddStandaloneCatalog(base, nil, dynamictools.StandaloneOptions{})
+			if err != nil {
+				t.Fatalf("AddStandaloneCatalog: %v", err)
+			}
+			read := 0
+			for _, action := range catalog.Actions() {
+				if action.IndividualTool.Description == "" {
+					continue
+				}
+				read++
+				for _, name := range toolNamesOutsideSeeAlso(action.IndividualTool.Description) {
+					t.Errorf("action %s's Description names %s outside its See also clause, which gitlab://tools serves verbatim on the dynamic and meta surfaces: name the canonical action ID there, or move the reference into the clause", action.ID, name)
+				}
+			}
+			if read == 0 {
+				t.Error("no action in the catalog carried a Description, so nothing was read")
+			}
+		})
+	}
+}
+
+// TestToolNamesOutsideSeeAlso_OneDescription_ReportsAllButTheClause pins the guard's reading
+// of one description, since the tree it runs over is clean and so shows none
+// of it: a name inside the clause is passed, one before or after it is
+// reported, and a token declared to name no tool is passed wherever it is.
+func TestToolNamesOutsideSeeAlso_OneDescription_ReportsAllButTheClause(t *testing.T) {
+	const description = "Reversible via gitlab_unban_user. Lists gitlab_ci_ymls templates. See also: gitlab_get_user, gitlab_ban_user. Then gitlab_list_users."
+	want := []string{"gitlab_unban_user", "gitlab_list_users"}
+	if got := toolNamesOutsideSeeAlso(description); !slices.Equal(got, want) {
+		t.Errorf("toolNamesOutsideSeeAlso() = %v, want %v", got, want)
+	}
+}
+
+// toolNamesOutsideSeeAlso returns the tool names a description spells
+// outside its "See also" clause, less the tokens that name no tool.
+func toolNamesOutsideSeeAlso(description string) []string {
+	var names []string
+	outside := actioncatalog.SeeAlsoClause.ReplaceAllString(description, " ")
+	for _, name := range descriptionToolName.FindAllString(outside, -1) {
+		if _, namesNoTool := descriptionTokensNamingNoTool[name]; !namesNoTool {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // TestToolManifest_StandaloneSeeAlso_IsKeptInCanonicalIDsOnEverySurface
 // holds what each surface's manifest does with the clause a standalone
 // surface tool writes in canonical IDs, with each surface assembled the way
@@ -1388,7 +1479,7 @@ func assertSeeAlsoResolves(t *testing.T, snapshot toolSurfaceSnapshot, valid map
 // the same pattern the projection rewrites.
 func seeAlsoNames(description string) []string {
 	var names []string
-	for _, match := range seeAlsoClause.FindAllStringSubmatch(description, -1) {
+	for _, match := range actioncatalog.SeeAlsoClause.FindAllStringSubmatch(description, -1) {
 		names = append(names, strings.Split(match[1], ", ")...)
 	}
 	return names
@@ -1413,7 +1504,7 @@ func assertSeeAlsoFormat(t *testing.T, owner, description string) {
 // current catalog's metadata.
 func seeAlsoFormatViolation(description string) (string, bool) {
 	for idx := strings.Index(description, "See also:"); idx >= 0; {
-		loc := seeAlsoClause.FindStringIndex(description[idx:])
+		loc := actioncatalog.SeeAlsoClause.FindStringIndex(description[idx:])
 		if loc == nil || loc[0] != 0 {
 			return description[idx:], false
 		}

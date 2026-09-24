@@ -3,7 +3,6 @@ package resources
 import (
 	"cmp"
 	"context"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -749,15 +748,6 @@ func actionDescription(action actioncatalog.Action, resolve seeAlsoResolver) str
 // a canonical ID resolves as it does on every surface).
 type seeAlsoResolver func(name string) (string, bool)
 
-// seeAlsoClause matches the trailing cross-reference sentence the action
-// specs write for the individual surface — "See also: gitlab_a, gitlab_b."
-// — and, because the character class admits dots, also a clause already
-// projected into entry IDs ("See also: widget.create, gitlab_widget.get."),
-// which is what lets the guard test parse the rewritten output with the
-// same pattern. The terminating literal dot still matches: the greedy
-// class backtracks one character off the final name.
-var seeAlsoClause = regexp.MustCompile(`See also: ([a-z0-9_.]+(?:, [a-z0-9_.]+)*)\.`)
-
 // rewriteSeeAlso projects the "See also:" clause of an individual-surface
 // description into the active surface's identifier namespace.
 //
@@ -786,7 +776,7 @@ func rewriteSeeAlso(description string, resolve seeAlsoResolver) string {
 	if resolve == nil {
 		return description
 	}
-	rewritten := seeAlsoClause.ReplaceAllStringFunc(description, func(clause string) string {
+	rewritten := actioncatalog.SeeAlsoClause.ReplaceAllStringFunc(description, func(clause string) string {
 		names := strings.Split(strings.TrimSuffix(strings.TrimPrefix(clause, "See also: "), "."), ", ")
 		kept := names[:0]
 		for _, name := range names {
