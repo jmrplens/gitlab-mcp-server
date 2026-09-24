@@ -462,9 +462,11 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 //     that leaves the hint empty: for a string project id, parseID accepts
 //     whatever it is given, so ErrInvalidFileName is the only error the call
 //     can return and errors.Is is never false there.
-//  2. NewRequest error: the only error path is url.PathUnescape on a
-//     malformed percent-encoded path. FormatPackageURL generates the
-//     path with PathEscape, so the result is always well-formed.
+//  2. NewRequest error: the error paths are url.PathUnescape on a
+//     malformed percent-encoded path and a request option that fails.
+//     FormatPackageURL generates the path with PathEscape, so the result is
+//     always well-formed, and the one option passed, gl.WithContext, never
+//     returns an error.
 //  3. MkdirAll error: it fails where an ancestor exists and is not a
 //     directory, and CanonicalDownloadOutputPath has already refused that
 //     path. It resolves the longest existing prefix through EvalSymlinks,

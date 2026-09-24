@@ -33,13 +33,6 @@ func CancelledCtx(t *testing.T) context.Context {
 	return ctx
 }
 
-// cancelOnArrivalHold is how long a [CancelOnArrival] mock keeps a request the
-// client has not abandoned before answering it. It is long enough that a
-// request carrying the cancelled context is always abandoned first, since that
-// takes one round trip on loopback, and short enough that a handler which
-// dropped the context fails its test in seconds rather than hanging it.
-const cancelOnArrivalHold = 5 * time.Second
-
 // CancelOnArrival is the fixture for the one thing a handler's cancellation
 // test cannot learn from a context cancelled up front: whether the request the
 // handler builds carries the caller's context at all.
@@ -54,8 +47,7 @@ const cancelOnArrivalHold = 5 * time.Second
 //
 // The context returned here is cancelled the moment the first request reaches
 // the mock, and the mock holds every request until the client abandons it or
-// [cancelOnArrivalHold] elapses, answering through respond only in the second
-// case. A handler that passed the context therefore returns promptly with an
+// five seconds pass, answering through respond only in the second case. A handler that passed the context therefore returns promptly with an
 // error for which errors.Is(err, context.Canceled) holds; one that did not
 // waits out the hold and returns whatever respond answered, which a test
 // asserting the cancellation reports.
@@ -66,7 +58,13 @@ const cancelOnArrivalHold = 5 * time.Second
 // a test that never sends a request could leak.
 func CancelOnArrival(tb testing.TB, respond http.HandlerFunc) (context.Context, *gitlabclient.Client) {
 	tb.Helper()
-	return cancelOnArrival(tb, respond, cancelOnArrivalHold)
+	// Five seconds is long enough that a request carrying the cancelled
+	// context is always abandoned first, since that takes one round trip on
+	// loopback, and short enough that a handler which dropped the context
+	// fails its test in seconds rather than hanging it. It is written here
+	// rather than as a constant so the one statement that states it is one a
+	// test executes.
+	return cancelOnArrival(tb, respond, 5*time.Second)
 }
 
 // cancelOnArrival is [CancelOnArrival] with the hold stated, so the helper's
