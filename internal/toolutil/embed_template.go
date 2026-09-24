@@ -100,10 +100,10 @@ const upperHex = "0123456789ABCDEF"
 //
 // Go's url.PathEscape is not that. It encodes a path segment, which is allowed
 // to carry "$" "&" "+" ":" "=" "@" raw, and the go-sdk router matches a simple
-// variable against the unreserved set and escapes alone, so a URI that
-// PathEscape wrote for a scoped label (priority::high) or a tag with build
-// metadata (v1.0.0+build) matched no template and the resource block a tool
-// result carried could not be read back.
+// variable against the unreserved set, a comma and percent-escapes, so a URI
+// that PathEscape wrote for a scoped label (priority::high) or a tag with
+// build metadata (v1.0.0+build) matched no template and the resource block a
+// tool result carried could not be read back.
 func escapeSimpleExpansion(value string) string {
 	var b strings.Builder
 	for i := range len(value) {

@@ -1449,8 +1449,8 @@ func TestEmbeddedResource_GetEmbedsOnEverySurface(t *testing.T) {
 }
 
 // TestEmbeddedResource_EncodedProjectPath_EmbedsTheURIThatReadsIt calls
-// issue.get with the project given URL-encoded, the form every project_id
-// description offers, and requires each surface to embed the URI a resource
+// issue.get with the project given URL-encoded, the form most project_id
+// descriptions offer, and requires each surface to embed the URI a resource
 // read resolves to the same project.
 //
 // The handler decodes "group%2Fproject" before it calls GitLab, but the meta

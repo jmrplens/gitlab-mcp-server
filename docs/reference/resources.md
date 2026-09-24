@@ -176,9 +176,11 @@ URI: `group/project` is written `group%2Fproject`, the branch `feature/login`
 is `feature%2Flogin`, and the scoped label `priority::high` is
 `priority%3A%3Ahigh`. The server decodes each variable exactly once before it
 asks GitLab, so the value GitLab receives is the one you encoded. A raw slash
-in such a variable matches no template and the read answers resource-not-found.
-The resource blocks tool results embed are already spelled this way, so their
-URIs can be handed to `resources/read` unchanged.
+in such a variable either matches no template, and the read answers
+resource-not-found, or is read as a separator, as the file template's `{ref}`
+is before `{+path}`, so a different object is asked for. Encode it. The
+resource blocks tool results embed are already spelled this way, so their URIs
+can be handed to `resources/read` unchanged.
 
 `{+path}` is a reserved expansion: its slashes stay as they are, and every
 segment is decoded once like any other variable. Reserved expansion passes an
@@ -189,7 +191,7 @@ valid escape, such as a branch `fix-%41`: it is decoded, and names `fix-A`.
 
 ## Autocomplete Support
 
-The `project_id`, `group_id`, `merge_request_iid` and `issue_iid` template parameters support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values (e.g., project paths, group paths, open MR or issue IIDs). The other parameters (`sha`, `ref`, `path`, `slug`, and the numeric object IDs) get no suggestions on the resource side. See [Completions](capabilities/completions.md).
+The `project_id`, `group_id`, `merge_request_iid` and `issue_iid` template parameters support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values (e.g., project paths, group paths, open MR or issue IIDs). The other parameters (`sha`, `ref`, `branch`, `tag_name`, `label_id`, `path`, `slug`, and the numeric object IDs) get no suggestions on the resource side. See [Completions](capabilities/completions.md).
 
 ## Source
 

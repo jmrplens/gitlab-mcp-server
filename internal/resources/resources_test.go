@@ -3345,7 +3345,9 @@ func (g *recordingGitLab) requests() []gitlabRequest {
 // literally named that and answered 404. The mock's decoded path is what the
 // handler passed on, so it must carry the value with no escape left in it.
 // There is one case per way a variable is extracted, since each helper splits
-// the URI differently and each had to learn to decode after the split.
+// the URI differently and each had to learn to decode after the split, plus
+// one whose value literally holds an escape: every other value here decodes to
+// itself a second time, so only that case tells decoding once from twice.
 func TestResourceTemplates_EscapedVariable_ReachesGitLabDecodedOnce(t *testing.T) {
 	gitlab := &recordingGitLab{}
 	session := newMCPSession(t, gitlab)
@@ -3359,6 +3361,7 @@ func TestResourceTemplates_EscapedVariable_ReachesGitLabDecodedOnce(t *testing.T
 		{name: "a project collection", uri: "gitlab://project/group%2Fproject/branches", wantPath: "/api/v4/projects/group/project/repository/branches"},
 		{name: "a group's members", uri: "gitlab://group/parent%2Fchild/members", wantPath: "/api/v4/groups/parent/child/members/all"},
 		{name: "a branch with a slash", uri: "gitlab://project/group%2Fproject/branch/feature%2Fworld", wantPath: "/api/v4/projects/group/project/repository/branches/feature/world"},
+		{name: "a branch whose name holds an escape", uri: "gitlab://project/42/branch/fix-%2541", wantPath: "/api/v4/projects/42/repository/branches/fix-%41"},
 		{name: "a tag with a slash", uri: "gitlab://project/42/tag/release%2F2026.1", wantPath: "/api/v4/projects/42/repository/tags/release/2026.1"},
 		{name: "a release with a slash", uri: "gitlab://project/42/release/release%2F2026.1", wantPath: "/api/v4/projects/42/releases/release/2026.1"},
 		{name: "a nested wiki slug", uri: "gitlab://project/42/wiki/parent%2Fchild", wantPath: "/api/v4/projects/42/wikis/parent/child"},
@@ -3392,8 +3395,9 @@ func TestResourceTemplates_EscapedVariable_ReachesGitLabDecodedOnce(t *testing.T
 
 // roundTripValue is the value TestResourceTemplates_ServerExpandedURI_RoundTrips
 // binds for each template variable. A string carries every character a simple
-// expansion must encode that url.PathEscape leaves alone (":" "+" "@"), plus a
-// slash and a space; the numeric ones are the ids the handlers parse.
+// expansion must encode that url.PathEscape leaves alone ("$" "&" "+" ":" "="
+// "@"), plus a slash, a space and a literal percent-escape; the numeric ones are
+// the ids the handlers parse.
 var roundTripValue = map[string]any{
 	"project_id":        "group/sub/project",
 	"group_id":          "parent/child",
@@ -3418,8 +3422,11 @@ var roundTripValue = map[string]any{
 }
 
 // roundTripString is the string every named variable of the round trip is
-// bound to.
-const roundTripString = "a/b c::d+e@f"
+// bound to. The trailing "%41" is there for the decode: every other character
+// decodes to itself a second time, so a handler that decoded its variable twice
+// would pass on them all, and only an escape GitLab must receive literally
+// ("%41", not "A") tells once from twice.
+const roundTripString = "a/b c::d+e@f$g&h=i%41"
 
 // TestResourceTemplates_ServerExpandedURI_RoundTrips holds the server's two
 // halves of a resource URI to each other: every template it serves, filled by
@@ -3428,9 +3435,10 @@ const roundTripString = "a/b c::d+e@f"
 // GitLab, and hand GitLab each value exactly as it was bound.
 //
 // Two defects failed it before, independently. ExpandResourceURI escaped with
-// url.PathEscape, which leaves ":" "+" "@" raw, and the router matches a simple
-// variable against unreserved characters and escapes alone, so those URIs
-// resolved to no template and never reached GitLab. And the handlers passed
+// url.PathEscape, which leaves "$" "&" "+" ":" "=" "@" raw, and the router
+// matches a simple variable against the unreserved set, a comma and
+// percent-escapes, so those URIs resolved to no template and never reached
+// GitLab. And the handlers passed
 // the encoded segment to client-go, so a slash reached GitLab escaped twice.
 // A variable with no value in the table fails the test rather than being
 // skipped, so a template added later is held to this too.

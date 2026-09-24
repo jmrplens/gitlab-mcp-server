@@ -118,9 +118,9 @@ func TestHandlerIndexRead_ReportsEachFailureDistinctly(t *testing.T) {
 // the one route an escape that does not decode takes to a handler.
 //
 // The SDK's router never delivers one, since a simple variable matches only
-// unreserved characters and well-formed escapes, but a subscription's first
-// read goes through this index with a URI the subscription whitelist accepted,
-// and that whitelist takes any non-empty segment. Such a URI names nothing, so
+// unreserved characters, a comma and well-formed escapes, but a subscription's
+// first read goes through this index with a URI the subscription whitelist
+// accepted, and that whitelist takes any non-empty segment. Such a URI names nothing, so
 // it must answer resource-not-found, the code a watcher stops on, and must not
 // reach GitLab: handed on undecoded, a%zz was escaped to a%25zz and GitLab was
 // asked for a branch nobody named.

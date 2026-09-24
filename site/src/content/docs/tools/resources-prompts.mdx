@@ -128,7 +128,7 @@ Static best-practice guides for AI assistants — no API calls required.
 :::note
 Resource URIs with `{project_id}`, `{group_id}`, etc. are **resource templates**. The client substitutes the actual ID or URL-encoded path when requesting the resource.
 
-Each variable fills one path segment, so a value carrying a slash or another reserved character is percent-encoded once, as RFC 6570 expands it: the branch `feature/login` is written `feature%2Flogin` and the scoped label `priority::high` is `priority%3A%3Ahigh`. The server decodes it once before asking GitLab. Only the file template's `{+path}` keeps its slashes.
+Each variable fills one path segment, so a value carrying a slash, a space or any other character outside `A-Z a-z 0-9 - . _ ~` is percent-encoded once, as RFC 6570 expands it: the branch `feature/login` is written `feature%2Flogin` and the scoped label `priority::high` is `priority%3A%3Ahigh`. The server decodes it once before asking GitLab. Only the file template's `{+path}` keeps its slashes.
 :::
 
 ### How do I read a resource?

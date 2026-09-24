@@ -420,7 +420,7 @@ func FinishToolResult(callResult *mcp.CallToolResult, result any, route ActionRo
 //
 // The meta, individual and standalone dispatchers hand this tail the raw
 // arguments, while the handler decoded a project given URL-encoded
-// ("group%2Fproject", the form every project_id description offers) and
+// ("group%2Fproject", the form most project_id descriptions offer) and
 // resolved a compatibility alias before it called GitLab. Expanded from the
 // raw form, that project was escaped again into group%252Fproject, which the
 // resource read decodes to group%2Fproject and sends GitLab as a different

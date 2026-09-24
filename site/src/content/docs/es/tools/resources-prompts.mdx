@@ -128,7 +128,7 @@ Guías estáticas de mejores prácticas para asistentes de IA — sin llamadas a
 :::note
 Las URIs de recursos con `{project_id}`, `{group_id}`, etc. son **plantillas de recursos**. El cliente sustituye el ID real o la ruta codificada en URL al solicitar el recurso.
 
-Cada variable ocupa un único segmento de la ruta, así que un valor con una barra u otro carácter reservado se codifica en porcentaje una sola vez, como lo expande RFC 6570: la rama `feature/login` se escribe `feature%2Flogin` y la etiqueta con ámbito `priority::high`, `priority%3A%3Ahigh`. El servidor lo decodifica una vez antes de consultar a GitLab. Solo el `{+path}` de la plantilla de ficheros conserva sus barras.
+Cada variable ocupa un único segmento de la ruta, así que un valor con una barra, un espacio o cualquier otro carácter fuera de `A-Z a-z 0-9 - . _ ~` se codifica en porcentaje una sola vez, como lo expande RFC 6570: la rama `feature/login` se escribe `feature%2Flogin` y la etiqueta con ámbito `priority::high`, `priority%3A%3Ahigh`. El servidor lo decodifica una vez antes de consultar a GitLab. Solo el `{+path}` de la plantilla de ficheros conserva sus barras.
 :::
 
 ### ¿Cómo leo un recurso?
