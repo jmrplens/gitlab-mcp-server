@@ -933,8 +933,10 @@ var sharedDestinationPools = sync.OnceValue(func() destinationPools {
 //
 // Proxy is kept as the clone carries it, which for net/http's own default is
 // [http.ProxyFromEnvironment]. [destinationTransport] asks that same field
-// which proxy a request goes through, so whatever it holds, the router and the
-// transport read one answer.
+// which proxy a request goes through, so for a deterministic function, which
+// ProxyFromEnvironment is since it reads the environment once per process,
+// the router and the transport read one answer. [proxyDialAddress] says what
+// is and is not covered when the function is not deterministic.
 func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
 	var t *http.Transport
 	if def, ok := http.DefaultTransport.(*http.Transport); ok {

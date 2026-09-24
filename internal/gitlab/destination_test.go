@@ -174,13 +174,13 @@ func TestGuardDestination_TierAAppliesWithNoPolicy(t *testing.T) {
 }
 
 // TestGuardDestination_StampedWithNoPolicy_GetsTierAAndNothingElse covers the
-// half of the unstamped branch the absent-stamp test cannot reach: a request
-// that WAS stamped, by a policy of nil.
+// stamp [guardedDial] puts on a dial to the operator's proxy: a stamp whose
+// policy is nil, which reaches the same nil-policy branch of [dialTarget.judge]
+// as no stamp at all.
 //
-// [guardedDial] produces exactly this for a dial to the operator's proxy, which
-// is re-stamped with no policy so that tier A is all it gets, and a stamp whose
-// policy is nil must therefore be as good as no stamp, because there is
-// nothing to apply tier B with. Reading it the other way round would
+// That dial is re-stamped with no policy so that tier A is all it gets, and a
+// stamp whose policy is nil must therefore be as good as no stamp, because
+// there is nothing to apply tier B with. Reading it the other way round would
 // dereference the nil policy on every such dial.
 //
 // The private address is the assertion that matters. A public one would be
@@ -1047,7 +1047,8 @@ func TestDestinationPools_RedirectOffAPublicInstance_IsNotHandedAnotherClientsCo
 // proxy was asked to reach from one refused before anything was sent.
 //
 // It listens on loopback, which is the point: a proxy on a private address is
-// the deployment the guard used to refuse wholesale.
+// the deployment the guard used to refuse for every request tier B refuses a
+// private address.
 type proxyStub struct {
 	url   *url.URL
 	mu    sync.Mutex
@@ -1099,8 +1100,7 @@ func redirectingFrom(host, location string) http.HandlerFunc {
 // [newBaseTransport], except that both send every request through proxy.
 //
 // [http.ProxyURL] is used rather than the environment because
-// [http.ProxyFromEnvironment] reads its variables once per process, and
-// because it never proxies a loopback destination, which every stub here is.
+// [http.ProxyFromEnvironment] reads its variables once per process.
 func proxiedPools(t *testing.T, proxy *url.URL) destinationPools {
 	t.Helper()
 	return proxiedPoolsVia(t, http.ProxyURL(proxy))
@@ -1175,9 +1175,10 @@ func TestDestinationTransport_RedirectOffAPublicInstanceThroughAPrivateProxy_Suc
 //
 // No proxy is served from a cloud metadata address any more than a GitLab is,
 // so a proxy configured there is refused before a packet is sent, for the
-// operator's own instance as much as for a hop tier B would refuse. The proxy
-// URL names no port, so the dial is also the one address the default port of
-// its scheme makes, which is what the proxy stamp has to spell identically.
+// operator's own instance as much as for a hop tier B would refuse. Tier A
+// refuses this dial whether or not the stamp spells the proxy as net/http
+// does, so this test says nothing about the spelling:
+// [TestProxyDialAddress_IsTheAddressNetHTTPDials] is what holds that.
 func TestDestinationTransport_ProxyOnAMetadataAddress_IsRefused(t *testing.T) {
 	const instanceURL = "http://gitlab.example.com"
 	metadataProxy := &url.URL{Scheme: "http", Host: "169.254.169.254"}
@@ -1219,12 +1220,13 @@ func TestDestinationTransport_ProxyOnAMetadataAddress_IsRefused(t *testing.T) {
 // the proxy what the dialer refuses it directly, including the cloud metadata
 // address, since the proxy fetches whatever it is asked for. So a destination
 // spelled as an address is judged before anything is sent, by the rule the
-// dialer applies, and the proxy is never asked. Every row but the last must
-// leave the proxy asked only for the instance, or for nothing.
+// dialer applies, and the proxy is never asked for it. Every row of the table
+// must leave the proxy asked for the instance alone.
 //
-// The private instance row is the one the old guard did not refuse: its
-// hops were allowed a private address, the proxy's included, so a redirect to
-// the metadata address went through the proxy.
+// The two private-instance rows are the ones the old guard did not refuse:
+// their hops were allowed a private address, the proxy's included, so a
+// redirect to the metadata address went through the proxy. The subtest after
+// the table is the hop that must still go through.
 func TestDestinationTransport_ProxiedDestinationSpelledAsAnAddress_IsJudged(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1378,6 +1380,77 @@ func TestDestinationTransport_ProxyFunctionFails_NothingIsSent(t *testing.T) {
 	}
 	if got := stub.asked(); len(got) != 0 {
 		t.Errorf("the proxy was asked for %v, want nothing sent", got)
+	}
+}
+
+// TestDestinationTransport_RefusedUnsent_ClosesTheBody verifies that both
+// refusals [destinationTransport.RoundTrip] makes before sending close the
+// body of the request they decline.
+//
+// A RoundTripper owns the body it is handed, refusals included, and net/http
+// kept that promise itself when its own call of the Proxy function failed:
+// the transport closes the body before it returns the error. Both refusals
+// now happen before net/http is reached, so the promise is this transport's
+// to keep. Each row posts a body, calls RoundTrip directly so nothing else
+// can close it, and requires it closed with nothing sent to the proxy.
+func TestDestinationTransport_RefusedUnsent_ClosesTheBody(t *testing.T) {
+	const instanceURL = "http://gitlab.example.com"
+	errNoProxy := errors.New("proxy configuration unreadable")
+	tests := []struct {
+		name       string
+		pools      func(t *testing.T, stub *proxyStub) destinationPools
+		requestURL string
+		wantErr    error
+	}{
+		{
+			name: "the proxy cannot be determined",
+			pools: func(t *testing.T, _ *proxyStub) destinationPools {
+				t.Helper()
+				return proxiedPoolsVia(t, func(*http.Request) (*url.URL, error) { return nil, errNoProxy })
+			},
+			requestURL: instanceURL + versionAPIPath,
+			wantErr:    errNoProxy,
+		},
+		{
+			name: "the destination behind the proxy is refused",
+			pools: func(t *testing.T, stub *proxyStub) destinationPools {
+				t.Helper()
+				return proxiedPools(t, stub.url)
+			},
+			requestURL: "http://10.0.0.5:9000" + versionAPIPath,
+			wantErr:    ErrDestinationRefused,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newProxyStub(t, versionAnswer)
+			pools := tt.pools(t, stub)
+			transport := &destinationTransport{
+				pools:  pools,
+				client: proxiedClient(instanceURL, pools, publicPolicy(instanceURL)),
+			}
+			body := &closeRecorder{Reader: strings.NewReader("payload")}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, tt.requestURL, body)
+			if err != nil {
+				t.Fatalf("http.NewRequestWithContext() unexpected error: %v", err)
+			}
+
+			resp, err := transport.RoundTrip(req)
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("RoundTrip() err = %v, want %v", err, tt.wantErr)
+			}
+			if !body.closed.Load() {
+				t.Error("the body of a request refused before it was sent was left open")
+			}
+			if got := stub.asked(); len(got) != 0 {
+				t.Errorf("the proxy was asked for %v, want nothing sent", got)
+			}
+		})
 	}
 }
 

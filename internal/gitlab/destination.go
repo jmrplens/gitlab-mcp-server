@@ -457,10 +457,14 @@ func guardDestination(ctx context.Context, network, address string, _ syscall.Ra
 // proxy; the address before resolution can, and this is the one place it is
 // visible. It is compared with the address [destinationTransport.RoundTrip]
 // recorded for the request's proxy, as a string, so a dial that is not that
-// address keeps its stamp and is judged as a destination: any disagreement
-// between the two spellings refuses rather than permits. An unstamped dial,
-// or one whose request is not proxied, has no proxy address, and net/http
-// never dials an empty one.
+// address keeps the request's stamp and is judged as a destination. A
+// disagreement between the two spellings therefore falls back to judging the
+// proxy as the destination, which is the rule every proxy dial got before
+// this wrapper existed: it can refuse more than a match does, since a private
+// proxy is then refused wherever tier B refuses the request a private
+// address, but it never permits more, since tier A applies either way. An
+// unstamped dial, or one whose request is not proxied, has no proxy address,
+// and net/http never dials an empty one.
 func guardedDial(d *net.Dialer) func(ctx context.Context, network, address string) (net.Conn, error) {
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		if target, _ := dialTargetFrom(ctx); target.proxy == address {
@@ -564,15 +568,22 @@ func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, err
 //
 // It asks the transport's own Proxy function, which the transport will ask
 // again for the same request, rather than reading the environment itself, so
-// the two cannot come to different answers. A pool that is not an
-// [http.Transport] has no proxy this package can see, and none is assumed.
+// for a deterministic function the two come to one answer. The function every
+// transport here carries is deterministic: [http.ProxyFromEnvironment] reads
+// the environment once per process. One that is not is covered only as far
+// as it fails: a function that fails here refuses the request unsent, while
+// one that answers "direct" here and names a proxy when the transport asks
+// again sends the request through a proxy nobody stamped, to a destination
+// nothing judged. A pool that is not an [http.Transport] has no proxy this
+// package can see, and none is assumed.
 //
 // The address is spelled as net/http spells the one it hands the dialer: the
 // proxy's host, and its port or the default of its scheme. [guardedDial]
 // compares the two as strings, so a host net/http would spell differently (a
 // name it converts to its IDNA form, which this does not) matches no dial,
-// and that dial is judged as a destination. The mismatch refuses; it never
-// permits.
+// and that dial is judged as a destination under the request's own stamp,
+// which is the rule before the stamp existed. That can refuse a proxy a match
+// would have let through; it cannot let through one a match would refuse.
 func proxyDialAddress(pool http.RoundTripper, req *http.Request) (string, error) {
 	transport, ok := pool.(*http.Transport)
 	if !ok || transport.Proxy == nil {
@@ -612,10 +623,11 @@ var proxySchemePorts = map[string]string{
 // traffic has made the proxy the place a rule about names belongs. It is the
 // same line [CheckCallerNamedInstance] draws at the door, for the same reason.
 //
-// It runs per request rather than per dial because a proxied connection is
-// shared by every request sent through the same proxy, whatever each one
-// asks it to reach: net/http keys a plain-HTTP request's connection on the
-// proxy alone, so most of these requests are never dialed at all.
+// It runs per request rather than per dial because behind any proxy the
+// dialer only ever sees the proxy's address, and because net/http keys a
+// plain-HTTP request sent through an http or https proxy on the proxy alone
+// (connectMethod.key in its transport.go), so one such connection carries
+// requests to many destinations.
 func judgeProxiedDestination(ctx context.Context, target dialTarget, dest *url.URL) error {
 	addr, spelledAsAddress := addressLiteral(dest.Hostname())
 	if !spelledAsAddress {

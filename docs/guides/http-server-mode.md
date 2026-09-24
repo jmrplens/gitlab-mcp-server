@@ -345,7 +345,7 @@ The refusal for a **missing** header is `400` in both modes, and only its messag
 
 ### Outbound destinations
 
-Choosing the instance is one half of the question; the other half is which addresses this server will open a connection to at all. That is decided at the dialer, after DNS resolution, so it covers the first request and every redirect hop alike ([ADR-0022](../development/adr/adr-0022-operator-named-destinations-are-exempt.md)).
+Choosing the instance is one half of the question; the other half is which addresses this server will open a connection to at all. That is decided at the dialer, after DNS resolution, so it covers the first request and every redirect hop alike ([ADR-0022](../development/adr/adr-0022-operator-named-destinations-are-exempt.md)). Behind an outbound proxy the dialer sees only the proxy, and the destination is judged per request as far as its URL spells it (see below).
 
 **An address the operator named is never checked.** `--gitlab-url` and `GITLAB_URL` are the operator's own configuration, so a GitLab on `localhost`, on `10.x`, on `192.168.x` or behind a VPN on `100.64.0.0/10` works with nothing set and no list to maintain. There is no configuration for this and none is needed.
 
@@ -356,7 +356,7 @@ Two kinds of destination are **not** the operator's choice, and those are checke
 
 For those two, a private, loopback, CGNAT, link-local, unique-local or unspecified address is refused unless `--allow-private-instances` (or `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES=true`) is passed. One case is allowed without the flag: a redirect to a private address when the instance the operator configured **itself** resolves to a private address, which is the ordinary self-managed GitLab with its object store on the same network. An instance a caller named never qualifies; it needs `--allow-private-instances`.
 
-**The cloud metadata addresses are refused on every hop, for every deployment, and `--allow-private-instances` does not permit them**: `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254` and `100.100.100.200`. Nothing legitimate serves a GitLab API or a presigned object-storage URL from one of them.
+**The cloud metadata addresses are refused on every hop this server dials, and behind a proxy on every hop whose URL spells one, for every deployment, and `--allow-private-instances` does not permit them**: `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254` and `100.100.100.200`. Nothing legitimate serves a GitLab API or a presigned object-storage URL from one of them.
 
 **Behind an outbound proxy** (`HTTP_PROXY` or `HTTPS_PROXY`), the connection this server opens is to the proxy, which is your own configuration, so it is checked against the metadata addresses alone and may sit on `localhost` or on a private network. The destination behind it is checked only where it is written as an address, and is then refused before anything is sent exactly as it would be without a proxy; a host name is resolved by the proxy, so what it can reach is the proxy's own egress policy. Hosts this server should connect to directly belong in `NO_PROXY`, and only a direct connection is checked after DNS resolution.
 
