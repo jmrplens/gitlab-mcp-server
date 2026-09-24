@@ -223,7 +223,10 @@
 // it does not spell, so it is rewritten to toolutil.HintAction by hand; a
 // merge's body adds prose unread, as above; a domain action's individual tool
 // Description assembled at run time is read by no rule, and three such said
-// "Use this instead of" a tool name until they were rewritten by hand; and
+// "Use this instead of" a tool name until they were rewritten by hand, so a
+// test in internal/resources reads every Description the built catalog
+// carries outside the clause actioncatalog.SeeAlsoClause matches, which is
+// the one this rule passes over too; and
 // internal/prompts and internal/resources are outside the load, the review
 // prompt being held to the catalog by a test of its own and the resource
 // manifests' own prose, around the descriptions they serve, by no gate.
