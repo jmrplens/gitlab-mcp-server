@@ -1216,7 +1216,8 @@ var descriptionTokensNamingNoTool = map[string]string{
 // TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause
 // holds every individual tool Description the catalog carries to the rule
 // cmd/audit_action_ids holds a constant one to: outside its "See also" clause
-// it names no gitlab_* tool.
+// it names no gitlab_* tool, and every action ID it spells is a canonical one,
+// an alias refused like an ID that resolves nowhere.
 //
 // gitlab://tools serves a domain action's Description verbatim as its entry's
 // description on the dynamic and meta surfaces and rewrites only that clause,
@@ -1250,20 +1251,36 @@ func TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause(t *
 			if err != nil {
 				t.Fatalf("AddStandaloneCatalog: %v", err)
 			}
+			ids := newDescriptionIDIndex(catalog.Actions())
 			read := 0
 			for _, action := range catalog.Actions() {
 				if action.IndividualTool.Description == "" {
 					continue
 				}
 				read++
-				for _, name := range toolNamesOutsideSeeAlso(action.IndividualTool.Description) {
-					t.Errorf("action %s's Description names %s outside its See also clause, which gitlab://tools serves verbatim on the dynamic and meta surfaces: name the canonical action ID there, or move the reference into the clause", action.ID, name)
-				}
+				checkServedDescription(t, action, ids)
 			}
 			if read == 0 {
 				t.Error("no action in the catalog carried a Description, so nothing was read")
 			}
 		})
+	}
+}
+
+// checkServedDescription reports what one action's Description names that no
+// surface can follow: a tool name outside its See also clause, and a dotted
+// token offered as an action ID that is not a canonical one.
+func checkServedDescription(t *testing.T, action actioncatalog.Action, ids descriptionIDIndex) {
+	t.Helper()
+	for _, name := range toolNamesOutsideSeeAlso(action.IndividualTool.Description) {
+		t.Errorf("action %s's Description names %s outside its See also clause, which gitlab://tools serves verbatim on the dynamic and meta surfaces: name the canonical action ID there, or move the reference into the clause", action.ID, name)
+	}
+	for _, id := range ids.unresolved(action.IndividualTool.Description) {
+		if canonical, isAlias := ids.aliases[id]; isAlias {
+			t.Errorf("action %s's Description names %q, which resolves only as an alias: name the canonical ID %q, which gitlab_find_action publishes", action.ID, id, canonical)
+			continue
+		}
+		t.Errorf("action %s's Description names %q, which resolves to no action", action.ID, id)
 	}
 }
 
@@ -1290,6 +1307,81 @@ func toolNamesOutsideSeeAlso(description string) []string {
 		}
 	}
 	return names
+}
+
+// descriptionActionID matches an action-ID-shaped token, as
+// cmd/internal/actionids spells the one its prose rule offers as an ID.
+var descriptionActionID = regexp.MustCompile(`\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b`)
+
+// descriptionIDIndex is what a Description's dotted tokens are judged
+// against: the canonical IDs, the dotted aliases that resolve to one, and the
+// two halves of every canonical ID, which decide whether a token is offered
+// as an ID at all, the test cmd/internal/actionids applies to constant prose.
+type descriptionIDIndex struct {
+	ids     map[string]bool
+	aliases map[string]string
+	domains map[string]bool
+	members map[string]bool
+}
+
+// newDescriptionIDIndex indexes the canonical IDs and dotted aliases of
+// actions.
+func newDescriptionIDIndex(actions []actioncatalog.Action) descriptionIDIndex {
+	index := descriptionIDIndex{ids: map[string]bool{}, aliases: map[string]string{}, domains: map[string]bool{}, members: map[string]bool{}}
+	for _, action := range actions {
+		id := string(action.ID)
+		index.ids[id] = true
+		if domain, member, found := strings.Cut(id, "."); found {
+			index.domains[domain] = true
+			index.members[member] = true
+		}
+		for _, alias := range action.Aliases {
+			if strings.Contains(alias, ".") {
+				index.aliases[alias] = id
+			}
+		}
+	}
+	return index
+}
+
+// unresolved returns the tokens description offers as action IDs that are
+// not canonical ones, in the order they appear. A token is offered when
+// either half is one a canonical ID uses; a .git tail is a repository URL's.
+func (index descriptionIDIndex) unresolved(description string) []string {
+	var tokens []string
+	for _, token := range descriptionActionID.FindAllString(description, -1) {
+		domain, member, _ := strings.Cut(token, ".")
+		if member == "git" || (!index.domains[domain] && !index.members[member]) || index.ids[token] {
+			continue
+		}
+		if !slices.Contains(tokens, token) {
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens
+}
+
+// TestDescriptionIDIndex_Unresolved_OffersOnlyCatalogShapedTokens pins which
+// dotted tokens the guard judges, since the tree it runs over is clean: a
+// canonical ID passes, a misspelled member or an alias is reported, and a token
+// neither of whose halves the catalog uses, or a .git tail, is not offered.
+func TestDescriptionIDIndex_Unresolved_OffersOnlyCatalogShapedTokens(t *testing.T) {
+	index := newDescriptionIDIndex([]actioncatalog.Action{
+		{ID: "access.deploy_key_list_project", Aliases: []string{"gitlab_list_deploy_keys", "access.list_deploy_keys"}},
+		{ID: "project.get"},
+		{ID: "user.unban"},
+	})
+	const description = "Use access.deploy_key_list_project, not access.deploy_key_list_projekt or access.list_deploy_keys. Reads go.mod, clones project.git and calls user.unban then user.unban."
+	want := []string{"access.deploy_key_list_projekt", "access.list_deploy_keys"}
+	if got := index.unresolved(description); !slices.Equal(got, want) {
+		t.Errorf("unresolved() = %v, want %v", got, want)
+	}
+	if got := index.aliases["access.list_deploy_keys"]; got != "access.deploy_key_list_project" {
+		t.Errorf("aliases[access.list_deploy_keys] = %q, want the canonical ID it stands for", got)
+	}
+	if _, indexed := index.aliases["gitlab_list_deploy_keys"]; indexed {
+		t.Error("a tool-name alias was indexed as a dotted one")
+	}
 }
 
 // TestToolManifest_StandaloneSeeAlso_IsKeptInCanonicalIDsOnEverySurface
