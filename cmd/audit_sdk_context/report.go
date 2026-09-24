@@ -13,7 +13,8 @@ import (
 // over rather than only that it was clean.
 type Summary struct {
 	Packages int `json:"packages"`
-	// Calls are the calls that reached a request option parameter.
+	// Calls are the calls judged: those that reached a request option
+	// parameter, and the request constructors of go-retryablehttp.
 	Calls int `json:"calls"`
 	// Forwarded and Rebound are the clean calls that rest on the two rules
 	// that are not an option in the call itself.
@@ -107,7 +108,7 @@ func (r Report) write(out io.Writer, verbose bool) {
 	if verbose || !r.ok() {
 		fmt.Fprintln(out)
 	}
-	fmt.Fprintf(out, "%s: %d calls handing client-go request options in %d packages, %d without the caller's context "+
+	fmt.Fprintf(out, "%s: %d calls building or sending a request in %d packages, %d without the caller's context "+
 		"(%d forwarded to their own caller, %d rebound after they were built, %d excused by a declaration)\n",
 		toolName, r.Summary.Calls, r.Summary.Packages, r.Summary.Findings,
 		r.Summary.Forwarded, r.Summary.Rebound, r.Summary.Excused)

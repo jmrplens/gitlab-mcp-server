@@ -21,7 +21,10 @@ const clientGoPath = "gitlab.com/gitlab-org/api/client-go/v3"
 
 // retryablePath is the import path of the request type client-go's request
 // builders return, whose own WithContext method is the other way a request
-// can be given the caller's context after it was built.
+// can be given the caller's context after it was built. Its own constructors
+// are judged as well: (*gl.Client).Do sends whatever request it is handed,
+// and one this package built from context.Background() reaches GitLab through
+// it as surely as a builder's does.
 const retryablePath = "github.com/hashicorp/go-retryablehttp"
 
 // The reasons a call is reported, one per way the context fails to arrive.
@@ -30,12 +33,14 @@ const (
 	// context, which client-go answers by building the request from
 	// context.Background().
 	reasonMissing = "passes no gl.WithContext option"
-	// reasonDetached is a call whose only context is one that never ends:
+	// reasonDetached is a call one of whose options is gl.WithContext of a
+	// context that never ends, whatever else it passes:
 	// gl.WithContext(context.Background()) or context.TODO() compiles, reads
-	// like the fix, and bounds nothing.
+	// like the fix, and bounds nothing, and client-go applies the options in
+	// order, so one placed after the caller's context replaces it.
 	reasonDetached = "passes gl.WithContext a context that never ends"
 	// reasonUnbound is a request built by hand with no context among its
-	// options and never rebound to one before it is sent.
+	// options and never rebound to one.
 	reasonUnbound = "builds a request without the caller's context and never rebinds it to one"
 )
 
@@ -57,24 +62,36 @@ type Finding struct {
 	Reason string `json:"reason"`
 }
 
-// outcome is what the request options handed to one call say about its
-// context. The constants are ordered so the better of two outcomes is the
-// larger, which is how the options of one call are combined: a call carries
-// the context if any one of its options does.
-type outcome int
+// outcome is what the request options handed to one call were seen to do with
+// its context, as a set: the options of one call, the elements of a literal,
+// the arguments of an append and the assignments of a variable are combined by
+// union. A set rather than a rank, because a context that never ends is not a
+// weaker form of one that can: client-go applies the options in order and a
+// later WithContext replaces an earlier one, so a detached option beside the
+// caller's context may be the one the request ends up with, and taking the
+// better of the two would pass exactly that call.
+type outcome uint8
+
+// outcomeMissing: nothing among the options carries a context.
+const outcomeMissing outcome = 0
 
 const (
-	// outcomeMissing: nothing among the options carries a context.
-	outcomeMissing outcome = iota
-	// outcomeDetached: the only context among them is one that never ends.
-	outcomeDetached
-	// outcomeForwarded: the options are the enclosing function's own, handed
-	// on untouched, so whoever calls that function is judged instead.
-	outcomeForwarded
 	// outcomeCarried: one of the options is gl.WithContext of a context that
 	// can end.
-	outcomeCarried
+	outcomeCarried outcome = 1 << iota
+	// outcomeForwarded: one of the options is a request-option parameter of
+	// the enclosing function, handed on, so whoever calls that function is
+	// judged instead.
+	outcomeForwarded
+	// outcomeDetached: one of the options is gl.WithContext of a context that
+	// never ends.
+	outcomeDetached
 )
+
+// has reports whether an outcome includes another.
+func (o outcome) has(other outcome) bool {
+	return o&other != 0
+}
 
 // scanner accumulates what one load of the tree says about its client-go
 // calls.
@@ -93,8 +110,9 @@ type scanner struct {
 	// so a run over one package does not report every declaration elsewhere
 	// as stale.
 	packages map[string]struct{}
-	// calls counts every call that reached a request-option parameter, which
-	// is the population the findings are drawn from.
+	// calls counts every call judged, which is the population the findings
+	// are drawn from: those that reached a request-option parameter, and the
+	// request constructors of go-retryablehttp.
 	calls int
 	// forwarded and rebound count the calls accepted by the two rules that
 	// are not an option in the call itself, so a reader can see how much of
@@ -125,10 +143,13 @@ func (s *scanner) observe(loaded []*packages.Package) {
 //
 // Only the imports are read, which is all the question needs: whether a
 // hidden file could hold a call this gate would judge. A file that cannot be
-// read is recorded too, since nothing can be said about what it calls.
+// read is recorded too, since nothing can be said about what it calls. A test
+// file is passed over whatever its constraints say, because the gate reads no
+// test file under any constraint: naming one here would report the stated
+// blind spot as though a build tag had caused it.
 func (s *scanner) noteUnjudged(pkg *packages.Package) {
 	for _, path := range pkg.IgnoredFiles {
-		if !strings.HasSuffix(path, ".go") {
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			continue
 		}
 		var src any
@@ -196,35 +217,83 @@ func (s *scanner) observeNode(pkg *packages.Package, pkgName string, facts *fact
 }
 
 // judge decides one call, and returns why it reaches client-go without the
-// caller's context, or nothing when it passes the context or reaches no
-// request option parameter at all.
+// caller's context, or nothing when it passes the context or is not a call
+// this gate judges at all.
+//
+// A detached option is decided before anything else the call passes, so it is
+// reported beside the caller's context as much as instead of it: placed after
+// that context it replaces it, and placed before it, it does nothing and reads
+// as though it did.
 func (s *scanner) judge(info *types.Info, facts *facts, call *ast.CallExpr) string {
+	if ctx, built := retryableConstructor(info, call); built {
+		s.calls++
+		if ctx != nil && !neverEnds(info, ctx) {
+			return ""
+		}
+		return s.unlessRebound(facts, call)
+	}
 	options, signature := optionArguments(info, call)
 	if signature == nil {
 		return ""
 	}
 	s.calls++
-	best := outcomeMissing
+	seen := outcomeMissing
 	for _, option := range options {
-		best = max(best, facts.outcomeOf(info, option))
+		seen |= facts.outcomeOf(info, option)
 	}
-	switch best {
-	case outcomeCarried:
+	switch {
+	case seen.has(outcomeDetached):
+		return reasonDetached
+	case seen.has(outcomeCarried):
 		return ""
-	case outcomeForwarded:
+	case seen.has(outcomeForwarded):
 		s.forwarded++
 		return ""
-	case outcomeDetached:
-		return reasonDetached
 	}
 	if !returnsRequest(signature) {
 		return reasonMissing
 	}
+	return s.unlessRebound(facts, call)
+}
+
+// unlessRebound decides a call that built a request with no context of its
+// own: clean when the variable holding the request is rebound to one, and
+// reported otherwise.
+func (s *scanner) unlessRebound(facts *facts, call *ast.CallExpr) string {
 	if facts.rebound[facts.requestOf[call]] {
 		s.rebound++
 		return ""
 	}
 	return reasonUnbound
+}
+
+// retryableConstructor reports whether a call is one of go-retryablehttp's own
+// request constructors, with the context it was handed: none for NewRequest,
+// which builds from context.Background(), and the first argument of
+// NewRequestWithContext.
+//
+// These are judged because nothing else here would see them. A request they
+// build takes no client-go option, so no rule above reaches it, and
+// (*gl.Client).Do sends it as it is. Judging the constructor rather than the
+// send is what keeps a request a helper built from being reported where it is
+// sent, as the four group board handlers send one: every request starts at a
+// constructor, and each one that can start it without the caller's context is
+// judged where it is called, client-go's builders by the option rules, these
+// two here, and the standard library's by noctx, which is what covers the
+// http.Request that FromRequest wraps. Only the direct call is recognized, as
+// with the contexts that never end.
+func retryableConstructor(info *types.Info, call *ast.CallExpr) (ast.Expr, bool) {
+	fn := calledFunc(info, call.Fun)
+	if fn == nil || fn.Pkg().Path() != retryablePath {
+		return nil, false
+	}
+	switch fn.Name() {
+	case "NewRequest":
+		return nil, true
+	case "NewRequestWithContext":
+		return call.Args[0], true
+	}
+	return nil, false
 }
 
 // optionArguments returns the argument expressions a call hands to a request
@@ -301,11 +370,14 @@ type facts struct {
 	// closure within it, and handing it on is forwarding.
 	params map[types.Object]bool
 	// requestOf names the variable a call's first result was assigned to,
-	// which the rebinding rule reads for a request builder.
+	// which the rebinding rule reads for a request builder or constructor.
 	requestOf map[*ast.CallExpr]types.Object
 	// rebound are the request variables rebound through their WithContext
 	// method to a context that can end, in a way that reaches the send: the
 	// result assigned back to the variable, or handed straight to a call.
+	// Where the rebinding sits is not read, so one after the send counts as
+	// much as one before it; that is a stated limit of the rule, the same one
+	// the option variables have.
 	rebound map[types.Object]bool
 	// outcomes memoises what each variable carries, and guards the
 	// recursion: a variable assigned from itself is answered from here rather
@@ -408,11 +480,11 @@ func (f *facts) outcomeOf(info *types.Info, expr ast.Expr) outcome {
 	case *ast.CallExpr:
 		return f.callOutcome(info, e)
 	case *ast.CompositeLit:
-		best := outcomeMissing
+		seen := outcomeMissing
 		for _, element := range e.Elts {
-			best = max(best, f.outcomeOf(info, element))
+			seen |= f.outcomeOf(info, element)
 		}
-		return best
+		return seen
 	case *ast.Ident:
 		return f.variableOutcome(info, info.Uses[e])
 	}
@@ -431,30 +503,35 @@ func (f *facts) callOutcome(info *types.Info, call *ast.CallExpr) outcome {
 	if !isBuiltin(info, call.Fun, "append") {
 		return outcomeMissing
 	}
-	best := outcomeMissing
+	seen := outcomeMissing
 	for _, arg := range call.Args {
-		best = max(best, f.outcomeOf(info, arg))
+		seen |= f.outcomeOf(info, arg)
 	}
-	return best
+	return seen
 }
 
-// variableOutcome says what a variable carries: forwarded at least when it is
-// a request-option parameter, and otherwise the best of what it was ever
-// assigned.
+// variableOutcome says what a variable carries: forwarded when it is a
+// request-option parameter, together with everything it was ever assigned.
+//
+// Neither half reads control flow, which is a stated limit rather than an
+// oversight. A parameter reassigned before the call is still forwarded, and an
+// assignment counts wherever it sits, after the call included: the same
+// reading that lets a slice initialized with the context and appended to on a
+// branch pass without the walk following the branch.
 func (f *facts) variableOutcome(info *types.Info, obj types.Object) outcome {
-	if known, seen := f.outcomes[obj]; seen {
+	if known, memoized := f.outcomes[obj]; memoized {
 		return known
 	}
-	best := outcomeMissing
+	seen := outcomeMissing
 	if f.params[obj] {
-		best = outcomeForwarded
+		seen = outcomeForwarded
 	}
-	f.outcomes[obj] = best
+	f.outcomes[obj] = seen
 	for _, value := range f.assigned[obj] {
-		best = max(best, f.outcomeOf(info, value))
+		seen |= f.outcomeOf(info, value)
 	}
-	f.outcomes[obj] = best
-	return best
+	f.outcomes[obj] = seen
+	return seen
 }
 
 // requestRebinding names the request variable a call rebinds when it is

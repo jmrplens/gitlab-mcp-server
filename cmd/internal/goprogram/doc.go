@@ -29,10 +29,12 @@
 // What stays with each gate is everything above the load: its own indexers,
 // its own detectors, its own question and its own binary.
 //
-// cmd/audit_e2e_coverage's static check reads test packages that exist only
-// behind the e2e build tag, and cmd/audit_dead_consts reads test variants
-// too. [LoadWith] takes the [Options] those loads need, test variants and
-// build tags, and [Load] is the same call with neither, so the loads that
+// Four of them load test variants: cmd/audit_e2e_coverage's static check and
+// cmd/audit_action_ids read test packages that exist only behind the e2e build
+// tag, which those two pass, and cmd/audit_dead_consts and
+// cmd/audit_catalog_first read the test variants of production packages
+// without one. [LoadWith] takes the [Options] those loads need, test variants
+// and build tags, and [Load] is the same call with neither, so the loads that
 // read production source alone are unchanged.
 //
 // [Options.Env] is there for the one load that is not of this repository at

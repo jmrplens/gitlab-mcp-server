@@ -29,12 +29,13 @@ const (
 	DefaultPoolIdleTimeout    = 1 * time.Hour
 	// DefaultActionTimeout bounds one action's handler: it ends one that would
 	// otherwise park until its client gave up, and never cuts a legitimate
-	// call. It is the longest wait any action offers, a pipeline wait's
-	// 3600-second ceiling, plus five minutes for the calls around it, since
-	// the deadline starts before the handler does and a default equal to the
-	// wait would end it a moment before it returned on its own. toolutil pins
-	// the inequality in a test, since this package cannot import the constant
-	// it must exceed.
+	// wait; a file transfer still running at the limit ends with its action.
+	// It is the longest wait any action offers, a pipeline wait's 3600-second
+	// ceiling, plus five minutes for the calls around it, since the deadline
+	// starts before the handler does and a default equal to the wait would
+	// end it a moment before it returned on its own. toolutil pins the
+	// inequality in a test, since this package cannot import the constant it
+	// must exceed.
 	DefaultActionTimeout = 65 * time.Minute
 	// DefaultDrainDelay is zero: on SIGTERM the listener closes at once, as
 	// it always has. A deployment behind a balancer that polls /health sets

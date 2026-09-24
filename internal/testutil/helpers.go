@@ -42,15 +42,18 @@ func CancelledCtx(t *testing.T) context.Context {
 // forgets the option compiles, passes every other test and serves correct
 // answers, while neither the action deadline nor an abandoned HTTP POST ever
 // reaches the request it sends. A context that is already cancelled cannot
-// tell the two apart, because every handler checks ctx.Err() before it builds
-// anything.
+// tell the two apart in a handler that checks ctx.Err() before it builds
+// anything, as the handlers this fixture was written for do: that handler
+// returns before any request exists, whether or not it would have passed the
+// context on.
 //
 // The context returned here is cancelled the moment the first request reaches
 // the mock, and the mock holds every request until the client abandons it or
-// five seconds pass, answering through respond only in the second case. A handler that passed the context therefore returns promptly with an
-// error for which errors.Is(err, context.Canceled) holds; one that did not
-// waits out the hold and returns whatever respond answered, which a test
-// asserting the cancellation reports.
+// five seconds pass, answering through respond only in the second case. A
+// handler that passed the context therefore returns promptly with an error for
+// which errors.Is(err, context.Canceled) holds; one that did not waits out the
+// hold and returns whatever respond answered, which a test asserting the
+// cancellation reports.
 //
 // The cancel is made through a [sync.Once] on the handler's own goroutine
 // rather than by a watcher goroutine, since a CancelFunc may be called from

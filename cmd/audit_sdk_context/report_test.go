@@ -40,7 +40,7 @@ func TestReport_Write_RendersEverySection(t *testing.T) {
 		"internal/tools/x:Keep: declared with a category that is not one of the defined ones\n" +
 		"internal/tools/x/hidden.go: left out of this load by its build constraints and imports client-go, so no call in it was judged\n" +
 		"\n" +
-		"audit_sdk_context: 42 calls handing client-go request options in 7 packages, 1 without the caller's context " +
+		"audit_sdk_context: 42 calls building or sending a request in 7 packages, 1 without the caller's context " +
 		"(3 forwarded to their own caller, 2 rebound after they were built, 1 excused by a declaration)\n"
 	if out.String() != want {
 		t.Fatalf("write =\n%s\nwant\n%s", out.String(), want)

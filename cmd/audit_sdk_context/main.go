@@ -16,8 +16,10 @@ const toolName = "audit_sdk_context"
 
 // defaultPatterns is this repository's own library source. The end-to-end
 // packages under test/ are left out: their scenario packages are test files
-// this load does not read, and their library code builds its own bounded
-// contexts outside any handler.
+// this load does not read, and their library code, the harness and the
+// fixture library, is outside the rule by decision, since it runs in a test
+// process rather than inside a handler. Not every request that code makes
+// passes a context, and the command's documentation says so.
 var defaultPatterns = []string{"./internal/...", "./cmd/..."}
 
 // auditConfig is one configured run: where to look, what to look at, and the

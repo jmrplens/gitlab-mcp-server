@@ -1627,8 +1627,8 @@ func TestPackages_PaginationComesFromTheResponseHeaders(t *testing.T) {
 }
 
 // TestPackages_ContextCancelledMidFlight_AbandonsTheRequest verifies that the
-// upload and the three package-file calls hand the caller's context to the
-// request they send, so the action deadline and an abandoned HTTP POST end
+// upload, the file listing and the two deletes hand the caller's context to
+// the request they send, so the action deadline and an abandoned HTTP POST end
 // them rather than leaving them running against GitLab.
 //
 // client-go takes that context only as the gl.WithContext request option and

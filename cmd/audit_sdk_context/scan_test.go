@@ -441,6 +441,141 @@ func Detached(c *gl.Client) {
 		"Detached: c.Version.GetVersion "+reasonDetached)
 }
 
+// TestScan_AContextThatNeverEnds_IsReportedBesideTheCallersContext: client-go
+// applies a call's options in order and a later WithContext replaces an
+// earlier one, so a detached option placed after the caller's context is the
+// one the request ends up with, and one placed before it does nothing while
+// reading as though it did. Both are reported whatever else the call passes,
+// and so is one appended to options that were forwarded, which a forwarding
+// caller could not undo. The caller's context beside a forwarded slice or
+// another option keeps the call clean.
+func TestScan_AContextThatNeverEnds_IsReportedBesideTheCallersContext(t *testing.T) {
+	report := scanBody(t, `
+func After(ctx context.Context, c *gl.Client) {
+	_, _, _ = c.Version.GetVersion(gl.WithContext(ctx), gl.WithContext(context.Background()))
+}
+
+func Before(ctx context.Context, c *gl.Client) {
+	_, _, _ = c.Version.GetVersion(gl.WithContext(context.TODO()), gl.WithContext(ctx))
+}
+
+func InALiteral(ctx context.Context, c *gl.Client) {
+	_, _, _ = c.Version.GetVersion([]gl.RequestOptionFunc{gl.WithContext(ctx), gl.WithContext(context.Background())}...)
+}
+
+func Appended(c *gl.Client, opts ...gl.RequestOptionFunc) {
+	_, _, _ = c.Version.GetVersion(append(opts, gl.WithContext(context.Background()))...)
+}
+
+func Clean(ctx context.Context, c *gl.Client, opts ...gl.RequestOptionFunc) {
+	_, _, _ = c.Version.GetVersion(gl.WithContext(ctx), gl.WithHeader("X", "y"))
+	_, _, _ = c.Version.GetVersion([]gl.RequestOptionFunc{gl.WithContext(ctx), gl.WithHeader("X", "y")}...)
+	_, _, _ = c.Version.GetVersion(append([]gl.RequestOptionFunc{gl.WithContext(ctx)}, gl.WithHeader("X", "y"))...)
+	_, _, _ = c.Version.GetVersion(append(opts, gl.WithContext(ctx))...)
+}
+`)
+	assertFindings(t, report,
+		"After: c.Version.GetVersion "+reasonDetached,
+		"Before: c.Version.GetVersion "+reasonDetached,
+		"InALiteral: c.Version.GetVersion "+reasonDetached,
+		"Appended: c.Version.GetVersion "+reasonDetached)
+	if report.Summary.Forwarded != 0 || report.Summary.Calls != 8 {
+		t.Fatalf("summary = %+v, want eight calls and none resting on forwarding", report.Summary)
+	}
+}
+
+// TestScan_TheRulesDoNotReadControlFlow pins the limit the command states: a
+// variable counts as carrying the context if any assignment of it does, a
+// parameter reassigned before the call still counts as forwarded, and a
+// rebinding counts wherever it sits, after the send included. Each of these
+// passes a call that does not carry the context, and none exists in the tree;
+// the day the rules are made to read order, this is the test that says so.
+func TestScan_TheRulesDoNotReadControlFlow(t *testing.T) {
+	report := scanBody(t, `
+func Dropped(ctx context.Context, c *gl.Client) {
+	opts := []gl.RequestOptionFunc{gl.WithContext(ctx)}
+	opts = nil
+	_, _, _ = c.Version.GetVersion(opts...)
+}
+
+func Reassigned(c *gl.Client, opts ...gl.RequestOptionFunc) {
+	opts = []gl.RequestOptionFunc{gl.WithHeader("X", "y")}
+	_, _, _ = c.Version.GetVersion(opts...)
+}
+
+func ReboundAfterTheSend(ctx context.Context, c *gl.Client) {
+	req, _ := c.NewRequest("GET", "version", nil, nil)
+	_, _ = c.Do(req, nil)
+	req = req.WithContext(ctx)
+	_ = req
+}
+`)
+	assertFindings(t, report)
+	if report.Summary.Forwarded != 1 || report.Summary.Rebound != 1 || report.Summary.Calls != 3 {
+		t.Fatalf("summary = %+v, want three calls, one forwarded and one rebound", report.Summary)
+	}
+}
+
+// TestScan_RetryablehttpConstructors holds the requests client-go did not
+// build: go-retryablehttp's own constructors, whose request (*gl.Client).Do
+// sends as it is. NewRequest builds from context.Background() and passes only
+// when rebound; NewRequestWithContext passes on a context that can end and is
+// held to the rebinding rule on one that never does. Its other functions, a
+// method of the request and a constructor of the same name in another package
+// are not judged.
+func TestScan_RetryablehttpConstructors(t *testing.T) {
+	report := auditFixture(t, map[string]string{"fixture.go": `package fixture
+
+import (
+	"context"
+	"net/http"
+
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+)
+
+func Unbound(c *gl.Client) {
+	req, _ := retryablehttp.NewRequest("GET", "https://example.com", nil)
+	_, _ = c.Do(req, nil)
+}
+
+func Rebound(ctx context.Context, c *gl.Client) {
+	req, _ := retryablehttp.NewRequest("GET", "https://example.com", nil)
+	req = req.WithContext(ctx)
+	_, _ = c.Do(req, nil)
+}
+
+func Carried(ctx context.Context, c *gl.Client) {
+	req, _ := retryablehttp.NewRequestWithContext(ctx, "GET", "https://example.com", nil)
+	_, _ = c.Do(req, nil)
+}
+
+func Detached(c *gl.Client) {
+	req, _ := retryablehttp.NewRequestWithContext(context.Background(), "GET", "https://example.com", nil)
+	_, _ = c.Do(req, nil)
+}
+
+func DetachedThenRebound(ctx context.Context, c *gl.Client) {
+	req, _ := retryablehttp.NewRequestWithContext(context.TODO(), "GET", "https://example.com", nil)
+	_, _ = c.Do(req.WithContext(ctx), nil)
+}
+
+func NotJudged(ctx context.Context, c *gl.Client) {
+	_ = retryablehttp.NewClient()
+	plain, _ := http.NewRequestWithContext(ctx, "GET", "https://example.com", nil)
+	wrapped, _ := retryablehttp.FromRequest(plain)
+	_, _ = wrapped.BodyBytes()
+	_, _ = c.Do(wrapped, nil)
+}
+`}, nil)
+	assertFindings(t, report,
+		"Unbound: retryablehttp.NewRequest "+reasonUnbound,
+		"Detached: retryablehttp.NewRequestWithContext "+reasonUnbound)
+	if report.Summary.Calls != 5 || report.Summary.Rebound != 2 {
+		t.Fatalf("summary = %+v, want five constructor calls, two rebound", report.Summary)
+	}
+}
+
 // TestScan_OptionVariables holds the options kept in a variable: a slice
 // initialized with the context and appended to on a branch, which is the
 // natural way to add pagination conditionally, a slice given the context by
@@ -611,7 +746,9 @@ func TestFuncDeclName_AReceiverThatIsNoTypeName_KeepsTheMethodName(t *testing.T)
 // TestScan_BuildConstrainedFiles holds the one blind spot a load has that the
 // gate can see from outside: a file its build constraints left out. One that
 // imports client-go is reported as unjudged, since every call in it went
-// unread; one that does not is not the gate's business.
+// unread; one that does not is not the gate's business, and neither is a test
+// file, which the gate would not read under any constraint: reporting it
+// would blame a build tag for the blind spot the gate states.
 func TestScan_BuildConstrainedFiles(t *testing.T) {
 	report := auditFixture(t, map[string]string{
 		"fixture.go": "package fixture\n",
@@ -622,6 +759,14 @@ package fixture
 import gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 var _ = gl.WithContext
+`,
+		"hidden_test.go": `//go:build ignore
+
+package fixture
+
+import gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+func version(c *gl.Client) { _, _, _ = c.Version.GetVersion() }
 `,
 		"elsewhere.go": `//go:build ignore
 
@@ -643,13 +788,15 @@ var _ = context.Background
 
 // TestNoteUnjudged_AFileThatCannotBeRead_IsUnjudged: nothing can be said about
 // what an unreadable file calls, so it is reported with the rest. A file the
-// load left out that is not Go source is not read at all.
+// load left out that is not Go source is not read at all, and neither is a
+// test file, which is passed over before anything tries to read it.
 func TestNoteUnjudged_AFileThatCannotBeRead_IsUnjudged(t *testing.T) {
 	root := t.TempDir()
 	found := newScanner(root, nil)
 	found.noteUnjudged(&packages.Package{IgnoredFiles: []string{
 		filepath.Join(root, "gone.go"),
 		filepath.Join(root, "notes.txt"),
+		filepath.Join(root, "gone_test.go"),
 	}})
 	if want := []string{"gone.go"}; !slices.Equal(found.unjudged, want) {
 		t.Fatalf("unjudged = %v, want %v", found.unjudged, want)

@@ -48,7 +48,7 @@ func TestRun_FindingWithoutCheck_ReportsAndSucceeds(t *testing.T) {
 	}
 	want := fixtureDir + "/fixture.go:18: c.Version.GetVersion " + reasonMissing + " (in Get)\n" +
 		"\n" +
-		"audit_sdk_context: 2 calls handing client-go request options in 1 packages, 1 without the caller's context " +
+		"audit_sdk_context: 2 calls building or sending a request in 1 packages, 1 without the caller's context " +
 		"(0 forwarded to their own caller, 0 rebound after they were built, 0 excused by a declaration)\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
@@ -79,7 +79,7 @@ func TestRun_NothingToReport_SucceedsUnderCheck(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0", code)
 	}
-	want := "audit_sdk_context: 1 calls handing client-go request options in 1 packages, 0 without the caller's context " +
+	want := "audit_sdk_context: 1 calls building or sending a request in 1 packages, 0 without the caller's context " +
 		"(0 forwarded to their own caller, 0 rebound after they were built, 0 excused by a declaration)\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
@@ -165,7 +165,7 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 		{name: "help", args: []string{"-h"}, wantCode: 0},
 		{
 			name: "one package under check and verbose", args: []string{"-dir", root, "-check", "-v", "./cmd/audit_sdk_context"}, wantCode: 0,
-			wantStdout: "\naudit_sdk_context: 0 calls handing client-go request options in 1 packages",
+			wantStdout: "\naudit_sdk_context: 0 calls building or sending a request in 1 packages",
 		},
 	}
 	for _, tt := range tests {
@@ -197,7 +197,7 @@ func TestRunMain_NoPatterns_AuditsTheDefaultOnes(t *testing.T) {
 	if code := runMain([]string{"-dir", dir, "-check"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, want 0; stdout = %s; stderr = %s", code, stdout.String(), stderr.String())
 	}
-	if want := "audit_sdk_context: 0 calls handing client-go request options in 2 packages,"; !strings.HasPrefix(stdout.String(), want) {
+	if want := "audit_sdk_context: 0 calls building or sending a request in 2 packages,"; !strings.HasPrefix(stdout.String(), want) {
 		t.Fatalf("stdout = %q, want it to begin %q", stdout.String(), want)
 	}
 }

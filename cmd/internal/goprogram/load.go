@@ -36,9 +36,10 @@ const ToolutilPath = ModulePath + "/internal/toolutil"
 // name and its signature, both of which come in through export data, which
 // also gives each of its objects the same identity the packages using them see.
 // NeedForTest is here for a gate that loads test variants and has to tell the
-// test main the go tool synthesizes from a package this repository wrote. The only thing that distinguishes them on the path is a ".test"
-// suffix, which a real package whose directory is named that way carries too,
-// and skipping such a package would drop its declarations and read as clean.
+// test main the go tool synthesizes from a package this repository wrote. The
+// only thing that distinguishes them on the path is a ".test" suffix, which a
+// real package whose directory is named that way carries too, and skipping
+// such a package would drop its declarations and read as clean.
 // ForTest names the package under test and is empty for everything else, so
 // it answers the question the path cannot. It is metadata `go list` already
 // produces for a load that asks for tests: no extra type-checking, and no
