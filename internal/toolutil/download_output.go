@@ -118,9 +118,12 @@ func createPartialDownload(path string) (*partialDownload, error) {
 	name := filepath.Join(filepath.Dir(destination), partialDownloadPrefix+rand.Text()+partialDownloadSuffix)
 	file, err := createNewLeafNoFollow(name)
 	if err != nil {
-		// Named after the destination the caller gave, and the random name
-		// left to the wrapped error: the caller never saw that name, and
-		// the permission it lacks is on the destination's directory.
+		// Named after the file output_path resolves to, whose directory is
+		// the one the permission is needed on, and which is output_path
+		// itself unless the path was relative or its leaf a link; the
+		// refusals canonicalDownloadOutputPath makes once it has resolved
+		// the path name it the same way. The random name is left to the
+		// wrapped error, because the caller never saw it.
 		return nil, fmt.Errorf("create a temporary file beside output path %s: %w", destination, err)
 	}
 	return &partialDownload{file: file, destination: destination}, nil
