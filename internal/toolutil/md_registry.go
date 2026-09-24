@@ -425,6 +425,12 @@ func FinishToolResult(callResult *mcp.CallToolResult, result any, route ActionRo
 // raw form, that project was escaped again into group%252Fproject, which the
 // resource read decodes to group%2Fproject and sends GitLab as a different
 // project. Only a route that embeds pays for the normalisation.
+//
+// The URL-encoded decode applies to every dispatcher. The alias applies only
+// where the served schema admits it: the dynamic surface, and meta under the
+// opaque or compact parameter schema. An individual tool, and meta under the
+// full schema, declare their properties closed, so the SDK refuses an alias
+// before any handler or this tail runs.
 func embedParams(route ActionRoute, params map[string]any) map[string]any {
 	if route.EmbeddedResource == "" {
 		return params

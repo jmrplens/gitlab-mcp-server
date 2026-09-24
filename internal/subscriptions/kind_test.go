@@ -302,6 +302,46 @@ func TestClassify_NumericIdentifier_MatchesGitLabSemantics(t *testing.T) {
 	}
 }
 
+// TestClassify_EncodedNumericIdentifier_JudgedDecoded verifies that a numeric
+// identifier is judged once percent-decoded, the way the resource handlers
+// read it, for a tail's identifier and for a snippet reference alike.
+//
+// The handlers decode every template variable before strconv parses it, so
+// %34%32 is read as 42 and %2B42 as 42 too; refusing either here would leave
+// a URI a client can read but not subscribe to. A raw "+" is refused because
+// the router matches no such segment, and an escape that does not decode, or
+// one that decodes to zero, a negative or a second sign, names nothing.
+func TestClassify_EncodedNumericIdentifier_JudgedDecoded(t *testing.T) {
+	tests := []struct {
+		name, uri string
+		want      Kind
+		ok        bool
+	}{
+		{"encoded digits", "gitlab://project/42/pipeline/%34%32", KindPipeline, true},
+		{"encoded zero padding", "gitlab://project/42/mr/%30%37", KindMergeRequest, true},
+		{"encoded sign", "gitlab://project/42/issue/%2B7", KindIssue, true},
+		{"encoded snippet reference", "gitlab://snippet/%31%30%30", KindSnippet, true},
+		{"encoded sign on a snippet reference", "gitlab://snippet/%2B100", KindSnippet, true},
+		{"raw sign", "gitlab://project/42/issue/+7", KindUnknown, false},
+		{"raw sign on a snippet", "gitlab://snippet/+100", KindUnknown, false},
+		{"escape that does not decode", "gitlab://project/42/job/%zz", KindUnknown, false},
+		{"truncated escape", "gitlab://snippet/%3", KindUnknown, false},
+		{"encoded zero", "gitlab://project/42/pipeline/%30", KindUnknown, false},
+		{"encoded negative", "gitlab://project/42/pipeline/%2D1", KindUnknown, false},
+		{"encoded sign alone", "gitlab://project/42/pipeline/%2B", KindUnknown, false},
+		{"two encoded signs", "gitlab://project/42/pipeline/%2B%2B1", KindUnknown, false},
+		{"encoded letters", "gitlab://project/42/pipeline/%6C%61%74%65%73%74", KindUnknown, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := Classify(tt.uri)
+			if got != tt.want || ok != tt.ok {
+				t.Errorf("Classify(%q) = (%v, %v), want (%v, %v)", tt.uri, got, ok, tt.want, tt.ok)
+			}
+		})
+	}
+}
+
 // TestClassify_FreeFormIdentifier_AcceptsNonNumeric verifies tails whose
 // identifier is a name rather than a number still accept one, so the
 // numeric tightening does not leak onto them.

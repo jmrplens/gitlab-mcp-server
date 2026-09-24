@@ -166,6 +166,7 @@ Static best-practice guides that provide AI assistants with GitLab workflow know
 | `label_id`          | string  | Numeric label ID or label name (e.g., `priority%3A%3Ahigh` for `priority::high`)       |
 | `path`              | string  | Repository file path (may contain slashes; uses RFC 6570 reserved expansion `{+path}`) |
 | `slug`              | string  | Wiki page slug (case-sensitive; spaces are replaced with hyphens)                      |
+| `name`              | string  | Feature flag name                                                                      |
 
 ### Encoding a value into a URI
 
@@ -191,7 +192,7 @@ valid escape, such as a branch `fix-%41`: it is decoded, and names `fix-A`.
 
 ## Autocomplete Support
 
-The `project_id`, `group_id`, `merge_request_iid` and `issue_iid` template parameters support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values (e.g., project paths, group paths, open MR or issue IIDs). The other parameters (`sha`, `ref`, `branch`, `tag_name`, `label_id`, `path`, `slug`, and the numeric object IDs) get no suggestions on the resource side. See [Completions](capabilities/completions.md).
+The `project_id`, `group_id`, `merge_request_iid` and `issue_iid` template parameters support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values (e.g., project paths, group paths, open MR or issue IIDs). The other parameters (`sha`, `ref`, `branch`, `tag_name`, `label_id`, `path`, `slug`, `name`, and the numeric object IDs) get no suggestions on the resource side. See [Completions](capabilities/completions.md).
 
 ## Source
 

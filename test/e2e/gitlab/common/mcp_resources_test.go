@@ -106,9 +106,10 @@ func TestResources_Sweep(t *testing.T) {
 // A variable is one segment written {name} or {+name}; the reserved "+" form
 // the file template uses for its path is expanded the same way, since the
 // World's value is already a path. The bound value is spelled as a string
-// because it lands in a URI, and it is spelled the way a conforming client
-// spells it ([templateValue]), so the sweep reads what any RFC 6570 client
-// would send. The branch template is bound to the World's feature branch,
+// because it lands in a URI, and a simple variable is spelled the way a
+// conforming client spells it ([templateValue]); the reserved path is written
+// as bound, which is right for the World's README.md and would not be for a
+// path carrying a space or a bare "%". The branch template is bound to the World's feature branch,
 // slash and all, on purpose: it arrives as feature%2Fworld and the server has
 // to decode it once before GitLab is asked (issue 912), and binding a branch
 // without a slash would leave that decode unexercised.
@@ -139,10 +140,14 @@ func expandTemplate(template string, world *fixture.World) (string, string) {
 	}
 }
 
-// templateValue spells a World value for a URI the way RFC 6570 expands it: a
-// simple variable has every byte outside the unreserved set percent-encoded, so
-// a slash, a colon or a space stays inside its one segment, and the reserved
-// path form keeps its slashes, which is what it is for. It is written here
+// templateValue spells a World value for a URI. A simple variable is spelled
+// the way RFC 6570 expands it, every byte outside the unreserved set
+// percent-encoded, so a slash, a colon or a space stays inside its one
+// segment. The reserved path form is written as bound, keeping its slashes,
+// which is what it is for; RFC 6570 would still encode a byte outside the
+// unreserved and reserved sets there, such as a space, a bare "%" or a
+// non-ASCII byte, and this does not, which is right for the World's README.md
+// and would not be for a path carrying one of those. It is written here
 // rather than borrowed from the server's own expansion, because a sweep that
 // spelled its URIs with the code under test would agree with it by
 // construction.

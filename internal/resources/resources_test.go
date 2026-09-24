@@ -831,15 +831,18 @@ func TestFileBlobResource_BadURI(t *testing.T) {
 	}
 }
 
-// TestExtractFileBlobURI verifies that [extractFileBlobURI] correctly splits
-// a file blob URI into project_id, ref, and path components, including paths
-// with multiple slashes.
+// TestExtractFileBlobURI verifies that [extractFileBlobURI] splits a file blob
+// URI into project_id, ref and path, each decoded once, including paths with
+// multiple slashes.
 //
 // Every rejected shape is listed, and each one is listed because it is the
-// only input that can tell one guard from the next: a URI whose project
-// segment is empty is what separates "/file/ must not be at the start" from
-// "/file/ must be present", and a URI whose ref is empty is what separates the
-// three operands of the final guard. The success flag is asserted beside the
+// only input that fails one guard and none before it: the empty string lacks
+// the project prefix, the commit URI lacks "/file/", and ".../file/main" has
+// no raw slash after the ref. The three components are then judged together
+// (projectOK, refOK and pathOK), so each needs a row of its own for each way
+// it can fail: the rows with an empty project, an empty ref and an empty path,
+// and the three rows carrying a%zz in one component, are what tell those
+// three operands apart. The success flag is asserted beside the
 // components because it is what every call site now branches on, and a helper
 // that returned the components without it would be answered by a caller
 // re-deriving the same fact from emptiness — the branch this flag removed.
@@ -1021,7 +1024,13 @@ func TestMergeRequestDiscussionsResource_APIError(t *testing.T) {
 // URI helper tests.
 
 // TestExtractSuffix uses table-driven subtests to verify that [extractSuffix]
-// correctly returns the portion of a URI after a given prefix.
+// returns the variable after a given prefix, decoded once, or the empty
+// string when the URI does not start with the prefix or the variable is empty
+// or does not decode.
+//
+// The fix-%2541 row is the one that tells decoding once from twice: every
+// other value decodes to itself a second time, while this one must come back
+// as fix-%41, the value GitLab has to receive literally.
 func TestExtractSuffix(t *testing.T) {
 	tests := []struct {
 		uri, prefix, want string
@@ -1029,6 +1038,7 @@ func TestExtractSuffix(t *testing.T) {
 		{"gitlab://project/42", testURIProjectPrefix, "42"},
 		{"gitlab://user/current", "gitlab://user/", "current"},
 		{"gitlab://project/group%2Frepo", testURIProjectPrefix, "group/repo"},
+		{"gitlab://project/fix-%2541", testURIProjectPrefix, "fix-%41"},
 		{"gitlab://project/a%zz", testURIProjectPrefix, ""},
 		{"other://something", "gitlab://", ""},
 		{"", "gitlab://", ""},
@@ -1044,7 +1054,12 @@ func TestExtractSuffix(t *testing.T) {
 }
 
 // TestExtractMiddle uses table-driven subtests to verify that [extractMiddle]
-// correctly returns the portion of a URI between a prefix and suffix.
+// returns the variable between a prefix and a suffix, decoded once, or the
+// empty string when the URI does not match them or the variable is empty or
+// does not decode.
+//
+// As in [TestExtractSuffix], the fix-%2541 row is the one that tells decoding
+// once from twice.
 func TestExtractMiddle(t *testing.T) {
 	tests := []struct {
 		uri, prefix, suffix, want string
@@ -1052,6 +1067,7 @@ func TestExtractMiddle(t *testing.T) {
 		{"gitlab://project/42/branches", testURIProjectPrefix, "/branches", "42"},
 		{"gitlab://project/42/labels", testURIProjectPrefix, "/labels", "42"},
 		{"gitlab://project/group%2Frepo/labels", testURIProjectPrefix, "/labels", "group/repo"},
+		{"gitlab://project/fix-%2541/labels", testURIProjectPrefix, "/labels", "fix-%41"},
 		{"gitlab://project/a%zz/labels", testURIProjectPrefix, "/labels", ""},
 		{"wrong", testURIProjectPrefix, "/labels", ""},
 	}
@@ -1106,10 +1122,11 @@ func TestExtractTwoParts(t *testing.T) {
 	}
 }
 
-// TestURIVariable_DecodesOnce pins the one decode every URI helper applies: a
-// percent-encoded value comes back as itself, an escape that does not decode
-// and an empty segment come back as nothing, and a plus stays a plus.
-func TestURIVariable_DecodesOnce(t *testing.T) {
+// TestURIVariable_EscapedSegment_DecodesOnce pins the one decode every URI
+// helper applies: a percent-encoded value comes back as itself, an escape that
+// does not decode and an empty segment come back as nothing, and a plus stays
+// a plus.
+func TestURIVariable_EscapedSegment_DecodesOnce(t *testing.T) {
 	tests := []struct {
 		name, segment, want string
 		ok                  bool
@@ -3300,11 +3317,17 @@ func TestDecodeFileContent_Base64InvalidUTF8_ReadsAsBinary(t *testing.T) {
 }
 
 // gitlabRequest is what a mock GitLab saw of one request: the path decoded
-// once, which is what the value a handler passed to client-go reads as, and
-// the query decoded the same way.
+// once, which is what the value a handler passed to client-go reads as, the
+// path as it arrived on the wire, and the query decoded once.
+//
+// The escaped path is kept because the decoded one cannot tell a project path
+// escaped once from one not escaped at all: group%2Fsub%2Fproject and
+// group/sub/project both decode to group/sub/project, and only the first is a
+// request GitLab routes to that project.
 type gitlabRequest struct {
-	path  string
-	query map[string][]string
+	path        string
+	escapedPath string
+	query       map[string][]string
 }
 
 // recordingGitLab answers every request with 404 and keeps what each one
@@ -3319,7 +3342,7 @@ type recordingGitLab struct {
 // server's goroutine, so it records under the lock and asserts nothing.
 func (g *recordingGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
-	g.seen = append(g.seen, gitlabRequest{path: r.URL.Path, query: r.URL.Query()})
+	g.seen = append(g.seen, gitlabRequest{path: r.URL.Path, escapedPath: r.URL.EscapedPath(), query: r.URL.Query()})
 	g.mu.Unlock()
 	http.NotFound(w, r)
 }
@@ -3343,8 +3366,8 @@ func (g *recordingGitLab) requests() []gitlabRequest {
 // GitLab escaped twice: client-go escapes what it is handed, and it was handed
 // feature%2Fworld rather than feature/world, so GitLab was asked for a branch
 // literally named that and answered 404. The mock's decoded path is what the
-// handler passed on, so it must carry the value with no escape left in it.
-// There is one case per way a variable is extracted, since each helper splits
+// handler passed on, so it must carry the bound value exactly, with none of
+// the URI's own encoding left in it. There is one case per way a variable is extracted, since each helper splits
 // the URI differently and each had to learn to decode after the split, plus
 // one whose value literally holds an escape: every other value here decodes to
 // itself a second time, so only that case tells decoding once from twice.
@@ -3394,9 +3417,13 @@ func TestResourceTemplates_EscapedVariable_ReachesGitLabDecodedOnce(t *testing.T
 }
 
 // roundTripValue is the value TestResourceTemplates_ServerExpandedURI_RoundTrips
-// binds for each template variable. A string carries every character a simple
-// expansion must encode that url.PathEscape leaves alone ("$" "&" "+" ":" "="
-// "@"), plus a slash, a space and a literal percent-escape; the numeric ones are
+// binds for each template variable. The named variables are bound to
+// [roundTripString], which carries every character a simple expansion must
+// encode that url.PathEscape leaves alone ("$" "&" "+" ":" "=" "@"), plus a
+// slash, a space and a literal percent-escape. The project and group paths
+// stay realistic, a nested path with slashes and nothing else, so they carry
+// no escape of their own; what holds them to being escaped once on the way to
+// GitLab is the round trip's check of the escaped path. The numeric ones are
 // the ids the handlers parse.
 var roundTripValue = map[string]any{
 	"project_id":        "group/sub/project",
@@ -3429,10 +3456,17 @@ var roundTripValue = map[string]any{
 const roundTripString = "a/b c::d+e@f$g&h=i%41"
 
 // TestResourceTemplates_ServerExpandedURI_RoundTrips holds the server's two
-// halves of a resource URI to each other: every template it serves, filled by
-// toolutil.ExpandResourceURI (the expansion behind the resource block a tool
-// result embeds) from values carrying reserved characters, must route, reach
-// GitLab, and hand GitLab each value exactly as it was bound.
+// halves of a resource URI to each other: every template it serves that reads
+// GitLab, filled by toolutil.ExpandResourceURI (the expansion behind the
+// resource block a tool result embeds) from values carrying reserved
+// characters, must route, reach GitLab, and hand GitLab each value exactly as
+// it was bound, numeric ids included. The tool manifest's templates read a
+// catalog rather than GitLab and are the one family skipped.
+//
+// A project or group path is held to the path as it arrived on the wire as
+// well, with each slash escaped: the decoded path reads the same whether the
+// handler escaped the value once or not at all, and a handler building its own
+// path from the decoded value would send GitLab a path it does not route.
 //
 // Two defects failed it before, independently. ExpandResourceURI escaped with
 // url.PathEscape, which leaves "$" "&" "+" ":" "=" "@" raw, and the router
@@ -3470,10 +3504,7 @@ func TestResourceTemplates_ServerExpandedURI_RoundTrips(t *testing.T) {
 				t.Fatalf("reading %s never reached GitLab: the router matched no template", uri)
 			}
 			for name, bound := range params {
-				value, isString := bound.(string)
-				if isString && !carries(seen[0], value) {
-					t.Errorf("reading %s sent GitLab %q %v, which does not carry %s=%q", uri, seen[0].path, seen[0].query, name, value)
-				}
+				assertCarriesBinding(t, uri, seen[0], name, bound)
 			}
 		})
 		judged++
@@ -3501,6 +3532,26 @@ func roundTripParams(t *testing.T, template string) map[string]any {
 		params[name] = value
 	}
 	return params
+}
+
+// assertCarriesBinding holds the first request a read of uri sent GitLab to
+// one variable the round trip bound: the value, spelled as a string whatever
+// its type, must be in the decoded path or among the query values, and a
+// project or group path must also be in the path as it arrived on the wire,
+// each slash escaped once.
+func assertCarriesBinding(t *testing.T, uri string, request gitlabRequest, name string, bound any) {
+	t.Helper()
+	value := fmt.Sprint(bound)
+	if !carries(request, value) {
+		t.Errorf("reading %s sent GitLab %q %v, which does not carry %s=%q", uri, request.path, request.query, name, value)
+	}
+	if name != "project_id" && name != "group_id" {
+		return
+	}
+	escaped := strings.ReplaceAll(value, "/", "%2F")
+	if !strings.Contains(request.escapedPath, escaped) {
+		t.Errorf("reading %s sent GitLab the path %q, which does not carry %s escaped once as %q", uri, request.escapedPath, name, escaped)
+	}
 }
 
 // carries reports whether a request GitLab received holds value, in its path
