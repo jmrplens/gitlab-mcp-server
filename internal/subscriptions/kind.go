@@ -370,16 +370,17 @@ func isPositiveIntSegment(seg string) bool {
 //
 // Leading zeros are accepted deliberately: GitLab resolves a zero-padded
 // identifier to the same object as its bare form (verified against a live
-// instance — GET /projects/02317 and GET /projects/2317 both return the same
+// instance: GET /projects/02317 and GET /projects/2317 both return the same
 // project), and this server's own resource read path parses identifiers with
 // strconv.ParseInt, which accepts them too. Rejecting them here would create
 // a URI a client can read but not subscribe to.
 //
 // Zero and negatives are rejected: GitLab identifiers and IIDs are
 // auto-increment integers starting at 1, so neither can ever name a real
-// object. A sign character is rejected for the same reason — GitLab returns
-// 404 for "+2317", so accepting it would only create a subscription
-// guaranteed to be dropped on its first read.
+// object. A sign is not a digit here either, and never needs to be:
+// [isPositiveIntSegment] strips the one sign an encoded segment may carry,
+// since the handlers' strconv reads it and asks GitLab for the bare number,
+// and refuses a raw one, which the resource router never matches.
 func isPositiveInt(s string) bool {
 	nonZero := false
 	for i := range len(s) {

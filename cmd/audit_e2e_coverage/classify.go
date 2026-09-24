@@ -561,11 +561,12 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 // without this rule, the 2026-09-23 shards behind the committed record hold
 // unobserved default sessions on both runtimes, of two kinds. On dynamic,
 // three tier-pin sessions only listed what they serve and made no call at
-// all, and the subscription sweep's private session made untraced subscribes
-// and one traced resource read. On every surface, the minimal
-// capability-surface session's only calls were reads of the tool manifest,
-// plus a completion on dynamic. Neither kind says anything about whether the
-// row's telemetry worked. The record on main reads those rows observed only
+// all. On every surface, the sessions whose traced calls were all non-tool
+// calls read unobserved: the minimal capability-surface session (reads of
+// the tool manifest, plus a completion on dynamic) and, on dynamic, the
+// subscription sweep's private session (one traced resource read beside
+// untraced subscribes). Neither kind says anything about whether the row's
+// telemetry worked. The record on main reads those rows observed only
 // because its fold judged a session only when a call line under its label was
 // a tools/call, which left every one of those sessions out, and that label
 // join is what this rule replaces. Setting the idle sessions apart clears the
