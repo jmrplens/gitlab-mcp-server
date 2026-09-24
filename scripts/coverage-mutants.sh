@@ -29,11 +29,26 @@
 # copy does not pass its own tests where it was staged, the run stops and says
 # so rather than falling back to the unstaged run, because that run is the one
 # that reports a clean package without measuring it. See issue 872.
+#
+# The other thing it decides is how long each mutant may run. gremlins has no
+# setting for that: it multiplies --timeout-coefficient by the wall time of its
+# own coverage run, `go test [-tags T] [-coverpkg P] -cover -coverprofile F
+# ./<pkg>/...` from the module root. So the coefficient is derived here from a
+# run of that same command under the same tags, timed by the clock, and held
+# under a ceiling. Deriving it from anything else is how a package behind a
+# build tag came to give each mutant a deadline of 95 hours. See issue 915.
 set -euo pipefail
 
-PKG=${1:?usage: coverage-mutants.sh <package> [budget] [floor]}
-BUDGET=${2:-30}
+# bash writes the figure `time` reports with the locale's decimal separator,
+# so under es_ES the baseline reads 0,940, which awk takes for 0, and every
+# bound derived from it comes out unbounded. C is the one locale every tool
+# here reads the same way.
+export LC_ALL=C
+
+PKG=${1:?usage: coverage-mutants.sh <package> [budget] [floor] [ceiling]}
+BUDGET=${2:-300}
 FLOOR=${3:-10}
+CEILING=${4:-3600}
 
 # The budget is a knob and the floor is what it may not go under: below a few
 # seconds the per-mutant budget falls under the fixed cost of starting
@@ -44,17 +59,171 @@ if [ "$budget" != "$BUDGET" ]; then
   echo "gremlins: MUTANT_BUDGET=${BUDGET}s is under the ${FLOOR}s floor and would report untested mutants as timeouts; using ${budget}s"
 fi
 
-pkgname=$(go list -f '{{.Name}}' "$PKG")
-pkgdir=$(go list -f '{{.Dir}}' "$PKG")
+# The ceiling bounds each mutant's deadline outright, so a mutant that makes
+# the tests hang is reported TIMED OUT within it rather than holding a worker
+# for as long as the coefficient allows. It answers to the same floor as the
+# budget, for the same reason: under it every mutant times out unrun.
+ceiling=$(awk -v want="$CEILING" -v floor="$FLOOR" 'BEGIN{print (want+0 < floor+0) ? floor : want}')
+if [ "$ceiling" != "$CEILING" ]; then
+  echo "gremlins: MUTANT_DEADLINE_MAX=${CEILING}s is under the ${FLOOR}s floor and would report untested mutants as timeouts; using ${ceiling}s"
+fi
+
+# GREMLINS_FLAGS is split into words on purpose and then quoted, because its
+# documented use carries a regular expression, and a caller passing `.*` to
+# --exclude-files would otherwise have it expanded against the working
+# directory before gremlins ever saw it.
+read -r -a gremlins_flags <<<"${GREMLINS_FLAGS:-}"
+
+# The baseline has to be the run gremlins times, so it has to see what gremlins
+# sees: the build tags, a -coverpkg, and whether --integration widens the run
+# to the whole module. Each comes from a flag or from gremlins' own environment
+# binding, and a flag wins, so the environment is read first and the flags over
+# it in order, the last of a repeated one winning as it does in pflag. They are
+# read the way pflag reads them, shorthand clusters such as -dte2e included,
+# because the measured failure was a tag that reached gremlins and not the
+# baseline. A word this cannot read could be hiding a -t, so it is refused
+# rather than guessed at. A tag set only in a .gremlins.yaml is out of reach,
+# and the test-file check below is what stops the run that would then measure
+# nothing.
+tags=${GREMLINS_UNLEASH_TAGS:-}
+coverpkg=${GREMLINS_UNLEASH_COVERPKG:-}
+integration=${GREMLINS_UNLEASH_INTEGRATION:-false}
+excluded=${GREMLINS_UNLEASH_EXCLUDE_FILES:+yes}
+unreadable() {
+  echo "gremlins: GREMLINS_FLAGS: cannot read $1 the way gremlins would, so the baseline could run under other build tags than gremlins does; refusing to measure" >&2
+  exit 1
+}
+i=0
+while [ "$i" -lt "${#gremlins_flags[@]}" ]; do
+  word=${gremlins_flags[$i]}
+  i=$((i + 1))
+  case "$word" in
+    --)
+      break
+      ;;
+    --*)
+      name=${word#--}
+      value=""
+      inline=""
+      case "$name" in
+        *=*) value=${name#*=}; name=${name%%=*}; inline=yes ;;
+      esac
+      # pflag reads `_` and `.` in a flag name as `-`, and gremlins lets it.
+      name=${name//[._]/-}
+      case "$name" in
+        tags | coverpkg | exclude-files | output-statuses | diff | output | threshold-efficacy | threshold-mcover | workers | test-cpu | timeout-coefficient | config)
+          if [ -z "$inline" ]; then
+            [ "$i" -lt "${#gremlins_flags[@]}" ] || unreadable "$word"
+            value=${gremlins_flags[$i]}
+            i=$((i + 1))
+          fi
+          ;;
+        *)
+          [ -n "$inline" ] || value=true
+          ;;
+      esac
+      case "$name" in
+        tags) tags=$value ;;
+        coverpkg) coverpkg=$value ;;
+        integration) integration=$value ;;
+        exclude-files) excluded=yes ;;
+      esac
+      ;;
+    -?*)
+      # gremlins' shorthands: d and i are switches, the rest take a value,
+      # written after `=`, joined to the letter, or as the next word.
+      cluster=${word#-}
+      while [ -n "$cluster" ]; do
+        letter=${cluster:0:1}
+        cluster=${cluster:1}
+        value=true
+        case "$letter" in
+          d | i)
+            if [ "${#cluster}" -gt 1 ] && [ "${cluster:0:1}" = "=" ]; then
+              value=${cluster:1}
+              cluster=""
+            fi
+            ;;
+          S | t | D | o | E)
+            if [ "${#cluster}" -gt 1 ] && [ "${cluster:0:1}" = "=" ]; then
+              value=${cluster:1}
+            elif [ -n "$cluster" ]; then
+              value=$cluster
+            elif [ "$i" -lt "${#gremlins_flags[@]}" ]; then
+              value=${gremlins_flags[$i]}
+              i=$((i + 1))
+            else
+              unreadable "$word"
+            fi
+            cluster=""
+            ;;
+          *)
+            unreadable "$word"
+            ;;
+        esac
+        case "$letter" in
+          t) tags=$value ;;
+          i) integration=$value ;;
+          E) excluded=yes ;;
+        esac
+      done
+      ;;
+  esac
+done
+case "$integration" in
+  1 | t | T | TRUE | true | True) integration=yes ;;
+  *) integration="" ;;
+esac
+tag_args=()
+[ -z "$tags" ] || tag_args=(-tags "$tags")
+cover_args=()
+[ -z "$coverpkg" ] || cover_args=(-coverpkg "$coverpkg")
+
+# The package is loaded under those tags, and -e keeps one go cannot load
+# (every file behind a tag nobody passed, a path that is not there) from ending
+# the script with go's own message, which does not say what to do about it. A
+# package with no test file under its tags is refused: every mutant of it would
+# be reported NOT COVERED, and before this check its baseline passed having run
+# nothing, printed no duration, and handed gremlins a coefficient of 3001.
+listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Name}}
+{{.Dir}}
+{{len .TestGoFiles}} {{len .XTestGoFiles}}
+{{with .Error}}{{.}}{{end}}' "$PKG")
+{
+  IFS= read -r pkgname
+  IFS= read -r pkgdir
+  read -r tests xtests
+  listerr=$(cat)
+} <<<"$listing"
+refusal=""
+if [ -n "$listerr" ]; then
+  refusal="go cannot load $PKG under build tags ${tags:-(none)}: $listerr"
+elif [ "$tests $xtests" = "0 0" ]; then
+  refusal="$PKG has no test files under build tags ${tags:-(none)}, so no mutant of it could be killed; refusing to measure"
+fi
+if [ -n "$refusal" ]; then
+  echo "gremlins: $refusal" >&2
+  echo "gremlins: a package behind a build tag is measured with GREMLINS_FLAGS='--tags <tag>', which reaches this baseline and gremlins alike; a tag set only in a .gremlins.yaml reaches gremlins and not the baseline" >&2
+  exit 1
+fi
 root=$(go list -m -f '{{.Dir}}')
 
 # The staging directory is removed whatever happens. Left behind it is a second
 # copy of the package inside the module, which every tree-wide `go build ./...`
-# and every gate that loads ./... would then read as real.
+# and every gate that loads ./... would then read as real. The baseline's
+# output and coverage profile go with it.
 staged=""
+out=""
+profile=""
 cleanup() {
   if [ -n "$staged" ] && [ -d "$staged" ]; then
     rm -rf "$staged"
+  fi
+  if [ -n "$out" ]; then
+    rm -f "$out"
+  fi
+  if [ -n "$profile" ]; then
+    rm -f "$profile"
   fi
 }
 trap cleanup EXIT INT TERM
@@ -86,45 +255,88 @@ case "$(basename "$pkgdir")" in
     ;;
 esac
 
-baseline=$(go test -count=1 "$target" 2>&1) || {
-  printf '%s\n' "$baseline" >&2
+# The run gremlins times: its coverage step, from the module root, over the
+# target's subtree, or over the whole module under --integration.
+dir=$pkgdir
+[ -z "$staged" ] || dir=$staged
+if [ -n "$integration" ] || [ "$dir" = "$root" ]; then
+  scan=./...
+else
+  scan="./${dir#"$root"/}/..."
+fi
+out=$(mktemp)
+profile=$(mktemp)
+baseline() {
+  (cd "$root" && go test -count=1 ${tag_args[@]+"${tag_args[@]}"} ${cover_args[@]+"${cover_args[@]}"} \
+    -cover -coverprofile "$profile" "$scan") >"$out" 2>&1
+}
+
+# The first run is the gate, and it is not timed. A package whose suite fails
+# is refused rather than measured, because gremlins reads a failing test run as
+# a killed mutant, so every mutant of it would read as killed. It also warms
+# the build cache: gremlins downloads modules outside its own timer and times a
+# coverage run whose compile the run before it already paid for, so the run
+# timed here has to find the cache the way gremlins' will. Timing a first
+# build instead makes the base too long on a package just edited, and the
+# per-mutant deadline too short to run a mutant in.
+(cd "$root" && go mod download)
+if ! baseline; then
+  cat "$out" >&2
   if [ -n "$staged" ]; then
     echo "gremlins: the staged copy of $PKG does not pass its own tests there, so the verdicts would be about the staging rather than the package; refusing to measure" >&2
     echo "gremlins: a test that reads its own directory or import path is the usual cause. Run it unstaged to see, and read issue 872 before trusting a clean figure from one." >&2
   else
-    echo "gremlins: $PKG does not pass its own tests, so every mutant would read as killed; refusing to measure" >&2
+    echo "gremlins: $PKG does not pass its own tests, or a package below it does not (the output above says which), so every mutant would read as killed; refusing to measure" >&2
   fi
   exit 1
-}
+fi
 
-# The whole duration, minutes included. `go test` prints a summary over a
-# minute as 1m2.345s, and a pattern that reads the seconds off the end takes
-# that for 2.345: the coefficient is then derived from a package twenty-six
-# times faster than the one being measured, and every mutant gets a timeout
-# that much larger than intended. A line with no duration on it, which is what
-# a cached result prints, leaves base empty and falls back below.
-base=$(printf '%s\n' "$baseline" | tail -1 | awk '{ d = $NF }
-  END {
-    if (d !~ /^([0-9]+m)?[0-9]+(\.[0-9]+)?s$/) exit 0
-    sub(/s$/, "", d); minutes = 0
-    if (match(d, /^[0-9]+m/)) { minutes = substr(d, 1, RLENGTH - 1) + 0; d = substr(d, RLENGTH + 1) }
-    printf "%.3f", minutes * 60 + d + 0
-  }')
-[ -n "$base" ] || base=0.010
+# The second run is timed by the clock, because `go test`'s own summary line
+# says nothing reliable about it: it reports the test binary's run without the
+# build gremlins' figure includes, a -cover run ends in a coverage figure
+# rather than a duration, and a package with no tests under the tags given
+# prints `[no test files]` and exits 0. Reading that line, and falling back to
+# a guess of 0.010s when it carried no duration, is what turned 114 seconds of
+# harness tests into a 95-hour deadline for every mutant.
+TIMEFORMAT=%3R
+status=0
+base=$({ time baseline; } 2>&1) || status=$?
+if [ "$status" != 0 ]; then
+  cat "$out" >&2
+  echo "gremlins: $PKG passed its tests and then failed them on the timed second run, so a mutant's verdict would depend on which way the suite fell; refusing to measure" >&2
+  exit 1
+fi
+if ! awk -v b="$base" 'BEGIN{exit !(b ~ /^[0-9]+\.[0-9]+$/ && b + 0 > 0)}'; then
+  echo "gremlins: the timed baseline reads '$base', which is not a positive number of seconds; refusing to derive a deadline from it" >&2
+  exit 1
+fi
 
-# The coefficient is applied to gremlins' OWN coverage run rather than to the
-# baseline above, and Go's test cache answers that instantly for an unchanged
-# package, so GOFLAGS carries -count=1 to make what it multiplies a real
-# measurement. `go build` ignores a flag it does not know, so the same setting
-# is harmless for the compile around each mutant.
-coeff=$(awk -v b="$base" -v f="$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}')
-echo "gremlins: $PKG tests take ${base}s, so -timeout-coefficient $coeff for a ~${budget}s budget"
-
-# GREMLINS_FLAGS is split into words on purpose and then quoted, because its
-# documented use carries a regular expression, and a caller passing `.*` to
-# --exclude-files would otherwise have it expanded against the working
-# directory before gremlins ever saw it.
-read -r -a gremlins_flags <<<"${GREMLINS_FLAGS:-}"
+# The coefficient is the budget's multiple of the base, never below 8 so a slow
+# package still gets a real multiple of its own runtime and never above 6000,
+# and then no larger than the ceiling's multiple. A ceiling that does not hold
+# two runs would time out every mutant, so it is refused rather than applied.
+# gremlins multiplies its OWN coverage run rather than this one, and Go's test
+# cache answers that instantly for an unchanged package, so GOFLAGS carries
+# -count=1 below to make what it multiplies a real measurement.
+read -r coeff cap <<<"$(awk -v b="$base" -v f="$budget" -v m="$ceiling" 'BEGIN{
+  c = int(f / b) + 1; if (c < 8) c = 8; if (c > 6000) c = 6000
+  k = int(m / b); if (k > 6000) k = 6000
+  print c, k
+}')"
+if [ "$cap" -lt 2 ]; then
+  echo "gremlins: $PKG's coverage run takes ${base}s by the clock, and a ${ceiling}s ceiling does not hold two of them, so every mutant would be reported TIMED OUT; raise MUTANT_DEADLINE_MAX (the fourth argument) to measure it" >&2
+  exit 1
+fi
+if [ "$coeff" -gt "$cap" ]; then
+  if [ "$cap" -lt 8 ]; then
+    echo "gremlins: the ${ceiling}s ceiling holds the coefficient at $cap, under the floor of 8 a slow package is otherwise given, so a mutant that is only slow under four workers may be reported TIMED OUT"
+  else
+    echo "gremlins: the ${ceiling}s ceiling holds the coefficient at $cap rather than $coeff"
+  fi
+  coeff=$cap
+fi
+deadline=$(awk -v b="$base" -v c="$coeff" 'BEGIN{printf "%.1f", b * c}')
+echo "gremlins: $PKG coverage run takes ${base}s by the clock, so -timeout-coefficient $coeff: about ${deadline}s per mutant (budget ${budget}s, ceiling ${ceiling}s)"
 
 # PKG names ONE package, which is what this target's usage line says and what
 # the sweep's per-package figures claim. gremlins does not read it that way: it
@@ -143,12 +355,13 @@ read -r -a gremlins_flags <<<"${GREMLINS_FLAGS:-}"
 # excludes all of them and nothing else. A leaf package has none, so passing it
 # there changes no figure.
 #
-# A caller who states their own --exclude-files is left alone: they are asking
-# for a different measurement, and two rules for one flag is how one of them
-# silently wins.
-if [[ " ${gremlins_flags[*]-} " != *" --exclude-files"* && " ${gremlins_flags[*]-} " != *" -E"* ]]; then
+# A caller who states their own exclusion, as a flag in any spelling or through
+# GREMLINS_UNLEASH_EXCLUDE_FILES, is left alone: they are asking for a
+# different measurement, and two rules for one flag is how one of them silently
+# wins. A flag passed here would override their variable without a word.
+if [ -z "$excluded" ]; then
   gremlins_flags+=(--exclude-files=/)
 fi
 
 GOFLAGS="${GOFLAGS:-} -count=1" go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 \
-  unleash --invert-logical --workers 4 --timeout-coefficient "$coeff" "${gremlins_flags[@]}" "$target"
+  unleash --invert-logical --workers 4 --timeout-coefficient "$coeff" ${gremlins_flags[@]+"${gremlins_flags[@]}"} "$target"
