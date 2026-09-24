@@ -5,6 +5,7 @@
 package e2ecalls
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -42,8 +43,21 @@ const (
 	// false DispatchObserved said only that no fact-carrying span arrived, so
 	// folding it under the new reading would mark sessions unobserved that
 	// were only never asked a tool. Such shards are refused, to be re-recorded
-	// rather than re-folded.
+	// rather than re-folded. [ReadShardsForCalls] is the one exception, for a
+	// reader of the lines version 2 left as they were.
 	SchemaVersion = 2
+
+	// OldestCallsSchemaVersion is the oldest schema whose run, call, dispatch
+	// and skip lines read the way [SchemaVersion]'s do. Version 2 changed the
+	// session line alone, so a reader that judges nothing by a session line can
+	// still read a version 1 shard, through [ReadShardsForCalls]. A version that
+	// changes one of those four lines moves this to itself.
+	//
+	// It exists for the old suite's baseline: its shards were written under
+	// version 1 by a suite that has since been deleted, so they can never be
+	// recorded again, and what they are compared on is what their calls
+	// credited.
+	OldestCallsSchemaVersion = 1
 
 	// ShardPattern is the [os.CreateTemp] pattern a shard file is named with.
 	// One process writes one shard, so package binaries running side by side
@@ -257,6 +271,22 @@ func (r Record) validate() error {
 	return shardio.ValidateEnvelope(r, r.Schema, SchemaVersion, r.Type, payloadPresent)
 }
 
+// validateForCalls is [Record.validate] for [ReadShardsForCalls]: a line
+// written under any schema from [OldestCallsSchemaVersion] to [SchemaVersion]
+// is held to the envelope a current line is, and any other schema is refused
+// as a stale artifact.
+//
+// The schema is settled here rather than by [shardio.ValidateEnvelope], which
+// knows one version, so the envelope is then asked about the current one and
+// only its type and payload remain to be judged.
+func (r Record) validateForCalls() error {
+	if r.Schema < OldestCallsSchemaVersion || r.Schema > SchemaVersion {
+		return fmt.Errorf("schema %d is not between %d and %d: the shard was written by another version of this package",
+			r.Schema, OldestCallsSchemaVersion, SchemaVersion)
+	}
+	return shardio.ValidateEnvelope(r, SchemaVersion, SchemaVersion, r.Type, payloadPresent)
+}
+
 // FixtureProfile is what a runtime had available to the test package that ran
 // on it.
 //
@@ -368,8 +398,8 @@ type Session struct {
 	// It is written only when true. A line written before the field existed
 	// cannot be told apart from a non-idle one, and its false DispatchObserved
 	// said only that no fact-carrying span arrived, which is why
-	// [SchemaVersion] moved to 2 with it: such a line is refused rather than
-	// read under the new meaning.
+	// [SchemaVersion] moved to 2 with it: such a line is refused, or dropped
+	// by [ReadShardsForCalls], rather than read under the new meaning.
 	Idle bool `json:"idle,omitempty"`
 }
 

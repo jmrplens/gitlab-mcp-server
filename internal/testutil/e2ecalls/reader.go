@@ -4,6 +4,8 @@
 package e2ecalls
 
 import (
+	"slices"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/shardio"
 )
 
@@ -25,6 +27,38 @@ type Shard = shardio.Shard[Record]
 // result, since reporting nothing recorded as zero coverage would be a claim
 // about the server made from a claim about the harness.
 func ReadShards(dir string) ([]Shard, error) { return shards.ReadShards(dir) }
+
+// callShards is the mechanism [ReadShardsForCalls] reads through: the same
+// shards under the same names, held to [Record.validateForCalls] rather than
+// to [Record.validate]. Nothing writes through it.
+var callShards = newShards(Record.validateForCalls)
+
+// ReadShardsForCalls is [ReadShards] for a reader of the run, call, dispatch
+// and skip lines alone, such as a comparison of what two runs credited.
+//
+// It accepts a line written under any schema from [OldestCallsSchemaVersion]
+// to [SchemaVersion], since those four lines read the same under each, and
+// drops the session lines of an older schema, which are the lines a later
+// version changed the meaning of: a reader handed one would fold it under a
+// reading it was not written for, which is what [ReadShards] refuses a whole
+// shard for. A session line of the current schema is kept. Every other rule
+// [ReadShards] holds a line to still applies.
+func ReadShardsForCalls(dir string) ([]Shard, error) {
+	read, err := callShards.ReadShards(dir)
+	if err != nil {
+		return nil, err
+	}
+	for i := range read {
+		read[i].Records = slices.DeleteFunc(read[i].Records, olderSession)
+	}
+	return read, nil
+}
+
+// olderSession reports whether a record is a session line written under an
+// older schema than the current one.
+func olderSession(r Record) bool {
+	return r.Type == TypeSession && r.Schema != SchemaVersion
+}
 
 // Read merges every shard under dir, subdirectories included, in the order the
 // directory tree walks. It is [ReadShards] with the file boundaries dropped,

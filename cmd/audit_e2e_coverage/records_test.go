@@ -190,6 +190,37 @@ func TestReadRuntimes_ShardOfSchemaOne_IsRefused(t *testing.T) {
 	}
 }
 
+// TestReadBaselineRuntimes_ShardOfSchemaOne_IsReadWithoutItsSessions verifies
+// the one reader that still takes a shard written before issue 920: the
+// -baseline directory, whose only instance is the old suite's schema 1 record,
+// recorded once by a suite that has since been deleted.
+//
+// Its calls and its run line are read, since what a baseline is compared on
+// is what those calls credited, and version 2 left call lines alone. Its
+// session lines are dropped rather than folded, since they are the lines
+// version 2 changed the meaning of. The same directory given to -calls is
+// refused, which is the other half of the rule.
+func TestReadBaselineRuntimes_ShardOfSchemaOne_IsReadWithoutItsSessions(t *testing.T) {
+	dir := callsFixture("baseline-ce")
+
+	runtimes, err := readBaselineRuntimes(dir)
+	if err != nil {
+		t.Fatalf("readBaselineRuntimes() error = %v, want the schema 1 baseline read", err)
+	}
+	if len(runtimes) != 1 {
+		t.Fatalf("readBaselineRuntimes() = %d runtimes, want 1", len(runtimes))
+	}
+	rt := runtimes[0]
+	if rt.key != "community/free" || len(rt.runs) != 1 || len(rt.calls) != 5 || len(rt.sessions) != 0 {
+		t.Errorf("baseline = %s with %d runs, %d calls, %d sessions; want community/free with 1, 5, 0",
+			rt.key, len(rt.runs), len(rt.calls), len(rt.sessions))
+	}
+
+	if _, strictErr := readRuntimes(dir); strictErr == nil || !strings.Contains(strictErr.Error(), "schema 1 is not 2") {
+		t.Errorf("readRuntimes() error = %v, want the schema 1 shard refused as -calls input", strictErr)
+	}
+}
+
 // TestReadRuntimes_DeeperShards_ReadAsOne verifies that shards two levels
 // down, with no shard at the first level, are read as one runtime.
 func TestReadRuntimes_DeeperShards_ReadAsOne(t *testing.T) {

@@ -93,10 +93,14 @@
 // or asserted, and a sweep credit by sweep or asserted, since each of those
 // says the action ran and answered at least as firmly as the one it stands
 // in for. It compares the action cells alone, so the grain the capability
-// cells are counted at has no bearing on it. A baseline whose shards carry no
-// verdicts, which is how the old suite's recorder wrote them, is joined with
-// the gotestsum stream at
-// <directory>.results.json beside it, and refused when there is none, or when
+// cells are counted at has no bearing on it, and neither does what a session
+// line means: a baseline is read through e2ecalls.ReadShardsForCalls, which
+// accepts the old suite's schema 1 shards, recorded once and never again, and
+// drops their session lines instead of folding them under schema 2's
+// reading, where -calls refuses such a shard outright. A baseline whose
+// shards carry no verdicts, which is how the old suite's recorder wrote them,
+// is joined with the gotestsum stream at <directory>.results.json beside it,
+// and refused when there is none, or when
 // the stream judges none or not all of the tests the calls name, rather than
 // compared against nothing. -port-map
 // reads the "// Replaces:" lines of the new suite against every Test function

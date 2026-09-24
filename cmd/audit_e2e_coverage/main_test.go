@@ -672,17 +672,17 @@ func TestRun_Baseline_Unreadable_IsAUsageError(t *testing.T) {
 // beside it stops the run before any comparison: compared as it is, every
 // baseline call would classify as failed and the superset check would pass
 // against nothing. The committed baseline fixture carries verdicts, so a
-// shard without one is written here, in the shape the old suite's recorder
-// wrote.
+// shard without one is written here, in the shape and under the schema the
+// old suite's recorder wrote.
 func TestRun_Baseline_Unjudged_IsAUsageError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "baseline-ce")
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	writeFile(t, filepath.Join(dir, "calls-old.jsonl"), strings.Join([]string{
-		`{"schema":2,"type":"run","run":{"package":"suite","requirement":"any","edition":"community","tier":"free","run_id":"20260901t100000z-old","status":"started"}}`,
-		`{"schema":2,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","tools":["gitlab_execute_action","gitlab_find_action"],"dispatch_observed":true}}`,
-		`{"schema":2,"type":"call","call":{"test":"TestOld_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.list","dispatched":"issue.list","outcome":"ok"}}`,
+		`{"schema":1,"type":"run","run":{"package":"suite","requirement":"any","edition":"community","tier":"free","run_id":"20260901t100000z-old","status":"started"}}`,
+		`{"schema":1,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","tools":["gitlab_execute_action","gitlab_find_action"],"dispatch_observed":true}}`,
+		`{"schema":1,"type":"call","call":{"test":"TestOld_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.list","dispatched":"issue.list","outcome":"ok"}}`,
 		"",
 	}, "\n"))
 	opts := fixtureOptions(t)
