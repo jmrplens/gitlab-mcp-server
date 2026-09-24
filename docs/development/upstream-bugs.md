@@ -80,13 +80,13 @@ readable without opening the tracker:
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
-| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | No; shape agreed, ours follows [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232) | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes |
+| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours follows it | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user | Yes, theirs, open | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open | No | No | None taken |
 | 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open | No | No | Partial |
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, [#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255), merged | **Yes, unreleased** | No | Yes, until it ships |
-| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Not by us | No | **Yes, unreleased** | No | None taken |
+| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
@@ -179,7 +179,10 @@ table to reach a release, so its declaration now waits only on the live record
 being taken again from a 19.4 image, which is deferred until the work in flight
 has landed. Row 8 moved as well: the keep-alive option it asked for was merged
 upstream by somebody else, for the listen stream alone, and ours follows on the
-shape agreed on the issue. Rows 35 to 37 and 41 to 44 now read Reported through
+shape agreed on the issue. Rows 8 and 14 now count another user's merged pull
+request as In review, and row 14 the issue that pull request fixed as Reported,
+which is the reading row 9 already took and the one the Merged field implies. Rows 35 to 37
+and 41 to 44 now read Reported through
 the umbrella issue, whose field lists carry a block for each of those structs,
 which is the reading row 34 already took; the table had said no since the rows
 were added. The sections of rows 15 and 21 each carried two Merged bullets that
@@ -187,9 +190,10 @@ contradicted each other, and row 14's still named v1.8.0-pre.2 as the newest
 tag; all three are corrected. client-go v3.13.0, tagged on 2026-09-21, adds
 nothing any row waits on, so the v3.12.0 pin still carries every client-go merge
 the file records; go-sdk v1.8.0 is still that SDK's newest tag, so every go-sdk
-merge here is still unreleased. Rows 34, 39, 46 and 53 keep their fields, and
-their sections now carry the state as of that day, most of which is what was
-done upstream the same morning.
+merge here is still unreleased. Rows 34, 46 and 53 keep their fields, row 39's
+In review cell now records the approval, and the four sections now carry the
+state as of that day, most of which is what was done upstream the same
+morning.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -204,15 +208,16 @@ done upstream the same morning.
   [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936),
   open, from this repository's maintainer. The same team member routed it with
   the issue and set milestone 19.5 on it, which is a target and not a release.
-  It was readied on 2026-09-24 with a bare `@gitlab-bot ready`, which is the
-  right form for a merge request that is not documentation only: the bot
+  It was readied on 2026-09-24 with a bare `@gitlab-bot ready`, the form every
+  earlier backend merge request here had been readied with: the bot
   requested a backend coach, and seconds later the documentation automation
   requested the page's technical writer and took the coach off the reviewer
   field in the same step. So it carries a writer and no backend reviewer yet,
   though the coach was named in the bot's note and so still notified. Read the
   same day: the fork pipeline on `b183f4fa` is green, it has no conflicts, and
   it has no approval yet against the six maintainer code-owner rules its files
-  fall under.
+  fall under. The bot's reply also turned the ready into an unresolved thread,
+  so it fails `DISCUSSIONS_NOT_RESOLVED` until that thread is resolved.
 - **Merged**: no.
 - **Blocking**: no. The tier can always be pinned with `--tier` or
   `GITLAB_MCP_TIER`, which skips detection entirely.
@@ -223,8 +228,8 @@ done upstream the same morning.
   a non-administrator there falls through both steps to Free, and that caller
   is the one the merge request is for. Once a release carries it, a step
   reading `plan` from `GET /metadata` answers that caller, which needs
-  client-go's `Metadata` struct (version, revision, KAS and edition in
-  v3.12.0) to gain the field, or a captured-response read under
+  client-go's `Metadata` struct (`version`, `revision`, `kas` and `enterprise`
+  in v3.12.0) to gain the field, or a captured-response read under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)
   until it does.
 
@@ -371,8 +376,9 @@ example needs to stay reachable for callers still using it.
   not merged because the pipelines since have failed on breaks from `master`
   rather than on the change, the last of them the fork pipeline of the
   2026-09-22 rebase, whose one blocking failure was
-  `generate-apollo-graphql-schema` on a schema clash `master` had already
-  fixed. Auto-merge is no longer set. A follow-up of 2026-09-24 said so and
+  `generate-apollo-graphql-schema` on a schema clash that `master` fixed
+  twelve minutes later, when gitlab-org/gitlab!256904 merged, after the rebase
+  had landed on `e52599d0`. Auto-merge is no longer set. A follow-up of 2026-09-24 said so and
   asked @hustewart for a fresh pipeline and auto-merge; posted as a reply
   under our own note of 2026-09-22, it turned that note into an unresolved
   thread and so added a `DISCUSSIONS_NOT_RESOLVED` blocker to a merge request
@@ -1093,8 +1099,9 @@ of change whose test is one assertion on the built URL.
   read a merge as a release: `!3040` sat merged and in no tag for hours, so the
   version is read from which tags contain the merge commit rather than from the
   newest tag. Eleven releases in eight days is why: the newest tag was wrong
-  for five of the first six, and when this was first written `!3044` was in
-  three tags while `!3041` was in one.
+  for five of the first six, and when this was first written
+  `gitlab-org/api/client-go!3044` was in three tags while
+  `gitlab-org/api/client-go!3041` was in one.
 - **What review asked for, and what it cost**: `!3051` was merged on the
   second push. A maintainer asked for the five numeric fields as plain `int64`
   rather than pointers, on the convention that a response struct uses
@@ -1287,7 +1294,9 @@ was on the reviewer field within seconds. The same day it gained one commit,
 `ce04dc8e`, which makes `last_used_at` null in the `POST /deploy_keys`
 example: that call always creates the key it answers with, so the key has
 never been used, and the example had shown a timestamp eleven days after the
-key's own `created_at`. Its fork pipeline on that commit is green.
+key's own `created_at`. Its fork pipeline on that commit is green. It needs no
+further approval; its one failing check is the unresolved inactivity-nudge
+thread the ready was posted in.
 
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
@@ -1967,7 +1976,7 @@ inherits it on the routes that answer with a single object.
 | --------- | ----------------------------------------- | ------------------------------ | ------------------- |
 | `Group`   | `Entities::Group`                         | `Entities::GroupDetail`        | 10 + 8              |
 | `Project` | `Entities::BasicProjectDetails` (24 keys) | `Entities::Project` (159 keys) | 17                  |
-| `Issue`   | `Entities::IssueBasic`                    | `Entities::Issue`              | 3 + 9               |
+| `Issue`   | `Entities::IssueBasic`                    | `Entities::Issue`              | 3 + 6               |
 
 The project row is the one worth reading twice. `BasicProjectDetails` is not a
 subset a caller opts into: it is what
@@ -1992,7 +2001,7 @@ on the `read_secret_push_protection_info` ability, or on GitLab.com.
 `pre_receive_secret_detection_enabled`, which the SDK does model, exposed twice
 from `project.security_setting`.
 
-**The twelve on `Issue`**: `blocking_issues_count`, `start_date` and `type` are
+**The nine on `Issue`**: `blocking_issues_count`, `start_date` and `type` are
 on `IssueBasic` and therefore on every issue GitLab renders anywhere;
 `epic_iid`, `has_tasks`, `imported`, `imported_from`, `severity` and
 `task_status` are added by `Entities::Issue` and so reach only the issues API's
@@ -2163,12 +2172,14 @@ somebody else before we got to it.
   both still open) and the keep-alive comment
   ([modelcontextprotocol/go-sdk#1229](https://github.com/modelcontextprotocol/go-sdk/issues/1229),
   since closed by the merge below).
-- **In review**: not ours yet. The shape was settled on the issue on
-  2026-09-18: a contributor there prefers extending the write deadline on every
-  write, added as an option on top of
+- **In review**: yes, theirs,
+  [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232),
+  merged on 2026-09-21. Ours is not opened yet. The shape was settled on the
+  issue on 2026-09-18, where a contributor prefers extending the write
+  deadline on every write, added as an option on top of
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
-  once that merged, and we said we would open that pull request then. It
-  merged on 2026-09-21, so the next step is ours.
+  once that merged, and we said we would open that pull request then. It has
+  merged, so the next step is ours.
 - **Merged**: in part, and by somebody else:
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
@@ -2489,8 +2500,12 @@ only here.
 
 ### `Mcp-Name` is compared without decoding the base64 sentinel
 
-- **Reported**: not by us; fixed upstream before we got to it.
-- **In review**: no.
+- **Reported**: yes, by another user, not by us:
+  [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234),
+  opened 2026-09-03 and fixed upstream before we got to it.
+- **In review**: yes, theirs,
+  [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242),
+  merged on 2026-09-06.
 - **Merged**: **yes**, by another contributor:
   [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242)
   on 2026-09-06 decodes the header before the comparison, and
@@ -2833,24 +2848,28 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   deprecates it).
 
   **Where they stand on 2026-09-24.** The backend review of 2026-09-16 settled
-  `201` for success, `409` for a refusal and a commit message stating the
-  contract, and all three went in that day. On 2026-09-24 the branch of
+  `201` for success, `409` for a refusal and a commit message without the
+  short reference to its own merge request, which had turned `danger-review`
+  red, and all three went in that day. On 2026-09-24 the branch of
   `gitlab-org/gitlab!255702` was rebuilt on current `master` as one commit,
-  `ff12f93a`, whose only change beyond the reviewed diff is `"bot": false`
-  under `author` in the new example, since
+  `ff12f93a`, whose message states the final contract and whose only change
+  beyond the reviewed diff is `"bot": false` under `author` in the new
+  example, since
   [gitlab-org/gitlab!256381](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256381)
   had added that attribute to every merge request response; the push reset
-  the technical writer's approval. The rebase also brought in
-  `cells-routes:router-in-sync`, which
+  the technical writer's approval. The rebase also made
+  `cells-routes:router-in-sync` blocking on this branch; it had run here as a
+  non-blocking failure since 2026-09-15, and
   [gitlab-org/gitlab!257152](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/257152)
-  made blocking on `master` on 2026-09-23 and which compares GitLab's routes
+  made it blocking on `master` on 2026-09-23. It compares GitLab's routes
   with the HTTP Router's committed snapshot, so the new route needs that
   snapshot refreshed. The paired refresh is
   [gitlab-org/cells/http-router!1354](https://gitlab.com/gitlab-org/cells/http-router/-/merge_requests/1354):
   the route falls under the router's existing project rule, so nothing but the
-  snapshot changes, and it has been with @marcogreg since 2026-09-24. Until it
-  merges, or a maintainer applies `pipeline:skip-router-sync`, that job is the
-  one failure of the fork pipeline, whose predictive rspec runs passed. The
+  snapshot changes, and @marcogreg, asked for it on 2026-09-24, approved and
+  merged it the same day (merge commit `8337f3f5`). That job was the one
+  failure of the fork pipeline on `ff12f93a`, whose predictive rspec runs
+  passed, and the next pipeline runs it against the refreshed snapshot. The
   merge request's description and a correction in the `danger-review` thread
   set out the router's timeline, and it was readied the same day naming
   @marc_shaw for the re-review it now waits on.
