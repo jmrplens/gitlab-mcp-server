@@ -205,16 +205,18 @@ which writes rather than reads.
   outside those roots is refused. `package.download` resolves its destination
   again after creating parent directories, so a symlink planted underneath a
   directory the call just made cannot decide where the bytes go.
-- **A download never writes through its destination.** `package.download`
-  writes to a temporary file it creates exclusively beside `output_path`,
-  under a random name, and renames it over `output_path` once the whole body
-  has arrived. A rename replaces the name rather than following it, so a
-  symlink planted at `output_path` after the check is replaced instead of
-  written through, on Windows as well, where Go offers no `O_NOFOLLOW` and
-  opening a path that already exists follows a link planted there. A
-  download that fails or is cancelled removes its temporary file and leaves
-  `output_path` as it was, so nothing that looks like a download is left for
-  the next reader to trust.
+- **A download never writes through a link planted at its destination.**
+  `package.download` writes to a temporary file it creates exclusively
+  beside the file `output_path` resolves to, under a random name, and
+  renames it over that file once the whole body has arrived. When
+  `output_path` is already a link to a regular file inside the roots, that
+  file is what gets replaced and the link stays. A rename replaces the name
+  rather than following it, so a link planted after the check is replaced
+  instead of written through, on Windows as well, where Go offers no
+  `O_NOFOLLOW` and opening a path that already exists follows a link planted
+  there. A download that fails or is cancelled removes its temporary file
+  and leaves `output_path` as it was, so nothing that looks like a download
+  is left for the next reader to trust.
 - **The operator widens the roots, the caller never does.**
   `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` for reads, `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`
   for writes, and `GITLAB_MCP_ALLOWED_IMPORT_DIRS` for import archives.
