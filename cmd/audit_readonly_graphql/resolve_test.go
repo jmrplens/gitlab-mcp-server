@@ -72,6 +72,11 @@ func Decorated(ctx context.Context, client *gitlabclient.Client, input Input) (O
 	return read(ctx, client)
 }
 
+// Wrapped is the handler behind a route whose 404 WrapNotFound answers.
+func Wrapped(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return read(ctx, client)
+}
+
 func Chained(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
 	return read(ctx, client)
 }
@@ -173,6 +178,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		toolutil.NewReadActionSpec("direct", toolutil.RouteAction(client, Direct), toolutil.ActionSpecOptions{}),
 		helperSpec("helper", toolutil.RouteAction(client, ViaHelper)),
 		toolutil.NewReadActionSpec("decorated", toolutil.RouteAction(client, Decorated).WithTags("fixture"), toolutil.ActionSpecOptions{}),
+		toolutil.NewReadActionSpec("wrapped", toolutil.RouteAction(client, Wrapped).WrapNotFound(func(map[string]any) any { return nil }), toolutil.ActionSpecOptions{}),
 		helperSpec("chained", toolutil.RouteAction(client, Chained)).WithEmbeddedResource("gitlab://project/{id}"),
 		toolutil.ActionSpec{Name: "literal", Route: toolutil.RouteAction(client, Literal)},
 		variableSpec(client),
@@ -366,6 +372,72 @@ func TestResolver_CollectSites_EveryConstructionShape(t *testing.T) {
 				t.Errorf("action %q resolved to %v, want [%s]", testCase.action, got, testCase.handler)
 			}
 		})
+	}
+}
+
+// TestResolver_CollectSites_WrappedRouteResolvesItsReceiverToo verifies a
+// route decorated by a toolutil method taking a function, the shape every
+// not-found wrapper is written in, resolves to the handler of the route it was
+// called on as well as to the function it was given. Reading the function
+// alone classified the not-found builder and never the get handler behind it,
+// and a builder that calls nothing left the action with no handler at all.
+func TestResolver_CollectSites_WrappedRouteResolvesItsReceiverToo(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+	sites := (&resolver{prog: prog}).collectSites()
+
+	got := handlerNames(sites, "shapes", "wrapped")
+	if len(got) != 2 || got[0] != "Wrapped" || got[1] != "closure" {
+		t.Errorf("action wrapped resolved to %v, want [Wrapped closure]", got)
+	}
+}
+
+// TestResolver_WrappedRoute_ReceiverIsOneStepDeeper verifies the handler of
+// the route a toolutil method was called on is resolved one step past the
+// call, like the method's own argument: at depth zero both resolve, and one
+// short of the bound the argument still does while the receiver's handler,
+// a step further down its route literal, is past it.
+func TestResolver_WrappedRoute_ReceiverIsOneStepDeeper(t *testing.T) {
+	toolutilPkg, _, routeType := synthToolutilTypes()
+	handlerType := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+	receiver := types.NewVar(token.NoPos, toolutilPkg, "route", routeType)
+	signature := types.NewSignatureType(receiver, nil, nil,
+		types.NewTuple(types.NewVar(token.NoPos, toolutilPkg, "", handlerType)),
+		types.NewTuple(types.NewVar(token.NoPos, toolutilPkg, "", routeType)), false)
+	callee := types.NewFunc(token.NoPos, toolutilPkg, "WrapNotFound", signature)
+
+	info := synthInfo()
+	call := synthMethodCall(info, callee, synthRoute())
+	call.Args = []ast.Expr{&ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}}
+	at := synthFrame(info, nil)
+
+	for _, tt := range []struct {
+		name  string
+		depth int
+		want  int
+	}{
+		{name: "argument and receiver", depth: 0, want: 2},
+		{name: "one short of the bound", depth: maxResolveDepth - 1, want: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := len(synthResolver().resolveRouteCall(call, at, tt.depth)); got != tt.want {
+				t.Errorf("resolveRouteCall() at depth %d = %d handler(s), want %d", tt.depth, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestResolver_ToolutilCallWithoutAHandler_FollowsWhatItReturns verifies a
+// toolutil function given no function argument is not taken as resolving to
+// nothing: the route it returns is followed, as any other helper's is.
+func TestResolver_ToolutilCallWithoutAHandler_FollowsWhatItReturns(t *testing.T) {
+	toolutilPkg, _, routeType := synthToolutilTypes()
+	info := synthInfo()
+	callee := synthFunc(toolutilPkg, "DefaultRoute", nil, []types.Type{routeType})
+	body := &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{synthRoute()}}}}
+	res := synthIndexed(info, callee, body)
+
+	if got := len(res.resolveRouteCall(synthCall(info, callee), synthFrame(info, nil), 0)); got != 1 {
+		t.Errorf("resolveRouteCall() = %d handler(s), want the one the returned route runs", got)
 	}
 }
 
