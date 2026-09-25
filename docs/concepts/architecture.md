@@ -167,7 +167,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v3` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1086 self-managed Ultimate MCP tool implementations (866 on Free/CE, 1020 on Premium), plus 6 GitLab.com-only Orbit handlers for 1092 total in the GitLab.com Ultimate catalog, organized across 178 sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`, which lists 179 — the 178 sub-packages plus the `internal/tools` root package itself.
+The largest package family contains 1086 self-managed Ultimate MCP tool implementations (866 on Free/CE, 1020 on Premium), plus 6 GitLab.com-only Orbit handlers for 1092 total in the GitLab.com Ultimate catalog, organized across 178 sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`, which lists 179: the 178 sub-packages plus the `internal/tools` root package itself.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](../development/tool-surfaces-and-action-core.md).
 
