@@ -859,9 +859,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
-      # Still needed by the installer and packaging tests below, which are
-      # Python because what they test is. The auditor no longer is, so nothing
-      # here installs a package at run time any more.
+      # Still needed by the script tests below. The auditor no longer is
+      # Python, so nothing here installs a package at run time any more.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.x"
@@ -881,11 +880,14 @@ jobs:
       # scripts/build_mcpb_sh_test.py runs scripts/build-mcpb.sh over stand-in
       # binaries against each bundle its checks refuse, and over the dist/
       # layouts of make mcpb and of the release job.
+      # scripts/coverage_mutants_sh_test.py drives the mutation recipe,
+      # scripts/coverage-mutants.sh, against a stand-in go command, and holds
+      # the deadline it hands gremlins to the run gremlins actually times.
       # shellcheck, bash, jq, zip, unzip and wget come from the runner image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,
       # it fails instead, so a runner image that drops one turns this step red
       # rather than letting it pass with those cases unrun.
-      - name: Test the installer, launcher and packaging scripts
+      - name: Test the repository scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
   # Nothing written in this repository uses an em dash (U+2014), and until this

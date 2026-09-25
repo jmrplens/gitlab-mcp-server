@@ -723,19 +723,46 @@ coverage-conditions:
 # never managed to test, and internal/edition reported 0.00% efficacy over four
 # mutants none of which ever ran.
 #
-# MUTANT_BUDGET is the floor in seconds; the coefficient is whatever reaches it,
-# never below 8 so a slow package still gets a real multiple of its own runtime.
-# A timeout that survives a budget this size is a finding rather than a setting:
-# it is a mutant that made the package pathologically slow, which is what
-# mutating a memo does, and the answer is a test that asserts the memo.
+# MUTANT_BUDGET is the per-mutant budget in seconds; the coefficient is whatever
+# reaches it, never below 8 so a slow package still gets a real multiple of its
+# own runtime. A timeout that survives a budget this size is a finding rather
+# than a setting: it is a mutant that made the package pathologically slow,
+# which is what mutating a memo does, and the answer is a test that asserts the
+# memo.
 #
-# A package that does not pass its own tests is refused rather than measured.
-# The pipeline that reads the baseline duration takes its status from the last
-# command in it, so a failing `go test` did not stop the recipe; and a failing
-# run still ends in "FAIL <pkg> 1.234s", which the duration pattern matches, so
-# the baseline was not even empty. Gremlins would then run against a suite that
-# already fails, where every mutant is reported KILLED: a perfect score over a
-# broken package, which is the one reading this recipe exists to prevent.
+# The baseline is a run of the same command gremlins times, timed by the clock.
+# gremlins multiplies the coefficient by the wall time of its own `go test
+# [-tags T] [-coverpkg P] -cover -coverprofile F ./<pkg>/...` from the module
+# root, so the script runs that command, with the tags and -coverpkg it reads
+# out of GREMLINS_FLAGS or gremlins' own GREMLINS_UNLEASH_TAGS and
+# GREMLINS_UNLEASH_COVERPKG, and --integration from the flag alone, since
+# gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. It runs
+# it once untimed, which is the gate below and warms the build cache the way
+# gremlins' run will find it, and once under bash's `time`. It used to read the
+# duration off go test's summary line, which is the test binary's run without
+# the build, and to guess 0.010s when that line carried none. A tag that
+# reached gremlins and not the baseline left the harness printing `[no test
+# files]`, and the guess turned 114 seconds of tests into a deadline of 95
+# hours per mutant (issue 915). A package with no test file under its tags is
+# refused instead, since every mutant of it would be reported NOT COVERED.
+#
+# The budget has to cover a compile as well as a run, which is why it is five
+# minutes. gremlins copies the module into a directory per worker, and Go keys
+# a compile on the package's directory, so the first mutant on each of the
+# four workers recompiles every package of this module its test imports, and
+# does it inside its own deadline. Measured on five cores after a content
+# edit: cmd/audit_dynamic_aliases, whose tests take half a second and which
+# imports all of internal/tools, needs 110 seconds for that first compile with
+# four workers at it at once, and 2 for every run after. At a 30-second budget
+# it reported 2 killed and 8 timed out; at 300 it reports all 10 killed, the
+# figure the parsed baseline's inflated deadline used to give it by accident.
+#
+# A package that does not pass its own tests is refused rather than measured,
+# and so is one whose subtree does not, since the baseline runs the subtree as
+# gremlins does. Gremlins would otherwise run against a suite that already
+# fails, where every mutant is reported KILLED: a perfect score over a broken
+# package, which is the one reading this recipe exists to prevent. A suite that
+# passes the first run and fails the timed one is refused for the same reason.
 #
 # MUTANT_BUDGET is a knob and MUTANT_BUDGET_FLOOR is what it may not go under.
 # Raising the budget is the caller's business; lowering it past a few seconds
@@ -744,6 +771,14 @@ coverage-conditions:
 # would be reported TIMED OUT having never run. The floor is applied out loud
 # rather than silently: a run told to use one second and given ten should say
 # so, or the printed budget is a second lie on top of the first.
+#
+# MUTANT_DEADLINE_MAX bounds each mutant's deadline outright, in seconds: the
+# coefficient is held at the ceiling's multiple of the baseline, so a mutant
+# that makes the tests hang is reported TIMED OUT within it instead of holding
+# a worker for as long as the coefficient allows. It answers to the floor as
+# the budget does, and a baseline longer than half of it is refused, since no
+# mutant could run the suite twice inside it. At an hour it binds only on a
+# baseline over 450 seconds, where the floor of 8 would otherwise exceed it.
 #
 # -count=1 is what makes the coefficient mean what the line above says, and it
 # is a second defect rather than the same one. The coefficient is not applied to
@@ -758,11 +793,12 @@ coverage-conditions:
 # exactly like a package nothing tests. `go build` ignores a flag it does not
 # know, so the same GOFLAGS is safe for the compile gremlins runs around each
 # mutant.
-MUTANT_BUDGET ?= 30
+MUTANT_BUDGET ?= 300
 MUTANT_BUDGET_FLOOR ?= 10
+MUTANT_DEADLINE_MAX ?= 3600
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_stats"; exit 2; }
-	@scripts/coverage-mutants.sh $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR)
+	@scripts/coverage-mutants.sh $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test

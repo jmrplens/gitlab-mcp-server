@@ -164,7 +164,7 @@ it out of the efficacy quotient, so `internal/edition` announced 0.00% efficacy
 over four mutants none of which ever ran, while `internal/telemetry` hid two
 real survivors behind timeouts and read two better than it was.
 `make coverage-mutants` therefore measures the package first and derives the
-coefficient from it, printing both. `MUTANT_BUDGET` (30 s) is the budget, and
+coefficient from it, printing both. `MUTANT_BUDGET` (300 s) is the budget, and
 `MUTANT_BUDGET_FLOOR` (10 s) is what it may not go under: raising the budget is
 the caller's business, and lowering it past a few seconds would recreate this
 very defect, so a smaller value is raised to the floor and the run says so
@@ -182,6 +182,70 @@ exactly like a package nothing tests. `make coverage-mutants` therefore runs
 gremlins under `GOFLAGS=-count=1`, so what it multiplies is always a real
 measurement. `go build` ignores a flag it does not know, so the same setting is
 harmless for the compile around each mutant.
+
+**The baseline is a run of the same command gremlins times, and it is timed by
+the clock.** The recipe used to read the duration off the last line `go test`
+printed, and to fall back to a guess of 0.010 s when that line carried none, a
+guess meant for a cached result that `-count=1` had already made impossible.
+What it read was wrong two ways, each measured. The tags:
+`GREMLINS_FLAGS='--tags e2e'` reached gremlins and not the baseline, so on
+`test/e2e/internal/harness`, where every file but `doc.go` carries
+`//go:build e2e`, the baseline printed `[no test files]` and exited 0. The
+guess gave a coefficient of 3001, gremlins' own coverage run took 114 s, and
+every mutant got `go test -timeout 94h59m45s`. The INVERT_LOGICAL mutant of
+`missing == 0 || time.Now().After(deadline)` in `awaitTraces` makes the span
+wait loop for as long as a span is missing, and it ran for over an hour before
+it was killed by hand; `test/e2e/internal/fixture` got 8 h 44 min per mutant
+the same way. The units: a duration it could read was the test binary's own
+run, without the build and link gremlins' wall clock includes, so
+`internal/tools/elicitationtools` read 0.105 s against gremlins' 0.94 s and
+gave each mutant about 269 s instead of the 30 s it printed. Nor could a parse
+of that line be kept for the new command: the run gremlins times is a `-cover`
+run, whose summary ends in a coverage figure rather than a duration.
+
+`scripts/coverage-mutants.sh` therefore runs the command gremlins' coverage step
+runs, `go test -count=1 [-tags T] [-coverpkg P] -cover -coverprofile F
+./<pkg>/...` from the module root (`./...` under `--integration`). The tags and
+the `-coverpkg` come from `GREMLINS_FLAGS`, read the way pflag reads it
+(`-dte2e` included), or from gremlins' own `GREMLINS_UNLEASH_TAGS` and
+`GREMLINS_UNLEASH_COVERPKG`, and a flag the script cannot read is refused,
+since it could be hiding a tag. `--integration` is read from the flag alone
+(`-i` in `GREMLINS_FLAGS`): gremlins v0.6.0 binds
+`GREMLINS_UNLEASH_INTEGRATION` too, but reads it back with a bool type
+assertion that the string an environment variable arrives as never passes, so
+the variable widens nothing, and the script says so when it is set. It runs
+the command twice: once untimed, which is the pass/fail gate and leaves the
+build cache as warm as gremlins' run will find it, and once under bash's
+`time` in the C locale (under a comma-decimal locale `time`
+writes `0,940`, which awk reads as 0). Measured after a content edit, the
+timed base and gremlins' own figure now agree: 1.017 s against 1.045 s on
+`elicitationtools`, 1.026 s against 1.038 s on `cmd/audit_dynamic_aliases`. A
+package with no test file under the tags it was given is refused, naming them,
+since every mutant of it would be reported NOT COVERED. A tag set only in a
+`.gremlins.yaml` reaches gremlins and not the script, and that refusal stops
+such a run only when it would find no test file at all: a package with some
+untagged test files passes it and is measured against a baseline that runs
+fewer tests than gremlins times. Pass the tag through `GREMLINS_FLAGS`.
+
+`MUTANT_DEADLINE_MAX` (3600 s) is a ceiling on each mutant's deadline, applied
+through the coefficient because gremlins offers no other handle: a ceiling
+below the floor is raised to it and the run says so, and a baseline longer than
+half the ceiling is refused. A mutant that hangs is then reported TIMED OUT
+within the hour at most rather than blocking a run for days, and TIMED OUT is
+not part of the gate: it is a reading to explain, as the paragraphs below do.
+
+**The budget has to cover a compile, not only a run.** gremlins copies the
+module into a directory per worker, and Go keys a compile on the package's
+directory, so the first mutant on each of the four workers recompiles every
+package of this module its test imports, inside its own deadline. The inflated
+deadlines of the parsed baseline absorbed that without anyone noticing; a
+timed baseline does not. `cmd/audit_dynamic_aliases` runs its tests in half a
+second and imports all of `internal/tools`: four workers compiling it at once
+took 110 s each on five cores, and 2 s for every run after. At a 30 s budget it
+reported 2 killed and 8 timed out; at 300 s it reports all 10 killed, as
+before, and `elicitationtools` keeps its 133 killed and none timed out. That is
+why the default is 300 s. A timeout figure taken before this change is not
+comparable with one taken after it, since the deadlines themselves moved.
 
 A timeout that survives a budget that size is a finding rather than a setting:
 the mutant made the package pathologically slow instead of wrong. Eight of
