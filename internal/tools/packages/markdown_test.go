@@ -609,18 +609,22 @@ func TestFormatGetMarkdown_EscapesWhatGitLabAuthored(t *testing.T) {
 		Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: version, Tags: []toolutil.PackageTagOutput{{Name: tag}}}},
 	}})
 	for _, raw := range []string{name, tag, version} {
-		if strings.Contains(got, raw) {
-			t.Errorf("card carries %q unescaped:\n%s", raw, got)
-		}
+		t.Run(raw, func(t *testing.T) {
+			if strings.Contains(got, raw) {
+				t.Errorf("card carries %q unescaped:\n%s", raw, got)
+			}
+		})
 	}
 	for _, escaped := range []string{
 		toolutil.EscapeMdHeading("Package: " + name),
 		"- **Tags**: " + toolutil.EscapeMdTableCell(tag) + "\n",
 		"| 9 | " + toolutil.EscapeMdTableCell(version) + " | " + toolutil.EscapeMdTableCell(tag) + " |  |  |\n",
 	} {
-		if !strings.Contains(got, escaped) {
-			t.Errorf("card does not carry %q:\n%s", escaped, got)
-		}
+		t.Run(escaped, func(t *testing.T) {
+			if !strings.Contains(got, escaped) {
+				t.Errorf("card does not carry %q:\n%s", escaped, got)
+			}
+		})
 	}
 }
 
@@ -643,9 +647,11 @@ func TestFormatPackageNotFound_NamesThePackageAndWhereIDsComeFrom(t *testing.T) 
 		"Use package.list with project_id to list the project's packages and their package_id",
 		"Each version of a package has its own package_id",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("not-found result does not carry %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("not-found result does not carry %q:\n%s", want, text)
+			}
+		})
 	}
 }
 
