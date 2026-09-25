@@ -517,9 +517,10 @@ func TestSidekiq_EachMetricReachesItsOwnEndpoint(t *testing.T) {
 		}
 
 		// Each endpoint is accepted under two spellings on purpose. client-go
-		// v3.12.0 declares the four Sidekiq routes with a leading slash and so
-		// sends /api/v4//sidekiq/..., which GitLab redirects to the canonical
-		// path (docs/development/upstream-bugs.md, entry 33; the double slash
+		// declares the four Sidekiq routes with a leading slash, still so at
+		// the v3.14.0 pin, and so sends /api/v4//sidekiq/..., which GitLab
+		// redirects to the canonical path
+		// (docs/development/upstream-bugs.md, entry 33; the double slash
 		// is declared in cmd/audit_1to1/internal/paths/endpoint_declarations.go
 		// and R-PATH holds the request to it). The canonical spelling is kept
 		// beside it so the upstream fix costs this test no edit; what the test

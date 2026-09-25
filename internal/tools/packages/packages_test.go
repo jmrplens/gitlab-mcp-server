@@ -1231,10 +1231,11 @@ func TestPackages_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestPackages_UnreadableCapturedFields verifies both listing handlers report
-// the captured response's decode failure rather than a package missing what
-// GitLab sent. The SDK's own Package has no creator_id, so only the read
-// beside it can notice GitLab sent a string there.
+// TestPackages_UnreadableCapturedFields verifies both listing handlers refuse
+// a package whose creator_id is not a number rather than publishing one
+// missing what GitLab sent. client-go models creator_id on its own Package as
+// of v3.14.0, so the SDK's decoder is what refuses it now that it reads the
+// same bytes first.
 func TestPackages_UnreadableCapturedFields(t *testing.T) {
 	const poisoned = `[{"id":10,"name":"my-pkg","version":"1.0.0","creator_id":"nobody"}]`
 	cases := make([]testutil.CapturedCase, 0, len(packageCalls))
@@ -1244,7 +1245,7 @@ func TestPackages_UnreadableCapturedFields(t *testing.T) {
 			return err
 		}})
 	}
-	testutil.AssertCapturedDecodeFailures(t, cases)
+	testutil.AssertUnreadableBodyRefused(t, cases)
 }
 
 // TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired verifies a
