@@ -57,8 +57,10 @@ func sanitizeNamePart(name string, maxLength int) string {
 	sanitized = strings.ReplaceAll(sanitized, "_", "-")
 	sanitized = unsafeChars.ReplaceAllString(sanitized, "")
 	sanitized = strings.Trim(sanitized, "-")
-	if maxLength > 0 && len(sanitized) > maxLength {
-		sanitized = strings.Trim(sanitized[:maxLength], "-")
+	if maxLength > 0 {
+		// A name already within the cap is sliced whole and trimmed of the
+		// dashes it no longer has, so one expression serves both lengths.
+		sanitized = strings.Trim(sanitized[:min(len(sanitized), maxLength)], "-")
 	}
 	return sanitized
 }
@@ -91,15 +93,85 @@ func newRunID(now time.Time, pkg string) string {
 	return withPackage(now.UTC().Format(e2ecalls.RunIDStampLayout)+"-"+shortStableHash(source), pkg)
 }
 
+// mintedRunID matches a run identifier [newRunID] minted, wherever it sits in
+// a name or a path. Its pattern is [mintedRunIDPattern].
+var mintedRunID = regexp.MustCompile(mintedRunIDPattern())
+
+// mintedRunIDPattern spells the shape of a minted run identifier: the stamp,
+// the hash, and the first character of the package name. The stamp is the
+// layout with each digit read as any digit and the hash is stableHashLength
+// hexadecimal characters, so the shape is built from the same two constants
+// the identifier is, and the one cannot change without the other following it.
+//
+// The character before the stamp must not be a letter of either case or a
+// digit: the stamp opens a name part, after a dash or a slash or at the start,
+// and a stamp run into a longer word is not one this package wrote. Upper case
+// counts because the sweep reads display names as well as paths, and a display
+// name keeps whatever case it was given.
+//
+// It is a function rather than one expression in the variable's initializer
+// so that coverage sees it: a package-level initializer is not instrumented,
+// and a mutation of it would be reported as covered by nothing.
+func mintedRunIDPattern() string {
+	stamp := regexp.MustCompile(`\d`).ReplaceAllLiteralString(regexp.QuoteMeta(e2ecalls.RunIDStampLayout), `\d`)
+	return `(?:^|[^0-9A-Za-z])(` + stamp + fmt.Sprintf(`)-[0-9a-f]{%d}-[a-z0-9]`, stableHashLength)
+}
+
+// MintedRunStart finds a run identifier [newRunID] minted inside a name or a
+// path and returns when that run started, which is what lets a sweep tell the
+// leftovers of a run that has ended from the objects of one still going
+// without knowing either run's identifier.
+//
+// It reports false for a string carrying none, and that includes every
+// identifier E2E_RUN_ID replaced: [configuredRunID] passes an override through
+// [undatable], so nothing in one says when its run began, not even a stamp it
+// copied from another run.
+func MintedRunStart(s string) (time.Time, bool) {
+	match := mintedRunID.FindStringSubmatch(s)
+	if match == nil {
+		return time.Time{}, false
+	}
+	return e2ecalls.RunIDDate(match[1] + "-")
+}
+
 // configuredRunID returns the sanitized override when one was given, and a
 // fresh identifier otherwise. The package name is appended either way: an
 // override set once for a whole run reaches every package, and without it the
 // three would name their resources identically.
+//
+// An override is made [undatable] after the package is appended, since a
+// stamp and a hash given without a package become a whole minted identifier
+// only once the package follows them.
 func configuredRunID(now time.Time, override, pkg string) string {
 	if runID := sanitizeNamePart(override, 48); runID != "" {
-		return withPackage(runID, pkg)
+		return undatable(withPackage(runID, pkg))
 	}
 	return newRunID(now, pkg)
+}
+
+// undatable returns runID with a letter set before every stamp in it that
+// [MintedRunStart] would read, so that no name built from it can be dated.
+//
+// An override is where such a stamp comes from, and the likeliest one is a
+// copy of the identifier an earlier run logged at its start. Kept as given,
+// that stamp would date this run by when the earlier one began, and the
+// on-demand sweep, which takes a run once its stamp is old enough, would
+// delete this run's fixtures while it is still going. A letter is what the
+// shape refuses before a stamp; the rest of the override is kept, so the names
+// still carry what the operator chose.
+//
+// It searches again after each letter rather than replacing every match in
+// one pass, because a match takes the dash after its hash and the character
+// after that: when that character opens a second stamp, one pass has already
+// consumed the second stamp's boundary and never sees it.
+func undatable(runID string) string {
+	for {
+		match := mintedRunID.FindStringSubmatchIndex(runID)
+		if match == nil {
+			return runID
+		}
+		runID = runID[:match[2]] + "x" + runID[match[2]:]
+	}
 }
 
 // withPackage appends the package name to a run identifier, leaving it alone

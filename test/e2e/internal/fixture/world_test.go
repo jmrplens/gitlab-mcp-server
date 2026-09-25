@@ -359,7 +359,7 @@ func TestTeardownWorld_PersonalSnippet_IsDeletedWithTheRest(t *testing.T) {
 	}{
 		{name: "deleted", answer: stubNoContent()},
 		{name: "already gone", answer: stubRefusal(http.StatusNotFound, "404 Snippet Not Found")},
-		{name: "refused", answer: stubRefusal(http.StatusForbidden, "403 Forbidden"), wantErr: "tearing down the World's personal snippet"},
+		{name: "refused", answer: stubRefusal(http.StatusForbidden, "403 Forbidden"), wantErr: "tearing down the World's personal snippet: deleting snippet 10 (world-snippet-run): "},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -370,7 +370,7 @@ func TestTeardownWorld_PersonalSnippet_IsDeletedWithTheRest(t *testing.T) {
 			world := &World{
 				Group:   Group{ID: 1, Path: "e2e-world-group-run"},
 				Project: Project{ID: 2, Path: "e2e-world-group-run/e2e-world-project-run"},
-				Snippet: Snippet{ID: 10},
+				Snippet: Snippet{ID: 10, Title: "world-snippet-run"},
 			}
 
 			err := teardownWorld(client, world)

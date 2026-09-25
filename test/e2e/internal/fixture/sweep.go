@@ -1,18 +1,24 @@
 //go:build e2e
 
-// sweep.go deletes what a run left behind, and only what this run left
-// behind.
+// sweep.go deletes what runs left behind: at a run's exit only what that run
+// left, and on demand what runs that have ended left.
 //
 // Every name a builder hands out carries the run ID, so a sweep can recognize
 // its own leftovers on an instance three packages share and other people use.
 // The suite this replaces matched a prefix alone, which on a shared instance
-// deleted another package's live projects; the prefix-wide sweep still exists
-// for an explicit target a person runs on purpose, and nothing runs it by
-// itself.
+// deleted another package's live projects.
+//
+// Two sweeps exist for a person to run on purpose, and nothing runs either by
+// itself. The default one takes what a run left once that run is over, which
+// the floor it is given has to outlast the run's timeout to guarantee: it
+// knows no run ID, so it reads the one each name carries and the second that
+// run started, and leaves every run younger than the floor. The prefix one is
+// the explicit override, for whatever the default cannot date.
 
 package fixture
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -36,9 +42,12 @@ const (
 
 // SweepReport says what a sweep found and what it could not remove.
 type SweepReport struct {
-	// Projects, Groups and Users name what was deleted.
+	// Projects, Groups, Snippets and Users name what was deleted: a project
+	// or a group by its path, a personal snippet by its title and a user by
+	// the username.
 	Projects []string
 	Groups   []string
+	Snippets []string
 	Users    []string
 	// Errors holds every deletion that failed and every listing that could
 	// not be read.
@@ -47,7 +56,28 @@ type SweepReport struct {
 
 // Found reports whether the sweep had anything to delete.
 func (r SweepReport) Found() bool {
-	return len(r.Projects)+len(r.Groups)+len(r.Users) > 0
+	return len(r.Removed()) > 0
+}
+
+// Removed names every object the sweep deleted, each after its kind, in the
+// order the sweep deleted them. It is the one list both the exit hook and the
+// on-demand sweep log, so neither can leave a kind out of its log.
+func (r SweepReport) Removed() []string {
+	var removed []string
+	for _, kind := range []struct {
+		name  string
+		names []string
+	}{
+		{name: "project", names: r.Projects},
+		{name: "group", names: r.Groups},
+		{name: "snippet", names: r.Snippets},
+		{name: "user", names: r.Users},
+	} {
+		for _, name := range kind.names {
+			removed = append(removed, kind.name+" "+name)
+		}
+	}
+	return removed
 }
 
 // Err folds the failures into one error, nil when there were none.
@@ -57,8 +87,8 @@ func (r SweepReport) Err() error {
 
 // String summarizes the report for a log line.
 func (r SweepReport) String() string {
-	return fmt.Sprintf("%d project(s), %d group(s), %d user(s) removed; %d error(s)",
-		len(r.Projects), len(r.Groups), len(r.Users), len(r.Errors))
+	return fmt.Sprintf("%d project(s), %d group(s), %d snippet(s), %d user(s) removed; %d error(s)",
+		len(r.Projects), len(r.Groups), len(r.Snippets), len(r.Users), len(r.Errors))
 }
 
 // matcher decides whether an object the listing returned is one to delete.
@@ -90,9 +120,23 @@ func lastSegment(path string) string {
 	return path
 }
 
-// SweepRun permanently deletes every project, group and, with an
-// administrator's token, every user whose name carries runID. It is what the
-// exit hook runs; a person runs SweepPrefix instead.
+// startedBefore reports whether an object's name or path carries a run
+// identifier the harness minted for a run that started before cutoff.
+func startedBefore(name, path string, cutoff time.Time) bool {
+	return mintedBefore(name, cutoff) || mintedBefore(path, cutoff)
+}
+
+// mintedBefore reports whether s carries a minted run identifier whose stamp
+// is earlier than cutoff.
+func mintedBefore(s string, cutoff time.Time) bool {
+	started, found := harness.MintedRunStart(s)
+	return found && started.Before(cutoff)
+}
+
+// SweepRun permanently deletes every project, group and personal snippet,
+// and with an administrator's token every user, whose name carries runID. It
+// is what the exit hook runs; a person runs SweepRunsStartedBefore or
+// SweepPrefix instead.
 func SweepRun(ctx context.Context, client *gitlabclient.Client, runID string, admin bool) SweepReport {
 	if runID == "" {
 		return SweepReport{Errors: []error{errors.New("a sweep needs a run ID to scope itself to")}}
@@ -100,10 +144,40 @@ func SweepRun(ctx context.Context, client *gitlabclient.Client, runID string, ad
 	return sweep(ctx, client, runID, func(name, path string) bool { return belongsToRun(name, path, runID) }, admin)
 }
 
-// SweepPrefix permanently deletes every owned project and group, and with an
-// administrator's token every user, whose name opens with prefix, whatever
-// run made it. It is for an explicit target run by hand after a run that
-// could not clean up, never for a run's own exit.
+// SweepRunsStartedBefore permanently deletes every owned project and group,
+// every personal snippet, and with an administrator's token every user,
+// whose name or path carries a run identifier the harness minted for a run
+// that started before cutoff, whatever run that was. It is the on-demand
+// sweep's default, for the leftovers of runs that were killed and so never
+// reached their own exit sweep.
+//
+// The cutoff is what keeps it off a run still going. Each package's binary
+// stamps its own start, and its fixtures are in use no longer than its test
+// timeout plus its exit hooks: the timeout's alarm is a fatal panic, so the
+// hooks run only after tests that ended in time, and each runs under a budget
+// of its own, this sweep's and the World teardown's. go test's backstop, a
+// SIGQUIT a tenth of the timeout past it and never less than a minute, only
+// shortens that. A cutoff further back than the longest timeout any run was
+// given, plus those budgets, reaches only runs that have ended; one given no
+// timeout at all is safe only from a sweep not run while it goes. A run whose
+// identifier E2E_RUN_ID replaced carries no stamp, since the harness sets a
+// letter before any stamp an override copies, and is never reached here.
+//
+// No listing can be searched for a shape, so all four are read whole: every
+// project and group the token owns, every snippet of its user, and with an
+// administrator's token every user on the instance.
+func SweepRunsStartedBefore(ctx context.Context, client *gitlabclient.Client, cutoff time.Time, admin bool) SweepReport {
+	return sweep(ctx, client, "", func(name, path string) bool { return startedBefore(name, path, cutoff) }, admin)
+}
+
+// SweepPrefix permanently deletes every owned project and group, every
+// personal snippet, and with an administrator's token every user, whose name
+// opens with prefix, whatever run made it and however recently. It is the
+// explicit override of the on-demand sweep, never a run's own exit.
+//
+// The one prefix is applied to all four kinds, so a prefix meant for one kind
+// reaches the others too, and it reaches the token user's own objects as
+// readily as the suite's.
 func SweepPrefix(ctx context.Context, client *gitlabclient.Client, prefix string, admin bool) SweepReport {
 	if prefix == "" {
 		return SweepReport{Errors: []error{errors.New("a prefix sweep needs a prefix, or it would delete everything the token owns")}}
@@ -113,20 +187,34 @@ func SweepPrefix(ctx context.Context, client *gitlabclient.Client, prefix string
 
 // sweep lists what search finds and deletes what match accepts: projects
 // first, since the ones under a group go with it either way and a project
-// that fails to delete then says so on its own line; then groups; then
-// users, which only an administrator can list or delete.
+// that fails to delete then says so on its own line; then groups; then the
+// token user's personal snippets, which no deletion of a project or a group
+// takes along; then users, which only an administrator can list or delete.
+// An empty search lists every object of a kind.
 func sweep(ctx context.Context, client *gitlabclient.Client, search string, match matcher, admin bool) SweepReport {
 	var report SweepReport
 	report.Projects, report.Errors = sweepKind(ctx, projectTarget(client, search), match, report.Errors)
 	report.Groups, report.Errors = sweepKind(ctx, groupTarget(client, search), match, report.Errors)
+	report.Snippets, report.Errors = sweepKind(ctx, snippetTarget(client), match, report.Errors)
 	if admin {
 		report.Users, report.Errors = sweepKind(ctx, userTarget(client, search), match, report.Errors)
 	}
 	return report
 }
 
+// searchParam is the search a listing sends, and none for an empty one:
+// what GitLab makes of an empty search is its own to decide, while no search
+// is a listing of everything by definition.
+func searchParam(search string) *string {
+	if search == "" {
+		return nil
+	}
+	return new(search)
+}
+
 // sweepItem is one object a listing returned, as the matcher and the
-// report see it.
+// report see it. An object with no path, which is what a snippet is, is
+// matched on its name alone and reported by it.
 type sweepItem struct {
 	id   int64
 	name string
@@ -143,27 +231,39 @@ type sweepTarget struct {
 	remove func(ctx context.Context, item sweepItem) error
 }
 
-// sweepKind walks every page of one target, deletes what match accepts, and
-// returns the paths removed beside the errors, appended to those given.
+// sweepKind walks every page of one target, then deletes what match accepted,
+// and returns what it removed, by path or by name when there is no path,
+// beside the errors, appended to those given.
+//
+// Every page is read before anything is deleted, because GitLab pages by
+// offset: deleting the first page's matches before asking for the second
+// shifts the list under it, and the first rows of what was the second page
+// are then never read. That loses the most exactly when leftovers have piled
+// up and the matches are dense, which is the case a sweep exists for. A page
+// that cannot be read ends the listing, and what the earlier pages matched is
+// still deleted.
 func sweepKind(ctx context.Context, target sweepTarget, match matcher, errs []error) (removed []string, failures []error) {
 	failures = errs
-	var page int64 = 1
-	for page != 0 {
+	var matched []sweepItem
+	for page := int64(1); page != 0; {
 		items, next, err := target.list(ctx, page)
 		if err != nil {
-			return removed, append(failures, fmt.Errorf("listing %ss (page %d): %w", target.kind, page, err))
+			failures = append(failures, fmt.Errorf("listing %ss (page %d): %w", target.kind, page, err))
+			break
 		}
 		for _, item := range items {
-			if !match(item.name, item.path) {
-				continue
+			if match(item.name, item.path) {
+				matched = append(matched, item)
 			}
-			if removeErr := target.remove(ctx, item); removeErr != nil {
-				failures = append(failures, removeErr)
-				continue
-			}
-			removed = append(removed, item.path)
 		}
 		page = next
+	}
+	for _, item := range matched {
+		if removeErr := target.remove(ctx, item); removeErr != nil {
+			failures = append(failures, removeErr)
+			continue
+		}
+		removed = append(removed, cmp.Or(item.path, item.name))
 	}
 	return removed, failures
 }
@@ -175,7 +275,7 @@ func projectTarget(client *gitlabclient.Client, search string) sweepTarget {
 	return sweepTarget{
 		kind: "project",
 		list: func(ctx context.Context, page int64) ([]sweepItem, int64, error) {
-			opts := &gl.ListProjectsOptions{Owned: new(true), IncludePendingDelete: new(true), Search: new(search)}
+			opts := &gl.ListProjectsOptions{Owned: new(true), IncludePendingDelete: new(true), Search: searchParam(search)}
 			opts.Page = page
 			opts.PerPage = sweepPageSize
 			projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx))
@@ -201,7 +301,7 @@ func groupTarget(client *gitlabclient.Client, search string) sweepTarget {
 	return sweepTarget{
 		kind: "group",
 		list: func(ctx context.Context, page int64) ([]sweepItem, int64, error) {
-			opts := &gl.ListGroupsOptions{Owned: new(true), Search: new(search)}
+			opts := &gl.ListGroupsOptions{Owned: new(true), Search: searchParam(search)}
 			opts.Page = page
 			opts.PerPage = sweepPageSize
 			groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
@@ -220,13 +320,49 @@ func groupTarget(client *gitlabclient.Client, search string) sweepTarget {
 	}
 }
 
+// snippetTarget lists the token user's personal snippets and removes them
+// through deletePersonalSnippet.
+//
+// The listing takes no search, since GitLab's snippet listing has none, so
+// every page is read and the matcher does all the choosing. It also answers
+// the project snippets the user wrote, and those are passed over: a project
+// snippet goes with its project, which the project target has already dealt
+// with. A snippet has no path, so the matcher judges its title alone, which
+// keeps the path rule of the prefix sweep, the last segment after a slash,
+// off a title that happens to hold one.
+func snippetTarget(client *gitlabclient.Client) sweepTarget {
+	return sweepTarget{
+		kind: "snippet",
+		list: func(ctx context.Context, page int64) ([]sweepItem, int64, error) {
+			opts := &gl.ListSnippetsOptions{}
+			opts.Page = page
+			opts.PerPage = sweepPageSize
+			snippets, resp, err := client.GL().Snippets.ListSnippets(opts, gl.WithContext(ctx))
+			if err != nil {
+				return nil, 0, err
+			}
+			items := make([]sweepItem, 0, len(snippets))
+			for _, snippet := range snippets {
+				if snippet.ProjectID != 0 {
+					continue
+				}
+				items = append(items, sweepItem{id: snippet.ID, name: snippet.Title})
+			}
+			return items, resp.NextPage, nil
+		},
+		remove: func(ctx context.Context, item sweepItem) error {
+			return deletePersonalSnippet(ctx, client, item.id, item.name)
+		},
+	}
+}
+
 // userTarget lists the users search finds, matching on the username since a
 // user has no path, and hard-deletes them.
 func userTarget(client *gitlabclient.Client, search string) sweepTarget {
 	return sweepTarget{
 		kind: "user",
 		list: func(ctx context.Context, page int64) ([]sweepItem, int64, error) {
-			opts := &gl.ListUsersOptions{Search: new(search)}
+			opts := &gl.ListUsersOptions{Search: searchParam(search)}
 			opts.Page = page
 			opts.PerPage = sweepPageSize
 			users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
@@ -249,40 +385,124 @@ func userTarget(client *gitlabclient.Client, search string) sweepTarget {
 	}
 }
 
-// sweepOnce arms the run's exit sweep the first time a builder creates
-// something that outlives a request.
-var sweepOnce sync.Once
+// The exit sweep is armed once per process, by the first builder that creates
+// something outliving a request. The hook is registered through a variable
+// rather than a direct call so a test can arm the sweep afresh and see what
+// was registered: in a test process no hook ever runs, since only harness.Main
+// runs them, so which builders arm the sweep is otherwise invisible.
+var (
+	sweepOnce        = new(sync.Once)
+	registerExitHook = harness.AtExit
+)
+
+// ArmRunSweep arms the run's exit sweep for a test that creates something
+// lasting through the server rather than through a builder here, which is
+// what arms it otherwise.
+//
+// A scenario that makes a personal snippet with the snippet create action is
+// the case: its deletion is registered on the Env, and a failed one is only
+// logged. Run alone, or beside tests whose builders all skipped, the package
+// then has no exit sweep, so that snippet would stay on the instance with
+// nothing to remove it or fail the run until someone ran make
+// e2e-clean-orphans. Call it before the create, so a test that stops between
+// the create and its Defer is covered too.
+func ArmRunSweep(e *harness.Env) {
+	armSweep(e)
+}
 
 // armSweep registers the run-scoped sweep as an exit hook, once per process.
+func armSweep(e *harness.Env) {
+	sweepOnce.Do(func() {
+		registerExitHook(exitSweep(e.Client(), e.RunID(), e.Runtime().Admin))
+	})
+}
+
+// exitSweep is the hook armSweep registers: SweepRun over the run's own
+// identifier, under the sweep's budget.
 //
 // It runs after every test's own cleanup, so what it finds is what a cleanup
 // failed to remove; that is logged as a leak, and the run is failed only when
 // the sweep could not remove it either, since a leak the sweep removed is a
 // cleanup defect the log now names and not a resource left on the instance.
-func armSweep(e *harness.Env) {
-	sweepOnce.Do(func() {
-		client, runID, admin := e.Client(), e.RunID(), e.Runtime().Admin
-		harness.AtExit(func() error {
-			ctx, cancel := context.WithTimeout(context.Background(), sweepBudget)
-			defer cancel()
+func exitSweep(client *gitlabclient.Client, runID string, admin bool) func() error {
+	return func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), sweepBudget)
+		defer cancel()
 
-			report := SweepRun(ctx, client, runID, admin)
-			if report.Found() {
-				log.Printf("e2e: sweep for run %s removed leftovers a cleanup did not: %s", runID, report)
-				for _, path := range report.Projects {
-					log.Printf("e2e: sweep removed project %s", path)
-				}
-				for _, path := range report.Groups {
-					log.Printf("e2e: sweep removed group %s", path)
-				}
-				for _, username := range report.Users {
-					log.Printf("e2e: sweep removed user %s", username)
-				}
+		report := SweepRun(ctx, client, runID, admin)
+		if report.Found() {
+			log.Printf("e2e: sweep for run %s removed leftovers a cleanup did not: %s", runID, report)
+			for _, removed := range report.Removed() {
+				log.Printf("e2e: sweep removed %s", removed)
 			}
-			if err := report.Err(); err != nil {
-				return fmt.Errorf("sweep for run %s: %w", runID, err)
-			}
-			return nil
-		})
-	})
+		}
+		if err := report.Err(); err != nil {
+			return fmt.Errorf("sweep for run %s: %w", runID, err)
+		}
+		return nil
+	}
+}
+
+// The settings that choose the on-demand sweep, beside the instance and its
+// credential, which the test that runs it reads.
+const (
+	// sweepMinAgeEnv turns the default on-demand sweep on, and says how long
+	// ago a run must have started for it to take what that run left.
+	sweepMinAgeEnv = "E2E_SWEEP_MIN_AGE"
+	// sweepPrefixEnv is the explicit override: sweep by name prefix instead,
+	// whatever run made an object and however recently.
+	sweepPrefixEnv = "E2E_SWEEP_PREFIX"
+)
+
+// orphanScope is what the on-demand sweep deletes: every object whose name
+// opens with prefix when one is set, and otherwise every object named after a
+// run that started before cutoff.
+type orphanScope struct {
+	prefix string
+	cutoff time.Time
+	// minAge is what cutoff was computed from, kept for the log line.
+	minAge time.Duration
+}
+
+// resolveOrphanScope reads which on-demand sweep a person asked for, and
+// reports false when they asked for none: neither setting is set, which is
+// what a bare go test of this package looks like, and that must delete
+// nothing.
+//
+// A prefix wins over an age, since it is the override. An age that is not a
+// duration, or is negative, is refused rather than read as none: a sweep
+// silently skipped for a typo reads exactly like one that found nothing, and
+// a negative floor would reach every run including those still going.
+func resolveOrphanScope(getenv func(string) string, now time.Time) (orphanScope, bool, error) {
+	if prefix := strings.TrimSpace(getenv(sweepPrefixEnv)); prefix != "" {
+		return orphanScope{prefix: prefix}, true, nil
+	}
+	raw := strings.TrimSpace(getenv(sweepMinAgeEnv))
+	if raw == "" {
+		return orphanScope{}, false, nil
+	}
+	minAge, err := time.ParseDuration(raw)
+	if err != nil {
+		return orphanScope{}, true, fmt.Errorf("%s=%q is not a duration such as 2h: %w", sweepMinAgeEnv, raw, err)
+	}
+	if minAge < 0 {
+		return orphanScope{}, true, fmt.Errorf("%s=%q is negative, which would reach runs still going", sweepMinAgeEnv, raw)
+	}
+	return orphanScope{cutoff: now.Add(-minAge), minAge: minAge}, true, nil
+}
+
+// run runs the sweep the scope names.
+func (s orphanScope) run(ctx context.Context, client *gitlabclient.Client, admin bool) SweepReport {
+	if s.prefix != "" {
+		return SweepPrefix(ctx, client, s.prefix, admin)
+	}
+	return SweepRunsStartedBefore(ctx, client, s.cutoff, admin)
+}
+
+// String says what the scope reaches, for the log line of the sweep.
+func (s orphanScope) String() string {
+	if s.prefix != "" {
+		return fmt.Sprintf("names opening with %q", s.prefix)
+	}
+	return fmt.Sprintf("names of runs started before %s (%s ago)", s.cutoff.UTC().Format(time.RFC3339), s.minAge)
 }

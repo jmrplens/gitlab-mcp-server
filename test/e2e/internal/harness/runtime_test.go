@@ -7,6 +7,7 @@ package harness
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -215,6 +216,52 @@ func TestSnapshotDifferences_ProjectChanges_ReportsThem(t *testing.T) {
 	}
 	if !strings.Contains(changes, `project ID=11 renamed: "team/lib" to "team/lib-renamed"`) {
 		t.Fatalf("the renamed project is not reported:\n%s", changes)
+	}
+}
+
+// TestSnapshotDifferences_AnotherRunsObjectsGone_ReportsOnlyTheOwners checks
+// that a self-hosted run is not failed for what happened to another run's
+// objects while it went.
+//
+// Every object below that carries a minted run identifier was already on the
+// instance when this run took its snapshot, so another run made it, and make
+// e2e-clean-orphans, that run's exit sweep or its own cleanup may take it
+// while this run goes: missing, or renamed the way a group marked for
+// deletion is. A project inside such a run's group carries the identifier
+// through its namespace. The owner's group and project are still reported,
+// and so is an object whose identifier an E2E_RUN_ID override made
+// undatable, since nothing says whose it is.
+func TestSnapshotDifferences_AnotherRunsObjectsGone_ReportsOnlyTheOwners(t *testing.T) {
+	const olderRun = "20260912t101500z-0123456789-common"
+	runGroup := "grp-" + olderRun + "-abc-1"
+	before := &resourceSnapshot{
+		groups: map[int64]string{
+			1: "team",
+			2: runGroup,
+			3: "e2e-world-group-" + olderRun + "-def-2",
+			4: "grp-x" + olderRun + "-abc-3",
+		},
+		projects: map[int64]string{
+			10: "team/app",
+			11: runGroup + "/app",
+			12: "root/proj-" + olderRun + "-abc-4",
+		},
+	}
+	current := &resourceSnapshot{
+		groups:   map[int64]string{3: "e2e-world-group-" + olderRun + "-def-2-deletion_scheduled-3"},
+		projects: map[int64]string{},
+	}
+
+	changes := snapshotDifferences(before, current)
+
+	slices.Sort(changes)
+	want := []string{
+		`group "grp-x` + olderRun + `-abc-3" (ID=4): missing`,
+		`group "team" (ID=1): missing`,
+		`project "team/app" (ID=10): missing`,
+	}
+	if !slices.Equal(changes, want) {
+		t.Errorf("changes = %q, want only the owner's objects and the undatable one: %q", changes, want)
 	}
 }
 

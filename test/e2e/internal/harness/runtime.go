@@ -485,24 +485,51 @@ func verifySnapshot(client *gitlabclient.Client, before *resourceSnapshot) error
 }
 
 // snapshotDifferences names every group and project that disappeared or was
-// renamed between the two readings.
+// renamed between the two readings, leaving out every one named after a run.
+//
+// Such an object is another run's, never the instance owner's: the snapshot
+// is taken before this run creates anything, so whatever carries a run
+// identifier the harness minted at that point was made by a run that had
+// already started. That run's own cleanup, its exit sweep or a make
+// e2e-clean-orphans run beside this one may remove it while this run goes,
+// and none of those is this run changing a resource it does not own. Counted,
+// it would fail a self-hosted run whenever the orphan sweep, which is dated to
+// leave a run still going alone, took an older run's leftover while this one
+// went. No date is compared, since every such object predates this run's
+// snapshot by construction.
 func snapshotDifferences(before, current *resourceSnapshot) []string {
+	changes := kindDifferences("group", before.groups, current.groups)
+	return append(changes, kindDifferences("project", before.projects, current.projects)...)
+}
+
+// kindDifferences is snapshotDifferences for one kind of object, named kind
+// in what it reports.
+//
+// The comparisons are if statements rather than switch cases on purpose: a
+// case expression lies outside every block the coverage profile counts, so a
+// mutation of it is reported as covered by nothing however many tests reach
+// it.
+func kindDifferences(kind string, before, current map[int64]string) []string {
 	var changes []string
-	for id, path := range before.groups {
-		switch now, found := current.groups[id]; {
-		case !found:
-			changes = append(changes, fmt.Sprintf("group %q (ID=%d): missing", path, id))
-		case now != path:
-			changes = append(changes, fmt.Sprintf("group ID=%d renamed: %q to %q", id, path, now))
+	for id, path := range before {
+		if namedAfterARun(path) {
+			continue
 		}
-	}
-	for id, path := range before.projects {
-		switch now, found := current.projects[id]; {
-		case !found:
-			changes = append(changes, fmt.Sprintf("project %q (ID=%d): missing", path, id))
-		case now != path:
-			changes = append(changes, fmt.Sprintf("project ID=%d renamed: %q to %q", id, path, now))
+		now, found := current[id]
+		if !found {
+			changes = append(changes, fmt.Sprintf("%s %q (ID=%d): missing", kind, path, id))
+			continue
+		}
+		if now != path {
+			changes = append(changes, fmt.Sprintf("%s ID=%d renamed: %q to %q", kind, id, path, now))
 		}
 	}
 	return changes
+}
+
+// namedAfterARun reports whether a path carries a run identifier the harness
+// minted, which a project inside a run's group does through its namespace.
+func namedAfterARun(path string) bool {
+	_, minted := MintedRunStart(path)
+	return minted
 }
