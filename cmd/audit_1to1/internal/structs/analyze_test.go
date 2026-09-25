@@ -456,11 +456,13 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 	}
 }
 
-// TestExtraOutputFields_DiffPairKindGating verifies diffPair attaches ExtraFields for
-// output pairs but never for input pairs (MCP inputs carry path ids legitimately).
+// TestExtraOutputFields_DiffPairKindGating verifies no input gap in the
+// repository report carries extra fields: the extra-field rule belongs to the
+// output diff alone, because an MCP input legitimately carries path ids the SDK
+// Options never name. diffPair, which diffs the inputs, attaches no extras at
+// all; the output side's extras are exercised by the unit tests of
+// extraOutputFields and diffOutputGroup.
 func TestExtraOutputFields_DiffPairKindGating(t *testing.T) {
-	// Synthesize via the real diffPair against the repository to confirm input
-	// gaps never carry extras. Output extras are exercised in the unit test above.
 	rep := cachedBuildReport(t, true)
 	for _, pr := range rep.Packages {
 		for _, g := range pr.Gaps {
@@ -500,11 +502,41 @@ func TestNonResultStructName_ExcludesWrapperOptionsAndTime(t *testing.T) {
 	}
 }
 
-// TestIsAcceptedRename_AllowsScopedAndGlobalTags verifies the accepted-rename
-// allowlist: a type-scoped entry suppresses only that MCP type's tag, while a
-// genuinely invented scalar (not in the allowlist) is still reported.
+// declare adds one entry to a declaration table for the length of a test, so
+// the key forms a table accepts can be exercised without depending on which
+// entries the tree carries today. A fixture key that already exists is refused
+// rather than overwritten, since removing it afterwards would delete a real
+// declaration for every test that runs later.
+func declare[V any](t *testing.T, table map[string]V, key string, value V) {
+	t.Helper()
+	if _, exists := table[key]; exists {
+		t.Fatalf("fixture declaration %q already exists in the table", key)
+	}
+	table[key] = value
+	t.Cleanup(func() { delete(table, key) })
+}
+
+// TestIsAcceptedRename_AllowsScopedAndGlobalTags verifies both forms of the
+// accepted-rename allowlist: a type-scoped entry suppresses only that MCP
+// type's tag, a global entry suppresses its tag on every type, and a genuinely
+// invented scalar (in neither form) is still reported.
+//
+// No entry in the table uses the global form today, so the fixture declares
+// one; without it the second lookup could answer false for every tag and this
+// test, whose name has always claimed the global form, would not notice.
 func TestIsAcceptedRename_AllowsScopedAndGlobalTags(t *testing.T) {
-	// Seeded scoped entry: branches Output renames SDK `name` → `branch_name`.
+	declare(t, acceptedOutputRenames, "fixture_global_rename", true)
+	for _, mcpType := range []string{"Output", "OtherOutput"} {
+		t.Run(mcpType, func(t *testing.T) {
+			if !isAcceptedRename(mcpType, "fixture_global_rename") {
+				t.Errorf("isAcceptedRename(%s, fixture_global_rename) = false, want true (global entry)", mcpType)
+			}
+		})
+	}
+
+	// The table's one scoped entry, Output.branch_name. It was written for
+	// branches.Output, which no longer publishes branch_name, so it is read
+	// here as a fixture of the scoped form and not as a fact about the tree.
 	if !isAcceptedRename("Output", "branch_name") {
 		t.Errorf("isAcceptedRename(Output, branch_name) = false, want true (seeded allowlist)")
 	}
@@ -1247,7 +1279,10 @@ func TestFlattenNamesInto_UntaggedStructs_AreWalkedUnderTheSameRules(t *testing.
 
 	t.Run("the shallower field wins a repeated name", func(t *testing.T) {
 		// encoding/json promotes the outer field over the embedded one of the
-		// same name, so the type recorded must be the outer field's.
+		// same name, so the type recorded must be the outer field's. The
+		// fixture declares the outer field first, and that order is the only
+		// one this holds in: both walks keep the first field they meet, so an
+		// embed declared above the outer field wins with the deeper type.
 		promoted := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "ID", tString, false)}, []string{""})
 		st := types.NewStruct([]*types.Var{
 			types.NewField(token.NoPos, nil, "ID", tInt, false),
@@ -1333,19 +1368,25 @@ func TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName(t *testing.T) {
 // coincide: three of four packages carry a gap, and inverting any one class
 // swaps exactly which three, leaving the total at three. A second clean package
 // is what makes the mutant's total four and the assertion able to see it.
+//
+// The eight totals are also eight different numbers. Two accumulations that
+// happen to agree can be written into each other's field and the summary still
+// reads right, which is how a package count stood in for a field count here:
+// with three gapped packages and three missing input fields, and two missing
+// output fields beside two type mismatches, either pair could be crossed.
 func TestSummarize_Reports_CountPackagesWithGaps(t *testing.T) {
 	s := summarize([]packageReport{
 		{Package: "clean", InputPairs: 4, OutputPairs: 2},
 		{Package: "also_clean", InputPairs: 6, OutputPairs: 3},
-		{Package: "missing_input", InputPairs: 1, MissingInputCount: 3},
-		{Package: "missing_output", OutputPairs: 1, MissingOutputCount: 2},
+		{Package: "missing_input", InputPairs: 1, MissingInputCount: 4},
+		{Package: "missing_output", OutputPairs: 1, MissingOutputCount: 6},
 		{Package: "extra_output", OutputPairs: 1, ExtraOutputCount: 1, Gaps: []gap{
 			{Kind: "output", TypeMismatches: []typeMismatch{{Tag: "id"}, {Tag: "iid"}}},
 		}},
 	})
 	want := reportSummary{
 		Packages: 5, PackagesWithGaps: 3, InputPairs: 11, OutputPairs: 7,
-		MissingInputFields: 3, MissingOutputFields: 2, ExtraOutputFields: 1, TypeMismatches: 2,
+		MissingInputFields: 4, MissingOutputFields: 6, ExtraOutputFields: 1, TypeMismatches: 2,
 	}
 	if s != want {
 		t.Errorf("summarize = %+v, want %+v", s, want)
@@ -1672,6 +1713,23 @@ func TestDisjointPhantomInput_TheOverlapEvidence_ComesFromTheSameInputStruct(t *
 	if !disjointPhantomInput(jsonPair, byTagPreference) {
 		t.Error("a pairing compared by json tags found its overlap in url tags the diff would never match")
 	}
+
+	// Where a field carries both tags under different names, the url one is
+	// the name the diff compares, so it is the one the overlap is measured on:
+	// a json spelling the pairing is never compared by is no evidence that it
+	// describes this input's request.
+	dualTagged := makeStructWithTags(taggedField{name: "Query", tag: `url:"search" json:"query"`, goType: tString})
+	queryInput := makeStruct(structField{"Query", "query", tString})
+	queryOpts := makeStructWithTags(taggedField{name: "Query", tag: `url:"query"`, goType: tString})
+	dualPair := structPair{mcpName: "QueryInput", mcpType: queryInput, sdkName: "v2.SearchOptions", sdkType: dualTagged, sdkURLTags: true}
+	queryPair := structPair{mcpName: "QueryInput", mcpType: queryInput, sdkName: "v2.QueryOptions", sdkType: queryOpts, sdkURLTags: true}
+	byURLName := map[[2]string]structPair{
+		{"QueryInput", "SearchOptions"}: dualPair,
+		{"QueryInput", "QueryOptions"}:  queryPair,
+	}
+	if !disjointPhantomInput(dualPair, byURLName) {
+		t.Error("a pairing whose only shared name is a json tag the diff never reads was kept as genuine")
+	}
 }
 
 // TestLocalNamedStruct_OnlyTheHandlersOwnPackage_IsTheMCPSide verifies the
@@ -1888,4 +1946,285 @@ func TestCollectConverter_TheResultName_DecidesWhetherThePairIsRecorded(t *testi
 			}
 		})
 	}
+}
+
+// TestDiffPair_ATypeMismatch_KeepsEachTypeOnItsOwnSide verifies the input
+// diff's advisory record and the direction its compatibility rule is asked in.
+//
+// The rule is not symmetric: an SDK value enum is accepted as the int or
+// string an input projects it to, and the reverse is a divergence. Asked the
+// other way round, every enum an input projects would be reported, and a
+// record with its two types crossed names the SDK's type as ours, which no
+// reader of the report could tell from a real finding.
+func TestDiffPair_ATypeMismatch_KeepsEachTypeOnItsOwnSide(t *testing.T) {
+	sdkPkg := types.NewPackage("example.com/api/client-go/v2", "sdk")
+	accessLevel := types.NewNamed(types.NewTypeName(token.NoPos, sdkPkg, "AccessLevelValue", nil), tInt, nil)
+	mcp := makeStruct(
+		structField{"AccessLevel", "access_level", tInt},
+		structField{"ExpiresAt", "expires_at", types.Typ[types.Bool]},
+	)
+	sdk := makeStructWithTags(
+		taggedField{name: "AccessLevel", tag: `url:"access_level"`, goType: types.NewPointer(accessLevel)},
+		taggedField{name: "ExpiresAt", tag: `url:"expires_at"`, goType: types.NewPointer(namedStruct(sdkPkg, "ISOTime", makeStruct()))},
+	)
+
+	g := diffPair("members", "input", structPair{
+		mcpName: "AddInput", mcpType: mcp,
+		sdkName: "v2.AddGroupMemberOptions", sdkType: sdk, sdkURLTags: true,
+	})
+
+	want := gap{
+		Kind: "input", MCPType: "AddInput", SDKType: "v2.AddGroupMemberOptions",
+		TypeMismatches: []typeMismatch{{Tag: "expires_at", MCPType: "bool", SDKType: "*v2.ISOTime"}},
+	}
+	if !reflect.DeepEqual(g, want) {
+		t.Errorf("diffPair = %+v, want %+v", g, want)
+	}
+}
+
+// TestDiffPair_AnOptionsField_IsNamedByItsURLTagFirst verifies which of
+// client-go's two tags names a request field in the input diff.
+//
+// Where the two spell a field differently, the url one decides. client-go
+// sends a query and every multipart form field from its url tags, and keeps
+// the avatar of four update structs (group, project, topic, user) out of them
+// with url:"-", since UploadRequest sends the image as a file part of its own;
+// the json tag beside it still says avatar. Read json first, the diff would
+// hold each such input to a parameter under a name its request is not built
+// from.
+func TestDiffPair_AnOptionsField_IsNamedByItsURLTagFirst(t *testing.T) {
+	mcp := makeStruct(structField{"Search", "search", tString})
+	sdk := makeStructWithTags(
+		taggedField{name: "Search", tag: `url:"search" json:"query"`, goType: tString},
+		taggedField{name: "Avatar", tag: `url:"-" json:"avatar"`, goType: tString},
+	)
+
+	g := diffPair("groups", "input", structPair{
+		mcpName: "ListInput", mcpType: mcp,
+		sdkName: "v2.ListGroupsOptions", sdkType: sdk, sdkURLTags: true,
+	})
+
+	want := gap{Kind: "input", MCPType: "ListInput", SDKType: "v2.ListGroupsOptions"}
+	if !reflect.DeepEqual(g, want) {
+		t.Errorf("diffPair = %+v, want no finding: search is the url name and avatar is kept out of the url encoding", g)
+	}
+}
+
+// TestDiffPair_ACuratedInput_AnswersEveryFieldOfItsOwnTypeOnly verifies the
+// whole-type form of the adjudicated-omission table: one entry answers every
+// SDK field an input deliberately leaves out, and answers nothing for a
+// sibling type or for a type of the same name in another package.
+//
+// The key is joined from two names and only the diff reads it, so a key built
+// in the other order answers nothing and the curated subset reopens as dozens
+// of findings; the fixture declares its own entry so the rule is held whatever
+// the table carries.
+func TestDiffPair_ACuratedInput_AnswersEveryFieldOfItsOwnTypeOnly(t *testing.T) {
+	declare(t, acceptedMissingInputs, "fixturepkg.CuratedInput", "curated subset fixture")
+	mcp := makeStruct(structField{"Name", "name", tString})
+	sdk := makeStructWithTags(
+		taggedField{name: "Name", tag: `url:"name"`, goType: tString},
+		taggedField{name: "Path", tag: `url:"path"`, goType: tString},
+		taggedField{name: "Visibility", tag: `url:"visibility"`, goType: tInt},
+	)
+	missing := []missingField{{Tag: "path", SDKType: typNameString}, {Tag: "visibility", SDKType: "int"}}
+
+	cases := []struct {
+		name, pkg, mcpType string
+		want               []missingField
+	}{
+		{name: "the declared type", pkg: "fixturepkg", mcpType: "CuratedInput"},
+		{name: "a sibling type", pkg: "fixturepkg", mcpType: "OtherInput", want: missing},
+		{name: "the same type name elsewhere", pkg: "otherpkg", mcpType: "CuratedInput", want: missing},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := diffPair(tc.pkg, "input", structPair{
+				mcpName: tc.mcpType, mcpType: mcp,
+				sdkName: "v2.ImportOptions", sdkType: sdk, sdkURLTags: true,
+			})
+
+			if !reflect.DeepEqual(g.MissingFields, tc.want) {
+				t.Errorf("%s.%s missing fields = %+v, want %+v", tc.pkg, tc.mcpType, g.MissingFields, tc.want)
+			}
+		})
+	}
+}
+
+// TestExtraOutputFields_AnAdjudicatedExtra_AnswersOnlyItsOwnKey verifies the
+// two key forms of the accepted-extra table and the order each is joined in.
+//
+// A per-field entry answers one field of one type and a whole-type entry every
+// field of that type, both scoped by package, since two packages may name an
+// output type alike and an adjudication is about one of them. Nothing but this
+// pass reads the keys, so a key joined in another order, or asked with the
+// package and the type crossed, answers nothing and every adjudicated extra
+// reopens as a finding. The fixture declares its own entries so the rule is
+// held whatever the table carries.
+func TestExtraOutputFields_AnAdjudicatedExtra_AnswersOnlyItsOwnKey(t *testing.T) {
+	declare(t, acceptedExtraOutputs, "fixturepkg.ComposedOutput.target_url", "server-composed fixture field")
+	declare(t, acceptedExtraOutputs, "fixturepkg.GraphQLOutput", "GraphQL-sourced fixture type")
+	mcp := map[string]string{"target_url": typNameString, "iid": "int"}
+	both := []extraField{{Tag: "iid", MCPType: "int"}, {Tag: "target_url", MCPType: typNameString}}
+
+	cases := []struct {
+		name, pkg, mcpType string
+		want               []extraField
+	}{
+		{name: "the declared field of the declared type", pkg: "fixturepkg", mcpType: "ComposedOutput", want: []extraField{{Tag: "iid", MCPType: "int"}}},
+		{name: "the declared field on a sibling type", pkg: "fixturepkg", mcpType: "OtherOutput", want: both},
+		{name: "every field of the declared type", pkg: "fixturepkg", mcpType: "GraphQLOutput"},
+		{name: "the declared type name elsewhere", pkg: "otherpkg", mcpType: "GraphQLOutput", want: both},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extraOutputFields(tc.pkg, tc.mcpType, mcp, map[string]string{})
+
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("extraOutputFields(%s, %s) = %+v, want %+v", tc.pkg, tc.mcpType, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDiffOutputGroup_ASpelledDifferentSDKTag_IsComparedUnderOurName verifies
+// the output diff's fallback for an SDK tag that is not the snake_case our
+// output writes: a camelCase json tag is looked up under its snake_case form,
+// so the field is found rather than reported missing, and its type is still
+// compared once found.
+//
+// The extra-field pass already normalizes the SDK side before comparing, so
+// without this lookup the same field would be missing in one direction and
+// present in the other: the report would ask for web_url while our output
+// carries it.
+func TestDiffOutputGroup_ASpelledDifferentSDKTag_IsComparedUnderOurName(t *testing.T) {
+	mcp := makeStruct(
+		structField{"WebURL", "web_url", tString},
+		structField{"AuthorID", "author_id", types.Typ[types.Bool]},
+	)
+	sdk := makeStruct(
+		structField{"WebURL", "webUrl", tString},
+		structField{"AuthorID", "authorId", types.NewPointer(sdkNamedStruct(t, "Author"))},
+	)
+
+	g := diffOutputGroup("workitems", outputGroup{
+		mcpName: "Output", mcpType: mcp,
+		pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.WorkItem", sdkType: sdk}},
+	})
+
+	want := gap{
+		Kind: "output", MCPType: "Output", SDKType: "v2.WorkItem",
+		TypeMismatches: []typeMismatch{{Tag: "authorId", MCPType: "bool", SDKType: "*v2.Author"}},
+	}
+	if !reflect.DeepEqual(g, want) {
+		t.Errorf("diffOutputGroup = %+v, want %+v", g, want)
+	}
+}
+
+// TestDiffOutputGroup_PairingsThatDisagreeOnAType_AreNamedByTheFirst verifies
+// which type a finding names when the pairings of one output type declare a
+// field differently: the first pairing's, in the group's order, for a missing
+// field and for a mismatch alike.
+//
+// Either rule alone would be deterministic, which is why a report compared
+// with itself cannot see a change between them. What they must share is the
+// pairing they name, or one output type's findings point at two SDK structs
+// and a reader following the mismatch lands on a struct the missing field was
+// never read from.
+func TestDiffOutputGroup_PairingsThatDisagreeOnAType_AreNamedByTheFirst(t *testing.T) {
+	mcp := makeStruct(structField{"Weight", "weight", mcpNamedStruct(t, "Weight")})
+	alpha := makeStruct(
+		structField{"Author", "author", sdkNamedStruct(t, "Author")},
+		structField{"Weight", "weight", sdkNamedStruct(t, "AlphaWeight")},
+	)
+	zeta := makeStruct(
+		structField{"Author", "author", sdkNamedStruct(t, "BasicUser")},
+		structField{"Weight", "weight", sdkNamedStruct(t, "ZetaWeight")},
+	)
+
+	g := diffOutputGroup("environments", outputGroup{
+		mcpName: "Output", mcpType: mcp,
+		pairs: []structPair{
+			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Alpha", sdkType: alpha},
+			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Zeta", sdkType: zeta},
+		},
+	})
+
+	want := gap{
+		Kind: "output", MCPType: "Output", SDKType: "v2.Alpha|v2.Zeta",
+		MissingFields:  []missingField{{Tag: "author", SDKType: "v2.Author"}},
+		TypeMismatches: []typeMismatch{{Tag: "weight", MCPType: "environments.Weight", SDKType: "v2.AlphaWeight"}},
+	}
+	if !reflect.DeepEqual(g, want) {
+		t.Errorf("diffOutputGroup = %+v, want %+v", g, want)
+	}
+}
+
+// TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput
+// verifies the record the handler scan writes for each client-go Options
+// literal in a handler's body, and the literals it passes over.
+//
+// Every side of the record is read by someone: the diff compares the two
+// structs, the tag preference decides which of client-go's tags names a
+// field, and the enum rule keys on the MCP named type, so a record naming the
+// SDK struct there would send that rule to look the enum up on client-go's
+// type rather than ours. Only an Options struct is a request; a result struct
+// built in a handler, or one of this package's own, is not.
+func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *testing.T) {
+	const pkgPath = "example.com/x/internal/tools/branches"
+	local := types.NewPackage(pkgPath, "branches")
+	sdkPkg := types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab")
+	mcpStruct := makeStruct(structField{"Search", "search", tString})
+	optionsStruct := makeStructWithTags(taggedField{name: "Search", tag: `url:"search"`, goType: tString})
+	mcpNamed := namedStruct(local, "ListInput", mcpStruct)
+	optionsNamed := namedStruct(sdkPkg, "ListBranchesOptions", optionsStruct)
+	resultNamed := namedStruct(sdkPkg, "Branch", makeStruct(structField{"Name", "name", tString}))
+	localNamed := namedStruct(local, "Scratch", makeStruct(structField{"ID", "id", tInt}))
+
+	handler := func(literalTypes ...types.Type) (*packages.Package, *ast.FuncDecl) {
+		param := ast.NewIdent("in")
+		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{param: {Type: mcpNamed}}}
+		body := &ast.BlockStmt{}
+		for _, typ := range literalTypes {
+			lit := &ast.CompositeLit{Type: ast.NewIdent("T")}
+			info.Types[lit] = types.TypeAndValue{Type: typ}
+			body.List = append(body.List, &ast.ExprStmt{X: &ast.UnaryExpr{Op: token.AND, X: lit}})
+		}
+		fn := &ast.FuncDecl{
+			Name: ast.NewIdent("list"),
+			Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Type: param}}}},
+			Body: body,
+		}
+		return &packages.Package{PkgPath: pkgPath, TypesInfo: info}, fn
+	}
+
+	t.Run("an Options literal is recorded whole", func(t *testing.T) {
+		pkg, fn := handler(optionsNamed)
+		pairs := map[[2]string]structPair{}
+
+		collectHandlerInputs(pkg, fn, pairs)
+
+		// The pair is compared field for field with ==, which holds each
+		// go/types value to the very object declared above rather than to one
+		// that merely prints alike.
+		want := structPair{
+			mcpName: "ListInput", mcpType: mcpStruct, mcpNamed: mcpNamed,
+			sdkName: "v2.ListBranchesOptions", sdkType: optionsStruct, sdkURLTags: true,
+		}
+		got, recorded := pairs[[2]string{"ListInput", "ListBranchesOptions"}]
+		if len(pairs) != 1 || !recorded || got != want {
+			t.Errorf("collectHandlerInputs = %+v, want the one pair %+v", pairs, want)
+		}
+	})
+
+	t.Run("a result struct or a local struct is not a request", func(t *testing.T) {
+		pkg, fn := handler(resultNamed, localNamed)
+		pairs := map[[2]string]structPair{}
+
+		collectHandlerInputs(pkg, fn, pairs)
+
+		if len(pairs) != 0 {
+			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a result or a local literal", pairs)
+		}
+	})
 }
