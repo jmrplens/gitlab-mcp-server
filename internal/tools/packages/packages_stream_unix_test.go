@@ -31,8 +31,9 @@ import (
 //
 // This test used to assert the opposite: it pointed output_path at a pipe on
 // purpose to reach the outFile.Sync() error branch, which fsync(2) fails with
-// EINVAL. That branch is now unreachable from a caller-supplied path, and is
-// documented as such in TestStreamDownload_DeadBranches.
+// EINVAL. That branch is unreachable from a caller-supplied path, and the sync
+// failure is now staged by toolutil's own tests instead, which close the file
+// before it is flushed.
 func TestStreamDownload_FIFOOutputPath_Refused(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -69,15 +70,18 @@ func TestStreamDownload_FIFOOutputPath_Refused(t *testing.T) {
 }
 
 // TestStreamDownload_DownloadedFile_IsPrivateToTheOwner verifies that
-// package.download creates its destination readable by the owner alone, which
-// is the observable half of writing through toolutil.CreateDownloadOutputFile
-// instead of os.Create.
+// package.download leaves its destination readable by the owner alone, both
+// when it creates the file and when it replaces one that was readable by
+// anybody, which is the observable half of writing through
+// toolutil.WriteDownloadOutputFile instead of os.Create.
 //
 // The assertion is written against the action rather than against the helper on
 // purpose: a test that pins the primitive stays green when the caller stops
 // calling it, which is exactly the regression worth catching here, since the
 // helper shipped with a test and no caller. Mode 0o600 is only reachable
-// through the helper, because os.Create asks for 0o666.
+// through the helper, because os.Create asks for 0o666. The replaced file is
+// the case a write in place would keep at its old mode: the download is a new
+// file renamed over the old one, and takes its own mode with it.
 //
 // The umask is zeroed for the duration so the two modes cannot coincide. A
 // machine already running under umask 077 would otherwise see os.Create produce
@@ -87,27 +91,40 @@ func TestStreamDownload_DownloadedFile_IsPrivateToTheOwner(t *testing.T) {
 	t.Cleanup(func() { syscall.Umask(previousUmask) })
 
 	fileBody := "private-artifact-bytes"
-	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
+	for _, existed := range []bool{false, true} {
+		name := "created"
+		if existed {
+			name = "replacing a file anybody could read"
+		}
+		t.Run(name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
+			outPath := filepath.Join(t.TempDir(), testOutputBin)
+			if existed {
+				if err := os.WriteFile(outPath, []byte("old"), 0o644); err != nil { //nolint:gosec // The world-readable mode is the fixture: the download must not inherit it.
+					t.Fatalf("WriteFile(%q) error = %v", outPath, err)
+				}
+			}
 
-	outPath := filepath.Join(t.TempDir(), testOutputBin)
-	if _, err := Download(context.Background(), nil, client, DownloadInput{
-		ProjectID:      "42",
-		PackageName:    testPackageName,
-		PackageVersion: testPkgVersion,
-		FileName:       testAppBin,
-		OutputPath:     outPath,
-	}); err != nil {
-		t.Fatalf("Download() error = %v", err)
-	}
+			if _, err := Download(context.Background(), nil, client, DownloadInput{
+				ProjectID:      "42",
+				PackageName:    testPackageName,
+				PackageVersion: testPkgVersion,
+				FileName:       testAppBin,
+				OutputPath:     outPath,
+			}); err != nil {
+				t.Fatalf("Download() error = %v", err)
+			}
 
-	info, err := os.Lstat(outPath)
-	if err != nil {
-		t.Fatalf("os.Lstat(%q) error = %v", outPath, err)
-	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Errorf("os.Lstat(%q) permissions = %#o, want %#o", outPath, got, 0o600)
-	}
-	if !info.Mode().IsRegular() {
-		t.Errorf("os.Lstat(%q) mode = %v, want a regular file", outPath, info.Mode())
+			info, err := os.Lstat(outPath)
+			if err != nil {
+				t.Fatalf("os.Lstat(%q) error = %v", outPath, err)
+			}
+			if got := info.Mode().Perm(); got != 0o600 {
+				t.Errorf("os.Lstat(%q) permissions = %#o, want %#o", outPath, got, 0o600)
+			}
+			if !info.Mode().IsRegular() {
+				t.Errorf("os.Lstat(%q) mode = %v, want a regular file", outPath, info.Mode())
+			}
+		})
 	}
 }

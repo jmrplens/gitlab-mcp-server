@@ -71,7 +71,7 @@ func TestOpenAndValidateFile_FileDescriptorLimitReached_ReturnsOpenError(t *test
 
 // TestOpenLeafNoFollow_SymlinkAtTheLeaf_Refused verifies that the two leaf-open
 // primitives refuse a symlink at the last path component rather than following
-// it.
+// it, and that the create primitive refuses a regular file already there.
 //
 // The path checks in file_utils.go run on a path string: EvalSymlinks resolves
 // it, Lstat proves the result is a regular file, and only then does the open
@@ -79,7 +79,9 @@ func TestOpenAndValidateFile_FileDescriptorLimitReached_ReturnsOpenError(t *test
 // directory is always one, and /tmp is world-writable) can replace the leaf
 // with a symlink in between, and os.Open and os.Create both follow one, so the
 // file read or written is not the file that was checked. The refusal has to
-// live in the open itself, which is what this pins.
+// live in the open itself, which is what this pins. The create primitive makes
+// the temporary file a download is written to, which must be one this process
+// created, so an existing regular file is refused too rather than truncated.
 func TestOpenLeafNoFollow_SymlinkAtTheLeaf_Refused(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "secret.txt")
@@ -99,8 +101,9 @@ func TestOpenLeafNoFollow_SymlinkAtTheLeaf_Refused(t *testing.T) {
 	}{
 		{name: "read refuses a symlink at the leaf", open: openLeafNoFollow, path: link, wantErr: true},
 		{name: "read opens a regular file", open: openLeafNoFollow, path: target, wantErr: false},
-		{name: "create refuses a symlink at the leaf", open: createLeafNoFollow, path: link, wantErr: true},
-		{name: "create makes a new file", open: createLeafNoFollow, path: filepath.Join(dir, "new.txt"), wantErr: false},
+		{name: "create refuses a symlink at the leaf", open: createNewLeafNoFollow, path: link, wantErr: true},
+		{name: "create refuses a regular file already there", open: createNewLeafNoFollow, path: target, wantErr: true},
+		{name: "create makes a new file", open: createNewLeafNoFollow, path: filepath.Join(dir, "new.txt"), wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

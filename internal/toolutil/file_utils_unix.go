@@ -24,12 +24,13 @@ func openLeafNoFollow(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0) // the caller resolves the path through symlinks and confines it to the allowed directories
 }
 
-// createLeafNoFollow creates or truncates path for writing and refuses a
-// symlink at the leaf, for the same reason [openLeafNoFollow] refuses one on
-// the way in.
+// createNewLeafNoFollow creates path for writing, readable by the owner alone,
+// and refuses anything already there, a symlink at the leaf included.
 //
-// Truncating an existing regular file is still allowed: overwriting a
-// destination the caller named is what a download does.
-func createLeafNoFollow(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600) // the caller resolves the path through symlinks and confines it to the allowed directories
+// O_EXCL alone refuses a symlink whatever it points at, which POSIX
+// specifies; O_NOFOLLOW is kept beside it so the refusal does not rest on one
+// flag's reading of the standard. Nothing is ever truncated here: a download
+// replaces its destination by renaming a file this created over it.
+func createNewLeafNoFollow(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600) // the caller resolves the directory through symlinks and confines it to the allowed directories
 }

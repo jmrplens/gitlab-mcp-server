@@ -194,19 +194,6 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 	return f, opened, nil
 }
 
-// CreateDownloadOutputFile creates the destination a download writes to,
-// refusing a symlink at the leaf where the platform can.
-//
-// [CanonicalDownloadOutputPath] refuses a destination that is already a
-// symlink, but it refuses a path, and the file is created by a later syscall:
-// a local principal who can write in an allowed root can put a symlink there
-// in between and redirect the write to whatever the server may overwrite. The
-// creation is the only place that race can be closed, so it happens here
-// rather than at the call site.
-func CreateDownloadOutputFile(path string) (*os.File, error) {
-	return createLeafNoFollow(path)
-}
-
 // CanonicalLocalFilePath resolves a caller-supplied path to an existing local
 // file and returns it canonicalized, provided the resolved path lies under the
 // working directory, the OS temporary directory, or a directory listed in
@@ -256,7 +243,7 @@ func CanonicalLocalDirPath(path string) (string, error) {
 	return canonicalPath, nil
 }
 
-// CanonicalDownloadOutputPath resolves a caller-supplied destination for a
+// canonicalDownloadOutputPath resolves a caller-supplied destination for a
 // file the server is about to write and returns it canonicalized, provided it
 // lies under the working directory, the OS temporary directory, or a directory
 // listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. It refuses every path when the
@@ -264,16 +251,25 @@ func CanonicalLocalDirPath(path string) (string, error) {
 //
 // The destination does not exist yet and neither may its parents, so the
 // deepest existing ancestor is what gets resolved through symlinks; the
-// segments below it cannot be symlinks because they do not exist. A leaf that
-// does exist must be a regular file: a symlink there would redirect the write
-// to whatever it names, which is how an "output path" becomes a way to
-// overwrite an SSH key.
+// segments below it cannot be symlinks because they do not exist. A symlink
+// at the destination is resolved with the rest. A link to a regular file
+// inside the roots is resolved to that file, which is what gets replaced
+// while the link stays; a dangling link, one naming a non-regular file, or
+// one leading outside the roots is refused. What is left at the leaf after
+// resolution must be absent or a regular file, because a dangling link there
+// would redirect a write that opened the path to whatever it later names,
+// which is how an "output path" becomes a way to overwrite an SSH key.
 //
-// Call it again after creating the parent directories. The second call
-// resolves a parent that now exists, which is what turns the check from a
-// promise about the path into a check on the directory being written to.
+// It is unexported because a path it returns is only safe to write through
+// the rename [WriteDownloadOutputFile] makes: opening it, as a download once
+// did, truncates the destination before a byte has arrived and, on Windows,
+// follows a link planted there after the check. It is called twice, the
+// second time after creating the parent directories, which resolves a parent
+// that now exists and so turns the check from a promise about the path into
+// a check on the directory being written to. [WriteDownloadOutputFile] makes
+// both calls.
 //
-// An existing regular file is overwritten, deliberately, and there is no
+// An existing regular file is replaced, deliberately, and there is no
 // caller opt-in to refuse it. The audit that produced the symlink check asked
 // for one, and the trade is not worth taking: an opt-in is a new field on
 // DownloadInput, which is a served input schema, so it lands in the tool
@@ -287,7 +283,7 @@ func CanonicalLocalDirPath(path string) (string, error) {
 // write and can overwrite that same file directly. The opt-in would be one
 // bool plus a regeneration pass if the calculus ever changes, but the residual
 // risk it removes is smaller than the surface it adds.
-func CanonicalDownloadOutputPath(path string) (string, error) {
+func canonicalDownloadOutputPath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("output path is required")
 	}

@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -19,6 +18,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// newDownloadRequest builds the package file GET. The request is built here
+// rather than through a service method, so the context goes in as the same
+// option every service call takes: without it client-go builds the request
+// from context.Background(), and neither the action deadline nor an abandoned
+// call would end a transfer nothing else bounds.
+//
+// It is a package variable so a test can reach the construction failure,
+// which no input reaches: FormatPackageURL escapes every segment it
+// interpolates, so the path always unescapes, and the one option passed
+// never fails.
+var newDownloadRequest = func(ctx context.Context, client *gitlabclient.Client, path string) (*retryablehttp.Request, error) {
+	return client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+}
+
 // streamDownloadPackageFile downloads a package file by streaming the HTTP
 // response body directly to disk. It computes the SHA-256 checksum during
 // transfer using io.MultiWriter so the file is never fully loaded into memory.
@@ -26,6 +39,10 @@ import (
 // The function leverages client-go's Client.Do(req, io.Writer) code path,
 // which calls io.Copy(writer, resp.Body), preserving the client's
 // authentication headers, rate limiting, and retryable HTTP logic.
+//
+// The body goes through [toolutil.WriteDownloadOutputFile], so output_path is
+// written only once the whole body has arrived: an error answer, a body cut
+// short or a cancelled call leaves it exactly as it was.
 func streamDownloadPackageFile(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -49,68 +66,26 @@ func streamDownloadPackageFile(
 		return 0, "", fmt.Errorf("format package URL: %w%s", err, hint)
 	}
 
-	// The request is built here rather than through a service method, so the
-	// context goes in as the same option every service call takes: without it
-	// client-go builds the request from context.Background(), and neither the
-	// action deadline nor an abandoned call would end a transfer nothing else
-	// bounds.
-	httpReq, err := client.GL().NewRequest(http.MethodGet, apiPath, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	httpReq, err := newDownloadRequest(ctx, client, apiPath)
 	if err != nil {
 		return 0, "", fmt.Errorf("create download request: %w", err)
 	}
 
-	// Resolved and confined before anything is created, so a destination
-	// outside the allowed roots leaves no directory behind either.
-	outputPath, err := toolutil.CanonicalDownloadOutputPath(input.OutputPath)
-	if err != nil {
-		return 0, "", err
-	}
-
-	dir := filepath.Dir(outputPath)
-	if mkdirErr := os.MkdirAll(dir, 0o750); mkdirErr != nil {
-		return 0, "", fmt.Errorf("create output directory %s: %w", dir, mkdirErr)
-	}
-
-	// Resolved a second time now that the parent exists: the first pass could
-	// only vouch for the ancestors that were there at the time, and a symlink
-	// planted under a directory this call just created would otherwise decide
-	// where the bytes land.
-	outputPath, err = toolutil.CanonicalDownloadOutputPath(outputPath)
-	if err != nil {
-		return 0, "", err
-	}
-
-	// os.Create would follow whatever the leaf is when it runs, so the two
-	// resolutions above would only describe a path the write need not take.
-	outFile, err := toolutil.CreateDownloadOutputFile(outputPath)
-	if err != nil {
-		return 0, "", fmt.Errorf("create output file %s: %w", outputPath, err)
-	}
-	defer outFile.Close()
-
 	hasher := sha256.New()
-
-	baseWriter := io.MultiWriter(outFile, hasher)
-
-	tracker := progress.FromRequest(req)
-	if tracker.IsActive() {
-		baseWriter = toolutil.NewProgressWriter(ctx, baseWriter, 0, tracker)
-	}
-
-	_, err = client.GL().Do(httpReq, baseWriter)
+	size, err := toolutil.WriteDownloadOutputFile(input.OutputPath, func(file io.Writer) error {
+		body := io.MultiWriter(file, hasher)
+		tracker := progress.FromRequest(req)
+		if tracker.IsActive() {
+			body = toolutil.NewProgressWriter(ctx, body, 0, tracker)
+		}
+		if _, doErr := client.GL().Do(httpReq, body); doErr != nil {
+			return fmt.Errorf("stream download %s: %w", input.FileName, doErr)
+		}
+		return nil
+	})
 	if err != nil {
-		return 0, "", fmt.Errorf("stream download %s: %w", input.FileName, err)
+		return 0, "", err
 	}
 
-	if err = outFile.Sync(); err != nil {
-		return 0, "", fmt.Errorf("sync output file: %w", err)
-	}
-
-	info, err := outFile.Stat()
-	if err != nil {
-		return 0, "", fmt.Errorf("stat output file: %w", err)
-	}
-
-	checksum := hex.EncodeToString(hasher.Sum(nil))
-	return info.Size(), checksum, nil
+	return size, hex.EncodeToString(hasher.Sum(nil)), nil
 }

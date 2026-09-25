@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -404,10 +405,10 @@ func TestComputeSHA256_ViaToolutil(t *testing.T) {
 // has a regular file where a directory belongs is refused.
 //
 // The refusal comes from the confinement rather than from opening the file:
-// CanonicalDownloadOutputPath resolves the longest existing prefix and gets
-// ENOTDIR, so neither MkdirAll nor the create below it ever runs. The comment
-// here used to say os.Create failed, which gobco refutes: that arm is never
-// taken. TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked states the
+// toolutil.WriteDownloadOutputFile resolves the longest existing prefix and
+// gets ENOTDIR, so neither MkdirAll nor the create below it ever runs. The
+// comment here used to say os.Create failed, which gobco refutes: that arm is
+// never taken. TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked states the
 // same rule with the message it is actually refused by.
 func TestStreamDownload_UnwritablePath(t *testing.T) {
 	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))
@@ -452,50 +453,25 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 
 // ----- branch coverage -----
 
-// TestStreamDownload_DeadBranches documents why the error-return branches
-// inside streamDownloadPackageFile are unreachable through any public call
-// path. The list is the one gobco reports as never evaluated both ways, so it
-// names every such branch rather than a selection of them:
+// TestStreamDownload_DeadBranches documents the one condition inside
+// streamDownloadPackageFile that no public call path evaluates both ways,
+// which gobco reports:
 //
-//  1. FormatPackageURL error: reached, by the invalid-file-name cases of
+//   - FormatPackageURL error: reached, by the invalid-file-name cases of
 //     TestDownload_FileNameShapes. What is unreachable is the arm below it
 //     that leaves the hint empty: for a string project id, parseID accepts
 //     whatever it is given, so ErrInvalidFileName is the only error the call
 //     can return and errors.Is is never false there.
-//  2. NewRequest error: the error paths are url.PathUnescape on a
-//     malformed percent-encoded path and a request option that fails.
-//     FormatPackageURL generates the path with PathEscape, so the result is
-//     always well-formed, and the one option passed, gl.WithContext, never
-//     returns an error.
-//  3. MkdirAll error: it fails where an ancestor exists and is not a
-//     directory, and CanonicalDownloadOutputPath has already refused that
-//     path. It resolves the longest existing prefix through EvalSymlinks,
-//     which answers ENOTDIR rather than ErrNotExist for a file used as a
-//     directory, and that is not the "not yet created" case it walks past.
-//     TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked is what
-//     pins the refusal, and it accepts either message for that reason.
-//  4. The second CanonicalDownloadOutputPath error: the same path resolved
-//     again now that the parent exists. Reaching it would mean the
-//     destination stopped being confined between the two calls, which is a
-//     race a test cannot stage; the call stays because a symlink planted
-//     under a directory this call just created is exactly what it guards.
-//  5. CreateDownloadOutputFile error: every destination a caller can name
-//     that would fail to open is refused by the confinement above, which
-//     checks the leaf's type as well as its roots. What is left is a
-//     filesystem that fails on open, which a unit test cannot stage.
-//  6. outFile.Sync error: fsync(2) genuinely fails with EINVAL on a named
-//     pipe, which is how TestStreamDownload_SyncErrorOnFIFO used to reach
-//     this branch. Confining output_path now refuses any destination that
-//     already exists and is not a regular file, so no caller-supplied path
-//     reaches Sync on a pipe any more; what is left are real I/O failures
-//     (a full or failing filesystem), which a unit test cannot stage. The
-//     wrap stays because those failures are what it names.
-//  7. outFile.Stat error: the file handle is still open, so Stat
-//     succeeds unconditionally under normal conditions.
 //
-// We assert the documented contract below: a happy-path download
-// streams the payload to disk, syncs the file, and reports its size
-// without invoking any of the unreachable branches.
+// The request construction failure no input reaches is reached through the
+// newDownloadRequest seam instead, by
+// TestDownload_RequestCannotBeBuilt_NothingIsWritten. The branches that
+// prepare the destination, flush the file and put it in place used to be
+// listed here as unreachable too; they now live in
+// toolutil.WriteDownloadOutputFile, whose own tests stage each of them.
+//
+// We assert the documented contract below: a happy-path download streams
+// the payload to disk and reports its size and checksum.
 func TestStreamDownload_DeadBranches(t *testing.T) {
 	fileBody := "dead-branch-fixture"
 	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
@@ -551,5 +527,225 @@ func TestDownload_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Download() error = %v after the context was cancelled mid-flight, want context.Canceled", err)
+	}
+}
+
+// previousRelease is what a destination held before a download that fails,
+// which it must still hold afterwards.
+const previousRelease = "the previous release, which a failed download must not touch\n"
+
+// packageBody is the file a mock serves, long enough that half of it is
+// several writes and a flush on its own.
+var packageBody = strings.Repeat("package-file-block-", 512)
+
+// serveHalfThen answers the package GET with a Content-Length for the whole
+// body, sends half of it and flushes, so the download has written bytes by
+// the time then decides how the response ends.
+func serveHalfThen(then func(w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(headerContentType, testOctetStream)
+		w.Header().Set("Content-Length", strconv.Itoa(len(packageBody)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(packageBody[:len(packageBody)/2]))
+		// A failed flush still ends the response short of its declared
+		// length, so the download is interrupted either way.
+		_ = http.NewResponseController(w).Flush()
+		then(w, r)
+	}
+}
+
+// interruption is one way a package download can end before its body does,
+// with the context and client that stage it.
+type interruption struct {
+	name  string
+	stage func(t *testing.T) (context.Context, *gitlabclient.Client)
+	check func(t *testing.T, err error)
+}
+
+// wantContextCanceled fails unless err carries context.Canceled.
+func wantContextCanceled(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Download() error = %v, want context.Canceled", err)
+	}
+}
+
+// wantMessage returns a check that fails unless the error names want.
+func wantMessage(want string) func(t *testing.T, err error) {
+	return func(t *testing.T, err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Download() error = %v, want one naming %q", err, want)
+		}
+	}
+}
+
+// interruptions lists the four ways a download ends early that
+// TestDownload_Interrupted_LeavesOutputPathAsItWas holds to one outcome.
+func interruptions() []interruption {
+	return []interruption{
+		{
+			name: "GitLab answers an error",
+			stage: func(t *testing.T) (context.Context, *gitlabclient.Client) {
+				t.Helper()
+				return context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Package Not Found"}`)
+				}))
+			},
+			check: wantMessage("404"),
+		},
+		{
+			name: "the body is cut short",
+			stage: func(t *testing.T) (context.Context, *gitlabclient.Client) {
+				t.Helper()
+				// ErrAbortHandler closes the connection without the rest of
+				// the declared length, which the client reads as an
+				// unexpected end of the body, and net/http does not log it.
+				return context.Background(), testutil.NewTestClient(t, serveHalfThen(func(http.ResponseWriter, *http.Request) {
+					panic(http.ErrAbortHandler)
+				}))
+			},
+			check: wantMessage("unexpected EOF"),
+		},
+		{
+			name: "the call is cancelled once the request arrives",
+			stage: func(t *testing.T) (context.Context, *gitlabclient.Client) {
+				t.Helper()
+				return testutil.CancelOnArrival(t, testStreamServer(t, packageBody, http.StatusOK))
+			},
+			check: wantContextCanceled,
+		},
+		{
+			name: "the call is cancelled partway through the body",
+			stage: func(t *testing.T) (context.Context, *gitlabclient.Client) {
+				t.Helper()
+				ctx, cancel := context.WithCancel(t.Context())
+				t.Cleanup(cancel)
+				return ctx, testutil.NewTestClient(t, serveHalfThen(func(_ http.ResponseWriter, r *http.Request) {
+					cancel()
+					// Held until the client abandons the request, so the
+					// cancellation and not the end of the response is what
+					// ends the body; bounded so a download that ignored the
+					// context fails in seconds rather than hanging. How much
+					// of the flushed half the client wrote before it saw the
+					// cancellation is the scheduler's call; the cut body
+					// above is the case where every byte of it is written.
+					select {
+					case <-r.Context().Done():
+					case <-time.After(5 * time.Second):
+					}
+				}))
+			},
+			check: wantContextCanceled,
+		},
+	}
+}
+
+// TestDownload_Interrupted_LeavesOutputPathAsItWas verifies that a package
+// download that ends before its body does leaves output_path exactly as it
+// was, absent if it was absent and holding its previous content if it held
+// one, and leaves no temporary file beside it.
+//
+// The download used to create output_path first and stream into it, so every
+// one of these left a file that looked like a download and was not one: empty
+// after an error answer or a cancellation on arrival, truncated after a cut
+// body or a cancellation partway, and a previous file at that path destroyed
+// in all four, since it was truncated before a byte was requested. The case
+// that cancels partway is the one the handler context makes routine: an
+// abandoned call or the action deadline now ends a transfer where it stands.
+func TestDownload_Interrupted_LeavesOutputPathAsItWas(t *testing.T) {
+	for _, tc := range interruptions() {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, existed := range []bool{false, true} {
+				name := "output_path absent"
+				if existed {
+					name = "output_path held a previous file"
+				}
+				t.Run(name, func(t *testing.T) {
+					dir := t.TempDir()
+					outPath := filepath.Join(dir, testOutputBin)
+					if existed {
+						if err := os.WriteFile(outPath, []byte(previousRelease), 0o600); err != nil {
+							t.Fatalf("WriteFile(%q) error = %v", outPath, err)
+						}
+					}
+					ctx, client := tc.stage(t)
+
+					_, err := Download(ctx, nil, client, DownloadInput{
+						ProjectID:      "42",
+						PackageName:    testPackageName,
+						PackageVersion: testPkgVersion,
+						FileName:       testAppBin,
+						OutputPath:     outPath,
+					})
+					tc.check(t, err)
+
+					assertOutputPathAsItWas(t, outPath, existed)
+					assertOnlyEntries(t, dir, existed)
+				})
+			}
+		})
+	}
+}
+
+// assertOutputPathAsItWas fails unless outPath is still absent, when it was,
+// or still holds previousRelease, when it held that.
+func assertOutputPathAsItWas(t *testing.T, outPath string, existed bool) {
+	t.Helper()
+	got, err := os.ReadFile(outPath)
+	if !existed {
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("os.ReadFile(%q) = %d bytes, %v, want output_path still absent", outPath, len(got), err)
+		}
+		return
+	}
+	if err != nil || string(got) != previousRelease {
+		t.Errorf("os.ReadFile(%q) = %d bytes, %v, want the previous file's %d bytes untouched", outPath, len(got), err, len(previousRelease))
+	}
+}
+
+// assertOnlyEntries fails when dir holds anything besides the output file it
+// held before the download, which is where a temporary file left behind would
+// show.
+func assertOnlyEntries(t *testing.T, dir string, existed bool) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("os.ReadDir(%q) error = %v", dir, err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	want := 0
+	if existed {
+		want = 1
+	}
+	if len(names) != want || (existed && names[0] != testOutputBin) {
+		t.Errorf("os.ReadDir(%q) = %q, want only the output file it held before", dir, names)
+	}
+}
+
+// TestDownload_RequestCannotBeBuilt_NothingIsWritten verifies that a download
+// whose request cannot be built is refused with the construction error before
+// GitLab is asked and before anything is created at output_path. No input
+// reaches this, since FormatPackageURL escapes everything it interpolates, so
+// the construction is replaced for the test.
+func TestDownload_RequestCannotBeBuilt_NothingIsWritten(t *testing.T) {
+	original := newDownloadRequest
+	newDownloadRequest = func(context.Context, *gitlabclient.Client, string) (*retryablehttp.Request, error) {
+		return nil, errors.New("malformed request path")
+	}
+	t.Cleanup(func() { newDownloadRequest = original })
+
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	outPath := filepath.Join(t.TempDir(), "sub", testOutputBin)
+
+	_, err := downloadTo(t, client, outPath)
+	if err == nil || !strings.Contains(err.Error(), "create download request: malformed request path") {
+		t.Errorf("Download() error = %v, want the construction error", err)
+	}
+	if _, statErr := os.Lstat(filepath.Dir(outPath)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("os.Lstat(%q) error = %v, want nothing created", filepath.Dir(outPath), statErr)
 	}
 }
