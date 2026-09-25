@@ -2381,6 +2381,75 @@
       "package": "internal/tools/awardemoji",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/issues/:issue_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":issue_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/issues/:issue_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":issue_id": 1,
+        ":note_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":merge_request_id": 1,
+        ":note_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/snippets/:snippet_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":project_id": 1,
+        ":snippet_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/snippets/:snippet_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":note_id": 1,
+        ":project_id": 1,
+        ":snippet_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/my-project/issues/:issue_id/award_emoji",
       "query": [
         "order_by",
@@ -2792,7 +2861,7 @@
       "path": "/groups/:group_id/badges/:badge_id",
       "identifiers": {
         ":badge_id": 2,
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -5041,7 +5110,7 @@
       "path": "/projects/:project_id/deployments/:deployment_id",
       "identifiers": {
         ":deployment_id": 4,
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -5447,7 +5516,7 @@
       "path": "/projects/:project_id/environments/:environment_id",
       "identifiers": {
         ":environment_id": 8,
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -6548,7 +6617,7 @@
       "method": "GET",
       "path": "/projects/:project_id/repository/files/missing.go",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -8135,7 +8204,7 @@
         "with_projects"
       ],
       "identifiers": {
-        ":group_id": 5
+        ":group_id": 6
       }
     },
     {
@@ -11316,8 +11385,8 @@
       "method": "GET",
       "path": "/projects/:project_id/labels/:label_id",
       "identifiers": {
-        ":label_id": 1,
-        ":project_id": 1
+        ":label_id": 2,
+        ":project_id": 2
       }
     },
     {
@@ -11874,8 +11943,8 @@
         "render_html"
       ],
       "identifiers": {
-        ":merge_request_id": 6,
-        ":project_id": 1
+        ":merge_request_id": 7,
+        ":project_id": 2
       }
     },
     {
@@ -12280,7 +12349,7 @@
         "title"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -13286,8 +13355,8 @@
       "method": "GET",
       "path": "/projects/:project_id/packages/:package_id",
       "identifiers": {
-        ":package_id": 2,
-        ":project_id": 2
+        ":package_id": 3,
+        ":project_id": 3
       }
     },
     {
@@ -13715,8 +13784,8 @@
       "method": "GET",
       "path": "/projects/:project_id/pipelines/:pipeline_id",
       "identifiers": {
-        ":pipeline_id": 8,
-        ":project_id": 2
+        ":pipeline_id": 9,
+        ":project_id": 3
       }
     },
     {
@@ -14430,7 +14499,7 @@
         "with_custom_attributes"
       ],
       "identifiers": {
-        ":project_id": 3
+        ":project_id": 4
       }
     },
     {
@@ -17460,7 +17529,7 @@
       "method": "GET",
       "path": "/snippets/:snippet_id",
       "identifiers": {
-        ":snippet_id": 4
+        ":snippet_id": 5
       }
     },
     {
@@ -17797,7 +17866,7 @@
       "method": "GET",
       "path": "/projects/:project_id/repository/tags/nonexistent",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -18558,7 +18627,7 @@
         "with_custom_attributes"
       ],
       "identifiers": {
-        ":user_id": 2
+        ":user_id": 3
       }
     },
     {
