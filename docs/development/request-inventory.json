@@ -953,8 +953,8 @@
       "method": "GET",
       "path": "/projects/:project_id/issues/:issue_id",
       "identifiers": {
-        ":issue_id": 1,
-        ":project_id": 1
+        ":issue_id": 2,
+        ":project_id": 2
       }
     },
     {
@@ -1009,8 +1009,8 @@
         "per_page"
       ],
       "identifiers": {
-        ":merge_request_id": 1,
-        ":project_id": 1
+        ":merge_request_id": 2,
+        ":project_id": 2
       }
     },
     {
@@ -1031,8 +1031,8 @@
       "method": "GET",
       "path": "/projects/:project_id/pipelines/:pipeline_id",
       "identifiers": {
-        ":pipeline_id": 1,
-        ":project_id": 1
+        ":pipeline_id": 2,
+        ":project_id": 2
       }
     },
     {
@@ -1122,7 +1122,57 @@
       "method": "GET",
       "path": "/snippets/:snippet_id",
       "identifiers": {
-        ":snippet_id": 1
+        ":snippet_id": 2
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id",
+      "body": [
+        "name"
+      ],
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/access_tokens",
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/access_tokens/:access_token_id",
+      "identifiers": {
+        ":access_token_id": 1,
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/access_tokens/:access_token_id/rotate",
+      "identifiers": {
+        ":access_token_id": 1,
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/access_tokens/self/rotate",
+      "identifiers": {
+        ":group_id": 1
       }
     },
     {
@@ -1138,9 +1188,435 @@
       "package": "internal/tools",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id/saml_group_links",
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/saml_group_links",
+      "body": [
+        "access_level",
+        "saml_group_name"
+      ],
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/saml_group_links/devs",
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/saml_group_links/devs",
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/security_settings",
+      "body": [
+        "secret_push_protection_enabled"
+      ],
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/personal_access_tokens",
+      "query": [
+        "user_id"
+      ]
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/personal_access_tokens/:personal_access_token_id",
+      "identifiers": {
+        ":personal_access_token_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/personal_access_tokens/:personal_access_token_id/rotate",
+      "identifiers": {
+        ":personal_access_token_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/access_tokens",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/access_tokens/:access_token_id",
+      "identifiers": {
+        ":access_token_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/access_tokens/:access_token_id/rotate",
+      "identifiers": {
+        ":access_token_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/access_tokens/self/rotate",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/external_status_checks",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/external_status_checks",
+      "body": [
+        "external_url",
+        "name"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/external_status_checks/:external_status_check_id",
+      "identifiers": {
+        ":external_status_check_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/external_status_checks/:external_status_check_id",
+      "identifiers": {
+        ":external_status_check_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/fork/:fork_id",
+      "identifiers": {
+        ":fork_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/issues/:issue_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":issue_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/issues/:issue_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":issue_id": 1,
+        ":note_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/approve",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/cancel_merge_when_pipeline_succeeds",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/merge",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":merge_request_id": 1,
+        ":note_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/reset_approvals",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/status_check_responses",
+      "body": [
+        "external_status_check_id",
+        "sha",
+        "status"
+      ],
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/status_checks",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/status_checks/:status_check_id/retry",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1,
+        ":status_check_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/merge_trains/merge_requests/:merge_request_id",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/protected_environments/production",
       "identifiers": {
         ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/remote_mirrors",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/remote_mirrors",
+      "body": [
+        "url"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/remote_mirrors/:remote_mirror_id",
+      "identifiers": {
+        ":project_id": 1,
+        ":remote_mirror_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/remote_mirrors/:remote_mirror_id",
+      "identifiers": {
+        ":project_id": 1,
+        ":remote_mirror_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/remote_mirrors/:remote_mirror_id",
+      "identifiers": {
+        ":project_id": 1,
+        ":remote_mirror_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/remote_mirrors/:remote_mirror_id/public_key",
+      "identifiers": {
+        ":project_id": 1,
+        ":remote_mirror_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/remote_mirrors/:remote_mirror_id/sync",
+      "identifiers": {
+        ":project_id": 1,
+        ":remote_mirror_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/security_settings",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/security_settings",
+      "body": [
+        "secret_push_protection_enabled"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/snippets/:snippet_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":project_id": 1,
+        ":snippet_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/snippets/:snippet_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":note_id": 1,
+        ":project_id": 1,
+        ":snippet_id": 1
       }
     },
     {
@@ -1474,7 +1950,7 @@
       "method": "GET",
       "path": "/projects/:project_id/access_tokens/:access_token_id",
       "identifiers": {
-        ":access_token_id": 2,
+        ":access_token_id": 3,
         ":project_id": 2
       }
     },
@@ -5480,7 +5956,7 @@
         "status"
       ],
       "identifiers": {
-        ":merge_request_id": 2,
+        ":merge_request_id": 3,
         ":project_id": 2
       }
     },
@@ -5498,7 +5974,7 @@
         "sort"
       ],
       "identifiers": {
-        ":merge_request_id": 2,
+        ":merge_request_id": 3,
         ":project_id": 2
       }
     },
@@ -5508,7 +5984,7 @@
       "method": "POST",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/status_checks/:status_check_id/retry",
       "identifiers": {
-        ":merge_request_id": 2,
+        ":merge_request_id": 3,
         ":project_id": 2,
         ":status_check_id": 2
       }
@@ -6667,7 +7143,7 @@
       "method": "DELETE",
       "path": "/groups/mygroup/manage/personal_access_tokens/:personal_access_token_id",
       "identifiers": {
-        ":personal_access_token_id": 1
+        ":personal_access_token_id": 2
       }
     },
     {
@@ -12901,6 +13377,18 @@
       "package": "internal/tools/packages",
       "kind": "rest",
       "method": "PUT",
+      "path": "/projects/:project_id/packages/generic/my-pkg/1.0.0/b.bin",
+      "query": [
+        "select"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/packages",
+      "kind": "rest",
+      "method": "PUT",
       "path": "/projects/:project_id/packages/generic/my-pkg/1.0.0/b.tar.gz",
       "query": [
         "select"
@@ -16535,7 +17023,7 @@
         "secret_push_protection_enabled"
       ],
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 3
       }
     },
     {

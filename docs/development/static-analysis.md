@@ -273,7 +273,7 @@ make sonar-status                # just print the latest gate (no re-scan)
 
 GitHub Actions uses the same separation as Make:
 
-- The `golangci-lint` job installs the pinned `golangci-lint` release through the official action and runs `make golangci-lint`, so CI and a developer's machine run the same three commands with the same version. Its per-package analysis cache is kept between runs.
+- The `golangci-lint` job installs the pinned `golangci-lint` release through the official action and runs `make golangci-lint`, so CI and a developer's machine run the same three commands with the same version. Its analysis cache is deliberately not kept between runs, so a result depends on the tree being linted and nothing else: a pull request restores a cache from its own ref first, which after a rebase holds the analysis of the branch's previous tree, and that once failed a cascaded layer on an unused `//nolint` in a file it never touched (issue 945). The Go build and module caches are still restored, since their keys are content hashes.
 - The `govulncheck` job installs the `govulncheck` named by the `tool` directive in `go.mod` (a bare `go install`, so the pin lives in one place) and runs `make govulncheck`.
 - The `Markdown` job runs `markdownlint-cli2` for Markdown and MDX content through the linter's own action, which bundles the tool and touches no registry.
 
@@ -367,8 +367,9 @@ you need to experiment, override per-run with `-j`:
 golangci-lint run -j 8 ./...
 ```
 
-The analysis cache matters too — a warm run takes seconds against minutes cold —
-but it is rebuilt automatically and needs no manual warming.
+Locally the analysis cache matters too: a warm run takes seconds against minutes
+cold, and it is rebuilt automatically and needs no manual warming. CI keeps none,
+for the reason the CI section above gives.
 
 ### Need a standalone tool during investigation
 

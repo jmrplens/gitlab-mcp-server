@@ -595,19 +595,18 @@ jobs:
         with:
           version: ${{ steps.lint.outputs.version }}
           install-only: true
-      # golangci-lint keeps a per-package analysis cache and skips what has
-      # not changed, which is most of the tree on most pull requests. The key
-      # names the linter config and go.sum, so a change to either starts
-      # fresh; restore-keys lets a run reuse the newest cache for the same
-      # config even when go.sum moved, since a dependency bump does not
-      # invalidate the analysis of packages that do not import it.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/golangci-lint
-          key: golangci-lint-${{ hashFiles('.golangci.yml', 'go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            golangci-lint-${{ hashFiles('.golangci.yml', 'go.sum') }}-
-            golangci-lint-
+      # golangci-lint's own analysis cache (~/.cache/golangci-lint) is
+      # deliberately not restored, so the result depends only on the tree
+      # being linted. A pull request restores first from its own ref, which
+      # after a rebase holds the analysis of the branch's previous tree, and
+      # on 2026-09-24 that failed a cascaded layer twice with an unused
+      # //nolint:contextcheck in a file the stack never touched, which a
+      # cold run did not report (issue 945). The same staleness could hide a
+      # finding. The Go build and module caches setup-go keeps are still
+      # used: their keys are content hashes. The cost is small: a cold
+      # analysis of the whole tree took 101 s against 29 s warm on a 4-CPU
+      # host, and this job runs well inside the cross-platform matrix that
+      # sets the wall clock.
       - run: make golangci-lint
 
   govulncheck:

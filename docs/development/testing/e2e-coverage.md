@@ -36,8 +36,8 @@ further down.
 
 | Runtime | Edition/tier        | Measured   | Catalog actions |           L1 |          L2 |          L3 | Test calls |
 | ------- | ------------------- | ---------- | --------------: | -----------: | ----------: | ----------: | ---------: |
-| `ce`    | community/free      | 2026-09-23 |             869 |  821 (94.5%) | 721 (83.0%) | 705 (81.1%) |       3355 |
-| `ee`    | enterprise/ultimate | 2026-09-23 |            1089 | 1016 (93.3%) | 917 (84.2%) | 901 (82.7%) |       4417 |
+| `ce`    | community/free      | 2026-09-24 |             869 |  821 (94.5%) | 721 (83.0%) | 705 (81.1%) |       3358 |
+| `ee`    | enterprise/ultimate | 2026-09-24 |            1089 | 1016 (93.3%) | 917 (84.2%) | 901 (82.7%) |       4375 |
 
 The actions behind each level are listed by id in `docs/development/e2e-coverage.json`, under `levels.l1`, `levels.l2` and `levels.l3`.
 
@@ -45,10 +45,10 @@ The actions behind each level are listed by id in `docs/development/e2e-coverage
 
 | Runtime | Package  | Requires | Status  | GitLab    | Tier confirmed | Commit         |
 | ------- | -------- | -------- | ------- | --------- | -------------- | -------------- |
-| `ce`    | `ce`     | free     | started | 19.3.1    | no             | `09488ccec445` |
-| `ce`    | `common` | any      | started | 19.3.1    | no             | `09488ccec445` |
-| `ee`    | `common` | any      | started | 19.3.1-ee | yes            | `09488ccec445` |
-| `ee`    | `ee`     | licensed | started | 19.3.1-ee | yes            | `09488ccec445` |
+| `ce`    | `ce`     | free     | started | 19.3.1    | no             | `0a0b5bb79424` |
+| `ce`    | `common` | any      | started | 19.3.1    | no             | `0a0b5bb79424` |
+| `ee`    | `common` | any      | started | 19.3.1-ee | yes            | `0a0b5bb79424` |
+| `ee`    | `ee`     | licensed | started | 19.3.1-ee | yes            | `0a0b5bb79424` |
 
 A tier that is not confirmed came from a setting rather than from the instance license, which means the catalog the share is divided by may hold actions that instance would refuse. An unlicensed GitLab reports no license at all, so the `ce` half is expected to read `no` here.
 
@@ -102,8 +102,8 @@ What each capability surface served, which is what the `resources`, `prompts`, `
 | `elicitation`   |       12 |          0 |          0 |               0 |            0 |           12 |            0 |          0 |         12 |       0 |      0 |      0 |
 | `modes`         |       12 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `prompts`       |       37 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
-| `resources`     |        0 |          0 |         42 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
-| `subscriptions` |        1 |          0 |         24 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `resources`     |        1 |          0 |         42 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `subscriptions` |        1 |          0 |         25 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `tool_manifest` |       24 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 
 Called outside what any session listed, and so counted in none of the rows above:
@@ -114,9 +114,9 @@ Called outside what any session listed, and so counted in none of the rows above
 
 | Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `dynamic`    |      917 |          0 |         26 |              21 |           43 |            0 |            0 |          0 |          0 |      11 |      0 |     71 |
+| `dynamic`    |      917 |          0 |         27 |              21 |           42 |            0 |            0 |          0 |          0 |      11 |      0 |     71 |
 | `meta`       |      987 |          0 |          5 |              20 |           42 |            0 |            0 |          0 |          0 |      11 |      0 |     24 |
-| `individual` |      919 |          0 |         22 |              18 |           43 |            0 |            0 |          0 |          4 |      11 |      0 |     72 |
+| `individual` |      919 |          0 |         22 |              19 |           42 |            0 |            0 |          0 |          4 |      11 |      0 |     72 |
 
 What each capability surface served, which is what the `resources`, `prompts`, `completions` and `subscriptions` rows beneath are counted against (`tool_manifest` is counted per shape and capability surface, `elicitation` and `modes` per shape; none has a figure here):
 
@@ -131,8 +131,8 @@ What each capability surface served, which is what the `resources`, `prompts`, `
 | `elicitation`   |       12 |          0 |          0 |               0 |            0 |           12 |            0 |          0 |         12 |       0 |      0 |      0 |
 | `modes`         |       12 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `prompts`       |       37 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
-| `resources`     |        0 |          0 |         42 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
-| `subscriptions` |        1 |          0 |         24 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `resources`     |        1 |          0 |         42 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
+| `subscriptions` |        1 |          0 |         25 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 | `tool_manifest` |       24 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |
 
 Called outside what any session listed, and so counted in none of the rows above:

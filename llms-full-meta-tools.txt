@@ -131,7 +131,7 @@ Parameter guidance:
 - invite_group.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
 - invite_group.email: invite_email. Source: Email address of the person to invite when they may not have an account yet. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_group.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
-- invite_group.group_id: scope_group. Source: Group ID or full group path the user is being invited to. Avoid: Use group_id for the group scope. Use project_id only with project.invite_project.
+- invite_group.group_id: scope_group. Source: Group ID or full group path the user is being invited to. Avoid: Use group_id for the group scope. Use project_id only with access.invite_project.
 - invite_group.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
 - invite_group.user_id: user_id. Source: Numeric user ID when inviting an existing GitLab user. Avoid: Use user_id for existing accounts and email otherwise. Do not pass a username here.
 - invite_list_group.group_id: scope_group. Source: Group ID or full group path whose pending invitations should be listed. Avoid: Lists pending invitations, not accepted members. Use group.members for current members.
@@ -142,7 +142,7 @@ Parameter guidance:
 - invite_project.email: invite_email. Source: Email address of the person to invite when they may not have an account yet. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_project.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_project.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
-- invite_project.project_id: scope_project. Source: Project ID or full namespace path the user is being invited to. Avoid: Use the target project here. Use group_id only with group.invite_group.
+- invite_project.project_id: scope_project. Source: Project ID or full namespace path the user is being invited to. Avoid: Use the target project here. Use group_id only with access.invite_group.
 - invite_project.user_id: user_id. Source: Numeric user ID when inviting an existing GitLab user. Avoid: Use user_id for existing accounts and email otherwise. Do not pass a username here.
 - request_group.group_id: scope_group. Source: Group numeric ID or full path to request access to.
 - request_list_group.group_id: scope_group. Source: Group numeric ID or full path where requests are pending.
@@ -2300,7 +2300,7 @@ IMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ pr
 
 Returns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).
 
-See also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.
+See also: project.get, server.status, search.projects.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -2742,12 +2742,12 @@ Use {"action":"list","params":{...}}. The only top-level keys are action and par
 Action params schema: gitlab://tools/gitlab_group.<action>.
 Action guidance:
 - archive: Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent. Archiving an archived group is a no-op.
-- badge_add: Add a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badge CRUD belongs to gitlab_project.
-- badge_delete: Delete a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badge CRUD belongs to gitlab_project.
-- badge_edit: Edit a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badge CRUD belongs to gitlab_project. Use the parameter name name for a new badge name. new_name is not supported.
-- badge_get: Get a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badge CRUD belongs to gitlab_project.
-- badge_list: List group badges. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badge CRUD belongs to gitlab_project.
-- badge_preview: Preview a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badge CRUD belongs to gitlab_project.
+- badge_add: Add a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
+- badge_delete: Delete a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
+- badge_edit: Edit a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete. Use the parameter name name for a new badge name. new_name is not supported.
+- badge_get: Get a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
+- badge_list: List group badges. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
+- badge_preview: Preview a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
 - create: Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested.
 - delete: Delete a group (marks it for deletion, or permanently removes it with permanently_remove=true). Destructive: this removes the group and all its projects. Confirm before calling.
 - get: Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics.
@@ -2804,15 +2804,15 @@ Action guidance:
 - service_account_pat_revoke: Revoke one of a group service account's personal access tokens. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate). Requires Owner permissions.
 - service_account_pat_rotate: Rotate a group service account's personal access token. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate). Requires Owner permissions. Rotating revokes the supplied token_id and returns a brand-new token value. Capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime.
 - service_account_update: Update a group service account's name or username. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate). Requires Owner permissions. Omit email unless the task gives an explicit valid email address.
-- share_with_group: Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (gitlab_group_share is the GroupMembers-API equivalent.)
+- share_with_group: Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (group.group_member_share is the GroupMembers-API equivalent.)
 - shared_projects: List the projects shared *into* this group from elsewhere (not the group's own projects). Use when the user asks which external projects a group can access via sharing.
 - shared_with: List the groups that have been shared with this group (group-to-group shares granting members access). Use when the user asks which groups can access a group via sharing, not its members or subgroups.
 - subgroups: List the descendant groups (subgroups at all depths) of a group. Use search, min_access_level, visibility, and ordering when the user asks which groups nest under a group.
-- transfer: Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use gitlab_group_transfer_locations first to find valid parents. Requires Owner role on both ends.
+- transfer: Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends.
 - transfer_locations: List the parent groups this group can be transferred (moved) into. Use this BEFORE attempting a group transfer to discover valid destinations. The caller needs the Owner role on a destination for it to appear.
-- transfer_project: Move an existing project into this group's namespace. Use when the user wants to relocate a project under a group. To discover which groups a group itself can be transferred into, use gitlab_group_transfer_locations instead.
+- transfer_project: Move an existing project into this group's namespace. Use when the user wants to relocate a project under a group. To discover which groups a group itself can be transferred into, use group.transfer_locations instead.
 - unarchive: Unarchive a previously archived group, restoring write access. Idempotent. Unarchiving a non-archived group is a no-op.
-- unshare_from_group: Revoke a group-to-group share via the Groups API, removing the shared group's access. Destructive. Send group_id and shared_group_id. Requires Owner role. (gitlab_group_unshare is the GroupMembers-API equivalent.)
+- unshare_from_group: Revoke a group-to-group share via the Groups API, removing the shared group's access. Destructive. Send group_id and shared_group_id. Requires Owner role. (group.group_member_unshare is the GroupMembers-API equivalent.)
 - update: Update an existing group's settings. Send group_id plus only the fields to change (name, path, visibility, default branch protection, merge policies, Duo, runner limits, etc.).
 - upload_avatar: Upload or replace a group's avatar image. Send group_id, filename, and exactly one of file_path (a local image the MCP server reads) or content_base64 (inline base64-encoded image). Image must be JPG/PNG/GIF under 200 KB. Requires Owner role.
 Parameter guidance:
@@ -2850,17 +2850,17 @@ Parameter guidance:
 - group_member_add.access_level: access_level. Source: Numeric role level for the membership. Avoid: Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name.
 - group_member_add.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
 - group_member_add.member_role_id: member_role_id. Source: ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level. Avoid: member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate.
-- group_member_add.user_id: user_id. Source: Numeric user ID to add as a member (alternative to username). Avoid: Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first.
+- group_member_add.user_id: user_id. Source: Numeric user ID to add as a member (alternative to username). Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_edit.access_level: access_level. Source: Numeric role level for the membership. Avoid: Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name.
 - group_member_edit.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
 - group_member_edit.member_role_id: member_role_id. Source: ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level. Avoid: member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate.
-- group_member_edit.user_id: user_id. Source: Numeric user ID of the direct member to edit. Avoid: Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first.
+- group_member_edit.user_id: user_id. Source: Numeric user ID of the direct member to edit. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_get.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
-- group_member_get.user_id: user_id. Source: Numeric user ID of the direct group member to inspect. Avoid: Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first.
+- group_member_get.user_id: user_id. Source: Numeric user ID of the direct group member to inspect. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_get_inherited.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
-- group_member_get_inherited.user_id: user_id. Source: Numeric user ID of the member to inspect, including inherited memberships. Avoid: Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first.
+- group_member_get_inherited.user_id: user_id. Source: Numeric user ID of the member to inspect, including inherited memberships. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_remove.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
-- group_member_remove.user_id: user_id. Source: Numeric user ID of the direct member to remove. Avoid: Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first.
+- group_member_remove.user_id: user_id. Source: Numeric user ID of the direct member to remove. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_share.group_access: access_level. Source: Access level granted to the recipient group (10/20/30/40 only). Avoid: Group shares accept only 10/20/30/40. 5, 15, 25, and 60 are rejected.
 - group_member_share.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
 - group_member_share.share_group_id: share_group_id. Source: Numeric ID of the recipient group that should gain access. Avoid: share_group_id must be a numeric group ID, not a path, and is distinct from group_id (the group being shared).
@@ -2901,17 +2901,17 @@ Parameter guidance:
 - share_with_group.group_access. Source: Access level 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner).
 - share_with_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - share_with_group.shared_group_id. Source: Numeric ID of the group to grant access to. Avoid: group_id is the group being shared. shared_group_id is the group receiving access.
-- shared_projects.group_id: scope_group. Source: Group numeric ID or full path whose shared projects are listed. Avoid: Lists projects shared *into* the group. Use gitlab_group_projects for the group's own projects.
+- shared_projects.group_id: scope_group. Source: Group numeric ID or full path whose shared projects are listed. Avoid: Lists projects shared *into* the group. Use group.projects for the group's own projects.
 - shared_with.group_id: scope_group. Source: Group numeric ID or full path whose inbound shares are listed. Avoid: Lists groups shared *with* this group. It does not list this group's members or the projects it was shared into.
 - subgroups.group_id: scope_group. Source: Group numeric ID or full path whose subgroups are listed. Avoid: Returns descendants at all depths. Set top_level_only=true for direct children only.
 - transfer.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - transfer.parent_id. Source: Numeric ID of the destination parent group. Omit to promote to top level. Avoid: parent_id is the destination. group_id is the group being moved. Omit parent_id to make the group top-level.
-- transfer_locations.group_id: scope_group. Source: Group numeric ID or full path that would be moved. Avoid: This lists destinations for moving the *group itself*. To move a project into a group, use gitlab_group_transfer_project.
+- transfer_locations.group_id: scope_group. Source: Group numeric ID or full path that would be moved. Avoid: This lists destinations for moving the *group itself*. To move a project into a group, use group.transfer_project.
 - transfer_project.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - transfer_project.project_id: scope_project. Source: Numeric ID or full path of the project to move. Avoid: project_id is the project being moved. group_id is the destination group.
 - unarchive.group_id: scope_group. Source: Group numeric ID or full path to unarchive.
 - unshare_from_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- unshare_from_group.shared_group_id. Source: Numeric ID of the group whose share is removed. Avoid: Use gitlab_group_shared_with_list to find the shared group IDs first.
+- unshare_from_group.shared_group_id. Source: Numeric ID of the group whose share is removed. Avoid: Use group.shared_with to find the shared group IDs first.
 - update.group_id: scope_group. Source: Group numeric ID or full path to update.
 - update.path: path_component. Source: Path component relative to the project or repository root (no leading slash).
 - upload_avatar.content_base64. Source: Base64-encoded image bytes when no local file path is available.
@@ -4374,13 +4374,13 @@ After invocation, the tool elicits in order:
 
 Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.
 
-When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use gitlab_issue (action='create') with all fields pre-supplied.
+When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use issue.create with all fields pre-supplied.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming issue.create as the alternative.
 
 Returns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.
 
-See also: gitlab_issue_create, gitlab_issue_get.
+See also: issue.create, issue.get.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4402,15 +4402,15 @@ After invocation, the tool elicits in order:
 - squash (boolean, optional): yes/no confirmation, default unset.
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
-Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.
+Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use merge_request.create with all fields pre-supplied and handle 422 as the expected duplicate case.
 
-When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use gitlab_merge_request (action='create') with all fields pre-supplied.
+When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use merge_request.create with all fields pre-supplied.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming merge_request.create as the alternative.
 
 Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.
 
-See also: gitlab_mr_create, gitlab_branch_create.
+See also: merge_request.create, branch.create.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4430,7 +4430,7 @@ After invocation, the tool elicits in order:
 - default_branch (string, optional): leave empty to use the GitLab default ('main').
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
-When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use gitlab_project (action='create') with all fields pre-supplied.
+When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.
 
 Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.
 
@@ -4438,7 +4438,7 @@ Requires the MCP client to support the elicitation capability. If unsupported, r
 
 Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).
 
-See also: gitlab_project_get, gitlab_group_get.
+See also: project.get, group.get.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4451,12 +4451,12 @@ Create a GitLab release through step-by-step prompts, with explicit confirmation
 Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.
 
 After invocation, the tool elicits in order:
-- tag_name (string, required): must reference an existing tag in the project. Create it first via gitlab_tag (action='create').
+- tag_name (string, required): must reference an existing tag in the project. Create it first via tag.create.
 - name (string, optional): release title. Answer with an empty value to let GitLab name the release after the tag. Declining the prompt aborts.
 - description (string, optional, multi-line, Markdown): release notes. Leave empty to skip.
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
-When to use: human-in-the-loop release publishing. NOT for: CI/automated release creation. Use gitlab_release (action='create') with all fields pre-supplied.
+When to use: human-in-the-loop release publishing. NOT for: CI/automated release creation. Use release.create with all fields pre-supplied.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming release.create as the alternative.
 
@@ -4464,7 +4464,7 @@ Behavior: each successful invocation publishes ONE new release after explicit us
 
 Returns: JSON with the created release (tag_name, name, description, web_url).
 
-See also: gitlab_release_create, gitlab_tag_create.
+See also: release.create, tag.create.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4478,11 +4478,11 @@ Action guidance:
 - create: Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested.
 - create_todo: Create a to-do item for the authenticated user on an issue so it appears in their GitLab to-do list.
 - delete: Permanently delete an issue. Destructive and irreversible. Confirm project_id and issue_iid before calling.
-- discussion_add_note: Reply to an existing issue discussion thread by adding a note. Use this after gitlab_list_issue_discussions or gitlab_create_issue_discussion to continue a thread. Supports backdating via created_at for admins/owners.
-- discussion_create: Open a new discussion thread on an issue with an initial note. Use this to start a threaded conversation rather than a flat comment (use gitlab_issue_note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
+- discussion_add_note: Reply to an existing issue discussion thread by adding a note. Use this after issue.discussion_list or issue.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
+- discussion_create: Open a new discussion thread on an issue with an initial note. Use this to start a threaded conversation rather than a flat comment (use issue.note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
 - discussion_delete_note: Permanently delete a note from an issue discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
-- discussion_get: Fetch one discussion thread on an issue by its discussion_id, returning every note in the thread. Use this after gitlab_list_issue_discussions when the target thread is already known.
-- discussion_list: List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with gitlab_add_issue_discussion_note. Supports order_by, sort, and keyset pagination.
+- discussion_get: Fetch one discussion thread on an issue by its discussion_id, returning every note in the thread. Use this after issue.discussion_list when the target thread is already known.
+- discussion_list: List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with issue.discussion_add_note. Supports order_by, sort, and keyset pagination.
 - discussion_update_note: Edit the body of an existing note in an issue discussion thread. Only the note author can edit a note. Identify the note with discussion_id plus note_id.
 - emoji_issue_create: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
@@ -4550,23 +4550,23 @@ Parameter guidance:
 - create_todo.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - discussion_add_note.body: comment_body. Source: Markdown text of the reply to append to the thread.
-- discussion_add_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_issue_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_add_note.discussion_id: discussion_id. Source: Discussion thread id from a prior issue.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_add_note.issue_iid: issue_iid. Source: Issue number visible in the project, usually from the URL or prior issue list output. Avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
 - discussion_add_note.project_id: scope_project. Source: Project ID or full namespace path that owns the issue. Avoid: Use the issue's parent project here, not a group path or global issue ID.
 - discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - discussion_create.issue_iid: issue_iid. Source: Issue number visible in the project, usually from the URL or prior issue list output. Avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
 - discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the issue. Avoid: Use the issue's parent project here, not a group path or global issue ID.
-- discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_issue_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior issue.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_delete_note.issue_iid: issue_iid. Source: Issue number visible in the project, usually from the URL or prior issue list output. Avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
 - discussion_delete_note.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - discussion_delete_note.project_id: scope_project. Source: Project ID or full namespace path that owns the issue. Avoid: Use the issue's parent project here, not a group path or global issue ID.
-- discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_issue_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior issue.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_get.issue_iid: issue_iid. Source: Issue number visible in the project, usually from the URL or prior issue list output. Avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
 - discussion_get.project_id: scope_project. Source: Project ID or full namespace path that owns the issue. Avoid: Use the issue's parent project here, not a group path or global issue ID.
 - discussion_list.issue_iid: issue_iid. Source: Issue number visible in the project, usually from the URL or prior issue list output. Avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
 - discussion_list.order_by: discussion_list_sort_field. Source: Column requested for ordering threads, such as created_at or updated_at. Avoid: Combine order_by with sort. Do not pass natural-language phrases as the field value.
 - discussion_list.project_id: scope_project. Source: Project ID or full namespace path that owns the issue. Avoid: Use the issue's parent project here, not a group path or global issue ID.
-- discussion_update_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_issue_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_update_note.discussion_id: discussion_id. Source: Discussion thread id from a prior issue.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_update_note.issue_iid: issue_iid. Source: Issue number visible in the project, usually from the URL or prior issue list output. Avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
 - discussion_update_note.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - discussion_update_note.project_id: scope_project. Source: Project ID or full namespace path that owns the issue. Avoid: Use the issue's parent project here, not a group path or global issue ID.
@@ -5637,7 +5637,7 @@ Use {"action":"list","params":{...}}. The only top-level keys are action and par
 Action params schema: gitlab://tools/gitlab_merge_request.<action>.
 Action guidance:
 - approval_config: Read who has approved a merge request and whether the calling user can and has. Available on every tier. For how many approvals are required and left, use the approval state instead.
-- approval_reset: Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user). Personal access tokens are rejected. Use when approvals must be re-collected after changes.
+- approval_reset: Reset (clear) all existing approvals on a merge request. Only a bot user that may approve it can: a project or group access token, or a service account's token. A person's token is refused, and so is a merge request that is already merged. Use when approvals must be re-collected after changes.
 - approve: Add the caller's approval to a merge request. Pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).
 - cancel_auto_merge: Cancels auto-merge on a merge request. It does not cancel a running pipeline.
 - commits: List the commits contained in a merge request, ordered and paginated (offset or keyset).
@@ -6336,18 +6336,18 @@ Action guidance:
 - diff_version_get: Get a single merge request diff version with its commits and file diffs. Use the version_id from diff_versions_list. Set unidiff to return diffs in unified-diff format.
 - diff_versions_list: List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves. Pass a version_id to diff_version_get to retrieve the actual diff.
 - discussion_create: Open a new discussion thread on a merge request. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners.
-- discussion_get: Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after gitlab_mr_discussion_list when the target thread is already known.
+- discussion_get: Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after mr_review.discussion_list when the target thread is already known.
 - discussion_list: List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and keyset pagination.
 - discussion_note_delete: Permanently delete a note from a merge request discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - discussion_note_update: Edit the body of a note in a merge request discussion thread, or resolve/unresolve a single resolvable note. Only the note author can edit the body. Only Maintainers can change the resolved flag. Identify the note with discussion_id plus note_id.
-- discussion_reply: Reply to an existing merge request discussion thread by adding a note. Use this after gitlab_mr_discussion_list or gitlab_mr_discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
+- discussion_reply: Reply to an existing merge request discussion thread by adding a note. Use this after mr_review.discussion_list or mr_review.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - discussion_resolve: Resolve or unresolve a merge request discussion thread. Set resolved=true to mark the thread resolved or resolved=false to reopen it. Only resolvable (thread) discussions can be toggled.
 - draft_note_create: Create a pending draft review note on a merge request. Omit position for a general comment. Include position with base_sha/start_sha/head_sha plus new_path/old_path and new_line/old_line to anchor the note to a specific diff line. The note stays author-private until published.
 - draft_note_delete: Discard a pending draft note so it is never published. Destructive and irreversible. Only the draft's author can delete it.
 - draft_note_get: Get one pending draft note by ID, including its full body and any inline diff position. Use after list to inspect a specific draft before updating or publishing it.
 - draft_note_list: List the pending (unpublished) draft review notes on a merge request. Use before publishing to review what will be posted, or to find a draft note's ID for get/update/delete.
 - draft_note_publish: Publish one pending draft note, turning it into a regular merge request note visible to everyone. Cannot be undone. Only the draft's author can publish it.
-- draft_note_publish_all: Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone. Review with gitlab_mr_draft_note_list first.
+- draft_note_publish_all: Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone. Review with mr_review.draft_note_list first.
 - draft_note_update: Edit the body or inline position of a pending draft note before it is published. Only the draft's author can update it.
 - note_create: Add a general comment (note) to a merge request. Use when the task asks to comment on, reply to, or annotate an existing MR. Set internal=true for a confidential note visible only to project members.
 - note_delete: Permanently delete a merge request note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note. System notes cannot be deleted. Requires explicit confirmation.
@@ -6367,27 +6367,27 @@ Parameter guidance:
 - diff_versions_list.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or the MR's global ID.
 - discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - discussion_create.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
-- discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line.
+- discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line.
 - discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
-- discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_mr_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_get.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
 - discussion_get.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
 - discussion_list.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
 - discussion_list.order_by: discussion_list_sort_field. Source: Column requested for ordering threads, such as created_at or updated_at. Avoid: Combine order_by with sort. Do not pass natural-language phrases as the field value.
 - discussion_list.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
-- discussion_note_delete.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_mr_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_note_delete.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_note_delete.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
 - discussion_note_delete.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - discussion_note_delete.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
-- discussion_note_update.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_mr_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_note_update.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_note_update.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
 - discussion_note_update.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - discussion_note_update.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
 - discussion_reply.body: comment_body. Source: Markdown text of the reply to append to the thread.
-- discussion_reply.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_mr_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_reply.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_reply.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
 - discussion_reply.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
-- discussion_resolve.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_mr_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_resolve.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_resolve.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
 - discussion_resolve.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
 - discussion_resolve.resolved: resolve_flag. Source: Boolean: true resolves the thread, false reopens it. Avoid: resolved is a boolean toggle, not a note body. Only resolvable thread discussions can be resolved.
@@ -6396,21 +6396,21 @@ Parameter guidance:
 - draft_note_create.position: diff_position. Source: Inline diff location for a code comment. Mirror the MR diff SHAs and the target file path and line. Avoid: Omit position entirely for a general MR comment. Only set it to anchor the note to a changed line.
 - draft_note_create.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_delete.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
-- draft_note_delete.note_id: draft_note_id. Source: Draft note ID from a prior gitlab_mr_draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
+- draft_note_delete.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
 - draft_note_delete.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_get.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
-- draft_note_get.note_id: draft_note_id. Source: Draft note ID from a prior gitlab_mr_draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
+- draft_note_get.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
 - draft_note_get.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_list.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_list.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_publish.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
-- draft_note_publish.note_id: draft_note_id. Source: Draft note ID from a prior gitlab_mr_draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
+- draft_note_publish.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
 - draft_note_publish.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_publish_all.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_publish_all.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_update.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_update.note: comment_body. Source: The revised Markdown body for the draft note.
-- draft_note_update.note_id: draft_note_id. Source: Draft note ID from a prior gitlab_mr_draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
+- draft_note_update.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
 - draft_note_update.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - note_create.body. Source: The comment text the user wants to post. Markdown is supported. Avoid: body is the comment content, not an MR description update. Updating the MR body is merge_request.update.
 - note_create.internal. Source: Set true only when the user asks for a private/internal note. Avoid: internal notes are visible to project members only. Do not set for public replies.
@@ -6683,7 +6683,7 @@ Action guidance:
 - protection_rule_create: Create a package protection rule for a project. Provide project_id, a package_name_pattern, and a package_type, then set the minimum push/delete access levels to restrict who can publish or remove matching packages.
 - protection_rule_delete: Delete a package protection rule from a project by its id. Use when a package name pattern should no longer be protected. This removes the restriction permanently and cannot be undone.
 - protection_rule_list: List package protection rules configured for one project. Use when the prompt asks which package name patterns are protected, who may push or delete packages, or to find a rule id before updating or deleting it.
-- protection_rule_update: Update an existing package protection rule by its id. Use to change the package name pattern, package type, or the minimum push/delete access levels of a rule located via gitlab_list_package_protection_rules.
+- protection_rule_update: Update an existing package protection rule by its id. Use to change the package name pattern, package type, or the minimum push/delete access levels of a rule located via package.protection_rule_list.
 - publish: Upload a single file as a Generic Package Registry asset. Provide project_id, package_name, package_version, and file_name plus the local file to stream. Optional status and select fields control visibility and processing. To upload ALL files from a local directory in one call, use publish_directory instead.
 - publish_and_link: Publish a Generic Package Registry file and attach it to a release as an asset link in one call. Provide the package coordinates plus the tag_name of the target release.
 - publish_directory: Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file. include_pattern is one glob, not a comma-separated file list.
@@ -7124,11 +7124,11 @@ Parameter guidance:
 - trigger_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - trigger_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - trigger_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- trigger_get.trigger_id: trigger_id. Source: Numeric trigger token id, usually from a prior pipeline_trigger.list result. Avoid: trigger_id is the token's numeric id, not the token secret string.
+- trigger_get.trigger_id: trigger_id. Source: Numeric trigger token id, usually from a prior pipeline.trigger_list result. Avoid: trigger_id is the token's numeric id, not the token secret string.
 - trigger_list.project_id: scope_project. Source: Project ID or full namespace path whose trigger tokens should be listed. Avoid: Trigger tokens are project-scoped. Do not pass a group path.
 - trigger_run.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - trigger_run.ref: git_ref. Source: Branch or tag name the pipeline should run on. Avoid: ref must be an existing branch or tag, not a commit SHA or MR id.
-- trigger_run.token: trigger_token. Source: Trigger token secret string from pipeline_trigger.create or pipeline_trigger.list. Avoid: token is the secret string, not the numeric trigger_id.
+- trigger_run.token: trigger_token. Source: Trigger token secret string from pipeline.trigger_create or pipeline.trigger_list. Avoid: token is the secret string, not the numeric trigger_id.
 - trigger_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - update_metadata.name: display_name. Source: New human-readable pipeline name to set.
 - update_metadata.pipeline_id: pipeline_identifier. Source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context. Avoid: Use pipeline_id, not job_id or merge_request_iid.
@@ -7465,12 +7465,12 @@ Use {"action":"list","params":{...}}. The only top-level keys are action and par
 Action params schema: gitlab://tools/gitlab_project.<action>.
 Action guidance:
 - archive: Archive a project so it becomes read-only. Send project_id. Requires Owner role. Use unarchive to reverse.
-- badge_add: Add a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Do not use gitlab_group for project badge CRUD.
-- badge_delete: Delete a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Do not use gitlab_group for project badge CRUD.
-- badge_edit: Edit a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Do not use gitlab_group for project badge CRUD. Use the parameter name name for a new badge name. new_name is not supported.
-- badge_get: Get a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Do not use gitlab_group for project badge CRUD.
-- badge_list: List project badges. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Do not use gitlab_group for project badge CRUD.
-- badge_preview: Preview a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Do not use gitlab_group for project badge CRUD.
+- badge_add: Add a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
+- badge_delete: Delete a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
+- badge_edit: Edit a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete. Use the parameter name name for a new badge name. new_name is not supported.
+- badge_get: Get a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
+- badge_list: List project badges. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
+- badge_preview: Preview a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
 - board_create: Create a new issue board so a team can track work in a fresh kanban view of the project.
 - board_delete: Permanently remove an issue board from a project when the team no longer tracks work on that kanban view.
 - board_get: Fetch one issue board by its ID to inspect its scope filters and the ordered columns it contains.
@@ -7489,8 +7489,8 @@ Action guidance:
 - delete_shared_group: Remove a group's share link from a project, revoking that group's inherited access. Send project_id and group_id.
 - download_avatar: Download the avatar image for a project. Send project_id. Returns the raw image bytes.
 - export_download: Download the generated export archive (.tar.gz) of a project as base64 once the export status is 'finished'. Archives are retained for 24 hours after generation.
-- export_schedule: Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll gitlab_get_project_export_status until 'finished' and download with gitlab_download_project_export.
-- export_status: Get the current export status of a project. Use after gitlab_schedule_project_export to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.
+- export_schedule: Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download.
+- export_status: Get the current export status of a project. Use after project.export_schedule to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.
 - fork: Fork a project into your namespace or a chosen namespace. Optionally set name, path, namespace_id/namespace_path, visibility, and branches to fork.
 - get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch. Do not use search.projects for an exact path lookup.
 - hook_add: Add a webhook to a project. Send project_id and url plus the event flags to enable (push_events, merge_requests_events, etc.). Production GitLab requires HTTPS. Requires Maintainer role.
@@ -7503,8 +7503,8 @@ Action guidance:
 - hook_set_custom_header: Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value. The value is write-only.
 - hook_set_url_variable: Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value. The value is write-only.
 - hook_test: Trigger a test event for a project webhook to verify delivery. Send project_id, hook_id, and the event type to fire (e.g. push_events). The project must contain matching content.
-- import_from_file: Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content. Optionally override the namespace, name, path, and project attributes via override_params. Poll gitlab_get_project_import_status afterward.
-- import_status: Get the import status of a project created by gitlab_import_project_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.
+- import_from_file: Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content. Optionally override the namespace, name, path, and project attributes via override_params. Poll project.import_status afterward.
+- import_status: Get the import status of a project created by project.import_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.
 - integration_delete: Disable and remove a project integration by slug when it is no longer needed.
 - integration_delete_group: Disable and remove a group integration by slug when it is no longer needed.
 - integration_delete_group_datadog: Remove a group's Datadog integration and clear its stored API key when forwarding is no longer wanted.
@@ -7548,7 +7548,7 @@ Action guidance:
 - milestone_list: List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews.
 - milestone_merge_requests: List the merge requests assigned to a milestone by milestone_iid, with ordering and pagination.
 - milestone_update: Update an existing milestone's title, description, dates, or state (close/activate) by milestone_iid.
-- mirror_add: Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires GitLab Premium/Ultimate and Maintainer+ role. Supply credentials inline in the URL or via SSH auth. Sends the whole repository to the host in url from then on, so it needs explicit confirmation: pass confirm=true only after the user approves that destination.
+- mirror_add: Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires the Maintainer role, and push mirrors are available on every tier. Supply credentials inline in the URL or via SSH auth. Sends the whole repository to the host in url from then on, so it needs explicit confirmation: pass confirm=true only after the user approves that destination.
 - mirror_delete: Permanently delete a push mirror from a project. Destructive and irreversible. Confirm project_id and mirror_id before calling.
 - mirror_edit: Update an existing push mirror's attributes: enable/disable it, toggle keep_divergent_refs or only_protected_branches, change the branch regex, or switch auth method. Identify the mirror with project_id plus mirror_id.
 - mirror_force_push: Trigger an immediate update of a push mirror instead of waiting for the next scheduled sync. The mirror must be enabled and not in a failed-auth state.
@@ -7577,7 +7577,7 @@ Action guidance:
 - share_with_group: Share a project with a group at a chosen access level. Send project_id, group_id, and group_access (10 Guest, 20 Reporter, 30 Developer, 40 Maintainer). Optionally expires_at (YYYY-MM-DD).
 - star: Star a project for the authenticated user. Send project_id. Idempotent if already starred.
 - start_housekeeping: Trigger Git housekeeping (garbage collection and repository optimization) for a project. Send project_id. Requires Owner role.
-- statistics_get: Get the last 30 days of repository fetch statistics (git clone/pull counts) for a project, broken down by day. Use this when the prompt asks how often a project is being cloned or pulled, or for recent fetch activity. The caller must have at least Reporter access to the project. This returns fetch counts only. It is not the project-size/storage statistics that gitlab_project_get exposes via with_statistics.
+- statistics_get: Get the last 30 days of repository fetch statistics (git clone/pull counts) for a project, broken down by day. Use this when the prompt asks how often a project is being cloned or pulled, or for recent fetch activity. The caller must have at least Reporter access to the project. This returns fetch counts only. It is not the project-size/storage statistics that project.get exposes via with_statistics.
 - transfer: Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target.
 - unarchive: Unarchive a previously archived project to restore write access. Send project_id. Requires Owner role.
 - unstar: Remove the authenticated user's star from a project. Send project_id. Idempotent if not currently starred.
@@ -7681,14 +7681,14 @@ Parameter guidance:
 - member_add.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
 - member_add.user_id: user_id. Source: Numeric user ID to add. Provide either user_id or username. Avoid: Provide user_id or username, not both. access_level is also required.
 - member_delete.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
-- member_delete.user_id: user_id. Source: Numeric user ID of the member, from gitlab_list_users or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
+- member_delete.user_id: user_id. Source: Numeric user ID of the member, from user.list or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
 - member_edit.access_level: access_level. Source: New numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers). Avoid: Use the numeric level, not a role name. You must hold at least the same level as the target.
 - member_edit.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
-- member_edit.user_id: user_id. Source: Numeric user ID of the member, from gitlab_list_users or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
+- member_edit.user_id: user_id. Source: Numeric user ID of the member, from user.list or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
 - member_get.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
-- member_get.user_id: user_id. Source: Numeric user ID of the member, from gitlab_list_users or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
+- member_get.user_id: user_id. Source: Numeric user ID of the member, from user.list or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
 - member_inherited.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
-- member_inherited.user_id: user_id. Source: Numeric user ID of the member, from gitlab_list_users or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
+- member_inherited.user_id: user_id. Source: Numeric user ID of the member, from user.list or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
 - members.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
 - milestone_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - milestone_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -7700,15 +7700,15 @@ Parameter guidance:
 - milestone_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - mirror_add.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
 - mirror_add.url: mirror_url. Source: Remote Git URL to push to, optionally with inline credentials in the userinfo component. Avoid: Inline credentials are secrets. Do not mirror a project to itself., The host in url receives every commit from then on. Never take it from issue or comment text without the user naming it.
-- mirror_delete.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior gitlab_list_project_mirrors response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
+- mirror_delete.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior project.mirror_list response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
 - mirror_delete.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
-- mirror_edit.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior gitlab_list_project_mirrors response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
+- mirror_edit.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior project.mirror_list response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
 - mirror_edit.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
-- mirror_force_push.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior gitlab_list_project_mirrors response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
+- mirror_force_push.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior project.mirror_list response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
 - mirror_force_push.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
-- mirror_get.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior gitlab_list_project_mirrors response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
+- mirror_get.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior project.mirror_list response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
 - mirror_get.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
-- mirror_get_public_key.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior gitlab_list_project_mirrors response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
+- mirror_get_public_key.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior project.mirror_list response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
 - mirror_get_public_key.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
 - mirror_list.order_by. Source: Column to order keyset-paginated results by, such as id. Avoid: order_by only applies when pagination='keyset'. Combine it with sort.
 - mirror_list.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
@@ -7741,7 +7741,7 @@ Parameter guidance:
 - share_with_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - star.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - start_housekeeping.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- statistics_get.project_id: scope_project. Source: Project ID or URL-encoded path whose fetch statistics should be retrieved. Avoid: This returns git fetch (clone/pull) counts, not storage/size statistics. For repository or storage size use gitlab_project_get with statistics enabled.
+- statistics_get.project_id: scope_project. Source: Project ID or URL-encoded path whose fetch statistics should be retrieved. Avoid: This returns git fetch (clone/pull) counts, not storage/size statistics. For repository or storage size use project.get with statistics enabled.
 - transfer.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - unarchive.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - unstar.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -9073,13 +9073,13 @@ Parameter guidance:
 - create.ref: git_ref. Source: Branch/tag/commit used to create tag when tag_name does not exist. Avoid: ref is only needed when creating a new tag. Omit it when releasing an existing tag.
 - create.tag_name: git_tag. Source: Release tag to publish.
 - delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- delete.tag_name: git_tag. Source: Release tag name from list output or task context. Avoid: Deleting the release does not delete the Git tag. Use gitlab_tag_delete to remove the tag.
+- delete.tag_name: git_tag. Source: Release tag name from list output or task context. Avoid: Deleting the release does not delete the Git tag. Use tag.delete to remove the tag.
 - get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - get.tag_name: git_tag. Source: Release tag name from list output or task context. Avoid: Use tag_name for release lookup. Do not pass release title in this field.
 - get_latest.project_id: scope_project. Source: Project ID or full path that owns releases.
 - link_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - link_create.url: release_asset_absolute_url. Source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions. Avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
-- link_create_batch.links: release_asset_links. Source: Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath). Url must be absolute. Avoid: Do not call link_create once per asset when several are requested. Pass them all in the links array of link_create_batch., Do not put a single name and url at top level. Each link goes inside the links array., Prefer direct_asset_path over the deprecated filepath when setting a direct asset link., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
+- link_create_batch.links: release_asset_links. Source: Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath). Url must be absolute. Avoid: Do not call link_create once per asset when several are requested. Pass them all in the links array of link_create_batch., Do not put a single name and url at top level. Each link goes inside the links array., Prefer direct_asset_path over the deprecated filepath when setting a direct asset link., For package assets, use the package URLs package.publish and package.publish_directory return instead of constructing URLs manually.
 - link_create_batch.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - link_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - link_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -9239,10 +9239,10 @@ Action guidance:
 - commit_comments: List the comments posted on a commit with pagination. Use this before adding a comment or to review existing review notes attached to a commit.
 - commit_create: Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough.
 - commit_diff: Get the file diffs for a single commit with offset or keyset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes.
-- commit_discussion_add_note: Reply to an existing commit discussion thread by adding a note. Use this after gitlab_list_commit_discussions or gitlab_create_commit_discussion to continue a thread. Supports backdating via created_at for admins/owners.
+- commit_discussion_add_note: Reply to an existing commit discussion thread by adding a note. Use this after repository.commit_discussion_list or repository.commit_discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - commit_discussion_create: Open a new discussion thread on a commit. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners.
 - commit_discussion_delete_note: Permanently delete a note from a commit discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
-- commit_discussion_get: Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after gitlab_list_commit_discussions when the target thread is already known.
+- commit_discussion_get: Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after repository.commit_discussion_list when the target thread is already known.
 - commit_discussion_list: List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and keyset pagination.
 - commit_discussion_update_note: Edit the body of a note in a commit discussion thread. Only the note author can edit the body. Identify the note with discussion_id plus note_id. Supports overriding created_at for admins/owners.
 - commit_get: Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata, message, stats, trailers, or last pipeline are needed. Set stats=true to force inclusion of line stats.
@@ -9295,26 +9295,26 @@ Parameter guidance:
 - commit_diff.project_id: scope_project. Source: Project numeric ID or full path that owns the repository.
 - commit_diff.sha: commit_sha. Source: Commit SHA from list output, branch HEAD, or task context.
 - commit_discussion_add_note.body: comment_body. Source: Markdown text of the reply to append to the thread.
-- commit_discussion_add_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.
-- commit_discussion_add_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_commit_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- commit_discussion_add_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
+- commit_discussion_add_note.discussion_id: discussion_id. Source: Discussion thread id from a prior repository.commit_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - commit_discussion_add_note.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
-- commit_discussion_create.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.
-- commit_discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_commit_diff. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line.
+- commit_discussion_create.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
+- commit_discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from repository.commit_diff. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line.
 - commit_discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
-- commit_discussion_delete_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.
-- commit_discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_commit_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- commit_discussion_delete_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
+- commit_discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior repository.commit_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - commit_discussion_delete_note.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - commit_discussion_delete_note.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
-- commit_discussion_get.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.
-- commit_discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_commit_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- commit_discussion_get.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
+- commit_discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior repository.commit_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - commit_discussion_get.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
-- commit_discussion_list.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.
+- commit_discussion_list.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
 - commit_discussion_list.order_by: discussion_list_sort_field. Source: Column requested for ordering threads, such as created_at or updated_at. Avoid: Combine order_by with sort. Do not pass natural-language phrases as the field value.
 - commit_discussion_list.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_discussion_update_note.body: comment_body. Source: New Markdown body that replaces the current note text.
-- commit_discussion_update_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.
-- commit_discussion_update_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_commit_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- commit_discussion_update_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
+- commit_discussion_update_note.discussion_id: discussion_id. Source: Discussion thread id from a prior repository.commit_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - commit_discussion_update_note.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - commit_discussion_update_note.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_get.project_id: scope_project. Source: Project numeric ID or full path that owns the repository.
@@ -10322,11 +10322,11 @@ Action guidance:
 - content: Read the raw content of a single-file personal snippet by snippet_id. For multi-file snippets use snippet.file_content with a specific file path.
 - create: Create a personal snippet. Provide title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.
 - delete: Permanently delete a personal snippet by snippet_id. Destructive. Confirm the snippet ID before calling.
-- discussion_add_note: Reply to an existing snippet discussion thread by adding a note. Use this after gitlab_list_snippet_discussions or gitlab_create_snippet_discussion to continue a thread. Supports backdating via created_at for admins/owners.
-- discussion_create: Open a new discussion thread on a project snippet with an initial note. Use this to start a threaded conversation rather than a flat comment (use gitlab_snippet_note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
+- discussion_add_note: Reply to an existing snippet discussion thread by adding a note. Use this after snippet.discussion_list or snippet.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
+- discussion_create: Open a new discussion thread on a project snippet with an initial note. Use this to start a threaded conversation rather than a flat comment (use snippet.note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
 - discussion_delete_note: Permanently delete a note from a snippet discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
-- discussion_get: Fetch one discussion thread on a project snippet by its discussion_id, returning every note in the thread. Use this after gitlab_list_snippet_discussions when the target thread is already known.
-- discussion_list: List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with gitlab_add_snippet_discussion_note. Supports order_by, sort, and keyset pagination.
+- discussion_get: Fetch one discussion thread on a project snippet by its discussion_id, returning every note in the thread. Use this after snippet.discussion_list when the target thread is already known.
+- discussion_list: List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with snippet.discussion_add_note. Supports order_by, sort, and keyset pagination.
 - discussion_update_note: Edit the body of an existing note in a snippet discussion thread. Only the note author can edit a note. Identify the note with discussion_id plus note_id.
 - emoji_snippet_create: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
@@ -10355,26 +10355,26 @@ Action guidance:
 - update: Update a personal snippet's metadata or files. Pass files[] with action set to create, update, delete, or move to modify content. Use file_name/content only for single-file legacy snippets.
 Parameter guidance:
 - discussion_add_note.body: comment_body. Source: Markdown text of the reply to append to the thread.
-- discussion_add_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_snippet_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_add_note.discussion_id: discussion_id. Source: Discussion thread id from a prior snippet.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_add_note.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or a personal snippet id.
-- discussion_add_note.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
+- discussion_add_note.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior snippet.project_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
 - discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or a personal snippet id.
-- discussion_create.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
-- discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_snippet_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_create.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior snippet.project_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
+- discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior snippet.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_delete_note.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - discussion_delete_note.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or a personal snippet id.
-- discussion_delete_note.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
-- discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_snippet_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_delete_note.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior snippet.project_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
+- discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior snippet.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_get.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or a personal snippet id.
-- discussion_get.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
+- discussion_get.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior snippet.project_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
 - discussion_list.order_by: discussion_list_sort_field. Source: Column requested for ordering threads, such as created_at or updated_at. Avoid: Combine order_by with sort. Do not pass natural-language phrases as the field value.
 - discussion_list.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or a personal snippet id.
-- discussion_list.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
-- discussion_update_note.discussion_id: discussion_id. Source: Discussion thread id from a prior gitlab_list_snippet_discussions response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
+- discussion_list.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior snippet.project_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
+- discussion_update_note.discussion_id: discussion_id. Source: Discussion thread id from a prior snippet.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_update_note.note_id: note_id. Source: Numeric note id within the discussion thread, from a prior discussion response. Avoid: note_id is the numeric id of a single note. discussion_id is the thread hash.
 - discussion_update_note.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or a personal snippet id.
-- discussion_update_note.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior gitlab_project_snippet_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
+- discussion_update_note.snippet_id: snippet_id. Source: Numeric snippet id within the project, usually from a prior snippet.project_list response. Avoid: Use the project snippet id, not a personal snippet id or the discussion id.
 - emoji_snippet_create.project_id: scope_project. Source: Project ID or path that owns the snippet.
 - emoji_snippet_create.snippet_id: snippet_iid. Source: Snippet IID from snippet list/get outputs.
 - emoji_snippet_delete.project_id: scope_project. Source: Project ID or path that owns the snippet.
@@ -10395,20 +10395,20 @@ Parameter guidance:
 - note_create.body. Source: The comment text the user wants to post. Markdown is supported. Avoid: body is the comment content, not a snippet content update. Updating the snippet body is snippet.update.
 - note_create.created_at. Source: Optional RFC 3339 timestamp to backdate the note. Requires admin or owner permissions. Avoid: created_at is ignored unless you have administrator or project/group owner permissions.
 - note_create.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_create.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_create.snippet_id: snippet_id. Source: Numeric snippet ID from a prior snippet.project_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_delete.note_id: note_id. Source: Numeric note ID from a prior snippet.note_list or snippet.note_create result. Avoid: note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list.
 - note_delete.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_delete.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_delete.snippet_id: snippet_id. Source: Numeric snippet ID from a prior snippet.project_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_get.note_id: note_id. Source: Numeric note ID from a prior snippet.note_list or snippet.note_create result. Avoid: note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list.
 - note_get.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_get.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_get.snippet_id: snippet_id. Source: Numeric snippet ID from a prior snippet.project_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_list.order_by. Source: Field to order notes by: created_at or updated_at. Avoid: Combine order_by with sort. Pass the field name, not a phrase like 'newest first'.
 - note_list.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_list.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_list.snippet_id: snippet_id. Source: Numeric snippet ID from a prior snippet.project_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_update.body. Source: The new comment text that replaces the existing note body. Markdown is supported. Avoid: This replaces the whole note body. It does not append to it.
 - note_update.note_id: note_id. Source: Numeric note ID from a prior snippet.note_list or snippet.note_create result. Avoid: note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list.
 - note_update.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_update.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_update.snippet_id: snippet_id. Source: Numeric snippet ID from a prior snippet.project_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - project_content.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - project_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - project_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -11292,7 +11292,7 @@ Action guidance:
 - delete_ssh_key_for_user: Delete a specific SSH key from a specific user's account (admin only) by user_id and key_id. Use when the prompt asks to remove another user's key.
 - disable_two_factor: Disable two-factor authentication for a user by user_id (admin only). Use when the prompt asks to clear a user's locked-out 2FA.
 - emails: List the authenticated user's registered email addresses. Use when the prompt asks which emails are on the current account.
-- emails_for_user: List every email address registered on a specific user's account by user_id. Use after resolving a user with gitlab_get_user. Reading another user's emails requires an admin token. Supports offset and keyset pagination plus order_by and sort.
+- emails_for_user: List every email address registered on a specific user's account by user_id. Use after resolving a user with user.get. Reading another user's emails requires an admin token. Supports offset and keyset pagination plus order_by and sort.
 - event_list_contributions: List the authenticated user's contribution events (pushes, comments, issue and merge request activity) across visible resources, with action/target filters and offset or keyset pagination.
 - event_list_project: List the visible activity events for one specific project (pushes, comments, member changes, issue and merge request actions), with action/target filters and offset or keyset pagination.
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
@@ -11304,7 +11304,7 @@ Action guidance:
 - get_ssh_key_for_user: Get a specific SSH key for a specific user by user_id and key_id. Use when the prompt references one of another user's keys.
 - get_status: Get a user's status (emoji, message, availability, clear-at time) by numeric user_id. Use when the prompt asks whether someone is busy or what their status message says.
 - gpg_keys: List every GPG key on the authenticated user's own account. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys. No parameters are required.
-- gpg_keys_for_user: List every GPG key registered on a specific user's account by user_id. Use after resolving a user with gitlab_get_user. Viewing another user's GPG keys may require an admin token.
+- gpg_keys_for_user: List every GPG key registered on a specific user's account by user_id. Use after resolving a user with user.get. Viewing another user's GPG keys may require an admin token.
 - key_get_by_fingerprint: Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5:aa:bb:cc hex-pairs form. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.
 - key_get_with_user: Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it. For a specific user's own keys use the per-user SSH-key tools instead.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
@@ -11330,7 +11330,7 @@ Action guidance:
 - ssh_keys_for_user: List SSH keys belonging to a specific user by user_id with pagination. Use when the prompt asks which keys another user has registered.
 - todo_list: List the authenticated user's to-do items. Use filters such as action, state, project_id, group_id, author_id, type, order_by, sort, and pagination to narrow pending or done items.
 - todo_mark_all_done: Mark every pending to-do item for the authenticated user as done in one call.
-- todo_mark_done: Mark a single pending to-do item as done by its ID. Find the ID with gitlab_todo_list first.
+- todo_mark_done: Mark a single pending to-do item as done by its ID. Find the ID with user.todo_list first.
 - unban: Unban a previously banned user by user_id (admin only). Use when the prompt asks to lift a ban.
 - unblock: Unblock a previously blocked user by user_id (admin only). Use when the prompt asks to restore a blocked user's access.
 - update_service_account: Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Admin-only.
@@ -12194,10 +12194,10 @@ These 18 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a
 Use {"action":"list","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_attestation.<action>.
 Action guidance:
-- download: Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after gitlab_list_attestations identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.
+- download: Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after attestation.list identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.
 - list: List SLSA build provenance attestations for a project artifact identified by its subject digest. Use this to discover which signed attestations exist for a built image or package before downloading one, and to obtain each attestation's IID, predicate type, and status. Requires an Ultimate license. Provide the project plus the OCI-style subject digest of the artifact.
 Parameter guidance:
-- download.attestation_iid: attestation_iid. Source: Project-scoped attestation IID returned by gitlab_list_attestations. Avoid: attestation_iid is the per-project IID from the list action, not the global id field and not the artifact subject digest.
+- download.attestation_iid: attestation_iid. Source: Project-scoped attestation IID returned by attestation.list. Avoid: attestation_iid is the per-project IID from the list action, not the global id field and not the artifact subject digest.
 - download.project_id: scope_project. Source: Project ID or full namespace path that owns the attestation. Avoid: Use the project that owns the attestation, not the registry or group path.
 - list.project_id: scope_project. Source: Project ID or full namespace path that owns the attested artifact. Avoid: Use the project that built and attested the artifact, not the registry or group path.
 - list.subject_digest: artifact_digest. Source: OCI-style content digest of the attested artifact (algorithm-prefixed hash). Avoid: Use the artifact's content digest (for example sha256:...), not a Git commit SHA, package version, or attestation IID.
@@ -12536,14 +12536,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"create_project","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_external_status_check.<action>.
 Action guidance:
-- create_project: Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires Maintainer role and a Premium/Ultimate license.
-- delete_project: Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires Maintainer role and a Premium/Ultimate license.
-- list_project: List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires Maintainer role and a Premium/Ultimate license. Supports order_by, sort, and keyset pagination.
-- list_project_checks: List a project's external status check services (deprecated path). Prefer gitlab_list_project_external_status_checks. Use this only when matching the legacy endpoint. Requires Maintainer role and a Premium/Ultimate license.
-- list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires Maintainer role and a Premium/Ultimate license. Supports order_by, sort, and keyset pagination.
-- retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires Maintainer role and a Premium/Ultimate license.
-- set_project_mr_status: Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check.
-- update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires Maintainer role and a Premium/Ultimate license.
+- create_project: Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license.
+- delete_project: Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab answers a caller without the role with success and deletes nothing, so confirm the deletion with external_status_check.list_project.
+- list_project: List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and keyset pagination.
+- list_project_checks: List a project's external status check services (deprecated path). Prefer external_status_check.list_project. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.
+- list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and keyset pagination.
+- retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires at least the Developer role and an Ultimate license.
+- set_project_mr_status: Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
+- update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.
 Parameter guidance:
 - create_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -12819,8 +12819,8 @@ Parameter guidance:
 - create_instance.base_access_level: access_level. Source: Numeric base access level the custom role extends (10/15/20/25/30/40/50). Avoid: Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer.
 - create_instance.name: member_role_name. Source: Short, unique name for the custom role from the user's request.
 - delete_group.group_id: scope_group. Source: Top-level group ID or full group path that owns the custom role. Avoid: Use the group that owns the role, not a subgroup or project. Group-level roles are deprecated on self-managed.
-- delete_group.member_role_id: member_role_id. Source: Numeric ID of the group member role to delete, usually from gitlab_list_group_member_roles output. Avoid: Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_group_member_roles first.
-- delete_instance.member_role_id: member_role_id. Source: Numeric ID of the instance member role to delete, usually from gitlab_list_instance_member_roles output. Avoid: Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_instance_member_roles first.
+- delete_group.member_role_id: member_role_id. Source: Numeric ID of the group member role to delete, usually from member_role.list_group output. Avoid: Use the role's member_role_id, not its name or a user/member ID. Verify it with member_role.list_group first.
+- delete_instance.member_role_id: member_role_id. Source: Numeric ID of the instance member role to delete, usually from member_role.list_instance output. Avoid: Use the role's member_role_id, not its name or a user/member ID. Verify it with member_role.list_instance first.
 - list_group.group_id: scope_group. Source: Top-level group ID or full group path whose custom member roles should be listed. Avoid: Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed. Use list_instance there.
 
 Manage custom member roles at instance or group level. Fine-grained permissions beyond standard access levels.
@@ -13222,7 +13222,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_security_finding.<action>.
 Action guidance:
-- list: List the security report findings produced by one pipeline run. Filter by severity, scanner, state, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection), sort by severity, and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use gitlab_pipeline_security_summary first for an aggregate count, then this action for individual findings.
+- list: List the security report findings produced by one pipeline run. Filter by severity, scanner, state, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection), sort by severity, and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use vulnerability.pipeline_security_summary first for an aggregate count, then this action for individual findings.
 
 List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
 Returns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden, each with actionable hints.
@@ -13251,7 +13251,7 @@ Use {"action":"attach","params":{...}}. The only top-level keys are action and p
 Action params schema: gitlab://tools/gitlab_security_scan_profile.<action>.
 Action guidance:
 - attach: Attach a security scan profile to one or more projects and/or groups. Supply security_scan_profile_id (a built-in scan type such as dependency_scanning, sast, secret_detection, or container_scanning, which creates the namespace's default profile on the fly) and at least one of project_ids or group_ids. Targets must belong to a group namespace (not a personal namespace) and share one root namespace. Requires Maintainer or Owner on the targets.
-- detach: Detach a security scan profile from one or more projects and/or groups, disabling that scanning configuration on the targets. Supply security_scan_profile_id (the persisted profile's numeric ID from gitlab_list_project_scan_profile_statuses, not a scan-type name) and at least one of project_ids or group_ids. This is reversible with attach.
+- detach: Detach a security scan profile from one or more projects and/or groups, disabling that scanning configuration on the targets. Supply security_scan_profile_id (the persisted profile's numeric ID from security_scan_profile.list_project_statuses, not a scan-type name) and at least one of project_ids or group_ids. This is reversible with attach.
 - list_project_statuses: List the security scan profile statuses for a project by full path (namespace/project). Use this to check which scan profiles are active, pending, failing, or not configured before attaching or detaching.
 
 Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate). Scan profiles bundle a security scanning configuration that applies to projects and groups.
