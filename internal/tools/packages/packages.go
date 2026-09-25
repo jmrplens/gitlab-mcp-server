@@ -277,10 +277,15 @@ type ListItem struct {
 	CreatorID        int64          `json:"creator_id,omitempty"`
 	Tags             []TagItem      `json:"tags,omitempty"`
 	// Versions holds the package's other versions, which GitLab sends when one
-	// package is asked for rather than a page of them.
+	// package is asked for rather than a page of them: the entity exposes them
+	// unless it renders a collection, so neither listing ever carries them.
 	Versions []toolutil.PackageVersionOutput `json:"versions,omitempty"`
 	// ProjectID and ProjectPath name the owning project, which GitLab sends
-	// when the package is rendered in a group's listing.
+	// only when the package is rendered in a group's listing. There
+	// [GroupListItem] publishes both under the same keys, which take
+	// precedence over these, and no project-scoped route sends them, so
+	// nothing fills them; they stay so the entity's two conditional keys are
+	// accounted for on the project-scoped item as well.
 	ProjectID   int64  `json:"project_id,omitempty"`
 	ProjectPath string `json:"project_path,omitempty"`
 }
@@ -363,22 +368,20 @@ func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
 	return opts
 }
 
-// packageToListItem converts a GitLab Package API object into a ListItem.
-// packageToListItem converts a [gl.Package] into the package's
-// [ListItem] shape, flattening the optional pipeline metadata and filling
-// from what the capture read beside the SDK's decode.
-func packageToListItem(p *gl.Package, extra toolutil.PackageExtra) ListItem {
+// packageToListItem converts a [gl.Package] into the package's [ListItem]
+// shape, flattening the optional pipeline metadata. Every field it fills is
+// one client-go decodes: the creator and the Conan recipe name since
+// v3.14.0, which carries the package's other versions too, left out here
+// because no listing sends them.
+func packageToListItem(p *gl.Package) ListItem {
 	item := ListItem{
 		ID:               p.ID,
 		Name:             p.Name,
 		Version:          p.Version,
 		PackageType:      p.PackageType,
 		Status:           p.Status,
-		ConanPackageName: extra.ConanPackageName,
-		CreatorID:        extra.CreatorID,
-		Versions:         extra.Versions,
-		ProjectID:        extra.ProjectID,
-		ProjectPath:      extra.ProjectPath,
+		ConanPackageName: p.ConanPackageName,
+		CreatorID:        p.CreatorID,
 	}
 	if p.Pipeline != nil {
 		item.Pipeline = packagePipelineToOutput(p.Pipeline)
@@ -476,20 +479,15 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("packageList: project_id is required")
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pkgs, resp, err := client.GL().Packages.ListProjectPackages(string(input.ProjectID), buildListOptions(input), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("packageList", err, http.StatusNotFound,
 			"verify project_id with project.get; the project may have no packages yet or package registry may be disabled")
 	}
-	extras, err := toolutil.CapturedPackages(captured, len(pkgs))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("packageList", err)
-	}
 
 	items := make([]ListItem, 0, len(pkgs))
-	for i, p := range pkgs {
-		items = append(items, packageToListItem(p, extras[i]))
+	for _, p := range pkgs {
+		items = append(items, packageToListItem(p))
 	}
 
 	return ListOutput{
@@ -575,24 +573,19 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 		return GroupListOutput{}, errors.New("packageGroupList: group_id is required")
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pkgs, resp, err := client.GL().Packages.ListGroupPackages(string(input.GroupID), buildGroupListOptions(input), gl.WithContext(ctx))
 	if err != nil {
 		return GroupListOutput{}, toolutil.WrapErrWithStatusHint("packageGroupList", err, http.StatusNotFound,
 			"verify group_id with group.get; the group may have no packages yet or package registry may be disabled")
 	}
-	extras, err := toolutil.CapturedPackages(captured, len(pkgs))
-	if err != nil {
-		return GroupListOutput{}, toolutil.WrapErr("packageGroupList", err)
-	}
 
 	items := make([]GroupListItem, 0, len(pkgs))
-	for i, p := range pkgs {
+	for _, p := range pkgs {
 		if p == nil {
 			continue
 		}
 		items = append(items, GroupListItem{
-			ListItem:    packageToListItem(&p.Package, extras[i]),
+			ListItem:    packageToListItem(&p.Package),
 			ProjectID:   p.ProjectID,
 			ProjectPath: p.ProjectPath,
 		})

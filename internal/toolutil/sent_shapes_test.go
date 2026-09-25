@@ -179,22 +179,6 @@ type capturedReaderCase struct {
 	want func(any) bool
 }
 
-// readTheSentPackage reports whether the package reader decoded every key of
-// the fixture, the nested version with its tag and its pipeline included. It
-// sits out here because a predicate reaching three objects deep is the one
-// shape the table cannot hold as a literal and stay readable.
-func readTheSentPackage(v any) bool {
-	e, _ := v.([]PackageExtra)
-	if len(e) != 1 || e[0].CreatorID != 57 || e[0].ConanPackageName != "my-pkg" ||
-		e[0].ProjectID != 42 || e[0].ProjectPath != "group/project" || len(e[0].Versions) != 1 {
-		return false
-	}
-	version := e[0].Versions[0]
-	return version.Version == "0.9.0" && len(version.Tags) == 1 && version.Tags[0].Name == "stable" &&
-		version.Pipeline != nil && version.Pipeline.IID == 4 &&
-		version.Pipeline.User != nil && version.Pipeline.User.Username == "alice"
-}
-
 // tailReaderCases is the table itself, out here rather than inside the test, so
 // that the test is the loop it runs and nothing else.
 //
@@ -449,15 +433,6 @@ func tailReaderCases() []capturedReaderCase {
 			},
 		},
 		{
-			name: "package",
-			read: first(func(c *gitlabclient.ResponseCapture, n int) (any, error) { return CapturedPackages(c, n) }),
-			body: `[{"id":10,"creator_id":57,"conan_package_name":"my-pkg","project_id":42,` +
-				`"project_path":"group/project","versions":[{"id":9,"version":"0.9.0",` +
-				`"tags":[{"id":3,"package_id":9,"name":"stable"}],` +
-				`"pipeline":{"id":77,"iid":4,"sha":"abc123","user":{"id":5,"username":"alice"}}}]}]`,
-			want: readTheSentPackage,
-		},
-		{
 			// The pending request is the shape that carries nothing of the
 			// membership, so the body offers membership keys and the check is
 			// that the four UserBasic ones arrived. A shape that embedded
@@ -668,10 +643,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"namespaces", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedNamespaces(c, n)
-			return len(x), e
-		}},
-		{"packages", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedPackages(c, n)
 			return len(x), e
 		}},
 		{"access requests", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

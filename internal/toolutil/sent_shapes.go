@@ -835,32 +835,14 @@ type PackagePipelineOutput struct {
 }
 
 // PackageVersionOutput is one other version of the same package, with the tags
-// pointing at it and the pipeline that built it.
+// pointing at it and the pipeline that built it, which GitLab sends only when
+// one package is asked for and never on a page of them.
 type PackageVersionOutput struct {
 	ID        int64                  `json:"id"`
 	Version   string                 `json:"version"`
 	CreatedAt *time.Time             `json:"created_at"`
 	Tags      []PackageTagOutput     `json:"tags"`
 	Pipeline  *PackagePipelineOutput `json:"pipeline"`
-}
-
-// PackageExtra is what GitLab's package entity sends that the package itself
-// does not say: who published it, unconditionally; the Conan recipe's own name
-// on a Conan package; the owning project's id and path, sent when the package
-// is listed across a group; and the package's other versions, sent when one
-// package is asked for rather than a page of them.
-type PackageExtra struct {
-	CreatorID        int64                  `json:"creator_id"`
-	ConanPackageName string                 `json:"conan_package_name"`
-	ProjectID        int64                  `json:"project_id"`
-	ProjectPath      string                 `json:"project_path"`
-	Versions         []PackageVersionOutput `json:"versions"`
-}
-
-// CapturedPackages reads them off the captured answer to a list of packages,
-// one extra per package in order, the count held to what the SDK decoded.
-func CapturedPackages(capture *gitlabclient.ResponseCapture, decoded int) ([]PackageExtra, error) {
-	return capturedList[PackageExtra](capture, decoded, "packages")
 }
 
 // AccessRequesterExtra is what lib/api/entities/access_requester.rb sends on a

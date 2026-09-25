@@ -473,7 +473,7 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 				},
 			},
 		},
-	}, toolutil.PackageExtra{})
+	})
 
 	if item.CreatedAt == "" {
 		t.Fatal("CreatedAt should be preserved")
@@ -600,7 +600,7 @@ func TestPackageToListItem_FullNestedObjects(t *testing.T) {
 				WebURL: "https://gitlab.example.com/alice", CreatedAt: &now,
 			},
 		},
-	}, toolutil.PackageExtra{})
+	})
 
 	if item.Links == nil || item.Links.DeleteAPIPath != "/api/v4/p/7" {
 		t.Errorf("Links = %+v, want DeleteAPIPath set", item.Links)
@@ -1079,13 +1079,17 @@ func TestDownload_FileNameShapes(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Fields GitLab sends beside the ones the SDK's own Package models
+// The fields client-go's Package models since v3.14.0, and the ones a listing
+// never carries
 // ---------------------------------------------------------------------------.
 
-// packageSentJSON is one package as GitLab renders it, carrying the keys the
-// SDK's own Package leaves out: who published it, the Conan recipe name, the
-// owning project a group listing names, and the package's other versions with
-// the tags and the pipeline each of those carries.
+// packageSentJSON is one package carrying every key GitLab's package entity
+// can send: who published it, the Conan recipe name, the owning project a
+// group listing names, and the package's other versions with the tags and the
+// pipeline each of those carries. No single response carries all of them,
+// since the versions come only with a request for one package and the owning
+// project only with a group's listing, which is what lets one fixture show
+// which of them each handler publishes.
 const packageSentJSON = `{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"conan",` +
 	`"status":"default","creator_id":57,"conan_package_name":"my-pkg",` +
 	`"project_id":42,"project_path":"group/project",` +
@@ -1140,10 +1144,14 @@ var packageCalls = []struct {
 // errNoPackage reports a listing handler that answered with no package.
 var errNoPackage = errors.New("the handler published no package")
 
-// TestPackages_PublishTheFieldsGitLabSendsBesideTheSDKs verifies both listing
-// handlers publish the five keys the SDK's own Package does not model, read
-// off the captured response, including every field of a nested version.
-func TestPackages_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+// TestPackages_PublishTheFieldsClientGoDecodes verifies both listing handlers
+// publish who published the package and the Conan recipe name, which
+// client-go's Package decodes as of v3.14.0, and publish on the package's own
+// item neither the other versions nor the owning project. A listing never
+// carries versions, since the entity leaves them out of a collection, and the
+// owning project reaches a reader through the group listing's own item, which
+// the next test holds.
+func TestPackages_PublishTheFieldsClientGoDecodes(t *testing.T) {
 	for _, packageCall := range packageCalls {
 		t.Run(packageCall.name, func(t *testing.T) {
 			item, err := packageCall.call(packagesClient(t, `[`+packageSentJSON+`]`))
@@ -1156,52 +1164,29 @@ func TestPackages_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
 			if item.ConanPackageName != "my-pkg" {
 				t.Errorf("conan_package_name = %q, want my-pkg", item.ConanPackageName)
 			}
-			if item.ProjectID != 42 || item.ProjectPath != "group/project" {
-				t.Errorf("owning project = %d / %q, want 42 / group/project", item.ProjectID, item.ProjectPath)
+			if item.Versions != nil {
+				t.Errorf("versions = %+v, want none on a listing", item.Versions)
 			}
-			assertSentVersions(t, item.Versions)
+			if item.ProjectID != 0 || item.ProjectPath != "" {
+				t.Errorf("package item's owning project = %d / %q, want none", item.ProjectID, item.ProjectPath)
+			}
 		})
 	}
 }
 
-// wantSentVersion is the one other version packageSentJSON carries, with the
-// tag pointing at it and the pipeline that built it, as the handler should
-// publish them.
-var wantSentVersion = toolutil.PackageVersionOutput{
-	ID:      9,
-	Version: "0.9.0",
-	Tags:    []toolutil.PackageTagOutput{{ID: 3, PackageID: 9, Name: "stable"}},
-	Pipeline: &toolutil.PackagePipelineOutput{
-		ID: 77, IID: 4, ProjectID: 42, SHA: "abc123", Ref: "main", Status: "success",
-		Source: "push", WebURL: "https://gitlab.example.com/p/-/pipelines/77",
-		User: &toolutil.UserBasicOutput{ID: 5, Username: "alice", Name: "Alice"},
-	},
-}
-
-// assertSentVersions reports a package's other versions that lost any field of
-// the version, its tags or the pipeline that built it. The timestamps are
-// compared only for presence, since the fixture's are the only ones that could
-// be there.
-func assertSentVersions(t *testing.T, versions []toolutil.PackageVersionOutput) {
-	t.Helper()
-	if len(versions) != 1 {
-		t.Fatalf("versions = %+v, want the one version GitLab sent", versions)
+// TestGroupList_PublishesTheOwningProjectOnItsOwnItem verifies the group
+// listing publishes the owning project GitLab names there, which client-go
+// decodes on the GroupPackage wrapping the package, under the item's own keys.
+func TestGroupList_PublishesTheOwningProjectOnItsOwnItem(t *testing.T) {
+	out, err := GroupList(t.Context(), packagesClient(t, `[`+packageSentJSON+`]`), GroupListInput{GroupID: "7"})
+	if err != nil {
+		t.Fatalf("GroupList: %v", err)
 	}
-	got := versions[0]
-	if got.CreatedAt == nil || len(got.Tags) != 1 || got.Tags[0].CreatedAt == nil || got.Tags[0].UpdatedAt == nil {
-		t.Fatalf("versions[0] = %+v, want the version and its tag with their timestamps", got)
+	if len(out.Packages) != 1 {
+		t.Fatalf("packages = %d, want one", len(out.Packages))
 	}
-	if got.Pipeline == nil || got.Pipeline.CreatedAt == nil || got.Pipeline.UpdatedAt == nil {
-		t.Fatalf("versions[0].pipeline = %+v, want the pipeline with its timestamps", got.Pipeline)
-	}
-	// Compared with the timestamps cleared, so one comparison covers every
-	// other field of the version, the tag and the pipeline at once.
-	got.CreatedAt, got.Tags[0].CreatedAt, got.Tags[0].UpdatedAt = nil, nil, nil
-	pipeline := *got.Pipeline
-	pipeline.CreatedAt, pipeline.UpdatedAt = nil, nil
-	got.Pipeline = &pipeline
-	if !reflect.DeepEqual(got, wantSentVersion) {
-		t.Errorf("versions[0] = %+v, want %+v", got, wantSentVersion)
+	if got := out.Packages[0]; got.ProjectID != 42 || got.ProjectPath != "group/project" {
+		t.Errorf("owning project = %d / %q, want 42 / group/project", got.ProjectID, got.ProjectPath)
 	}
 }
 
@@ -1231,12 +1216,12 @@ func TestPackages_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestPackages_UnreadableCapturedFields verifies both listing handlers refuse
+// TestPackages_UnreadableCreator_Refused verifies both listing handlers refuse
 // a package whose creator_id is not a number rather than publishing one
 // missing what GitLab sent. client-go models creator_id on its own Package as
-// of v3.14.0, so the SDK's decoder is what refuses it now that it reads the
-// same bytes first.
-func TestPackages_UnreadableCapturedFields(t *testing.T) {
+// of v3.14.0, so its decoder is what refuses it, and the listings read nothing
+// beside it any more.
+func TestPackages_UnreadableCreator_Refused(t *testing.T) {
 	const poisoned = `[{"id":10,"name":"my-pkg","version":"1.0.0","creator_id":"nobody"}]`
 	cases := make([]testutil.CapturedCase, 0, len(packageCalls))
 	for _, packageCall := range packageCalls {
@@ -1248,10 +1233,9 @@ func TestPackages_UnreadableCapturedFields(t *testing.T) {
 	testutil.AssertUnreadableBodyRefused(t, cases)
 }
 
-// TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired verifies a
-// listing whose array carries a null entry publishes the packages beside it
-// with the fields read off their own position in the captured answer.
-func TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired(t *testing.T) {
+// TestGroupList_SkipsANullPackage verifies a listing whose array carries a
+// null entry publishes the package beside it, whole.
+func TestGroupList_SkipsANullPackage(t *testing.T) {
 	client := packagesClient(t, `[null,`+packageSentJSON+`]`)
 	out, err := GroupList(t.Context(), client, GroupListInput{GroupID: "7"})
 	if err != nil {
@@ -1261,7 +1245,7 @@ func TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired(t *testing.T
 		t.Fatalf("packages = %d, want the one package beside the null", len(out.Packages))
 	}
 	if out.Packages[0].CreatorID != 57 {
-		t.Errorf("creator_id = %d, want 57 read off the second position", out.Packages[0].CreatorID)
+		t.Errorf("creator_id = %d, want 57", out.Packages[0].CreatorID)
 	}
 }
 
@@ -1269,7 +1253,7 @@ func TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired(t *testing.T
 // package carrying no pipeline history and no tags publishes neither, rather
 // than publishing an empty list for each.
 func TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend(t *testing.T) {
-	item := packageToListItem(&gl.Package{ID: 1, Name: "pkg", Version: "1.0.0"}, toolutil.PackageExtra{})
+	item := packageToListItem(&gl.Package{ID: 1, Name: "pkg", Version: "1.0.0"})
 	if item.Pipelines != nil {
 		t.Errorf("Pipelines = %+v, want none", item.Pipelines)
 	}
@@ -1521,16 +1505,15 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 		Pipelines:        []*gl.PackagePipeline{previous},
 		CreatedAt:        &created,
 		LastDownloadedAt: &downloaded,
+		CreatorID:        57,
+		ConanPackageName: "recipe-name",
 		Tags: []gl.PackageTag{{
 			ID: 3, PackageID: 10, Name: "latest",
 			CreatedAt: &tagCreated, UpdatedAt: &tagUpdated,
 		}},
-	}, toolutil.PackageExtra{
-		CreatorID:        57,
-		ConanPackageName: "recipe-name",
-		ProjectID:        42,
-		ProjectPath:      "grp/proj",
-		Versions:         []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
+		// A listing never carries versions, so the conversion a listing runs
+		// leaves them out even where the struct holds some.
+		Versions: []*gl.PackageVersion{{ID: 9, Version: "0.9.0"}},
 	})
 
 	want := ListItem{
@@ -1573,9 +1556,6 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 			ID: 3, PackageID: 10, Name: "latest",
 			CreatedAt: tagCreated.String(), UpdatedAt: tagUpdated.String(),
 		}},
-		Versions:    []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
-		ProjectID:   42,
-		ProjectPath: "grp/proj",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("packageToListItem() =\n%+v\nwant:\n%+v", got, want)
