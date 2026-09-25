@@ -40,6 +40,9 @@ func (g *gate) classify(err *upstreamError) *gateFailure {
 		}
 		return &gateFailure{status: 503, code: -50300, message: "Verify later;", header: newHeader("Retry-After", itoa(delay))}
 	}
+	var scratch struct{ v int }
+	scratch.v = 1
+	_ = scratch
 	var fixed, unused = upstreamRetryAfter, 0
 	_ = unused
 	return &gateFailure{status: 503, code: -50300, message: "Verify later.", header: newHeader("Retry-After", itoa(fixed))}
@@ -94,6 +97,10 @@ const codeBusy = -32000
 
 var ErrTooMany = errors.New("subscriptions: too many active subscriptions")
 
+var errPicked = errors.New("picked")
+
+func pick() int64 { return -32000 }
+
 var errUnbound = &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "this subscription could not be attributed"}
 
 func busy(scope string) error {
@@ -105,6 +112,8 @@ func wire(err error) error {
 	switch {
 	case errors.Is(err, ErrTooMany):
 		code = codeBusy
+	case errors.Is(err, errPicked):
+		code = pick()
 	default:
 		code = jsonrpc.CodeInternalError
 	}
@@ -116,6 +125,8 @@ var packageCode int64 = -32000
 func noCode() error { return &jsonrpc.Error{Message: "no code"} }
 
 func globalCode() error { return &jsonrpc.Error{Code: packageCode} }
+
+func callCode() error { return &jsonrpc.Error{Code: pick()} }
 
 func noLiteral() error { return errors.New("plain") }
 
@@ -133,6 +144,10 @@ func unflagged() *result { return &result{Text: "x"} }
 func positional() *result { return &result{true, "x"} }
 
 func variableFlag(b bool) *result { return &result{IsError: b} }
+
+func falseFlag() *result { return &result{IsError: false} }
+
+func fromChannel(ch chan *result) *result { return <-ch }
 
 func fromValue(f func() *result) *result { return f() }
 
@@ -227,6 +242,10 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 		gateAt("gate.headerNameNotConstant", 400, -32600, "Named."),
 		gateAt("gate.gone", 400, -32600, ""),
 		gateAt("holder", 400, -32600, ""),
+		// A JSON-RPC literal is not a gate literal, and of two gate literals
+		// that both drifted the first one's problem is the one reported.
+		gateAt("busy", 400, -32600, ""),
+		gateAt("gate.resolveURL", 400, -40300, ""),
 	)
 	key := func(name string) string { return siteDir + ":" + name }
 	assertFindings(t, report, "G8",
@@ -241,13 +260,16 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 		"ROW-001 refusal 9 (http gate): "+key("gate.unreadableHeader")+" its headers are built where the gate cannot read them",
 		"ROW-001 refusal 10 (http gate): "+key("gate.headerNameNotConstant")+" its headers are built where the gate cannot read them",
 		"ROW-001 refusal 12 (http gate): "+key("holder")+" holds no gate refusal with status 400 whose text begins \"\"",
+		"ROW-001 refusal 13 (http gate): "+key("busy")+" holds no gate refusal with status 400 whose text begins \"\"",
+		"ROW-001 refusal 14 (http gate): "+key("gate.resolveURL")+" its code is -32600, and the register says -40300",
 	)
 }
 
 // TestCheckRefusals_RPCRefusals: a code that folds, a code held in a variable
 // and counted as every constant the function assigns it, and a holder that
 // is a variable, pass; a holder with no JSON-RPC literal, one whose literals
-// carry another code, set none, or read a package variable, fail.
+// carry another code, set none, or read a package variable or a call, fail.
+// A call assigned to the variable is not a constant it can carry.
 func TestCheckRefusals_RPCRefusals(t *testing.T) {
 	rpc := func(at string, code int, prefix, via string) tenancy.Refusal {
 		r := tenancy.Refusal{
@@ -269,6 +291,7 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		rpc("noCode", -32000, "", ""),
 		rpc("globalCode", -32000, "", ""),
 		rpc("gate.missing", -40100, "", ""),
+		rpc("callCode", -32000, "", ""),
 	)
 	assertFindings(t, report, "G8",
 		"ROW-001 refusal 4 (resources/read rpc): no string "+siteDir+":busy folds begins with \"too many open streams (%s\"",
@@ -277,14 +300,15 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		"ROW-001 refusal 7 (resources/read rpc): "+siteDir+":noCode builds no JSON-RPC error carrying code -32000 (it carries [])",
 		"ROW-001 refusal 8 (resources/read rpc): "+siteDir+":globalCode builds no JSON-RPC error carrying code -32000 (it carries [])",
 		"ROW-001 refusal 9 (resources/read rpc): "+siteDir+":gate.missing builds no JSON-RPC error",
+		"ROW-001 refusal 10 (resources/read rpc): "+siteDir+":callCode builds no JSON-RPC error carrying code -32000 (it carries [])",
 	)
 }
 
 // TestCheckRefusals_ToolErrorRefusals: a result flagged as an error, directly
 // or through the function it returns, passes, and so does a holder that
 // returns no tool result; one that returns a result it does not flag, flags
-// with a value that is not constant, returns through a value or a variable,
-// or writes it positionally, fails.
+// false or with a value that is not constant, returns through a value, a
+// variable or a channel, or writes it positionally, fails.
 func TestCheckRefusals_ToolErrorRefusals(t *testing.T) {
 	r := fixtureRules()
 	toolError := func(at string) tenancy.Refusal {
@@ -295,7 +319,7 @@ func TestCheckRefusals_ToolErrorRefusals(t *testing.T) {
 		toolError("refusedResult"), toolError("errorResult"), toolError("noResult"), toolError("codeBusy"),
 		toolError("bare"), toolError("recursive"),
 		toolError("unflagged"), toolError("variableFlag"), toolError("fromValue"), toolError("fromVariable"), toolError("positional"),
-		toolError("withClosure"), toolError("throughUnflagged"),
+		toolError("withClosure"), toolError("throughUnflagged"), toolError("falseFlag"), toolError("fromChannel"),
 	}
 	report := fixture{
 		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource},
@@ -312,6 +336,8 @@ func TestCheckRefusals_ToolErrorRefusals(t *testing.T) {
 		"ROW-001 refusal 10 (tools/call tool-error): "+siteDir+":fromVariable returns r, which the gate cannot read as a tool result",
 		"ROW-001 refusal 11 (tools/call tool-error): "+siteDir+":positional returns a tool result at "+at(`func positional() *result { return &result{true, "x"} }`)+" without IsError set",
 		"ROW-001 refusal 13 (tools/call tool-error): "+siteDir+":throughUnflagged returns a tool result at "+at(`func unflagged() *result { return &result{Text: "x"} }`)+" without IsError set",
+		"ROW-001 refusal 14 (tools/call tool-error): "+siteDir+":falseFlag returns a tool result at "+at(`func falseFlag() *result { return &result{IsError: false} }`)+" without IsError set",
+		"ROW-001 refusal 15 (tools/call tool-error): "+siteDir+":fromChannel returns <-ch, which the gate cannot read as a tool result",
 	)
 }
 
@@ -387,7 +413,10 @@ import "fmt"
 
 const suffix = "; retry"
 
+var varied = "%s"
+
 func Refuse(n int) string {
+	_ = fmt.Sprintf(varied, "varied argument")
 	return fmt.Sprintf("Refused (%d)"+suffix, n, "argument")
 }
 `
@@ -397,14 +426,19 @@ func Refuse(n int) string {
 	if !slices.Contains(texts, "Refused (") || !slices.Contains(texts, "argument") || slices.Contains(texts, "Refused (%d); retry") {
 		t.Fatalf("texts = %q, want the format up to its verb and the argument, never the format whole", texts)
 	}
+	// A format that does not fold contributes nothing, and its arguments are
+	// still read.
+	if !slices.Contains(texts, "varied argument") || slices.Contains(texts, "%s") || slices.Contains(texts, "") {
+		t.Fatalf("texts = %q, want the argument of a format that does not fold and nothing of the format", texts)
+	}
 	if g.foldedTexts(&declaration{typ: &ast.TypeSpec{}}) != nil {
 		t.Fatal("a declaration with no body folded texts")
 	}
 }
 
 // TestRefusalLiteral_ReadsKeyedAndPositionalFields: a positional literal is
-// read by field order, and a literal of a type that is no struct is read as
-// far as its keyed elements go.
+// read by field order, and a literal of a type that is no struct names no
+// field, keyed or not.
 func TestRefusalLiteral_ReadsKeyedAndPositionalFields(t *testing.T) {
 	source := `package site
 
@@ -419,6 +453,7 @@ var (
 	keyed      = failure{status: 400, code: -32600}
 	positional = failure{403, -40300}
 	slice      = codes{0: -32000}
+	unkeyed    = codes{-32000}
 )
 `
 	r := fixtureRules()
@@ -428,7 +463,7 @@ var (
 	}
 	p := programOf(t, fixture{files: map[string]string{"site/site.go": source}, rules: &r})
 	g := &gate{p: p, rules: r}
-	for name, want := range map[string][2]int{"keyed": {400, -32600}, "positional": {403, -40300}, "slice": {0, 0}} {
+	for name, want := range map[string][2]int{"keyed": {400, -32600}, "positional": {403, -40300}, "slice": {0, 0}, "unkeyed": {0, 0}} {
 		t.Run(name, func(t *testing.T) {
 			decl := p.decls[siteDir+":"+name]
 			rl, ok := g.refusalLiteral(decl.info(), decl.initializer().(*ast.CompositeLit))

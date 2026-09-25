@@ -64,7 +64,8 @@ func (g *gate) refusalLiteral(info *types.Info, lit *ast.CompositeLit) (refusalL
 			}
 			continue
 		}
-		if st != nil && pos < st.NumFields() {
+		// A positional struct literal names every field in order.
+		if st != nil {
 			fields[st.Field(pos).Name()] = elt
 		}
 	}
@@ -90,24 +91,25 @@ func (g *gate) refusalLiterals(decl *declaration, only string) []refusalLit {
 	return out
 }
 
-// intField is the integer a field of the literal folds to.
+// intField is the integer a field of the literal folds to. A type without
+// the field names it as empty, which no literal sets.
 func (r refusalLit) intField(info *types.Info, field string) (int, bool) {
 	expr, ok := r.fields[field]
-	if !ok || field == "" {
+	if !ok {
 		return 0, false
 	}
 	return foldInt(info, expr)
 }
 
-// foldInt is the integer an expression folds to.
+// foldInt is the integer an expression folds to, and false for one that folds
+// to nothing or to no integer.
 func foldInt(info *types.Info, expr ast.Expr) (int, bool) {
-	tv, ok := info.Types[expr]
-	if !ok || tv.Value == nil || tv.Value.Kind() != constant.Int {
+	value := info.Types[expr].Value
+	if value == nil {
 		return 0, false
 	}
-	// A code or a status is held in an int field, so it fits.
-	v, _ := constant.Int64Val(tv.Value)
-	return int(v), true
+	v, exact := constant.Int64Val(constant.ToInt(value))
+	return int(v), exact
 }
 
 // constString is the string an expression folds to.
@@ -545,9 +547,10 @@ func (g *gate) setsIsError(info *types.Info, lit *ast.CompositeLit) bool {
 		if !isKV {
 			continue
 		}
-		if id, isIdent := kv.Key.(*ast.Ident); isIdent && id.Name == g.rules.isErrorField {
-			tv := info.Types[kv.Value]
-			return tv.Value != nil && tv.Value.Kind() == constant.Bool && constant.BoolVal(tv.Value)
+		// A struct literal's keys are its field names, and the flag is a bool.
+		if types.ExprString(kv.Key) == g.rules.isErrorField {
+			value := info.Types[kv.Value].Value
+			return value != nil && constant.BoolVal(value)
 		}
 	}
 	return false

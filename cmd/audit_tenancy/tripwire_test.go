@@ -41,6 +41,8 @@ func Build(cfg config, l limiter) {
 	_ = NewLimiter(cfg.Other, l.Size(), false)
 	_ = NewLimiter(undeclared, 2, false)
 	_ = make(chan struct{}, undeclared)
+	_ = make(chan struct{}, 5)
+	_ = NewLimiter(int(time.Nanosecond), n, false)
 }
 
 func Loose(n int) {
@@ -86,6 +88,7 @@ func TestCheckTripwire_Constructors(t *testing.T) {
 		siteDir+":Build: passes "+siteDir+":undeclared, which no row declares to "+sitePath+".NewLimiter",
 		siteDir+":Build: passes "+siteDir+":undeclared, which no row declares to make",
 		siteDir+":Build: passes the literal 2 to "+sitePath+".NewLimiter",
+		siteDir+":Build: passes the literal 5 to make",
 		siteDir+":Loose: builds a limit with "+sitePath+".NewLimiter outside every declared site",
 		siteDir+":declaredLimiter: passes the literal 1 to "+sitePath+".NewLimiter",
 		siteDir+":semaphores: builds a limit with make outside every declared site",

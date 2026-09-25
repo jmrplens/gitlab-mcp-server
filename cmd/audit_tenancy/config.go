@@ -92,8 +92,9 @@ func (g *gate) prefixedNames() ([]string, bool) {
 func (g *gate) directEnvReads() map[string][]string {
 	reads := map[string][]string{}
 	g.p.forEachCall(func(_ string, info *types.Info, call *ast.CallExpr) {
+		// Every reader takes the variable's name as its first argument.
 		callee := calleeOf(info, call)
-		if callee == nil || !slices.Contains(g.rules.envReaders, calleeName(callee)) || len(call.Args) == 0 {
+		if callee == nil || !slices.Contains(g.rules.envReaders, calleeName(callee)) {
 			return
 		}
 		if name, folds := constString(info, call.Args[0]); folds {

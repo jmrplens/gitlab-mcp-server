@@ -151,6 +151,7 @@ func (g *gate) resolve(token string, n int) (int, *gateFailure) {
 func TestCheckCharges_EveryKindOfBlock_IsWalked(t *testing.T) {
 	body := `
 func (g *gate) resolve(token string, v any, ch chan int) *gateFailure {
+	<-ch
 	switch v.(type) {
 	case int:
 		g.charge(token)
@@ -200,7 +201,7 @@ func (g *gate) either(n int) *gateFailure {
 
 func pair() (int, *gateFailure) { return 0, nil }
 
-func (g *gate) resolve(n int, failure *gateFailure) (int, *gateFailure) {
+func (g *gate) resolve(n int, failure *gateFailure, failures chan *gateFailure) (int, *gateFailure) {
 	switch n {
 	case 1:
 		return 0, g.pick()
@@ -210,6 +211,8 @@ func (g *gate) resolve(n int, failure *gateFailure) (int, *gateFailure) {
 		return pair()
 	case 4:
 		return 0, g.either(n)
+	case 5:
+		return 0, <-failures
 	}
 	return 0, nil
 }
@@ -221,10 +224,31 @@ func (g *gate) resolve(n int, failure *gateFailure) (int, *gateFailure) {
 	assertFindings(t, report, "G7",
 		siteDir+":gate.resolve: returns a refusal from a call the gate cannot follow",
 		siteDir+":gate.resolve: returns a refusal the gate cannot read",
+		siteDir+":gate.resolve: returns a refusal the gate cannot read",
 		siteDir+":gate.resolve: returns what the gate cannot split into its results",
 		siteDir+":gate.resolve: returns a refusal from "+siteDir+":gate.either, which builds 2 gate refusals rather than one",
 		siteDir+":gate.resolve none: is a 400 refusal beginning \"\" in the failure table that no return of "+siteDir+":gate.resolve matches",
 	)
+}
+
+// TestCheckCharges_AConstructorGivenNoTextOfItsOwn_ReadsNone: a constructor
+// handed a text that does not fold, and holding none of its own, returns a
+// refusal with no text, which only a row naming no prefix matches.
+func TestCheckCharges_AConstructorGivenNoTextOfItsOwn_ReadsNone(t *testing.T) {
+	body := `
+func (g *gate) resolve(n int) *gateFailure {
+	return g.rejected(describe(n))
+}
+`
+	at := tenancy.Site{Pkg: siteDir, Name: "gate.resolve", Role: tenancy.Charge, Call: "gate.charge"}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + body},
+		fails: []tenancy.Failure{{Kind: "rejected", At: at, Status: 401}},
+	}.run(t)
+	assertFindings(t, report, "G7")
+	if report.Summary.Returns != 1 {
+		t.Fatalf("returns read = %d, want 1", report.Summary.Returns)
+	}
 }
 
 // TestCheckCharges_ADelegatedAnswer_IsNotARefusalOfItsOwn: check returning

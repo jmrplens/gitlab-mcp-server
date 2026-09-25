@@ -23,11 +23,19 @@ func Unused() bool { return false }
 `
 
 // refsSource reads the register directly, through a declared alias, and not
-// at all, and calls the register function from one place.
+// at all, and calls the register function from one place; Direct calls a
+// function value and a helper of its own, neither of them the register's.
 const refsSource = siteHeader + `
 const limit = leaf.Limit
 
-func Direct(n int) bool { return n > leaf.Limit }
+func helper() {}
+
+func Direct(n int) bool {
+	through := func() {}
+	through()
+	helper()
+	return n > leaf.Limit
+}
 
 func Aliased(n int) bool { return n > limit }
 

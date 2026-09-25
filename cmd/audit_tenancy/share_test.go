@@ -33,10 +33,12 @@ func shareRow(id string, kind tenancy.Kind, key tenancy.Key, sites ...tenancy.Si
 
 // TestCheckShareWords_ANumberOnAMintableKeyCalledAShare_IsAFinding: a share
 // word in a site's doc or in its block's, on an allowance keyed on a key a
-// caller can mint, fails without a finding recorded for INV-003.
+// caller can mint, fails without a finding recorded for INV-003. Pin and
+// Reason sites are read as well, each declaration once.
 func TestCheckShareWords_ANumberOnAMintableKeyCalledAShare_IsAFinding(t *testing.T) {
 	d := shareRow("HLD-001", tenancy.Ceiling, tenancy.KeyEntry,
-		aliasSite("perEntry", "Limit"), aliasSite("inBlock", "Limit"), site("Enforce", tenancy.Enforce), site("gone", tenancy.Enforce))
+		aliasSite("perEntry", "Limit"), aliasSite("inBlock", "Limit"), site("Enforce", tenancy.Enforce), site("gone", tenancy.Enforce),
+		site("affair", tenancy.Pin), site("Enforce", tenancy.Reason), site("Enforce", tenancy.Charge))
 	d.ReasonAt = site("perEntry", tenancy.Reason)
 	report := fixture{files: map[string]string{"site/site.go": shareSource}, rows: []tenancy.Decision{d}}.run(t)
 	assertFindings(t, report, "G13",

@@ -90,13 +90,15 @@ func moduleDir(path string) string {
 func (p *program) index(pkg *packages.Package, dir string) {
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
-			switch d := decl.(type) {
-			case *ast.FuncDecl:
-				obj := pkg.TypesInfo.Defs[d.Name]
-				p.add(&declaration{pkg: pkg, key: siteKey(dir, funcName(d)), obj: obj, fn: d})
-			case *ast.GenDecl:
-				p.indexGen(pkg, dir, d)
+			// A file's declarations are functions and general declarations;
+			// the parser makes a bad one only of source that does not parse,
+			// which the loader has already refused.
+			if fn, isFunc := decl.(*ast.FuncDecl); isFunc {
+				p.add(&declaration{pkg: pkg, key: siteKey(dir, funcName(fn)), obj: pkg.TypesInfo.Defs[fn.Name], fn: fn})
+				continue
 			}
+			gen, _ := decl.(*ast.GenDecl)
+			p.indexGen(pkg, dir, gen)
 		}
 	}
 }
@@ -139,7 +141,7 @@ func keyOf(s tenancy.Site) string {
 // funcName is how a function is named in a site: "Func", or "Type.Method"
 // with the receiver's base type, its pointer and type parameters stripped.
 func funcName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+	if fn.Recv == nil {
 		return fn.Name.Name
 	}
 	return receiverName(fn.Recv.List[0].Type) + "." + fn.Name.Name
@@ -377,18 +379,18 @@ func (p *program) forEachTopLevel(visit func(key string, info *types.Info, node 
 
 // visitDecl hands visit the code of one top-level declaration.
 func visitDecl(dir string, info *types.Info, decl ast.Decl, visit func(key string, info *types.Info, node ast.Node)) {
-	switch d := decl.(type) {
-	case *ast.FuncDecl:
-		visit(siteKey(dir, funcName(d)), info, d)
-	case *ast.GenDecl:
-		for _, spec := range d.Specs {
-			vs, isValue := spec.(*ast.ValueSpec)
-			if !isValue {
-				continue
-			}
-			for i, value := range vs.Values {
-				visit(siteKey(dir, vs.Names[min(i, len(vs.Names)-1)].Name), info, value)
-			}
+	if fn, isFunc := decl.(*ast.FuncDecl); isFunc {
+		visit(siteKey(dir, funcName(fn)), info, fn)
+		return
+	}
+	gen, _ := decl.(*ast.GenDecl)
+	for _, spec := range gen.Specs {
+		vs, isValue := spec.(*ast.ValueSpec)
+		if !isValue {
+			continue
+		}
+		for i, value := range vs.Values {
+			visit(siteKey(dir, vs.Names[min(i, len(vs.Names)-1)].Name), info, value)
 		}
 	}
 }

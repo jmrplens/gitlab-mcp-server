@@ -22,6 +22,8 @@ type loader struct{}
 func (loader) parse(s string, fallback float64) float64 { return fallback }
 
 func Load() {
+	through := func(s string) float64 { return 0 }
+	_ = through("value")
 	_ = parse("a", leaf.Ratio)
 	_ = parse("b", leaf.Ratio)
 }
@@ -58,6 +60,7 @@ func TestCheckArgs_WhatIsNotTheRegistersArgument_IsAFinding(t *testing.T) {
 			argSite("Literal", "parse", 1, 1, "Ratio"),
 			argSite("Load", "parse", 1, 1, "Ratio"),
 			argSite("Method", "loader.parse", 4, 1, "Ratio"),
+			argSite("Method", "loader.parse", -1, 1, "Ratio"),
 			argSite("Load", "parse", 1, 2, "Missing"),
 			argSite("notAFunction", "parse", 1, 1, "Ratio"),
 			argSite("gone", "parse", 1, 1, "Ratio"))},
@@ -67,6 +70,7 @@ func TestCheckArgs_WhatIsNotTheRegistersArgument_IsAFinding(t *testing.T) {
 		"ROW-001: "+siteDir+":Load calls parse 2 times, and the register says 1",
 		"ROW-001: "+siteDir+":Load passes Missing, which is not a constant of the register",
 		"ROW-001: "+siteDir+":Method calls loader.parse with 2 arguments, so it has none at index 4",
+		"ROW-001: "+siteDir+":Method calls loader.parse with 2 arguments, so it has none at index -1",
 		"ROW-001: "+siteDir+":notAFunction is not a function, so it has no call to parse",
 	)
 }

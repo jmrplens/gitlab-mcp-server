@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // checkReasons is G9: each row's quoted reason still appears, whitespace
@@ -17,11 +19,12 @@ func (g *gate) checkReasons() []Finding {
 		if d.Reason == "" {
 			continue
 		}
+		if d.ReasonAt == (tenancy.Site{}) {
+			found = append(found, Finding{Rule: "G9", Subject: d.ID, Message: "quotes a reason and names no declaration it is quoted from"})
+			continue
+		}
 		decl, err := g.p.lookup(d.ReasonAt)
 		if err != nil {
-			if d.ReasonAt.Pkg == "" && d.ReasonAt.Name == "" {
-				found = append(found, Finding{Rule: "G9", Subject: d.ID, Message: "quotes a reason and names no declaration it is quoted from"})
-			}
 			continue
 		}
 		want := normalize(d.Reason)

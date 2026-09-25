@@ -33,7 +33,7 @@ func (g *gate) checkOrphans() []Finding {
 		}
 	}
 	var found []Finding
-	for _, c := range g.exportedLeafDecls(token.CONST, g.rules.valueFiles) {
+	for _, c := range exportedConsts(g.p, g.leafFiles(g.rules.valueFiles)) {
 		if !deferred[c.name] {
 			if msg := g.orphanProblem(c.name); msg != "" {
 				found = append(found, Finding{Rule: "G6", Subject: siteKey(g.reg.leaf, c.name), Position: c.at, Message: msg})
@@ -46,7 +46,7 @@ func (g *gate) checkOrphans() []Finding {
 			named[name] = true
 		}
 	}
-	for _, fn := range g.exportedLeafDecls(token.FUNC, g.rules.ruleFiles) {
+	for _, fn := range exportedFuncs(g.p, g.leafFiles(g.rules.ruleFiles)) {
 		if !named[fn.name] {
 			found = append(found, Finding{
 				Rule: "G6", Subject: siteKey(g.reg.leaf, fn.name), Position: fn.at,
@@ -114,40 +114,47 @@ type leafDecl struct {
 	at   string
 }
 
-// exportedLeafDecls lists the register's exported constants (tok CONST) or
-// functions (tok FUNC) declared in the named files.
-func (g *gate) exportedLeafDecls(tok token.Token, files []string) []leafDecl {
-	leaf := g.p.byDir[g.reg.leaf]
-	var out []leafDecl
-	for _, file := range leaf.Syntax {
-		if !slices.Contains(files, filepath.Base(g.p.fset.Position(file.Package).Filename)) {
-			continue
-		}
-		for _, decl := range file.Decls {
-			out = append(out, exported(g.p, tok, decl)...)
+// leafFiles are the register's files with the named base names.
+func (g *gate) leafFiles(names []string) []*ast.File {
+	var out []*ast.File
+	for _, file := range g.p.byDir[g.reg.leaf].Syntax {
+		if slices.Contains(names, filepath.Base(g.p.fset.Position(file.Package).Filename)) {
+			out = append(out, file)
 		}
 	}
 	return out
 }
 
-// exported lists the exported names one declaration of kind tok introduces.
-func exported(p *program, tok token.Token, decl ast.Decl) []leafDecl {
+// exportedConsts lists the exported constants the files declare.
+func exportedConsts(p *program, files []*ast.File) []leafDecl {
 	var out []leafDecl
-	switch d := decl.(type) {
-	case *ast.FuncDecl:
-		if tok == token.FUNC && d.Recv == nil && d.Name.IsExported() {
-			out = append(out, leafDecl{name: d.Name.Name, at: p.position(d.Name.Pos())})
-		}
-	case *ast.GenDecl:
-		if d.Tok != tok {
-			return nil
-		}
-		for _, spec := range d.Specs {
-			vs, _ := spec.(*ast.ValueSpec)
-			for _, name := range vs.Names {
-				if name.IsExported() {
-					out = append(out, leafDecl{name: name.Name, at: p.position(name.Pos())})
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			gen, isGen := decl.(*ast.GenDecl)
+			if !isGen || gen.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				vs, _ := spec.(*ast.ValueSpec)
+				for _, name := range vs.Names {
+					if name.IsExported() {
+						out = append(out, leafDecl{name: name.Name, at: p.position(name.Pos())})
+					}
 				}
+			}
+		}
+	}
+	return out
+}
+
+// exportedFuncs lists the exported functions, not methods, the files
+// declare.
+func exportedFuncs(p *program, files []*ast.File) []leafDecl {
+	var out []leafDecl
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			if fn, isFunc := decl.(*ast.FuncDecl); isFunc && fn.Recv == nil && fn.Name.IsExported() {
+				out = append(out, leafDecl{name: fn.Name.Name, at: p.position(fn.Name.Pos())})
 			}
 		}
 	}

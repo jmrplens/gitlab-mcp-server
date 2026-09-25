@@ -61,12 +61,18 @@ func TestCheckOrphans_EveryRegisterValueHasAReader(t *testing.T) {
 	)
 }
 
+// orphanLeafCodes is a value file that also holds a function, which is not a
+// value and is not held to a reader through it.
+const orphanLeafCodes = leafCodes + `
+func codeName() string { return "busy" }
+`
+
 // TestCheckOrphans_ARegisterValueNothingReads_IsAFinding: a constant no site
 // is declared to read, and a rule function no row names, each fail; a
 // constant of a pending row waits for its layer.
 func TestCheckOrphans_ARegisterValueNothingReads_IsAFinding(t *testing.T) {
 	report := fixture{
-		files: map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules},
+		files: map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules, "leaf/codes.go": orphanLeafCodes},
 		rows: []tenancy.Decision{
 			row("ROW-001", aliasSite("limit", "Limit")),
 			{ID: "ROW-002", Values: []string{"Window"}},

@@ -160,15 +160,16 @@ func (w *chargeWalk) nested(st ast.Stmt) {
 	}
 }
 
-// clauses walks the case bodies of a switch or a select.
+// clauses walks the case bodies of a switch or a select: a switch's are case
+// clauses, and a select's are communication clauses.
 func (w *chargeWalk) clauses(body *ast.BlockStmt) {
 	for _, clause := range body.List {
-		switch c := clause.(type) {
-		case *ast.CaseClause:
-			w.block(c.Body)
-		case *ast.CommClause:
-			w.block(c.Body)
+		if cc, isCase := clause.(*ast.CaseClause); isCase {
+			w.block(cc.Body)
+			continue
 		}
+		comm, _ := clause.(*ast.CommClause)
+		w.block(comm.Body)
 	}
 }
 
@@ -190,7 +191,9 @@ func (w *chargeWalk) refusal(ret *ast.ReturnStmt, charged bool) bool {
 	}
 	switch e := expr.(type) {
 	case *ast.CompositeLit:
-		if rl, ok := w.g.refusalLiteral(info, e); ok && rl.typ.name == w.g.rules.gateType {
+		// The result is typed as the gate's failure, so a literal there is
+		// one, and read as one wherever the rules list its type.
+		if rl, ok := w.g.refusalLiteral(info, e); ok {
 			status, _ := rl.intField(info, rl.typ.status)
 			w.returns = append(w.returns, refusalReturn{pos: ret.Pos(), status: status, text: w.g.leadingText(info, rl.fields[rl.typ.message]), charged: charged})
 			return true
