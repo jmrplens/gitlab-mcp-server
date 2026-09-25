@@ -148,7 +148,7 @@ func Live() string { return usedConst + otherConst }
 // TestScan_ConstantsSharingALine_AreJudgedApartAndReportedInSourceOrder holds
 // the two things a line declaring three constants asks of the scan, as
 // `const a, b, c = ...` makes one. The column is part of a constant's
-// identity, so the one the package reads does not make its neighbours read.
+// identity, so the one the package reads does not make its neighbors read.
 // And the report comes in one order, the line's: the names are chosen to sort
 // the other way round from the columns, so an order taken from the names, or
 // from the map the scan collects into, cannot pass for the source's.

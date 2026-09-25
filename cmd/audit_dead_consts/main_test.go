@@ -385,6 +385,8 @@ func runMain(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	if err != nil {
 		t.Fatalf("encode the arguments: %v", err)
 	}
+	// #nosec G204 G702 -- the program is this test binary itself and the one
+	// argument a literal naming the test it is started at.
 	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestMain_InAChildProcess_RunsTheCommand$")
 	child.Env = append(os.Environ(), mainArgsEnv+"="+string(encoded), "GOCOVERDIR="+t.TempDir(), "GOWORK=off")
 	var out, errOut strings.Builder
@@ -440,14 +442,13 @@ func main() { println(greeting) }
 const otherDead = "outside the default patterns"
 `,
 	}
+	var written []error
 	for name, source := range files {
 		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			t.Fatalf("create the directory of %s: %v", name, err)
-		}
-		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
+		written = append(written, os.MkdirAll(filepath.Dir(path), 0o750), os.WriteFile(path, []byte(source), 0o600))
+	}
+	if err = errors.Join(written...); err != nil {
+		t.Fatalf("write the module: %v", err)
 	}
 	return dir
 }

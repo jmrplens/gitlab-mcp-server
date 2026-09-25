@@ -141,18 +141,21 @@ func TestReportWrite_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 // runs over one tree printing the same report. The input holds a file out of
 // order in each direction, so both answers of the file comparison decide
 // something; two findings on one line, the later column first, so only the
-// column can put them right; and a line whose column is smaller than an
-// earlier line's, so a column read before the line would misorder them.
+// column can put them right, and two on another line already in order, which
+// the column has to leave as they are; and a line whose column is smaller
+// than an earlier line's, so a column read before the line would misorder
+// them.
 func TestSortConstants_FileLineThenColumn_IsTheOrderFindingsAreRead(t *testing.T) {
 	found := []Constant{
 		{File: "b.go", Line: 1, Column: 5, Name: "fourth"},
-		{File: "c.go", Line: 1, Column: 1, Name: "fifth"},
+		{File: "b.go", Line: 1, Column: 12, Name: "fifth"},
+		{File: "c.go", Line: 1, Column: 1, Name: "sixth"},
 		{File: "a.go", Line: 9, Column: 1, Name: "third"},
 		{File: "a.go", Line: 2, Column: 30, Name: "second"},
 		{File: "a.go", Line: 2, Column: 7, Name: "first"},
 	}
 	sortConstants(found)
-	want := []string{"first", "second", "third", "fourth", "fifth"}
+	want := []string{"first", "second", "third", "fourth", "fifth", "sixth"}
 	for index, name := range want {
 		t.Run(name, func(t *testing.T) {
 			if found[index].Name != name {
