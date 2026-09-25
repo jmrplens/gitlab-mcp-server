@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
@@ -291,9 +292,13 @@ func TestWriteRecord_TwoRunsOneKey_Refused(t *testing.T) {
 		wants []string
 	}{
 		{
-			name:  "two directories of one edition",
-			reps:  []*report{docker, developer},
-			wants: []string{"settle to the ce entry", docker.Directory, developer.Directory},
+			// The two named in the order they were handed in, the one the
+			// entry would have held first, since the operator reads the pair
+			// to learn which directory to pass.
+			name: "two directories of one edition",
+			reps: []*report{docker, developer},
+			wants: []string{"settle to the ce entry, community/free (" + docker.Directory +
+				") and community/free (" + developer.Directory + "): "},
 		},
 		{
 			// A report built without shards has no directory to name, so the
@@ -599,6 +604,36 @@ func TestRecordPaths_EmptyOptions_UseTheRepositoryArtifacts(t *testing.T) {
 	named, page := recordPaths(options{dir: "/repo", recordPath: "a.json", recordPage: "b.md"})
 	if named != "a.json" || page != "b.md" {
 		t.Errorf("recordPaths() = %q, %q; want the named paths", named, page)
+	}
+}
+
+// TestRecordPaths_Defaults_NameTheCommittedArtifacts verifies that the two
+// default paths name the files the repository commits, each as the kind of
+// file it is read as: the record parses as a coverage record holding entries,
+// and the page opens with the title the renderer writes. The test above builds
+// its expectation from the same two constants, so the two exchanged read the
+// same there, and every Makefile target that relies on the defaults would
+// have been handed the page to parse as the record.
+func TestRecordPaths_Defaults_NameTheCommittedArtifacts(t *testing.T) {
+	root, err := mcpsurface.ProjectRoot()
+	if err != nil {
+		t.Fatalf("find the repository root: %v", err)
+	}
+	recordPath, pagePath := recordPaths(options{dir: root})
+
+	doc, err := readRecord(recordPath)
+	if err != nil {
+		t.Fatalf("the default record path %s does not hold a coverage record: %v", recordPath, err)
+	}
+	if len(doc.Runtimes) == 0 {
+		t.Errorf("the default record path %s holds no runtime entry", recordPath)
+	}
+	page, err := os.ReadFile(pagePath) // #nosec G304 -- a path inside this repository.
+	if err != nil {
+		t.Fatalf("read the default page path: %v", err)
+	}
+	if !strings.HasPrefix(string(page), "# E2E Coverage\n") {
+		t.Errorf("the default page path %s does not hold the rendered page", pagePath)
 	}
 }
 

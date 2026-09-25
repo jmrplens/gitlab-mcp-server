@@ -425,6 +425,81 @@ func TestClassify_Diagnostics_CountTheRecord(t *testing.T) {
 	}
 }
 
+// TestClassify_Diagnostics_EachCounterItsOwn verifies that every counter of
+// the diagnostics is fed by its own event, on a record where no two of them
+// agree. The fixture above holds three counters at one and two at zero, so a
+// raw call counted as a call without a dispatch, or the dispatch lines read
+// off the late joins, read exactly the same there.
+func TestClassify_Diagnostics_EachCounterItsOwn(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.dispatches, rt.lateJoins = 5, 6
+	unjudged := func(call *e2ecalls.Call) *e2ecalls.Call {
+		call.TestStatus = ""
+		return call
+	}
+	raw := func(test string) *e2ecalls.Call {
+		call := fixtureCall(callSpec{test: test, purpose: e2ecalls.PurposeRaw, expectation: e2ecalls.ExpectationAny, shape: metaDefault, outcome: e2ecalls.OutcomeProtocolError})
+		call.Tool = "gitlab_nope"
+		return unjudged(call)
+	}
+	rt.calls = append(rt.calls,
+		raw("TestRawAgain"), raw("TestRawOnceMore"),
+		unjudged(fixtureCall(callSpec{test: "TestLostRead", method: methodReadResource, target: "gitlab://groups", outcome: e2ecalls.OutcomeTransportError, shape: dynamicDefault})),
+		unjudged(fixtureCall(callSpec{test: "TestUnjudged", method: methodGetPrompt, target: "summarize_issue", shape: metaDefault})),
+	)
+	c := classify(rt, fixtureCatalog())
+
+	want := diagnostics{
+		Calls: len(rt.calls), ToolCalls: 20, DispatchLines: 5, LateJoins: 6,
+		WithoutDispatch: 1, TransportErrors: 2, RawCalls: 3, WithoutStatus: 4,
+		UnknownActions: []string{"ghost.action"}, UnobservedSessions: []string{"meta/default"},
+	}
+	if !reflect.DeepEqual(c.diagnostics, want) {
+		t.Errorf("diagnostics = %+v, want %+v", c.diagnostics, want)
+	}
+}
+
+// TestClassify_CapabilityCell_SecondCallAddsToTheFirst verifies that a second
+// call on a capability target adds its credit to the cell the first one made
+// rather than starting the cell over: two tests reading through one template,
+// and two reading one URI no session listed, each land in one cell naming
+// both, and the unlisted one stays unlisted. Every capability call of the
+// shared fixture has a target no other call has, so no other test reaches a
+// cell that already exists.
+func TestClassify_CapabilityCell_SecondCallAddsToTheFirst(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = append(rt.calls,
+		fixtureCall(callSpec{test: "TestResourcesAgain", method: methodReadResource, target: "gitlab://project/2/issue/7", shape: dynamicDefault}),
+		fixtureCall(callSpec{test: "TestNowhereAgain", method: methodReadResource, target: "gitlab://nowhere", outcome: e2ecalls.OutcomeProtocolError, expectation: "protocol_error", shape: dynamicDefault}),
+	)
+	c := classify(rt, fixtureCatalog())
+
+	cases := []struct {
+		name     string
+		target   string
+		tests    []string
+		unlisted bool
+	}{
+		{name: "two reads through one template", target: "gitlab://project/{project_id}/issue/{issue_iid}", tests: []string{"TestResources", "TestResourcesAgain"}},
+		{name: "two reads of one unlisted URI", target: "gitlab://nowhere", tests: []string{"TestNowhereAgain", "TestResources"}, unlisted: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found, exists := c.capabilities[capabilityResources][capabilityKey(capabilityResources, dynamicDefault, full, tc.target)]
+			if !exists {
+				t.Fatalf("no resources cell for %q", tc.target)
+			}
+			calls := 0
+			for _, n := range found.counts {
+				calls += n
+			}
+			if got := found.bestTests(); !reflect.DeepEqual(got, tc.tests) || calls != 2 || found.unlisted != tc.unlisted {
+				t.Errorf("cell = tests %q, %d calls, unlisted %t; want %q, 2 calls, unlisted %t", got, calls, found.unlisted, tc.tests, tc.unlisted)
+			}
+		})
+	}
+}
+
 // capabilityState reads one capability cell's state.
 func capabilityState(c *classification, kind string, key cellKey) state {
 	found, exists := c.capabilities[kind][key]

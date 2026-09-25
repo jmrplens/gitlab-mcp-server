@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"sort"
 	"testing"
 
@@ -49,6 +50,48 @@ func TestCatalogFrom_DeclaredIndividualNames_ResolvedByRegistration(t *testing.T
 				t.Errorf("%s = known %t, individual %q, owner %q; want known, %q, %q", tc.id, known, action.individualTool, action.individualOwner, tc.tool, tc.owner)
 			}
 		})
+	}
+}
+
+// TestCatalogFrom_ActionClasses_CopiedFromTheAction verifies that each action
+// carries its own class and tier, read off actions whose flags are set one at
+// a time: a read, a destructive action and a plain mutation, each at a tier of
+// its own. The classification tests hand in a catalog of their own and the
+// real-catalog tests look at names, so the read-only and destructive flags
+// could be read off each other's field with every other test green, and the
+// read-only mode would then withhold the reads and serve the deletes.
+func TestCatalogFrom_ActionClasses_CopiedFromTheAction(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	issues := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_issue", BaseDomain: "issue", SurfaceKind: actioncatalog.SurfaceKindMetaGroup})
+	issues.SetAction(actioncatalog.Action{Name: "list", ReadOnly: true, IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list"}})
+	issues.SetAction(actioncatalog.Action{Name: "delete", Destructive: true, Edition: "premium", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_delete"}})
+	issues.SetAction(actioncatalog.Action{Name: "create", Edition: "ultimate", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_create"}})
+	if err := catalog.AddGroup(issues); err != nil {
+		t.Fatalf("add the issue group: %v", err)
+	}
+
+	served := catalogFrom(catalog, edition.Ultimate)
+
+	want := &servedCatalog{
+		tier: edition.Ultimate,
+		ids:  []string{"issue.create", "issue.delete", "issue.list"},
+		actions: map[string]catalogAction{
+			"issue.list": {
+				id: "issue.list", domain: "issue", tier: edition.Free, readOnly: true,
+				metaTool: "gitlab_issue", individualTool: "gitlab_issue_list",
+			},
+			"issue.delete": {
+				id: "issue.delete", domain: "issue", tier: edition.Premium, destructive: true,
+				metaTool: "gitlab_issue", individualTool: "gitlab_issue_delete",
+			},
+			"issue.create": {
+				id: "issue.create", domain: "issue", tier: edition.Ultimate,
+				metaTool: "gitlab_issue", individualTool: "gitlab_issue_create",
+			},
+		},
+	}
+	if !reflect.DeepEqual(served, want) {
+		t.Errorf("catalogFrom() = %+v, want %+v", served, want)
 	}
 }
 

@@ -108,9 +108,11 @@ func TestCheckRecord_Failures(t *testing.T) {
 			want:    `ee names the tier "diamond"`,
 		},
 		{
+			// The whole sentence, since it carries two figures that differ by
+			// one: the count the summary claims and the length of the list.
 			name:    "the summary was edited without the list",
 			corrupt: func(doc *coverageRecord) { doc.Runtimes["ce"].Summary.L1++ },
-			want:    "the summary was edited without the list",
+			want:    "ce says l1 is 3 and lists 2 actions at that level: the summary was edited without the list",
 		},
 		{
 			name: "more asserted than the catalog holds",
@@ -533,6 +535,44 @@ func TestRevisionNote_Branches(t *testing.T) {
 				t.Errorf("revisionNote() = %q, want it to say %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestRevisionNote_Probes_AskGitThePairOfQuestions verifies the two questions
+// the note puts to git, word for word and in the repository it was handed:
+// whether the recorded revision names a commit here, and whether that commit
+// is an ancestor of HEAD. The branch test above answers by the subcommand
+// alone, so a merge-base asked the other way round passed there, and it would
+// call every record measured on an ancestor foreign while staying silent on
+// the one that is not.
+func TestRevisionNote_Probes_AskGitThePairOfQuestions(t *testing.T) {
+	const sha = "6bd82ea61e0ee0751e28b0a75954b9e4b86a8648"
+	var asked [][]string
+	previous := gitProbe
+	gitProbe = func(dir string, args ...string) (bool, error) {
+		asked = append(asked, append([]string{dir}, args...))
+		switch strings.Join(args, " ") {
+		case "cat-file -e " + sha + "^{commit}":
+			return true, nil
+		case "merge-base --is-ancestor " + sha + " HEAD":
+			return false, nil
+		default:
+			return false, errors.New("a question the note does not ask")
+		}
+	}
+	t.Cleanup(func() { gitProbe = previous })
+
+	got := revisionNote("/repo", "ee", &recordEntry{Runs: []runRow{{Commit: sha}}})
+
+	if want := "ee was measured on " + sha + ", which is not an ancestor of HEAD: the tree it ran against is not this one"; got != want {
+		t.Errorf("revisionNote() = %q, want %q", got, want)
+	}
+	wantAsked := [][]string{
+		{"/repo", "cat-file", "-e", sha + "^{commit}"},
+		{"/repo", "merge-base", "--is-ancestor", sha, "HEAD"},
+	}
+	if !slices.EqualFunc(asked, wantAsked, slices.Equal[[]string]) {
+		t.Errorf("git was asked %q, want %q", asked, wantAsked)
 	}
 }
 

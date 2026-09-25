@@ -87,7 +87,10 @@ func TestJoinBaselineResults_UnjudgedShards_TakeTheStreamBeside(t *testing.T) {
 	rt.calls = []*e2ecalls.Call{passed, failed}
 	rt.packages[passed], rt.packages[failed] = "suite", "suite"
 
-	writeFile(t, dir+baselineResultsSuffix, strings.Join([]string{
+	// Spelled out rather than built from the constant: it is the name S09
+	// wrote the stream under, and a constant read only through itself would
+	// let the reader look for any other name with this test still green.
+	writeFile(t, dir+".results.json", strings.Join([]string{
 		`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/e2e/suite","Test":"TestOld_Passed"}`,
 		`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/e2e/suite","Test":"TestOld_Passed","Elapsed":1}`,
 		`{"Time":"2026-09-01T10:00:02Z","Action":"run","Package":"example.com/old/e2e/suite","Test":"TestOld_Failed"}`,
