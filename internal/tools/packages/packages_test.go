@@ -1821,7 +1821,9 @@ func TestGet_InvalidInput_RefusedBeforeAnyRequest(t *testing.T) {
 
 // TestGet_GitLabRefusal_Wrapped verifies a 404 keeps its status for the route
 // to turn into the not-found result and carries the hint naming the listing,
-// and any other refusal is reported with its own status.
+// and any other refusal is reported with its own status. It asks for another
+// package than the other tests do, and holds the path to it, so a handler that
+// sent one fixed id would be seen here and in the request inventory alike.
 func TestGet_GitLabRefusal_Wrapped(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
@@ -1832,10 +1834,13 @@ func TestGet_GitLabRefusal_Wrapped(t *testing.T) {
 		{name: "forbidden", status: http.StatusForbidden},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/projects/42/packages/11" {
+					t.Errorf("request path = %q, want package 11's", r.URL.Path)
+				}
 				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
 			}))
-			_, err := Get(t.Context(), client, GetInput{ProjectID: "42", PackageID: "10"})
+			_, err := Get(t.Context(), client, GetInput{ProjectID: "42", PackageID: "11"})
 			if !toolutil.IsHTTPStatus(err, tt.status) {
 				t.Fatalf("Get error = %v, want status %d", err, tt.status)
 			}
