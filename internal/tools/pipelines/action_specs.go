@@ -53,7 +53,8 @@ func pipelineGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["pipeline_id"], input["project_id"])}, nil
+				return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+					toolutil.ParamText(input["pipeline_id"]), toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

@@ -48,7 +48,8 @@ func deploymentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return deploymentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["deployment_id"], input["project_id"])}, nil
+				return deploymentNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+					toolutil.ParamText(input["deployment_id"]), toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

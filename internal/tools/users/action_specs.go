@@ -2,7 +2,6 @@ package users
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -127,7 +126,7 @@ func userGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return userNotFoundOutput{Identifier: fmt.Sprintf("ID %v", input["user_id"])}, nil
+				return userNotFoundOutput{Identifier: "ID " + toolutil.ParamText(input["user_id"])}, nil
 			}
 			return result, err
 		}

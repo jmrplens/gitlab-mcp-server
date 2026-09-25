@@ -1540,12 +1540,16 @@ func TestActionSpecs_MilestoneGetRouteNotFound(t *testing.T) {
 	}))
 	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 9})
+	// JSON numbers of eight digits, which reach the route as float64s. The
+	// milestone used to be named 3.1234567e+07, and the project, read as a
+	// string, not at all.
+	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(),
+		map[string]any{"project_id": float64(12345678), "milestone_iid": float64(31234567)})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if _, ok := result.(milestoneNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want milestoneNotFoundOutput", result)
+	if notFound, ok := result.(milestoneNotFoundOutput); !ok || notFound.Identifier != "IID 31234567 in project 12345678" {
+		t.Fatalf("result = %#v, want milestoneNotFoundOutput naming IID 31234567 in project 12345678", result)
 	}
 }
 

@@ -192,7 +192,7 @@ func groupGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return groupNotFoundOutput{Identifier: fmt.Sprint(input[paramGroupID])}, nil
+				return groupNotFoundOutput{Identifier: toolutil.ParamText(input[paramGroupID])}, nil
 			}
 			return result, err
 		}

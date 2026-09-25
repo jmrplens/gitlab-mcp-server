@@ -125,7 +125,7 @@ func projectGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return projectNotFoundOutput{Identifier: fmt.Sprint(input[paramProjectID])}, nil
+				return projectNotFoundOutput{Identifier: toolutil.ParamText(input[paramProjectID])}, nil
 			}
 			return result, err
 		}

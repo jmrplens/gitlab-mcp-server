@@ -44,7 +44,7 @@ func wikiGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 				slug, _ := input["slug"].(string)
-				return wikiNotFoundOutput{Identifier: fmt.Sprintf("slug %q in project %v", slug, input["project_id"])}, nil
+				return wikiNotFoundOutput{Identifier: fmt.Sprintf("slug %q in project %s", slug, toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

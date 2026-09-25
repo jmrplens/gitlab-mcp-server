@@ -1388,13 +1388,33 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	byTool := labelSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_label_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "label_id": "nonexist"})
-	if err != nil {
-		t.Fatalf("Route.Handler error: %v", err)
-	}
-	callResult := toolutil.MarkdownForResult(result)
-	if callResult == nil || !callResult.IsError {
-		t.Fatalf("MarkdownForResult() = %#v, want IsError result for 404", callResult)
+	for _, tt := range []struct {
+		name  string
+		input map[string]any
+		want  string
+	}{
+		{name: "by name", input: map[string]any{"project_id": "42", "label_id": "nonexist"}, want: "ID nonexist in project 42"},
+		{
+			// JSON numbers of eight digits, which reach the route as float64s:
+			// read as strings they named no label and no project at all.
+			name:  "by number",
+			input: map[string]any{"project_id": float64(12345678), "label_id": float64(31234567)},
+			want:  "ID 31234567 in project 12345678",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := byTool["gitlab_label_get"].Route.Handler(t.Context(), tt.input)
+			if err != nil {
+				t.Fatalf("Route.Handler error: %v", err)
+			}
+			if notFound, ok := result.(labelNotFoundOutput); !ok || notFound.Identifier != tt.want {
+				t.Fatalf("result = %#v, want labelNotFoundOutput naming %s", result, tt.want)
+			}
+			callResult := toolutil.MarkdownForResult(result)
+			if callResult == nil || !callResult.IsError {
+				t.Fatalf("MarkdownForResult() = %#v, want IsError result for 404", callResult)
+			}
+		})
 	}
 }
 

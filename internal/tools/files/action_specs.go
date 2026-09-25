@@ -28,7 +28,7 @@ func fileGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return fileNotFoundOutput{Identifier: fmt.Sprintf("%q in project %v", input["file_path"], input["project_id"])}, nil
+				return fileNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", input["file_path"], toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

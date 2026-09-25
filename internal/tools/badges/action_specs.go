@@ -234,7 +234,7 @@ func wrapBadgeNotFound(route toolutil.ActionRoute, resource, scope, scopeKey str
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 				return badgeNotFoundOutput{
 					Resource:   resource,
-					Identifier: fmt.Sprintf("badge %v in %s %v", input["badge_id"], scope, input[scopeKey]),
+					Identifier: fmt.Sprintf("badge %s in %s %s", toolutil.ParamText(input["badge_id"]), scope, toolutil.ParamText(input[scopeKey])),
 					Hints:      hints,
 				}, nil
 			}

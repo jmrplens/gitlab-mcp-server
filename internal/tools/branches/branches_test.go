@@ -1844,7 +1844,9 @@ func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 	}))
 	byTool := branchSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "branch_name": "missing"})
+	// The project is a JSON number of eight digits, which reaches the route as
+	// a float64: read as a string it named no project at all.
+	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": float64(12345678), "branch_name": "missing"})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
@@ -1852,8 +1854,8 @@ func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 	if !ok {
 		t.Fatalf("result type = %T, want branchNotFoundOutput", result)
 	}
-	if !strings.Contains(notFound.Identifier, "missing") || !strings.Contains(notFound.Identifier, "42") {
-		t.Fatalf("identifier = %q, want branch and project context", notFound.Identifier)
+	if notFound.Identifier != `"missing" in project 12345678` {
+		t.Fatalf("identifier = %q, want the branch and the project the caller named", notFound.Identifier)
 	}
 }
 

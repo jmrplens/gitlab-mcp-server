@@ -50,9 +50,11 @@ func branchGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				// The project is named as the caller wrote it. Reading it as a
+				// string named a project given as a JSON number as no project
+				// at all.
 				branchName, _ := input[paramBranchName].(string)
-				projectID, _ := input["project_id"].(string)
-				return branchNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", branchName, projectID)}, nil
+				return branchNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", branchName, toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

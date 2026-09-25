@@ -36,3 +36,17 @@ func NotFoundResult(resource, identifier string, hints ...string) *mcp.CallToolR
 	c.End(hints...)
 	return ErrorResultAnnotated(b.String(), ContentDetail)
 }
+
+// ParamText renders a tool argument the way the caller wrote it, for the
+// identifier a not-found result names. A route wrapper reads the arguments as
+// they were decoded, before anything coerced them, so a JSON number arrives as
+// a float64, and %v prints one of a million or more in exponent form: a
+// package_id of 31234567 was named "3.1234567e+07" on the dynamic, meta and
+// individual surfaces alike. A whole number is printed as the integer it is,
+// and anything else as fmt prints it.
+func ParamText(value any) string {
+	if text, ok := numericIDString(value); ok {
+		return text
+	}
+	return fmt.Sprint(value)
+}

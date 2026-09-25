@@ -66,8 +66,11 @@ func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				projectID, _ := input["project_id"].(string)
-				return milestoneNotFoundOutput{Identifier: fmt.Sprintf("IID %v in project %s", input[paramMilestoneIID], projectID)}, nil
+				// The project is named as the caller wrote it. Reading it as a
+				// string named a project given as a JSON number as no project
+				// at all.
+				return milestoneNotFoundOutput{Identifier: fmt.Sprintf("IID %s in project %s",
+					toolutil.ParamText(input[paramMilestoneIID]), toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

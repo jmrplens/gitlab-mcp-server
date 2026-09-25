@@ -84,9 +84,11 @@ func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				labelID, _ := input[paramLabelID].(string)
-				projectID, _ := input["project_id"].(string)
-				return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s", labelID, projectID)}, nil
+				// Both are named as the caller wrote them. Reading them as
+				// strings named a label or a project given as a JSON number
+				// as none at all.
+				return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+					toolutil.ParamText(input[paramLabelID]), toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

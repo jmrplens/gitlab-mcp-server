@@ -35,7 +35,9 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 		args        map[string]any
 		expectError bool
 	}{
-		{"gitlab_deployment_get", map[string]any{"project_id": "42", "deployment_id": 999}, false},
+		// JSON numbers of eight digits, which reach the route as float64s:
+		// %v named them 3.1234567e+07 and 1.2345678e+07.
+		{"gitlab_deployment_get", map[string]any{"project_id": float64(12345678), "deployment_id": float64(31234567)}, false},
 		{"gitlab_deployment_create", map[string]any{"project_id": "42", "environment": "prod", "ref": "main", "sha": "abc123", "tag": false, "status": "created"}, true},
 		{"gitlab_deployment_update", map[string]any{"project_id": "42", "deployment_id": 1, "status": "failed"}, true},
 		{"gitlab_deployment_delete", map[string]any{"project_id": "42", "deployment_id": 1}, true},
@@ -53,8 +55,8 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
-			if _, ok := result.(deploymentNotFoundOutput); !ok {
-				t.Fatalf("result type = %T, want deploymentNotFoundOutput", result)
+			if notFound, ok := result.(deploymentNotFoundOutput); !ok || notFound.Identifier != "ID 31234567 in project 12345678" {
+				t.Fatalf("result = %#v, want deploymentNotFoundOutput naming ID 31234567 in project 12345678", result)
 			}
 		})
 	}

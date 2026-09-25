@@ -54,7 +54,7 @@ func releaseGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 				tagName, _ := input[paramTagName].(string)
-				return releaseNotFoundOutput{Identifier: fmt.Sprintf("tag %q in project %v", tagName, input["project_id"])}, nil
+				return releaseNotFoundOutput{Identifier: fmt.Sprintf("tag %q in project %s", tagName, toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

@@ -560,7 +560,9 @@ func TestActionSpecs_Get404(t *testing.T) {
 		args         map[string]any
 		expectResult bool
 	}{
-		{"gitlab_snippet_get", map[string]any{"snippet_id": 1}, true},
+		// A JSON number of eight digits, which reaches the route as a float64:
+		// %v named it 3.1234567e+07.
+		{"gitlab_snippet_get", map[string]any{"snippet_id": float64(31234567)}, true},
 		{"gitlab_project_snippet_get", map[string]any{"project_id": "p", "snippet_id": 1}, false},
 	}
 	for _, tc := range tools {
@@ -570,8 +572,8 @@ func TestActionSpecs_Get404(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
 				}
-				if _, ok := result.(snippetNotFoundOutput); !ok {
-					t.Fatalf("result type = %T, want snippetNotFoundOutput", result)
+				if notFound, ok := result.(snippetNotFoundOutput); !ok || notFound.Identifier != "ID 31234567" {
+					t.Fatalf("result = %#v, want snippetNotFoundOutput naming ID 31234567", result)
 				}
 				return
 			}

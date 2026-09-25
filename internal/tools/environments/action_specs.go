@@ -77,7 +77,8 @@ func environmentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return func(ctx context.Context, input map[string]any) (any, error) {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input[paramEnvironmentID], input["project_id"])}, nil
+				return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+					toolutil.ParamText(input[paramEnvironmentID]), toolutil.ParamText(input["project_id"]))}, nil
 			}
 			return result, err
 		}

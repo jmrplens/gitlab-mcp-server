@@ -74,3 +74,29 @@ func TestNotFoundResult_NoHints_EscapesTheIdentifier(t *testing.T) {
 		t.Errorf("not-found card:\n got %q\nwant %q", text, want)
 	}
 }
+
+// TestParamText_NamesAnArgumentAsTheCallerWroteIt verifies the identifier a
+// not-found result names is the argument as the caller wrote it: a JSON
+// number, which a route wrapper reads as a float64, is printed whole at any
+// size, where %v printed one of a million or more as 3.1234567e+07, while a
+// string, a fraction and a missing argument read as fmt prints them.
+func TestParamText_NamesAnArgumentAsTheCallerWroteIt(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{name: "a JSON number of eight digits", value: float64(31234567), want: "31234567"},
+		{name: "a small JSON number", value: float64(42), want: "42"},
+		{name: "an int", value: 12345678, want: "12345678"},
+		{name: "a path", value: "group/project", want: "group/project"},
+		{name: "a fraction", value: 1.5, want: "1.5"},
+		{name: "nothing", value: nil, want: "<nil>"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ParamText(tt.value); got != tt.want {
+				t.Errorf("ParamText(%#v) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}

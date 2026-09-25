@@ -75,9 +75,14 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	byTool := tagSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_tag_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "nonexistent"})
+	// The project is a JSON number of eight digits, which reaches the route as
+	// a float64: read as a string it named no project at all.
+	result, err := byTool["gitlab_tag_get"].Route.Handler(t.Context(), map[string]any{"project_id": float64(12345678), "tag_name": "nonexistent"})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
+	}
+	if notFound, ok := result.(tagNotFoundOutput); !ok || notFound.Identifier != `"nonexistent" in project 12345678` {
+		t.Fatalf("result = %#v, want tagNotFoundOutput naming \"nonexistent\" in project 12345678", result)
 	}
 	callResult := toolutil.MarkdownForResult(result)
 	if callResult == nil || !callResult.IsError {

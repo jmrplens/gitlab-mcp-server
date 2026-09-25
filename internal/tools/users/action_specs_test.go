@@ -119,7 +119,9 @@ func TestActionSpecs_GetUserNotFound(t *testing.T) {
 	}))
 	byTool := userSpecsByTool(t, ActionSpecs(client, false))
 
-	result, err := byTool["gitlab_get_user"].Route.Handler(t.Context(), map[string]any{"user_id": 999})
+	// A JSON number of eight digits, which reaches the route as a float64: %v
+	// named it 3.1234567e+07.
+	result, err := byTool["gitlab_get_user"].Route.Handler(t.Context(), map[string]any{"user_id": float64(31234567)})
 	if err != nil {
 		t.Fatalf("Route.Handler(gitlab_get_user) error: %v", err)
 	}
@@ -127,7 +129,7 @@ func TestActionSpecs_GetUserNotFound(t *testing.T) {
 	if !ok {
 		t.Fatalf("Route.Handler(gitlab_get_user) returned %T, want userNotFoundOutput", result)
 	}
-	if out.Identifier != "ID 999" {
+	if out.Identifier != "ID 31234567" {
 		t.Fatalf("identifier = %q", out.Identifier)
 	}
 }
