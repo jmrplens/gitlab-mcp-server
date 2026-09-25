@@ -106,7 +106,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 2 open | **12 of 14; all 12 released, v3.1.0 to v3.11.0** | No | Retired for the 12; the 2 open ones keep theirs |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 1 open | **13 of 14; all 13 released, v3.1.0 to v3.14.0** | No | Retired for the 12 the v3.12.0 pin carries; the v3.14.0 one and the open one keep theirs |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
@@ -207,6 +207,20 @@ the router snapshot merged and the reviewer's suggestion applied on row 46's,
 and the umbrella issue's description rewritten. No open merge request the
 file follows has merged since, and each now waits on its reviewers, or on
 another merge request, rather than on us.
+
+Re-verified on 2026-09-25 against the trackers and the tags. One row moved:
+[gitlab-org/api/client-go!3052](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3052)
+merged at 18:46 UTC on 2026-09-24 and is in **v3.14.0**, tagged thirteen
+minutes later, so row 34 reads 13 of 14 and every merged client-go row is
+released. The pin is still v3.12.0, which now lags one merge this file records:
+the `Package` fields stay read off the capture until a bump reaches v3.14.0.
+v3.13.1, tagged at 18:23 the same day, carries nothing a row waits on. The
+fork pipeline of
+[gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702)
+failed `cells-routes:router-in-sync` again, on routes `master` added after the
+branch was rebuilt rather than on the route the router snapshot refresh added,
+and row 46's section says what clears it. Six merge requests are open, and no
+reviewer has commented on any of them since.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -1084,7 +1098,7 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: two are open, both with a green pipeline and no conflicts.
+- **In review**: one is open, with a green pipeline and no conflicts.
   [gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
   (the seven `Hook` fields) is approved and mergeable: a reviewer approved it
   on 2026-09-14 and again on 2026-09-16, after the test push that reset the
@@ -1095,13 +1109,6 @@ of change whose test is one assertion on the built URL.
   thread records that the documentation half,
   [gitlab-org/gitlab!254538](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254538),
   merged and is live, and asks @fforster for that review.
-  [gitlab-org/api/client-go!3052](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3052)
-  (the `Package` fields) was handed to @PatrickRice on 2026-09-14, who asked
-  on 2026-09-16 whether `CreatorID` should be a primitive rather than a
-  pointer, which it became the same day (`2cc7e540`). That thread, still
-  unresolved and the reviewer's to close, is the one thing between it and an
-  approval. It was not asked again from here on 2026-09-24, because the bot
-  had sent a reminder about it that morning.
 - **Merged**: `gitlab-org/api/client-go!3042` (`BroadcastMessage.Color`) in
   **v3.1.0**, tagged on 2026-09-09 eighteen minutes after the merge; then
   `gitlab-org/api/client-go!3040` (`Appearance.SiteName`) and
@@ -1118,8 +1125,12 @@ of change whose test is one assertion on the built URL.
   and `gitlab-org/api/client-go!3041` (`Topic.OrganizationID`) in **v3.9.0**,
   merged on 2026-09-12 and 2026-09-13; then `gitlab-org/api/client-go!3050`
   (`Imported`, `ImportedFrom` and `WikiPage` on both event structs) in
-  **v3.10.0** on 2026-09-14; and finally `gitlab-org/api/client-go!3051` (the
-  eight `Namespace` fields) in **v3.11.0** on 2026-09-16.
+  **v3.10.0** on 2026-09-14; then `gitlab-org/api/client-go!3051` (the eight
+  `Namespace` fields) in **v3.11.0** on 2026-09-16; and
+  `gitlab-org/api/client-go!3052` (`ConanPackageName`, `CreatorID` and
+  `Versions` on `Package`) in **v3.14.0**, merged by @PatrickRice at 18:46 UTC
+  on 2026-09-24 and tagged thirteen minutes later. v3.13.1, cut at 18:23 the
+  same day, does not carry it.
   `gitlab-org/api/client-go!3051` was merged on the 14th, nineteen minutes
   after v3.10.0 was cut, and this register recorded it as in no tag until the
   next release carried it. Do not read a merge as a release:
@@ -1169,11 +1180,13 @@ of change whose test is one assertion on the built URL.
     "limited to zero minutes", which is the one way this bump could have made
     the surface less true rather than more.
 
-  The two open merge requests keep their workarounds whole: `systemhooks`
-  still reads the seven `Hook` fields of `gitlab-org/api/client-go!3048` off
-  the capture, and `packages` the `Package` fields of
-  `gitlab-org/api/client-go!3052`. Both were checked against the v3.12.0
-  source rather than against the tracker, and neither struct carries them.
+  Two keep their workarounds whole: `systemhooks` still reads the seven `Hook`
+  fields of `gitlab-org/api/client-go!3048`, which is open, off the capture,
+  and `packages` the `Package` fields of `gitlab-org/api/client-go!3052`,
+  which is released in v3.14.0 while the pin is v3.12.0, so that read retires
+  with the bump that moves the pin there. Both were checked against the
+  v3.12.0 source rather than against the tracker, and neither struct carries
+  them.
   `projectserviceaccounts` keeps its read of `public_email` too, since
   `gitlab-org/api/client-go!3047` added the pair to `GroupServiceAccount` and
   `ProjectServiceAccount` was outside it.
@@ -2925,10 +2938,18 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   @uchandran approved it at 13:07 UTC. The suggestion was applied at 18:39 UTC
   in one commit, `839df5e1572f`, which specs the author path, and every thread
   was answered and resolved. That push reset @marc_shaw's approval and started
-  a fork pipeline on `839df5e1572f`. As of 2026-09-24 it carries @uchandran's
-  approval, and waits on @egrieff's review and on @marc_shaw approving again;
-  it still needs a maintainer approval for each of the `/config/`, `/lib/` and
-  `/spec/` code-owner rules, and nothing is pending on us.
+  a fork pipeline on `839df5e1572f`, whose one blocking failure was
+  `cells-routes:router-in-sync` again, and not on this route: the six
+  templates it reports (five under `/api/:version/orbit/` and
+  `/api/:version/integrations/jira_forge/user_delegation`) are routes `master`
+  added after the branch was rebuilt and the router's snapshot already
+  carries, while `cancel_auto_merge` matches. It clears once the branch is
+  rebased onto current `master` or a pipeline runs on the merged result. As of
+  2026-09-25 it carries @uchandran's approval, and waits on @egrieff's review
+  and on @marc_shaw approving again; it still needs a maintainer approval for
+  each of the `/config/`, `/lib/` and `/spec/` code-owner rules. The one step
+  that could come from here is that rebase, and it has not been taken, since
+  the push would reset the approval it carries.
   `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
   `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
   section then.

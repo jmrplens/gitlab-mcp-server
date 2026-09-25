@@ -430,6 +430,31 @@ instance you configure (plus an optional signed-binary update check against
 GitHub Releases). Your token is used solely to authenticate GitLab requests
 and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
+## Upstream contributions
+
+This server is built on GitLab's REST and GraphQL APIs, on
+[`client-go`](https://gitlab.com/gitlab-org/api/client-go) and on the
+[MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). When building it
+turns up a gap in one of them, the fix goes upstream rather than staying a
+workaround here, so every other user of those projects gets it too:
+
+- **client-go**: response fields GitLab sends that the SDK's structs did not
+  model, found by holding each struct against what a running GitLab actually
+  sends, and fixes such as a panic decoding an issue with no id
+  ([merge requests](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests?scope=all&state=all&author_username=jmrp)).
+- **GitLab**: API documentation and response annotations corrected where they
+  disagreed with what the API sends, a fix so a revoked GPG identity no longer
+  verifies commits, and proposed additions such as cancelling an automatic merge
+  ([merge requests](https://gitlab.com/gitlab-org/gitlab/-/merge_requests?scope=all&state=all&author_username=jmrp)).
+- **MCP Go SDK**: protocol conformance fixes around cancellation, protocol
+  version negotiation and the initialize handshake
+  ([pull requests](https://github.com/modelcontextprotocol/go-sdk/pulls?q=is%3Apr+author%3Ajmrplens)).
+
+Every gap is tracked in
+[docs/development/upstream-bugs.md](docs/development/upstream-bugs.md): the
+upstream issue or merge request, whether it has merged and in which release,
+and the workaround this server carries until it ships.
+
 ## Contributing & Security
 
 - **Contributing**: see [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch naming, commit conventions, and the PR process.
