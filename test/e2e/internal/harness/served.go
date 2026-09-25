@@ -315,19 +315,21 @@ func addStandaloneActions(actions map[ActionID]struct{}, inst *instance, serverC
 // on the meta and individual surfaces, which is register every one of them
 // and then run the visibility pass over the tools it registered.
 //
-// That pass removes a tool whose registered name an operator's exclusion names
-// exactly, and in read-only mode every tool that does not read; safe mode
-// wraps the rest in a preview and removes nothing, so it keeps them all here.
-// The exact name is the rule because it is the binary's rule on these two
-// surfaces, even though the dynamic surface also honors the group name: a
-// harness that applied the broader rule would expect a tool gone that the
-// server still serves (issue 911 tracks the difference). The read-only mode is
-// the configuration's own, which already carries the narrowing a credential
-// that cannot write imposes.
+// That pass removes a tool an operator's exclusion names, by its tool name,
+// its group name or its canonical action ID, and in read-only mode every tool
+// that does not read; safe mode wraps the rest in a preview and removes
+// nothing, so it keeps them all here. Which tools an exclusion names is asked
+// of [gitlabtools.ExcludedStandaloneTools], the resolver the pass itself
+// asks, rather than restated: a copy of the rule here is how the harness came
+// to encode the binary's old one, the registered name alone, which removed no
+// flow for the group name or the canonical ID (issue 911). The read-only mode
+// is the configuration's own, which already carries the narrowing a
+// credential that cannot write imposes.
 func standaloneActions(projected *projection, serverCfg *config.ServerConfig) map[ActionID]struct{} {
+	excluded, _ := gitlabtools.ExcludedStandaloneTools(serverCfg.ExcludeTools)
 	actions := make(map[ActionID]struct{})
 	for id, action := range projected.actions {
-		if !action.standalone || slices.Contains(serverCfg.ExcludeTools, action.metaTool) {
+		if !action.standalone || slices.Contains(excluded, action.metaTool) {
 			continue
 		}
 		if serverCfg.ReadOnly && !action.readOnly {

@@ -24,6 +24,15 @@ import (
 // maintenance utility groups. AllowedToolNames and ExcludeToolNames are
 // post-filter allow/exclude lists. DescriptionForTool computes a
 // per-action description when the spec does not provide one.
+//
+// ExcludeToolNames is not how the server applies --exclude-tools, and no
+// production path sets it. It matches a projected individual tool name
+// exactly, while an operator's entry may also be a group name or a
+// canonical action ID. The server narrows the catalog through
+// [ExcludeFromCatalog] before this projection runs and narrows the
+// standalone utilities through [ExcludedStandaloneTools], so both paths
+// ask the catalog's one rule; setting this field for that purpose would add
+// the kind of private matcher that rule replaced.
 type IndividualCatalogRegisterOptions struct {
 	ApplyEditionFilters        bool
 	Enterprise                 bool

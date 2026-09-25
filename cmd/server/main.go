@@ -272,7 +272,7 @@ func main() {
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
 	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
-	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated list of tool names to exclude from registration")
+	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface")
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
@@ -529,7 +529,8 @@ FLAGS
   -capability-surface str   Capability surface: full|minimal (default full)
   -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
   -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
-  -exclude-tools string     Comma-separated tool names to exclude from registration
+  -exclude-tools string     Comma-separated tool names, group names or canonical action IDs
+                            to exclude, on every surface
   -client-compat string     Per-client response compatibility: auto|off (default auto)
 
  Protective modes
@@ -606,7 +607,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_READ_ONLY              Expose only read-only tools: true/false (default false)
   GITLAB_MCP_SAFE_MODE              Intercept mutating tools and return a preview (default false)
   GITLAB_MCP_EMBEDDED_RESOURCES     Embed canonical MCP resource links in get_* results (default true)
-  GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names to exclude (default empty)
+  GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names, group names or canonical action IDs
+                                    to exclude, on every surface (default empty)
   GITLAB_MCP_IGNORE_SCOPES          Skip PAT scope detection: true/false (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
   GITLAB_MCP_RATE_LIMIT_RPS         Per-credential rate limit on every call that reaches GitLab, plus

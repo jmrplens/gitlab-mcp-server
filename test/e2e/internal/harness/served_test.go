@@ -547,11 +547,16 @@ func assertServesTheStandaloneActions(t *testing.T, expected surfaceExpectation)
 // time, what the binary's visibility pass leaves of the standalone tools on
 // the meta and individual surfaces.
 //
-// The group name is the case worth reading: the dynamic surface removes the
-// guided flows for gitlab_interactive, and these two surfaces remove nothing
-// for it, since the pass there matches registered names exactly. The harness
-// follows the binary, so a session excluding the group still serves the flows
-// here, which is the behavior issue 911 tracks rather than one this corrects.
+// The group name and the canonical ID are the cases worth reading. Until
+// issue 911 the pass on these two surfaces matched registered names exactly,
+// so both removed nothing here while the dynamic surface honored the group
+// name, and the harness followed the binary. Both now remove what they name
+// on every surface, by the catalog's own rule. These cases pin the answers
+// that rule's resolver gives, as the harness receives them, so they fail if
+// the resolver or the harness's use of it changes. They cannot see the
+// visibility pass drift away from the resolver: that is held by the
+// toolvisibility TestApply_ExcludeTools_* tests and by cmd/server's
+// TestCreateServer_StandaloneUtilities_ExcludedByEveryNameOnEverySurface.
 func TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass(t *testing.T) {
 	made := freeProjection(t)
 	everything := standaloneActionIDs
@@ -572,11 +577,19 @@ func TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass(t *testing.
 			want: []ActionID{"discover_project.resolve", "interactive.issue_create", "interactive.project_create", "interactive.release_create"},
 		},
 		{
-			name: "the group name removes nothing here", serverCfg: config.ServerConfig{ExcludeTools: []string{"gitlab_interactive"}},
-			want: everything,
+			name: "the group name removes every guided flow", serverCfg: config.ServerConfig{ExcludeTools: []string{"gitlab_interactive"}},
+			want: []ActionID{"discover_project.resolve"},
 		},
 		{
-			name: "the canonical id removes nothing either", serverCfg: config.ServerConfig{ExcludeTools: []string{"interactive.mr_create"}},
+			name: "the canonical id removes the one flow it names", serverCfg: config.ServerConfig{ExcludeTools: []string{"interactive.mr_create"}},
+			want: []ActionID{"discover_project.resolve", "interactive.issue_create", "interactive.project_create", "interactive.release_create"},
+		},
+		{
+			name: "the discovery id removes discovery", serverCfg: config.ServerConfig{ExcludeTools: []string{"discover_project.resolve"}},
+			want: []ActionID{"interactive.issue_create", "interactive.mr_create", "interactive.project_create", "interactive.release_create"},
+		},
+		{
+			name: "an entry naming nothing removes nothing", serverCfg: config.ServerConfig{ExcludeTools: []string{"gitlab_interactive_issue"}},
 			want: everything,
 		},
 	}

@@ -2,6 +2,7 @@ package surfaces
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -61,17 +62,71 @@ func AddToolCatalog(catalog *actioncatalog.Catalog, specs []actioncatalog.Surfac
 	if catalog == nil {
 		catalog = actioncatalog.NewCatalog()
 	}
-	groups := ToolGroupSpecs(filterToolSpecs(specs, opts))
-	for _, groupSpec := range groups {
-		group, err := actioncatalog.GroupFromSpecs(groupSpec.GroupOptions(), groupSpec.Actions)
-		if err != nil {
-			return nil, fmt.Errorf("build surface tool group %s: %w", groupSpec.ToolName, err)
-		}
-		if addErr := catalog.AddGroup(group); addErr != nil {
-			return nil, fmt.Errorf("add surface tool group %s: %w", surfaceGroupActionLabel(group), addErr)
-		}
+	kept, err := filterToolSpecs(specs, opts)
+	if err != nil {
+		return nil, err
+	}
+	if addErr := addToolGroups(catalog, kept); addErr != nil {
+		return nil, addErr
 	}
 	return catalog, nil
+}
+
+// ExcludedToolSpecs resolves an --exclude-tools list against surface specs and
+// returns the tool names of the specs it removes, together with the entries
+// that named none of them, in the order the operator wrote them.
+//
+// The rule is the action catalog's, asked rather than restated: the specs are
+// assembled into a catalog of their own, unfiltered, and
+// [actioncatalog.Catalog.FilterExcludedToolNames] judges it, so a group name,
+// an individual tool name and a canonical action ID reach a standalone utility
+// exactly as they reach a catalog action. Each surface used to keep a copy of
+// its own for these tools, and the copies had drifted apart: the dynamic one
+// matched the tool and the group name, the meta and individual ones the
+// registered name alone, and none the canonical ID, which is the one spelling
+// that means the same thing on every surface.
+//
+// The names are the ones the specs register under, which is what the pass
+// over registered tools removes on the meta and individual surfaces and what
+// [AddToolCatalog] leaves out on the dynamic one. An empty list builds
+// nothing, since [AddToolCatalog] asks on every call and most calls exclude
+// nothing.
+func ExcludedToolSpecs(specs []actioncatalog.SurfaceToolSpec, excludeTools []string) (excluded map[string]struct{}, unmatched []string, err error) {
+	if len(excludeTools) == 0 {
+		return nil, nil, nil
+	}
+	assembled := actioncatalog.NewCatalog()
+	if addErr := addToolGroups(assembled, specs); addErr != nil {
+		return nil, nil, addErr
+	}
+	filtered, unmatched := assembled.FilterExcludedToolNames(excludeTools)
+	kept := make(map[actioncatalog.ActionID]struct{}, filtered.CountActions())
+	for _, action := range filtered.Actions() {
+		kept[action.ID] = struct{}{}
+	}
+	excluded = make(map[string]struct{})
+	for _, action := range assembled.Actions() {
+		if _, ok := kept[action.ID]; !ok {
+			excluded[action.IndividualTool.Name] = struct{}{}
+		}
+	}
+	return excluded, unmatched, nil
+}
+
+// addToolGroups projects specs into catalog one group at a time, naming the
+// group, or the first action of the one that clashed, when a group cannot be
+// built or added.
+func addToolGroups(catalog *actioncatalog.Catalog, specs []actioncatalog.SurfaceToolSpec) error {
+	for _, groupSpec := range ToolGroupSpecs(specs) {
+		group, err := actioncatalog.GroupFromSpecs(groupSpec.GroupOptions(), groupSpec.Actions)
+		if err != nil {
+			return fmt.Errorf("build surface tool group %s: %w", groupSpec.ToolName, err)
+		}
+		if addErr := catalog.AddGroup(group); addErr != nil {
+			return fmt.Errorf("add surface tool group %s: %w", surfaceGroupActionLabel(group), addErr)
+		}
+	}
+	return nil
 }
 
 func surfaceGroupActionLabel(group actioncatalog.Group) string {
@@ -193,22 +248,36 @@ func surfaceActionSpecGroup(opts surfaceToolGroupOptions, specs []toolutil.Actio
 	}
 }
 
-func filterToolSpecs(specs []actioncatalog.SurfaceToolSpec, opts CatalogOptions) []actioncatalog.SurfaceToolSpec {
-	excluded := stringSet(opts.ExcludeToolNames)
+// filterToolSpecs returns the specs a deployment serves: without the ones the
+// operator excluded and, in read-only mode, without the ones that write.
+//
+// The exclusion is judged over every spec, before read-only mode removes any,
+// which is the order the catalog filter applies the two in. The count it logs
+// is the only line an operator gets about a standalone exclusion on the
+// dynamic surface: the pass over registered tools sees two tools there and
+// neither is ever a standalone utility, so without it a working exclusion read
+// the same as one that named nothing.
+func filterToolSpecs(specs []actioncatalog.SurfaceToolSpec, opts CatalogOptions) ([]actioncatalog.SurfaceToolSpec, error) {
+	excluded, _, err := ExcludedToolSpecs(specs, opts.ExcludeToolNames)
+	if err != nil {
+		return nil, fmt.Errorf("resolve excluded surface tools: %w", err)
+	}
+	if len(excluded) > 0 {
+		slog.Info("excluded standalone actions by configuration", "excluded", len(excluded), "patterns", opts.ExcludeToolNames)
+	}
 	out := make([]actioncatalog.SurfaceToolSpec, 0, len(specs))
 	for _, spec := range specs {
 		if opts.ReadOnlyOnly && !spec.ReadOnly {
 			continue
 		}
+		// Trimmed as registration trims it, since the names resolved above
+		// are the ones the specs register under.
 		if _, ok := excluded[strings.TrimSpace(spec.Name)]; ok {
-			continue
-		}
-		if _, ok := excluded[strings.TrimSpace(spec.GroupToolName)]; ok {
 			continue
 		}
 		out = append(out, spec)
 	}
-	return out
+	return out, nil
 }
 
 func readOnlyGroup(specs []toolutil.ActionSpec) bool {
@@ -221,18 +290,4 @@ func readOnlyGroup(specs []toolutil.ActionSpec) bool {
 		}
 	}
 	return true
-}
-
-func stringSet(values []string) map[string]struct{} {
-	if len(values) == 0 {
-		return nil
-	}
-	set := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			set[value] = struct{}{}
-		}
-	}
-	return set
 }

@@ -113,6 +113,59 @@ func TestLimit_ExcludeTools(t *testing.T) {
 	}
 }
 
+// TestLimit_ExcludeTools_StandaloneByCatalogSpelling verifies, on the real
+// binary, that a guided flow is removed by the two spellings the catalog
+// accepts beside its tool name, on the two surfaces that register the flows
+// as tools of their own.
+//
+// Those surfaces used to remove a flow by its registered name alone, so an
+// operator who wrote the canonical action ID, the one spelling that means the
+// same thing on every surface, or the group name the documentation offers,
+// kept every flow listed and was not told (issue 911). A unit test composes
+// the pass with registration; this is the binary, reading the variable from
+// its environment.
+func TestLimit_ExcludeTools_StandaloneByCatalogSpelling(t *testing.T) {
+	gitlab := acceptingGitLab(t)
+
+	cases := []struct {
+		name    string
+		surface string
+		exclude string
+		gone    []string
+		kept    []string
+	}{
+		{
+			name: "the canonical action ID on meta", surface: "meta", exclude: "interactive.issue_create",
+			gone: []string{"gitlab_interactive_issue_create"},
+			kept: []string{"gitlab_interactive_mr_create", "gitlab_discover_project"},
+		},
+		{
+			name: "the group name on individual", surface: "individual", exclude: "gitlab_interactive",
+			gone: []string{"gitlab_interactive_issue_create", "gitlab_interactive_mr_create", "gitlab_interactive_project_create", "gitlab_interactive_release_create"},
+			kept: []string{"gitlab_discover_project"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := listTools(t, startServer(t, map[string]string{
+				"GITLAB_MCP_TOOL_SURFACE":  tc.surface,
+				"GITLAB_MCP_EXCLUDE_TOOLS": tc.exclude,
+			}, "--gitlab-url="+gitlab.url))
+
+			for _, name := range tc.gone {
+				if strings.Contains(body, `"name":"`+name+`"`) {
+					t.Errorf("%s is still advertised on %s after excluding %s", name, tc.surface, tc.exclude)
+				}
+			}
+			for _, name := range tc.kept {
+				if !strings.Contains(body, `"name":"`+name+`"`) {
+					t.Errorf("%s is no longer advertised on %s, although excluding %s does not name it", name, tc.surface, tc.exclude)
+				}
+			}
+		})
+	}
+}
+
 // TestLimit_ReadOnlyRemovesMutations verifies that --read-only takes the
 // mutating surface away rather than relying on the model not to ask.
 func TestLimit_ReadOnlyRemovesMutations(t *testing.T) {

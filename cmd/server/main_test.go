@@ -1436,6 +1436,36 @@ func helpEntry(help, flagName string) string {
 	return ""
 }
 
+// TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts verifies that the
+// curated help describes an exclusion entry the way the server reads one: a
+// tool name, a group name or a canonical action ID, on every surface.
+//
+// It said "tool names" alone, which hid the other two spellings the server
+// accepts: the group name and the canonical action ID. The canonical ID is
+// the one spelling that means the same thing on every surface, since the
+// default surface reaches every action by it, and issue 911 made it work for
+// the standalone utilities too, so an operator reading the help had no way
+// to learn the spelling that works everywhere.
+func TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts(t *testing.T) {
+	stdout := captureStdout(t)
+
+	printHelp()
+
+	help := stdout()
+	for _, name := range []string{"-exclude-tools", "GITLAB_MCP_EXCLUDE_TOOLS"} {
+		t.Run(name, func(t *testing.T) {
+			entry := helpEntry(help, name)
+			for _, spelling := range []string{"tool names", "group names", "canonical action IDs", "every surface"} {
+				t.Run(spelling, func(t *testing.T) {
+					if !strings.Contains(entry, spelling) {
+						t.Errorf("help for %s = %q, want it to say %q", name, entry, spelling)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification
 // verifies that the help says what the pool now does.
 //
@@ -1753,6 +1783,84 @@ func TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse(t *t
 			}
 		})
 	}
+}
+
+// TestCreateServer_StandaloneUtilities_ExcludedByEveryNameOnEverySurface
+// verifies, through the whole registration the binary makes, that the three
+// spellings an operator may write for a guided flow remove it on each of the
+// three surfaces, and that the narrow ones remove nothing else.
+//
+// The standalone utilities are the part of each surface the catalog does not
+// hold, so the catalog's exclusion never reached them and each surface kept a
+// rule of its own (issue 911). The meta and individual surfaces removed a
+// flow by its registered name alone, so the group name and the canonical ID
+// left it listed; the dynamic surface honored the tool and the group name and
+// not the canonical ID, so interactive.issue_create stayed executable through
+// gitlab_execute_action. On meta and individual a flow that is gone is absent
+// from tools/list; on dynamic it is an unknown action, since an exclusion is
+// deliberately not reported back as withheld.
+func TestCreateServer_StandaloneUtilities_ExcludedByEveryNameOnEverySurface(t *testing.T) {
+	spellings := []struct {
+		name    string
+		exclude string
+		// removesSibling is true for the group name, which takes every
+		// guided flow with it, interactive.mr_create among them.
+		removesSibling bool
+	}{
+		{name: "the tool name", exclude: "gitlab_interactive_issue_create"},
+		{name: "the canonical action ID", exclude: "interactive.issue_create"},
+		{name: "the group name", exclude: "gitlab_interactive", removesSibling: true},
+	}
+	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			for _, spelling := range spellings {
+				t.Run(spelling.name, func(t *testing.T) {
+					cfg := &config.ServerConfig{ToolSurface: surface, ExcludeTools: []string{spelling.exclude}}
+					served := standaloneServed(t, cfg)
+					if served["interactive.issue_create"] {
+						t.Errorf("%s still serves interactive.issue_create after excluding %q", surface, spelling.exclude)
+					}
+					if served["interactive.mr_create"] == spelling.removesSibling {
+						t.Errorf("%s serves interactive.mr_create = %t after excluding %q, want %t",
+							surface, served["interactive.mr_create"], spelling.exclude, !spelling.removesSibling)
+					}
+					if !served["discover_project.resolve"] {
+						t.Errorf("%s dropped discover_project.resolve after excluding %q, which does not name it", surface, spelling.exclude)
+					}
+				})
+			}
+		})
+	}
+}
+
+// standaloneServed reports, for three standalone actions, whether a server
+// built for cfg serves each: by tools/list on the meta and individual
+// surfaces, which register each utility as a tool of its own, and by what
+// gitlab_execute_action answers on the dynamic one, which registers none.
+func standaloneServed(t *testing.T, cfg *config.ServerConfig) map[string]bool {
+	t.Helper()
+	tools := map[string]string{
+		"interactive.issue_create": "gitlab_interactive_issue_create",
+		"interactive.mr_create":    "gitlab_interactive_mr_create",
+		"discover_project.resolve": "gitlab_discover_project",
+	}
+	served := make(map[string]bool, len(tools))
+	if cfg.ToolSurface == config.ToolSurfaceDynamic {
+		session := modeTestSession(t, cfg)
+		for id := range tools {
+			answer := callModeTool(t, session, "gitlab_execute_action", map[string]any{"action": id, "params": map[string]any{}})
+			served[id] = !strings.Contains(strings.ToLower(answer), "unknown action")
+		}
+		return served
+	}
+	listed, err := listRegisteredTools(mustCreateServer(t, newMockGitLabClient(t), cfg), "standalone-exclusion")
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	for id, tool := range tools {
+		served[id] = slices.ContainsFunc(listed, func(registered *mcp.Tool) bool { return registered.Name == tool })
+	}
+	return served
 }
 
 // TestServerShellRegister_StandaloneToolCalls_AreNamedOnMetaAndIndividual

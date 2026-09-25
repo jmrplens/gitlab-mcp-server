@@ -35,16 +35,17 @@ var toolToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
 // that name tools this audit cannot register. Each entry carries the reason so
 // a future reader can tell an exemption from an oversight.
 var allowed = map[string]string{
-	"gitlab_com":        "stats.tools.gitlab_com. A generated data property, not a tool",
-	"gitlab_orbit":      "prose prefix for the gitlab_orbit_* family",
-	"gitlab_url":        "mcpb user_config key (gitlab_url), not a tool",
-	"gitlab_refused":    "a model evaluation record value: the answer a step carries when GitLab refused a correctly dispatched call",
-	"gitlab_mcp":        "fragment of GITLAB_MCP_* env names and of the project slug",
-	"gitlab_xxx":        "placeholder in prose",
-	"gitlab_ci_ymls":    "a GitLab template type and API path segment (templates/gitlab_ci_ymls)",
-	"gitlab_duo":        "a docs.gitlab.com URL path segment (user/gitlab_duo/...)",
-	"gitlab_status":     "a JSON struct field (json:\"gitlab_status\") quoted in error-handling docs",
-	"gitlab_mcp_server": "the Python import package of the PyPI distribution (python -m gitlab_mcp_server), not a tool",
+	"gitlab_com":         "stats.tools.gitlab_com. A generated data property, not a tool",
+	"gitlab_orbit":       "prose prefix for the gitlab_orbit_* family",
+	"gitlab_url":         "mcpb user_config key (gitlab_url), not a tool",
+	"gitlab_refused":     "a model evaluation record value: the answer a step carries when GitLab refused a correctly dispatched call",
+	"gitlab_mcp":         "fragment of GITLAB_MCP_* env names and of the project slug",
+	"gitlab_xxx":         "placeholder in prose",
+	"gitlab_ci_ymls":     "a GitLab template type and API path segment (templates/gitlab_ci_ymls)",
+	"gitlab_duo":         "a docs.gitlab.com URL path segment (user/gitlab_duo/...)",
+	"gitlab_status":      "a JSON struct field (json:\"gitlab_status\") quoted in error-handling docs",
+	"gitlab_mcp_server":  "the Python import package of the PyPI distribution (python -m gitlab_mcp_server), not a tool",
+	"gitlab_interactive": "the guided flows' catalog group name, which --exclude-tools accepts on every surface; no surface registers a tool of that name, since meta and individual register the four gitlab_interactive_* flows one by one",
 }
 
 // allowedPrefixes exempts whole families that exist only on a live GitLab.com

@@ -7,10 +7,12 @@
 // the catalog every assembler shares. The tools registered outside the catalog,
 // the gitlab_interactive_* flows the meta and individual surfaces register,
 // receive them from [Apply], a pass over the tools a server holds once
-// registration is done: it removes the names --exclude-tools lists, in
-// read-only mode removes every tool without a read-only hint, and in safe mode
-// wraps what is left with previews, exempting the catalog-backed dispatchers
-// because they already preview per action.
+// registration is done: it removes the tools --exclude-tools names, by their
+// registered name or, for a standalone utility, by any spelling the catalog's
+// exclusion rule accepts; in read-only mode it removes every tool without a
+// read-only hint; and in safe mode it wraps what is left with previews,
+// exempting the catalog-backed dispatchers because they already preview per
+// action.
 //
 // It is a package of its own for the reason internal/tools/dynamiccatalog is:
 // the pass needs the two filters internal/tools holds and the two tool names

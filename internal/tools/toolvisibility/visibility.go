@@ -14,7 +14,7 @@ import (
 )
 
 // Apply narrows the tools registered on server to what cfg says the
-// deployment serves, in three steps: the names cfg.ExcludeTools lists are
+// deployment serves, in three steps: the tools cfg.ExcludeTools names are
 // removed, then read-only mode removes every tool without a read-only hint,
 // or safe mode wraps every mutating tool that the catalog does not already
 // preview per action. Read-only mode wins over safe mode, since nothing is
@@ -24,9 +24,12 @@ import (
 // reaches the tools registered outside the catalog: the catalog filter has
 // already applied the same configuration to the catalog-backed ones, per
 // action, and this pass is the second mechanism the standalone flows need.
-// toolSurface and surfaceCatalog decide the safe-mode exemptions (see
-// catalogBackedToolNames); a surface whose exclusions were applied to the
-// catalog legitimately has nothing left for the first step to remove.
+// The exclusions reach those flows by the catalog's own rule, so an entry
+// naming one by its group name or its canonical action ID removes it here as
+// its tool name does (see removeExcluded). toolSurface and surfaceCatalog
+// decide the safe-mode exemptions (see catalogBackedToolNames); a surface
+// whose exclusions were applied to the catalog legitimately has nothing left
+// for the first step to remove.
 //
 // The token-scope filter is deliberately absent. It is applied to the
 // catalog, before registration, by the three catalog assemblers, which is the
@@ -37,7 +40,7 @@ import (
 func Apply(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcluded(ctx, server, cfg.ExcludeTools)
-		// Named for what it counts. This pass sees registered tool names only,
+		// Named for what it counts. This pass removes registered tools only,
 		// so on a surface whose exclusions are applied to the catalog it
 		// legitimately removes nothing, and a bare "excluded" reading zero
 		// there said the opposite of what had happened.
@@ -84,18 +87,33 @@ func catalogBackedToolNames(surfaceCatalog *actioncatalog.Catalog, toolSurface s
 	return exempt
 }
 
-// removeExcluded removes every registered tool whose name is in exclude,
-// matched exactly, and returns how many it removed. A server that cannot be
-// listed has nothing removed and the failure logged: guessing at names to
-// remove would be worse than leaving an exclusion unapplied and reported.
+// removeExcluded removes every registered tool an entry of exclude names, and
+// returns how many it removed. A server that cannot be listed has nothing
+// removed and the failure logged: guessing at names to remove would be worse
+// than leaving an exclusion unapplied and reported.
+//
+// Two rules name a tool, and either is enough. An entry equal to a registered
+// name removes that tool, which is how gitlab_find_action leaves the dynamic
+// surface; the match is whole, never a prefix, since the names of the three
+// surfaces nest inside one another. And an entry naming a standalone utility
+// by any spelling the catalog accepts, the group name gitlab_interactive, a
+// tool name or a canonical action ID such as interactive.issue_create, removes
+// the tools [gitlabtools.ExcludedStandaloneTools] resolves it to. Only the
+// first rule applied here until issue 911, so the other two spellings removed
+// no guided flow on the meta and individual surfaces while the documentation
+// offered all three.
 func removeExcluded(ctx context.Context, server *mcp.Server, exclude []string) int {
 	registered, err := toolutil.ListRegisteredTools(ctx, server, "exclude-filter")
 	if err != nil {
 		slog.ErrorContext(ctx, "exclude-tools: list registered tools failed", "error", err)
 		return 0
 	}
+	standalone, _ := gitlabtools.ExcludedStandaloneTools(exclude)
 	excludeSet := make(map[string]struct{}, len(exclude))
 	for _, name := range exclude {
+		excludeSet[name] = struct{}{}
+	}
+	for _, name := range standalone {
 		excludeSet[name] = struct{}{}
 	}
 	var toRemove []string

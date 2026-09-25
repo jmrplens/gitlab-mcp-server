@@ -218,9 +218,11 @@ func TestFilterExcludedToolNames_KeepsGroupMetadataAndSchemas(t *testing.T) {
 	})
 }
 
-// TestFilterExcludedTools_DelegatesToNameMatching verifies that the existing
-// FilterExcludedTools entry point, which the server calls, now applies the same
-// action-level matching, and that its documented edge cases still hold.
+// TestFilterExcludedTools_DelegatesToNameMatching verifies that the
+// FilterExcludedTools entry point, which Catalog.Filter calls, applies the
+// same action-level matching as FilterExcludedToolNames, and that its
+// documented edge cases still hold. The server no longer calls it: it asks
+// FilterExcludedToolNames through tools.ExcludeFromCatalog.
 func TestFilterExcludedTools_DelegatesToNameMatching(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -276,12 +278,15 @@ func captureSlogOutput(t *testing.T) *bytes.Buffer {
 	return &buffer
 }
 
-// TestFilterExcludedTools_WarnsOnlyWhenAnEntryNamedNothing verifies the one
-// signal an operator gets about a wrong --exclude-tools entry: a WARN naming
-// each entry that matched nothing, and no warning at all when every entry
+// TestFilterExcludedTools_WarnsOnlyWhenAnEntryNamedNothing verifies the
+// warning FilterExcludedTools writes about the entries this catalog did not
+// match: a WARN naming each of them, and no warning at all when every entry
 // matched.
 //
-// The warning is the whole of what FilterExcludedTools adds over
+// It is not the warning an operator reads. That one is written by
+// tools.ExcludeFromCatalog, which also clears the entries a standalone
+// utility answers, since those are in no catalog this method sees. The
+// warning here is still the whole of what FilterExcludedTools adds over
 // FilterExcludedToolNames, and nothing observed it before: a filter that
 // warned on every clean configuration, or on none, passed every test.
 func TestFilterExcludedTools_WarnsOnlyWhenAnEntryNamedNothing(t *testing.T) {

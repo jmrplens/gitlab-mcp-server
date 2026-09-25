@@ -202,6 +202,17 @@ Current standalone dynamic additions live in `internal/tools/dynamic/standalone.
 - `discover_project.resolve` from `gitlab_discover_project`.
 - `interactive.issue_create`, `interactive.mr_create`, `interactive.project_create`, and `interactive.release_create` when read-only mode and exclusions allow them.
 
+The meta and individual surfaces register the same utilities as tools of
+their own, beside a catalog that carries none of them, and
+`toolvisibility.Apply` narrows them after registration. An `ExcludeTools`
+entry reaches them by the catalog's own rule on all three surfaces: the group
+name (`gitlab_interactive`, `gitlab_discover_project`), the tool name and the
+canonical action ID remove the same tools everywhere, because every path asks
+`surfaces.ExcludedToolSpecs`, which assembles the specs into a catalog of their
+own and puts them to `actioncatalog.Catalog.FilterExcludedToolNames`. Do not
+add a matcher of your own for them: the three copies this replaced had drifted
+apart until the canonical ID removed a guided flow on no surface at all.
+
 Do not add dynamic-only copies of ordinary GitLab API operations. Add ordinary
 operations through the owning domain's `ActionSpecs` and the route definitions
 that feed the canonical catalog.
@@ -212,7 +223,16 @@ Filtering must happen before a catalog-backed surface exposes actions to a
 client. The relevant policies are:
 
 - Enterprise/Premium and GitLab.com-only catalog selection.
-- `ExcludeTools` configuration.
+- `ExcludeTools` configuration, one rule for catalog and standalone actions. An
+  entry that names neither is reported once per configuration by
+  `tools.ExcludeFromCatalog` with a WARN, never refused, since one
+  configuration is reused across tiers. The WARN is written when the catalog
+  for a configuration is first built: at startup on stdio, on the first
+  request for that configuration in HTTP mode. It also names the dynamic
+  surface's own `gitlab_find_action` and `gitlab_execute_action`, although the
+  pass over registered tools removes them there by name, because
+  `ExcludeFromCatalog` knows no surface and on the other two those names do
+  name nothing.
 - Token-scope filtering.
 - `GITLAB_MCP_READ_ONLY` / `--read-only` filtering.
 - `GITLAB_MCP_SAFE_MODE` / `--safe-mode` previews.

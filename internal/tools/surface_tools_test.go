@@ -5,8 +5,10 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -142,4 +144,99 @@ func assertRefusalNamesItsFlow(t *testing.T, spec actioncatalog.SurfaceToolSpec,
 	if !strings.Contains(text, spec.Name) {
 		t.Errorf("%s: refusal does not give the tool name the meta and individual surfaces register the flow under:\n%s", spec.Name, text)
 	}
+}
+
+// TestExcludedStandaloneTools_EverySpelling_ResolvesToTheRegisteredNames
+// verifies the resolver the meta and individual visibility pass, the warning
+// about entries that named nothing and the end-to-end harness all ask,
+// against the standalone utilities the server actually registers.
+//
+// Each spelling an operator may write for a standalone utility is held to the
+// tools it removes: the group name every guided flow, a tool name or a
+// canonical action ID the one tool it names. Until issue 911 only the tool
+// name removed anything on the meta and individual surfaces, and the
+// canonical ID removed nothing anywhere. The names come back sorted, and an
+// entry reaching nothing comes back unmatched in the operator's order, since
+// that half becomes the warning an operator reads against their own file. A
+// catalog group name and a prefix of a flow's name reach nothing, because the
+// rule matches whole names and a standalone utility is not in any catalog
+// group.
+func TestExcludedStandaloneTools_EverySpelling_ResolvesToTheRegisteredNames(t *testing.T) {
+	t.Parallel()
+
+	flows := []string{
+		"gitlab_interactive_issue_create",
+		"gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create",
+		"gitlab_interactive_release_create",
+	}
+	cases := []struct {
+		name          string
+		exclude       []string
+		wantTools     []string
+		wantUnmatched []string
+	}{
+		{name: "the group name", exclude: []string{"gitlab_interactive"}, wantTools: flows},
+		{name: "a flow's canonical ID", exclude: []string{"interactive.issue_create"}, wantTools: []string{"gitlab_interactive_issue_create"}},
+		{name: "a flow's tool name", exclude: []string{"gitlab_interactive_issue_create"}, wantTools: []string{"gitlab_interactive_issue_create"}},
+		{name: "discovery's canonical ID", exclude: []string{"discover_project.resolve"}, wantTools: []string{"gitlab_discover_project"}},
+		{name: "discovery's tool name", exclude: []string{"gitlab_discover_project"}, wantTools: []string{"gitlab_discover_project"}},
+		{
+			name:      "two IDs come back sorted by tool name",
+			exclude:   []string{"interactive.release_create", "interactive.issue_create"},
+			wantTools: []string{"gitlab_interactive_issue_create", "gitlab_interactive_release_create"},
+		},
+		{name: "a catalog group name", exclude: []string{"gitlab_issue"}, wantUnmatched: []string{"gitlab_issue"}},
+		{name: "a prefix of a flow's name", exclude: []string{"gitlab_interactive_issue"}, wantUnmatched: []string{"gitlab_interactive_issue"}},
+		{
+			name:          "entries naming nothing keep the operator's order",
+			exclude:       []string{"gitlab_zzz", "interactive.mr_create", "gitlab_aaa"},
+			wantTools:     []string{"gitlab_interactive_mr_create"},
+			wantUnmatched: []string{"gitlab_zzz", "gitlab_aaa"},
+		},
+		{name: "no entries", exclude: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tools, unmatched := ExcludedStandaloneTools(tc.exclude)
+			if !slices.Equal(tools, tc.wantTools) {
+				t.Errorf("ExcludedStandaloneTools(%v) tools = %v, want %v", tc.exclude, tools, tc.wantTools)
+			}
+			if !slices.Equal(unmatched, tc.wantUnmatched) {
+				t.Errorf("ExcludedStandaloneTools(%v) unmatched = %v, want %v", tc.exclude, unmatched, tc.wantUnmatched)
+			}
+		})
+	}
+}
+
+// TestExcludedStandaloneTools_SpecsThatDoNotAssemble_PanicsNamingTheResolution
+// verifies the failure mode the resolver has to have: a standalone spec that
+// cannot be assembled stops startup, as [RegisterSurfaceTools] stops it over
+// the same spec, and the panic says it was the exclusion being resolved.
+//
+// The specs are compiled in, so the resolver is replaced here: nothing an
+// operator configures reaches this branch. Sequential, because the seam is a
+// package variable the parallel tests read.
+func TestExcludedStandaloneTools_SpecsThatDoNotAssemble_PanicsNamingTheResolution(t *testing.T) {
+	original := excludedStandaloneSpecs
+	excludedStandaloneSpecs = func([]actioncatalog.SurfaceToolSpec, []string) (map[string]struct{}, []string, error) {
+		return nil, nil, errors.New("the specs would not assemble")
+	}
+	t.Cleanup(func() { excludedStandaloneSpecs = original })
+
+	defer func() {
+		recovered := recover()
+		err, ok := recovered.(error)
+		if !ok {
+			t.Fatalf("panic value = %v (%T), want an error naming the resolution", recovered, recovered)
+		}
+		if !strings.Contains(err.Error(), "resolve --exclude-tools against the standalone utilities") || !strings.Contains(err.Error(), "the specs would not assemble") {
+			t.Errorf("panic = %q, want it to name the resolution and its cause", err)
+		}
+	}()
+
+	ExcludedStandaloneTools([]string{"gitlab_interactive"})
+	t.Error("ExcludedStandaloneTools returned over specs that could not be assembled, so a malformed utility would be served unexcluded")
 }
