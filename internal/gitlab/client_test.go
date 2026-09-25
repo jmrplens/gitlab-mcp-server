@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -523,8 +524,9 @@ func TestDotUnescape_Transport(t *testing.T) {
 }
 
 // TestBuildBaseTransport_DefaultAndTLS verifies that [buildBaseTransport]
-// returns http.DefaultTransport when TLS verification is enabled, and a
-// custom transport with InsecureSkipVerify when disabled.
+// returns the shared permissive transport, a clone of http.DefaultTransport,
+// when TLS verification is enabled, and a custom transport with
+// InsecureSkipVerify when disabled.
 func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
 	defTransport, ok := buildBaseTransport(false).(*http.Transport)
 	if !ok {
@@ -556,6 +558,96 @@ func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
 	}
 	if ht.ResponseHeaderTimeout != responseHeaderTimeout {
 		t.Errorf("ResponseHeaderTimeout = %v, want %v", ht.ResponseHeaderTimeout, responseHeaderTimeout)
+	}
+}
+
+// destinationPoolTransports holds a pair of pools to what every pair must be,
+// whoever it was built for, and returns its two transports.
+//
+// The two must be different transports, since one transport is one idle pool
+// and a pair of the same transport is the defect the pair exists to close.
+// Each must be a clone rather than [http.DefaultTransport], carry the response
+// header timeout, and dial through the guard.
+func destinationPoolTransports(t *testing.T, pools destinationPools) (permissive, strict *http.Transport) {
+	t.Helper()
+	permissive, ok := pools.permissive.(*http.Transport)
+	if !ok {
+		t.Fatalf("permissive = %T, want *http.Transport", pools.permissive)
+	}
+	strict, ok = pools.strict.(*http.Transport)
+	if !ok {
+		t.Fatalf("strict = %T, want *http.Transport", pools.strict)
+	}
+	if permissive == strict {
+		t.Fatal("the two pools are one transport, so a request the guard refuses can be handed a connection one it permits opened")
+	}
+	for name, transport := range map[string]*http.Transport{"permissive": permissive, "strict": strict} {
+		t.Run(name, func(t *testing.T) {
+			if transport == http.DefaultTransport {
+				t.Error("this pool is http.DefaultTransport itself; mutating it would leak into the whole process")
+			}
+			if transport.ResponseHeaderTimeout != responseHeaderTimeout {
+				t.Errorf("ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, responseHeaderTimeout)
+			}
+			conn, err := transport.DialContext(t.Context(), "tcp", "169.254.169.254:80")
+			if conn != nil {
+				_ = conn.Close()
+			}
+			if !errors.Is(err, ErrDestinationRefused) {
+				t.Errorf("this pool dialed a metadata address: %v", err)
+			}
+		})
+	}
+	return permissive, strict
+}
+
+// skipsVerification reports whether a transport accepts any certificate.
+func skipsVerification(transport *http.Transport) bool {
+	return transport.TLSClientConfig != nil && transport.TLSClientConfig.InsecureSkipVerify
+}
+
+// TestBuildDestinationPools_Verified_OnePairSharedAndLent verifies the pair
+// every verifying client routes its requests between.
+//
+// It must be one pair per process, since the connection pool is why the
+// transports are shared at all, and its permissive half must be the transport
+// [HTTPTransport] lends, so that an unstamped borrower keeps the pool it
+// always had.
+func TestBuildDestinationPools_Verified_OnePairSharedAndLent(t *testing.T) {
+	permissive, strict := destinationPoolTransports(t, buildDestinationPools(false))
+
+	again := buildDestinationPools(false)
+	if again.permissive != permissive || again.strict != strict {
+		t.Error("buildDestinationPools(false) built a fresh pair; the connection pools must be shared")
+	}
+	if HTTPTransport(false) != permissive {
+		t.Error("HTTPTransport(false) is not the shared permissive pool, so an unstamped borrower moved pools")
+	}
+	if skipsVerification(permissive) || skipsVerification(strict) {
+		t.Error("a shared pool skips certificate verification")
+	}
+}
+
+// TestBuildDestinationPools_SkipTLSVerify_APairOfTheClientsOwn verifies the
+// pair a client that skips certificate verification gets: its own, as the one
+// transport such a client got always was, with both halves skipping
+// verification above the TLS 1.2 floor.
+func TestBuildDestinationPools_SkipTLSVerify_APairOfTheClientsOwn(t *testing.T) {
+	permissive, strict := destinationPoolTransports(t, buildDestinationPools(true))
+
+	if !skipsVerification(permissive) || !skipsVerification(strict) {
+		t.Fatal("a pool of a client that skips verification verifies")
+	}
+	if permissive.TLSClientConfig.MinVersion != tls.VersionTLS12 || strict.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Error("skipping verification lowered the TLS floor below 1.2")
+	}
+	shared := buildDestinationPools(false)
+	if permissive == shared.permissive || strict == shared.strict {
+		t.Error("a client that skips verification was given a verified pool")
+	}
+	other := buildDestinationPools(true)
+	if other.permissive == permissive || other.strict == strict {
+		t.Error("two clients that skip verification share a pool")
 	}
 }
 
@@ -2146,6 +2238,129 @@ func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
 	}
 	if got := client.DetectTier(context.Background()); got != edition.Premium {
 		t.Errorf("DetectTier() = %v, want Premium: the first page answered before the second failed", got)
+	}
+}
+
+// TestDetectTier_NamespacePlan_StopsAtThePageBound verifies both edges of
+// namespacePlanMaxPages against an account that administers more namespaces
+// than the bound reads.
+//
+// The last page the bound allows is read, so a paid plan there is found; the
+// page after it is not, so a paid plan there is not, and the probe asks for
+// exactly as many pages as the bound names. Both halves matter: a walk that
+// stopped one page early would resolve the first case Free, and one that
+// never stopped would read every namespace an account holds, which is the cost
+// the bound exists to cap.
+func TestDetectTier_NamespacePlan_StopsAtThePageBound(t *testing.T) {
+	cases := []struct {
+		name     string
+		paidPage int
+		want     edition.Tier
+	}{
+		{name: "a paid plan on the last page the bound reads", paidPage: namespacePlanMaxPages, want: edition.Premium},
+		{name: "a paid plan on the first page past the bound", paidPage: namespacePlanMaxPages + 1, want: edition.Free},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pages := make([][]map[string]any, namespacePlanMaxPages+1)
+			for i := range pages {
+				pages[i] = []map[string]any{{"full_path": fmt.Sprintf("free-%d", i+1), "kind": "user", "plan": "free"}}
+			}
+			pages[tc.paidPage-1] = []map[string]any{{"full_path": "paid-group", "kind": "group", "plan": "premium"}}
+			var asked int32
+			srv := pagedNamespaceServer(t, pages, &asked)
+
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if got := client.DetectTier(context.Background()); got != tc.want {
+				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
+			}
+			if got := atomic.LoadInt32(&asked); got != namespacePlanMaxPages {
+				t.Errorf("pages read = %d, want %d: the bound, and not one page either side of it", got, namespacePlanMaxPages)
+			}
+		})
+	}
+}
+
+// TestTierFromNamespaces_EntriesThatAnswerNothing_AreNotEvidence verifies that
+// a namespace carrying no usable plan neither decides the tier nor counts as an
+// answer.
+//
+// The found half is the one DetectTier cannot show on its own, since an
+// unanswered probe and a Free answer both resolve Free there, and it is what
+// decides whether an enterprise build warns that its tier could not be read. A
+// null entry is covered because GitLab's list is decoded into pointers, and a
+// null in the array arrives as a nil one.
+func TestTierFromNamespaces_EntriesThatAnswerNothing_AreNotEvidence(t *testing.T) {
+	cases := []struct {
+		name       string
+		namespaces []map[string]any
+		wantTier   edition.Tier
+		wantFound  bool
+	}{
+		{
+			name:       "a null entry beside a paid namespace",
+			namespaces: []map[string]any{nil, {"full_path": "paid", "kind": "group", "plan": "premium"}},
+			wantTier:   edition.Premium,
+			wantFound:  true,
+		},
+		{
+			name:       "only a null entry",
+			namespaces: []map[string]any{nil},
+			wantTier:   edition.Free,
+		},
+		{
+			name: "only plans that answer nothing",
+			namespaces: []map[string]any{
+				{"full_path": "root", "kind": "user", "plan": "default"},
+				{"full_path": "not-mine", "kind": "group"},
+			},
+			wantTier: edition.Free,
+		},
+		{
+			name:       "a free plan is an answer",
+			namespaces: []map[string]any{{"full_path": "someone", "kind": "user", "plan": "free"}},
+			wantTier:   edition.Free,
+			wantFound:  true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := tierCascadeServer(t, http.StatusForbidden, "", tc.namespaces, true)
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			tier, found := client.tierFromNamespaces(context.Background())
+			if tier != tc.wantTier || found != tc.wantFound {
+				t.Errorf("tierFromNamespaces() = (%v, %v), want (%v, %v)", tier, found, tc.wantTier, tc.wantFound)
+			}
+		})
+	}
+}
+
+// TestNextNamespacePage_NoResponse_EndsTheWalk verifies the one input the SDK
+// never produces and the walk must still survive: a missing response reads as
+// "no next page" rather than as a nil dereference in the middle of resolving a
+// tier.
+func TestNextNamespacePage_NoResponse_EndsTheWalk(t *testing.T) {
+	cases := []struct {
+		name string
+		resp *gl.Response
+		want int64
+	}{
+		{name: "no response", resp: nil, want: 0},
+		{name: "a response naming the next page", resp: &gl.Response{NextPage: 3}, want: 3},
+		{name: "a response on the last page", resp: &gl.Response{}, want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nextNamespacePage(tc.resp); got != tc.want {
+				t.Errorf("nextNamespacePage() = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 

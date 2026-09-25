@@ -203,7 +203,7 @@ func IsGitLabDotComURL(rawURL string) bool {
 // The client includes a resilience transport that enables automatic recovery
 // when GitLab becomes available after being unreachable at startup.
 func NewClient(cfg *config.Config) (*Client, error) {
-	base := buildBaseTransport(cfg.SkipTLSVerify)
+	pools := buildDestinationPools(cfg.SkipTLSVerify)
 
 	c := &Client{
 		baseURL:   cfg.GitLabURL,
@@ -213,10 +213,10 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	c.SetTier(cfg.Tier)
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	c.destination.Store(newDestinationPolicy(cfg.GitLabURL, false, allowPrivateInstances()))
-	c.healthClient = newHealthClient(base, cfg.GitLabURL, c)
+	c.healthClient = newHealthClient(pools, cfg.GitLabURL, c)
 
 	sdkHTTPClient := &http.Client{
-		Transport:     apiTransport(base, c),
+		Transport:     apiTransport(pools, c),
 		CheckRedirect: credentialSafeRedirect(cfg.GitLabURL),
 	}
 
@@ -265,7 +265,7 @@ func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetr
 // [retryOptionsWithCeiling] for why that seam exists; every caller outside a
 // test passes the package constant.
 func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, retryCeiling time.Duration) (*Client, error) {
-	base := buildBaseTransport(skipTLSVerify)
+	pools := buildDestinationPools(skipTLSVerify)
 
 	c := &Client{
 		baseURL:   baseURL,
@@ -274,10 +274,10 @@ func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, r
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	c.destination.Store(newDestinationPolicy(baseURL, false, allowPrivateInstances()))
-	c.healthClient = newHealthClient(base, baseURL, c)
+	c.healthClient = newHealthClient(pools, baseURL, c)
 
 	sdkHTTPClient := &http.Client{
-		Transport:     apiTransport(base, c),
+		Transport:     apiTransport(pools, c),
 		CheckRedirect: credentialSafeRedirect(baseURL),
 	}
 
@@ -310,7 +310,7 @@ func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, r
 // valid in both schemes, so forwarding exactly as received is correct for
 // every token kind the mode admits.
 func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, error) {
-	base := buildBaseTransport(skipTLSVerify)
+	pools := buildDestinationPools(skipTLSVerify)
 
 	c := &Client{
 		baseURL:    baseURL,
@@ -320,10 +320,10 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	c.destination.Store(newDestinationPolicy(baseURL, false, allowPrivateInstances()))
-	c.healthClient = newHealthClient(base, baseURL, c)
+	c.healthClient = newHealthClient(pools, baseURL, c)
 
 	sdkHTTPClient := &http.Client{
-		Transport:     apiTransport(base, c),
+		Transport:     apiTransport(pools, c),
 		CheckRedirect: credentialSafeRedirect(baseURL),
 	}
 
@@ -347,6 +347,14 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 
 // HTTPTransport returns the GitLab HTTP transport configured with the same TLS
 // policy used by authenticated GitLab clients.
+//
+// A request made through it carries no destination policy, so the dialer
+// applies tier A and nothing else, as it always has: a caller that borrows the
+// transport chose its own destination (ADR-0022). Without skipped
+// verification it is the permissive half of [sharedDestinationPools], which is
+// the pool such a request belongs in: a connection it finds there leads to an
+// address tier A allows, and one it opens is one any request routed there
+// would have been allowed to dial as well.
 func HTTPTransport(skipTLSVerify bool) http.RoundTripper {
 	return buildBaseTransport(skipTLSVerify)
 }
@@ -587,7 +595,11 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 	opts.Page = 1
 
 	best, found := edition.Free, false
-	for page := 1; page <= namespacePlanMaxPages; page++ {
+	// No bound in the loop header: the page cap below is what ends the walk,
+	// and it has to be the one that does, since it is where the walk says it
+	// stopped short. A second copy of the bound up here could never be reached
+	// first, which is a condition that reads as a limit and decides nothing.
+	for page := 1; ; page++ {
 		namespaces, resp, err := c.inner.Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
 		if err != nil {
 			// A page that fails after an earlier one answered keeps what it
@@ -614,7 +626,8 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 		if best == edition.Ultimate {
 			break
 		}
-		if resp == nil || resp.NextPage <= 0 {
+		next := nextNamespacePage(resp)
+		if next <= 0 {
 			break
 		}
 		if page == namespacePlanMaxPages {
@@ -622,13 +635,27 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 				"pages", namespacePlanMaxPages, "per_page", namespacePlanPageSize)
 			break
 		}
-		opts.Page = resp.NextPage
+		opts.Page = next
 	}
 
 	if found {
 		slog.InfoContext(ctx, "detected GitLab tier from the namespace plan", "tier", best.String())
 	}
 	return best, found
+}
+
+// nextNamespacePage is the page GitLab says follows resp, or zero when it names
+// none.
+//
+// client-go hands back a response with every nil error, so the SDK never
+// brings a nil one here. The check stays so that a change on its side ends the
+// walk instead of panicking in the middle of resolving a tier, and it lives in
+// a function of its own because that is the one place a test can hand it nil.
+func nextNamespacePage(resp *gl.Response) int64 {
+	if resp == nil {
+		return 0
+	}
+	return resp.NextPage
 }
 
 // namespacePlanAnswers reports whether a namespace's plan says anything about
@@ -837,9 +864,9 @@ func IsCredentialRejection(err error) bool {
 //
 // A 401 it is answered with is not reported to the unauthorized hook, unlike
 // one the SDK is answered with: see [responseLimitTransport.reportsUnauthorized].
-func newHealthClient(base http.RoundTripper, baseURL string, c *Client) *http.Client {
+func newHealthClient(pools destinationPools, baseURL string, c *Client) *http.Client {
 	return &http.Client{
-		Transport:     &responseLimitTransport{base: &destinationTransport{base: base, client: c}, client: c},
+		Transport:     &responseLimitTransport{base: &destinationTransport{pools: pools, client: c}, client: c},
 		Timeout:       healthTimeout,
 		CheckRedirect: credentialSafeRedirect(baseURL),
 	}
@@ -860,15 +887,22 @@ func newHealthClient(base http.RoundTripper, baseURL string, c *Client) *http.Cl
 // worker timeout is of that order) and far below "forever".
 const responseHeaderTimeout = 60 * time.Second
 
-// sharedBaseTransport is the verifying transport every client shares.
+// sharedDestinationPools is the pair of verifying transports every client
+// shares.
 //
-// It is built once because the connection pool lives in the transport: a
+// They are built once because the connection pool lives in the transport: a
 // per-client transport would give each of up to --max-http-clients pool
-// entries its own idle-connection set. It is a clone rather than
+// entries its own idle-connection set. They are clones rather than
 // [http.DefaultTransport] itself because setting ResponseHeaderTimeout on that
-// would change the behavior of every other package in the process.
-var sharedBaseTransport = sync.OnceValue(func() http.RoundTripper {
-	return newBaseTransport(nil)
+// would change the behavior of every other package in the process. There are
+// two rather than one for the reason [destinationPools] gives: a single pool
+// let a request the destination guard refuses reuse a connection a request it
+// permits had opened.
+var sharedDestinationPools = sync.OnceValue(func() destinationPools {
+	return destinationPools{
+		permissive: newBaseTransport(nil),
+		strict:     newBaseTransport(nil),
+	}
 })
 
 // newBaseTransport clones net/http's default transport and applies this
@@ -915,16 +949,42 @@ func baseDialer() *net.Dialer {
 }
 
 // buildBaseTransport returns the base HTTP round tripper with optional TLS
-// configuration. When skipTLSVerify is true, TLS certificate verification is
-// disabled to support self-signed certificates in development environments.
+// configuration, for a caller that makes its own requests with no destination
+// policy (see [HTTPTransport]). When skipTLSVerify is true, TLS certificate
+// verification is disabled to support self-signed certificates in development
+// environments.
 func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 	if skipTLSVerify {
-		return newBaseTransport(&tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //nolint:gosec // G402: user-configured opt-in for self-signed certificates via GITLAB_MCP_SKIP_TLS_VERIFY
-		})
+		return newBaseTransport(insecureTLSConfig())
 	}
-	return sharedBaseTransport()
+	return sharedDestinationPools().permissive
+}
+
+// buildDestinationPools returns the pair of transports one client routes its
+// requests between.
+//
+// A client that skips certificate verification gets a pair of its own, as it
+// always got a transport of its own, because the shared pair verifies. The pair
+// is split for the same reason the shared one is: a client's policy answers
+// differently for its own instance and for a hop away from it, and the pool
+// is what a reused connection is judged by.
+func buildDestinationPools(skipTLSVerify bool) destinationPools {
+	if skipTLSVerify {
+		return destinationPools{
+			permissive: newBaseTransport(insecureTLSConfig()),
+			strict:     newBaseTransport(insecureTLSConfig()),
+		}
+	}
+	return sharedDestinationPools()
+}
+
+// insecureTLSConfig is the TLS configuration of a transport whose operator
+// asked for certificate verification to be skipped.
+func insecureTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: true, //nolint:gosec // G402: user-configured opt-in for self-signed certificates via GITLAB_MCP_SKIP_TLS_VERIFY
+	}
 }
 
 // apiTransport is the full chain the GitLab SDK client speaks through.
@@ -962,14 +1022,15 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 // The destination stamp is one layer further in still, because what it must
 // name is the request as the dialer will see it: each redirect hop reaches
 // this chain as a request of its own, and the stamp says whether that hop's
-// URL is still the instance's own host.
-func apiTransport(base http.RoundTripper, c *Client) http.RoundTripper {
+// URL is still the instance's own host. The same layer chooses which of the
+// two pools serves the hop, for the reason [destinationPools] gives.
+func apiTransport(pools destinationPools, c *Client) http.RoundTripper {
 	return mcpotel.NewTransport(&outboundBoundaryTransport{
 		base: &dotUnescapeTransport{
 			base: &resilienceTransport{
 				base: &captureTransport{
 					base: &responseLimitTransport{
-						base:                &destinationTransport{base: base, client: c},
+						base:                &destinationTransport{pools: pools, client: c},
 						client:              c,
 						reportsUnauthorized: true,
 					},

@@ -354,7 +354,7 @@ Two kinds of destination are **not** the operator's choice, and those are checke
 - an instance a caller named in the `GITLAB-URL` header under `--allow-any-gitlab-url`
 - a redirect hop that left the configured instance's own host, which is how GitLab answers artifact, trace and package downloads when object storage is configured
 
-For those two, a private, loopback, CGNAT, link-local, unique-local or unspecified address is refused unless `--allow-private-instances` (or `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES=true`) is passed. One case is allowed without the flag: a redirect to a private address when the configured instance **itself** resolves to a private address, which is the ordinary self-managed GitLab with its object store on the same network.
+For those two, a private, loopback, CGNAT, link-local, unique-local or unspecified address is refused unless `--allow-private-instances` (or `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES=true`) is passed. One case is allowed without the flag: a redirect to a private address when the instance the operator configured **itself** resolves to a private address, which is the ordinary self-managed GitLab with its object store on the same network. An instance a caller named never qualifies; it needs `--allow-private-instances`.
 
 **The cloud metadata addresses are refused on every hop, for every deployment, and `--allow-private-instances` does not permit them**: `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254` and `100.100.100.200`. Nothing legitimate serves a GitLab API or a presigned object-storage URL from one of them.
 

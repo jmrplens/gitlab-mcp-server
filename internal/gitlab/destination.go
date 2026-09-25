@@ -76,8 +76,12 @@ var cgnatPrefix = netip.MustParsePrefix("100.64.0.0/10")
 // instanceLookupTimeout bounds the one DNS question this guard asks of its own
 // accord: whether the configured instance itself sits on a private address.
 //
-// The lookup happens on the refusal path only, so a slow resolver delays a
-// request that was about to fail rather than every request that succeeds.
+// It is asked the first time a request leaves the host of an instance the
+// operator named, since the answer decides which of the [destinationPools]
+// that request is served from, and never again for the same policy. A
+// deployment whose requests never leave the instance, one whose instance is
+// spelled as an address, one that passed --allow-private-instances and a
+// client whose instance a caller named never ask it at all.
 const instanceLookupTimeout = 2 * time.Second
 
 // addressLiteral reports whether host is spelled as an address rather than as
@@ -210,23 +214,47 @@ func (p *destinationPolicy) coversInstance(dest *url.URL) bool {
 	return isDomainOrSubdomain(strings.ToLower(dest.Hostname()), p.instanceHost)
 }
 
-// checkPrivate applies tier B to one candidate address.
-func (p *destinationPolicy) checkPrivate(ctx context.Context, addr netip.Addr, offOrigin bool) error {
+// permitsPrivate reports whether tier B lets one request reach a private
+// address at all.
+//
+// It is the one predicate both halves of the guard read:
+// [destinationPolicy.checkPrivate] when a connection is dialed, and
+// [destinationTransport.RoundTrip] when it chooses the pool a request is
+// served from. They must never disagree, because on a reused connection the
+// pool is all there is: nothing is dialed, so the connection a request is
+// handed carries only the answer it was dialed under.
+// Every input is fixed for the life of the policy, the instance's own privacy
+// included once it has been resolved, so the routing and the dial of one
+// request get the same answer from the same policy.
+func (p *destinationPolicy) permitsPrivate(ctx context.Context, offOrigin bool) bool {
 	if !offOrigin && !p.callerChosen {
 		// The operator named this instance. Nothing here is checked, ever.
-		return nil
-	}
-	if !isPrivateAddress(addr) {
-		return nil
+		return true
 	}
 	if p.allowPrivate {
-		return nil
+		return true
 	}
-	if offOrigin && p.instanceIsPrivate(ctx) {
-		// A self-managed GitLab redirecting an artifact download to object
-		// storage on the same private network is ordinary, and a deployment
-		// whose instance is already private is inside that network. Tier A
-		// still applied above, so this cannot reach a metadata address.
+	// A self-managed GitLab redirecting an artifact download to object
+	// storage on the same private network is ordinary, and a deployment whose
+	// operator named an instance that is already private is inside that
+	// network. Tier A still applies at the dial, so this cannot reach a
+	// metadata address.
+	//
+	// Never for an instance a caller named. Its first hop is refused a private
+	// address, so a caller-named instance this client reached answered the
+	// dialer with a public one, and the only way the lookup here could then
+	// call it private is a name answering differently the second time it is
+	// asked: DNS rebinding, by whoever holds the name. The operator's own name
+	// is exempt from that concern because the operator chose it; a caller's
+	// is not, and granting this would turn --allow-any-gitlab-url into a
+	// redirect onto the private network. A caller-named instance that really
+	// is private is served through --allow-private-instances, answered above.
+	return offOrigin && !p.callerChosen && p.instanceIsPrivate(ctx)
+}
+
+// checkPrivate applies tier B to one candidate address.
+func (p *destinationPolicy) checkPrivate(ctx context.Context, addr netip.Addr, offOrigin bool) error {
+	if !isPrivateAddress(addr) || p.permitsPrivate(ctx, offOrigin) {
 		return nil
 	}
 	return p.refusal(addr, offOrigin)
@@ -248,12 +276,21 @@ func (p *destinationPolicy) refusal(addr netip.Addr, offOrigin bool) error {
 // instanceIsPrivate answers, once, whether the configured instance itself sits
 // on a private address.
 //
-// A literal host is decided without asking anybody. A name is resolved on the
-// refusal path only, so the common case pays nothing, and a resolver that
-// cannot answer leaves the destination refused rather than permitted.
+// A literal host is decided without asking anybody. A name is resolved the
+// first time a request leaves the instance, and a resolver that cannot answer
+// leaves the destination refused rather than permitted.
+//
+// The lookup does not inherit the caller's cancellation, because its answer
+// is kept for every later request of the client and describes the instance
+// rather than the request that happened to ask first. net/http hands a
+// redirect hop to the transport without checking whether its context has
+// ended, so a hop routed after its caller gave up would otherwise record "not
+// private" for the life of the client, and every later redirect to the
+// instance's own object store would be refused for it. [instanceLookupTimeout]
+// still bounds the wait.
 func (p *destinationPolicy) instanceIsPrivate(ctx context.Context) bool {
 	p.privateOnce.Do(func() {
-		p.privateResult = p.resolveInstancePrivate(ctx)
+		p.privateResult = p.resolveInstancePrivate(context.WithoutCancel(ctx))
 	})
 	return p.privateResult
 }
@@ -289,10 +326,11 @@ func (p *destinationPolicy) resolveInstancePrivate(ctx context.Context) bool {
 
 // dialTarget is what one request tells the dialer.
 //
-// It travels on the request context rather than on the transport because
-// [sharedBaseTransport] is one process-wide transport: a transport per client
-// would give each of up to --max-http-clients pool entries its own
-// idle-connection set, which is the cost that transport exists to avoid.
+// It travels on the request context rather than on the transport because the
+// transports are shared: every client in the process is routed between the
+// same two, [sharedDestinationPools], and a transport per client would give
+// each of up to --max-http-clients pool entries its own idle-connection set,
+// which is the cost sharing them exists to avoid.
 type dialTarget struct {
 	policy *destinationPolicy
 	// offOrigin reports that this request's URL is not the instance's own
@@ -330,9 +368,17 @@ func dialTargetFrom(ctx context.Context) (dialTarget, bool) {
 // It is also the one place that covers the first request and every redirect
 // hop with the same code, since both reach the same dialer.
 //
-// Connection reuse does not walk past it: Go keys idle connections on scheme,
-// host and port, so a connection to one destination is never handed to a
-// request for another.
+// # What it cannot see, and what covers that
+//
+// A request served from an idle connection is not dialed, so this never runs
+// for it. Go keys idle connections on scheme, host and port and knows nothing
+// of the policy a connection was opened under: on one shared transport, a
+// request this would refuse was handed, without a dial, the connection a
+// request it permits had opened to the same host. [destinationTransport] closes
+// that by routing each request to one of the [destinationPools] by the same
+// predicate this applies, so a request refused a private address is only
+// served connections that were dialed under that refusal, and every one of
+// those leads to a public address.
 func guardDestination(ctx context.Context, network, address string, _ syscall.RawConn) error {
 	if !strings.HasPrefix(network, "tcp") {
 		// Everything this server dials is TCP. A unix socket carries a path
@@ -358,25 +404,71 @@ func guardDestination(ctx context.Context, network, address string, _ syscall.Ra
 	return target.policy.checkPrivate(ctx, addr, target.offOrigin)
 }
 
-// destinationTransport stamps every request with the policy in force for the
-// client that made it.
+// destinationPools are the two transports every request this package makes is
+// routed between, split by what tier B answers for a private address.
 //
-// It sits at the bottom of the chain, immediately around the base transport,
-// so the stamp is structurally the last thing that happens before the dial
-// rather than something a later wrapper could be inserted in front of.
+// The split is what keeps connection reuse from walking past
+// [guardDestination]. A reused connection is not dialed, so the guard never
+// sees the request it serves, and the only judgement such a connection carries
+// is the one made when it was opened. So a request is only handed connections
+// opened under the same answer as its own:
+//
+//   - strict carries the requests tier B refuses a private address: an
+//     instance a caller named, a redirect hop that left it, and a redirect hop
+//     that left a public instance the operator named. Every connection in it
+//     was dialed under that refusal, so it leads to a public address, which
+//     every one of those requests may reach.
+//   - permissive carries the requests tier B allows one: the operator's own
+//     instance, a deployment that passed --allow-private-instances, and a hop
+//     from an instance the operator named that is itself private. A
+//     connection in it may lead to a private address, and every request
+//     routed to it would have been allowed to dial that address.
+//
+// Tier A needs no pool of its own, because no request of any policy can open a
+// connection to a metadata address in the first place.
+//
+// The ordinary deployment pays nothing for it in idle connections. Every
+// request to the instance the operator named is permissive, so first-party
+// traffic shares one idle pool exactly as it did when there was only one; the
+// strict pool holds connections only for a caller-named instance and the hops
+// away from it, and for redirect hops away from a public one. A client whose
+// requests leave the instance the operator named does pay one memoized lookup
+// of that instance's name, to know which pool the first such hop belongs in:
+// see [instanceLookupTimeout].
+type destinationPools struct {
+	permissive http.RoundTripper
+	strict     http.RoundTripper
+}
+
+// destinationTransport stamps every request with the policy in force for the
+// client that made it, and routes it to the pool that policy's answer belongs
+// in.
+//
+// It sits at the bottom of the chain, immediately around the base transports,
+// so the stamp and the routing are structurally the last things that happen
+// before the dial rather than something a later wrapper could be inserted in
+// front of.
 type destinationTransport struct {
-	base   http.RoundTripper
+	pools  destinationPools
 	client *Client
 }
 
-// RoundTrip stamps the request and delegates.
+// RoundTrip stamps the request and delegates to the pool its answer selects.
 func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	policy := t.client.destinationPolicy()
 	if policy == nil {
-		return t.base.RoundTrip(req)
+		// Tier A alone allows a private address, so an unstamped request
+		// belongs with the permissive pool: nothing there was dialed under an
+		// answer stricter than the one its own dial would get.
+		return t.pools.permissive.RoundTrip(req)
 	}
-	target := dialTarget{policy: policy, offOrigin: !policy.coversInstance(req.URL)}
-	return t.base.RoundTrip(req.WithContext(withDialTarget(req.Context(), target)))
+	offOrigin := !policy.coversInstance(req.URL)
+	ctx := withDialTarget(req.Context(), dialTarget{policy: policy, offOrigin: offOrigin})
+	pool := t.pools.strict
+	if policy.permitsPrivate(ctx, offOrigin) {
+		pool = t.pools.permissive
+	}
+	return pool.RoundTrip(req.WithContext(ctx))
 }
 
 // destinationPolicy returns the policy this client dials under, or nil.
