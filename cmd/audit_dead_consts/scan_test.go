@@ -544,17 +544,22 @@ func TestElsewhere(t *testing.T) {
 	assertDead(t, scanFixtureAs(t, files, []target{{otherPlatform, runtime.GOARCH}}))
 }
 
-// TestScan_PackageReadTwice_DeclaresEachConstantOnce checks that the second
-// load is a union with the first rather than a second count: a constant is
-// keyed by where it sits in the tree, which both loads agree on, so the
-// summary says two constants were declared and not four.
-func TestScan_PackageReadTwice_DeclaresEachConstantOnce(t *testing.T) {
-	report, progress := auditFixture(t, platformFixture, []target{{otherPlatform, runtime.GOARCH}})
-	if want := "re-reading 1 package(s) as " + otherPlatform + "/" + runtime.GOARCH; !strings.Contains(progress, want) {
+// TestScan_PackageReadThreeTimes_DeclaresEachConstantOnce checks that the
+// later loads are a union with the first rather than more counts: a constant
+// is keyed by where it sits in the tree, which every load agrees on, so the
+// summary says two constants were declared and not six. The package is read
+// again under two targets, so the progress names a package count and a
+// target count that differ, and holds each line whole.
+func TestScan_PackageReadThreeTimes_DeclaresEachConstantOnce(t *testing.T) {
+	targets := []target{{otherPlatform, runtime.GOARCH}, {otherPlatform, otherArch}}
+	report, progress := auditFixture(t, platformFixture, targets)
+	want := toolName + ": re-reading 1 package(s) as " + targets[0].String() + "\n" +
+		toolName + ": re-reading 1 package(s) as " + targets[1].String() + "\n"
+	if progress != want {
 		t.Fatalf("progress = %q, want %q: the fixture holds a file this platform left out", progress, want)
 	}
 	if report.Summary.Declared != 2 {
-		t.Fatalf("Summary.Declared = %d, want 2: the two loads saw the same two constants", report.Summary.Declared)
+		t.Fatalf("Summary.Declared = %d, want 2: the three loads saw the same two constants", report.Summary.Declared)
 	}
 	if report.Summary.Packages != 1 {
 		t.Fatalf("Summary.Packages = %d, want 1", report.Summary.Packages)
@@ -832,6 +837,9 @@ func TestAudit_PlatformLoadThatFails_StopsTheRun(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("audit error = nil, want the platform load failure")
+	}
+	if want := "load as notanoperatingsystem/" + runtime.GOARCH + ": "; !strings.HasPrefix(err.Error(), want) {
+		t.Fatalf("audit error = %v, want it to start %q: the failure is the second load's, not the first's", err, want)
 	}
 }
 
