@@ -443,8 +443,8 @@ workaround here, so every other user of those projects gets it too:
   sends, and fixes such as a panic decoding an issue with no id
   ([merge requests](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests?scope=all&state=all&author_username=jmrp)).
 - **GitLab**: API documentation and response annotations corrected where they
-  disagreed with what the API sends, a fix to the GPG key identities endpoint,
-  and proposed additions such as cancelling an automatic merge
+  disagreed with what the API sends, a fix so a revoked GPG identity no longer
+  verifies commits, and proposed additions such as cancelling an automatic merge
   ([merge requests](https://gitlab.com/gitlab-org/gitlab/-/merge_requests?scope=all&state=all&author_username=jmrp)).
 - **MCP Go SDK**: protocol conformance fixes around cancellation, protocol
   version negotiation and the initialize handshake
