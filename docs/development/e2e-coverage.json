@@ -2484,7 +2484,7 @@
    }
   },
   "ee": {
-   "retrieved_at": "2026-09-24",
+   "retrieved_at": "2026-09-25",
    "runtime": "enterprise/ultimate",
    "edition": "enterprise",
    "tier": "ultimate",
@@ -2493,30 +2493,30 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20260924t230935z-edc80f2a78-common",
-     "commit": "0a0b5bb794244bb2ab09441fc030a74a62d77995",
+     "run_id": "20260925t192534z-90ee1f97b1-common",
+     "commit": "f4a909072df12493059dd3b449cabc67b6e6926e",
      "gitlab_version": "19.3.1-ee",
      "tier_confirmed": true,
      "fixtures": {
       "runner": true,
       "fixture_service": true,
       "bitbucket": false,
-      "gh_token": true
+      "gh_token": false
      }
     },
     {
      "package": "ee",
      "requirement": "licensed",
      "status": "started",
-     "run_id": "20260924t235118z-d36f9cde73-ee",
-     "commit": "0a0b5bb794244bb2ab09441fc030a74a62d77995",
+     "run_id": "20260925t201917z-680929b67a-ee",
+     "commit": "f4a909072df12493059dd3b449cabc67b6e6926e",
      "gitlab_version": "19.3.1-ee",
      "tier_confirmed": true,
      "fixtures": {
       "runner": true,
       "fixture_service": true,
       "bitbucket": false,
-      "gh_token": true
+      "gh_token": false
      }
     }
    ],
@@ -2586,7 +2586,7 @@
      "surface": "individual",
      "mode": "default",
      "sessions": 14,
-     "tools": 1085,
+     "tools": 1086,
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
@@ -2596,7 +2596,7 @@
      "surface": "individual",
      "mode": "read-only",
      "sessions": 2,
-     "tools": 509,
+     "tools": 510,
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
@@ -2606,7 +2606,7 @@
      "surface": "individual",
      "mode": "safe",
      "sessions": 1,
-     "tools": 1085,
+     "tools": 1086,
      "resources": 8,
      "resource_templates": 37,
      "prompts": 37,
@@ -2634,32 +2634,32 @@
     }
    ],
    "summary": {
-    "catalog_actions": 1089,
-    "test_calls": 4375,
-    "l1": 1016,
-    "l2": 917,
-    "l3": 901,
+    "catalog_actions": 1090,
+    "test_calls": 4443,
+    "l1": 1017,
+    "l2": 918,
+    "l3": 902,
     "states": {
      "dynamic": {
       "absent": 71,
-      "asserted": 917,
+      "asserted": 918,
       "error-path-only": 21,
-      "refused-only": 42,
+      "refused-only": 43,
       "skipped": 11,
-      "sweep-only": 27
+      "sweep-only": 26
      },
      "individual": {
       "absent": 72,
-      "asserted": 919,
-      "error-path-only": 19,
-      "refused-only": 42,
+      "asserted": 920,
+      "error-path-only": 18,
+      "refused-only": 43,
       "skipped": 11,
       "sweep-only": 22,
       "unservable": 4
      },
      "meta": {
       "absent": 24,
-      "asserted": 987,
+      "asserted": 988,
       "error-path-only": 20,
       "refused-only": 42,
       "skipped": 11,
@@ -3269,6 +3269,7 @@
      "package.download",
      "package.file_delete",
      "package.file_list",
+     "package.get",
      "package.group_list",
      "package.list",
      "package.protection_rule_create",
@@ -4202,6 +4203,7 @@
      "package.download",
      "package.file_delete",
      "package.file_list",
+     "package.get",
      "package.group_list",
      "package.list",
      "package.protection_rule_create",
@@ -5108,6 +5110,7 @@
      "package.download",
      "package.file_delete",
      "package.file_list",
+     "package.get",
      "package.group_list",
      "package.list",
      "package.protection_rule_create",
