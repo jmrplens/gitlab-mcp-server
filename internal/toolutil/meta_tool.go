@@ -820,7 +820,10 @@ func normalizeParamAliases(params map[string]any, target reflect.Type) map[strin
 
 // NormalizeParamAliasesForSchema applies the same compatibility aliases used
 // by UnmarshalParams, driven by a JSON Schema properties map instead of a Go
-// struct type. It is used by evaluation code that validates simulated calls.
+// struct type. The dynamic surface normalises with it before dispatch, and
+// FinishToolResult, through embedParams, expands the embedded resource URI from
+// its output, so both see the parameters as the handler's UnmarshalParams saw
+// them.
 func NormalizeParamAliasesForSchema(params, schema map[string]any) map[string]any {
 	if len(params) == 0 {
 		return params

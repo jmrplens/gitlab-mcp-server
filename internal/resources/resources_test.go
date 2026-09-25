@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Shared format strings and URI prefix constants used across resource tests.
@@ -846,7 +849,13 @@ func TestExtractFileBlobURI(t *testing.T) {
 		ok                        bool
 	}{
 		{"gitlab://project/42/file/main/src/main.go", "42", "main", "src/main.go", true},
-		{"gitlab://project/group%2Frepo/file/v1.0/README.md", "group%2Frepo", "v1.0", "README.md", true},
+		{"gitlab://project/group%2Frepo/file/v1.0/README.md", "group/repo", "v1.0", "README.md", true},
+		// A ref carrying a slash arrives encoded, so the first raw slash after
+		// it starts the path; the split is made before the decode.
+		{"gitlab://project/42/file/feature%2Fnew-ui/docs/my%20file.md", "42", "feature/new-ui", "docs/my file.md", true},
+		{"gitlab://project/a%zz/file/main/README.md", "", "", "", false},
+		{"gitlab://project/42/file/a%zz/README.md", "", "", "", false},
+		{"gitlab://project/42/file/main/a%zz", "", "", "", false},
 		{"gitlab://project/42/file/main/", "", "", "", false},
 		{"gitlab://project/42/file/main", "", "", "", false},
 		{"gitlab://project/42/file//README.md", "", "", "", false},
@@ -1019,6 +1028,8 @@ func TestExtractSuffix(t *testing.T) {
 	}{
 		{"gitlab://project/42", testURIProjectPrefix, "42"},
 		{"gitlab://user/current", "gitlab://user/", "current"},
+		{"gitlab://project/group%2Frepo", testURIProjectPrefix, "group/repo"},
+		{"gitlab://project/a%zz", testURIProjectPrefix, ""},
 		{"other://something", "gitlab://", ""},
 		{"", "gitlab://", ""},
 	}
@@ -1040,6 +1051,8 @@ func TestExtractMiddle(t *testing.T) {
 	}{
 		{"gitlab://project/42/branches", testURIProjectPrefix, "/branches", "42"},
 		{"gitlab://project/42/labels", testURIProjectPrefix, "/labels", "42"},
+		{"gitlab://project/group%2Frepo/labels", testURIProjectPrefix, "/labels", "group/repo"},
+		{"gitlab://project/a%zz/labels", testURIProjectPrefix, "/labels", ""},
 		{"wrong", testURIProjectPrefix, "/labels", ""},
 	}
 	for _, tt := range tests {
@@ -1068,6 +1081,13 @@ func TestExtractTwoParts(t *testing.T) {
 	}{
 		{"gitlab://project/42/pipeline/100", testURIProjectPrefix, "/pipeline/", "42", "100", true},
 		{"gitlab://project/42/mr/5", testURIProjectPrefix, "/mr/", "42", "5", true},
+		{"gitlab://project/group%2Frepo/branch/feature%2Fworld", testURIProjectPrefix, "/branch/", "group/repo", "feature/world", true},
+		// The project's own path spells the separator once decoded, which is
+		// why the split is made on the URI as it arrived: decoding first would
+		// cut this into project "group" and branch "x/branch/main".
+		{"gitlab://project/group%2Fbranch%2Fx/branch/main", testURIProjectPrefix, "/branch/", "group/branch/x", "main", true},
+		{"gitlab://project/a%zz/branch/main", testURIProjectPrefix, "/branch/", "", "", false},
+		{"gitlab://project/42/branch/a%zz", testURIProjectPrefix, "/branch/", "", "", false},
 		{"invalid", testURIProjectPrefix, "/pipeline/", "", "", false},
 		{"gitlab://project//pipeline/100", testURIProjectPrefix, "/pipeline/", "", "", false},
 	}
@@ -1081,6 +1101,31 @@ func TestExtractTwoParts(t *testing.T) {
 			if ok == (a == "" && b == "") {
 				t.Errorf("extractTwoParts(%q, %q, %q) = (%q, %q, %v): ok must say exactly whether both segments were filled",
 					tt.uri, tt.prefix, tt.sep, a, b, ok)
+			}
+		})
+	}
+}
+
+// TestURIVariable_DecodesOnce pins the one decode every URI helper applies: a
+// percent-encoded value comes back as itself, an escape that does not decode
+// and an empty segment come back as nothing, and a plus stays a plus.
+func TestURIVariable_DecodesOnce(t *testing.T) {
+	tests := []struct {
+		name, segment, want string
+		ok                  bool
+	}{
+		{"an encoded slash", "feature%2Fworld", "feature/world", true},
+		{"an escape of an escape is decoded once", "group%252Fproject", "group%2Fproject", true},
+		{"a plus stays a plus", "v1.0.0+build", "v1.0.0+build", true},
+		{"an escape that does not decode", "a%zz", "", false},
+		{"a truncated escape", "a%2", "", false},
+		{"an empty segment", "", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := uriVariable(tt.segment)
+			if got != tt.want || ok != tt.ok {
+				t.Errorf("uriVariable(%q) = (%q, %v), want (%q, %v)", tt.segment, got, ok, tt.want, tt.ok)
 			}
 		})
 	}
@@ -3251,5 +3296,240 @@ func TestDecodeFileContent_Base64InvalidUTF8_ReadsAsBinary(t *testing.T) {
 	content, category := decodeFileContent(f)
 	if content != "" || category != "binary" {
 		t.Errorf("decodeFileContent(invalid utf-8) = (%q, %q), want (\"\", \"binary\")", content, category)
+	}
+}
+
+// gitlabRequest is what a mock GitLab saw of one request: the path decoded
+// once, which is what the value a handler passed to client-go reads as, and
+// the query decoded the same way.
+type gitlabRequest struct {
+	path  string
+	query map[string][]string
+}
+
+// recordingGitLab answers every request with 404 and keeps what each one
+// asked for. A 404 stops every handler before it decodes a body, so one mock
+// serves all of them; what is under test is the request, not the answer.
+type recordingGitLab struct {
+	mu   sync.Mutex
+	seen []gitlabRequest
+}
+
+// ServeHTTP records the request and answers 404. It runs on the httptest
+// server's goroutine, so it records under the lock and asserts nothing.
+func (g *recordingGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	g.mu.Lock()
+	g.seen = append(g.seen, gitlabRequest{path: r.URL.Path, query: r.URL.Query()})
+	g.mu.Unlock()
+	http.NotFound(w, r)
+}
+
+// requests returns what the mock was asked since the last call, and forgets
+// it, so each subtest judges only its own read.
+func (g *recordingGitLab) requests() []gitlabRequest {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	seen := g.seen
+	g.seen = nil
+	return seen
+}
+
+// TestResourceTemplates_EscapedVariable_ReachesGitLabDecodedOnce reads, through
+// the SDK's own router, a URI whose variables carry reserved characters and
+// were percent-encoded the way RFC 6570 simple expansion encodes them, and
+// holds the request GitLab receives to the original value.
+//
+// Before the resource layer decoded its variables, every one of these reached
+// GitLab escaped twice: client-go escapes what it is handed, and it was handed
+// feature%2Fworld rather than feature/world, so GitLab was asked for a branch
+// literally named that and answered 404. The mock's decoded path is what the
+// handler passed on, so it must carry the value with no escape left in it.
+// There is one case per way a variable is extracted, since each helper splits
+// the URI differently and each had to learn to decode after the split, plus
+// one whose value literally holds an escape: every other value here decodes to
+// itself a second time, so only that case tells decoding once from twice.
+func TestResourceTemplates_EscapedVariable_ReachesGitLabDecodedOnce(t *testing.T) {
+	gitlab := &recordingGitLab{}
+	session := newMCPSession(t, gitlab)
+
+	tests := []struct {
+		name, uri, wantPath string
+		wantRef             string
+	}{
+		{name: "a project path", uri: "gitlab://project/group%2Fsub%2Fproject", wantPath: "/api/v4/projects/group/sub/project"},
+		{name: "a group path", uri: "gitlab://group/parent%2Fchild", wantPath: "/api/v4/groups/parent/child"},
+		{name: "a project collection", uri: "gitlab://project/group%2Fproject/branches", wantPath: "/api/v4/projects/group/project/repository/branches"},
+		{name: "a group's members", uri: "gitlab://group/parent%2Fchild/members", wantPath: "/api/v4/groups/parent/child/members/all"},
+		{name: "a branch with a slash", uri: "gitlab://project/group%2Fproject/branch/feature%2Fworld", wantPath: "/api/v4/projects/group/project/repository/branches/feature/world"},
+		{name: "a branch whose name holds an escape", uri: "gitlab://project/42/branch/fix-%2541", wantPath: "/api/v4/projects/42/repository/branches/fix-%41"},
+		{name: "a tag with a slash", uri: "gitlab://project/42/tag/release%2F2026.1", wantPath: "/api/v4/projects/42/repository/tags/release/2026.1"},
+		{name: "a release with a slash", uri: "gitlab://project/42/release/release%2F2026.1", wantPath: "/api/v4/projects/42/releases/release/2026.1"},
+		{name: "a nested wiki slug", uri: "gitlab://project/42/wiki/parent%2Fchild", wantPath: "/api/v4/projects/42/wikis/parent/child"},
+		{name: "a scoped project label", uri: "gitlab://project/42/label/team%2Fpriority%3A%3Ahigh", wantPath: "/api/v4/projects/42/labels/team/priority::high"},
+		{name: "a group label with a space", uri: "gitlab://group/parent%2Fchild/label/team%2Fbug%20fix", wantPath: "/api/v4/groups/parent/child/labels/team/bug fix"},
+		{name: "a merge request's notes", uri: "gitlab://project/group%2Fproject/mr/5/notes", wantPath: "/api/v4/projects/group/project/merge_requests/5/notes"},
+		{name: "a pipeline", uri: "gitlab://project/group%2Fproject/pipeline/7", wantPath: "/api/v4/projects/group/project/pipelines/7"},
+		{name: "a file on a branch with a slash", uri: "gitlab://project/group%2Fproject/file/feature%2Fnew-ui/docs/my%20file.md", wantPath: "/api/v4/projects/group/project/repository/files/docs/my file.md", wantRef: "feature/new-ui"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The mock answers 404, so the read fails; the request it made is
+			// what is judged here.
+			_, _ = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: tt.uri})
+			seen := gitlab.requests()
+			if len(seen) == 0 {
+				t.Fatalf("reading %s never reached GitLab", tt.uri)
+			}
+			first := seen[0]
+			if first.path != tt.wantPath {
+				t.Errorf("reading %s asked GitLab for %q, want %q", tt.uri, first.path, tt.wantPath)
+			}
+			if tt.wantRef != "" {
+				if got := first.query["ref"]; len(got) != 1 || got[0] != tt.wantRef {
+					t.Errorf("reading %s sent ref %q, want %q", tt.uri, got, tt.wantRef)
+				}
+			}
+		})
+	}
+}
+
+// roundTripValue is the value TestResourceTemplates_ServerExpandedURI_RoundTrips
+// binds for each template variable. A string carries every character a simple
+// expansion must encode that url.PathEscape leaves alone ("$" "&" "+" ":" "="
+// "@"), plus a slash, a space and a literal percent-escape; the numeric ones are
+// the ids the handlers parse.
+var roundTripValue = map[string]any{
+	"project_id":        "group/sub/project",
+	"group_id":          "parent/child",
+	"branch":            roundTripString,
+	"tag_name":          roundTripString,
+	"label_id":          roundTripString,
+	"slug":              roundTripString,
+	"name":              roundTripString,
+	"sha":               roundTripString,
+	"ref":               roundTripString,
+	"path":              roundTripString,
+	"pipeline_id":       42,
+	"merge_request_iid": 42,
+	"issue_iid":         42,
+	"deployment_id":     42,
+	"environment_id":    42,
+	"job_id":            42,
+	"snippet_id":        42,
+	"deploy_key_id":     42,
+	"board_id":          42,
+	"milestone_iid":     42,
+}
+
+// roundTripString is the string every named variable of the round trip is
+// bound to. The trailing "%41" is there for the decode: every other character
+// decodes to itself a second time, so a handler that decoded its variable twice
+// would pass on them all, and only an escape GitLab must receive literally
+// ("%41", not "A") tells once from twice.
+const roundTripString = "a/b c::d+e@f$g&h=i%41"
+
+// TestResourceTemplates_ServerExpandedURI_RoundTrips holds the server's two
+// halves of a resource URI to each other: every template it serves, filled by
+// toolutil.ExpandResourceURI (the expansion behind the resource block a tool
+// result embeds) from values carrying reserved characters, must route, reach
+// GitLab, and hand GitLab each value exactly as it was bound.
+//
+// Two defects failed it before, independently. ExpandResourceURI escaped with
+// url.PathEscape, which leaves "$" "&" "+" ":" "=" "@" raw, and the router
+// matches a simple variable against the unreserved set, a comma and
+// percent-escapes, so those URIs resolved to no template and never reached
+// GitLab. And the handlers passed
+// the encoded segment to client-go, so a slash reached GitLab escaped twice.
+// A variable with no value in the table fails the test rather than being
+// skipped, so a template added later is held to this too.
+func TestResourceTemplates_ServerExpandedURI_RoundTrips(t *testing.T) {
+	gitlab := &recordingGitLab{}
+	session := newMCPSession(t, gitlab)
+
+	listed, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	judged := 0
+	for _, tmpl := range listed.ResourceTemplates {
+		if strings.HasPrefix(tmpl.URITemplate, "gitlab://tools/") {
+			// The tool manifest reads a catalog, not GitLab, and its ids are
+			// canonical action ids made of unreserved characters.
+			continue
+		}
+		t.Run(tmpl.URITemplate, func(t *testing.T) {
+			params := roundTripParams(t, tmpl.URITemplate)
+			uri, ok := toolutil.ExpandResourceURI(tmpl.URITemplate, params)
+			if !ok {
+				t.Fatalf("ExpandResourceURI(%q) expanded nothing", tmpl.URITemplate)
+			}
+
+			_, _ = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: uri})
+			seen := gitlab.requests()
+			if len(seen) == 0 {
+				t.Fatalf("reading %s never reached GitLab: the router matched no template", uri)
+			}
+			for name, bound := range params {
+				value, isString := bound.(string)
+				if isString && !carries(seen[0], value) {
+					t.Errorf("reading %s sent GitLab %q %v, which does not carry %s=%q", uri, seen[0].path, seen[0].query, name, value)
+				}
+			}
+		})
+		judged++
+	}
+	if judged == 0 {
+		t.Fatal("the session listed no GitLab resource template; the round trip judged nothing")
+	}
+}
+
+// roundTripParams binds every variable of template from [roundTripValue], and
+// fails the test on one the table has no value for, so a template added later
+// is judged rather than skipped.
+func roundTripParams(t *testing.T, template string) map[string]any {
+	t.Helper()
+	names, err := toolutil.ResourceTemplateVariables(template)
+	if err != nil {
+		t.Fatalf("ResourceTemplateVariables(%q): %v", template, err)
+	}
+	params := make(map[string]any, len(names))
+	for _, name := range names {
+		value, known := roundTripValue[name]
+		if !known {
+			t.Fatalf("variable %q of %s has no round-trip value; add one so this template is judged", name, template)
+		}
+		params[name] = value
+	}
+	return params
+}
+
+// carries reports whether a request GitLab received holds value, in its path
+// or as one of its query values.
+func carries(request gitlabRequest, value string) bool {
+	if strings.Contains(request.path, value) {
+		return true
+	}
+	for _, values := range request.query {
+		if slices.Contains(values, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestFileBlobResource_PlusInPath_StaysAPlus pins the choice of
+// url.PathUnescape for the decode: a "+" in a path is a plus, and the query
+// decoding that would read it as a space would ask GitLab for another file.
+func TestFileBlobResource_PlusInPath_StaysAPlus(t *testing.T) {
+	gitlab := &recordingGitLab{}
+	session := newMCPSession(t, gitlab)
+
+	_, _ = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/src/a+b.txt"})
+	seen := gitlab.requests()
+	if len(seen) == 0 {
+		t.Fatal("reading the file never reached GitLab")
+	}
+	if want := "/api/v4/projects/42/repository/files/src/a+b.txt"; seen[0].path != want {
+		t.Errorf("GitLab was asked for %q, want %q", seen[0].path, want)
 	}
 }

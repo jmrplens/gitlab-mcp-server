@@ -43,9 +43,11 @@ func ResourceTemplateVariables(template string) ([]string, error) {
 }
 
 // ExpandResourceURI fills a canonical resource URI template from an action's
-// parameters. Each {name} is replaced by the path-escaped value of the parameter
-// of that name, so a project given as "group/project" lands in the URI as
-// group%2Fproject, which is the form the resource templates accept; {+name}
+// parameters. Each {name} is replaced by the value of the parameter of that name
+// escaped as RFC 6570 simple expansion escapes it ([escapeSimpleExpansion]), so
+// a project given as "group/project" lands in the URI as group%2Fproject and a
+// scoped label priority::high as priority%3A%3Ahigh, which is the form the
+// resource templates accept and the resource handlers decode once; {+name}
 // keeps the slashes of a path-valued parameter, escaping each segment. It
 // reports false when the template is empty or any variable is absent or empty,
 // so a result whose identifier the caller never supplied gets no resource block
@@ -82,10 +84,48 @@ func ExpandResourceURI(template string, params map[string]any) (string, bool) {
 			}
 			b.WriteString(strings.Join(segments, "/"))
 		} else {
-			b.WriteString(url.PathEscape(value))
+			b.WriteString(escapeSimpleExpansion(value))
 		}
 		rest = rest[open+closing+1:]
 	}
+}
+
+// upperHex is the digit set RFC 3986 section 2.1 asks a producer to write a
+// percent-encoding in.
+const upperHex = "0123456789ABCDEF"
+
+// escapeSimpleExpansion percent-encodes value the way an RFC 6570 simple
+// expansion does: every byte outside ALPHA, DIGIT and "-" "." "_" "~" becomes
+// %XX, a multi-byte character one escape per byte.
+//
+// Go's url.PathEscape is not that. It encodes a path segment, which is allowed
+// to carry "$" "&" "+" ":" "=" "@" raw, and the go-sdk router matches a simple
+// variable against the unreserved set, a comma and percent-escapes, so a URI
+// that PathEscape wrote for a scoped label (priority::high) or a tag with
+// build metadata (v1.0.0+build) matched no template and the resource block a
+// tool result carried could not be read back.
+func escapeSimpleExpansion(value string) string {
+	var b strings.Builder
+	for i := range len(value) {
+		c := value[i]
+		if isUnreserved(c) {
+			b.WriteByte(c)
+			continue
+		}
+		b.WriteByte('%')
+		b.WriteByte(upperHex[c>>4])
+		b.WriteByte(upperHex[c&0x0F])
+	}
+	return b.String()
+}
+
+// unreservedBytes is RFC 3986's unreserved set, the only bytes a simple
+// expansion writes as themselves.
+const unreservedBytes = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+
+// isUnreserved reports whether c is in [unreservedBytes].
+func isUnreserved(c byte) bool {
+	return strings.IndexByte(unreservedBytes, c) >= 0
 }
 
 // resourceParamValue renders one parameter for a URI. JSON numbers arrive as

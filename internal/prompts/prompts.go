@@ -420,10 +420,16 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	default:
 		// Still moving. Pointing at the subscription beats teaching the
 		// model to re-invoke this prompt on a timer, which is the pattern
-		// resource subscriptions exist to replace.
+		// resource subscriptions exist to replace. The URI is expanded the
+		// way the template is, because a project given as a path carries a
+		// slash, and written into the URI raw it names no resource at all.
+		// The expansion fails only for a blank project, which GitLab has
+		// just answered for above.
+		uri, _ := toolutil.ExpandResourceURI("gitlab://project/{project_id}/pipelines/latest",
+			map[string]any{argProjectID: projectID})
 		fmt.Fprintf(&b, "This pipeline is still in progress. If your client supports MCP resource "+
-			"subscriptions, subscribe to gitlab://project/%s/pipelines/latest to be notified when it "+
-			"changes instead of re-invoking this prompt.\n", projectID)
+			"subscriptions, subscribe to %s to be notified when it "+
+			"changes instead of re-invoking this prompt.\n", uri)
 	}
 
 	return promptResult(b.String()), nil

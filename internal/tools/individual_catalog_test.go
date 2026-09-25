@@ -1448,6 +1448,69 @@ func TestEmbeddedResource_GetEmbedsOnEverySurface(t *testing.T) {
 	})
 }
 
+// TestEmbeddedResource_EncodedProjectPath_EmbedsTheURIThatReadsIt calls
+// issue.get with the project given URL-encoded, the form most project_id
+// descriptions offer, and requires each surface to embed the URI a resource
+// read resolves to the same project.
+//
+// The handler decodes "group%2Fproject" before it calls GitLab, but the meta
+// and individual dispatchers used to expand the embedded URI from the raw
+// arguments, which escaped the percent again: gitlab://project/group%252Fproject
+// reads back as the project literally named group%2Fproject, which does not
+// exist. The dynamic surface normalises its arguments before dispatch and was
+// right already; it is driven here so the three are held to one answer.
+func TestEmbeddedResource_EncodedProjectPath_EmbedsTheURIThatReadsIt(t *testing.T) {
+	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/group/project/issues/7":
+			respondJSON(w, http.StatusOK, `{"id":1,"iid":7,"project_id":42,"title":"Embed me","state":"opened","web_url":"https://gitlab.example.com/group/project/-/issues/7"}`)
+		case "/api/v4/version":
+			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	params := map[string]any{"project_id": "group%2Fproject", "issue_iid": 7}
+	const want = "gitlab://project/group%2Fproject/issue/7"
+
+	surfaces := []struct {
+		name string
+		call func(t *testing.T) (*mcp.CallToolResult, error)
+	}{
+		{"individual", func(t *testing.T) (*mcp.CallToolResult, error) {
+			t.Helper()
+			return newMCPSession(t, backend, false).CallTool(t.Context(), &mcp.CallToolParams{Name: "gitlab_issue_get", Arguments: params})
+		}},
+		{"meta", func(t *testing.T) (*mcp.CallToolResult, error) {
+			t.Helper()
+			return newMetaMCPSession(t, backend, false).CallTool(t.Context(), &mcp.CallToolParams{Name: "gitlab_issue", Arguments: map[string]any{"action": "get", "params": params}})
+		}},
+		{"dynamic", func(t *testing.T) (*mcp.CallToolResult, error) {
+			t.Helper()
+			return newDynamicMCPSession(t, backend).CallTool(t.Context(), &mcp.CallToolParams{Name: "gitlab_execute_action", Arguments: map[string]any{"action": "issue.get", "params": params}})
+		}},
+	}
+	for _, surface := range surfaces {
+		t.Run(surface.name, func(t *testing.T) {
+			result, err := surface.call(t)
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if result.IsError {
+				t.Fatalf("issue.get returned an error result: %+v", result.Content)
+			}
+			embedded := embeddedResourcesOf(result)
+			if len(embedded) != 1 || embedded[0].Resource.URI != want {
+				var got []string
+				for _, e := range embedded {
+					got = append(got, e.Resource.URI)
+				}
+				t.Errorf("embedded resources = %q, want exactly %q", got, want)
+			}
+		})
+	}
+}
+
 // TestEmbeddedResource_SettingOffEmbedsNothing verifies the kill switch:
 // with embedding disabled the same call carries no resource block, on every
 // surface. It flips a process-wide switch, so it does not run in parallel.

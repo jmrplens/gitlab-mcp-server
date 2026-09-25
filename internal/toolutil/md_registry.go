@@ -410,8 +410,26 @@ func FinishToolResult(callResult *mcp.CallToolResult, result any, route ActionRo
 	}
 	annotateContent(callResult, AnnotationsForContentKind(route.ContentKind))
 	result = withHintsSet(callResult, result)
-	EmbedCanonicalResource(callResult, route.EmbeddedResource, params, result)
+	EmbedCanonicalResource(callResult, route.EmbeddedResource, embedParams(route, params), result)
 	return callResult, result
+}
+
+// embedParams is the parameters the embedded resource URI is expanded from:
+// the call's own, normalised the way [UnmarshalParams] normalised them for the
+// handler, so the URI names the object the handler read.
+//
+// The meta, individual and standalone dispatchers hand this tail the raw
+// arguments, while the handler decoded a project given URL-encoded
+// ("group%2Fproject", the form most project_id descriptions offer) and
+// resolved a compatibility alias before it called GitLab. Expanded from the
+// raw form, that project was escaped again into group%252Fproject, which the
+// resource read decodes to group%2Fproject and sends GitLab as a different
+// project. Only a route that embeds pays for the normalisation.
+func embedParams(route ActionRoute, params map[string]any) map[string]any {
+	if route.EmbeddedResource == "" {
+		return params
+	}
+	return NormalizeParamAliasesForSchema(params, route.InputSchema)
 }
 
 // annotateContent gives every text block the action's annotation and every

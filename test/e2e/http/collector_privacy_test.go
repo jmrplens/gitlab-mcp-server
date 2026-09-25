@@ -124,11 +124,27 @@ type privacyGitLab struct {
 	raw []string
 }
 
+// exactRoute marks a route or an assertion that matches one path exactly
+// rather than every path it prefixes, for a path that is itself the prefix of
+// another route: a project and the project's issues.
+const exactRoute = "="
+
+// matchesRoute reports whether a request path is the one a route or an
+// assertion names: exactly, when the pattern carries [exactRoute], and as a
+// prefix otherwise.
+func matchesRoute(pattern, path string) bool {
+	if exact, ok := strings.CutPrefix(pattern, exactRoute); ok {
+		return path == exact
+	}
+	return strings.HasPrefix(path, pattern)
+}
+
 // startPrivacyGitLab serves the endpoints a tool call reaches, with routes
 // under the caller's control.
 //
-// routes maps a path prefix to the handler for it. Anything unmatched answers
-// 404, which every caller in this server handles.
+// routes maps a path prefix to the handler for it, or one exact path when the
+// key starts with [exactRoute]. Anything unmatched answers 404, which every
+// caller in this server handles.
 func startPrivacyGitLab(t *testing.T, routes map[string]http.HandlerFunc) *privacyGitLab {
 	t.Helper()
 
@@ -146,8 +162,8 @@ func startPrivacyGitLab(t *testing.T, routes map[string]http.HandlerFunc) *priva
 		g.raw = append(g.raw, r.URL.RequestURI())
 		g.mu.Unlock()
 
-		for prefix, handler := range routes {
-			if strings.HasPrefix(path, prefix) {
+		for pattern, handler := range routes {
+			if matchesRoute(pattern, path) {
 				handler(w, r)
 				return
 			}
@@ -169,14 +185,15 @@ func startPrivacyGitLab(t *testing.T, routes map[string]http.HandlerFunc) *priva
 	return g
 }
 
-// hitsFor reports how many requests reached a path prefix.
-func (g *privacyGitLab) hitsFor(prefix string) int {
+// hitsFor reports how many requests reached a path prefix, or one exact path
+// when the pattern starts with [exactRoute].
+func (g *privacyGitLab) hitsFor(pattern string) int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	total := 0
 	for path, n := range g.hits {
-		if strings.HasPrefix(path, prefix) {
+		if matchesRoute(pattern, path) {
 			total += n
 		}
 	}
@@ -185,14 +202,14 @@ func (g *privacyGitLab) hitsFor(prefix string) int {
 
 // assertCalled fails when GitLab was never asked, which means the assertions
 // that follow are about a path that never ran.
-func (g *privacyGitLab) assertCalled(t *testing.T, prefix string) {
+func (g *privacyGitLab) assertCalled(t *testing.T, pattern string) {
 	t.Helper()
-	if g.hitsFor(prefix) == 0 {
+	if g.hitsFor(pattern) == 0 {
 		g.mu.Lock()
 		seen := make([]string, 0, len(g.raw))
 		seen = append(seen, g.raw...)
 		g.mu.Unlock()
-		t.Fatalf("no request reached GitLab at %s, so the executing path was never driven; GitLab saw %v", prefix, seen)
+		t.Fatalf("no request reached GitLab at %s, so the executing path was never driven; GitLab saw %v", pattern, seen)
 	}
 }
 
@@ -223,13 +240,12 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 		searchQuery  = "quarterly-layoff-plan"
 		collectorPwd = "collector-password-value"
 	)
+	// A resource URI addresses a project by its URL-encoded path, which the
+	// server decodes once before client-go escapes it again for the request
+	// target, so GitLab is asked for the once-escaped form whichever way the
+	// project was named. It used to be escaped twice (issue 912), and this
+	// fake served the project only under that spelling.
 	encodedPath := url.PathEscape(projectPath)
-	// A resource URI addresses a project by its URL-encoded path, and client-go
-	// escapes whatever identifier it is handed before putting it in a request
-	// target. So the identifier that arrives at GitLab from the resource path
-	// is escaped twice, and a fake serving only the once-escaped form answers
-	// 404 while looking as though it had been asked.
-	reEncodedPath := url.PathEscape(encodedPath)
 
 	gitlab := startPrivacyGitLab(t, map[string]http.HandlerFunc{
 		"/api/v4/projects/" + encodedPath + "/issues": func(w http.ResponseWriter, _ *http.Request) {
@@ -240,7 +256,10 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
 		},
-		"/api/v4/projects/" + reEncodedPath: func(w http.ResponseWriter, _ *http.Request) {
+		// The project itself is served at its exact path only: as a prefix it
+		// would also match the issues request above, and which of the two
+		// answered would depend on the order a map is walked in.
+		exactRoute + "/api/v4/projects/" + encodedPath: func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":42,"path_with_namespace":"` + projectPath + `","name":"internal-secrets-repo"}`))
 		},
@@ -269,7 +288,7 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 		{
 			name:  "project_path_in_resource_uri",
 			call:  readResource(3, "gitlab://project/"+encodedPath),
-			asked: "/api/v4/projects/" + reEncodedPath,
+			asked: exactRoute + "/api/v4/projects/" + encodedPath,
 		},
 		{
 			name: "client_token_in_header",

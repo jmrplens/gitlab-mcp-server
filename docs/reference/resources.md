@@ -160,13 +160,38 @@ Static best-practice guides that provide AI assistants with GitLab workflow know
 | `merge_request_iid` | integer | Merge request IID (project-scoped numeric ID, visible as `!N` in GitLab)               |
 | `issue_iid`         | integer | Issue IID (project-scoped numeric ID, visible as `#N` in GitLab)                       |
 | `sha`               | string  | Commit SHA (full or short)                                                             |
-| `ref`               | string  | Branch name, tag name, or commit SHA                                                   |
+| `ref`               | string  | Branch name, tag name, or commit SHA (e.g., `feature%2Flogin`)                         |
+| `branch`            | string  | Branch name (e.g., `feature%2Flogin` for `feature/login`)                              |
+| `tag_name`          | string  | Tag name (e.g., `v1.0.0%2Bbuild` for `v1.0.0+build`)                                   |
+| `label_id`          | string  | Numeric label ID or label name (e.g., `priority%3A%3Ahigh` for `priority::high`)       |
 | `path`              | string  | Repository file path (may contain slashes; uses RFC 6570 reserved expansion `{+path}`) |
 | `slug`              | string  | Wiki page slug (case-sensitive; spaces are replaced with hyphens)                      |
 
+### Encoding a value into a URI
+
+Every variable except `{+path}` is an RFC 6570 simple expansion, and each one
+fills exactly one path segment. A value carrying any character outside
+`A-Z a-z 0-9 - . _ ~` is therefore percent-encoded once before it goes into the
+URI: `group/project` is written `group%2Fproject`, the branch `feature/login`
+is `feature%2Flogin`, and the scoped label `priority::high` is
+`priority%3A%3Ahigh`. The server decodes each variable exactly once before it
+asks GitLab, so the value GitLab receives is the one you encoded. A raw slash
+in such a variable either matches no template, and the read answers
+resource-not-found, or is read as a separator, as the file template's `{ref}`
+is before `{+path}`, so a different object is asked for. Encode it. The
+resource blocks tool results embed are already spelled this way, so their URIs
+can be handed to `resources/read` unchanged.
+
+`{+path}` is a reserved expansion: its slashes stay as they are, and every
+segment is decoded once like any other variable. Reserved expansion passes an
+existing percent-escape through, so a file whose name literally contains one
+(`a%20b.txt`) must have its `%` encoded as `%25` (`a%2520b.txt`), or it is read
+as `a b.txt`. The same holds for a name sent unencoded that happens to contain a
+valid escape, such as a branch `fix-%41`: it is decoded, and names `fix-A`.
+
 ## Autocomplete Support
 
-The `project_id`, `group_id`, `merge_request_iid` and `issue_iid` template parameters support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values (e.g., project paths, group paths, open MR or issue IIDs). The other parameters (`sha`, `ref`, `path`, `slug`, and the numeric object IDs) get no suggestions on the resource side. See [Completions](capabilities/completions.md).
+The `project_id`, `group_id`, `merge_request_iid` and `issue_iid` template parameters support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values (e.g., project paths, group paths, open MR or issue IIDs). The other parameters (`sha`, `ref`, `branch`, `tag_name`, `label_id`, `path`, `slug`, and the numeric object IDs) get no suggestions on the resource side. See [Completions](capabilities/completions.md).
 
 ## Source
 
