@@ -21,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -398,7 +399,7 @@ func (b *sessionBridge) releaseSession(session *mcp.ServerSession) {
 // that are about server state rather than the request: rate limiting, the
 // watcher cap, and shutdown. The condition is transient, so unlike the
 // invalid-params family a retry later can succeed.
-const codeServerBusy = -32000
+const codeServerBusy = tenancy.CodeServerBusyLegacy // register row HLD-001
 
 // wireSubscribeError classifies a subscription failure for the wire.
 //
@@ -1540,8 +1541,8 @@ func withSubscriptionOptions(opts subscriptions.Options) serverOption {
 // is what bounds the process. Both are generous next to any real client, which
 // opens a handful.
 const (
-	maxListenStreamsPerServer  = 64
-	maxListenStreamsPerProcess = 512
+	maxListenStreamsPerServer  = tenancy.ListenStreamsPerCredential // register row HLD-001
+	maxListenStreamsPerProcess = tenancy.ListenStreamsPerProcess    // register row HLD-002
 )
 
 // maxListenStreamsEnv overrides the per-server ceiling. Zero disables it,
@@ -1638,7 +1639,7 @@ var processListenStreams = &listenCounter{}
 // caller holds, so only this one bounds the process, and an operator who can
 // raise it can undo the bound. The lever an operator does have is
 // --max-http-clients.
-const maxWatchersPerProcess = 512
+const maxWatchersPerProcess = tenancy.WatchersPerProcess // register row HLD-004
 
 // processWatchers is the watcher ceiling every subscription shape shares. It is
 // a value the shape injects rather than state internal/subscriptions holds,
