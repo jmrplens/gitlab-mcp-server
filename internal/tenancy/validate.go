@@ -193,18 +193,33 @@ func refusalCarriage(r *Refusal, legacyCodeRecorded bool) []string {
 
 // codeCarriage is what MCP and the SDK allow of an error's code.
 func codeCarriage(code int, legacyCodeRecorded bool) []string {
-	switch {
-	case code == 0:
+	if code == 0 {
 		return []string{"an error with no code reaches the client as code 0"}
-	case code == codeMethodNotFound:
-		return []string{"-32601's message is replaced by the SDK, so it cannot explain a refusal"}
-	case code <= -32020 && code >= -32099 && !mcpDefinesCode(code):
-		return []string{fmt.Sprintf("code %d is in the range MCP reserves and does not define", code)}
-	case code <= -32000 && code >= -32019 && !legacyCodeRecorded:
-		return []string{fmt.Sprintf("code %d is in the legacy range new implementations should not use", code)}
-	default:
-		return nil
 	}
+	if code == codeMethodNotFound {
+		return []string{"-32601's message is replaced by the SDK, so it cannot explain a refusal"}
+	}
+	if reservedForMCP(code) && !mcpDefinesCode(code) {
+		return []string{fmt.Sprintf("code %d is in the range MCP reserves and does not define", code)}
+	}
+	if inLegacyRange(code) && !legacyCodeRecorded {
+		return []string{fmt.Sprintf("code %d is in the legacy range new implementations should not use", code)}
+	}
+	return nil
+}
+
+// reservedForMCP reports whether code lies in the sub-range of JSON-RPC's
+// implementation-defined errors that MCP reserves for itself, -32020 to
+// -32099.
+func reservedForMCP(code int) bool {
+	return code <= -32020 && code >= -32099
+}
+
+// inLegacyRange reports whether code lies in the legacy sub-range, -32000 to
+// -32019, where new codes must not be allocated and receivers must not assume
+// a meaning.
+func inLegacyRange(code int) bool {
+	return code <= -32000 && code >= -32019
 }
 
 // checkZeroStated holds a valued decision to saying what zero means, and a

@@ -124,15 +124,50 @@ func TestValidate_ChannelCarried(t *testing.T) {
 		{"a 400 with invalid request", with(gate(400, codeInvalidRequest, false)), ""},
 		{"a 404 with invalid request", with(gate(404, codeInvalidRequest, false)), ""},
 		{"a 403 with invalid request", with(gate(403, codeInvalidRequest, false)), "does not mirror status 403"},
+		{"a 404 with another code", with(gate(404, CodeUnavailable, false)), "does not mirror status 404"},
+		{"a 400 that mirrors its status", with(gate(400, -40000, false)), ""},
 		{"a 401 with a challenge", with(gate(401, CodeUnauthorized, true)), ""},
 		{"a 401 without a challenge", with(gate(401, CodeUnauthorized, false)), "without a WWW-Authenticate"},
 		{"no code", with(rpc(0)), "code 0"},
 		{"method not found", with(rpc(codeMethodNotFound)), "-32601"},
 		{"a reserved code MCP does not define", with(rpc(-32042)), "reserves and does not define"},
+		{"the bottom of MCP's range", with(rpc(-32099)), "reserves and does not define"},
+		{"the bottom of the legacy range", with(rpc(-32019)), "legacy range"},
 		{"a reserved code MCP defines", with(rpc(codeUnsupportedProtocolVersion)), ""},
 		{"the legacy range", with(rpc(CodeServerBusyLegacy)), "legacy range"},
 		{"the legacy range, recorded", with(rpc(CodeServerBusyLegacy), "F-07"), ""},
 	})
+}
+
+// TestValidate_CodeRanges pins the two sub-ranges of JSON-RPC's
+// implementation-defined errors at their edges: MCP reserves -32020 to -32099,
+// and -32000 to -32019 is the legacy range.
+func TestValidate_CodeRanges(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		code     int
+		reserved bool
+		legacy   bool
+	}{
+		{"just above the legacy range", -31999, false, false},
+		{"the top of the legacy range", -32000, false, true},
+		{"the bottom of the legacy range", -32019, false, true},
+		{"the top of MCP's range", -32020, true, false},
+		{"inside MCP's range", -32042, true, false},
+		{"the bottom of MCP's range", -32099, true, false},
+		{"just below MCP's range", -32100, false, false},
+		{"a mirrored gate code", CodeTooManyRequests, false, false},
+		{"a positive code", 32042, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := reservedForMCP(tc.code); got != tc.reserved {
+				t.Errorf("reservedForMCP(%d) = %v, want %v", tc.code, got, tc.reserved)
+			}
+			if got := inLegacyRange(tc.code); got != tc.legacy {
+				t.Errorf("inLegacyRange(%d) = %v, want %v", tc.code, got, tc.legacy)
+			}
+		})
+	}
 }
 
 // TestValidate_ZeroStated holds a valued row to a zero meaning, and a zero
@@ -411,6 +446,9 @@ func TestValidateFailures_RefusesWhatINV007Forbids(t *testing.T) {
 		{"no charge helper", func(f *Failure) { f.At.Call = "" }, "failure-site"},
 		{"no function", func(f *Failure) { f.At.Name = "" }, "failure-site"},
 		{"a success status", func(f *Failure) { f.Status = 200 }, "failure-status"},
+		{"the status below the refusals", func(f *Failure) { f.Status = 399 }, "failure-status"},
+		{"the first refusal status", func(f *Failure) { f.Status = 400 }, ""},
+		{"the last refusal status", func(f *Failure) { f.Status = 599 }, ""},
 		{"a status past the refusals", func(f *Failure) { f.Status = 600 }, "failure-status"},
 		{"a count that disagrees", func(f *Failure) { f.At.Count = 2 }, "declares 2 charged failures and lists 1"},
 		{"an uncharged failure", func(f *Failure) { f.Charged, f.At.Count = false, 0 }, ""},

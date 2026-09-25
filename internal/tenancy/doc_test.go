@@ -15,6 +15,10 @@ import (
 const tenancyImportPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 
 // productionFiles parses every non-test Go file of the package, by name.
+//
+// The files gobco writes into its instrumented copy of the package are left
+// out: they carry the counters `make coverage-conditions` reads, and are no
+// more part of the leaf than the copy is.
 func productionFiles(t *testing.T) map[string]*ast.File {
 	t.Helper()
 	entries, err := os.ReadDir(".")
@@ -25,7 +29,8 @@ func productionFiles(t *testing.T) map[string]*ast.File {
 	files := map[string]*ast.File{}
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
+			strings.HasPrefix(name, "gobco_") {
 			continue
 		}
 		f, parseErr := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
