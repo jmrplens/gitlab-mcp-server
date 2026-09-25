@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -229,6 +231,110 @@ func TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.state.busy(); got != tt.want {
 				t.Errorf("busy() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// busyStateCase is one credential state busy() is measured in, with the answer
+// it gives there.
+type busyStateCase struct {
+	name  string
+	state *credentialState
+	want  bool
+}
+
+// busyStates builds a credential state for each way busy() reaches its answer:
+// one holding an open listen stream and no watcher, where the stream count
+// decides and the watcher count is never read; one holding a watcher and no
+// stream, where both are read; and one holding neither, where both are read and
+// both are zero. Each carries a watcher manager, so what they hold is the only
+// difference between them.
+//
+// It takes a testing.TB, unlike the helpers the tests above build states with,
+// because the allocation pin and the benchmark measure the same three states.
+//
+// The watcher polls at the production cadence a pipeline that has finished is
+// polled at, so it stays quiet for the length of a measurement: a poll landing
+// inside one would be counted against busy(), since the allocation count a
+// measurement reads is the process's.
+func busyStates(tb testing.TB) []busyStateCase {
+	tb.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentType, mimeJSON)
+		switch r.URL.Path {
+		case "/api/v4/version":
+			_, _ = w.Write([]byte(`{"version":"16.0.0","revision":"test"}`))
+		case "/api/v4/projects/42/pipelines/99":
+			_, _ = w.Write([]byte(`{"id":99,"iid":7,"status":"success","ref":"main","sha":"abc123",` +
+				`"web_url":"https://gitlab.example.com/p/-/pipelines/99","source":"push"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	tb.Cleanup(gitlab.Close)
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: gitlab.URL, GitLabToken: testToken})
+	if err != nil {
+		tb.Fatalf("gitlabclient.NewClient: %v", err)
+	}
+	holding := func(owner string) *credentialState {
+		runtime := newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), subscriptions.Options{})
+		tb.Cleanup(runtime.close)
+		return &credentialState{owner: owner, listen: &listenCounter{}, subs: runtime}
+	}
+
+	streaming := holding("owner-streaming")
+	if !streaming.listen.acquire(0) {
+		tb.Fatal("the listen counter refused a stream with no ceiling configured")
+	}
+	watching := holding("owner-watching")
+	if err = watching.subs.manager.Subscribe(tb.Context(), testSession, "gitlab://project/42/pipeline/99"); err != nil {
+		tb.Fatalf("Subscribe: %v", err)
+	}
+	quiet := holding("owner-quiet")
+
+	return []busyStateCase{
+		{name: "stream_open", state: streaming, want: true},
+		{name: "watchers_only", state: watching, want: true},
+		{name: "neither", state: quiet, want: false},
+	}
+}
+
+// TestCredentialState_Busy_AllocatesNothing pins busy() at no allocation in
+// each of the three states it can be asked about.
+//
+// The pool's idle sweep asks it under the pool's write lock, once for every
+// entry the sweep passes, so whatever it costs is paid while every other
+// request waits for that lock. It reads one counter and, only when no stream is
+// open, the watcher count behind the manager's mutex, and neither allocates.
+// This is the baseline the layer that moves the predicate into the register
+// (POL-003) is held to: reading the state through the interface that layer
+// declares must not allocate either.
+//
+// It does not run in parallel: the count a measurement reads is the whole
+// process's, so a test allocating beside it would be counted against busy().
+func TestCredentialState_Busy_AllocatesNothing(t *testing.T) {
+	for _, tc := range busyStates(t) {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.state.busy(); got != tc.want {
+				t.Fatalf("busy() = %v, want %v; the state is not the one this case measures", got, tc.want)
+			}
+			if allocs := testing.AllocsPerRun(1000, func() { _ = tc.state.busy() }); allocs != 0 {
+				t.Errorf("busy() allocates %v times per call, want 0", allocs)
+			}
+		})
+	}
+}
+
+// BenchmarkCredentialState_Busy measures busy() in the same three states as
+// [TestCredentialState_Busy_AllocatesNothing], which is the baseline benchstat
+// compares the layer that moves the predicate into the register against.
+func BenchmarkCredentialState_Busy(b *testing.B) {
+	for _, tc := range busyStates(b) {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_ = tc.state.busy()
 			}
 		})
 	}
