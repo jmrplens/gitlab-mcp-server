@@ -1,10 +1,6 @@
 package snippets
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -42,14 +38,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func snippetGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return snippetNotFoundOutput{Identifier: fmt.Sprintf("ID %v", input["snippet_id"])}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return snippetNotFoundOutput{Identifier: "ID " + toolutil.ParamText(params["snippet_id"])}
 	})
 }
 

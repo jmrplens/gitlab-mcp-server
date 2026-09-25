@@ -1,9 +1,7 @@
 package milestones
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -62,15 +60,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // than an error, matching the get-not-found pattern used across the
 // project.
 func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				projectID, _ := input["project_id"].(string)
-				return milestoneNotFoundOutput{Identifier: fmt.Sprintf("IID %v in project %s", input[paramMilestoneIID], projectID)}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		// The project is named as the caller wrote it. Reading it as a string
+		// named a project given as a JSON number as no project at all.
+		return milestoneNotFoundOutput{Identifier: fmt.Sprintf("IID %s in project %s",
+			toolutil.ParamText(params[paramMilestoneIID]), toolutil.ParamText(params["project_id"]))}
 	})
 }
 

@@ -1,9 +1,7 @@
 package branches
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -46,16 +44,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func branchGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				branchName, _ := input[paramBranchName].(string)
-				projectID, _ := input["project_id"].(string)
-				return branchNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", branchName, projectID)}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		// The project is named as the caller wrote it. Reading it as a string
+		// named a project given as a JSON number as no project at all.
+		branchName, _ := params[paramBranchName].(string)
+		return branchNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", branchName, toolutil.ParamText(params["project_id"]))}
 	})
 }
 

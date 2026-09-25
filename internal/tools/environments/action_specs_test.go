@@ -197,7 +197,9 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 		args        map[string]any
 		expectError bool
 	}{
-		{"gitlab_environment_get", map[string]any{"project_id": "42", "environment_id": 999}, false},
+		// JSON numbers of eight digits, which reach the route as float64s:
+		// %v named them 3.1234567e+07 and 1.2345678e+07.
+		{"gitlab_environment_get", map[string]any{"project_id": float64(12345678), "environment_id": float64(31234567)}, false},
 		{"gitlab_environment_create", map[string]any{"project_id": "42", "name": "staging"}, true},
 		{"gitlab_environment_update", map[string]any{"project_id": "42", "environment_id": 1, "name": "staging-v2"}, true},
 		{"gitlab_environment_stop", map[string]any{"project_id": "42", "environment_id": 1}, true},
@@ -215,8 +217,8 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
-			if _, ok := result.(environmentNotFoundOutput); !ok {
-				t.Fatalf("result type = %T, want environmentNotFoundOutput", result)
+			if notFound, ok := result.(environmentNotFoundOutput); !ok || notFound.Identifier != "ID 31234567 in project 12345678" {
+				t.Fatalf("result = %#v, want environmentNotFoundOutput naming ID 31234567 in project 12345678", result)
 			}
 		})
 	}

@@ -106,7 +106,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 1 open | **13 of 14; all 13 released, v3.1.0 to v3.14.0** | No | Retired for the 12 the v3.12.0 pin carries; the v3.14.0 one and the open one keep theirs |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 1 open | **13 of 14; all 13 released, v3.1.0 to v3.14.0** | No | Retired for all 13 at the v3.14.0 pin; the open one keeps its own |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
@@ -212,9 +212,16 @@ Re-verified on 2026-09-25 against the trackers and the tags. One row moved:
 [gitlab-org/api/client-go!3052](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3052)
 merged at 18:46 UTC on 2026-09-24 and is in **v3.14.0**, tagged thirteen
 minutes later, so row 34 reads 13 of 14 and every merged client-go row is
-released. The pin is still v3.12.0, which now lags one merge this file records:
-the `Package` fields stay read off the capture until a bump reaches v3.14.0.
-v3.13.1, tagged at 18:23 the same day, carries nothing a row waits on. The
+released. The pin moved from v3.12.0 to v3.14.0 on 2026-09-25, so it lags no
+merge this file records, and the `Package` fields that merge request added are
+read off the struct rather than the capture. Every `client-go` row was re-read
+against the v3.14.0 source rather than the tracker, and only row 34 moved:
+between the two tags the non-test Go sources differ in `gitlab.go`, which
+gains `StatusCode`, and in `packages.go` with its generated mock,
+`testing/packages_mock.go`, which are that merge request, so no struct, method
+or route another row names changed. v3.13.1, tagged at 18:23 the same day, carries
+nothing a row waits on; its fix is to the separate `config` module, which this
+server does not import. The
 fork pipeline of
 [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702)
 failed `cells-routes:router-in-sync` again, on routes `master` added after the
@@ -264,7 +271,7 @@ reviewer has commented on any of them since.
   is the one the merge request is for. Once a release carries it, a step
   reading `plan` from `GET /metadata` answers that caller, which needs
   client-go's `Metadata` struct (`version`, `revision`, `kas` and `enterprise`
-  in v3.12.0) to gain the field, or a captured-response read under
+  at the v3.14.0 pin) to gain the field, or a captured-response read under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)
   until it does.
 
@@ -472,7 +479,7 @@ OpenAPI document, where the change is a single `$ref`, because
 - **Blocking**: it was. The panic took the process down rather than failing one
   call.
 - **Workaround**: retired. The local guard went with the move to v2.62.0, and
-  every v3 tag carries the fix as well; the pin is now `client-go/v3` v3.12.0.
+  every v3 tag carries the fix as well; the pin is now `client-go/v3` v3.14.0.
 
 Kept here as the record: this is what the round trip looks like when it works.
 
@@ -1152,7 +1159,8 @@ of change whose test is one assertion on the built URL.
   zero. It is only sent to a caller allowed `:update_subscription_limit`, who
   is reading the namespace to set those limits rather than to enforce one.
 - **Blocking**: no.
-- **Workaround**: retired for the twelve that merged, at the **v3.12.0** pin.
+- **Workaround**: retired for all thirteen that merged: twelve at the
+  **v3.12.0** pin and the thirteenth, `packages`, at **v3.14.0**.
   Each field was read from the captured response beside the SDK's decode,
   through the readers in `internal/toolutil/sent_shapes.go`; the pin was
   deliberately not moved once per merge, since these landed in quick
@@ -1180,13 +1188,27 @@ of change whose test is one assertion on the built URL.
     "limited to zero minutes", which is the one way this bump could have made
     the surface less true rather than more.
 
-  Two keep their workarounds whole: `systemhooks` still reads the seven `Hook`
+  `packages` followed when the pin moved to **v3.14.0**, checked against that
+  release's `packages.go` in the module cache: both listings read `creator_id`
+  and `conan_package_name` off `Package`, and `PackageExtra` now holds only the
+  five pipeline keys the `PackagePipeline` gap below records. Those are read on
+  every route that renders a package: on the package's own `pipeline` by both
+  listings and by `package.get`, the action the bump's `GetProjectPackage` made
+  possible, and on the pipeline of each other version by `package.get` alone.
+  The rest of what that capture read needed no field of
+  `gitlab-org/api/client-go!3052`, and is not lost: the owning project's
+  `project_id` and `project_path` are sent only to a group's listing, where
+  `GroupPackage` already decodes them, and `versions` only to a request for one
+  package, which neither listing is, because the entity leaves them out of a
+  collection. The entity's `pipelines` is read by nothing: it renders the
+  constant `EMPTY_PIPELINES` whatever the package, deprecated in GitLab 16.1,
+  so client-go's `Pipelines` decodes an empty list or none and this server
+  publishes no such key.
+
+  `systemhooks` keeps its workaround whole: it still reads the seven `Hook`
   fields of `gitlab-org/api/client-go!3048`, which is open, off the capture,
-  and `packages` the `Package` fields of `gitlab-org/api/client-go!3052`,
-  which is released in v3.14.0 while the pin is v3.12.0, so that read retires
-  with the bump that moves the pin there. Both were checked against the
-  v3.12.0 source rather than against the tracker, and neither struct carries
-  them.
+  checked against the v3.14.0 source rather than against the tracker, and the
+  struct does not carry them.
   `projectserviceaccounts` keeps its read of `public_email` too, since
   `gitlab-org/api/client-go!3047` added the pair to `GroupServiceAccount` and
   `ProjectServiceAccount` was outside it.
@@ -1391,7 +1413,7 @@ gives the distinct count, 897 fields, its table of merge requests reads as the
 tracker does, it counts the fields that have landed since the measurement, and
 it says the rest will follow as that one merge request without saying when.
 
-**Four findings from that batch that are not merge requests**, because sending
+**Three findings from that batch that are not merge requests**, because sending
 them would have been wrong:
 
 - `projects_with_write_access` and `projects_with_readonly_access` are gated on
@@ -1404,13 +1426,26 @@ them would have been wrong:
 - `ContributionEvent.Title`, `ProjectEvent.Title` and `ProjectEvent.Data` are
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
-- `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
-  keys `API::Entities::Package::Pipeline` exposes.
 
-**Three more gaps are recorded and not yet sent**, held back by the batching
+**Four more gaps are recorded and not yet sent**, held back by the batching
 the maintainer asked for above. Each is a field this server now reads from the
 captured response, so each carries a live workaround:
 
+- `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
+  keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
+  into `BasicUser`, which is missing the `public_email` and `locked` of the
+  `UserBasic` GitLab renders there, and carries a `created_at` that entity
+  never sends. Every route that renders a package renders that pipeline: as
+  the package's own `pipeline` on both listings and on a request for one
+  package, and as the pipeline of each other version on the last. The same
+  entity renders `pipelines` too, but as a constant empty list since GitLab
+  16.1, so no pipeline ever arrives there to be short of anything. This server
+  publishes all five on every one of them, reading them off
+  the captured response beside the SDK's decode (`toolutil.CapturedPackage`
+  and `toolutil.CapturedPackages`, under
+  [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  and publishes no `created_at` for the user; a bump carrying the five retires
+  the read.
 - `PendingInvite` has no `invite_token`, which
   `lib/api/entities/invitation.rb` exposes with no condition. The same struct
   declares an `ID` the entity does not expose, which the audit already reports
@@ -2187,7 +2222,8 @@ although a reviewer may prefer both changed for symmetry.
 **How we found it**: the `protectedpackages` sweep, reading what the handler can
 and cannot control. The consequence came from the e2e scenario's own comment,
 which had recorded the 422 without connecting it to the tag. Verified identical
-in v3.0.0, v3.10.0 and v3.12.0, so a dependency bump does not retire it.
+in v3.0.0, v3.10.0, v3.12.0 and v3.14.0, so a dependency bump does not retire
+it.
 
 **Effort**: small, two struct tags and a test, like
 [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).

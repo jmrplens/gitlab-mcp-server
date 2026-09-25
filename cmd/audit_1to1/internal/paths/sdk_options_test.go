@@ -1,6 +1,8 @@
 package paths
 
 import (
+	"go/ast"
+	"go/token"
 	"reflect"
 	"testing"
 )
@@ -154,6 +156,36 @@ func TestReadSDKOptions_AnUnreadableDirectory_ReadsNothing(t *testing.T) {
 				t.Errorf("readSDKOptions(%q) = %+v, want nothing", dir, options)
 			}
 		})
+	}
+}
+
+// TestSDKOptionReaders_ShapesClientGoHasNotUsed verifies the readers' answers
+// for the shapes client-go's source does not use today and a later release
+// could: a struct with no field list reads as no field, a tag that is not a
+// string literal and a json tag that names no key both leave the field under
+// its Go name as encoding/json would, the second omitted when empty as its
+// option says, and a method with no parameter list takes no option struct.
+func TestSDKOptionReaders_ShapesClientGoHasNotUsed(t *testing.T) {
+	if got := optionFields(&ast.StructType{}); len(got.Fields) != 0 || len(got.Embedded) != 0 {
+		t.Errorf("optionFields(no field list) = %+v, want nothing", got)
+	}
+	for _, tt := range []struct {
+		name       string
+		tag        *ast.BasicLit
+		wantAlways bool
+	}{
+		{name: "a tag that is not a string", tag: &ast.BasicLit{Kind: token.INT, Value: "1"}, wantAlways: true},
+		{name: "a json tag naming no key", tag: &ast.BasicLit{Kind: token.STRING, Value: "`json:\",omitempty\"`"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			key, always, published := jsonField(tt.tag, "GoName")
+			if key != "GoName" || always != tt.wantAlways || !published {
+				t.Errorf("jsonField() = %q, %t, %t; want GoName, %t, true", key, always, published, tt.wantAlways)
+			}
+		})
+	}
+	if got := optionParameters(&ast.FuncDecl{Type: &ast.FuncType{}}); got != nil {
+		t.Errorf("optionParameters(no parameter list) = %v, want none", got)
 	}
 }
 

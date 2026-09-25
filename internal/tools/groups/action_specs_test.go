@@ -115,12 +115,14 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	byTool := groupSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_group_get"].Route.Handler(t.Context(), map[string]any{"group_id": "999"})
+	// The group is a JSON number of eight digits, which reaches the route as a
+	// float64: fmt.Sprint named it 1.2345678e+07.
+	result, err := byTool["gitlab_group_get"].Route.Handler(t.Context(), map[string]any{"group_id": float64(12345678)})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if _, ok := result.(groupNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want groupNotFoundOutput", result)
+	if notFound, ok := result.(groupNotFoundOutput); !ok || notFound.Identifier != "12345678" {
+		t.Fatalf("result = %#v, want groupNotFoundOutput naming 12345678", result)
 	}
 }
 

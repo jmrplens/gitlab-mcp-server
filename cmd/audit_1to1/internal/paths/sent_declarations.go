@@ -86,6 +86,14 @@ const (
 	// hierarchy rather than a route's parameters, and because no route
 	// declaring something can ever retire it.
 	categorySubclassCannotSatisfy = "entity-condition-the-presented-class-cannot-satisfy"
+	// categoryConstantEmpty is a field the entity renders through a block that
+	// returns the same empty value whatever the object: the key can arrive, and
+	// never with anything in it, so publishing it would offer a key no answer
+	// fills. It is GitLab's way of deprecating a key without removing it. Kept
+	// apart from the condition categories because the condition is beside the
+	// point: it can hold and the value is still empty, and only a GitLab
+	// release that removes the block retires the declaration.
+	categoryConstantEmpty = "entity-renders-a-constant-empty-value"
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -263,6 +271,35 @@ const reasonIncludeSubscribedTurnedOff = "lib/api/entities/issue.rb exposes subs
 	"key unless the endpoint refuses it. GET /projects/:id/issues/:issue_iid/links is the only route filling this type and its `present` call in " +
 	"lib/api/issue_links.rb passes `include_subscribed: false`, so the key has never been on one of its responses. The entity says why above the " +
 	"exposure: the value triggers Markdown processing, which GitLab will not do for every row of a list."
+
+// The package items and the entity they are read against, spelled once for the
+// declarations below that share them.
+const (
+	packagesPkg   = toolsDir + "/packages"
+	packageEntity = "API::Entities::Package"
+)
+
+// reasonPackageGroupOptionNeverPassed answers the owning project held against
+// the package items a project's listing and a request for one package fill.
+const reasonPackageGroupOptionNeverPassed = "lib/api/entities/package.rb exposes project_id under `opts[:group]` and project_path " +
+	"under the same option and the caller's read access. lib/api/project_packages.rb presents both GET /projects/:id/packages " +
+	"and GET /projects/:id/packages/:package_id with `namespace:` and no `group:`, so neither route has ever sent either key; " +
+	"lib/api/group_packages.rb passes `group: true`, and packages.GroupListItem, which that route fills, publishes both."
+
+// reasonPackagePipelinesConstantEmpty answers the pipelines key held against
+// every package item and the package grain alike.
+const reasonPackagePipelinesConstantEmpty = "lib/api/entities/package.rb exposes pipelines with a block returning EMPTY_PIPELINES, " +
+	"a frozen empty array, whatever the package, so when its condition holds the key arrives as [] and otherwise not at all. " +
+	"doc/api/packages.md records it as deprecated in GitLab 16.1 on both the listings and the read of one package. The " +
+	"pipeline that last built the package is sent under pipeline, which every package item publishes."
+
+// reasonPackageVersionsOnTheDetailItem answers the other versions held against
+// the item the project's listing fills.
+const reasonPackageVersionsOnTheDetailItem = "lib/api/entities/package.rb exposes versions `unless: ->(_, opts) { opts[:collection] }`, " +
+	"and grape-entity's represent sets collection on every object of an array it presents, so GET /projects/:id/packages " +
+	"(lib/api/project_packages.rb:67, `present paginate(packages)`) never sends them. packages.ListItem is held against GET " +
+	"/projects/:id/packages/:package_id as well only because client-go's GetProjectPackage answers with the same Package " +
+	"struct; that route presents one package (line 89) and fills packages.DetailItem, which publishes the versions."
 
 // declaredUnsurfaced holds every field GitLab's document lists that the
 // endpoint does not send, each with the source that says so.
@@ -456,6 +493,22 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// that no response can ever satisfy.
 	{Package: projectsPkg, Entity: "API::Entities::ProjectHook", Field: "organization_id", Category: categorySubclassCannotSatisfy, Reason: reasonSystemHookSibling},
 	{Package: groupsPkg, Entity: "API::Entities::GroupHook", Field: "organization_id", Category: categorySubclassCannotSatisfy, Reason: reasonSystemHookSibling},
+
+	// The owning project on the package items the two project-scoped routes
+	// fill, the listing's and the read of one package's. Named with the type,
+	// since the group listing's item publishes both keys and is judged on its
+	// own.
+	{Package: packagesPkg, Type: "ListItem", Entity: packageEntity, Field: "project_id", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
+	{Package: packagesPkg, Type: "ListItem", Entity: packageEntity, Field: "project_path", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
+	{Package: packagesPkg, Type: "DetailItem", Entity: packageEntity, Field: "project_id", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
+	{Package: packagesPkg, Type: "DetailItem", Entity: packageEntity, Field: "project_path", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
+
+	// The package's other versions, on the item only the listing fills.
+	{Package: packagesPkg, Type: "ListItem", Entity: packageEntity, Field: "versions", Category: categorySDKRouteFillsAnotherType, Reason: reasonPackageVersionsOnTheDetailItem},
+
+	// pipelines, on every package item and at the package grain alike, since
+	// no route renders it with anything in it.
+	{Package: packagesPkg, Entity: packageEntity, Field: "pipelines", Category: categoryConstantEmpty, Reason: reasonPackagePipelinesConstantEmpty},
 
 	// subscribed on the related issue, named alone rather than with a splat:
 	// every other key of that entity is published on the same type, and a

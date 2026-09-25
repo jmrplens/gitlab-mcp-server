@@ -1972,6 +1972,66 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetNotFound_NamesTheArgumentsAsWritten verifies each get
+// route's not-found card names the award, its parent and its project as the
+// caller wrote them. A JSON number reaches a route as a float64, and %v
+// printed every id of a million or more in exponent form, so a caller asking
+// for award 31234567 was told award 3.1234567e+07 was not there.
+func TestActionSpecs_GetNotFound_NamesTheArgumentsAsWritten(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
+	const award, parent, note, project = float64(31234567), float64(2345678), float64(3456789), float64(12345678)
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{
+			name: "gitlab_issue_emoji_get",
+			args: map[string]any{"project_id": project, "issue_iid": parent, "award_id": award},
+			want: "award 31234567 on issue IID 2345678 in project 12345678",
+		},
+		{
+			name: "gitlab_issue_note_emoji_get",
+			args: map[string]any{"project_id": project, "issue_iid": parent, "note_id": note, "award_id": award},
+			want: "award 31234567 on note 3456789 (issue IID 2345678) in project 12345678",
+		},
+		{
+			name: "gitlab_mr_emoji_get",
+			args: map[string]any{"project_id": project, "merge_request_iid": parent, "award_id": award},
+			want: "award 31234567 on MR IID 2345678 in project 12345678",
+		},
+		{
+			name: "gitlab_mr_note_emoji_get",
+			args: map[string]any{"project_id": project, "merge_request_iid": parent, "note_id": note, "award_id": award},
+			want: "award 31234567 on note 3456789 (MR IID 2345678) in project 12345678",
+		},
+		{
+			name: "gitlab_snippet_emoji_get",
+			args: map[string]any{"project_id": project, "snippet_id": parent, "award_id": award},
+			want: "award 31234567 on snippet IID 2345678 in project 12345678",
+		},
+		{
+			name: "gitlab_snippet_note_emoji_get",
+			args: map[string]any{"project_id": project, "snippet_id": parent, "note_id": note, "award_id": award},
+			want: "award 31234567 on note 3456789 (snippet IID 2345678) in project 12345678",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err != nil {
+				t.Fatalf("Route.Handler(%s) error: %v", tc.name, err)
+			}
+			notFound, ok := res.(awardEmojiNotFoundOutput)
+			if !ok || notFound.Identifier != tc.want {
+				t.Errorf("Route.Handler(%s) = %#v, want the not-found card naming %q", tc.name, res, tc.want)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_GetForbidden_StaysAnError holds the limit of what the
 // not-found wrapper is allowed to absorb. A get route answers a 404 with a card
 // saying the award is not there, which is the right answer to that one status

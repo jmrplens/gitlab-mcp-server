@@ -75,13 +75,40 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	byTool := tagSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_tag_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "nonexistent"})
-	if err != nil {
-		t.Fatalf("Route.Handler error: %v", err)
-	}
-	callResult := toolutil.MarkdownForResult(result)
-	if callResult == nil || !callResult.IsError {
-		t.Fatalf("MarkdownForResult() = %#v, want IsError result for 404", callResult)
+	for _, tt := range []struct {
+		name  string
+		input map[string]any
+		want  string
+	}{
+		{
+			// The project is a JSON number of eight digits, which reaches the
+			// route as a float64: read as a string it named no project at all.
+			name:  "a JSON number",
+			input: map[string]any{"project_id": float64(12345678), "tag_name": "nonexistent"},
+			want:  `"nonexistent" in project 12345678`,
+		},
+		{
+			// The project under its documented alias, which the meta surface
+			// hands the route as written: read from the map as it arrived it
+			// named project <nil>.
+			name:  "project_path alias",
+			input: map[string]any{"project_path": "group/project", "tag_name": "nonexistent"},
+			want:  `"nonexistent" in project group/project`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := byTool["gitlab_tag_get"].Route.Handler(t.Context(), tt.input)
+			if err != nil {
+				t.Fatalf("Route.Handler error: %v", err)
+			}
+			if notFound, ok := result.(tagNotFoundOutput); !ok || notFound.Identifier != tt.want {
+				t.Fatalf("result = %#v, want tagNotFoundOutput naming %s", result, tt.want)
+			}
+			callResult := toolutil.MarkdownForResult(result)
+			if callResult == nil || !callResult.IsError {
+				t.Fatalf("MarkdownForResult() = %#v, want IsError result for 404", callResult)
+			}
+		})
 	}
 }
 

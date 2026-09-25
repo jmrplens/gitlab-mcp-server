@@ -8,7 +8,7 @@ faq:
   - q: "Which error wrapping function is used for which operation?"
     a: "Read-only operations (`list`, `get`, `search`) use `WrapErr`. Mutating operations (`create`, `update`, `delete`) use `WrapErrWithMessage`, which includes the specific detail extracted from the GitLab response. When a corrective action is known, `WrapErrWithHint` appends a suggestion, and `WrapErrWithStatusHint` scopes that hint to a single HTTP status code. A `get` operation returning 404 uses `NotFoundResult` instead of returning an error."
   - q: "Why does a 404 not appear as an error?"
-    a: "For `get` handlers, 404 responses are treated as **informational** rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints, logged at INFO level. This `NotFoundResult` pattern is applied through a shared formatter in each of 19 domains and gives the AI assistant actionable next steps, such as listing available resources or checking the resource name."
+    a: "For `get` handlers, 404 responses are treated as **informational** rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints, logged at INFO level. This `NotFoundResult` pattern is applied through a shared formatter in each of 20 domains and gives the AI assistant actionable next steps, such as listing available resources or checking the resource name."
   - q: "Should the AI assistant retry a failed operation?"
     a: "It depends on whether the error is **transient** or **permanent**. Transient errors — 429, 5xx, timeouts, and connection refused — are safe to retry after a delay. Permanent errors — 4xx except 429 — indicate a problem with the request itself, so retrying produces the same result. For permanent errors, fix the input parameters or configuration instead of retrying."
 ---
@@ -125,7 +125,7 @@ Branch `feature/old` was not found in the project.
 - Check branch name spelling and case sensitivity
 ```
 
-This pattern is applied through a shared formatter in each of 19 domains, so every get handler of a domain answers the same way. It logs at INFO level (expected outcome) and provides the AI assistant with actionable next steps.
+This pattern is applied through a shared formatter in each of 20 domains, so every get handler of a domain answers the same way. It logs at INFO level (expected outcome) and provides the AI assistant with actionable next steps.
 
 ## Corrective hints
 

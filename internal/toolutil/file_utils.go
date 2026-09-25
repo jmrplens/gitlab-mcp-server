@@ -40,6 +40,19 @@ const (
 	DownloadDirAllowlistEnv = "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS"
 )
 
+// The file-system calls below run on a path that was already resolved through
+// every symlink and checked, so each fails only when the file is removed or
+// replaced in between, or, for the ancestor walk, only on a file system with
+// no root at all. No input can schedule either, so they are package variables
+// a test replaces to take the branch that refuses the answer, and the branch
+// is kept because a race is exactly what it is there for.
+var (
+	lstatResolved        = os.Lstat
+	statResolved         = os.Stat
+	openResolved         = openLeafNoFollow
+	evalAncestorSymlinks = filepath.EvalSymlinks
+)
+
 // localFilesystemAllowed reports whether tool handlers may name paths on the
 // machine the server runs on. It is the transport distinction, not a knob: a
 // stdio server runs on the same machine as the person driving it, and naming a
@@ -153,7 +166,7 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 	// Lstat, not Stat: canonicalPath is already symlink-free, so the two agree
 	// unless the leaf became a symlink between resolution and here, and in
 	// that race Lstat is the answer that refuses.
-	info, err := os.Lstat(canonicalPath)
+	info, err := lstatResolved(canonicalPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("stat %s: %w", canonicalPath, err)
 	}
@@ -167,7 +180,7 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 			canonicalPath, info.Size(), maxSize)
 	}
 
-	f, err := openLeafNoFollow(canonicalPath)
+	f, err := openResolved(canonicalPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %s: %w", canonicalPath, err)
 	}
@@ -313,7 +326,7 @@ func canonicalizeThroughExistingAncestor(absolutePath string) (string, error) {
 	dir := absolutePath
 	tail := ""
 	for {
-		resolved, err := filepath.EvalSymlinks(dir)
+		resolved, err := evalAncestorSymlinks(dir)
 		if err == nil {
 			if tail == "" {
 				return resolved, nil
@@ -382,7 +395,7 @@ func CanonicalImportArchivePath(path string) (string, error) {
 		return "", fmt.Errorf("archive %s must use .tar.gz extension", canonicalPath)
 	}
 
-	info, err := os.Stat(canonicalPath)
+	info, err := statResolved(canonicalPath)
 	if err != nil {
 		return "", fmt.Errorf("stat archive %s: %w", canonicalPath, err)
 	}
@@ -530,7 +543,7 @@ func canonicalDirPath(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	info, err := os.Stat(canonicalDir)
+	info, err := statResolved(canonicalDir)
 	if err != nil {
 		return "", err
 	}

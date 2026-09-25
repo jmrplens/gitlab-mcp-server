@@ -2208,12 +2208,15 @@ func TestActionSpecs_Get404NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	byTool := pipelineSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_pipeline_get"].Route.Handler(t.Context(), map[string]any{"project_id": "1", "pipeline_id": 1})
+	// JSON numbers of eight digits, which reach the route as float64s: %v
+	// named them 3.1234567e+07 and 1.2345678e+07.
+	result, err := byTool["gitlab_pipeline_get"].Route.Handler(t.Context(),
+		map[string]any{"project_id": float64(12345678), "pipeline_id": float64(31234567)})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if _, ok := result.(pipelineNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want pipelineNotFoundOutput", result)
+	if notFound, ok := result.(pipelineNotFoundOutput); !ok || notFound.Identifier != "ID 31234567 in project 12345678" {
+		t.Fatalf("result = %#v, want pipelineNotFoundOutput naming ID 31234567 in project 12345678", result)
 	}
 }
 

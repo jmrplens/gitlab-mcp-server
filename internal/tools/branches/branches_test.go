@@ -1844,16 +1844,40 @@ func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 	}))
 	byTool := branchSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "branch_name": "missing"})
-	if err != nil {
-		t.Fatalf("Route.Handler error: %v", err)
-	}
-	notFound, ok := result.(branchNotFoundOutput)
-	if !ok {
-		t.Fatalf("result type = %T, want branchNotFoundOutput", result)
-	}
-	if !strings.Contains(notFound.Identifier, "missing") || !strings.Contains(notFound.Identifier, "42") {
-		t.Fatalf("identifier = %q, want branch and project context", notFound.Identifier)
+	for _, tt := range []struct {
+		name  string
+		input map[string]any
+		want  string
+	}{
+		{
+			// The project is a JSON number of eight digits, which reaches the
+			// route as a float64: read as a string it named no project at all.
+			name:  "a JSON number",
+			input: map[string]any{"project_id": float64(12345678), "branch_name": "missing"},
+			want:  `"missing" in project 12345678`,
+		},
+		{
+			// Both under their documented aliases, which the meta surface
+			// hands the route as written: read from the map as it arrived
+			// they named branch "" in project <nil>.
+			name:  "documented aliases",
+			input: map[string]any{"project_path": "group/project", "branch": "missing"},
+			want:  `"missing" in project group/project`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), tt.input)
+			if err != nil {
+				t.Fatalf("Route.Handler error: %v", err)
+			}
+			notFound, ok := result.(branchNotFoundOutput)
+			if !ok {
+				t.Fatalf("result type = %T, want branchNotFoundOutput", result)
+			}
+			if notFound.Identifier != tt.want {
+				t.Fatalf("identifier = %q, want %q, the branch and the project the caller named", notFound.Identifier, tt.want)
+			}
+		})
 	}
 }
 

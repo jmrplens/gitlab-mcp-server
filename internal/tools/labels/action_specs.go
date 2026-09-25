@@ -1,9 +1,7 @@
 package labels
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -80,16 +78,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // into a structured [labelNotFoundOutput] hint rather than an error,
 // matching the get-not-found pattern used across the project.
 func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				labelID, _ := input[paramLabelID].(string)
-				projectID, _ := input["project_id"].(string)
-				return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s", labelID, projectID)}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		// Both are named as the caller wrote them. Reading them as strings
+		// named a label or a project given as a JSON number as none at all.
+		return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+			toolutil.ParamText(params[paramLabelID]), toolutil.ParamText(params["project_id"]))}
 	})
 }
 

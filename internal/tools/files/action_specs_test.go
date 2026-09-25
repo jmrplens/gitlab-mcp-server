@@ -94,7 +94,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}))
 	byTool := fileSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_file_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "file_path": "missing.go"})
+	// The project is a JSON number of eight digits, which reaches the route as a
+	// float64: %v named it 1.2345678e+07.
+	result, err := byTool["gitlab_file_get"].Route.Handler(t.Context(), map[string]any{"project_id": float64(12345678), "file_path": "missing.go"})
 	if err != nil {
 		t.Fatalf("Route.Handler(gitlab_file_get) error: %v", err)
 	}
@@ -102,7 +104,7 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	if !ok {
 		t.Fatalf("Route.Handler(gitlab_file_get) returned %T, want fileNotFoundOutput", result)
 	}
-	if out.Identifier != `"missing.go" in project 42` {
+	if out.Identifier != `"missing.go" in project 12345678` {
 		t.Fatalf("identifier = %q", out.Identifier)
 	}
 }

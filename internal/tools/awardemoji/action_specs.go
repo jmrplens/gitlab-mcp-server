@@ -3,7 +3,6 @@ package awardemoji
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -269,14 +268,8 @@ func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 }
 
 func awardEmojiGetRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (Output, error), notFound func(map[string]any) awardEmojiNotFoundOutput) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, fn).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return notFound(input), nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, fn).WrapNotFound(func(params map[string]any) any {
+		return notFound(params)
 	})
 }
 
@@ -291,7 +284,8 @@ func awardEmojiDeleteRoute[T any](client *gitlabclient.Client, fn func(context.C
 
 func issueEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 	return awardEmojiNotFoundOutput{
-		Identifier: fmt.Sprintf("award %v on issue IID %v in project %v", input["award_id"], input["issue_iid"], input["project_id"]),
+		Identifier: fmt.Sprintf("award %s on issue IID %s in project %s",
+			toolutil.ParamText(input["award_id"]), toolutil.ParamText(input["issue_iid"]), toolutil.ParamText(input["project_id"])),
 		ListHint:   "Use issue.emoji_issue_list to list emojis on this issue",
 		VerifyHint: awardEmojiHintVerifyBasic,
 	}
@@ -299,7 +293,9 @@ func issueEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 
 func issueNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 	return awardEmojiNotFoundOutput{
-		Identifier: fmt.Sprintf("award %v on note %v (issue IID %v) in project %v", input["award_id"], input["note_id"], input["issue_iid"], input["project_id"]),
+		Identifier: fmt.Sprintf("award %s on note %s (issue IID %s) in project %s",
+			toolutil.ParamText(input["award_id"]), toolutil.ParamText(input["note_id"]),
+			toolutil.ParamText(input["issue_iid"]), toolutil.ParamText(input["project_id"])),
 		ListHint:   "Use issue.emoji_issue_note_list to list emojis on this note",
 		VerifyHint: awardEmojiHintVerifyWithNote,
 	}
@@ -307,7 +303,8 @@ func issueNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 
 func mrEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 	return awardEmojiNotFoundOutput{
-		Identifier: fmt.Sprintf("award %v on MR IID %v in project %v", input["award_id"], input["merge_request_iid"], input["project_id"]),
+		Identifier: fmt.Sprintf("award %s on MR IID %s in project %s",
+			toolutil.ParamText(input["award_id"]), toolutil.ParamText(input["merge_request_iid"]), toolutil.ParamText(input["project_id"])),
 		ListHint:   "Use merge_request.emoji_mr_list to list emojis on this merge request",
 		VerifyHint: awardEmojiHintVerifyBasic,
 	}
@@ -315,7 +312,9 @@ func mrEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 
 func mrNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 	return awardEmojiNotFoundOutput{
-		Identifier: fmt.Sprintf("award %v on note %v (MR IID %v) in project %v", input["award_id"], input["note_id"], input["merge_request_iid"], input["project_id"]),
+		Identifier: fmt.Sprintf("award %s on note %s (MR IID %s) in project %s",
+			toolutil.ParamText(input["award_id"]), toolutil.ParamText(input["note_id"]),
+			toolutil.ParamText(input["merge_request_iid"]), toolutil.ParamText(input["project_id"])),
 		ListHint:   "Use merge_request.emoji_mr_note_list to list emojis on this note",
 		VerifyHint: awardEmojiHintVerifyWithNote,
 	}
@@ -323,7 +322,8 @@ func mrNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 
 func snippetEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 	return awardEmojiNotFoundOutput{
-		Identifier: fmt.Sprintf("award %v on snippet IID %v in project %v", input["award_id"], input["snippet_id"], input["project_id"]),
+		Identifier: fmt.Sprintf("award %s on snippet IID %s in project %s",
+			toolutil.ParamText(input["award_id"]), toolutil.ParamText(input["snippet_id"]), toolutil.ParamText(input["project_id"])),
 		ListHint:   "Use snippet.emoji_snippet_list to list emojis on this snippet",
 		VerifyHint: awardEmojiHintVerifyBasic,
 	}
@@ -331,7 +331,9 @@ func snippetEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 
 func snippetNoteEmojiNotFound(input map[string]any) awardEmojiNotFoundOutput {
 	return awardEmojiNotFoundOutput{
-		Identifier: fmt.Sprintf("award %v on note %v (snippet IID %v) in project %v", input["award_id"], input["note_id"], input["snippet_id"], input["project_id"]),
+		Identifier: fmt.Sprintf("award %s on note %s (snippet IID %s) in project %s",
+			toolutil.ParamText(input["award_id"]), toolutil.ParamText(input["note_id"]),
+			toolutil.ParamText(input["snippet_id"]), toolutil.ParamText(input["project_id"])),
 		ListHint:   "Use snippet.emoji_snippet_note_list to list emojis on this note",
 		VerifyHint: awardEmojiHintVerifyWithNote,
 	}

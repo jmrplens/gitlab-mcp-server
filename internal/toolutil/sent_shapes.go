@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"fmt"
 	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -809,17 +810,26 @@ func CapturedNamespaces(capture *gitlabclient.ResponseCapture, decoded int) ([]N
 	return capturedList[NamespaceExtra](capture, decoded, "namespaces")
 }
 
-// PackageTagOutput is one tag pointing at a package version.
+// PackageTagOutput is one tag pointing at a package, every key of it read from
+// client-go's PackageTag: the one shape a tag is published in, on a package a
+// listing or a request for one package returns and on each of its other
+// versions alike. The timestamps are RFC 3339 to the second, as every
+// timestamp this server publishes as a string is.
 type PackageTagOutput struct {
-	ID        int64      `json:"id"`
-	PackageID int64      `json:"package_id"`
-	Name      string     `json:"name"`
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
+	ID        int64  `json:"id"`
+	PackageID int64  `json:"package_id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
-// PackagePipelineOutput is the pipeline that built a package version, sent to
-// a caller allowed to read it.
+// PackagePipelineOutput is a pipeline lib/api/entities/package/pipeline.rb
+// renders on a package, sent to a caller allowed to read it: the one that last
+// built the package, or the one that built one of its other versions.
+// client-go's PackagePipeline carries eight of its keys; iid, project_id and
+// source, and the user's locked and public_email, come from
+// [PackagePipelineExtra]. The timestamps are RFC 3339 to the second, like the
+// package's own.
 type PackagePipelineOutput struct {
 	ID        int64            `json:"id"`
 	IID       int64            `json:"iid"`
@@ -828,37 +838,83 @@ type PackagePipelineOutput struct {
 	Ref       string           `json:"ref"`
 	Status    string           `json:"status"`
 	Source    string           `json:"source"`
-	CreatedAt *time.Time       `json:"created_at"`
-	UpdatedAt *time.Time       `json:"updated_at"`
+	CreatedAt string           `json:"created_at,omitempty"`
+	UpdatedAt string           `json:"updated_at,omitempty"`
 	WebURL    string           `json:"web_url"`
 	User      *UserBasicOutput `json:"user"`
 }
 
 // PackageVersionOutput is one other version of the same package, with the tags
-// pointing at it and the pipeline that built it.
+// pointing at it and the pipeline that built it, which GitLab sends only when
+// one package is asked for and never on a page of them. It is published in
+// this shape rather than decoded into it: client-go's PackageVersion carries
+// the version, when it was published, its tags and eight keys of the pipeline
+// that built it, and [PackageExtra] supplies the other five. Its tags and its
+// timestamp are published as the package's own are.
 type PackageVersionOutput struct {
 	ID        int64                  `json:"id"`
 	Version   string                 `json:"version"`
-	CreatedAt *time.Time             `json:"created_at"`
-	Tags      []PackageTagOutput     `json:"tags"`
+	CreatedAt string                 `json:"created_at,omitempty"`
+	Tags      []PackageTagOutput     `json:"tags,omitempty"`
 	Pipeline  *PackagePipelineOutput `json:"pipeline"`
 }
 
-// PackageExtra is what GitLab's package entity sends that the package itself
-// does not say: who published it, unconditionally; the Conan recipe's own name
-// on a Conan package; the owning project's id and path, sent when the package
-// is listed across a group; and the package's other versions, sent when one
-// package is asked for rather than a page of them.
+// PackageExtra is what GitLab's package entity sends on a package that
+// client-go's Package does not carry, on every route that renders one.
+// client-go v3.14.0 models the package's creator, its Conan recipe name and its
+// other versions with their tags; what it leaves out is on the pipelines: the
+// one that last built the package, and the one that built each of its other
+// versions, which only a request for one package is sent. Each of them is
+// short the keys [PackagePipelineExtra] names.
+//
+// The entity's pipelines key is not read. lib/api/entities/package.rb renders
+// it as the constant EMPTY_PIPELINES whatever the package, which is how GitLab
+// deprecated it in 16.1, so there is nothing on it to complete and no count to
+// hold a capture to.
 type PackageExtra struct {
-	CreatorID        int64                  `json:"creator_id"`
-	ConanPackageName string                 `json:"conan_package_name"`
-	ProjectID        int64                  `json:"project_id"`
-	ProjectPath      string                 `json:"project_path"`
-	Versions         []PackageVersionOutput `json:"versions"`
+	Pipeline *PackagePipelineExtra `json:"pipeline"`
+	Versions []PackageVersionExtra `json:"versions"`
 }
 
-// CapturedPackages reads them off the captured answer to a list of packages,
-// one extra per package in order, the count held to what the SDK decoded.
+// PackageVersionExtra is the part of one other version of a package that
+// client-go's PackageVersion does not carry, all of it on its pipeline.
+type PackageVersionExtra struct {
+	Pipeline *PackagePipelineExtra `json:"pipeline"`
+}
+
+// PackagePipelineExtra is what lib/api/entities/package/pipeline.rb sends on a
+// package's pipeline that client-go's PackagePipeline does not carry: the
+// pipeline's iid, its project and its source, three of the eleven keys the
+// entity exposes, and the two keys of the UserBasic who ran it that client-go's
+// BasicUser leaves out.
+type PackagePipelineExtra struct {
+	IID       int64           `json:"iid"`
+	ProjectID int64           `json:"project_id"`
+	Source    string          `json:"source"`
+	User      *UserBasicExtra `json:"user"`
+}
+
+// CapturedPackage reads them off the captured answer to a request for one
+// package, one extra per other version in order, the count held to the number
+// of other versions the SDK decoded: the extras are paired with what client-go
+// decoded by position, and a count that differed would put one version's
+// pipeline keys on its neighbor.
+func CapturedPackage(capture *gitlabclient.ResponseCapture, decodedVersions int) (PackageExtra, error) {
+	extra, err := capturedOne[PackageExtra](capture)
+	if err != nil {
+		return PackageExtra{}, err
+	}
+	if len(extra.Versions) != decodedVersions {
+		return PackageExtra{}, fmt.Errorf("the captured answer holds %d package versions and the SDK decoded %d",
+			len(extra.Versions), decodedVersions)
+	}
+	return extra, nil
+}
+
+// CapturedPackages reads the same off a page of packages, one extra per
+// package in order, the count held to what the SDK decoded. A page carries no
+// other versions, so the package's own pipeline is all an extra completes and
+// the package's position is all it is paired by.
 func CapturedPackages(capture *gitlabclient.ResponseCapture, decoded int) ([]PackageExtra, error) {
 	return capturedList[PackageExtra](capture, decoded, "packages")
 }
@@ -1296,8 +1352,9 @@ func CapturedProjects(capture *gitlabclient.ResponseCapture, decoded int) ([]Pro
 }
 
 // UserBasicExtra is what lib/api/entities/user_basic.rb sends that client-go's
-// ProjectUser does not model. Both are unconditional on that entity, so a
-// plain value is the honest shape here.
+// ProjectUser does not model, and neither does its BasicUser, which is what the
+// user who ran a package's pipeline decodes into. Both are
+// unconditional on that entity, so a plain value is the honest shape here.
 type UserBasicExtra struct {
 	Locked      bool   `json:"locked"`
 	PublicEmail string `json:"public_email"`

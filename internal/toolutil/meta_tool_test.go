@@ -3257,6 +3257,35 @@ func TestSchemaForType_CacheHit(t *testing.T) {
 	}
 }
 
+// TestBuildSchemaForType_ARoundTripThatFails_PublishesNoSchema verifies a
+// schema that would not marshal, and bytes that would not decode, each leave
+// the type with no schema rather than a half-built one. A schema jsonschema-go
+// reflected from a Go type always does both, so the seams stand in for a
+// library that stopped doing so; the call is made on buildSchemaForType rather
+// than through the process-wide cache, which would keep the failure for every
+// later test. Not parallel: the seams are the package's.
+func TestBuildSchemaForType_ARoundTripThatFails_PublishesNoSchema(t *testing.T) {
+	type sample struct {
+		Name string `json:"name"`
+	}
+	if buildSchemaForType(reflect.TypeFor[sample]()) == nil {
+		t.Fatal("buildSchemaForType() = nil before any seam was replaced, want a schema")
+	}
+	refused := errors.New("refused")
+	t.Run("the marshal", func(t *testing.T) {
+		replaceForTest(t, &schemaToJSON, func(any) ([]byte, error) { return nil, refused })
+		if got := buildSchemaForType(reflect.TypeFor[sample]()); got != nil {
+			t.Errorf("buildSchemaForType() = %v, want nil", got)
+		}
+	})
+	t.Run("the unmarshal", func(t *testing.T) {
+		replaceForTest(t, &schemaFromJSON, func([]byte, any) error { return refused })
+		if got := buildSchemaForType(reflect.TypeFor[sample]()); got != nil {
+			t.Errorf("buildSchemaForType() = %v, want nil", got)
+		}
+	})
+}
+
 // TestInputSchemaForType_RequiredSuffixRemoved verifies requiredness is kept in
 // the schema's required array instead of leaking into property descriptions.
 func TestInputSchemaForType_RequiredSuffixRemoved(t *testing.T) {

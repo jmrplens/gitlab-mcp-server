@@ -346,11 +346,12 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1085 = 1073 + 12 achievement actions (Free, client-go v2.64.0).
-		// The 1073 was 1065 + 7 work item saved view actions (get/list/create/
+		// 1086 = 1085 + package.get (Free, client-go v3.14.0). The 1085 was
+		// 1073 + 12 achievement actions (Free, client-go v2.64.0), and the
+		// 1073 was 1065 + 7 work item saved view actions (get/list/create/
 		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0)
 		// + 1 Dependency Firewall package evaluation (Premium).
-		const expectedTools = 1085
+		const expectedTools = 1086
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -366,14 +367,15 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 865 = 866 −1 group board delete gated to Premium (group_boards.md
-		// states the tier on the delete as on the create). The 866 was 854 +
+		// 866 = 865 + package.get (Free, client-go v3.14.0). The 865 was
+		// 866 −1 group board delete gated to Premium (group_boards.md
+		// states the tier on the delete as on the create). That 866 was 854 +
 		// 12 achievement actions (Free, client-go v2.64.0), and the 854 was
 		// 868 −11 group webhooks −3 MR dependencies gated to Premium
 		// (group_webhooks.md and merge request dependencies are
 		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
 		// 861 with the 7 work item saved view actions, which are Free.
-		const expectedTools = 865
+		const expectedTools = 866
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

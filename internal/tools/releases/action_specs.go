@@ -1,9 +1,7 @@
 package releases
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -49,15 +47,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func releaseGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				tagName, _ := input[paramTagName].(string)
-				return releaseNotFoundOutput{Identifier: fmt.Sprintf("tag %q in project %v", tagName, input["project_id"])}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		tagName, _ := params[paramTagName].(string)
+		return releaseNotFoundOutput{Identifier: fmt.Sprintf("tag %q in project %s", tagName, toolutil.ParamText(params["project_id"]))}
 	})
 }
 

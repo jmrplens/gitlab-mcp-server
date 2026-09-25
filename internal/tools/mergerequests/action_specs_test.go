@@ -106,12 +106,15 @@ func TestMergeRequestGetRoute_OnlyANotFoundBecomesTheCard(t *testing.T) {
 				testutil.RespondJSON(w, tt.status, `{"message":"as GitLab said"}`)
 			}))
 			byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
-			result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 5})
+			// JSON numbers of eight digits, which reach the route as float64s:
+			// %v named them !3.1234567e+07 and 1.2345678e+07.
+			result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(),
+				map[string]any{"project_id": float64(12345678), "merge_request_iid": float64(31234567)})
 			card, isCard := result.(mergeRequestNotFoundOutput)
 			switch {
 			case tt.wantCard && (err != nil || !isCard):
 				t.Fatalf("route answered (%T, %v), want the not-found card and no error", result, err)
-			case tt.wantCard && card.Identifier != "!5 in project 42":
+			case tt.wantCard && card.Identifier != "!31234567 in project 12345678":
 				t.Errorf("card identifier = %q, want the IID and project the caller named", card.Identifier)
 			case !tt.wantCard && (err == nil || isCard):
 				t.Fatalf("route answered (%T, %v), want GitLab's %d reported as an error", result, err, tt.status)

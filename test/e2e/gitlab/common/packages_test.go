@@ -1,7 +1,8 @@
 //go:build e2e
 
 // packages_test.go covers the package registry through the server: the
-// generic package lifecycle, the group-level listings, the two composite
+// generic package lifecycle with the read of one package and its other
+// versions, the group-level listings, the two composite
 // publishes, the package protection rules, the container registry's own
 // protection and tag protection rules, and the image-backed registry
 // actions on the repository the provisioning script seeded with two tags,
@@ -29,11 +30,14 @@ import (
 )
 
 // The version and file every generic package here is published with, and
-// the content the download is checked against.
+// the content the download is checked against. The lifecycle publishes a
+// second version of its package as well, since only the read of one package
+// names its other versions.
 const (
-	packageVersion     = "1.0.0"
-	packageFileName    = "data.txt"
-	packageFileContent = "hello package"
+	packageVersion      = "1.0.0"
+	packageOtherVersion = "2.0.0"
+	packageFileName     = "data.txt"
+	packageFileContent  = "hello package"
 )
 
 // The tags the provisioning script pushes into each registry seed project.
@@ -77,22 +81,51 @@ func packageIDParam(id int64) string {
 // and checks the answer names the package and the file.
 func publishPackage(e *harness.Env, s *harness.Session, project fixture.Project, name string) packages.PublishOutput {
 	e.T.Helper()
+	return publishPackageVersion(e, s, project, name, packageVersion)
+}
+
+// publishPackageVersion is publishPackage for a version of the caller's
+// choosing, which GitLab stores as a package of its own.
+func publishPackageVersion(e *harness.Env, s *harness.Session, project fixture.Project, name, version string) packages.PublishOutput {
+	e.T.Helper()
 
 	published := harness.Do[packages.PublishOutput](s, actionPackagePublish, map[string]any{
-		"project_id": project.IDParam(), "package_name": name, "package_version": packageVersion,
+		"project_id": project.IDParam(), "package_name": name, "package_version": version,
 		"file_name": packageFileName, "content_base64": base64.StdEncoding.EncodeToString([]byte(packageFileContent)),
 	})
 	if published.PackageID == 0 || published.PackageFileID == 0 || published.FileName != packageFileName {
-		e.T.Fatalf("package publish answered %+v, want %s with a package and a file ID", published, name)
+		e.T.Fatalf("package publish answered %+v, want %s %s with a package and a file ID", published, name, version)
 	}
 	return published
 }
 
+// assertPackageGet reads one package through the server and checks it is the
+// package published as name at packageVersion, naming the other version among
+// its other versions, which no listing sends.
+func assertPackageGet(e *harness.Env, s *harness.Session, byPackage map[string]any, name string, published, other packages.PublishOutput) {
+	e.T.Helper()
+
+	got := harness.Do[packages.GetOutput](s, actionPackageGet, byPackage)
+	if got.Package.ID != published.PackageID || got.Package.Name != name || got.Package.Version != packageVersion {
+		e.T.Errorf("package get answered %d %q %q, want package %d, %s %s",
+			got.Package.ID, got.Package.Name, got.Package.Version, published.PackageID, name, packageVersion)
+	}
+	if !slices.ContainsFunc(got.Package.Versions, func(v toolutil.PackageVersionOutput) bool {
+		return v.ID == other.PackageID && v.Version == packageOtherVersion
+	}) {
+		e.T.Errorf("package get of %d lists the other versions %+v, want %s (%d) among them",
+			published.PackageID, got.Package.Versions, packageOtherVersion, other.PackageID)
+	}
+	e.T.Logf("package %d was published by user %d", got.Package.ID, got.Package.CreatorID)
+}
+
 // TestPackage_GenericLifecycle_PublishListDownloadDelete publishes a
-// generic package per surface into a shared project, finds it in the
-// listing, lists its one file, downloads the file into the test's own
-// directory and compares its content, deletes the file and then the
-// package, and asserts the listing no longer holds it.
+// generic package per surface into a shared project, and a second version
+// of it, finds it in the listing, reads it with the second version named
+// among its other versions, lists its one file, downloads the file into
+// the test's own directory and compares its content, deletes the file and
+// then the package, asserts the read of it is refused as not found, deletes
+// the second version, and asserts the listing no longer holds the name.
 //
 // Replaces: TestPackages
 func TestPackage_GenericLifecycle_PublishListDownloadDelete(t *testing.T) {
@@ -106,12 +139,14 @@ func TestPackage_GenericLifecycle_PublishListDownloadDelete(t *testing.T) {
 		params := map[string]any{"project_id": project.IDParam()}
 
 		published := publishPackage(e, s, project, name)
+		other := publishPackageVersion(e, s, project, name, packageOtherVersion)
 		byPackage := withParams(params, map[string]any{"package_id": packageIDParam(published.PackageID)})
 
 		listed := harness.Do[packages.ListOutput](s, actionPackageList, params)
 		if !slices.Contains(packageNames(listed.Packages), name) {
 			e.T.Errorf("the package listing does not hold %s: %v", name, packageNames(listed.Packages))
 		}
+		assertPackageGet(e, s, byPackage, name, published, other)
 		files := harness.Do[packages.FileListOutput](s, actionPackageFileList, byPackage)
 		if len(files.Files) != 1 || files.Files[0].FileName != packageFileName || files.Files[0].PackageFileID != published.PackageFileID {
 			e.T.Errorf("the file listing of package %d answered %+v, want the one file %s (%d)", published.PackageID, files.Files, packageFileName, published.PackageFileID)
@@ -130,6 +165,9 @@ func TestPackage_GenericLifecycle_PublishListDownloadDelete(t *testing.T) {
 
 		harness.DoVoid(s, actionPackageFileDelete, withParams(byPackage, map[string]any{"package_file_id": packageIDParam(published.PackageFileID)}))
 		harness.DoVoid(s, actionPackageDelete, byPackage)
+		refused := harness.Refused(s, actionPackageGet, byPackage, harness.FailureNotFound)
+		e.T.Logf("the read after the delete is refused: %s", firstLine(refused))
+		harness.DoVoid(s, actionPackageDelete, withParams(params, map[string]any{"package_id": packageIDParam(other.PackageID)}))
 		remaining := harness.Do[packages.ListOutput](s, actionPackageList, params)
 		if slices.Contains(packageNames(remaining.Packages), name) {
 			e.T.Errorf("the package listing still holds %s after its delete: %v", name, packageNames(remaining.Packages))

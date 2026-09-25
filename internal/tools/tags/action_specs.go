@@ -1,9 +1,7 @@
 package tags
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -46,16 +44,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // tagGetRoute wraps the canonical Get route to return a structured not-found output
 // when GitLab responds with HTTP 404, mirroring the branches package behavior.
 func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				tagName, _ := input[paramTagName].(string)
-				projectID, _ := input["project_id"].(string)
-				return tagNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", tagName, projectID)}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		// The project is named as the caller wrote it. Reading it as a string
+		// named a project given as a JSON number as no project at all.
+		tagName, _ := params[paramTagName].(string)
+		return tagNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", tagName, toolutil.ParamText(params["project_id"]))}
 	})
 }
 

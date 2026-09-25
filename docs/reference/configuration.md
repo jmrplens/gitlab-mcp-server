@@ -237,7 +237,7 @@ This table summarizes the most common operational variables. For the complete so
 | ----------------------------- | ------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | **Dynamic toolset** (default) | `GITLAB_MCP_TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_action`                                  | Most users — lowest startup context while retaining full catalog reachability |
 | **Meta-tools**                | `GITLAB_MCP_TOOL_SURFACE=meta`       | 34 base / 51 self-managed Ultimate / 52 GitLab.com Ultimate                    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
-| **Individual tools**          | `GITLAB_MCP_TOOL_SURFACE=individual` | 866 Free/CE / 1085 self-managed Ultimate / 1091 GitLab.com Ultimate with Orbit | Clients that need granular tool selection                                     |
+| **Individual tools**          | `GITLAB_MCP_TOOL_SURFACE=individual` | 866 Free/CE / 1086 self-managed Ultimate / 1092 GitLab.com Ultimate with Orbit | Clients that need granular tool selection                                     |
 
 Use the default dynamic surface for normal low-token deployments. Set `GITLAB_MCP_TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools.
 

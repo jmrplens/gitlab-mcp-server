@@ -1,7 +1,6 @@
 package toolutil
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -68,12 +67,12 @@ func PipelineInputsSchema[T any](property string) map[string]any {
 		{Type: "boolean"},
 		{Type: "array", Items: &jsonschema.Schema{Type: "string"}},
 	}}
-	data, err := json.Marshal(schema)
+	data, err := schemaToJSON(schema)
 	if err != nil {
 		panic(fmt.Sprintf("marshal input schema for %s: %v; check schema serialization for unsupported values", property, err))
 	}
 	var out map[string]any
-	if unmarshalErr := json.Unmarshal(data, &out); unmarshalErr != nil {
+	if unmarshalErr := schemaFromJSON(data, &out); unmarshalErr != nil {
 		panic(fmt.Sprintf("unmarshal input schema for %s: %v; check generated schema JSON shape", property, unmarshalErr))
 	}
 	return out

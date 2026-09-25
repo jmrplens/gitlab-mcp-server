@@ -3,7 +3,6 @@ package projects
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"slices"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -121,14 +120,8 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 }
 
 func projectGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return projectNotFoundOutput{Identifier: fmt.Sprint(input[paramProjectID])}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return projectNotFoundOutput{Identifier: toolutil.ParamText(params[paramProjectID])}
 	})
 }
 

@@ -6,6 +6,7 @@ package toolutil
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -146,4 +147,49 @@ func TestPipelineInputsSchema_AStructNoSchemaCanDescribe_Panics(t *testing.T) {
 	}()
 
 	_ = PipelineInputsSchema[unreflectable]("inputs")
+}
+
+// TestPipelineInputsSchema_ARoundTripThatFails_Panics covers the two guards
+// behind the schema's round trip into a map: a schema that would not marshal
+// and bytes that would not decode each fail at registration, naming the
+// property and which half failed. A schema jsonschema-go reflected from a Go
+// type always does both, so the seams stand in for a library that stopped
+// doing so. Not parallel: the seams are the package's.
+func TestPipelineInputsSchema_ARoundTripThatFails_Panics(t *testing.T) {
+	type withInputs struct {
+		Inputs map[string]any `json:"inputs"`
+	}
+	refused := errors.New("refused")
+	for _, tt := range []struct {
+		name  string
+		seams func(t *testing.T)
+		want  string
+	}{
+		{
+			name: "the marshal",
+			seams: func(t *testing.T) {
+				t.Helper()
+				replaceForTest(t, &schemaToJSON, func(any) ([]byte, error) { return nil, refused })
+			},
+			want: "marshal input schema for inputs: refused; check schema serialization",
+		},
+		{
+			name: "the unmarshal",
+			seams: func(t *testing.T) {
+				t.Helper()
+				replaceForTest(t, &schemaFromJSON, func([]byte, any) error { return refused })
+			},
+			want: "unmarshal input schema for inputs: refused; check generated schema JSON shape",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.seams(t)
+			defer func() {
+				if message, _ := recover().(string); !strings.HasPrefix(message, tt.want) {
+					t.Errorf("panic = %q, want one starting %q", message, tt.want)
+				}
+			}()
+			_ = PipelineInputsSchema[withInputs]("inputs")
+		})
+	}
 }

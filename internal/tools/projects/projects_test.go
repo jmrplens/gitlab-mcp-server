@@ -7892,12 +7892,14 @@ func TestActionSpecs_ProjectGetNotFound(t *testing.T) {
 	}))
 	byTool := projectSpecsByTool(t, ActionSpecs(client, false))
 
-	result, err := byTool["gitlab_project_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42"})
+	// A JSON number of eight digits, which reaches the route as a float64:
+	// fmt.Sprint named it 1.2345678e+07.
+	result, err := byTool["gitlab_project_get"].Route.Handler(t.Context(), map[string]any{"project_id": float64(12345678)})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if _, ok := result.(projectNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want projectNotFoundOutput", result)
+	if notFound, ok := result.(projectNotFoundOutput); !ok || notFound.Identifier != "12345678" {
+		t.Fatalf("result = %#v, want projectNotFoundOutput naming 12345678", result)
 	}
 }
 

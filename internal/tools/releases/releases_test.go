@@ -1171,12 +1171,14 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	byTool := releaseSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_release_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "v99.0.0"})
+	// The project is a JSON number of eight digits, which reaches the route as
+	// a float64: %v named it 1.2345678e+07.
+	result, err := byTool["gitlab_release_get"].Route.Handler(t.Context(), map[string]any{"project_id": float64(12345678), "tag_name": "v99.0.0"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, ok := result.(releaseNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want releaseNotFoundOutput", result)
+	if notFound, ok := result.(releaseNotFoundOutput); !ok || notFound.Identifier != `tag "v99.0.0" in project 12345678` {
+		t.Fatalf("result = %#v, want releaseNotFoundOutput naming tag \"v99.0.0\" in project 12345678", result)
 	}
 }
 

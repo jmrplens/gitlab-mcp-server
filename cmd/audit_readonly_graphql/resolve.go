@@ -257,6 +257,14 @@ func (r *resolver) resolveRouteLiteral(lit *ast.CompositeLit, at frame, depth in
 // are the handlers. Anything else with a body is entered the same way a spec
 // constructor is, and a decorating method (route.WithTags(...)) resolves to its
 // receiver.
+//
+// A toolutil method on a route is a decorating method too, and one that takes
+// a function, WrapHandler and WrapNotFound, is both at once: its argument runs,
+// and so does the handler of the route it was called on, which the argument
+// decorates rather than replaces. Both are resolved. Reading the argument alone
+// classified the twenty not-found wrappers by what they do with a 404 and never
+// by the get handler behind them, and a wrapper whose builder calls nothing
+// resolved to no handler at all.
 func (r *resolver) resolveRouteCall(call *ast.CallExpr, at frame, depth int) []handlerRef {
 	callee := calleeFunc(at.pkg, call)
 	if callee == nil {
@@ -266,6 +274,9 @@ func (r *resolver) resolveRouteCall(call *ast.CallExpr, at frame, depth int) []h
 		var found []handlerRef
 		for _, arg := range call.Args {
 			found = append(found, r.resolveHandler(arg, at, depth+1)...)
+		}
+		if isMethod(callee) {
+			found = append(found, r.resolveRoute(methodReceiver(call), at, depth+1)...)
 		}
 		if len(found) > 0 {
 			return found
@@ -539,6 +550,12 @@ func calleeFunc(pkg *packages.Package, call *ast.CallExpr) *types.Func {
 		}
 		return nil
 	}
+}
+
+// isMethod reports whether a function is a method, so that a call to it
+// names its receiver: a call qualified by a package name is not.
+func isMethod(callee *types.Func) bool {
+	return callee.Signature().Recv() != nil
 }
 
 // methodReceiver returns the receiver expression of a method call, or nil.

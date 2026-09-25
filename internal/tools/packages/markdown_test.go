@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -235,7 +237,7 @@ func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 			ID:      1,
 			Name:    "pkg",
 			Version: "1.0.0",
-			Pipeline: &PipelineItem{
+			Pipeline: &toolutil.PackagePipelineOutput{
 				ID:     7,
 				Status: "success",
 				Ref:    "main",
@@ -319,49 +321,26 @@ func TestGroupProjectSummary_Variants(t *testing.T) {
 	}
 }
 
-// TestPipelineSummary_Variants verifies package pipeline summaries for primary,
-// historical, linked, and empty pipeline data.
+// TestPipelineSummary_Variants verifies the pipeline cell: nothing when GitLab
+// sent no pipeline, the id, status and ref otherwise, linked to the pipeline's
+// page when GitLab gave one, and escaped when it did not, since a ref is a
+// branch or tag name.
 func TestPipelineSummary_Variants(t *testing.T) {
 	tests := []struct {
-		name string
-		pkg  ListItem
-		want string
+		name     string
+		pipeline *toolutil.PackagePipelineOutput
+		want     string
 	}{
-		{name: "none", pkg: ListItem{}, want: ""},
-		{name: "primary", pkg: ListItem{Pipeline: &PipelineItem{ID: 7, Status: "success", Ref: "main"}}, want: "7 success main"},
-		{name: "primary link", pkg: ListItem{Pipeline: &PipelineItem{ID: 7, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/pipelines/7"}}, want: "[7 success main](https://gitlab.example.com/pipelines/7)"},
-		{name: "single history", pkg: ListItem{Pipelines: []PipelineItem{{ID: 8, Status: "failed", Ref: "release"}}}, want: "8 failed release"},
-		{name: "multiple history", pkg: ListItem{Pipelines: []PipelineItem{{ID: 9, Status: "running", Ref: "dev"}, {ID: 10}}}, want: "9 running dev (+1)"},
-		{name: "multiple history link", pkg: ListItem{Pipelines: []PipelineItem{{ID: 9, Status: "running", Ref: "dev", WebURL: "https://gitlab.example.com/pipelines/9"}, {ID: 10}}}, want: "[9 running dev](https://gitlab.example.com/pipelines/9) (+1)"},
+		{name: "none", pipeline: nil, want: ""},
+		{name: "text", pipeline: &toolutil.PackagePipelineOutput{ID: 7, Status: "success", Ref: "main"}, want: "7 success main"},
+		{name: "link", pipeline: &toolutil.PackagePipelineOutput{ID: 7, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/pipelines/7"}, want: "[7 success main](https://gitlab.example.com/pipelines/7)"},
+		{name: "escaped ref", pipeline: &toolutil.PackagePipelineOutput{ID: 8, Status: "failed", Ref: "a|b"}, want: "8 failed a&#124;b"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pipelineSummary(tt.pkg); got != tt.want {
+			if got := pipelineSummary(tt.pipeline); got != tt.want {
 				t.Fatalf("pipelineSummary() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestVersionSummary_Variants verifies the version cell names the package's
-// own version, and counts the other versions beside it when GitLab sent them.
-func TestVersionSummary_Variants(t *testing.T) {
-	for _, testCase := range []struct {
-		name string
-		pkg  ListItem
-		want string
-	}{
-		{name: "alone", pkg: ListItem{Version: "1.0.0"}, want: "1.0.0"},
-		{
-			name: "with others",
-			pkg:  ListItem{Version: "1.0.0", Versions: []toolutil.PackageVersionOutput{{ID: 9}, {ID: 8}}},
-			want: "1.0.0 (+2)",
-		},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			if got := versionSummary(testCase.pkg); got != testCase.want {
-				t.Errorf("versionSummary() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
@@ -487,13 +466,14 @@ func TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn(t *testing.T) {
 }
 
 // TestFormatPackageListMarkdown_SentFields verifies both list tables carry the
-// creator column and the count of other versions read off the captured answer.
+// creator column, and name the package's own version alone: a listing is never
+// sent the other versions, so the cell has no count of them to give.
 func TestFormatPackageListMarkdown_SentFields(t *testing.T) {
 	item := ListItem{
 		ID: 10, Name: "my-pkg", Version: "1.0.0", PackageType: "generic", Status: "default",
-		CreatorID: 57, Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
+		CreatorID: 57,
 	}
-	const row = "| 10 | my-pkg | 1.0.0 (+1) | generic | default | 57 | "
+	const row = "| 10 | my-pkg | 1.0.0 | generic | default | 57 | "
 	tests := []struct {
 		name string
 		got  string
@@ -520,6 +500,171 @@ func TestFormatPackageListMarkdown_SentFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.got != tt.want {
 				t.Errorf("%s markdown =\n%q\nwant:\n%q", tt.name, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// getHints is the guidance the card of a package of any type but generic
+// closes with.
+const getHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'package.file_list' to list the files inside this package\n" +
+	"- Use action 'package.delete' to delete this version of the package\n"
+
+// genericGetHints is the guidance the card of a generic package closes with:
+// the same, and the download package.download can make of its files.
+const genericGetHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'package.file_list' to list the files inside this package\n" +
+	"- Use action 'package.download' to download one of its files\n" +
+	"- Use action 'package.delete' to delete this version of the package\n"
+
+// packageCardJSON is one Conan package as the single-package endpoint renders
+// it, timestamps in the millisecond form GitLab writes them in.
+const packageCardJSON = `{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"conan","status":"default",` +
+	`"conan_package_name":"recipe-name","creator_id":57,` +
+	`"created_at":"2026-01-02T03:04:05.678Z","last_downloaded_at":"2026-01-03T04:05:06.789Z",` +
+	`"_links":{"web_path":"/grp/proj/-/packages/10","delete_api_path":"/api/v4/projects/42/packages/10"},` +
+	`"pipeline":{"id":71,"status":"success","ref":"main","web_url":"https://gitlab.example.com/p/-/pipelines/71"},` +
+	`"tags":[{"name":"latest"},{"name":"stable"}],` +
+	`"versions":[{"id":9,"version":"0.9.0","created_at":"2026-01-04T05:06:00.5Z",` +
+	`"tags":[{"name":"old"},{"name":"lts"}],` +
+	`"pipeline":{"id":70,"status":"failed","ref":"release","web_url":"https://gitlab.example.com/p/-/pipelines/70"}},` +
+	`{"id":8,"version":"0.8.0"}]}`
+
+// TestFormatGetMarkdown_WholeCard verifies the package card as a caller sees
+// it, from GitLab's answer through the handler: its own fields, the pipeline
+// that last built it linked to its page, the tags pointing at it, and the
+// other versions as a nested table, each with its tags, the pipeline that
+// built it and when it was published, and empty cells for what GitLab did not
+// send. The card's input used to be written by hand in a form the handler
+// never produced, which is how the package's own times reached the card in
+// Go's time.String form while this test read them rendered.
+func TestFormatGetMarkdown_WholeCard(t *testing.T) {
+	out, err := Get(t.Context(), packagesClient(t, packageCardJSON), GetInput{ProjectID: "42", PackageID: "10"})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	got := FormatGetMarkdown(out)
+	want := "## Package: my-pkg\n\n" +
+		"- **ID**: 10\n" +
+		"- **Version**: 1.0.0\n" +
+		"- **Type**: conan\n" +
+		"- **Status**: default\n" +
+		"- **Conan Package**: recipe-name\n" +
+		"- **Creator ID**: 57\n" +
+		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
+		"- **Last Downloaded**: 3 Jan 2026 04:05 UTC\n" +
+		"- **Web Path**: `/grp/proj/-/packages/10`\n" +
+		"- **Pipeline**: [71 success main](https://gitlab.example.com/p/-/pipelines/71)\n" +
+		"- **Tags**: latest, stable\n" +
+		"\n### Other Versions\n\n" +
+		"| ID | Version | Tags | Pipeline | Created |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 9 | 0.9.0 | old, lts | [70 failed release](https://gitlab.example.com/p/-/pipelines/70) | 4 Jan 2026 05:06 UTC |\n" +
+		"| 8 | 0.8.0 |  |  |  |\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatGetMarkdown_OffersTheDownloadOnlyForAGenericPackage verifies the
+// card names package.download for a generic package, whose files that action
+// fetches from the Generic Package Registry, and for no other type, where the
+// action would ask the generic route for a package it does not hold.
+func TestFormatGetMarkdown_OffersTheDownloadOnlyForAGenericPackage(t *testing.T) {
+	got := FormatGetMarkdown(GetOutput{Package: DetailItem{ListItem: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", PackageType: "generic"}}})
+	want := "## Package: my-pkg\n\n" +
+		"- **ID**: 10\n" +
+		"- **Version**: 1.0.0\n" +
+		"- **Type**: generic\n" +
+		genericGetHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown(generic) =\n%q\nwant:\n%q", got, want)
+	}
+	for _, packageType := range []string{"npm", "maven", "conan", "pypi", "Generic"} {
+		t.Run(packageType, func(t *testing.T) {
+			card := FormatGetMarkdown(GetOutput{Package: DetailItem{ListItem: ListItem{ID: 10, Name: testPackageName, PackageType: packageType}}})
+			if !strings.HasSuffix(card, getHints) || strings.Contains(card, "package.download") {
+				t.Errorf("FormatGetMarkdown(%s) ends\n%q\nwant the hints without package.download", packageType, card)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_LeavesOutWhatGitLabDidNotSend verifies a package with
+// no creator, links, pipeline, tags or other versions is the card of what it
+// has and nothing else: no empty row, and no table heading over no rows.
+func TestFormatGetMarkdown_LeavesOutWhatGitLabDidNotSend(t *testing.T) {
+	got := FormatGetMarkdown(GetOutput{Package: DetailItem{ListItem: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", Links: &LinksItem{}}}})
+	want := "## Package: my-pkg\n\n" +
+		"- **ID**: 10\n" +
+		"- **Version**: 1.0.0\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatGetMarkdown_EscapesWhatGitLabAuthored verifies a package name, a
+// tag name and a version string carrying a pipe and markup reach the card
+// escaped, so none of them can add a column, a heading or a tag of its own.
+func TestFormatGetMarkdown_EscapesWhatGitLabAuthored(t *testing.T) {
+	const (
+		name    = "pkg|<b>x</b>"
+		tag     = "rc|<i>1</i>"
+		version = "2.0|<u>0</u>"
+	)
+	got := FormatGetMarkdown(GetOutput{Package: DetailItem{
+		ListItem: ListItem{ID: 10, Name: name, Version: "1.0.0", Tags: []toolutil.PackageTagOutput{{Name: tag}}},
+		Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: version, Tags: []toolutil.PackageTagOutput{{Name: tag}}}},
+	}})
+	for _, raw := range []string{name, tag, version} {
+		t.Run(raw, func(t *testing.T) {
+			if strings.Contains(got, raw) {
+				t.Errorf("card carries %q unescaped:\n%s", raw, got)
+			}
+		})
+	}
+	for _, escaped := range []string{
+		toolutil.EscapeMdHeading("Package: " + name),
+		"- **Tags**: " + toolutil.EscapeMdTableCell(tag) + "\n",
+		"| 9 | " + toolutil.EscapeMdTableCell(version) + " | " + toolutil.EscapeMdTableCell(tag) + " |  |  |\n",
+	} {
+		t.Run(escaped, func(t *testing.T) {
+			if !strings.Contains(got, escaped) {
+				t.Errorf("card does not carry %q:\n%s", escaped, got)
+			}
+		})
+	}
+}
+
+// TestFormatPackageNotFound_NamesBothReasonsForA404 verifies the not-found
+// result is an error result naming the package as the caller gave it, with
+// both reasons GitLab answers 404 for a package_id: a status this read
+// refuses, on a package package.list still shows, which re-listing alone
+// would hand back unchanged, and a deleted version.
+func TestFormatPackageNotFound_NamesBothReasonsForA404(t *testing.T) {
+	result := formatPackageNotFound(packageNotFoundOutput{Identifier: "10 in project 42"})
+	if !result.IsError || len(result.Content) != 1 {
+		t.Fatalf("not-found result = %+v, want one error content", result)
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("not-found content = %T, want text", result.Content[0])
+	}
+	text := content.Text
+	for _, want := range []string{
+		"Package Not Found",
+		"**10 in project 42**",
+		"- GitLab reads only a package whose status is default or deprecated here, and answers 404 for one " +
+			"package.list shows in error status, or in hidden, processing or pending_destruction when asked " +
+			"for by status: read the status column there rather than listing again\n",
+		"- Each version of a package has its own package_id, and deleting that version retires it\n",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("not-found result does not carry %q:\n%s", want, text)
 			}
 		})
 	}
@@ -841,8 +986,8 @@ func TestFileList_WithCreatedAt(t *testing.T) {
 	if len(out.Files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(out.Files))
 	}
-	if out.Files[0].CreatedAt == "" {
-		t.Error("CreatedAt should not be empty")
+	if out.Files[0].CreatedAt != "2026-06-01T10:00:00Z" {
+		t.Errorf("CreatedAt = %q, want 2026-06-01T10:00:00Z", out.Files[0].CreatedAt)
 	}
 }
 
@@ -1174,8 +1319,8 @@ func TestPublish_FilePathSmallFile(t *testing.T) {
 	if out.PackageFileID != 1 {
 		t.Errorf("expected PackageFileID=1, got %d", out.PackageFileID)
 	}
-	if out.UpdatedAt == "" {
-		t.Error("expected non-empty UpdatedAt")
+	if out.UpdatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("UpdatedAt = %q, want 2026-01-02T00:00:00Z", out.UpdatedAt)
 	}
 }
 

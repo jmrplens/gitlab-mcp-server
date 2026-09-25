@@ -1540,12 +1540,37 @@ func TestActionSpecs_MilestoneGetRouteNotFound(t *testing.T) {
 	}))
 	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 9})
-	if err != nil {
-		t.Fatalf("Route.Handler error: %v", err)
-	}
-	if _, ok := result.(milestoneNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want milestoneNotFoundOutput", result)
+	for _, tt := range []struct {
+		name  string
+		input map[string]any
+		want  string
+	}{
+		{
+			// JSON numbers of eight digits, which reach the route as float64s.
+			// The milestone used to be named 3.1234567e+07, and the project,
+			// read as a string, not at all.
+			name:  "JSON numbers",
+			input: map[string]any{"project_id": float64(12345678), "milestone_iid": float64(31234567)},
+			want:  "IID 31234567 in project 12345678",
+		},
+		{
+			// Both under their documented aliases, which the meta surface
+			// hands the route as written: read from the map as it arrived
+			// they named IID <nil> in project <nil>.
+			name:  "documented aliases",
+			input: map[string]any{"project_path": "group/project", "iid": float64(31234567)},
+			want:  "IID 31234567 in project group/project",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), tt.input)
+			if err != nil {
+				t.Fatalf("Route.Handler error: %v", err)
+			}
+			if notFound, ok := result.(milestoneNotFoundOutput); !ok || notFound.Identifier != tt.want {
+				t.Fatalf("result = %#v, want milestoneNotFoundOutput naming %s", result, tt.want)
+			}
+		})
 	}
 }
 

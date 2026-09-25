@@ -164,13 +164,9 @@ func publishWithTracker(
 		FileMD5:       published.FileMD5,
 		FileSHA1:      published.FileSHA1,
 		FileStore:     published.FileStore,
+		CreatedAt:     toolutil.RFC3339Ptr(published.CreatedAt),
+		UpdatedAt:     toolutil.RFC3339Ptr(published.UpdatedAt),
 		URL:           pkgURL,
-	}
-	if published.CreatedAt != nil {
-		out.CreatedAt = published.CreatedAt.String()
-	}
-	if published.UpdatedAt != nil {
-		out.UpdatedAt = published.UpdatedAt.String()
 	}
 	return out, nil
 }
@@ -258,9 +254,20 @@ type ListInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// ListItem represents a single package in the list output. It mirrors
-// the GitLab Packages API [gl.Package] object, surfacing the full
-// nested _links, pipeline, pipelines, and tags sub-objects.
+// ListItem represents a single package as the project listing publishes it,
+// and as the group listing and a request for one package publish it beside
+// what each of them adds. It mirrors the GitLab Packages API [gl.Package]
+// object, surfacing the full nested _links, pipeline and tags sub-objects.
+//
+// Three keys of GitLab's entity are deliberately not here. The owning
+// project's id and path are exposed only when it renders a group's listing,
+// where [GroupListItem] publishes them, and the package's other versions only
+// when it renders one package rather than a page, where [DetailItem] publishes
+// them; on this item each was a key the schema offered and no answer filled.
+// The entity's pipelines key is not published anywhere: lib/api/entities/
+// package.rb renders it as the constant EMPTY_PIPELINES whatever the package,
+// which is how GitLab deprecated it in 16.1, and the pipeline that last built
+// the package is under pipeline.
 type ListItem struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
@@ -268,21 +275,25 @@ type ListItem struct {
 	PackageType string `json:"package_type"`
 	Status      string `json:"status"`
 	// ConanPackageName is the recipe's own name, sent for a Conan package.
-	ConanPackageName string         `json:"conan_package_name,omitempty"`
-	Links            *LinksItem     `json:"_links,omitempty"`
-	Pipeline         *PipelineItem  `json:"pipeline,omitempty"`
-	Pipelines        []PipelineItem `json:"pipelines,omitempty"`
-	CreatedAt        string         `json:"created_at,omitempty"`
-	LastDownloadedAt string         `json:"last_downloaded_at,omitempty"`
-	CreatorID        int64          `json:"creator_id,omitempty"`
-	Tags             []TagItem      `json:"tags,omitempty"`
-	// Versions holds the package's other versions, which GitLab sends when one
-	// package is asked for rather than a page of them.
+	ConanPackageName string     `json:"conan_package_name,omitempty"`
+	Links            *LinksItem `json:"_links,omitempty"`
+	// Pipeline is the pipeline that last built the package, with every key
+	// GitLab's pipeline entity sends, five of them read from the captured
+	// response because client-go's PackagePipeline and BasicUser leave them
+	// out.
+	Pipeline         *toolutil.PackagePipelineOutput `json:"pipeline,omitempty"`
+	CreatedAt        string                          `json:"created_at,omitempty"`
+	LastDownloadedAt string                          `json:"last_downloaded_at,omitempty"`
+	CreatorID        int64                           `json:"creator_id,omitempty"`
+	Tags             []toolutil.PackageTagOutput     `json:"tags,omitempty"`
+}
+
+// DetailItem is one package as a request for it publishes: every field the
+// project's listing publishes for it, and the package's other versions, which
+// GitLab sends only to this read and never on a page of packages.
+type DetailItem struct {
+	ListItem
 	Versions []toolutil.PackageVersionOutput `json:"versions,omitempty"`
-	// ProjectID and ProjectPath name the owning project, which GitLab sends
-	// when the package is rendered in a group's listing.
-	ProjectID   int64  `json:"project_id,omitempty"`
-	ProjectPath string `json:"project_path,omitempty"`
 }
 
 // LinksItem mirrors the GitLab Packages API [gl.PackageLinks] object,
@@ -290,39 +301,6 @@ type ListItem struct {
 type LinksItem struct {
 	WebPath       string `json:"web_path,omitempty"`
 	DeleteAPIPath string `json:"delete_api_path,omitempty"`
-}
-
-// TagItem mirrors the GitLab Packages API [gl.PackageTag] object.
-type TagItem struct {
-	ID        int64  `json:"id"`
-	PackageID int64  `json:"package_id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-}
-
-// PipelineItem represents CI pipeline metadata attached to a package.
-type PipelineItem struct {
-	ID        int64         `json:"id"`
-	Status    string        `json:"status"`
-	Ref       string        `json:"ref"`
-	SHA       string        `json:"sha"`
-	WebURL    string        `json:"web_url"`
-	CreatedAt string        `json:"created_at,omitempty"`
-	UpdatedAt string        `json:"updated_at,omitempty"`
-	User      *PipelineUser `json:"user,omitempty"`
-}
-
-// PipelineUser mirrors the GitLab [gl.BasicUser] object attached to
-// package pipeline metadata.
-type PipelineUser struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state,omitempty"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // ListOutput contains the paginated list of packages.
@@ -363,10 +341,13 @@ func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
 	return opts
 }
 
-// packageToListItem converts a GitLab Package API object into a ListItem.
-// packageToListItem converts a [gl.Package] into the package's
-// [ListItem] shape, flattening the optional pipeline metadata and filling
-// from what the capture read beside the SDK's decode.
+// packageToListItem converts a [gl.Package] into the package's [ListItem]
+// shape. Every field comes from what client-go decodes, the creator and the
+// Conan recipe name included since v3.14.0, except the five keys of the
+// pipeline that client-go leaves out, which extra carries from the capture of
+// the same answer. The package's other versions, which v3.14.0 decodes too,
+// are left to [packageToDetailItem], since no listing sends them, and the
+// pipelines client-go decodes are GitLab's constant empty list.
 func packageToListItem(p *gl.Package, extra toolutil.PackageExtra) ListItem {
 	item := ListItem{
 		ID:               p.ID,
@@ -374,48 +355,12 @@ func packageToListItem(p *gl.Package, extra toolutil.PackageExtra) ListItem {
 		Version:          p.Version,
 		PackageType:      p.PackageType,
 		Status:           p.Status,
-		ConanPackageName: extra.ConanPackageName,
-		CreatorID:        extra.CreatorID,
-		Versions:         extra.Versions,
-		ProjectID:        extra.ProjectID,
-		ProjectPath:      extra.ProjectPath,
-	}
-	if p.Pipeline != nil {
-		item.Pipeline = packagePipelineToOutput(p.Pipeline)
-	}
-	if len(p.Pipelines) > 0 {
-		item.Pipelines = make([]PipelineItem, 0, len(p.Pipelines))
-		for _, pipeline := range p.Pipelines {
-			pipelineItem := packagePipelineToOutput(pipeline)
-			if pipelineItem == nil {
-				continue
-			}
-			item.Pipelines = append(item.Pipelines, *pipelineItem)
-		}
-	}
-	if p.CreatedAt != nil {
-		item.CreatedAt = p.CreatedAt.String()
-	}
-	if p.LastDownloadedAt != nil {
-		item.LastDownloadedAt = p.LastDownloadedAt.String()
-	}
-	if len(p.Tags) > 0 {
-		tags := make([]TagItem, 0, len(p.Tags))
-		for _, tag := range p.Tags {
-			tagItem := TagItem{
-				ID:        tag.ID,
-				PackageID: tag.PackageID,
-				Name:      tag.Name,
-			}
-			if tag.CreatedAt != nil {
-				tagItem.CreatedAt = tag.CreatedAt.String()
-			}
-			if tag.UpdatedAt != nil {
-				tagItem.UpdatedAt = tag.UpdatedAt.String()
-			}
-			tags = append(tags, tagItem)
-		}
-		item.Tags = tags
+		ConanPackageName: p.ConanPackageName,
+		Pipeline:         packagePipelineToOutput(p.Pipeline, extra.Pipeline),
+		CreatedAt:        toolutil.RFC3339Ptr(p.CreatedAt),
+		LastDownloadedAt: toolutil.RFC3339Ptr(p.LastDownloadedAt),
+		CreatorID:        p.CreatorID,
+		Tags:             packageTagsToOutput(p.Tags),
 	}
 	if p.Links != nil {
 		item.Links = &LinksItem{
@@ -426,48 +371,57 @@ func packageToListItem(p *gl.Package, extra toolutil.PackageExtra) ListItem {
 	return item
 }
 
-// packagePipelineToOutput converts GitLab package pipeline metadata.
-// packagePipelineToOutput converts a [gl.PackagePipeline] into the
-// package's [PipelineItem] shape, or nil when the pipeline pointer
-// is nil.
-func packagePipelineToOutput(pipeline *gl.PackagePipeline) *PipelineItem {
-	if pipeline == nil {
+// packageToDetailItem converts the one [gl.Package] a request for it returns
+// into the [DetailItem] shape: the fields [packageToListItem] converts, and the
+// package's other versions, each completed with what the capture of the same
+// answer read at its position.
+func packageToDetailItem(p *gl.Package, extra toolutil.PackageExtra) DetailItem {
+	return DetailItem{
+		ListItem: packageToListItem(p, extra),
+		Versions: packageVersionsToOutput(p.Versions, extra.Versions),
+	}
+}
+
+// packageTagsToOutput converts the tags pointing at a package or at one of its
+// other versions, or nil when GitLab sent none, so neither publishes an empty
+// list for them. It is the one conversion for a tag wherever a package answer
+// carries one, so a tag reads the same on the package and on its versions.
+func packageTagsToOutput(tags []gl.PackageTag) []toolutil.PackageTagOutput {
+	if len(tags) == 0 {
 		return nil
 	}
-	item := &PipelineItem{
-		ID:     pipeline.ID,
-		Status: pipeline.Status,
-		Ref:    pipeline.Ref,
-		SHA:    pipeline.SHA,
-		WebURL: pipeline.WebURL,
+	out := make([]toolutil.PackageTagOutput, 0, len(tags))
+	for _, tag := range tags {
+		out = append(out, toolutil.PackageTagOutput{
+			ID:        tag.ID,
+			PackageID: tag.PackageID,
+			Name:      tag.Name,
+			CreatedAt: toolutil.RFC3339Ptr(tag.CreatedAt),
+			UpdatedAt: toolutil.RFC3339Ptr(tag.UpdatedAt),
+		})
 	}
-	if pipeline.CreatedAt != nil {
-		item.CreatedAt = pipeline.CreatedAt.String()
+	return out
+}
+
+// extraAt is the extra the capture read at position i, or nil where it read
+// none. [toolutil.CapturedPackage] holds the count to what client-go decoded,
+// so a handler always has one; the nil is for a conversion made without a
+// capture, which then publishes what client-go decoded and leaves the rest at
+// zero rather than failing.
+func extraAt[T any](extras []T, i int) *T {
+	if i >= len(extras) {
+		return nil
 	}
-	if pipeline.UpdatedAt != nil {
-		item.UpdatedAt = pipeline.UpdatedAt.String()
-	}
-	if pipeline.User != nil {
-		user := &PipelineUser{
-			ID:        pipeline.User.ID,
-			Username:  pipeline.User.Username,
-			Name:      pipeline.User.Name,
-			State:     pipeline.User.State,
-			AvatarURL: pipeline.User.AvatarURL,
-			WebURL:    pipeline.User.WebURL,
-		}
-		if pipeline.User.CreatedAt != nil {
-			user.CreatedAt = pipeline.User.CreatedAt.String()
-		}
-		item.User = user
-	}
-	return item
+	return &extras[i]
 }
 
 // List retrieves a paginated list of Generic Package Registry
 // packages in a project via the GitLab Packages list API
 // (GET /projects/:id/packages). Optional filters narrow by package
 // name, version, status, and the [buildListOptions] sort field.
+//
+// The five keys of each package's pipeline that client-go does not decode are
+// read from the captured response beside that decode (ADR-0021).
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, fmt.Errorf(fmtCtxCancelled, err)
@@ -489,6 +443,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	items := make([]ListItem, 0, len(pkgs))
 	for i, p := range pkgs {
+		if p == nil {
+			continue
+		}
 		items = append(items, packageToListItem(p, extras[i]))
 	}
 
@@ -566,7 +523,9 @@ func buildGroupListOptions(input GroupListInput) *gl.ListGroupPackagesOptions {
 // GroupList retrieves a paginated list of packages across a group and
 // its descendant projects via the GitLab group Packages list API
 // (GET /groups/:id/packages). Each item carries the owning project's ID
-// and path in addition to the project-scoped package fields.
+// and path in addition to the project-scoped package fields, and the
+// pipeline's five keys client-go does not decode are read from the captured
+// response as [List] reads them.
 func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupListInput) (GroupListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GroupListOutput{}, fmt.Errorf(fmtCtxCancelled, err)
@@ -602,6 +561,141 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 		Packages:   items,
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}, nil
+}
+
+// Get Package.
+
+// GetInput defines input for retrieving one package of a project.
+type GetInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	PackageID toolutil.StringOrInt `json:"package_id" jsonschema:"Package ID, as package.list or package.group_list returns it,required"`
+}
+
+// GetOutput is one package: every field package.list publishes, and the
+// package's other versions, which only this read is sent.
+type GetOutput struct {
+	toolutil.HintableOutput
+	Package DetailItem `json:"package"`
+}
+
+// packageNotFoundHint is what the handler's own 404 names when a caller meets
+// it outside the route, which turns the same 404 into the structured result
+// [formatPackageNotFound] renders. It gives both of GitLab's reasons, because
+// GitLab reads only a package whose status is default or deprecated here while
+// package.list shows one in error status as well, so re-listing alone would
+// hand back the same package_id.
+const packageNotFoundHint = "check the package's status in package.list, since GitLab answers 404 here for a " +
+	"package whose status is not default or deprecated, and whether the package_id is still listed, since a " +
+	"deleted version answers 404 as well"
+
+// Get retrieves one package of a project via the GitLab Packages API
+// (GET /projects/:id/packages/:package_id), the only endpoint that sends the
+// package's other versions.
+//
+// client-go decodes every field package.list publishes, and the other versions
+// with their tags; the three keys of each pipeline that its PackagePipeline
+// leaves out, and two of the user who ran it, are read from the captured
+// response beside that decode (ADR-0021), on the package's own pipeline and
+// on those of its other versions alike.
+func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return GetOutput{}, fmt.Errorf(fmtCtxCancelled, err)
+	}
+	if input.ProjectID == "" {
+		return GetOutput{}, errors.New("packageGet: project_id is required")
+	}
+	pkgID, err := input.PackageID.Int64()
+	if err != nil || pkgID <= 0 {
+		return GetOutput{}, errors.New("packageGet: package_id must be a positive integer")
+	}
+
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	pkg, _, err := client.GL().Packages.GetProjectPackage(string(input.ProjectID), pkgID, gl.WithContext(ctx))
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("packageGet", err, http.StatusNotFound, packageNotFoundHint)
+	}
+	extra, err := toolutil.CapturedPackage(captured, len(pkg.Versions))
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErr("packageGet", err)
+	}
+	return GetOutput{Package: packageToDetailItem(pkg, extra)}, nil
+}
+
+// packageVersionsToOutput converts the other versions client-go decoded,
+// completing each one's pipeline with what the capture read at the same
+// position. A version GitLab sent as null is skipped. The item publishes its
+// versions with omitempty, so a package with no other version publishes none.
+func packageVersionsToOutput(versions []*gl.PackageVersion, extras []toolutil.PackageVersionExtra) []toolutil.PackageVersionOutput {
+	out := make([]toolutil.PackageVersionOutput, 0, len(versions))
+	for i, v := range versions {
+		if v == nil {
+			continue
+		}
+		var pipelineExtra *toolutil.PackagePipelineExtra
+		if extra := extraAt(extras, i); extra != nil {
+			pipelineExtra = extra.Pipeline
+		}
+		out = append(out, toolutil.PackageVersionOutput{
+			ID:        v.ID,
+			Version:   v.Version,
+			CreatedAt: toolutil.RFC3339Ptr(v.CreatedAt),
+			Tags:      packageTagsToOutput(v.Tags),
+			Pipeline:  packagePipelineToOutput(v.Pipeline, pipelineExtra),
+		})
+	}
+	return out
+}
+
+// packagePipelineToOutput converts the pipeline that last built a package or
+// one of its other versions, or nil when GitLab sent none: the eight keys
+// client-go's PackagePipeline decodes, and the three the capture read beside
+// it.
+func packagePipelineToOutput(pipeline *gl.PackagePipeline, extra *toolutil.PackagePipelineExtra) *toolutil.PackagePipelineOutput {
+	if pipeline == nil {
+		return nil
+	}
+	out := &toolutil.PackagePipelineOutput{
+		ID:        pipeline.ID,
+		SHA:       pipeline.SHA,
+		Ref:       pipeline.Ref,
+		Status:    pipeline.Status,
+		CreatedAt: toolutil.RFC3339Ptr(pipeline.CreatedAt),
+		UpdatedAt: toolutil.RFC3339Ptr(pipeline.UpdatedAt),
+		WebURL:    pipeline.WebURL,
+	}
+	var userExtra *toolutil.UserBasicExtra
+	if extra != nil {
+		out.IID = extra.IID
+		out.ProjectID = extra.ProjectID
+		out.Source = extra.Source
+		userExtra = extra.User
+	}
+	out.User = packagePipelineUserToOutput(pipeline.User, userExtra)
+	return out
+}
+
+// packagePipelineUserToOutput converts the user who ran one of a package's
+// pipelines, or nil when GitLab sent none: the six keys client-go's BasicUser
+// decodes that the entity sends, and the two the capture read beside it. The
+// seventh key BasicUser decodes, created_at, is not one GitLab's UserBasic
+// sends, so it is not published.
+func packagePipelineUserToOutput(user *gl.BasicUser, extra *toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
+	if user == nil {
+		return nil
+	}
+	out := &toolutil.UserBasicOutput{
+		ID:        user.ID,
+		Username:  user.Username,
+		Name:      user.Name,
+		State:     user.State,
+		AvatarURL: user.AvatarURL,
+		WebURL:    user.WebURL,
+	}
+	if extra != nil {
+		out.PublicEmail = extra.PublicEmail
+		out.Locked = extra.Locked
+	}
+	return out
 }
 
 // List Package Files.
@@ -667,7 +761,7 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 
 	items := make([]FileListItem, 0, len(files))
 	for _, f := range files {
-		item := FileListItem{
+		items = append(items, FileListItem{
 			PackageFileID: f.ID,
 			PackageID:     f.PackageID,
 			FileName:      f.FileName,
@@ -675,11 +769,8 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 			SHA256:        f.FileSHA256,
 			FileMD5:       f.FileMD5,
 			FileSHA1:      f.FileSHA1,
-		}
-		if f.CreatedAt != nil {
-			item.CreatedAt = f.CreatedAt.String()
-		}
-		items = append(items, item)
+			CreatedAt:     toolutil.RFC3339Ptr(f.CreatedAt),
+		})
 	}
 
 	return FileListOutput{

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Packages, Container Registry & Package Protection Rules
-> **Individual tools**: 33
+> **Individual tools**: 34
 > **Meta-tool**: `gitlab_package` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `dependency.*`, `package.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Packages API](https://docs.gitlab.com/ee/api/packages.html), [Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html), [Package Protection Rules API](https://docs.gitlab.com/ee/api/project_packages_protection_rules.html)
@@ -16,11 +16,12 @@ The packages domain covers the GitLab Generic Package Registry (publish, downloa
 
 On the default dynamic surface, these operations are the `dependency.*`, `package.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `group_list`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_MCP_TIER` (Premium or Ultimate).
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `group_list`, `get`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_MCP_TIER` (Premium or Ultimate).
 
 ### Common Questions
 
 > "List packages in project 42"
+> "Which other versions of package 17 exist, and which pipeline built each?"
 > "Upload a release binary to the package registry"
 > "Show container registry images"
 
@@ -63,7 +64,16 @@ A file already at `output_path` is replaced rather than written through: the res
 
 ### `gitlab_package_list`
 
-List packages in a GitLab project. Can filter by name, version, type, and supports pagination and sorting. When GitLab includes package pipeline metadata, the response preserves both `pipeline` and `pipelines` fields.
+List packages in a GitLab project. Can filter by name, version, type, and supports pagination and sorting. When GitLab includes the pipeline that last built a package, the response publishes it under `pipeline` with every key GitLab's pipeline entity sends: the pipeline's `iid`, `project_id` and `source`, and its user's `public_email` and `locked`, which client-go does not decode, are read from the captured response. GitLab's `pipelines` key is not published: it has been deprecated since GitLab 16.1 and GitLab renders it as an empty list whatever the package. A package's other versions are not published either, since GitLab sends them only to `gitlab_package_get`. Every timestamp, the package's, its tags' and its pipeline's, is RFC 3339 to the second, and a tag has the same shape here as on a package version.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_package_get`
+
+Get one package of a project by the `package_id` a listing returns (canonical ID `package.get`, `GET /projects/:id/packages/:package_id`). The answer carries every field `gitlab_package_list` does, and the package's other versions under `versions`, each with its tags and the pipeline that built it, which GitLab sends only to this read and never to a listing. A version's tags and times are published in the shape and to the precision the package's own are, RFC 3339 to the second. The owning project's `project_id` and `project_path` are not among the fields: GitLab sends them only to the group listing. Each version of a package is a package of its own with its own `package_id`, so the package a listing names at version `1.0.0` lists `2.0.0` among its other versions, and the reverse.
+
+GitLab reads only a package whose status is `default` or `deprecated` here, and answers 404 for any other. A listing shows a package in `error` status by default, and one in `hidden`, `processing` or `pending_destruction` when asked for by status, so a `package_id` taken from a listing can answer 404 while the package still exists; the status column of that listing says which it is, and listing again only hands back the same `package_id`. A deleted version answers 404 as well. Either way the tool returns a not-found result naming the package and the project, and both reasons, rather than an error.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -327,36 +337,37 @@ Download a completed dependency list export (CycloneDX SBOM JSON). Returns raw S
 | 1 | `gitlab_package_publish` | Generic Package Registry | Create |
 | 2 | `gitlab_package_download` | Generic Package Registry | Update |
 | 3 | `gitlab_package_list` | Generic Package Registry | Read |
-| 4 | `gitlab_package_file_list` | Generic Package Registry | Read |
-| 5 | `gitlab_package_delete` | Generic Package Registry | Delete |
-| 6 | `gitlab_package_file_delete` | Generic Package Registry | Delete |
-| 7 | `gitlab_package_publish_and_link` | Generic Package Registry | Create |
-| 8 | `gitlab_package_publish_directory` | Generic Package Registry | Create |
-| 9 | `gitlab_registry_list_project` | Registry Repositories & Tags | Read |
-| 10 | `gitlab_registry_list_group` | Registry Repositories & Tags | Read |
-| 11 | `gitlab_registry_get_repository` | Registry Repositories & Tags | Read |
-| 12 | `gitlab_registry_delete_repository` | Registry Repositories & Tags | Delete |
-| 13 | `gitlab_registry_list_tags` | Registry Repositories & Tags | Read |
-| 14 | `gitlab_registry_get_tag` | Registry Repositories & Tags | Read |
-| 15 | `gitlab_registry_delete_tag` | Registry Repositories & Tags | Delete |
-| 16 | `gitlab_registry_delete_tags_bulk` | Registry Repositories & Tags | Delete |
-| 17 | `gitlab_registry_protection_list` | Registry Protection Rules | Read |
-| 18 | `gitlab_registry_protection_create` | Registry Protection Rules | Create |
-| 19 | `gitlab_registry_protection_update` | Registry Protection Rules | Update |
-| 20 | `gitlab_registry_protection_delete` | Registry Protection Rules | Delete |
-| 21 | `gitlab_registry_tag_protection_list` | Registry Tag Protection Rules | Read |
-| 22 | `gitlab_registry_tag_protection_create` | Registry Tag Protection Rules | Create |
-| 23 | `gitlab_registry_tag_protection_update` | Registry Tag Protection Rules | Update |
-| 24 | `gitlab_registry_tag_protection_delete` | Registry Tag Protection Rules | Delete |
-| 25 | `gitlab_list_package_protection_rules` | Package Protection Rules | Read |
-| 26 | `gitlab_create_package_protection_rule` | Package Protection Rules | Create |
-| 27 | `gitlab_update_package_protection_rule` | Package Protection Rules | Update |
-| 28 | `gitlab_delete_package_protection_rule` | Package Protection Rules | Delete |
-| 29 | `gitlab_list_project_dependencies` | Dependencies | Read |
-| 30 | `gitlab_create_dependency_list_export` | Dependencies | Create |
-| 31 | `gitlab_get_dependency_list_export` | Dependencies | Read |
-| 32 | `gitlab_download_dependency_list_export` | Dependencies | Read |
-| 33 | `gitlab_list_group_packages` | Generic Package Registry | Read |
+| 4 | `gitlab_package_get` | Generic Package Registry | Read |
+| 5 | `gitlab_package_file_list` | Generic Package Registry | Read |
+| 6 | `gitlab_package_delete` | Generic Package Registry | Delete |
+| 7 | `gitlab_package_file_delete` | Generic Package Registry | Delete |
+| 8 | `gitlab_package_publish_and_link` | Generic Package Registry | Create |
+| 9 | `gitlab_package_publish_directory` | Generic Package Registry | Create |
+| 10 | `gitlab_registry_list_project` | Registry Repositories & Tags | Read |
+| 11 | `gitlab_registry_list_group` | Registry Repositories & Tags | Read |
+| 12 | `gitlab_registry_get_repository` | Registry Repositories & Tags | Read |
+| 13 | `gitlab_registry_delete_repository` | Registry Repositories & Tags | Delete |
+| 14 | `gitlab_registry_list_tags` | Registry Repositories & Tags | Read |
+| 15 | `gitlab_registry_get_tag` | Registry Repositories & Tags | Read |
+| 16 | `gitlab_registry_delete_tag` | Registry Repositories & Tags | Delete |
+| 17 | `gitlab_registry_delete_tags_bulk` | Registry Repositories & Tags | Delete |
+| 18 | `gitlab_registry_protection_list` | Registry Protection Rules | Read |
+| 19 | `gitlab_registry_protection_create` | Registry Protection Rules | Create |
+| 20 | `gitlab_registry_protection_update` | Registry Protection Rules | Update |
+| 21 | `gitlab_registry_protection_delete` | Registry Protection Rules | Delete |
+| 22 | `gitlab_registry_tag_protection_list` | Registry Tag Protection Rules | Read |
+| 23 | `gitlab_registry_tag_protection_create` | Registry Tag Protection Rules | Create |
+| 24 | `gitlab_registry_tag_protection_update` | Registry Tag Protection Rules | Update |
+| 25 | `gitlab_registry_tag_protection_delete` | Registry Tag Protection Rules | Delete |
+| 26 | `gitlab_list_package_protection_rules` | Package Protection Rules | Read |
+| 27 | `gitlab_create_package_protection_rule` | Package Protection Rules | Create |
+| 28 | `gitlab_update_package_protection_rule` | Package Protection Rules | Update |
+| 29 | `gitlab_delete_package_protection_rule` | Package Protection Rules | Delete |
+| 30 | `gitlab_list_project_dependencies` | Dependencies | Read |
+| 31 | `gitlab_create_dependency_list_export` | Dependencies | Create |
+| 32 | `gitlab_get_dependency_list_export` | Dependencies | Read |
+| 33 | `gitlab_download_dependency_list_export` | Dependencies | Read |
+| 34 | `gitlab_list_group_packages` | Generic Package Registry | Read |
 
 ### Destructive Tools (Require Confirmation)
 

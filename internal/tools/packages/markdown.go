@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -12,6 +14,98 @@ import (
 // before the ellipsis; a digest of exactly this length is left whole, so the
 // ellipsis always means something was cut.
 const shortDigestLength = 12
+
+// packageTypeGeneric is the one package type the Generic Package Registry
+// serves, and so the one whose files package.download can fetch.
+const packageTypeGeneric = "generic"
+
+// packageNotFoundOutput is the answer to a package GitLab answered 404 for,
+// naming the package and its project as the caller gave them.
+type packageNotFoundOutput struct {
+	Identifier string
+}
+
+// formatPackageNotFound renders a package GitLab could not find as the
+// structured not-found result, with the two reasons GitLab answers 404 for a
+// package_id: a package whose status this read refuses, which still exists and
+// which package.list still shows, and a version that was deleted. client-go
+// hands back its not-found sentinel without the body, so the handler cannot
+// tell them apart and the result names both, the one re-listing cannot explain
+// first.
+func formatPackageNotFound(out packageNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(
+		"Package", out.Identifier,
+		"GitLab reads only a package whose status is default or deprecated here, and answers 404 for one "+
+			"package.list shows in error status, or in hidden, processing or pending_destruction when asked "+
+			"for by status: read the status column there rather than listing again",
+		"Each version of a package has its own package_id, and deleting that version retires it",
+	)
+}
+
+// FormatGetMarkdown renders one package as the card of one object: its own
+// fields, the pipeline that last built it, and the package's other versions
+// as a nested table, which only this read is sent. It offers package.download
+// only for a generic package, the one type whose files that action can fetch.
+func FormatGetMarkdown(out GetOutput) string {
+	p := out.Package
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Package: "+p.Name)
+	c.Int("ID", p.ID)
+	c.Field("Version", p.Version)
+	c.Field("Type", p.PackageType)
+	c.Field("Status", p.Status)
+	c.Field("Conan Package", p.ConanPackageName)
+	c.Count("Creator ID", p.CreatorID)
+	c.Time("Created", p.CreatedAt)
+	c.Time("Last Downloaded", p.LastDownloadedAt)
+	if p.Links != nil {
+		c.Code("Web Path", p.Links.WebPath)
+	}
+	// The summary arrives rendered: a link when GitLab gave the pipeline's
+	// page, the escaped text otherwise, which is what pipelineSummary writes
+	// for the listing's cell too.
+	c.Markdown("Pipeline", pipelineSummary(p.Pipeline))
+	c.Field("Tags", tagNames(p.Tags))
+	writeVersionsTable(c, p.Versions)
+	hints := []string{toolutil.HintAction(actionPackageFileList, "list the files inside this package")}
+	if p.PackageType == packageTypeGeneric {
+		hints = append(hints, toolutil.HintAction("package.download", "download one of its files"))
+	}
+	hints = append(hints, toolutil.HintAction(actionPackageDelete, "delete this version of the package"))
+	c.End(hints...)
+	return b.String()
+}
+
+// tagNames joins the names of the tags pointing at the package or at one of
+// its other versions, for the card row and the table cell that list them; each
+// escapes what it writes.
+func tagNames(tags []toolutil.PackageTagOutput) string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// writeVersionsTable writes the package's other versions as the nested
+// collection they are, under a heading of the card's own: each version's id,
+// the tags pointing at it, the pipeline that built it and when it was
+// published. A package with no other version writes nothing.
+func writeVersionsTable(c *toolutil.Card, versions []toolutil.PackageVersionOutput) {
+	if len(versions) == 0 {
+		return
+	}
+	t := c.Table("Other Versions", "ID", "Version", "Tags", "Pipeline", "Created")
+	for _, v := range versions {
+		t.Row(
+			strconv.FormatInt(v.ID, 10),
+			toolutil.EscapeMdTableCell(v.Version),
+			toolutil.EscapeMdTableCell(tagNames(v.Tags)),
+			pipelineSummary(v.Pipeline),
+			toolutil.FormatTime(v.CreatedAt),
+		)
+	}
+}
 
 // FormatPublishMarkdown renders a published package file as the card of one
 // object.
@@ -62,7 +156,7 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListHeading(&b, "Packages", len(out.Packages), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Version", "Type", "Status", "Creator", "Pipeline"))
 	for _, p := range out.Packages {
-		writePackageRow(&b, p, pipelineSummary(p))
+		writePackageRow(&b, p, pipelineSummary(p.Pipeline))
 	}
 	// The pipeline column carries a link, so the footer keeps the instruction
 	// to preserve it.
@@ -85,21 +179,12 @@ func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
 	b.WriteString(toolutil.MarkdownTableRow(
 		strconv.FormatInt(p.ID, 10),
 		toolutil.EscapeMdTableCell(p.Name),
-		toolutil.EscapeMdTableCell(versionSummary(p)),
+		toolutil.EscapeMdTableCell(p.Version),
 		toolutil.EscapeMdTableCell(p.PackageType),
 		toolutil.EscapeMdTableCell(p.Status),
 		creatorSummary(p),
 		lastColumn,
 	))
-}
-
-// versionSummary names the package's version and how many others GitLab sent
-// beside it, which it does when one package is asked for rather than a page.
-func versionSummary(pkg ListItem) string {
-	if len(pkg.Versions) == 0 {
-		return pkg.Version
-	}
-	return fmt.Sprintf("%s (+%d)", pkg.Version, len(pkg.Versions))
 }
 
 // creatorSummary names the user who published the package, and nothing when
@@ -111,25 +196,15 @@ func creatorSummary(pkg ListItem) string {
 	return strconv.FormatInt(pkg.CreatorID, 10)
 }
 
-func pipelineSummary(pkg ListItem) string {
-	if pkg.Pipeline != nil {
-		return pipelineItemSummary(*pkg.Pipeline)
+// pipelineSummary renders the pipeline that last built a package or one of its
+// other versions as a cell: its id, status and ref, linked to its page when
+// GitLab gave one, or nothing when GitLab sent no pipeline. The ref is a branch
+// or tag name, so the text is escaped here on the path with no link, and by the
+// link helper on the other.
+func pipelineSummary(pipeline *toolutil.PackagePipelineOutput) string {
+	if pipeline == nil {
+		return ""
 	}
-	if len(pkg.Pipelines) > 0 {
-		latest := pkg.Pipelines[0]
-		if len(pkg.Pipelines) == 1 {
-			return pipelineItemSummary(latest)
-		}
-		return fmt.Sprintf("%s (+%d)", pipelineItemSummary(latest), len(pkg.Pipelines)-1)
-	}
-	return ""
-}
-
-// pipelineItemSummary renders one pipeline as a cell: its id, status and ref,
-// linked to its page when GitLab gave one. The ref is a branch or tag name, so
-// the text is escaped here on the path with no link, and by the link helper on
-// the other.
-func pipelineItemSummary(pipeline PipelineItem) string {
 	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
 	if pipeline.WebURL == "" {
 		return toolutil.EscapeMdTableCell(summary)
@@ -280,6 +355,8 @@ func publishDirHeading(published, failed int) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatPackageNotFound)
+	toolutil.RegisterMarkdown(FormatGetMarkdown)
 	toolutil.RegisterMarkdown(FormatPublishMarkdown)
 	toolutil.RegisterMarkdown(FormatDownloadMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)

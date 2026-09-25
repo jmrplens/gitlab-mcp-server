@@ -68,12 +68,14 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	byTool := wikiSpecsByTool(t, ActionSpecs(client))
 
-	result, err := byTool["gitlab_wiki_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "slug": "NonExistent"})
+	// The project is a JSON number of eight digits, which reaches the route as
+	// a float64: %v named it 1.2345678e+07.
+	result, err := byTool["gitlab_wiki_get"].Route.Handler(t.Context(), map[string]any{"project_id": float64(12345678), "slug": "NonExistent"})
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if _, ok := result.(wikiNotFoundOutput); !ok {
-		t.Fatalf("result type = %T, want wikiNotFoundOutput", result)
+	if notFound, ok := result.(wikiNotFoundOutput); !ok || notFound.Identifier != `slug "NonExistent" in project 12345678` {
+		t.Fatalf("result = %#v, want wikiNotFoundOutput naming slug \"NonExistent\" in project 12345678", result)
 	}
 }
 

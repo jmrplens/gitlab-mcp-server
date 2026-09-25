@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 3.1.0 | up to 1091 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.1.0 | up to 1092 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1091 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1085.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1092 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1086.
 Grouped by domain:
 
 ### access (8 tools)
@@ -8166,7 +8166,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_group_packages
 
-List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.
+List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_get, gitlab_package_file_list, gitlab_package_delete.
 
 **Parameters:**
 
@@ -10473,7 +10473,7 @@ List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### package (8 tools)
+### package (9 tools)
 
 #### gitlab_package_delete
 
@@ -10531,9 +10531,20 @@ List the files within a single package. Returns: package files with name, size, 
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_package_get
+
+Get one package of a project with its other versions. Returns: the package's type, status, creator, pipeline metadata, tags, _links, and its other versions with their tags and the pipeline that built each. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.
+
+**Parameters:**
+
+- `package_id` (string or integer) (required): Package ID, as package.list or package.group_list returns it
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_package_list
 
-List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.
+List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_get, gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.
 
 **Parameters:**
 

@@ -8,7 +8,7 @@ faq:
   - q: "¿Qué función de envoltura de errores se usa para cada operación?"
     a: "Las operaciones de solo lectura (`list`, `get`, `search`) usan `WrapErr`. Las operaciones de escritura (`create`, `update`, `delete`) usan `WrapErrWithMessage`, que incluye el detalle específico extraído de la respuesta de GitLab. Cuando se conoce la acción correctiva, `WrapErrWithHint` añade una sugerencia, y `WrapErrWithStatusHint` limita esa sugerencia a un único código de estado HTTP. Una operación `get` que devuelve 404 usa `NotFoundResult` en lugar de devolver un error."
   - q: "¿Por qué un 404 no aparece como error?"
-    a: "Para los handlers `get`, las respuestas 404 se tratan como **informativas** en lugar de fallos. En vez de devolver un error Go opaco registrado a nivel ERROR, el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio, registrado a nivel INFO. Este patrón `NotFoundResult` se aplica mediante un formateador compartido en cada uno de 19 dominios y proporciona al asistente de IA los siguientes pasos accionables, como listar los recursos disponibles o verificar el nombre del recurso."
+    a: "Para los handlers `get`, las respuestas 404 se tratan como **informativas** en lugar de fallos. En vez de devolver un error Go opaco registrado a nivel ERROR, el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio, registrado a nivel INFO. Este patrón `NotFoundResult` se aplica mediante un formateador compartido en cada uno de 20 dominios y proporciona al asistente de IA los siguientes pasos accionables, como listar los recursos disponibles o verificar el nombre del recurso."
   - q: "¿Debería el asistente de IA reintentar una operación fallida?"
     a: "Depende de si el error es **transitorio** o **permanente**. Los errores transitorios —429, 5xx, timeouts y conexión rechazada— son seguros de reintentar tras una espera. Los errores permanentes —4xx excepto 429— indican un problema con la propia solicitud, así que reintentar produce el mismo resultado. Para errores permanentes, corrige los parámetros de entrada o la configuración en lugar de reintentar."
 ---
@@ -125,7 +125,7 @@ Branch `feature/old` was not found in the project.
 - Check branch name spelling and case sensitivity
 ```
 
-Este patrón se aplica mediante un formateador compartido en cada uno de 19 dominios, de modo que todos los handlers get de un dominio responden igual. Se registra a nivel INFO (resultado esperado) y proporciona al asistente de IA los siguientes pasos accionables.
+Este patrón se aplica mediante un formateador compartido en cada uno de 20 dominios, de modo que todos los handlers get de un dominio responden igual. Se registra a nivel INFO (resultado esperado) y proporciona al asistente de IA los siguientes pasos accionables.
 
 ## Sugerencias correctivas
 

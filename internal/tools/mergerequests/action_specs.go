@@ -3,7 +3,6 @@ package mergerequests
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -157,14 +156,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // than an error, matching the get-not-found pattern used across the
 // project.
 func mergeRequestGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return mergeRequestNotFoundOutput{Identifier: fmt.Sprintf("!%v in project %v", input["merge_request_iid"], input["project_id"])}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return mergeRequestNotFoundOutput{Identifier: fmt.Sprintf("!%s in project %s",
+			toolutil.ParamText(params["merge_request_iid"]), toolutil.ParamText(params["project_id"]))}
 	})
 }
 

@@ -224,6 +224,7 @@ const (
 	actionPackagePublishDirectory      harness.ActionID = "package.publish_directory"
 	actionPackageList                  harness.ActionID = "package.list"
 	actionPackageGroupList             harness.ActionID = "package.group_list"
+	actionPackageGet                   harness.ActionID = "package.get"
 	actionPackageFileList              harness.ActionID = "package.file_list"
 	actionPackageDownload              harness.ActionID = "package.download"
 	actionPackageFileDelete            harness.ActionID = "package.file_delete"

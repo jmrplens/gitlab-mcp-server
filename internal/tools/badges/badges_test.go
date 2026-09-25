@@ -1030,12 +1030,19 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	byTool := badgeSpecsByTool(t, allBadgeActionSpecs(client))
 
+	// The badge and the group are JSON numbers of eight digits, which reach
+	// the route as float64s: %v named them 3.1234567e+07 and 1.2345678e+07.
 	tools := []struct {
-		name string
-		args map[string]any
+		name           string
+		args           map[string]any
+		wantIdentifier string
 	}{
-		{"gitlab_get_project_badge", map[string]any{"project_id": "1", "badge_id": float64(999)}},
-		{"gitlab_get_group_badge", map[string]any{"group_id": "1", "badge_id": float64(999)}},
+		{"gitlab_get_project_badge", map[string]any{"project_id": "1", "badge_id": float64(999)}, "badge 999 in project 1"},
+		{
+			"gitlab_get_group_badge",
+			map[string]any{"group_id": float64(12345678), "badge_id": float64(31234567)},
+			"badge 31234567 in group 12345678",
+		},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1043,8 +1050,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Route.Handler(%s) error: %v", tt.name, err)
 			}
-			if _, ok := result.(badgeNotFoundOutput); !ok {
-				t.Fatalf("result type = %T, want badgeNotFoundOutput", result)
+			notFound, ok := result.(badgeNotFoundOutput)
+			if !ok || notFound.Identifier != tt.wantIdentifier {
+				t.Fatalf("result = %#v, want badgeNotFoundOutput naming %q", result, tt.wantIdentifier)
 			}
 			toolResult := toolutil.MarkdownForResult(result)
 			if toolResult == nil || !toolResult.IsError {
