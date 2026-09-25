@@ -1,4 +1,4 @@
-// main_test.go covers the audit_action_spec_coverage command, which
+// main_test.go covers the audit_catalog_first command, which
 // validates the catalog-first migration by walking internal/tools and
 // reporting the per-domain coverage of the action spec system.
 //
@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -149,29 +150,36 @@ func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
 	}
 }
 
-// TestAssertActionSpecManifestCurrent_DetectsStaleManifest verifies AssertActionSpecManifestCurrent detects stale manifest.
+// TestAssertActionSpecManifestCurrent_DetectsStaleManifest verifies a manifest
+// that disagrees with the source is refused with both lists named, each in its
+// own place: the refusal is the one place a reader learns which side is behind.
 func TestAssertActionSpecManifestCurrent_DetectsStaleManifest(t *testing.T) {
-	root := t.TempDir()
-	toolsDir := filepath.Join(root, "internal", "tools")
-	if err := os.MkdirAll(toolsDir, 0o750); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
+	const staleFormat = "action spec manifest is stale: source builders [buildAlphaActionSpecs buildBetaActionSpecs], manifest builders [%s]; run go run ./cmd/gen_action_catalog_manifest/"
+	tests := []struct {
+		name     string
+		manifest string
+	}{
+		{name: "a builder missing from the manifest", manifest: "buildAlphaActionSpecs"},
+		// The lists are compared as joined text, so the separator is what keeps
+		// one name spelling both builders from reading as the two of them.
+		{name: "one name spelling both builders", manifest: "buildAlphaActionSpecsbuildBetaActionSpecs"},
 	}
-	writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs.go"), `package tools
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			toolsDir := filepath.Join(root, "internal", "tools")
+			if err := os.MkdirAll(toolsDir, 0o750); err != nil {
+				t.Fatalf("MkdirAll() error = %v", err)
+			}
+			writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs.go"), "package tools\n\nfunc buildAlphaActionSpecs() {}\nfunc buildBetaActionSpecs() {}\n")
+			writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs_manifest_gen.go"),
+				"package tools\n\nfunc actionSpecGroupBuilders() []actionSpecGroupBuilder {\n\treturn []actionSpecGroupBuilder{\n\t\t"+tt.manifest+",\n\t}\n}\n")
 
-func buildAlphaActionSpecs() {}
-func buildBetaActionSpecs() {}
-`)
-	writeAuditTestFile(t, filepath.Join(toolsDir, "action_specs_manifest_gen.go"), `package tools
-
-func actionSpecGroupBuilders() []actionSpecGroupBuilder {
-	return []actionSpecGroupBuilder{
-		buildAlphaActionSpecs,
-	}
-}
-`)
-
-	if err := assertActionSpecManifestCurrent(root); err == nil {
-		t.Fatal("assertActionSpecManifestCurrent() error = nil, want stale manifest error")
+			err := assertActionSpecManifestCurrent(root)
+			if want := fmt.Sprintf(staleFormat, tt.manifest); err == nil || err.Error() != want {
+				t.Fatalf("assertActionSpecManifestCurrent() error = %v, want %q", err, want)
+			}
+		})
 	}
 }
 
@@ -194,7 +202,20 @@ func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
 		{name: "legacy compatibility register tools", line: "Existing package-local `RegisterTools` files may remain for compatibility.", want: true},
 		{name: "legacy subpackage delegation", line: "register.go # RegisterAll() — delegates to sub-package RegisterTools()", want: true},
 		{name: "legacy register meta function", line: "func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {", want: true},
-		{name: "negative guidance allowed", line: "Do not add package-level `RegisterMeta` calls for ordinary GitLab API actions.", want: false},
+		// One line per remaining retired shape, each matching its own needle and
+		// no other, so a needle dropped from the list is a case that fails.
+		{name: "retired wiring step", line: "5. Wire the sub-package in `internal/tools/register.go`.", want: true},
+		{name: "retired root delegation", line: "internal/tools/register.go delegates to all sub-package RegisterTools functions.", want: true},
+		{name: "retired registration test", line: "Validated by `TestAllSubPackagesRegistered`.", want: true},
+		{name: "retired route definitions", line: "Developers add normal GitLab actions through the route definitions that feed `internal/tools/register_meta.go`.", want: true},
+		{name: "retired meta file step", line: "Create `${sourcePackage}/{domain}/register_meta.go` with the domain routes.", want: true},
+		{name: "retired meta call", line: "Call `{domain}.RegisterMeta(server, client)` from the root file.", want: true},
+		{name: "retired meta functions", line: "RegisterMeta() functions register one meta tool per domain.", want: true},
+		{name: "retired registration lookup", line: "Check `register.go` and `register_meta.go` for registration.", want: true},
+		{name: "retired godoc link", line: "Tools are registered via [RegisterTools].", want: true},
+		// The escape hatch is only observable on a line that quotes a retired
+		// shape: one naming none reads false whether or not "do not" is honored.
+		{name: "negative guidance allowed", line: "Do not wire the sub-package in `internal/tools/register.go`; the catalog projects it.", want: false},
 		// The second escape hatch beside "do not": a line saying a retired
 		// shape cannot come back quotes that shape to name it, and is the one
 		// sentence about it a reader most wants to keep.
@@ -211,28 +232,65 @@ func TestStaleAIContextLine_ClassifiesLegacyRegistrationGuidance(t *testing.T) {
 	}
 }
 
-// TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools verifies AssertCoverageInvariants detects package local register tools.
-func TestAssertCoverageInvariants_DetectsPackageLocalRegisterTools(t *testing.T) {
-	err := assertCoverageInvariants([]domainCoverage{{
-		Package:          "example",
-		HasRegisterTools: true,
-		HasMetaSpecs:     true,
-	}})
-	if err == nil {
-		t.Fatal("assertCoverageInvariants() error = nil, want package-local RegisterTools error")
+// TestAssertNoStaleAIContextGuidance_StaleLines_AreNamedByFileAndLine verifies
+// the refusal names each stale line by its file and its 1-based line number,
+// quoting it trimmed, which is what a reader needs to go and delete it.
+//
+// Every earlier assertion read only the prefix, so a line number one off, or a
+// file named for its neighbour's finding, refused the same tree and passed.
+func TestAssertNoStaleAIContextGuidance_StaleLines_AreNamedByFileAndLine(t *testing.T) {
+	files := catalogFirstFixtureFiles()
+	files["CLAUDE.md"] = "# Claude\n\nIntro.\n   - Create `register.go` with `RegisterTools`.\n"
+	files[".github/skills/skill.md"] = "# Skill\n\nValidated by `TestAllSubPackagesRegistered`.\n"
+	root := writeCatalogFirstFixture(t, files)
+
+	err := assertNoStaleAIContextGuidance(root)
+
+	want := "AI context audit failed: " +
+		filepath.Join(root, ".github", "skills", "skill.md") + ":3 contains stale registration guidance: Validated by `TestAllSubPackagesRegistered`.; " +
+		filepath.Join(root, "CLAUDE.md") + ":4 contains stale registration guidance: - Create `register.go` with `RegisterTools`."
+	if err == nil || err.Error() != want {
+		t.Fatalf("assertNoStaleAIContextGuidance() error = %v, want %q", err, want)
 	}
 }
 
-// TestAssertCoverageInvariants_DetectsIndividualOnlyPackage verifies AssertCoverageInvariants detects individual only package.
-func TestAssertCoverageInvariants_DetectsIndividualOnlyPackage(t *testing.T) {
-	err := assertCoverageInvariants([]domainCoverage{{
-		Package:               "example",
-		HasIndividualTools:    true,
-		HasMetaSpecs:          false,
-		SurfaceClassification: "individual-only",
-	}})
-	if err == nil {
-		t.Fatal("assertCoverageInvariants() error = nil, want missing ActionSpec error")
+// TestAssertCoverageInvariants_Scenarios_NameEachBrokenRule verifies each of
+// the four invariants on a row that breaks it alone, a row that breaks none,
+// and two rows reported together, sorted, in one refusal.
+//
+// Both earlier tests asserted only that some error came back, and the second
+// broke two rules at once, so either rule could have stopped firing unseen.
+func TestAssertCoverageInvariants_Scenarios_NameEachBrokenRule(t *testing.T) {
+	const prefix = "action spec coverage invariants failed: "
+	tests := []struct {
+		name    string
+		domains []domainCoverage
+		want    string
+	}{
+		{name: "package-local RegisterTools", domains: []domainCoverage{{Package: "alpha", HasRegisterTools: true, HasIndividualTools: true}}, want: prefix + "alpha still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs"},
+		{name: "package-level RegisterMeta", domains: []domainCoverage{{Package: "beta", HasRegisterMeta: true, HasMetaSpecs: true}}, want: prefix + "beta still defines package-level RegisterMeta"},
+		{name: "individual tools without ActionSpecs", domains: []domainCoverage{{Package: "gamma", HasIndividualTools: true, SurfaceClassification: "surface-backed"}}, want: prefix + "gamma has GitLab-client RegisterTools without canonical ActionSpecs"},
+		{name: "individual-only classification", domains: []domainCoverage{{Package: "delta", HasMetaSpecs: true, SurfaceClassification: "individual-only"}}, want: prefix + "delta is individual-only; ordinary GitLab actions must be catalog-backed"},
+		{name: "spec-backed row", domains: []domainCoverage{{Package: "epsilon", HasIndividualTools: true, HasMetaSpecs: true, SurfaceClassification: "spec-backed"}}},
+		{
+			name:    "two rows in one refusal",
+			domains: []domainCoverage{{Package: "zeta", HasRegisterMeta: true}, {Package: "eta", HasRegisterMeta: true}},
+			want:    prefix + "eta still defines package-level RegisterMeta; zeta still defines package-level RegisterMeta",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := assertCoverageInvariants(tt.domains)
+			if tt.want == "" {
+				if err != nil {
+					t.Fatalf("assertCoverageInvariants() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.want {
+				t.Fatalf("assertCoverageInvariants() error = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -267,9 +325,8 @@ func TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted(
 		{name: "meta-only alias is exempt", group: "gitlab_server", action: actioncatalog.Action{ID: "server.health_check", Name: "health_check"}},
 		// An action added with no ID of its own is still named in the finding,
 		// by the ID the catalog derived for it when the group was added. That
-		// is also what keeps the fallback below it (the group tool name
-		// joined to the action name) unreachable: no action a catalog hands
-		// back carries an empty ID.
+		// is also why the rule reads the ID without a fallback of its own: no
+		// action a catalog hands back carries an empty one.
 		{
 			name:   "an action added without an ID is named by the derived one",
 			group:  "gitlab_example",
@@ -514,9 +571,39 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 }
 
 // TestMarshalReport_WrittenFile_RoundTripsThroughJSON verifies the marshaled
-// coverage report survives a write and a decode unchanged.
+// coverage report survives a write and a decode unchanged, with every field of
+// every section populated.
+//
+// That is the property which keeps marshalReport's error arm, and runMain's
+// beside it, unreachable: the report holds strings, integers, booleans, string
+// slices and string-keyed integer maps, declares no MarshalJSON and carries no
+// float, so there is no value of it encoding/json can refuse.
 func TestMarshalReport_WrittenFile_RoundTripsThroughJSON(t *testing.T) {
-	report := coverageReport{SchemaVersion: schemaVersion, Summary: coverageSummary{DomainCount: 1}, Domains: []domainCoverage{{Package: "example"}}}
+	report := coverageReport{
+		SchemaVersion: schemaVersion,
+		Architecture: architectureReport{
+			CatalogSource: "catalog", ManifestSource: "manifest", MetaRegistrationSource: "meta",
+			IndividualRegistrationSource: "individual", DynamicAliasSource: "aliases",
+			SurfaceSpecCount: 2, LegacyBridgeCount: 1, LegacyBridges: []string{"bridge"},
+			DynamicActionAliasCount: 3, DynamicParameterAliasCount: 5, DynamicSpecMetadataParameterAliasCount: 4,
+		},
+		Summary: coverageSummary{
+			DomainCount: 1, RegisterToolsCount: 6, RegisterMetaCount: 7, ActionSpecDomainCount: 8,
+			DynamicCatalogDomainCount: 9, SurfaceSpecDomainCount: 10, StandaloneOnlyDomainCount: 11,
+			NoGitLabActionSurfaceCount: 12, OrdinaryGitLabActionCount: 13, UtilitySurfaceActionCount: 14,
+			SurfaceSpecCount: 15, SurfaceClassificationCounts: map[string]int{"spec-backed": 1},
+			SurfaceKindCounts: map[string]int{"gitlab-action": 16},
+		},
+		Domains: []domainCoverage{{
+			Package: "example", HasRegisterTools: true, HasRegisterMeta: true, HasMarkdown: true, HasTests: true,
+			SurfaceClassification: "spec-backed", ClientType: "*gitlabclient.Client", MetaGroup: "gitlab_example",
+			Notes: []string{"note"}, RegisteredInRegisterAll: true, DelegatedMeta: true, HasMetaSpecs: true,
+			HasIndividualTools: true, HasDynamicCatalogEntries: true, HasSurfaceSpecs: true, HasStandaloneOnlyTools: true,
+			ActionSpecCount: 17, OrdinaryGitLabActionCount: 18, UtilitySurfaceActionCount: 19,
+			DynamicCatalogActionCount: 20, SurfaceSpecCount: 21, SurfaceKinds: []string{"gitlab-action"},
+			SurfaceKindCounts: map[string]int{"gitlab-action": 22},
+		}},
+	}
 	content, err := marshalReport(report)
 	if err != nil {
 		t.Fatalf("marshalReport() error = %v", err)
@@ -537,8 +624,8 @@ func TestMarshalReport_WrittenFile_RoundTripsThroughJSON(t *testing.T) {
 	if unmarshalErr != nil {
 		t.Fatalf("Unmarshal() error = %v", unmarshalErr)
 	}
-	if decoded.SchemaVersion != schemaVersion || len(decoded.Domains) != 1 || decoded.Domains[0].Package != "example" {
-		t.Fatalf("decoded report = %+v", decoded)
+	if !reflect.DeepEqual(decoded, report) {
+		t.Fatalf("decoded report = %+v, want %+v", decoded, report)
 	}
 }
 
@@ -612,9 +699,9 @@ func writeAuditTestFile(t *testing.T, path, content string) {
 // type heuristic accepts names that contain both "gitlab" and "Client"
 // substrings and rejects names missing either token.
 //
-// This helper underpins the productionFileCallsSelector classification
-// logic; verifying it independently keeps the heuristic honest when the
-// wider integration tests do not exercise the matching branch.
+// This helper decides whether a legacy RegisterTools reads as individual
+// tools or as a standalone surface in [domainCoverageFor]; verifying it
+// independently keeps the heuristic honest.
 func TestIsGitLabClientType_RecognizesGitLabClient(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -694,8 +781,9 @@ func TestActionOwnerPackage_PrefersOwnerOverDomain(t *testing.T) {
 	}
 }
 
-// TestExprString_FormatsASTNodes verifies exprString renders Go AST
-// expressions using format.Node and returns empty on format errors.
+// TestExprString_FormatsASTNodes verifies exprString renders a Go AST
+// expression as format.Node prints it; the empty answer for a node the printer
+// rejects is TestExprString_UnprintableNode_ReturnsEmpty's.
 func TestExprString_FormatsASTNodes(t *testing.T) {
 	fileSet := token.NewFileSet()
 	expr, err := parser.ParseExpr("*gitlabclient.Client")
@@ -732,8 +820,8 @@ func TestRegisterToolsClientType_ReturnsNonServerParam(t *testing.T) {
 			want: "",
 		},
 		{
-			name: "first param is server",
-			src:  "package x\nfunc RegisterTools(s *mcp.Server, c *gitlabclient.Client) {}\n",
+			name: "server after the client",
+			src:  "package x\nfunc RegisterTools(c *gitlabclient.Client, s *mcp.Server) {}\n",
 			want: "*gitlabclient.Client",
 		},
 	}
@@ -825,6 +913,72 @@ func TestBuildCoverageReport_FixtureRoot_ReportsSourceOnlyDomains(t *testing.T) 
 	}
 	if report.Architecture.LegacyBridgeCount != 0 || len(report.Architecture.LegacyBridges) != 0 {
 		t.Errorf("architecture reports legacy bridges: %+v", report.Architecture)
+	}
+}
+
+// TestBuildCoverageReport_FixtureRoot_RecordsOnlyWhatTheDomainDirectoryHolds
+// verifies the markdown and test flags one at a time, and that files in a
+// subdirectory of a domain are not the domain's.
+//
+// The only planted domain used to carry both files, so a walk that set the
+// markdown flag for any Go file at all produced the same row and passed.
+func TestBuildCoverageReport_FixtureRoot_RecordsOnlyWhatTheDomainDirectoryHolds(t *testing.T) {
+	const noSurfaceNote = "no GitLab action surface discovered from source or catalog metadata"
+	files := catalogFirstFixtureFiles()
+	files["internal/tools/beta/beta.go"] = "package beta\n"
+	files["internal/tools/beta/nested/markdown.go"] = "package nested\n"
+	files["internal/tools/beta/nested/nested_test.go"] = "package nested\n"
+	files["internal/tools/gamma/gamma_test.go"] = "package gamma\n"
+	files["internal/tools/delta/markdown.go"] = "package delta\n"
+	root := writeCatalogFirstFixture(t, files)
+
+	report, err := buildCoverageReport(root)
+	if err != nil {
+		t.Fatalf("buildCoverageReport() error = %v", err)
+	}
+	tests := []struct {
+		name string
+		want domainCoverage
+	}{
+		{name: "beta", want: domainCoverage{Package: "beta"}},
+		{name: "gamma", want: domainCoverage{Package: "gamma", HasTests: true}},
+		{name: "delta", want: domainCoverage{Package: "delta", HasMarkdown: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.want.SurfaceClassification = noGitLabSurface
+			tt.want.Notes = []string{noSurfaceNote}
+			if got := requireDomain(t, report, tt.name); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("domain row = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBuildCoverageReport_RegistrationReferences_LandOnTheirOwnRows verifies
+// a package register.go names is marked as registered there and one
+// register_meta.go names as delegated there, and neither as the other.
+//
+// A reference that is not a call passes the bridge scan, so this is a tree the
+// report accepts; until it was planted both maps were empty in every report,
+// and the two files could have fed each other's field unnoticed.
+func TestBuildCoverageReport_RegistrationReferences_LandOnTheirOwnRows(t *testing.T) {
+	files := catalogFirstFixtureFiles()
+	files["internal/tools/register.go"] = "package tools\n\nvar _ = alpha.RegisterTools\n"
+	files["internal/tools/register_meta.go"] = "package tools\n\nvar _ = beta.RegisterMeta\n"
+	files["internal/tools/beta/beta.go"] = "package beta\n"
+	root := writeCatalogFirstFixture(t, files)
+
+	report, err := buildCoverageReport(root)
+	if err != nil {
+		t.Fatalf("buildCoverageReport() error = %v", err)
+	}
+	alpha, beta := requireDomain(t, report, "alpha"), requireDomain(t, report, "beta")
+	if !alpha.RegisteredInRegisterAll || alpha.DelegatedMeta {
+		t.Errorf("alpha registered = %t, delegated = %t; want register.go's reference alone", alpha.RegisteredInRegisterAll, alpha.DelegatedMeta)
+	}
+	if beta.RegisteredInRegisterAll || !beta.DelegatedMeta {
+		t.Errorf("beta registered = %t, delegated = %t; want register_meta.go's reference alone", beta.RegisteredInRegisterAll, beta.DelegatedMeta)
 	}
 }
 
@@ -1013,16 +1167,19 @@ func TestAssertNoLegacyRuntimeBridges_Scenarios_ReadsFixedFiles(t *testing.T) {
 		name    string
 		files   map[string]string
 		wantErr string
+		// wantBridge is the one finding the architecture section carries, as
+		// the file relative to the root and the retired call it contains.
+		wantBridge []string
 	}{
 		{name: "missing production file", files: map[string]string{}, wantErr: "read "},
-		{name: "retired bridge referenced", files: bridged, wantErr: "production legacy bridge count = 1"},
+		{name: "retired bridge referenced", files: bridged, wantErr: "production legacy bridge count = 1", wantBridge: []string{"internal/tools/register_meta.go", registerMetaCall}},
 		{name: "clean tree", files: clean},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := writeCatalogFirstFixture(t, tt.files)
 			err := assertNoLegacyRuntimeBridges(root)
-			_, architectureErr := buildArchitectureReport(root, coverageSummary{SurfaceSpecCount: 3})
+			architecture, architectureErr := buildArchitectureReport(root, coverageSummary{SurfaceSpecCount: 3})
 			if tt.wantErr == "" {
 				if err != nil || architectureErr != nil {
 					t.Fatalf("clean tree errors = %v / %v, want nil", err, architectureErr)
@@ -1034,6 +1191,113 @@ func TestAssertNoLegacyRuntimeBridges_Scenarios_ReadsFixedFiles(t *testing.T) {
 			}
 			if tt.files["internal/tools/register.go"] == "" && architectureErr == nil {
 				t.Error("buildArchitectureReport() error = nil on a tree without production files")
+			}
+			if tt.wantBridge != nil {
+				// The count and the list are two fields filled from one reading,
+				// so a report whose count said nothing while its list named the
+				// bridge would have read as clean to anyone reading the count.
+				want := []string{fmt.Sprintf("%s contains %q", filepath.Join(root, filepath.FromSlash(tt.wantBridge[0])), tt.wantBridge[1])}
+				if architecture.LegacyBridgeCount != 1 || !slices.Equal(architecture.LegacyBridges, want) {
+					t.Errorf("architecture bridges = %d %v, want 1 %v", architecture.LegacyBridgeCount, architecture.LegacyBridges, want)
+				}
+			}
+		})
+	}
+}
+
+// TestLegacyRuntimeBridgeFindings_EachRetiredCall_IsFoundInItsOwnFile plants
+// every retired call the bridge scan names, one at a time, in the one file it
+// is forbidden in, and verifies exactly the findings that come back.
+//
+// The list of retired calls is data rather than a branch, so neither gate can
+// see an entry dropped from it or moved to another file; this is what can.
+func TestLegacyRuntimeBridgeFindings_EachRetiredCall_IsFoundInItsOwnFile(t *testing.T) {
+	clean := map[string]string{
+		"internal/tools/action_catalog.go": "package tools\n",
+		"internal/tools/register_meta.go":  "package tools\n",
+		"internal/tools/register.go":       "package tools\n",
+		"internal/toolutil/meta_tool.go":   "package toolutil\n",
+	}
+	tests := []struct {
+		file  string
+		plant string
+		// found is every retired call the planted text contains; it differs
+		// from the plant only where one forbidden name holds another.
+		found []string
+	}{
+		{file: "internal/tools/action_catalog.go", plant: "CaptureMetaToolDefinitions"},
+		{file: "internal/tools/action_catalog.go", plant: registerAllCall},
+		{file: "internal/tools/action_catalog.go", plant: "groupFromMetaToolDefinition"},
+		{file: "internal/tools/action_catalog.go", plant: registerMetaCall},
+		{file: "internal/tools/register_meta.go", plant: registerAllCall},
+		{file: "internal/tools/register_meta.go", plant: registerMetaCall},
+		{file: "internal/tools/register.go", plant: ".RegisterTools("},
+		{file: "internal/tools/register.go", plant: "registerAllLegacy"},
+		{file: "internal/tools/register.go", plant: "legacyIndividualToolDescriptions"},
+		{file: "internal/tools/register.go", plant: "listToolsForDescriptionCapture"},
+		{file: "internal/toolutil/meta_tool.go", plant: "CaptureMetaToolDefinitions", found: []string{"CaptureMetaToolDefinitions", "MetaToolDefinition"}},
+		{file: "internal/toolutil/meta_tool.go", plant: "MetaToolDefinition"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.file+" "+tt.plant, func(t *testing.T) {
+			files := maps.Clone(clean)
+			files[tt.file] += "\n// " + tt.plant + "\n"
+			root := writeCatalogFirstFixture(t, files)
+
+			findings, err := legacyRuntimeBridgeFindings(root)
+			if err != nil {
+				t.Fatalf("legacyRuntimeBridgeFindings() error = %v", err)
+			}
+			found := tt.found
+			if found == nil {
+				found = []string{tt.plant}
+			}
+			want := make([]string, 0, len(found))
+			for _, needle := range found {
+				want = append(want, fmt.Sprintf("%s contains %q", filepath.Join(root, filepath.FromSlash(tt.file)), needle))
+			}
+			if !slices.Equal(findings, want) {
+				t.Errorf("findings = %v, want %v", findings, want)
+			}
+		})
+	}
+}
+
+// TestSourceAudits_EachForbiddenText_IsRefused verifies the two single-file
+// rules against every text each forbids: action_catalog.go must not name the
+// retired meta registration, and the dynamic package must not own
+// compatibility policy.
+//
+// Only one text of each rule was ever planted, so the others could have been
+// dropped from their lists with every test still green.
+func TestSourceAudits_EachForbiddenText_IsRefused(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		content string
+		audit   func(root string) error
+		wantErr string
+	}{
+		{name: "catalog names the meta group registration", file: "internal/tools/action_catalog.go", content: "package tools\n\n// registerAllMetaGroups(\n", audit: func(root string) error {
+			return assertActionCatalogHasNoLegacyReferences(filepath.Join(root, "internal", "tools", "action_catalog.go"))
+		}, wantErr: `contains "registerAllMetaGroups("; BuildActionCatalog must not depend on legacy meta registration`},
+		{name: "catalog names a domain RegisterMeta", file: "internal/tools/action_catalog.go", content: "package tools\n\n// alpha.RegisterMeta(server)\n", audit: func(root string) error {
+			return assertActionCatalogHasNoLegacyReferences(filepath.Join(root, "internal", "tools", "action_catalog.go"))
+		}, wantErr: `contains ".RegisterMeta("; BuildActionCatalog must not depend on legacy meta registration`},
+		{name: "dynamic keeps its alias table", file: "internal/tools/dynamic/register.go", content: "package dynamic\n\n// return annotateCompatibilityAliases([]actionAlias{\n", audit: assertDynamicCompatibilityPolicyOwnedByActionCompat, wantErr: `owns compatibility policy "return annotateCompatibilityAliases([]actionAlias{"`},
+		{name: "dynamic keeps the snippet adapter", file: "internal/tools/dynamic/register.go", content: "package dynamic\n\n// func buildSnippetCreateFilesFromSingleFileParams(\n", audit: assertDynamicCompatibilityPolicyOwnedByActionCompat, wantErr: `owns compatibility policy "func buildSnippetCreateFilesFromSingleFileParams("`},
+		{name: "dynamic keeps the access level mapping", file: "internal/tools/dynamic/register.go", content: "package dynamic\n\n// func gitlabAccessLevelValue(\n", audit: assertDynamicCompatibilityPolicyOwnedByActionCompat, wantErr: `owns compatibility policy "func gitlabAccessLevelValue("`},
+		{name: "dynamic keeps the boolean spelling", file: "internal/tools/dynamic/register.go", content: "package dynamic\n\n// func boolStringValue(\n", audit: assertDynamicCompatibilityPolicyOwnedByActionCompat, wantErr: `owns compatibility policy "func boolStringValue("`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := catalogFirstFixtureFiles()
+			files[tt.file] = tt.content
+			root := writeCatalogFirstFixture(t, files)
+
+			err := tt.audit(root)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("audit error = %v, want containing %q", err, tt.wantErr)
 			}
 		})
 	}
@@ -1053,7 +1317,15 @@ func TestBuildArchitectureReport_CleanFixture_MirrorsSummaryAndAliases(t *testin
 	if architecture.SurfaceSpecCount != 7 || architecture.LegacyBridgeCount != 0 || len(architecture.LegacyBridges) != 0 {
 		t.Errorf("architecture = %+v, want 7 surface specs and no bridge", architecture)
 	}
-	if architecture.DynamicActionAliasCount == 0 || architecture.DynamicParameterAliasCount < architecture.DynamicSpecMetadataParameterAliasCount {
+	specMetadata := 0
+	for _, alias := range actioncompat.ParameterAliases() {
+		if alias.SpecMetadata {
+			specMetadata++
+		}
+	}
+	if architecture.DynamicActionAliasCount != len(actioncompat.ActionAliases()) ||
+		architecture.DynamicParameterAliasCount != len(actioncompat.ParameterAliases()) ||
+		architecture.DynamicSpecMetadataParameterAliasCount != specMetadata {
 		t.Errorf("alias counts = %+v, want the real policy sizes", architecture)
 	}
 }
@@ -1256,21 +1528,32 @@ func TestReferencedPackages_Scenarios_CollectsQualifiers(t *testing.T) {
 // TestRecordSurfaceSpecs_OwnerlessSpec_IsSkipped verifies specs without an
 // owner package contribute nothing while owned specs are counted under
 // their owner with their surface kind and group.
+//
+// The whole record is compared, and the kinds are chosen so that no two counts
+// agree: a spec with no kind is counted as a meta group, which is ordinary, so
+// a kind recorded before it was normalized would show as an unnamed one.
 func TestRecordSurfaceSpecs_OwnerlessSpec_IsSkipped(t *testing.T) {
 	coverage := map[string]packageActionCoverage{}
 	recordSurfaceSpecs(coverage, []actioncatalog.SurfaceToolSpec{
 		{OwnerPackage: "  ", GroupToolName: "gitlab_ignored"},
 		{OwnerPackage: "owner", GroupToolName: "gitlab_owned", SurfaceKind: actioncatalog.SurfaceKindDynamicController},
+		{OwnerPackage: " owner ", GroupToolName: "gitlab_owned", SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility},
+		{OwnerPackage: "owner", GroupToolName: "gitlab_other"},
 	})
-	if len(coverage) != 1 {
-		t.Fatalf("coverage = %v, want the owned spec only", coverage)
-	}
-	owned := coverage["owner"]
-	if owned.SurfaceSpecCount != 1 || owned.UtilitySurfaceActionCount != 1 || owned.OrdinaryGitLabActionCount != 0 {
-		t.Errorf("owned coverage = %+v, want one utility surface spec", owned)
-	}
-	if _, ok := owned.MetaGroups["gitlab_owned"]; !ok {
-		t.Errorf("meta groups = %v, want gitlab_owned", owned.MetaGroups)
+
+	want := map[string]packageActionCoverage{"owner": {
+		OrdinaryGitLabActionCount: 1,
+		UtilitySurfaceActionCount: 2,
+		SurfaceSpecCount:          3,
+		SurfaceKindCounts: map[string]int{
+			string(actioncatalog.SurfaceKindDynamicController): 1,
+			string(actioncatalog.SurfaceKindRuntimeUtility):    1,
+			string(actioncatalog.SurfaceKindMetaGroup):         1,
+		},
+		MetaGroups: map[string]struct{}{"gitlab_owned": {}, "gitlab_other": {}},
+	}}
+	if !reflect.DeepEqual(coverage, want) {
+		t.Errorf("coverage = %+v, want %+v", coverage, want)
 	}
 }
 
@@ -1279,30 +1562,51 @@ func TestRecordSurfaceSpecs_OwnerlessSpec_IsSkipped(t *testing.T) {
 // the group's tool name and its surface kind, and that an action naming no
 // owner is skipped.
 //
-// The ownerless case is the one this repository has never been in: every spec
-// compiled in names an owner, so an action that lost its owner would leave the
-// report silently smaller with no test noticing.
+// The ownerless case is one this repository has never been in, and the three
+// kinds, an empty one among them, give every count a value of its own: the
+// whole record is compared, so a spec counted into the wrong field or under
+// its kind before normalizing changes what this reads.
 func TestRecordActionSpecGroups_Scenarios_CountSpecsUnderTheirOwner(t *testing.T) {
 	coverage := map[string]packageActionCoverage{}
-	recordActionSpecGroups(coverage, []tools.ActionSpecGroup{{
-		ToolName:    "gitlab_owned",
-		SurfaceKind: actioncatalog.SurfaceKindGitLabAction,
-		Actions: []toolutil.ActionSpec{
-			{Name: "get", OwnerPackage: "owner"},
-			{Name: "list", OwnerPackage: "owner"},
-			{Name: "orphaned", OwnerPackage: "  "},
+	recordActionSpecGroups(coverage, []tools.ActionSpecGroup{
+		{
+			ToolName:    "gitlab_owned",
+			SurfaceKind: actioncatalog.SurfaceKindGitLabAction,
+			Actions: []toolutil.ActionSpec{
+				{Name: "get", OwnerPackage: "owner"},
+				{Name: "list", OwnerPackage: " owner "},
+				{Name: "orphaned", OwnerPackage: "  "},
+			},
 		},
-	}})
+		{
+			ToolName: "gitlab_unkinded",
+			Actions:  []toolutil.ActionSpec{{Name: "status", OwnerPackage: "owner"}},
+		},
+		{
+			ToolName:    "gitlab_utility",
+			SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility,
+			Actions: []toolutil.ActionSpec{
+				{Name: "a", OwnerPackage: "owner"},
+				{Name: "b", OwnerPackage: "owner"},
+				{Name: "c", OwnerPackage: "owner"},
+				{Name: "d", OwnerPackage: "owner"},
+			},
+		},
+	})
 
-	if len(coverage) != 1 {
-		t.Fatalf("coverage = %v, want the owned package only", coverage)
-	}
-	owned := coverage["owner"]
-	if owned.ActionSpecCount != 2 || owned.OrdinaryGitLabActionCount != 2 || owned.DynamicCatalogActionCount != 0 {
-		t.Errorf("owned coverage = %+v, want 2 spec actions and no catalog actions", owned)
-	}
-	if _, ok := owned.MetaGroups["gitlab_owned"]; !ok || len(owned.MetaGroups) != 1 {
-		t.Errorf("meta groups = %v, want gitlab_owned alone", owned.MetaGroups)
+	want := map[string]packageActionCoverage{"owner": {
+		ActionSpecCount:           7,
+		OrdinaryGitLabActionCount: 3,
+		UtilitySurfaceActionCount: 4,
+		SurfaceKindCounts: map[string]int{
+			string(actioncatalog.SurfaceKindGitLabAction):   2,
+			string(actioncatalog.SurfaceKindMetaGroup):      1,
+			string(actioncatalog.SurfaceKindRuntimeUtility): 4,
+		},
+		MetaGroups: map[string]struct{}{"gitlab_owned": {}, "gitlab_unkinded": {}, "gitlab_utility": {}},
+	}}
+	if !reflect.DeepEqual(coverage, want) {
+		t.Errorf("coverage = %+v, want %+v", coverage, want)
 	}
 }
 
@@ -1314,11 +1618,6 @@ func TestRecordActionSpecGroups_Scenarios_CountSpecsUnderTheirOwner(t *testing.T
 // The two counters this and [recordActionSpecGroups] fill answer different
 // questions (what a package contributes and what the catalog serves) so this
 // asserts the whole row rather than the one number it raises.
-//
-// The fallback case is also the property that makes the ownerless skip beside
-// it unobservable: an action a catalog hands back always names a domain, since
-// normalizing a group derives one from the group's tool name where the action
-// declares none, so the owner this resolves is never empty.
 func TestRecordCatalogActions_Scenarios_CountActionsUnderTheirOwner(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_example"})
@@ -1346,6 +1645,29 @@ func TestRecordCatalogActions_Scenarios_CountActionsUnderTheirOwner(t *testing.T
 	recordCatalogActions(empty, nil)
 	if len(empty) != 0 {
 		t.Errorf("recordCatalogActions(nil) filled %v, want nothing", empty)
+	}
+}
+
+// TestRecordCatalogActions_BareToolPrefix_ResolvesNoOwnerAndIsSkipped verifies
+// the one catalog action that names no package is left out rather than counted
+// under the empty name.
+//
+// A catalog derives a missing domain from the group's tool name less its
+// "gitlab_" prefix, so a group called exactly that hands back an action with
+// neither owner nor domain; counted, it would add a row with no package.
+func TestRecordCatalogActions_BareToolPrefix_ResolvesNoOwnerAndIsSkipped(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_"})
+	group.SetAction(actioncatalog.Action{Name: "get"})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	coverage := map[string]packageActionCoverage{}
+	recordCatalogActions(coverage, catalog)
+
+	if len(coverage) != 0 {
+		t.Errorf("coverage = %+v, want the ownerless action left out", coverage)
 	}
 }
 
@@ -1776,6 +2098,47 @@ func TestDomainCoverageFor_SourceFlags_AreCarriedOneAtATime(t *testing.T) {
 	}
 }
 
+// TestDomainCoverageFor_SurfaceOnlyPackage_ClaimsNoSpecsAndNoCatalogEntries
+// verifies a package the catalog knows only through surface specs, the shape of
+// elicitationtools and projectdiscovery, is not read as declaring ActionSpecs
+// or as having dynamic catalog entries.
+//
+// Every earlier row either had no catalog entry at all or had every count
+// raised, so the two flags read true for any package the catalog named. The
+// last note is what the standalone flag writes, RegisterTools or not.
+func TestDomainCoverageFor_SurfaceOnlyPackage_ClaimsNoSpecsAndNoCatalogEntries(t *testing.T) {
+	actionCoverage := map[string]packageActionCoverage{
+		"surfaceonly": {
+			UtilitySurfaceActionCount: 3,
+			SurfaceSpecCount:          3,
+			SurfaceKindCounts:         map[string]int{"runtime-utility": 3},
+			MetaGroups:                map[string]struct{}{"gitlab_surface": {}},
+		},
+	}
+
+	got := domainCoverageFor(domainSource{Package: "surfaceonly"}, actionCoverage, nil, nil)
+
+	want := domainCoverage{
+		Package:                   "surfaceonly",
+		SurfaceClassification:     "surface-backed",
+		MetaGroup:                 "gitlab_surface",
+		HasSurfaceSpecs:           true,
+		HasStandaloneOnlyTools:    true,
+		UtilitySurfaceActionCount: 3,
+		SurfaceSpecCount:          3,
+		SurfaceKinds:              []string{"runtime-utility"},
+		SurfaceKindCounts:         map[string]int{"runtime-utility": 3},
+		Notes: []string{
+			"3 explicit surface specs: runtime-utility",
+			"3 utility/controller actions are outside ordinary GitLab API action counting",
+			"RegisterTools does not use a GitLab client constructor",
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("domainCoverageFor() = %+v, want %+v", got, want)
+	}
+}
+
 // TestBuildCoverageReport_Domains_AreSortedByPackage states the property the
 // report's sort holds, and which is also what makes its comparator
 // unobservable: os.ReadDir hands the domain walk its entries already in
@@ -1857,26 +2220,49 @@ func TestDiscoverDomainSources_DomainTheSelectorAuditSkipped_IsStillParsed(t *te
 }
 
 // TestAuditCatalogFirstSource_UnparsableRegistrationFile_IsRefusedFirst
-// verifies the source audit refuses a registration file that does not parse.
+// verifies the source audit refuses a registration file that does not parse,
+// or is not there, which are the two ways [referencedPackages] can fail.
 //
 // It is the property that makes the report's own two parse branches
 // unreachable: [buildCoverageReport] reads register.go and register_meta.go
 // again through [referencedPackages], and by the time it does, this audit has
-// already parsed both as production source. Those two error arms are therefore
-// kept for the values they return rather than for a state a tree can be in,
-// and this is what has to keep holding for that to stay true.
+// already read both and parsed them as production source.
 func TestAuditCatalogFirstSource_UnparsableRegistrationFile_IsRefusedFirst(t *testing.T) {
 	for _, name := range []string{registerGoFile, "register_meta.go"} {
-		t.Run(name, func(t *testing.T) {
-			files := catalogFirstFixtureFiles()
-			files["internal/tools/"+name] = "package tools\n\nfunc {\n"
-			root := writeCatalogFirstFixture(t, files)
+		for _, state := range []string{"unparsable", "missing"} {
+			t.Run(name+" "+state, func(t *testing.T) {
+				files := catalogFirstFixtureFiles()
+				files["internal/tools/"+name] = "package tools\n\nfunc {\n"
+				if state == "missing" {
+					delete(files, "internal/tools/"+name)
+				}
+				root := writeCatalogFirstFixture(t, files)
 
-			err := auditCatalogFirstSource(root)
-			if err == nil || !strings.Contains(err.Error(), name) {
-				t.Fatalf("auditCatalogFirstSource() error = %v, want it to name %s", err, name)
-			}
-		})
+				err := auditCatalogFirstSource(root)
+				if err == nil || !strings.Contains(err.Error(), name) {
+					t.Fatalf("auditCatalogFirstSource() error = %v, want it to name %s", err, name)
+				}
+			})
+		}
+	}
+}
+
+// TestAssertNoProductionSelectorCall_RootIsARepository_IsStillRead verifies
+// the selector audit reads a tree whose root carries a .git entry, which the
+// real repository root always does.
+//
+// Every directory below the root holding one is another checkout and is left
+// out, so the root judged by the same rule would skip itself and certify a
+// tree it never read. No planted root carried the marker until this one.
+func TestAssertNoProductionSelectorCall_RootIsARepository_IsStillRead(t *testing.T) {
+	files := catalogFirstFixtureFiles()
+	files[".git/HEAD"] = "ref: refs/heads/main\n"
+	files["internal/tools/beta/beta.go"] = "package beta\n\nfunc f() { toolutil.CaptureMetaToolDefinitions() }\n"
+	root := writeCatalogFirstFixture(t, files)
+
+	err := assertNoProductionSelectorCall(root, "toolutil", "CaptureMetaToolDefinitions")
+	if err == nil || !strings.Contains(err.Error(), filepath.Join("beta", "beta.go")) {
+		t.Fatalf("assertNoProductionSelectorCall() error = %v, want beta.go refused", err)
 	}
 }
 
@@ -1915,6 +2301,9 @@ func TestRunMain_Scenarios_ReportsTheExitCodeAndTheRefusal(t *testing.T) {
 		want          int
 		wantStderr    string
 		wantReport    bool
+		// wantDefaultReport reads the report where the documentation says a
+		// run without -output writes it, below the working directory.
+		wantDefaultReport bool
 	}{
 		{name: "unknown flag", args: []string{"-nope"}, outsideModule: true, want: 2, wantStderr: "flag provided but not defined"},
 		{name: "help", args: []string{"-h"}, outsideModule: true, want: 0},
@@ -1935,10 +2324,12 @@ func TestRunMain_Scenarios_ReportsTheExitCodeAndTheRefusal(t *testing.T) {
 		},
 		{name: "report cannot be written", blockedOutput: true, want: 1, wantStderr: "write coverage report"},
 		{name: "clean tree", want: 0, wantReport: true},
+		{name: "no output named", args: []string{}, want: 0, wantDefaultReport: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Chdir(runMainWorkingDirectory(t, tt.outsideModule, tt.mutate))
+			workingDirectory := runMainWorkingDirectory(t, tt.outsideModule, tt.mutate)
+			t.Chdir(workingDirectory)
 			outputPath := runMainOutputPath(t, tt.blockedOutput)
 			args := tt.args
 			if args == nil {
@@ -1956,6 +2347,9 @@ func TestRunMain_Scenarios_ReportsTheExitCodeAndTheRefusal(t *testing.T) {
 			}
 			if tt.wantReport {
 				assertWrittenCoverageReport(t, outputPath)
+			}
+			if tt.wantDefaultReport {
+				assertWrittenCoverageReport(t, filepath.Join(workingDirectory, "dist", "action-spec-coverage.json"))
 			}
 		})
 	}

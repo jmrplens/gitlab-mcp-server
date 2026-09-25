@@ -150,7 +150,9 @@ func actionSpecsAggregation(root string) (map[string]bool, error) {
 func declaredActionSpecs(loaded []*packages.Package) map[string]bool {
 	declared := map[string]bool{}
 	for _, pkg := range loaded {
-		if pkg.Types == nil || !strings.HasPrefix(pkg.Types.Path(), toolsPathPrefix) {
+		// No nil check on Types: goprogram returns only packages that
+		// type-checked, and every one of them carries its types.
+		if !strings.HasPrefix(pkg.Types.Path(), toolsPathPrefix) {
 			continue
 		}
 		// No exportedness check: the lookup key is the exported spelling, so
@@ -166,13 +168,14 @@ func declaredActionSpecs(loaded []*packages.Package) map[string]bool {
 // recordProductionUses marks as called every declared ActionSpecs that a
 // non-test file of pkg names, whether it calls it, takes it as a value or
 // passes it along.
+//
+// TypesInfo is read unchecked because goprogram fills it for every package it
+// returns, and a function's package unchecked because the only functions
+// without one are the universe's, none of which is called ActionSpecs.
 func recordProductionUses(pkg *packages.Package, declared map[string]bool) {
-	if pkg.TypesInfo == nil {
-		return
-	}
 	for ident, object := range pkg.TypesInfo.Uses {
 		function, ok := object.(*types.Func)
-		if !ok || function.Name() != actionSpecsFuncName || function.Pkg() == nil {
+		if !ok || function.Name() != actionSpecsFuncName {
 			continue
 		}
 		if _, tracked := declared[function.Pkg().Path()]; !tracked {
