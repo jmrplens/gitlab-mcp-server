@@ -172,6 +172,10 @@ func TestCoordinateString_EachDepth_ReadsAsAReaderWouldWriteIt(t *testing.T) {
 // documents depend on: the fields they select, the arguments they pass, the
 // types those name, and every field of an input object, since a document hands
 // one a value whose fields it never names and any of them may be sent.
+//
+// One field is aliased, because a field selected under its own name carries
+// that name as its alias too, and a walk that recorded the alias would then
+// pass every other case here while naming coordinates no schema holds.
 func TestTouchedCoordinates_WhatTheDocumentsSelect_IsWhatIsCompared(t *testing.T) {
 	pinned := loadSchemaFixture(t, pinnedFixture)
 
@@ -183,6 +187,9 @@ query($filter: Filter) {
     id
     severity
     ...timestamps
+  }
+  recent: findings(first: 2) {
+    id
   }
   node(id: "gid://x/1") {
     id
@@ -213,6 +220,7 @@ fragment timestamps on Finding {
 		{name: "a field reached only through an inline fragment", want: "Finding.title"},
 		{name: "a field reached only through a named fragment", want: "Finding.found"},
 		{name: "a custom scalar reached through the input object", want: "Time"},
+		{name: "an argument passed to an aliased field, under the field's name", want: "Query.findings(first)"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -221,10 +229,19 @@ fragment timestamps on Finding {
 			}
 		})
 	}
-	for _, absent := range []string{"Query.__typename", "Finding.__typename", "String", "ID"} {
-		t.Run("does not record "+absent, func(t *testing.T) {
-			if recorded[absent] {
-				t.Errorf("the walk recorded %q, which no GitLab release can narrow", absent)
+	const specification = "which no GitLab release can narrow"
+	const alias = "which is the document's alias, not a field any schema holds"
+	for _, absent := range []struct{ coordinate, why string }{
+		{"Query.__typename", specification},
+		{"Finding.__typename", specification},
+		{"String", specification},
+		{"ID", specification},
+		{"Query.recent", alias},
+		{"Query.recent(first)", alias},
+	} {
+		t.Run("does not record "+absent.coordinate, func(t *testing.T) {
+			if recorded[absent.coordinate] {
+				t.Errorf("the walk recorded %q, %s", absent.coordinate, absent.why)
 			}
 		})
 	}
@@ -463,6 +480,11 @@ func TestEnumDifference_ValuesAddedAndWithdrawn_AreBothReported(t *testing.T) {
 // is walked under the pin whichever schema is preferred, and the Filter.cursor
 // line below would then be missing for a reason that says nothing about the
 // preference.
+//
+// Each report is compared whole. The lines come out in the order a reader
+// looks a coordinate up in, and the coordinates are gathered in a map, so a
+// report that did not sort them would differ from one run to the next and two
+// runs could not be compared line for line.
 func TestDriftReport_TwoSchemasAndTheDocumentsBetweenThem_ReportsBothOutcomes(t *testing.T) {
 	pinned, probed := loadSchemaFixture(t, pinnedFixture), loadSchemaFixture(t, probedFixture)
 	documents := documentsOf(`
@@ -473,34 +495,31 @@ query($filter: Filter) {
   }
 }
 `)
+	const pinLine = "    the pin: 4331 types from https://gitlab.com/api/graphql (GitLab 19.4.0), retrieved 2026-03-01, 10 day(s) ago\n"
 
 	t.Run("schemas that disagree", func(t *testing.T) {
 		report := driftReport(pinned, probed, documents, fixturePin, fixtureNow())
 
-		for _, want := range []string{
-			"disagree on 5 of 14 coordinate(s)",
-			"    Filter.severity: the pin says [Severity!], the live schema says [String!]\n",
+		want := "audit_graphql_documents: the pin and the live schema disagree on 5 of 14 coordinate(s) the documents touch\n" +
 			// Only reachable when the walk followed the schema this run judged
 			// by: the pin's Filter has no cursor to reach it through.
-			"    Filter.cursor: the live schema has it, the pin does not\n",
-			"    Query.findings(first): the pin says Int, the live schema says Int!\n",
-			"    Severity: the live schema drops CRITICAL and adds UNKNOWN\n",
-			"    Time: the pin says SCALAR, the live schema says ENUM\n",
-			"    the pin: 4331 types from https://gitlab.com/api/graphql (GitLab 19.4.0), retrieved 2026-03-01, 10 day(s) ago\n",
-		} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(report, want) {
-					t.Errorf("the report does not contain %q:\n%s", want, report)
-				}
-			})
+			"    Filter.cursor: the live schema has it, the pin does not\n" +
+			"    Filter.severity: the pin says [Severity!], the live schema says [String!]\n" +
+			"    Query.findings(first): the pin says Int, the live schema says Int!\n" +
+			"    Severity: the live schema drops CRITICAL and adds UNKNOWN\n" +
+			"    Time: the pin says SCALAR, the live schema says ENUM\n" +
+			pinLine
+		if report != want {
+			t.Errorf("driftReport() =\n%s\nwant\n%s", report, want)
 		}
 	})
 
 	t.Run("one schema compared with itself", func(t *testing.T) {
 		report := driftReport(pinned, pinned, documents, fixturePin, fixtureNow())
 
-		if !strings.Contains(report, "agree on all 13 coordinate(s)") {
-			t.Errorf("the report does not say the two agree:\n%s", report)
+		want := "audit_graphql_documents: the pin and the live schema agree on all 13 coordinate(s) the documents touch\n" + pinLine
+		if report != want {
+			t.Errorf("driftReport() =\n%s\nwant\n%s", report, want)
 		}
 	})
 }
@@ -528,7 +547,8 @@ func TestDriftReport_APinWithNoUsableDate_StillReports(t *testing.T) {
 // walk. A field carrying neither the definition it resolved to nor the type it
 // was selected on cannot be placed in any schema, and a walk that assumed
 // otherwise would panic on the one input this command is pointed at: source
-// somebody is in the middle of writing.
+// somebody is in the middle of writing. An entry that holds no selection at
+// all is the same case one level up, and is passed over like the rest.
 func TestCoordinateWalker_ANodeNothingResolved_IsSkipped(t *testing.T) {
 	walker := &coordinateWalker{
 		schema:  loadSchemaFixture(t, pinnedFixture),
@@ -542,6 +562,7 @@ func TestCoordinateWalker_ANodeNothingResolved_IsSkipped(t *testing.T) {
 			Name: "selectedOnNothing", Type: ast.NamedType("String", nil),
 		}},
 		&ast.FragmentSpread{Name: "neverDefined"},
+		nil,
 	})
 
 	if len(walker.found) != 0 {
