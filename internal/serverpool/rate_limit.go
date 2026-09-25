@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // maxTrackedAuthSources bounds the failure table.
@@ -15,7 +17,7 @@ import (
 // real source to a few hundred distinct primary keys per window, so this admits
 // several such sources at once and still costs a few hundred kilobytes at the
 // ceiling.
-const maxTrackedAuthSources = 4096
+const maxTrackedAuthSources = tenancy.AuthTrackedSources // register row AUB-004
 
 // AuthRateLimiter tracks authentication failures per client IP and blocks
 // clients that exceed the maximum failure count within the configured window.

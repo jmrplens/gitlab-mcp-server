@@ -18,6 +18,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -70,7 +71,7 @@ const (
 	// one transport source is the rotation, or an incident either way. It
 	// also bounds the primary limiter's map: a blocked source is refused
 	// before a failure is recorded, so it stops minting keys.
-	transportFailureLimit = 500
+	transportFailureLimit = tenancy.TransportSourceDistinctKeys // register row AUB-002
 )
 
 // JSON-RPC error codes emitted by the request gate.
@@ -87,10 +88,10 @@ const (
 	// by this server, so it sits inside the reserved range where the spec put
 	// it rather than following the mirrored-status convention below.
 	codeUnsupportedProtocolVersion = -32022
-	errCodeUnauthorized            = -40100 // mirrors HTTP 401
-	errCodeForbidden               = -40300 // mirrors HTTP 403
-	errCodeTooManyRequests         = -42900 // mirrors HTTP 429
-	errCodeUpstreamUnavailable     = -50300 // mirrors HTTP 503
+	errCodeUnauthorized            = tenancy.CodeUnauthorized    // mirrors HTTP 401; register row AUB-001
+	errCodeForbidden               = tenancy.CodeForbidden       // mirrors HTTP 403; register row AUB-001
+	errCodeTooManyRequests         = tenancy.CodeTooManyRequests // mirrors HTTP 429; register row AUB-001
+	errCodeUpstreamUnavailable     = tenancy.CodeUnavailable     // mirrors HTTP 503; register row AUB-001
 )
 
 // legacyAuthChallenge is the WWW-Authenticate challenge for --auth-mode=legacy.
