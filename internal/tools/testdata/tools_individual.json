@@ -113301,7 +113301,7 @@
   },
   {
     "name": "gitlab_list_group_packages",
-    "description": "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
+    "description": "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_get, gitlab_package_file_list, gitlab_package_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154024,8 +154024,470 @@
     }
   },
   {
+    "name": "gitlab_package_get",
+    "description": "Get one package of a project with its other versions. Returns: the package's type, status, creator, pipeline metadata, tags, _links, and its other versions with their tags and the pipeline that built each. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "package_id": {
+          "description": "Package ID, as package.list or package.group_list returns it",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "package_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "package": {
+          "additionalProperties": false,
+          "properties": {
+            "_links": {
+              "additionalProperties": false,
+              "properties": {
+                "delete_api_path": {
+                  "type": "string"
+                },
+                "web_path": {
+                  "type": "string"
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "conan_package_name": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "creator_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "last_downloaded_at": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "package_type": {
+              "type": "string"
+            },
+            "pipeline": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "user": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name",
+                    "web_url"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "ref",
+                "sha",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "pipelines": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "sha": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "ref",
+                  "sha",
+                  "web_url"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "project_path": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "tags": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "package_id": {
+                    "type": "integer"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "package_id",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "version": {
+              "type": "string"
+            },
+            "versions": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "pipeline": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "created_at": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "iid": {
+                        "type": "integer"
+                      },
+                      "project_id": {
+                        "type": "integer"
+                      },
+                      "ref": {
+                        "type": "string"
+                      },
+                      "sha": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "user": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "avatar_url": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "locked": {
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "public_email": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "web_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "username",
+                          "name",
+                          "locked"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "iid",
+                      "project_id",
+                      "sha",
+                      "ref",
+                      "status",
+                      "source",
+                      "created_at",
+                      "updated_at",
+                      "web_url",
+                      "user"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "tags": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "created_at": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "package_id": {
+                          "type": "integer"
+                        },
+                        "updated_at": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "package_id",
+                        "name",
+                        "created_at",
+                        "updated_at"
+                      ],
+                      "type": "object"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "created_at",
+                  "tags",
+                  "pipeline"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "version",
+            "package_type",
+            "status"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_package_list",
-    "description": "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
+    "description": "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_get, gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

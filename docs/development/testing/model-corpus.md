@@ -25,7 +25,7 @@ which is the ground the boundary test sanctions it on.
 | ---------------------- | ----------: |
 | Cases                  |         258 |
 | Steps declared         |         464 |
-| Catalog actions named  | 313 of 1084 |
+| Catalog actions named  | 313 of 1085 |
 | Catalog domains named  |    42 of 46 |
 | Standalone tools named |           5 |
 | Worlds asked for       |    74 of 74 |
@@ -59,7 +59,7 @@ which is the ground the boundary test sanctions it on.
 | merge_train           |             3 |                      4 |
 | model_registry        |             1 |                      1 |
 | mr_review             |             9 |                     23 |
-| package               |             4 |                     29 |
+| package               |             4 |                     30 |
 | pipeline              |            16 |                     33 |
 | project               |            37 |                    143 |
 | project_alias         |             4 |                      4 |

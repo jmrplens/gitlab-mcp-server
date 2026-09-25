@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 18,845 |
-| Unit test functions                                   | 17,500 |
+| Total test functions                                  | 18,860 |
+| Unit test functions                                   | 17,515 |
 | E2E test functions                                    |  1,345 |
 | cmd test functions                                    |  3,565 |
 | Test files (internal/)                                |    657 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,499 | 66.3% |
+| `TestFunc_Scenario` (2-part)           | 12,509 | 66.3% |
 | `TestFunc` (no underscore)             |    905 |  4.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  5,441 | 28.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  5,446 | 28.9% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,375 |        192 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          3,377 |        192 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            378 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |         10,182 |        449 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |         10,195 |        449 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,345 |        388 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          3,565 |        226 | server entry point and developer command utilities                                              |
-| **Total**               |     **18,845** |  **1,271** |                                                                                                 |
+| **Total**               |     **18,860** |  **1,271** |                                                                                                 |
 
 ### Core Packages
 
@@ -86,8 +86,8 @@
 | testutil/modelrecord |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
 | testutil/modelscore  |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/shardio     |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil             |     1,095 |    99.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**         | **3,375** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil             |     1,097 |    99.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**         | **3,377** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -99,7 +99,7 @@
 | dynamic           |   283 |   100.0% |     2 |
 | issues            |   264 |    99.9% |    21 |
 | users             |   252 |   100.0% |    38 |
-| packages          |   156 |    99.0% |     9 |
+| packages          |   169 |    99.0% |    10 |
 | jobs              |   146 |   100.0% |    17 |
 | commits           |   136 |    99.9% |    13 |
 | search            |   132 |   100.0% |    10 |
@@ -247,7 +247,7 @@
 | namespaces              |         51 |          2 |    97.5% |         4 |
 | notifications           |         39 |          2 |   100.0% |         6 |
 | orbit                   |         86 |          4 |   100.0% |         6 |
-| packages                |        156 |          6 |    99.0% |         9 |
+| packages                |        169 |          6 |    99.0% |        10 |
 | pages                   |         61 |          2 |   100.0% |         9 |
 | pipelines               |        127 |          4 |   100.0% |        12 |
 | pipelineschedules       |        104 |          4 |    99.0% |        11 |
@@ -305,7 +305,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         58 |          4 |   100.0% |         7 |
-| **Total**               | **10,182** |    **449** |          | **1,187** |
+| **Total**               | **10,195** |    **449** |          | **1,188** |
 
 </details>
 

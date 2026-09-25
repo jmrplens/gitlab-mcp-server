@@ -13284,6 +13284,16 @@
       "package": "internal/tools/packages",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/packages/:package_id",
+      "identifiers": {
+        ":package_id": 2,
+        ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/packages",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/packages/:package_id/package_files",
       "query": [
         "order_by",

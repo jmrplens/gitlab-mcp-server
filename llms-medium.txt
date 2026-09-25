@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Medium Reference
 
-> Version 3.1.0 | up to 1091 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.1.0 | up to 1092 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
@@ -197,7 +197,7 @@ Actions (23): changes_get, diff_version_get, diff_versions_list, discussion_crea
 
 Manage GitLab package registry, container registry, and protection rules.
 
-Actions (29): delete, download, file_delete, file_list, group_list, list, protection_rule_create, protection_rule_delete, protection_rule_list, protection_rule_update, publish, publish_and_link, publish_directory, registry_delete, registry_get, registry_list_group, registry_list_project, registry_rule_create, registry_rule_delete, registry_rule_list, registry_rule_update, registry_tag_delete, registry_tag_delete_bulk, registry_tag_get, registry_tag_list, registry_tag_rule_create, registry_tag_rule_delete, registry_tag_rule_list, registry_tag_rule_update
+Actions (30): delete, download, file_delete, file_list, get, group_list, list, protection_rule_create, protection_rule_delete, protection_rule_list, protection_rule_update, publish, publish_and_link, publish_directory, registry_delete, registry_get, registry_list_group, registry_list_project, registry_rule_create, registry_rule_delete, registry_rule_list, registry_rule_update, registry_tag_delete, registry_tag_delete_bulk, registry_tag_get, registry_tag_list, registry_tag_rule_create, registry_tag_rule_delete, registry_tag_rule_list, registry_tag_rule_update
 
 ### gitlab_pipeline
 
@@ -447,7 +447,7 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 ## Individual Tools
 
-Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation.
 
 - gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership.
 - gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership.
@@ -1181,6 +1181,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation
 - gitlab_package_download: Download a single file from the Generic Package Registry to a local path.
 - gitlab_package_file_delete: Delete a single file from a package permanently.
 - gitlab_package_file_list: List the files within a single package.
+- gitlab_package_get: Get one package of a project with its other versions.
 - gitlab_package_list: List packages in a project with optional filters and ordering.
 - gitlab_package_publish: Publish a single file to the Generic Package Registry.
 - gitlab_package_publish_and_link: Publish a file to the Generic Package Registry and link it to a release in one call.
