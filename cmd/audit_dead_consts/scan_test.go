@@ -624,6 +624,50 @@ func Live() {}
 	}
 }
 
+// TestScan_LocalConstantInAFunctionLiteral_IsKeyedApartFromThePackageLevelOne
+// holds the same identity for a constant declared inside a function literal.
+// One that no function declaration encloses is keyed under `func`, a keyword
+// and so no function's name, where it used to carry no function at all and
+// be excused by the declaration written for the package-level constant it
+// shares a name with. One inside a closure is a local of the function around
+// the closure. The package-level constant after the literal closes carries no
+// function, which holds the walk to leaving the literal when it ends.
+func TestScan_LocalConstantInAFunctionLiteral_IsKeyedApartFromThePackageLevelOne(t *testing.T) {
+	original := unreadOnPurpose
+	t.Cleanup(func() { unreadOnPurpose = original })
+	unreadOnPurpose = map[string]string{fixtureDir + ":shared": "the package-level one is kept on purpose in this test"}
+
+	found := scanFixtureAs(t, map[string]string{"fixture.go": `package fixture
+
+const shared = "package level, declared unread on purpose"
+
+var walk = func() {
+	const shared = "local to a function literal no declaration encloses"
+}
+
+const after = "package level again, after the literal has closed"
+
+func Live() {
+	run := func() {
+		const inner = "local to a closure inside Live"
+	}
+	run()
+	walk()
+}
+`}, nil)
+	want := []Constant{
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Column: 8, Name: "shared", Func: "func", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 9, Column: 7, Name: "after", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 13, Column: 9, Name: "inner", Func: "Live", GroupSize: 1},
+	}
+	if !slices.Equal(found, want) {
+		t.Fatalf("findings = %+v, want %+v", found, want)
+	}
+	if got := declarationKey(found[0]); got != fixtureDir+":func.shared" {
+		t.Fatalf("declarationKey = %q, want the literal's constant keyed apart from the package-level one", got)
+	}
+}
+
 // TestScan_LocalConstantInAGenericMethod_IsKeyedByTheReceiversTypeName
 // spells a generic receiver the way the declaration table does: the type
 // parameters are the receiver's and not part of its name, whether there is

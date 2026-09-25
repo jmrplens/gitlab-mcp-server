@@ -17,9 +17,10 @@ import (
 //
 // The key is the package the repository names, a colon, and the constant, as
 // [declarationKey] spells it; a constant declared inside a function carries
-// that function before its name (`internal/tools/x:Type.Method.name`), so an
-// entry for a package-level constant excuses no local one sharing its name
-// and the reverse. An entry that excuses nothing is reported, on the terms
+// that function before its name (`internal/tools/x:Type.Method.name`, and
+// `internal/tools/x:func.name` inside a function literal no function
+// declaration encloses), so an entry for a package-level constant excuses no
+// local one sharing its name and the reverse. An entry that excuses nothing is reported, on the terms
 // every declaration table here is held to: a declaration that has stopped
 // describing the tree is itself a finding.
 var unreadOnPurpose = map[string]string{
