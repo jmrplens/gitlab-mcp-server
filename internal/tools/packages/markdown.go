@@ -62,10 +62,10 @@ func FormatGetMarkdown(out GetOutput) string {
 		c.Code("Web Path", p.Links.WebPath)
 	}
 	// The summary arrives rendered: a link when GitLab gave the pipeline's
-	// page, the escaped text otherwise, which is what pipelineItemSummary
-	// writes for the listing's cell too.
-	c.Markdown("Pipeline", pipelineSummary(p))
-	c.Field("Tags", listTagNames(p.Tags))
+	// page, the escaped text otherwise, which is what pipelineSummary writes
+	// for the listing's cell too.
+	c.Markdown("Pipeline", pipelineSummary(p.Pipeline))
+	c.Field("Tags", tagNames(p.Tags))
 	writeVersionsTable(c, p.Versions)
 	hints := []string{toolutil.HintAction(actionPackageFileList, "list the files inside this package")}
 	if p.PackageType == packageTypeGeneric {
@@ -76,18 +76,10 @@ func FormatGetMarkdown(out GetOutput) string {
 	return b.String()
 }
 
-// listTagNames joins the names of the tags pointing at the package, for the
-// one card row that lists them; the row escapes what it writes.
-func listTagNames(tags []TagItem) string {
-	names := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		names = append(names, tag.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
-// versionTagNames joins the names of the tags pointing at one other version.
-func versionTagNames(tags []toolutil.PackageTagOutput) string {
+// tagNames joins the names of the tags pointing at the package or at one of
+// its other versions, for the card row and the table cell that list them; each
+// escapes what it writes.
+func tagNames(tags []toolutil.PackageTagOutput) string {
 	names := make([]string, 0, len(tags))
 	for _, tag := range tags {
 		names = append(names, tag.Name)
@@ -108,21 +100,11 @@ func writeVersionsTable(c *toolutil.Card, versions []toolutil.PackageVersionOutp
 		t.Row(
 			strconv.FormatInt(v.ID, 10),
 			toolutil.EscapeMdTableCell(v.Version),
-			toolutil.EscapeMdTableCell(versionTagNames(v.Tags)),
-			versionPipelineSummary(v.Pipeline),
-			toolutil.FormatTime(toolutil.RFC3339Ptr(v.CreatedAt)),
+			toolutil.EscapeMdTableCell(tagNames(v.Tags)),
+			pipelineSummary(v.Pipeline),
+			toolutil.FormatTime(v.CreatedAt),
 		)
 	}
-}
-
-// versionPipelineSummary renders the pipeline that built one other version as
-// the listing renders a package's own pipeline, or nothing when GitLab sent
-// none.
-func versionPipelineSummary(pipeline *toolutil.PackagePipelineOutput) string {
-	if pipeline == nil {
-		return ""
-	}
-	return pipelineItemSummary(*pipeline)
 }
 
 // FormatPublishMarkdown renders a published package file as the card of one
@@ -174,7 +156,7 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListHeading(&b, "Packages", len(out.Packages), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Version", "Type", "Status", "Creator", "Pipeline"))
 	for _, p := range out.Packages {
-		writePackageRow(&b, p, pipelineSummary(p))
+		writePackageRow(&b, p, pipelineSummary(p.Pipeline))
 	}
 	// The pipeline column carries a link, so the footer keeps the instruction
 	// to preserve it.
@@ -197,21 +179,12 @@ func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
 	b.WriteString(toolutil.MarkdownTableRow(
 		strconv.FormatInt(p.ID, 10),
 		toolutil.EscapeMdTableCell(p.Name),
-		toolutil.EscapeMdTableCell(versionSummary(p)),
+		toolutil.EscapeMdTableCell(p.Version),
 		toolutil.EscapeMdTableCell(p.PackageType),
 		toolutil.EscapeMdTableCell(p.Status),
 		creatorSummary(p),
 		lastColumn,
 	))
-}
-
-// versionSummary names the package's version and how many others GitLab sent
-// beside it, which it does when one package is asked for rather than a page.
-func versionSummary(pkg ListItem) string {
-	if len(pkg.Versions) == 0 {
-		return pkg.Version
-	}
-	return fmt.Sprintf("%s (+%d)", pkg.Version, len(pkg.Versions))
 }
 
 // creatorSummary names the user who published the package, and nothing when
@@ -223,25 +196,15 @@ func creatorSummary(pkg ListItem) string {
 	return strconv.FormatInt(pkg.CreatorID, 10)
 }
 
-func pipelineSummary(pkg ListItem) string {
-	if pkg.Pipeline != nil {
-		return pipelineItemSummary(*pkg.Pipeline)
+// pipelineSummary renders the pipeline that last built a package or one of its
+// other versions as a cell: its id, status and ref, linked to its page when
+// GitLab gave one, or nothing when GitLab sent no pipeline. The ref is a branch
+// or tag name, so the text is escaped here on the path with no link, and by the
+// link helper on the other.
+func pipelineSummary(pipeline *toolutil.PackagePipelineOutput) string {
+	if pipeline == nil {
+		return ""
 	}
-	if len(pkg.Pipelines) > 0 {
-		latest := pkg.Pipelines[0]
-		if len(pkg.Pipelines) == 1 {
-			return pipelineItemSummary(latest)
-		}
-		return fmt.Sprintf("%s (+%d)", pipelineItemSummary(latest), len(pkg.Pipelines)-1)
-	}
-	return ""
-}
-
-// pipelineItemSummary renders one pipeline as a cell: its id, status and ref,
-// linked to its page when GitLab gave one. The ref is a branch or tag name, so
-// the text is escaped here on the path with no link, and by the link helper on
-// the other.
-func pipelineItemSummary(pipeline toolutil.PackagePipelineOutput) string {
 	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
 	if pipeline.WebURL == "" {
 		return toolutil.EscapeMdTableCell(summary)

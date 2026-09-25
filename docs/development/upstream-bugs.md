@@ -1192,15 +1192,18 @@ of change whose test is one assertion on the built URL.
   release's `packages.go` in the module cache: both listings read `creator_id`
   and `conan_package_name` off `Package`, and `PackageExtra` now holds only the
   five pipeline keys the `PackagePipeline` gap below records. Those are read on
-  every route that renders a package: on the package's own `pipeline` and
-  `pipelines` by both listings and by `package.get`, the action the bump's
-  `GetProjectPackage` made possible, and on the pipeline of each other version
-  by `package.get` alone. The rest of what that capture
-  read needed no field of `gitlab-org/api/client-go!3052`, and is not lost:
-  the owning project's `project_id` and `project_path` are sent only to a
-  group's listing, where `GroupPackage` already decodes them, and `versions`
-  only to a request for one package, which neither listing is, because the
-  entity leaves them out of a collection.
+  every route that renders a package: on the package's own `pipeline` by both
+  listings and by `package.get`, the action the bump's `GetProjectPackage` made
+  possible, and on the pipeline of each other version by `package.get` alone.
+  The rest of what that capture read needed no field of
+  `gitlab-org/api/client-go!3052`, and is not lost: the owning project's
+  `project_id` and `project_path` are sent only to a group's listing, where
+  `GroupPackage` already decodes them, and `versions` only to a request for one
+  package, which neither listing is, because the entity leaves them out of a
+  collection. The entity's `pipelines` is read by nothing: it renders the
+  constant `EMPTY_PIPELINES` whatever the package, deprecated in GitLab 16.1,
+  so client-go's `Pipelines` decodes an empty list or none and this server
+  publishes no such key.
 
   `systemhooks` keeps its workaround whole: it still reads the seven `Hook`
   fields of `gitlab-org/api/client-go!3048`, which is open, off the capture,
@@ -1433,9 +1436,11 @@ captured response, so each carries a live workaround:
   into `BasicUser`, which is missing the `public_email` and `locked` of the
   `UserBasic` GitLab renders there, and carries a `created_at` that entity
   never sends. Every route that renders a package renders that pipeline: as
-  the package's own `pipeline` and `pipelines` on both listings and on a
-  request for one package, and as the pipeline of each other version on the
-  last. This server publishes all five on every one of them, reading them off
+  the package's own `pipeline` on both listings and on a request for one
+  package, and as the pipeline of each other version on the last. The same
+  entity renders `pipelines` too, but as a constant empty list since GitLab
+  16.1, so no pipeline ever arrives there to be short of anything. This server
+  publishes all five on every one of them, reading them off
   the captured response beside the SDK's decode (`toolutil.CapturedPackage`
   and `toolutil.CapturedPackages`, under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),

@@ -401,7 +401,7 @@ func TestPackageList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPackageList {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","pipeline":{"id":77,"iid":4,"project_id":42,"source":"push","status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/77","user":{"id":5,"username":"alice","name":"Alice","public_email":"alice@example.com","locked":true,"web_url":"https://gitlab.example.com/alice"}},"pipelines":[{"id":76,"iid":3,"project_id":43,"source":"web","status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/76"}],"last_downloaded_at":"2026-06-01T12:00:00.123Z","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/project/-/packages/10"}}]`,
+				`[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","pipeline":{"id":77,"iid":4,"project_id":42,"source":"push","status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/project/-/pipelines/77","user":{"id":5,"username":"alice","name":"Alice","public_email":"alice@example.com","locked":true,"web_url":"https://gitlab.example.com/alice"}},"pipelines":[],"last_downloaded_at":"2026-06-01T12:00:00.123Z","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/project/-/packages/10"}}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -426,7 +426,7 @@ func TestPackageList_Success(t *testing.T) {
 	if out.Packages[0].PackageType != "generic" {
 		t.Errorf("Packages[0].PackageType = %q, want %q", out.Packages[0].PackageType, "generic")
 	}
-	assertListedPipelines(t, out.Packages[0])
+	assertListedPipeline(t, out.Packages[0])
 	// RFC 3339, seconds and UTC, which is what the card's time helper reads.
 	if out.Packages[0].LastDownloadedAt != "2026-06-01T12:00:00Z" {
 		t.Errorf("Packages[0].LastDownloadedAt = %q, want 2026-06-01T12:00:00Z", out.Packages[0].LastDownloadedAt)
@@ -439,11 +439,13 @@ func TestPackageList_Success(t *testing.T) {
 	}
 }
 
-// assertListedPipelines holds the listed package of TestPackageList_Success to
-// its two pipelines. The pipeline's iid, project and source, and its user's
-// address and lock, are keys client-go does not decode: the listing reads them
-// off the captured answer, each pipeline at its own position.
-func assertListedPipelines(t *testing.T, item ListItem) {
+// assertListedPipeline holds the listed package of TestPackageList_Success to
+// the pipeline that last built it. The pipeline's iid, project and source, and
+// its user's address and lock, are keys client-go does not decode: the listing
+// reads them off the captured answer. It also holds the item to publishing
+// neither pipelines, which GitLab sends as its constant empty list, nor
+// versions, which it sends only to a request for one package.
+func assertListedPipeline(t *testing.T, item ListItem) {
 	t.Helper()
 	pipeline := item.Pipeline
 	if pipeline == nil || pipeline.ID != 77 || pipeline.IID != 4 || pipeline.ProjectID != 42 || pipeline.Source != "push" {
@@ -452,20 +454,25 @@ func assertListedPipelines(t *testing.T, item ListItem) {
 	if pipeline.User == nil || pipeline.User.Username != "alice" || pipeline.User.PublicEmail != "alice@example.com" || !pipeline.User.Locked {
 		t.Fatalf("Pipeline.User = %+v, want alice, alice@example.com, locked", pipeline.User)
 	}
-	listed := item.Pipelines
-	if len(listed) != 1 || listed[0].ID != 76 || listed[0].IID != 3 || listed[0].ProjectID != 43 || listed[0].Source != "web" {
-		t.Fatalf("Pipelines = %+v, want 76 with iid 3, project 43 and source web", listed)
+	published, err := json.Marshal(item)
+	if err != nil {
+		t.Fatalf("marshal item: %v", err)
+	}
+	for _, key := range []string{`"pipelines"`, `"versions"`} {
+		if strings.Contains(string(published), key) {
+			t.Errorf("item published as %s, want no %s key", published, key)
+		}
 	}
 }
 
-// TestPackageToListItem_OptionalPipelineFields verifies that package conversion
-// preserves optional pipeline timestamps and user metadata while skipping nil
-// entries, and that the extra read at the null's position is not the one the
-// pipeline beside it takes.
+// TestPackageToListItem_OptionalPipelineFields verifies the pipeline that last
+// built a package keeps its timestamps, in RFC 3339 to the second as the
+// package's own are although GitLab writes them with milliseconds, its user,
+// and the keys the capture read beside it.
 func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
-	now := time.Date(2026, 5, 6, 11, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 5, 6, 11, 0, 0, 123000000, time.UTC)
 	updated := now.Add(time.Minute)
-	extra := toolutil.PackageExtra{Pipelines: []toolutil.PackagePipelineExtra{{IID: 1}, {IID: 2, Source: "push"}}}
+	extra := toolutil.PackageExtra{Pipeline: &toolutil.PackagePipelineExtra{IID: 2, Source: "push"}}
 	item := packageToListItem(&gl.Package{
 		ID:          99,
 		Name:        "pkg",
@@ -473,22 +480,19 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 		PackageType: "generic",
 		Status:      "default",
 		CreatedAt:   &now,
-		Pipelines: []*gl.PackagePipeline{
-			nil,
-			{
-				ID:        77,
-				Status:    "success",
-				Ref:       "main",
-				SHA:       "abc123",
-				WebURL:    "https://gitlab.example.com/pipelines/77",
-				CreatedAt: &now,
-				UpdatedAt: &updated,
-				User: &gl.BasicUser{
-					ID:       5,
-					Username: "alice",
-					Name:     "Alice",
-					WebURL:   "https://gitlab.example.com/alice",
-				},
+		Pipeline: &gl.PackagePipeline{
+			ID:        77,
+			Status:    "success",
+			Ref:       "main",
+			SHA:       "abc123",
+			WebURL:    "https://gitlab.example.com/pipelines/77",
+			CreatedAt: &now,
+			UpdatedAt: &updated,
+			User: &gl.BasicUser{
+				ID:       5,
+				Username: "alice",
+				Name:     "Alice",
+				WebURL:   "https://gitlab.example.com/alice",
 			},
 		},
 	}, extra)
@@ -496,15 +500,12 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 	if item.CreatedAt != "2026-05-06T11:00:00Z" {
 		t.Fatalf("CreatedAt = %q, want 2026-05-06T11:00:00Z", item.CreatedAt)
 	}
-	if len(item.Pipelines) != 1 {
-		t.Fatalf("Pipelines = %+v, want one non-nil pipeline", item.Pipelines)
+	pipeline := item.Pipeline
+	if pipeline == nil || pipeline.ID != 77 || pipeline.IID != 2 || pipeline.Source != "push" {
+		t.Fatalf("pipeline = %+v, want 77 with the keys the capture read", pipeline)
 	}
-	pipeline := item.Pipelines[0]
-	if pipeline.ID != 77 || pipeline.IID != 2 || pipeline.Source != "push" {
-		t.Fatalf("pipeline = %+v, want 77 with the extra read at its own position", pipeline)
-	}
-	if pipeline.CreatedAt == nil || !pipeline.CreatedAt.Equal(now) || pipeline.UpdatedAt == nil || !pipeline.UpdatedAt.Equal(updated) {
-		t.Fatalf("pipeline timestamps = %v / %v, want %v / %v", pipeline.CreatedAt, pipeline.UpdatedAt, now, updated)
+	if pipeline.CreatedAt != "2026-05-06T11:00:00Z" || pipeline.UpdatedAt != "2026-05-06T11:01:00Z" {
+		t.Fatalf("pipeline timestamps = %q / %q, want 2026-05-06T11:00:00Z / 2026-05-06T11:01:00Z", pipeline.CreatedAt, pipeline.UpdatedAt)
 	}
 	if pipeline.User == nil || pipeline.User.Username != "alice" {
 		t.Fatalf("pipeline user = %+v, want alice", pipeline.User)
@@ -1176,9 +1177,10 @@ var errNoPackage = errors.New("the handler published no package")
 // TestPackages_PublishTheFieldsClientGoDecodes verifies both listing handlers
 // publish who published the package and the Conan recipe name, which
 // client-go's Package decodes as of v3.14.0, and publish on the package's own
-// item no other version. A listing never carries versions, since the entity
-// leaves them out of a collection, and the owning project reaches a reader
-// through the group listing's own item, which the next test holds.
+// item no versions key, even from an answer carrying them. A listing never
+// carries versions, since the entity leaves them out of a collection, so the
+// key belongs to the item package.get fills alone; the owning project reaches a
+// reader through the group listing's own item, which the next test holds.
 func TestPackages_PublishTheFieldsClientGoDecodes(t *testing.T) {
 	for _, packageCall := range packageCalls {
 		t.Run(packageCall.name, func(t *testing.T) {
@@ -1192,10 +1194,22 @@ func TestPackages_PublishTheFieldsClientGoDecodes(t *testing.T) {
 			if item.ConanPackageName != "my-pkg" {
 				t.Errorf("conan_package_name = %q, want my-pkg", item.ConanPackageName)
 			}
-			if item.Versions != nil {
-				t.Errorf("versions = %+v, want none on a listing", item.Versions)
-			}
+			assertPublishesNoKey(t, item, "versions")
 		})
+	}
+}
+
+// assertPublishesNoKey reports v serializing with any of keys at any depth.
+func assertPublishesNoKey(t *testing.T, v any, keys ...string) {
+	t.Helper()
+	published, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", v, err)
+	}
+	for _, key := range keys {
+		if strings.Contains(string(published), `"`+key+`"`) {
+			t.Errorf("%T published as %s, want no %s key", v, published, key)
+		}
 	}
 }
 
@@ -1216,8 +1230,8 @@ func TestGroupList_PublishesTheOwningProjectOnItsOwnItem(t *testing.T) {
 }
 
 // TestPackages_OmitTheFieldsGitLabDidNotSend verifies a package answered
-// without the Conan name and the other versions publishes neither, while the
-// creator GitLab always sends still arrives.
+// without the Conan name publishes none, while the creator GitLab always sends
+// still arrives.
 func TestPackages_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 	for _, packageCall := range packageCalls {
 		t.Run(packageCall.name, func(t *testing.T) {
@@ -1227,9 +1241,6 @@ func TestPackages_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 			}
 			if item.ConanPackageName != "" {
 				t.Errorf("conan_package_name = %q, want none for a generic package", item.ConanPackageName)
-			}
-			if item.Versions != nil {
-				t.Errorf("versions = %+v, want none", item.Versions)
 			}
 			if item.CreatorID != 57 {
 				t.Errorf("creator_id = %d, want 57", item.CreatorID)
@@ -1298,13 +1309,14 @@ func TestPackages_UnreadablePipelineKey_RefusedByTheCapture(t *testing.T) {
 }
 
 // TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend verifies a
-// package carrying no pipeline history and no tags publishes neither, rather
-// than publishing an empty list for each.
+// package carrying an empty list of tags, and GitLab's constant empty list of
+// pipelines, publishes neither key, rather than an empty list for each.
 func TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend(t *testing.T) {
-	item := packageToListItem(&gl.Package{ID: 1, Name: "pkg", Version: "1.0.0"}, toolutil.PackageExtra{})
-	if item.Pipelines != nil {
-		t.Errorf("Pipelines = %+v, want none", item.Pipelines)
-	}
+	item := packageToListItem(&gl.Package{
+		ID: 1, Name: "pkg", Version: "1.0.0",
+		Tags: []gl.PackageTag{}, Pipelines: []*gl.PackagePipeline{},
+	}, toolutil.PackageExtra{})
+	assertPublishesNoKey(t, item, "tags", "pipelines", "pipeline")
 	if item.Tags != nil {
 		t.Errorf("Tags = %+v, want none", item.Tags)
 	}
@@ -1504,18 +1516,23 @@ func TestPackageOptions_UseTheMetadataTable(t *testing.T) {
 // stood, the package's version and status could be swapped, a pipeline's ref
 // and sha could be swapped, and the publishing user's avatar and profile URLs
 // could be swapped, with every test still green.
+//
+// Every timestamp carries a fraction of a second, as GitLab writes them, and
+// every one is published to the second: the package's own, its tag's and its
+// pipeline's used to be published at two precisions in one answer.
 func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
-	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	downloaded := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
-	tagCreated := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
-	tagUpdated := time.Date(2026, 4, 5, 6, 7, 8, 0, time.UTC)
-	pipeCreated := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC)
-	pipeUpdated := time.Date(2026, 6, 7, 8, 9, 10, 0, time.UTC)
+	created := time.Date(2026, 1, 2, 3, 4, 5, 100000000, time.UTC)
+	downloaded := time.Date(2026, 2, 3, 4, 5, 6, 200000000, time.UTC)
+	tagCreated := time.Date(2026, 3, 4, 5, 6, 7, 300000000, time.UTC)
+	tagUpdated := time.Date(2026, 4, 5, 6, 7, 8, 400000000, time.UTC)
+	pipeCreated := time.Date(2026, 5, 6, 7, 8, 9, 500000000, time.UTC)
+	pipeUpdated := time.Date(2026, 6, 7, 8, 9, 10, 600000000, time.UTC)
 	userCreated := time.Date(2026, 7, 8, 9, 10, 11, 0, time.UTC)
 
-	// The package's current pipeline and the one entry of its history differ
-	// in every field, so reading the history where the current pipeline
-	// belongs, or the other way round, is visible too.
+	// The pipeline that last built the package, and one GitLab lists beside
+	// it, differ in every field. GitLab has rendered that list as a constant
+	// empty one since 16.1, so nothing of it is published even where client-go
+	// decoded an entry, and reading it where the pipeline belongs is visible.
 	current := &gl.PackagePipeline{
 		ID:        71,
 		Status:    "success",
@@ -1539,14 +1556,11 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 		WebURL: "https://gitlab.example.com/p/-/pipelines/62",
 	}
 
-	// The captured keys differ between the two pipelines as well, so a key read
-	// at the other one's position is visible.
 	extra := toolutil.PackageExtra{
 		Pipeline: &toolutil.PackagePipelineExtra{
 			IID: 8, ProjectID: 42, Source: "push",
 			User: &toolutil.UserBasicExtra{Locked: true, PublicEmail: "alice@example.com"},
 		},
-		Pipelines: []toolutil.PackagePipelineExtra{{IID: 7, ProjectID: 43, Source: "schedule"}},
 	}
 
 	got := packageToListItem(&gl.Package{
@@ -1595,8 +1609,8 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 			Ref:       "main",
 			Status:    "success",
 			Source:    "push",
-			CreatedAt: &pipeCreated,
-			UpdatedAt: &pipeUpdated,
+			CreatedAt: "2026-05-06T07:08:09Z",
+			UpdatedAt: "2026-06-07T08:09:10Z",
 			WebURL:    "https://gitlab.example.com/p/-/pipelines/71",
 			User: &toolutil.UserBasicOutput{
 				ID:          5,
@@ -1609,16 +1623,12 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 				WebURL:      "https://gitlab.example.com/alice",
 			},
 		},
-		Pipelines: []toolutil.PackagePipelineOutput{{
-			ID: 62, IID: 7, ProjectID: 43, Status: "failed", Ref: "release-1", SHA: "bbb222", Source: "schedule",
-			WebURL: "https://gitlab.example.com/p/-/pipelines/62",
-		}},
 		// RFC 3339, which is what the card's time helper reads; Go's String
 		// form, published here before, reached the card unparsed.
 		CreatedAt:        "2026-01-02T03:04:05Z",
 		LastDownloadedAt: "2026-02-03T04:05:06Z",
 		CreatorID:        57,
-		Tags: []TagItem{{
+		Tags: []toolutil.PackageTagOutput{{
 			ID: 3, PackageID: 10, Name: "latest",
 			CreatedAt: "2026-03-04T05:06:07Z", UpdatedAt: "2026-04-05T06:07:08Z",
 		}},
@@ -1751,7 +1761,9 @@ const packageGetJSON = `{"id":10,"name":"my-pkg","version":"1.0.0","package_type
 	`"user":{"id":6,"username":"bob","public_email":"bob@example.com","name":"Bob",` +
 	`"state":"active","locked":false,"avatar_url":"https://gitlab.example.com/b.png",` +
 	`"web_url":"https://gitlab.example.com/bob"}},"pipelines":[],` +
-	`"versions":[{"id":9,"version":"0.9.0","created_at":"2026-01-02T03:04:05Z",` +
+	`"tags":[{"id":2,"package_id":10,"name":"latest","created_at":"2026-01-03T03:04:05.5Z",` +
+	`"updated_at":"2026-01-04T03:04:05.25Z"}],` +
+	`"versions":[{"id":9,"version":"0.9.0","created_at":"2026-01-02T03:04:05.75Z",` +
 	`"tags":[{"id":3,"package_id":9,"name":"stable","created_at":"2026-01-05T03:04:05Z",` +
 	`"updated_at":"2026-01-06T03:04:05Z"}],` +
 	`"pipeline":{"id":77,"iid":4,"project_id":42,"sha":"abc123","ref":"main","status":"success",` +
@@ -1779,13 +1791,20 @@ const wantGotVersions = `[{"id":9,"version":"0.9.0","created_at":"2026-01-02T03:
 // wantGotPipeline is how Get publishes the pipeline that last built the
 // package packageGetJSON carries: the same eleven keys, and the same eight of
 // its user, as each version's pipeline, which is what a caller reading both in
-// one answer is owed. The time is GitLab's own, fraction of a second included.
+// one answer is owed. Its time is RFC 3339 to the second, as every other time
+// in the answer is, although GitLab wrote it with milliseconds.
 const wantGotPipeline = `{"id":78,"iid":5,"project_id":42,"sha":"def456","ref":"release","status":"running",` +
-	`"source":"web","created_at":"2026-01-09T03:04:05.123Z","updated_at":"2026-01-10T03:04:05Z",` +
+	`"source":"web","created_at":"2026-01-09T03:04:05Z","updated_at":"2026-01-10T03:04:05Z",` +
 	`"web_url":"https://gitlab.example.com/p/-/pipelines/78",` +
 	`"user":{"id":6,"username":"bob","public_email":"bob@example.com","name":"Bob",` +
 	`"state":"active","locked":false,"avatar_url":"https://gitlab.example.com/b.png",` +
 	`"web_url":"https://gitlab.example.com/bob"}}`
+
+// wantGotTags is how Get publishes the tag pointing at the package
+// packageGetJSON carries: in the shape and to the precision a version's tag is
+// published in beside it, although GitLab wrote its times with fractions.
+const wantGotTags = `[{"id":2,"package_id":10,"name":"latest","created_at":"2026-01-03T03:04:05Z",` +
+	`"updated_at":"2026-01-04T03:04:05Z"}]`
 
 // assertPublishedAs reports a value serializing to anything but want, which is
 // the form a caller reads it in.
@@ -1810,8 +1829,11 @@ func assertVersionsPublishedAs(t *testing.T, versions []toolutil.PackageVersionO
 // package at its own route and publishes every field package.list does, the
 // pipeline that last built the package completed exactly as each version's
 // pipeline is, and the package's other versions, each version's pipeline
-// completed with the keys client-go does not decode. The owning project is not
-// among the keys: GitLab sends it only to a group's listing.
+// completed with the keys client-go does not decode. Its tags, its versions'
+// tags and every time in it share one shape and one precision. The owning
+// project is not among the keys, since GitLab sends it only to a group's
+// listing, and neither is pipelines, which GitLab sends as a constant empty
+// list.
 func TestGet_PublishesThePackageWithItsOtherVersions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != pathPackageGet {
@@ -1832,6 +1854,7 @@ func TestGet_PublishesThePackageWithItsOtherVersions(t *testing.T) {
 		t.Errorf("creator and recipe = %d / %q, want 57 / recipe-name", p.CreatorID, p.ConanPackageName)
 	}
 	assertPublishedAs(t, "pipeline", p.Pipeline, wantGotPipeline)
+	assertPublishedAs(t, "tags", p.Tags, wantGotTags)
 	assertVersionsPublishedAs(t, p.Versions, wantGotVersions)
 
 	published, err := json.Marshal(out)
@@ -1844,7 +1867,7 @@ func TestGet_PublishesThePackageWithItsOtherVersions(t *testing.T) {
 	if err = json.Unmarshal(published, &envelope); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	for _, key := range []string{"project_id", "project_path"} {
+	for _, key := range []string{"project_id", "project_path", "pipelines"} {
 		t.Run(key, func(t *testing.T) {
 			if _, ok := envelope.Package[key]; ok {
 				t.Errorf("package publishes %s, which this route is never sent", key)
@@ -1853,11 +1876,12 @@ func TestGet_PublishesThePackageWithItsOtherVersions(t *testing.T) {
 	}
 }
 
-// TestGet_VersionShapes verifies each shape an other version can arrive in is
-// published as GitLab sent it: no version at all, a version whose tag list is
-// empty rather than absent, one GitLab sent without tags or a pipeline, a
-// pipeline without the user who ran it, and a null entry, whose neighbor keeps
-// the pipeline keys read at its own position rather than the null's.
+// TestGet_VersionShapes verifies each shape an other version can arrive in:
+// no version at all, a version whose tag list is empty and one GitLab sent
+// without tags, both of which publish no tags key, as the package's own item
+// does, a version sent without a time or a pipeline, a pipeline without the
+// user who ran it, and a null entry, whose neighbor keeps the pipeline keys
+// read at its own position rather than the null's.
 func TestGet_VersionShapes(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
@@ -1868,26 +1892,26 @@ func TestGet_VersionShapes(t *testing.T) {
 		{
 			name:     "an empty tag list and no pipeline",
 			versions: `[{"id":9,"version":"0.9.0","tags":[]}]`,
-			want:     `[{"id":9,"version":"0.9.0","created_at":null,"tags":[],"pipeline":null}]`,
+			want:     `[{"id":9,"version":"0.9.0","pipeline":null}]`,
 		},
 		{
 			name:     "no tags sent",
 			versions: `[{"id":9,"version":"0.9.0"}]`,
-			want:     `[{"id":9,"version":"0.9.0","created_at":null,"tags":null,"pipeline":null}]`,
+			want:     `[{"id":9,"version":"0.9.0","pipeline":null}]`,
 		},
 		{
 			name: "a pipeline without its user",
 			versions: `[{"id":9,"version":"0.9.0","tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,` +
 				`"sha":"abc123","ref":"main","status":"success","source":"push","web_url":"https://g/p/77","user":null}}]`,
-			want: `[{"id":9,"version":"0.9.0","created_at":null,"tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,` +
-				`"sha":"abc123","ref":"main","status":"success","source":"push","created_at":null,"updated_at":null,` +
+			want: `[{"id":9,"version":"0.9.0","pipeline":{"id":77,"iid":4,"project_id":42,` +
+				`"sha":"abc123","ref":"main","status":"success","source":"push",` +
 				`"web_url":"https://g/p/77","user":null}}]`,
 		},
 		{
 			name:     "a null version beside one",
 			versions: `[null,{"id":9,"version":"0.9.0","tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,"source":"push"}}]`,
-			want: `[{"id":9,"version":"0.9.0","created_at":null,"tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,` +
-				`"sha":"","ref":"","status":"","source":"push","created_at":null,"updated_at":null,"web_url":"","user":null}}]`,
+			want: `[{"id":9,"version":"0.9.0","pipeline":{"id":77,"iid":4,"project_id":42,` +
+				`"sha":"","ref":"","status":"","source":"push","web_url":"","user":null}}]`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2011,15 +2035,18 @@ func TestExtraAt_ReadsOnlyWhatTheCaptureHolds(t *testing.T) {
 	}
 }
 
-// TestPackageConversions_WithoutACapture verifies a package's listed
-// pipelines and its other versions convert without a capture, each publishing
-// what client-go decoded and no captured key, rather than indexing past the
-// extras they were not given.
+// TestPackageConversions_WithoutACapture verifies a package's own pipeline
+// and its other versions convert without a capture, each publishing what
+// client-go decoded and no captured key, rather than dereferencing or indexing
+// past the extras they were not given.
 func TestPackageConversions_WithoutACapture(t *testing.T) {
 	pipeline := &gl.PackagePipeline{ID: 62, Status: "failed"}
-	item := packageToListItem(&gl.Package{ID: 10, Pipelines: []*gl.PackagePipeline{pipeline}}, toolutil.PackageExtra{})
-	if len(item.Pipelines) != 1 || item.Pipelines[0].ID != 62 || item.Pipelines[0].IID != 0 {
-		t.Errorf("pipelines = %+v, want 62 without a captured iid", item.Pipelines)
+	item := packageToDetailItem(&gl.Package{ID: 10, Pipeline: pipeline, Versions: []*gl.PackageVersion{{ID: 9}}}, toolutil.PackageExtra{})
+	if item.Pipeline == nil || item.Pipeline.ID != 62 || item.Pipeline.IID != 0 {
+		t.Errorf("pipeline = %+v, want 62 without a captured iid", item.Pipeline)
+	}
+	if len(item.Versions) != 1 || item.Versions[0].ID != 9 {
+		t.Errorf("versions = %+v, want 9", item.Versions)
 	}
 	versions := packageVersionsToOutput([]*gl.PackageVersion{{ID: 9, Pipeline: pipeline}}, nil)
 	if len(versions) != 1 || versions[0].Pipeline == nil || versions[0].Pipeline.ID != 62 || versions[0].Pipeline.IID != 0 {

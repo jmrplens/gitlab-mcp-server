@@ -321,49 +321,26 @@ func TestGroupProjectSummary_Variants(t *testing.T) {
 	}
 }
 
-// TestPipelineSummary_Variants verifies package pipeline summaries for primary,
-// historical, linked, and empty pipeline data.
+// TestPipelineSummary_Variants verifies the pipeline cell: nothing when GitLab
+// sent no pipeline, the id, status and ref otherwise, linked to the pipeline's
+// page when GitLab gave one, and escaped when it did not, since a ref is a
+// branch or tag name.
 func TestPipelineSummary_Variants(t *testing.T) {
 	tests := []struct {
-		name string
-		pkg  ListItem
-		want string
+		name     string
+		pipeline *toolutil.PackagePipelineOutput
+		want     string
 	}{
-		{name: "none", pkg: ListItem{}, want: ""},
-		{name: "primary", pkg: ListItem{Pipeline: &toolutil.PackagePipelineOutput{ID: 7, Status: "success", Ref: "main"}}, want: "7 success main"},
-		{name: "primary link", pkg: ListItem{Pipeline: &toolutil.PackagePipelineOutput{ID: 7, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/pipelines/7"}}, want: "[7 success main](https://gitlab.example.com/pipelines/7)"},
-		{name: "single history", pkg: ListItem{Pipelines: []toolutil.PackagePipelineOutput{{ID: 8, Status: "failed", Ref: "release"}}}, want: "8 failed release"},
-		{name: "multiple history", pkg: ListItem{Pipelines: []toolutil.PackagePipelineOutput{{ID: 9, Status: "running", Ref: "dev"}, {ID: 10}}}, want: "9 running dev (+1)"},
-		{name: "multiple history link", pkg: ListItem{Pipelines: []toolutil.PackagePipelineOutput{{ID: 9, Status: "running", Ref: "dev", WebURL: "https://gitlab.example.com/pipelines/9"}, {ID: 10}}}, want: "[9 running dev](https://gitlab.example.com/pipelines/9) (+1)"},
+		{name: "none", pipeline: nil, want: ""},
+		{name: "text", pipeline: &toolutil.PackagePipelineOutput{ID: 7, Status: "success", Ref: "main"}, want: "7 success main"},
+		{name: "link", pipeline: &toolutil.PackagePipelineOutput{ID: 7, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/pipelines/7"}, want: "[7 success main](https://gitlab.example.com/pipelines/7)"},
+		{name: "escaped ref", pipeline: &toolutil.PackagePipelineOutput{ID: 8, Status: "failed", Ref: "a|b"}, want: "8 failed a&#124;b"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pipelineSummary(tt.pkg); got != tt.want {
+			if got := pipelineSummary(tt.pipeline); got != tt.want {
 				t.Fatalf("pipelineSummary() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestVersionSummary_Variants verifies the version cell names the package's
-// own version, and counts the other versions beside it when GitLab sent them.
-func TestVersionSummary_Variants(t *testing.T) {
-	for _, testCase := range []struct {
-		name string
-		pkg  ListItem
-		want string
-	}{
-		{name: "alone", pkg: ListItem{Version: "1.0.0"}, want: "1.0.0"},
-		{
-			name: "with others",
-			pkg:  ListItem{Version: "1.0.0", Versions: []toolutil.PackageVersionOutput{{ID: 9}, {ID: 8}}},
-			want: "1.0.0 (+2)",
-		},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			if got := versionSummary(testCase.pkg); got != testCase.want {
-				t.Errorf("versionSummary() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
@@ -489,13 +466,14 @@ func TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn(t *testing.T) {
 }
 
 // TestFormatPackageListMarkdown_SentFields verifies both list tables carry the
-// creator column and the count of other versions read off the captured answer.
+// creator column, and name the package's own version alone: a listing is never
+// sent the other versions, so the cell has no count of them to give.
 func TestFormatPackageListMarkdown_SentFields(t *testing.T) {
 	item := ListItem{
 		ID: 10, Name: "my-pkg", Version: "1.0.0", PackageType: "generic", Status: "default",
-		CreatorID: 57, Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
+		CreatorID: 57,
 	}
-	const row = "| 10 | my-pkg | 1.0.0 (+1) | generic | default | 57 | "
+	const row = "| 10 | my-pkg | 1.0.0 | generic | default | 57 | "
 	tests := []struct {
 		name string
 		got  string
@@ -595,7 +573,7 @@ func TestFormatGetMarkdown_WholeCard(t *testing.T) {
 // fetches from the Generic Package Registry, and for no other type, where the
 // action would ask the generic route for a package it does not hold.
 func TestFormatGetMarkdown_OffersTheDownloadOnlyForAGenericPackage(t *testing.T) {
-	got := FormatGetMarkdown(GetOutput{Package: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", PackageType: "generic"}})
+	got := FormatGetMarkdown(GetOutput{Package: DetailItem{ListItem: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", PackageType: "generic"}}})
 	want := "## Package: my-pkg\n\n" +
 		"- **ID**: 10\n" +
 		"- **Version**: 1.0.0\n" +
@@ -606,7 +584,7 @@ func TestFormatGetMarkdown_OffersTheDownloadOnlyForAGenericPackage(t *testing.T)
 	}
 	for _, packageType := range []string{"npm", "maven", "conan", "pypi", "Generic"} {
 		t.Run(packageType, func(t *testing.T) {
-			card := FormatGetMarkdown(GetOutput{Package: ListItem{ID: 10, Name: testPackageName, PackageType: packageType}})
+			card := FormatGetMarkdown(GetOutput{Package: DetailItem{ListItem: ListItem{ID: 10, Name: testPackageName, PackageType: packageType}}})
 			if !strings.HasSuffix(card, getHints) || strings.Contains(card, "package.download") {
 				t.Errorf("FormatGetMarkdown(%s) ends\n%q\nwant the hints without package.download", packageType, card)
 			}
@@ -618,7 +596,7 @@ func TestFormatGetMarkdown_OffersTheDownloadOnlyForAGenericPackage(t *testing.T)
 // no creator, links, pipeline, tags or other versions is the card of what it
 // has and nothing else: no empty row, and no table heading over no rows.
 func TestFormatGetMarkdown_LeavesOutWhatGitLabDidNotSend(t *testing.T) {
-	got := FormatGetMarkdown(GetOutput{Package: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", Links: &LinksItem{}}})
+	got := FormatGetMarkdown(GetOutput{Package: DetailItem{ListItem: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", Links: &LinksItem{}}}})
 	want := "## Package: my-pkg\n\n" +
 		"- **ID**: 10\n" +
 		"- **Version**: 1.0.0\n" +
@@ -637,9 +615,8 @@ func TestFormatGetMarkdown_EscapesWhatGitLabAuthored(t *testing.T) {
 		tag     = "rc|<i>1</i>"
 		version = "2.0|<u>0</u>"
 	)
-	got := FormatGetMarkdown(GetOutput{Package: ListItem{
-		ID: 10, Name: name, Version: "1.0.0",
-		Tags:     []TagItem{{Name: tag}},
+	got := FormatGetMarkdown(GetOutput{Package: DetailItem{
+		ListItem: ListItem{ID: 10, Name: name, Version: "1.0.0", Tags: []toolutil.PackageTagOutput{{Name: tag}}},
 		Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: version, Tags: []toolutil.PackageTagOutput{{Name: tag}}}},
 	}})
 	for _, raw := range []string{name, tag, version} {

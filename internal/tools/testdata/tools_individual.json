@@ -113452,10 +113452,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "created_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
+                    "type": "string"
                   },
                   "id": {
                     "type": "integer"
@@ -113479,10 +113476,7 @@
                     "type": "string"
                   },
                   "updated_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
+                    "type": "string"
                   },
                   "user": {
                     "additionalProperties": false,
@@ -113535,114 +113529,12 @@
                   "ref",
                   "status",
                   "source",
-                  "created_at",
-                  "updated_at",
                   "web_url",
                   "user"
                 ],
                 "type": [
                   "null",
                   "object"
-                ]
-              },
-              "pipelines": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "created_at": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "iid": {
-                      "type": "integer"
-                    },
-                    "project_id": {
-                      "type": "integer"
-                    },
-                    "ref": {
-                      "type": "string"
-                    },
-                    "sha": {
-                      "type": "string"
-                    },
-                    "source": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "updated_at": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "user": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "avatar_url": {
-                          "type": "string"
-                        },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "locked": {
-                          "type": "boolean"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "public_email": {
-                          "type": "string"
-                        },
-                        "state": {
-                          "type": "string"
-                        },
-                        "username": {
-                          "type": "string"
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "username",
-                        "name",
-                        "locked"
-                      ],
-                      "type": [
-                        "null",
-                        "object"
-                      ]
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "iid",
-                    "project_id",
-                    "sha",
-                    "ref",
-                    "status",
-                    "source",
-                    "created_at",
-                    "updated_at",
-                    "web_url",
-                    "user"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
                 ]
               },
               "project_id": {
@@ -113688,174 +113580,6 @@
               },
               "version": {
                 "type": "string"
-              },
-              "versions": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "created_at": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "pipeline": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "created_at": {
-                          "type": [
-                            "null",
-                            "string"
-                          ]
-                        },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "iid": {
-                          "type": "integer"
-                        },
-                        "project_id": {
-                          "type": "integer"
-                        },
-                        "ref": {
-                          "type": "string"
-                        },
-                        "sha": {
-                          "type": "string"
-                        },
-                        "source": {
-                          "type": "string"
-                        },
-                        "status": {
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "type": [
-                            "null",
-                            "string"
-                          ]
-                        },
-                        "user": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "avatar_url": {
-                              "type": "string"
-                            },
-                            "id": {
-                              "type": "integer"
-                            },
-                            "locked": {
-                              "type": "boolean"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "public_email": {
-                              "type": "string"
-                            },
-                            "state": {
-                              "type": "string"
-                            },
-                            "username": {
-                              "type": "string"
-                            },
-                            "web_url": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "username",
-                            "name",
-                            "locked"
-                          ],
-                          "type": [
-                            "null",
-                            "object"
-                          ]
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "iid",
-                        "project_id",
-                        "sha",
-                        "ref",
-                        "status",
-                        "source",
-                        "created_at",
-                        "updated_at",
-                        "web_url",
-                        "user"
-                      ],
-                      "type": [
-                        "null",
-                        "object"
-                      ]
-                    },
-                    "tags": {
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "created_at": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
-                          "id": {
-                            "type": "integer"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "package_id": {
-                            "type": "integer"
-                          },
-                          "updated_at": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "package_id",
-                          "name",
-                          "created_at",
-                          "updated_at"
-                        ],
-                        "type": "object"
-                      },
-                      "type": [
-                        "null",
-                        "array"
-                      ]
-                    },
-                    "version": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "version",
-                    "created_at",
-                    "tags",
-                    "pipeline"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               }
             },
             "required": [
@@ -154153,10 +153877,7 @@
               "additionalProperties": false,
               "properties": {
                 "created_at": {
-                  "type": [
-                    "null",
-                    "string"
-                  ]
+                  "type": "string"
                 },
                 "id": {
                   "type": "integer"
@@ -154180,10 +153901,7 @@
                   "type": "string"
                 },
                 "updated_at": {
-                  "type": [
-                    "null",
-                    "string"
-                  ]
+                  "type": "string"
                 },
                 "user": {
                   "additionalProperties": false,
@@ -154236,114 +153954,12 @@
                 "ref",
                 "status",
                 "source",
-                "created_at",
-                "updated_at",
                 "web_url",
                 "user"
               ],
               "type": [
                 "null",
                 "object"
-              ]
-            },
-            "pipelines": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "created_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
-                  },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
-                    "type": "integer"
-                  },
-                  "ref": {
-                    "type": "string"
-                  },
-                  "sha": {
-                    "type": "string"
-                  },
-                  "source": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  },
-                  "updated_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
-                  },
-                  "user": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "avatar_url": {
-                        "type": "string"
-                      },
-                      "id": {
-                        "type": "integer"
-                      },
-                      "locked": {
-                        "type": "boolean"
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "public_email": {
-                        "type": "string"
-                      },
-                      "state": {
-                        "type": "string"
-                      },
-                      "username": {
-                        "type": "string"
-                      },
-                      "web_url": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "username",
-                      "name",
-                      "locked"
-                    ],
-                    "type": [
-                      "null",
-                      "object"
-                    ]
-                  },
-                  "web_url": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "iid",
-                  "project_id",
-                  "sha",
-                  "ref",
-                  "status",
-                  "source",
-                  "created_at",
-                  "updated_at",
-                  "web_url",
-                  "user"
-                ],
-                "type": "object"
-              },
-              "type": [
-                "null",
-                "array"
               ]
             },
             "status": {
@@ -154389,10 +154005,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "created_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
+                    "type": "string"
                   },
                   "id": {
                     "type": "integer"
@@ -154401,10 +154014,7 @@
                     "additionalProperties": false,
                     "properties": {
                       "created_at": {
-                        "type": [
-                          "null",
-                          "string"
-                        ]
+                        "type": "string"
                       },
                       "id": {
                         "type": "integer"
@@ -154428,10 +154038,7 @@
                         "type": "string"
                       },
                       "updated_at": {
-                        "type": [
-                          "null",
-                          "string"
-                        ]
+                        "type": "string"
                       },
                       "user": {
                         "additionalProperties": false,
@@ -154484,8 +154091,6 @@
                       "ref",
                       "status",
                       "source",
-                      "created_at",
-                      "updated_at",
                       "web_url",
                       "user"
                     ],
@@ -154499,10 +154104,7 @@
                       "additionalProperties": false,
                       "properties": {
                         "created_at": {
-                          "type": [
-                            "null",
-                            "string"
-                          ]
+                          "type": "string"
                         },
                         "id": {
                           "type": "integer"
@@ -154514,18 +154116,13 @@
                           "type": "integer"
                         },
                         "updated_at": {
-                          "type": [
-                            "null",
-                            "string"
-                          ]
+                          "type": "string"
                         }
                       },
                       "required": [
                         "id",
                         "package_id",
-                        "name",
-                        "created_at",
-                        "updated_at"
+                        "name"
                       ],
                       "type": "object"
                     },
@@ -154541,8 +154138,6 @@
                 "required": [
                   "id",
                   "version",
-                  "created_at",
-                  "tags",
                   "pipeline"
                 ],
                 "type": "object"
@@ -154727,10 +154322,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "created_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
+                    "type": "string"
                   },
                   "id": {
                     "type": "integer"
@@ -154754,10 +154346,7 @@
                     "type": "string"
                   },
                   "updated_at": {
-                    "type": [
-                      "null",
-                      "string"
-                    ]
+                    "type": "string"
                   },
                   "user": {
                     "additionalProperties": false,
@@ -154810,114 +154399,12 @@
                   "ref",
                   "status",
                   "source",
-                  "created_at",
-                  "updated_at",
                   "web_url",
                   "user"
                 ],
                 "type": [
                   "null",
                   "object"
-                ]
-              },
-              "pipelines": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "created_at": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "iid": {
-                      "type": "integer"
-                    },
-                    "project_id": {
-                      "type": "integer"
-                    },
-                    "ref": {
-                      "type": "string"
-                    },
-                    "sha": {
-                      "type": "string"
-                    },
-                    "source": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "updated_at": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "user": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "avatar_url": {
-                          "type": "string"
-                        },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "locked": {
-                          "type": "boolean"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "public_email": {
-                          "type": "string"
-                        },
-                        "state": {
-                          "type": "string"
-                        },
-                        "username": {
-                          "type": "string"
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "username",
-                        "name",
-                        "locked"
-                      ],
-                      "type": [
-                        "null",
-                        "object"
-                      ]
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "iid",
-                    "project_id",
-                    "sha",
-                    "ref",
-                    "status",
-                    "source",
-                    "created_at",
-                    "updated_at",
-                    "web_url",
-                    "user"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
                 ]
               },
               "status": {
@@ -154957,174 +154444,6 @@
               },
               "version": {
                 "type": "string"
-              },
-              "versions": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "created_at": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "pipeline": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "created_at": {
-                          "type": [
-                            "null",
-                            "string"
-                          ]
-                        },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "iid": {
-                          "type": "integer"
-                        },
-                        "project_id": {
-                          "type": "integer"
-                        },
-                        "ref": {
-                          "type": "string"
-                        },
-                        "sha": {
-                          "type": "string"
-                        },
-                        "source": {
-                          "type": "string"
-                        },
-                        "status": {
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "type": [
-                            "null",
-                            "string"
-                          ]
-                        },
-                        "user": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "avatar_url": {
-                              "type": "string"
-                            },
-                            "id": {
-                              "type": "integer"
-                            },
-                            "locked": {
-                              "type": "boolean"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "public_email": {
-                              "type": "string"
-                            },
-                            "state": {
-                              "type": "string"
-                            },
-                            "username": {
-                              "type": "string"
-                            },
-                            "web_url": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "username",
-                            "name",
-                            "locked"
-                          ],
-                          "type": [
-                            "null",
-                            "object"
-                          ]
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "iid",
-                        "project_id",
-                        "sha",
-                        "ref",
-                        "status",
-                        "source",
-                        "created_at",
-                        "updated_at",
-                        "web_url",
-                        "user"
-                      ],
-                      "type": [
-                        "null",
-                        "object"
-                      ]
-                    },
-                    "tags": {
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "created_at": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
-                          "id": {
-                            "type": "integer"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "package_id": {
-                            "type": "integer"
-                          },
-                          "updated_at": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "package_id",
-                          "name",
-                          "created_at",
-                          "updated_at"
-                        ],
-                        "type": "object"
-                      },
-                      "type": [
-                        "null",
-                        "array"
-                      ]
-                    },
-                    "version": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "version",
-                    "created_at",
-                    "tags",
-                    "pipeline"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               }
             },
             "required": [

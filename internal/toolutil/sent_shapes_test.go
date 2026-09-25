@@ -180,18 +180,17 @@ type capturedReaderCase struct {
 }
 
 // readTheSentPackage reports whether the package reader decoded the keys
-// client-go does not model on each of the three pipelines a package carries:
-// the one that last built it, the one it lists and the one that built its other
-// version, each with its own values so a key read at a neighbor's position is
-// visible. It sits out here because a predicate reaching three objects deep is
-// the one shape the table cannot hold as a literal and stay readable.
+// client-go does not model on each of the two pipelines a package carries: the
+// one that last built it and the one that built its other version, each with
+// its own values so a key read at the other's position is visible. It sits out
+// here because a predicate reaching three objects deep is the one shape the
+// table cannot hold as a literal and stay readable.
 func readTheSentPackage(v any) bool {
 	e, _ := v.(PackageExtra)
-	if len(e.Pipelines) != 1 || len(e.Versions) != 1 {
+	if len(e.Versions) != 1 {
 		return false
 	}
 	return readThePipeline(e.Pipeline, 2, 41, "web", "bob@example.com", false) &&
-		readThePipeline(&e.Pipelines[0], 3, 43, "schedule", "carol@example.com", false) &&
 		readThePipeline(e.Versions[0].Pipeline, 4, 42, "push", "alice@example.com", true)
 }
 
@@ -458,13 +457,14 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "package",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) {
-				return CapturedPackage(c, PackageCounts{Pipelines: 1, Versions: 1})
+				return CapturedPackage(c, 1)
 			},
+			// pipelines is what GitLab sends for it since 16.1: the constant
+			// empty list, with nothing on it for the reader to take.
 			body: `{"id":10,"creator_id":57,` +
 				`"pipeline":{"id":70,"iid":2,"project_id":41,"source":"web",` +
 				`"user":{"id":6,"username":"bob","public_email":"bob@example.com","locked":false}},` +
-				`"pipelines":[{"id":71,"iid":3,"project_id":43,"source":"schedule",` +
-				`"user":{"id":7,"username":"carol","public_email":"carol@example.com","locked":false}}],` +
+				`"pipelines":[],` +
 				`"versions":[{"id":9,"version":"0.9.0",` +
 				`"pipeline":{"id":77,"iid":4,"project_id":42,"source":"push",` +
 				`"user":{"id":5,"username":"alice","public_email":"alice@example.com","locked":true}}}]}`,
@@ -782,27 +782,25 @@ func TestCapturedMergeRequests_HoldsTheCountToTheSDKs(t *testing.T) {
 	}
 }
 
-// TestCapturedPackage_HoldsBothCountsToTheSDKs verifies the package reader
-// pairs by position only when the capture holds as many listed pipelines and
-// as many other versions as the SDK decoded, and refuses any other count of
-// either with both numbers, fewer and more alike, so a pipeline's keys cannot
-// land on its neighbor. The two counts differ in the fixture, so a check that
-// held one to the other's number would refuse the answer both agree on.
-func TestCapturedPackage_HoldsBothCountsToTheSDKs(t *testing.T) {
-	body := []byte(`{"pipelines":[{"iid":3}],"versions":[{"pipeline":{"iid":4}},{}]}`)
-	extra, err := CapturedPackage(gitlabclient.CapturedBody(body), PackageCounts{Pipelines: 1, Versions: 2})
-	if err != nil || len(extra.Pipelines) != 1 || extra.Pipelines[0].IID != 3 ||
+// TestCapturedPackage_HoldsTheVersionCountToTheSDKs verifies the package
+// reader pairs the other versions by position only when the capture holds as
+// many of them as the SDK decoded, and refuses any other count with both
+// numbers, fewer and more alike, so one version's pipeline keys cannot land on
+// its neighbor. The package's pipelines key is GitLab's constant empty list and
+// holds nothing to count.
+func TestCapturedPackage_HoldsTheVersionCountToTheSDKs(t *testing.T) {
+	body := []byte(`{"pipeline":{"iid":2},"pipelines":[],"versions":[{"pipeline":{"iid":4}},{}]}`)
+	extra, err := CapturedPackage(gitlabclient.CapturedBody(body), 2)
+	if err != nil || extra.Pipeline == nil || extra.Pipeline.IID != 2 ||
 		len(extra.Versions) != 2 || extra.Versions[0].Pipeline.IID != 4 || extra.Versions[1].Pipeline != nil {
-		t.Errorf("CapturedPackage() = %+v, %v; want one pipeline and two versions in order", extra, err)
+		t.Errorf("CapturedPackage() = %+v, %v; want the package's pipeline and two versions in order", extra, err)
 	}
 	for _, tt := range []struct {
-		decoded PackageCounts
+		decoded int
 		want    string
 	}{
-		{decoded: PackageCounts{Pipelines: 0, Versions: 2}, want: "holds 1 package pipelines and the SDK decoded 0"},
-		{decoded: PackageCounts{Pipelines: 2, Versions: 2}, want: "holds 1 package pipelines and the SDK decoded 2"},
-		{decoded: PackageCounts{Pipelines: 1, Versions: 1}, want: "holds 2 package versions and the SDK decoded 1"},
-		{decoded: PackageCounts{Pipelines: 1, Versions: 3}, want: "holds 2 package versions and the SDK decoded 3"},
+		{decoded: 1, want: "holds 2 package versions and the SDK decoded 1"},
+		{decoded: 3, want: "holds 2 package versions and the SDK decoded 3"},
 	} {
 		t.Run(tt.want, func(t *testing.T) {
 			_, countErr := CapturedPackage(gitlabclient.CapturedBody(body), tt.decoded)
@@ -813,33 +811,19 @@ func TestCapturedPackage_HoldsBothCountsToTheSDKs(t *testing.T) {
 	}
 }
 
-// TestCapturedPackages_HoldsEachPackageToTheSDKs verifies the page reader
-// pairs one extra per package in order, a null package included, and refuses
-// a page whose length differs from the SDK's or one package whose counts do,
-// naming which package of the page it was.
-func TestCapturedPackages_HoldsEachPackageToTheSDKs(t *testing.T) {
-	body := []byte(`[null,{"pipeline":{"iid":2},"pipelines":[{"iid":3}]}]`)
-	decoded := []PackageCounts{{}, {Pipelines: 1}}
-	extras, err := CapturedPackages(gitlabclient.CapturedBody(body), decoded)
+// TestCapturedPackages_HoldsThePageToTheSDKs verifies the page reader pairs
+// one extra per package in order, a null package included, and refuses a page
+// whose length differs from the SDK's, naming both numbers.
+func TestCapturedPackages_HoldsThePageToTheSDKs(t *testing.T) {
+	body := []byte(`[null,{"pipeline":{"iid":2},"pipelines":[]}]`)
+	extras, err := CapturedPackages(gitlabclient.CapturedBody(body), 2)
 	if err != nil || len(extras) != 2 || extras[0].Pipeline != nil ||
-		extras[1].Pipeline == nil || extras[1].Pipeline.IID != 2 || extras[1].Pipelines[0].IID != 3 {
+		extras[1].Pipeline == nil || extras[1].Pipeline.IID != 2 {
 		t.Errorf("CapturedPackages() = %+v, %v; want the null and then the package, in order", extras, err)
 	}
-	for _, tt := range []struct {
-		name    string
-		decoded []PackageCounts
-		want    string
-	}{
-		{name: "another page length", decoded: []PackageCounts{{Pipelines: 1}}, want: "holds 2 packages and the SDK decoded 1"},
-		{name: "another pipeline count", decoded: []PackageCounts{{}, {}}, want: "package 2 of the page: the captured answer holds 1 package pipelines and the SDK decoded 0"},
-		{name: "another version count", decoded: []PackageCounts{{Versions: 1}, {Pipelines: 1}}, want: "package 1 of the page: the captured answer holds 0 package versions and the SDK decoded 1"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			_, countErr := CapturedPackages(gitlabclient.CapturedBody(body), tt.decoded)
-			if countErr == nil || !strings.Contains(countErr.Error(), tt.want) {
-				t.Errorf("CapturedPackages() = %v, want %q", countErr, tt.want)
-			}
-		})
+	if _, countErr := CapturedPackages(gitlabclient.CapturedBody(body), 1); countErr == nil ||
+		!strings.Contains(countErr.Error(), "holds 2 packages and the SDK decoded 1") {
+		t.Errorf("CapturedPackages() with another page length = %v, want both numbers", countErr)
 	}
 }
 
