@@ -40,9 +40,13 @@ func TestCategories_EachSaysWhatItCovers(t *testing.T) {
 // movedByValueLayers are the Valued rows whose values a layer of issue 565 has
 // already moved into the register, each layer appending its own: the
 // holdings, the listen and watcher ceilings with the code they refuse with and
-// the watch cadence and back-off (L3).
+// the watch cadence and back-off (L3); the pool's size, idle timeout and probe
+// ceiling, the OAuth admission lifetimes, the credential re-checks, the idle
+// session timeout and the request state's lifetime (L4).
 var movedByValueLayers = []string{
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-007", "RTC-005",
+	"ADM-002", "ADM-005", "ADM-006", "ADM-008", "ADM-009", "ADM-010",
+	"END-005", "IDN-011", "POL-001", "POL-004", "POL-006",
 }
 
 // TestPending_IsTheValuedRowsNotYetMoved: the list holds each of the

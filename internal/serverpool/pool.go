@@ -20,6 +20,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // ServerFactory creates a fully configured [*mcp.Server] with all tools,
@@ -167,12 +168,12 @@ const DefaultIdleTimeout = 1 * time.Hour
 // since every tool call forwards the token and GitLab answers 401 the moment
 // it dies. An hour bounds that disclosure while costing at most one rebuild
 // per hour per active credential.
-const DefaultMaxCredentialAge = 1 * time.Hour
+const DefaultMaxCredentialAge = tenancy.CredentialMaxAge // register row ADM-008
 
 // maxCredentialAgeCeiling is the largest value [WithMaxCredentialAge] honors.
 // A ceiling that can be set arbitrarily high is not a ceiling; this is the
 // same upper bound the --revalidate-interval flag already documents.
-const maxCredentialAgeCeiling = 24 * time.Hour
+const maxCredentialAgeCeiling = tenancy.CredentialMaxAgeCeiling // register row ADM-008
 
 // idleSweepDivisor sets the sweep cadence as a fraction of the idle timeout,
 // bounded below by idleSweepMinInterval so a small timeout cannot turn the
@@ -186,8 +187,8 @@ const maxCredentialAgeCeiling = 24 * time.Hour
 // and a walk of every entry — but it is not what "a quarter of the timeout"
 // suggests on its own.
 const (
-	idleSweepDivisor     = 4
-	idleSweepMinInterval = 1 * time.Minute
+	idleSweepDivisor     = tenancy.PoolIdleSweepDivisor // register row POL-004
+	idleSweepMinInterval = tenancy.PoolIdleSweepFloor   // register row POL-004
 )
 
 // Metrics holds operational counters for the [ServerPool]. All counters are
@@ -819,7 +820,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 // bounds: the claim that opens the window is what keeps two refusals arriving
 // together from confirming twice, so a window shorter than the probe would let
 // the second refusal start its own while the first was still waiting.
-const unauthorizedConfirmCooldown = 30 * time.Second
+const unauthorizedConfirmCooldown = tenancy.UnexplainedRefusalCooldown // register row ADM-010
 
 // handleUnauthorized decides what a 401 on a call made with entry's credential
 // means for the entry.
@@ -1259,7 +1260,7 @@ func verifyCredential(base context.Context, client *gitlabclient.Client) error {
 // sixteen in flight is a few requests per second of steady load against the
 // instance for credentials it has never seen, while a legitimate burst of new
 // clients drains through in well under a second at typical latencies.
-const maxConcurrentCredentialProbes = 16
+const maxConcurrentCredentialProbes = tenancy.CredentialProbes // register row POL-006
 
 // credentialProbeQueueTimeout is how long a build waits for a probe slot.
 //
@@ -1270,7 +1271,7 @@ const maxConcurrentCredentialProbes = 16
 // takes a slot without waiting and does without one when none is free
 // ([ServerPool.tryProbeSlot]): no confirmation ever queues ahead of a build,
 // and a slot one holds is back within that one probe's [credentialCheckTimeout].
-const credentialProbeQueueTimeout = 5 * time.Second
+const credentialProbeQueueTimeout = tenancy.CredentialProbeWait // register row POL-006
 
 // ErrCredentialProbeBusy reports that no credential probe slot came free in
 // time.

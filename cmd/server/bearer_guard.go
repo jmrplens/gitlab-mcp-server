@@ -30,6 +30,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // Bounds for the rejected-token cache. The TTL is deliberately short: a
@@ -38,8 +39,8 @@ import (
 // long after the instance was fixed. The size cap bounds attacker-supplied
 // keys — see [oauth.RejectedTokens].
 const (
-	rejectedTokenTTL     = 5 * time.Minute
-	rejectedTokenMaxSize = 4096
+	rejectedTokenTTL     = tenancy.RejectedTokenTTL      // register row ADM-006
+	rejectedTokenMaxSize = tenancy.RejectedTokenCapacity // register row ADM-006
 )
 
 // Cadence for sweeping expired entries out of the verified-token cache, as a
@@ -48,13 +49,13 @@ const (
 // lowest --oauth-cache-ttl accepts — from turning the sweep into a hot loop on
 // a map that every authenticated request reads.
 const (
-	tokenCacheSweepDivisor     = 4
-	tokenCacheSweepMinInterval = 30 * time.Second
+	tokenCacheSweepDivisor     = tenancy.OAuthCacheSweepDivisor // register row ADM-005
+	tokenCacheSweepMinInterval = tenancy.OAuthCacheSweepFloor   // register row ADM-005
 )
 
 // upstreamRetryAfter is the delay advertised when GitLab throttled or failed
 // the verification without saying when to come back.
-const upstreamRetryAfter = 30 * time.Second
+const upstreamRetryAfter = tenancy.UpstreamRetryAfter // register row ADM-002
 
 // Response header names used by more than one rejection path.
 const (
