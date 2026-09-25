@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,8 +38,9 @@ func introspectionAnswer(types ...string) string {
 func answeringInstance(t *testing.T, body string) string {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end: one Read may stop short of "metadata" and send
+		// the version query the introspection answer.
+		payload, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(payload), "metadata") {
 			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
 			return
@@ -94,7 +96,7 @@ func TestLiveSchema_ATruncatedAnswer_NamesWhatArrivedAgainstTheFloor(t *testing.
 	}
 }
 
-// TestLiveSchema_AnInstanceThatCannotBeJudgedBy_IsRefused verifies the two ways
+// TestLiveSchema_AnInstanceThatCannotBeJudgedBy_IsRefused verifies the ways
 // a reachable instance still cannot answer the question.
 //
 // The truncated answer is the one that matters. An instance that boots and
@@ -148,8 +150,9 @@ func TestLiveSchema_ATokenIsOffered_ReachesTheInstance(t *testing.T) {
 	var seen string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = r.Header.Get("Authorization")
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end: one Read may stop short of "metadata" and send
+		// the version query the introspection answer.
+		payload, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(payload), "metadata") {
 			_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.4.0-ee","revision":"abc1234"}}}`))
 			return
@@ -184,8 +187,9 @@ func TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained(t *testing.T) {
 		if r.Header.Get("Authorization") != "" {
 			authorized = true
 		}
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end: one Read may stop short of "metadata" and send
+		// the version query the introspection answer.
+		payload, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(payload), "metadata") {
 			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
 			return
