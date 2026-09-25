@@ -274,6 +274,18 @@ func gitLabResponseOf(err error) (*gl.ErrorResponse, bool) {
 // every call, which carries the status and no response. Reading the status off
 // the response alone described every 404 as an unexpected error and gave its
 // error card no status.
+//
+// client-go v3.13.0 added gl.StatusCode, the StatusCode field of the first
+// *gl.ErrorResponse in an error's chain, and neither this nor
+// [gitLabResponseOf] is built on it, because it answers the same only where
+// the chain is plain. It agrees on a REST refusal client-go built, which
+// records the status in both places, and on the 404 sentinel. It reads zero
+// for a GraphQL refusal, since *gl.GraphQLResponseError keeps the response in
+// a field it has no Unwrap method for, and for a refusal built with a response
+// and no status, which mergerequests.CreateTodo builds for a 304. Using it
+// would hide both from every status reader in this file;
+// TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain notices the day that
+// changes upstream.
 func answeredStatus(glErr *gl.ErrorResponse) int {
 	if glErr.Response != nil {
 		return glErr.Response.StatusCode

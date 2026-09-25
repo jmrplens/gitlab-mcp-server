@@ -3233,6 +3233,76 @@ func TestWrapErrWithMessage_NotFoundSentinel_AppendsNoStatusText(t *testing.T) {
 	}
 }
 
+// TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain holds the reason the
+// status readers here are not built on gl.StatusCode, which client-go v3.13.0
+// added. On the two paths where client-go builds the refusal and the chain
+// unwraps plainly, a REST answer carrying its response and the 404 sentinel
+// carrying none, it reads what [answeredStatus] reads. On the other two it
+// reads zero: a GraphQL refusal, which *gl.GraphQLResponseError keeps in a
+// field it has no Unwrap method for, and a refusal built with a response and
+// no status, the shape mergerequests.CreateTodo builds for a 304. Adopting it
+// would stop IsHTTPStatus and every status hint from seeing either, so this
+// test is also what notices when upstream changes the wrapper.
+func TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		err     func(*testing.T) error
+		want    int
+		wantSDK int
+	}{
+		{
+			name: "a REST refusal carrying its response",
+			err: func(t *testing.T) error {
+				t.Helper()
+				_, err := restAnswer(t, http.MethodGet, "projects/1", http.StatusForbidden, `{"message":"403 Forbidden"}`)
+				return err
+			},
+			want: http.StatusForbidden, wantSDK: http.StatusForbidden,
+		},
+		{
+			name: "client-go's 404 sentinel",
+			err: func(t *testing.T) error {
+				t.Helper()
+				_, err := restAnswer(t, http.MethodGet, "projects/1", http.StatusNotFound, `{"message":"404 Project Not Found"}`)
+				return err
+			},
+			want: http.StatusNotFound, wantSDK: http.StatusNotFound,
+		},
+		{
+			name: "a GraphQL refusal",
+			err: func(t *testing.T) error {
+				t.Helper()
+				return graphQLAnswer(t, "", http.StatusForbidden, graphQLForbiddenBody)
+			},
+			want: http.StatusForbidden, wantSDK: 0,
+		},
+		{
+			name: "a refusal built with a response and no status",
+			err: func(*testing.T) error {
+				return &gl.ErrorResponse{Response: &http.Response{StatusCode: http.StatusNotModified}, Message: "already exists"}
+			},
+			want: http.StatusNotModified, wantSDK: 0,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.err(t)
+			glErr, ok := gitLabResponseOf(err)
+			if !ok {
+				t.Fatalf("gitLabResponseOf(%v) found no response", err)
+			}
+			if got := answeredStatus(glErr); got != tt.want {
+				t.Errorf("answeredStatus() = %d, want %d", got, tt.want)
+			}
+			if !IsHTTPStatus(err, tt.want) {
+				t.Errorf("IsHTTPStatus(%d) = false, want true", tt.want)
+			}
+			if got := gl.StatusCode(err); got != tt.wantSDK {
+				t.Errorf("gl.StatusCode() = %d, want %d", got, tt.wantSDK)
+			}
+		})
+	}
+}
+
 // TestClassifyError_ErrorResponseRecordingNoStatus_IsNotAnAnswer verifies that
 // a *gl.ErrorResponse recording neither a response nor a status is not
 // described as a status GitLab answered with: there is no status to describe,
