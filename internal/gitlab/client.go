@@ -81,18 +81,32 @@ type Client struct {
 	// lastInitAttempt prevents thundering herd on a recovering GitLab instance.
 	lastInitAttempt time.Time
 
-	// onUnauthorized is called once, the first time GitLab answers a call
-	// made with this client's credential with 401. The server pool uses it
-	// to drop the entry so the next request re-verifies, instead of serving
-	// a revoked token until the periodic check notices.
-	onUnauthorized   atomic.Pointer[func()]
+	// onUnauthorized is told when GitLab answers a call made with this
+	// client's credential with 401, and what the 401 said. The server pool
+	// uses it to stop serving a credential GitLab has refused, instead of
+	// serving it until the periodic check notices. See [Client.SetOnUnauthorized].
+	onUnauthorized atomic.Pointer[func(UnauthorizedAnswer)]
+	// unauthorizedOnce makes a 401 naming the credential reach the hook once:
+	// the verdict is final, so a second one would only repeat it.
 	unauthorizedOnce sync.Once
 }
 
-// SetOnUnauthorized registers fn to run the first time GitLab answers a
-// call made with this client's credential with 401. fn runs on the calling
-// goroutine, once; a nil fn clears it.
-func (c *Client) SetOnUnauthorized(fn func()) {
+// SetOnUnauthorized registers fn to run when GitLab answers a call made with
+// this client's credential with 401, and says what the 401 named. fn runs on
+// the goroutine that made the call, so it must be cheap and must not block; a
+// nil fn clears it.
+//
+// The two answers arrive differently, because they mean different things. A
+// 401 naming the credential ([UnauthorizedCredential]) is GitLab's verdict on
+// it, and reaches fn once for the client's lifetime. A 401 naming nothing
+// ([UnauthorizedUnexplained]) reaches fn every time: it may be a permission
+// refusal of one call, which says nothing about the next, so it must neither
+// stand for the credential's verdict nor use up the one delivery that verdict
+// gets. Deciding how often to act on it is fn's business.
+//
+// Only the SDK's requests are reported. The raw probes this client makes
+// outside the SDK are not, since their callers act on the answer themselves.
+func (c *Client) SetOnUnauthorized(fn func(UnauthorizedAnswer)) {
 	if fn == nil {
 		c.onUnauthorized.Store(nil)
 		return
@@ -100,13 +114,18 @@ func (c *Client) SetOnUnauthorized(fn func()) {
 	c.onUnauthorized.Store(&fn)
 }
 
-// notifyUnauthorized fires the registered callback, once.
-func (c *Client) notifyUnauthorized() {
+// notifyUnauthorized tells the registered callback what a 401 named: once for
+// a 401 naming the credential, every time for one naming nothing.
+func (c *Client) notifyUnauthorized(answer UnauthorizedAnswer) {
 	fn := c.onUnauthorized.Load()
 	if fn == nil {
 		return
 	}
-	c.unauthorizedOnce.Do(func() { (*fn)() })
+	if answer == UnauthorizedCredential {
+		c.unauthorizedOnce.Do(func() { (*fn)(answer) })
+		return
+	}
+	(*fn)(answer)
 }
 
 // initCooldown is the minimum interval between lazy re-initialization attempts
@@ -696,36 +715,87 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	return &versionInfo, nil
 }
 
-// CredentialRejected reports whether GitLab actively refuses this credential.
+// CredentialVerdict is what GitLab answered when asked whether it accepts a
+// credential. See [Client.CheckCredential].
+type CredentialVerdict uint8
+
+const (
+	// CredentialUnanswered means no verdict was obtained: a transport error, a
+	// timeout, a 404 from a stubbed instance, a 5xx. It is the zero value,
+	// because a question nobody answered must never read as either answer.
+	CredentialUnanswered CredentialVerdict = iota
+	// CredentialAccepted means GitLab answered the probe with a 2xx.
+	CredentialAccepted
+	// CredentialRefused means GitLab answered the probe with 401 or 403.
+	CredentialRefused
+)
+
+// CheckCredential asks GitLab whether it accepts this credential, and reports
+// which of the three answers it got.
+//
+// Three and not two, because two callers need different halves of them.
+// Admission ([Client.CredentialRejected]) needs only to know whether GitLab
+// refused, and admits on anything else so that an instance outage is not a
+// total denial of service. The pool's confirmation of a 401 that named no
+// cause needs to know whether GitLab accepted: keeping an entry and recording
+// that its credential was just checked is only honest on a real answer, and a
+// 500 read as "accepted" would push back the credential-age ceiling on the
+// strength of a question GitLab never answered.
 //
 // It issues GET /api/v4/user through the raw health client rather than the SDK
 // on purpose: client-go wraps requests in retryablehttp with RetryMax 5 and a
 // linear backoff, which turns a refused connection or a struggling instance
 // into seconds of stalling. A liveness question about a credential should be
-// asked once and answered fast.
-//
-// Only an explicit 401 or 403 counts as a rejection. Every other outcome — a
-// transport error, a 404 from a stubbed instance, a 5xx — means no verdict was
-// obtained and is reported as false, so callers fail open.
+// asked once and answered fast. The health client also does not report its
+// 401s to the unauthorized hook, which is what lets the pool ask this question
+// about a 401 without the answer raising another.
 //
 // The probe URL is built from the normalized base URL the operator configured,
 // never from a request.
-func (c *Client) CredentialRejected(ctx context.Context) bool {
+func (c *Client) CheckCredential(ctx context.Context) CredentialVerdict {
 	probeURL := strings.TrimRight(c.baseURL, "/") + "/api/v4/user"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, http.NoBody)
 	if err != nil {
-		return false
+		return CredentialUnanswered
 	}
 	c.setAuthHeader(req)
 
 	resp, err := c.healthClient.Do(req)
 	if err != nil {
-		return false
+		return CredentialUnanswered
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
 
-	return resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden
+	return credentialVerdictFor(resp.StatusCode)
+}
+
+// credentialVerdictFor reads the status the credential probe was answered
+// with. Only an explicit 401 or 403 refuses and only a 2xx accepts; every
+// other status is no verdict at all.
+//
+// Written as two ifs rather than a tagless switch, because a case expression
+// carries no statement counter of its own: the mutation gate reports every
+// mutant in one as not covered, and the boundaries of the 2xx range are
+// exactly where a mutant is worth seeing killed.
+func credentialVerdictFor(status int) CredentialVerdict {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return CredentialRefused
+	}
+	if status >= http.StatusOK && status < http.StatusMultipleChoices {
+		return CredentialAccepted
+	}
+	return CredentialUnanswered
+}
+
+// CredentialRejected reports whether GitLab actively refuses this credential.
+//
+// It is [Client.CheckCredential] read by admission: only an explicit 401 or
+// 403 counts as a rejection, and every other outcome, a transport error, a 404
+// from a stubbed instance, a 5xx, means no verdict was obtained and is
+// reported as false, so callers fail open.
+func (c *Client) CredentialRejected(ctx context.Context) bool {
+	return c.CheckCredential(ctx) == CredentialRefused
 }
 
 // IsCredentialRejection reports whether err is GitLab judging the credential,
@@ -736,6 +806,11 @@ func (c *Client) CredentialRejected(ctx context.Context) bool {
 // applies to its own probe. A transport error, a timeout, a 404 and a 5xx all
 // mean the question went unanswered, and treating those as a rejection turns a
 // GitLab that is briefly unreachable into a mass revocation.
+//
+// It reads the status alone, unlike [UnauthorizedNamesCredential], and that is
+// right for what it judges: the answer to GET /version, a route with no
+// permission to refuse, so a 401 there cannot be the permission refusal a 401
+// on a data call may be.
 func IsCredentialRejection(err error) bool {
 	var errResp *gl.ErrorResponse
 	if !errors.As(err, &errResp) || errResp == nil {
@@ -759,6 +834,9 @@ func IsCredentialRejection(err error) bool {
 // point at which a configured instance gets to answer with whatever it likes.
 // It is the client's own ceiling rather than a private one, so
 // [Client.SetMaxResponseBytes] means the same thing everywhere.
+//
+// A 401 it is answered with is not reported to the unauthorized hook, unlike
+// one the SDK is answered with: see [responseLimitTransport.reportsUnauthorized].
 func newHealthClient(base http.RoundTripper, baseURL string, c *Client) *http.Client {
 	return &http.Client{
 		Transport:     &responseLimitTransport{base: &destinationTransport{base: base, client: c}, client: c},
@@ -891,8 +969,9 @@ func apiTransport(base http.RoundTripper, c *Client) http.RoundTripper {
 			base: &resilienceTransport{
 				base: &captureTransport{
 					base: &responseLimitTransport{
-						base:   &destinationTransport{base: base, client: c},
-						client: c,
+						base:                &destinationTransport{base: base, client: c},
+						client:              c,
+						reportsUnauthorized: true,
 					},
 				},
 				client: c,

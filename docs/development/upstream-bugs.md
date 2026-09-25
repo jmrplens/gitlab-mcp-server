@@ -3220,17 +3220,25 @@ when the field is nil.
 - **Merged**: no.
 - **Blocking**: no. The call is correctly refused and nothing is served that
   should not be. What breaks is the explanation a client can give.
-- **Workaround**: yes, in `internal/toolutil/errors.go`.
+- **Workaround**: yes, in two places that read one rule,
+  `UnauthorizedNamesCredential` in `internal/gitlab/credential_refusal.go`: a
+  401 names the credential when its REST body carries the RFC 6750 code
+  `invalid_token`, which only GitLab's API guard writes, or when the GraphQL
+  endpoint answered it, which has no permission 401 to confuse it with.
+  `internal/toolutil/errors.go` reads it to describe a 401:
   `ClassifyHTTPStatus(401)` names both causes and how to tell them apart, and
-  `ClassifyError` names the credential alone when GitLab's answer says the
-  credential was the problem: a REST body carrying the RFC 6750 code
-  `invalid_token`, which only its API guard writes, or any 401 from the
-  GraphQL endpoint, which has no permission 401 to confuse it with. A
-  handler's hint then names the permission; the handlers of these routes that
-  scope that hint to 403 or carry none are
+  `ClassifyError` names the credential alone when the rule says GitLab did.
+  The HTTP pool (`internal/serverpool`) reads it to decide what a refused call
+  means for the caller's pooled credential: a 401 naming the credential ends
+  the entry at once, and one naming nothing is first put to the credential
+  probe (`GET /api/v4/user`, at most once per 30 seconds per credential),
+  which keeps the entry when GitLab still accepts the token. A handler's hint
+  then names the permission; the handlers of these routes that scope that
+  hint to 403 or carry none are
   [issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908). What
   retires it is GitLab answering 403 at these sites, after which a REST 401
-  without that code would again mean an unusable credential alone.
+  without that code would again mean an unusable credential alone and the
+  probe would have nothing left to tell apart.
 
 **Where**: `lib/api/merge_request_approvals.rb:105` and 148,
 `lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
@@ -3294,7 +3302,11 @@ authentication failure and wrong for every site above. It was fixed without
 waiting for upstream in
 [issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905), as the
 Workaround field describes, since it is the half a model actually reads. Two
-local consequences of the same upstream choice are tracked apart: the
-handlers' own hints ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)),
-and HTTP mode evicting a valid credential's pool entry on a permission 401
-([issue 907](https://github.com/jmrplens/gitlab-mcp-server/issues/907)).
+local consequences of the same upstream choice were tracked apart. HTTP mode
+evicted a valid credential's pool entry on a permission 401, which ended its
+subscriptions with a false "re-authenticate" and counted a revocation that
+never happened; that is fixed
+([issue 907](https://github.com/jmrplens/gitlab-mcp-server/issues/907)) by
+confirming a 401 that names nothing with the credential probe before the
+entry goes, as the Workaround field describes. The handlers' own hints are
+still tracked ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).

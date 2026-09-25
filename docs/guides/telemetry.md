@@ -207,15 +207,15 @@ answerable without typing the flag's value into a dashboard query.
 removal path, and every one of them is exported from process start whether it
 has fired or not, so a panel is never empty for the ambiguous reason:
 
-| Reason                | What happened                                                                             |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `size_pressure`       | The pool was full and dropped its least recently used entry, which was doing nothing      |
-| `size_pressure_busy`  | The pool was full, **every** entry was serving a subscription, and the oldest went anyway |
-| `idle`                | `--pool-idle-timeout` reclaimed an entry nobody had used                                  |
-| `stale_credential`    | The credential had not been re-checked against GitLab inside the age ceiling              |
-| `rejected_credential` | GitLab answered a call made with that credential with `401`                               |
-| `invalid_credential`  | Periodic revalidation found GitLab refusing the credential                                |
-| `rebuild`             | The configuration shape's catalog registration failed, taking its entries with it         |
+| Reason                | What happened                                                                                                                                                                                                                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `size_pressure`       | The pool was full and dropped its least recently used entry, which was doing nothing                                                                                                                                                                                                     |
+| `size_pressure_busy`  | The pool was full, **every** entry was serving a subscription, and the oldest went anyway                                                                                                                                                                                                |
+| `idle`                | `--pool-idle-timeout` reclaimed an entry nobody had used                                                                                                                                                                                                                                 |
+| `stale_credential`    | The credential had not been re-checked against GitLab inside the age ceiling                                                                                                                                                                                                             |
+| `rejected_credential` | GitLab refused the credential on a call: a `401` naming the token, or a `401` the credential probe then confirmed, never a permission refusal. A GraphQL `401` to a token carrying neither `api` nor `read_api` names the token too ([Refused calls](http-server-mode.md#refused-calls)) |
+| `invalid_credential`  | Periodic revalidation found GitLab refusing the credential                                                                                                                                                                                                                               |
+| `rebuild`             | The configuration shape's catalog registration failed, taking its entries with it                                                                                                                                                                                                        |
 
 `size_pressure_busy` is the one to alert on. It is the only path that ends a
 subscription somebody is waiting on, and it means the pool held nothing quiet to

@@ -309,6 +309,12 @@ Three things are worth knowing about the shape:
   carried an HTTP status. It is relayed, not interpreted: GitLab answers 404
   for a resource the caller may not see, precisely so that it cannot be told
   apart from one that does not exist, so a 404 here does **not** mean deleted.
+  A 401 here does not mean the token is dead either: GitLab answers some
+  missing permissions with 401, and a token it no longer finds gets the same
+  answer. Only `credential_revoked` says GitLab refused the credential itself,
+  and in HTTP mode it is sent only once GitLab has said so or the credential
+  probe has confirmed it
+  ([Refused calls](../../guides/http-server-mode.md#refused-calls)).
 - **The vocabulary is closed and published.** The `subscriptions.end_reasons`
   array of the [server card](../../guides/http-server-mode.md#server-card)
   lists it, so a client can learn the set without meeting each value in

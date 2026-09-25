@@ -432,19 +432,28 @@ The `429` row is about the credential, not only about the address. A request car
 
 All of them return `Content-Type: application/json` with a JSON-RPC error response. This matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognised JSON-RPC error to conclude the server is initialization-era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
 
+Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status.
+
 #### Credential Verification
 
-A token is verified against the instance once, when its pooled session is first built — never on subsequent requests, which are served from the pool. The probe is `GET /api/v4/user`, and only an explicit `401` or `403` rejects it.
+A token is verified against the instance when its pooled session is first built, and requests after that are served from the pool without asking GitLab first. The probe is `GET /api/v4/user`, and only an explicit `401` or `403` rejects it. The credential is checked again by the periodic revalidation (`--revalidate-interval`), by the credential-age ceiling, and when GitLab answers `401` to a call made with it, as [Refused calls](#refused-calls) describes.
 
 Verifying is what stops an unauthenticated caller from obtaining a working session with any non-empty string, and stops a stream of invented tokens from churning the session pool. Token _format_ is deliberately not checked: GitLab lets self-managed administrators change the `glpat-` prefix, so a prefix rule would reject legitimate self-hosted tokens while still admitting any well-shaped fake.
 
 Every other outcome — a transport error, a `5xx`, a `404` from an instance that does not expose the endpoint — means no verdict was obtained, and the session is admitted. Failing closed whenever GitLab is unreachable would turn an instance outage into a total denial of service. The probe does not retry and is bounded at 5 seconds.
 
-Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status.
-
 In legacy mode `GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
 
 Under `--auth-mode=oauth` there is no such exemption in either transport mode. The Bearer guard is mounted outside that gate and exempts only a CORS preflight, so an unauthenticated `GET` or `DELETE` is answered `401` with the RFC 9728 challenge; the `405` appears once the request carries a credential the instance accepts.
+
+##### Refused calls
+
+The first call GitLab refuses with `401` is where a revoked token is noticed, rather than at the next revalidation. Not every `401` means that, though: GitLab answers some missing permissions with `401` rather than `403`, approving a merge request you opened where author approval is prevented among them ([upstream bug 55](../development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403)), and it answers a token it no longer finds with the same bytes. So the pooled entry is treated by what the `401` says:
+
+- **A `401` that names the token** ends the entry at once: a REST body carrying the RFC 6750 code `invalid_token`, which GitLab writes for an expired, revoked or impersonation-disabled token, or any `401` from the GraphQL endpoint, which answers a missing permission with a `200` or a `403` and never with a `401`. That endpoint answers `401` only for a token it cannot use, and that includes one carrying neither `api` nor `read_api`: in legacy mode a token with `read_user` alone is admitted, since `GET /api/v4/user` accepts it, and its entry is then ended on each GraphQL call and rebuilt on its next request.
+- **A `401` that names nothing** is confirmed with the same `GET /api/v4/user` probe first, at most once every 30 seconds per credential. If GitLab refuses the probe, the token is gone and the entry ends as above. If GitLab accepts it, the refusal was a permission, and the entry is kept with its subscriptions, sessions and rate-limit bucket. If the probe gets no answer, or all 16 probe slots are busy (with admissions or other entries' confirmations), nothing changes, and the next refusal after the 30-second window, or the next revalidation, asks again.
+
+An entry that ends this way closes its subscribers' streams with `credential_revoked` and is counted as `rejected_credential`, so both mean GitLab refused the credential and never that it refused a permission. A token deleted within 30 seconds of a confirmation that GitLab accepted is caught by the next refusal after the window, or by the next revalidation. A client whose only activity is a subscription meets the refusal on its watcher's own read instead, and that watch ends with `resource_gone` and status `401`.
 
 ## Authentication Modes
 

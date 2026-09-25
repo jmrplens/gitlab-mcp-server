@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -384,73 +385,360 @@ func TestLimitedBody_UnderTheCeiling_DeliversWithoutError(t *testing.T) {
 	}
 }
 
-// TestResponseLimitTransport_PassesThroughUnlimited verifies a client whose
-// ceiling is removed gets the untouched body back, and that a transport error
-// is returned as-is rather than being wrapped in a limiter.
-// TestResponseLimitTransport_A401FiresTheUnauthorizedHookOnce verifies the
-// innermost transport reports the first 401 GitLab answers to whoever
-// registered for it, once, and never for any other status. The server pool
-// registers to drop its entry, so a revoked token stops being served on the
-// first call GitLab refuses rather than on the next periodic check.
-func TestResponseLimitTransport_A401FiresTheUnauthorizedHookOnce(t *testing.T) {
-	t.Parallel()
+// The bodies GitLab answers a 401 with, as its own code writes them: Grape's
+// unauthorized! for a permission refusal and for a token it cannot find, and
+// rack-oauth2's rendering of the API guard's invalid_token for an expired one.
+const (
+	plainUnauthorizedBody = `{"message":"401 Unauthorized"}`
+	expiredTokenBody      = `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`
+)
 
-	roundTrip := func(t *testing.T, transport *responseLimitTransport) {
-		t.Helper()
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://gitlab.example.com/x", http.NoBody)
-		if err != nil {
-			t.Fatalf("NewRequest: %v", err)
-		}
-		resp, err := transport.RoundTrip(req)
-		if err != nil {
-			t.Fatalf("RoundTrip: %v", err)
-		}
-		_ = resp.Body.Close()
+// restURL and graphQLURL are the two endpoints the credential signals differ
+// between.
+const (
+	restURL    = "https://gitlab.example.com/api/v4/projects/1/merge_requests/1/approve"
+	graphQLURL = "https://gitlab.example.com/api/graphql"
+)
+
+// answersHook registers a hook on client that records every answer it is
+// told, and returns the record. The transport calls the hook on the goroutine
+// that made the request, which in these tests is the test goroutine, so the
+// record needs no lock.
+func answersHook(client *Client) *[]UnauthorizedAnswer {
+	answers := &[]UnauthorizedAnswer{}
+	client.SetOnUnauthorized(func(answer UnauthorizedAnswer) { *answers = append(*answers, answer) })
+	return answers
+}
+
+// roundTripDrained sends one request through transport and reads the answer's
+// body to the end, which is what the SDK does with every answer it is given.
+func roundTripDrained(t *testing.T, transport http.RoundTripper, url string) []byte {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
 	}
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := readBounded(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the body: %v", err)
+	}
+	return body
+}
 
-	t.Run("three refusals fire it once", func(t *testing.T) {
-		t.Parallel()
-		client := &Client{}
-		fired := 0
-		client.SetOnUnauthorized(func() { fired++ })
-		transport := &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: http.StatusUnauthorized}, client: client}
-		for range 3 {
-			roundTrip(t, transport)
+// readBounded reads r to its end like io.ReadAll, except that a reader which
+// keeps answering nothing and no error is reported as a failure instead of
+// being waited on forever. A body replayed wrongly can do exactly that, and a
+// test that hangs on it reports nothing.
+func readBounded(r io.Reader) ([]byte, error) {
+	var out []byte
+	buf := make([]byte, 512)
+	for idle := 0; idle < 100; {
+		n, err := r.Read(buf)
+		out = append(out, buf[:n]...)
+		if errors.Is(err, io.EOF) {
+			return out, nil
 		}
-		if fired != 1 {
-			t.Errorf("the hook fired %d times over three 401s, want once", fired)
+		if err != nil {
+			return out, err
 		}
-	})
-	t.Run("any other status leaves it alone", func(t *testing.T) {
-		t.Parallel()
+		if n == 0 {
+			idle++
+			continue
+		}
+		idle = 0
+	}
+	return out, errors.New("the body answered nothing a hundred times in a row without ending")
+}
+
+// TestResponseLimitTransport_A401NamingTheCredential_ReportsItOnce verifies
+// that a 401 GitLab said was about the credential reaches the hook as that,
+// and only once however many follow.
+//
+// The two signals are the API guard's invalid_token and any 401 from the
+// GraphQL endpoint. The verdict is final, so the server pool acts on the
+// first and a second delivery would only repeat it.
+func TestResponseLimitTransport_A401NamingTheCredential_ReportsItOnce(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		body string
+	}{
+		{name: "a REST 401 carrying invalid_token", url: restURL, body: expiredTokenBody},
+		{name: "a GraphQL 401", url: graphQLURL, body: `{"errors":[{"message":"Invalid token"}]}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &Client{}
+			answers := answersHook(client)
+			transport := &responseLimitTransport{
+				base:                &stubRoundTripper{body: tt.body, status: http.StatusUnauthorized},
+				client:              client,
+				reportsUnauthorized: true,
+			}
+			for range 3 {
+				roundTripDrained(t, transport, tt.url)
+			}
+			if len(*answers) != 1 || (*answers)[0] != UnauthorizedCredential {
+				t.Errorf("the hook was told %v over three 401s naming the credential, want [UnauthorizedCredential] once", *answers)
+			}
+		})
+	}
+}
+
+// TestResponseLimitTransport_A401NamingNothing_ReportsUnexplainedEveryTime
+// verifies that a 401 naming no cause reaches the hook on every refusal, and
+// never uses up the one delivery a verdict on the credential gets.
+//
+// Before, every 401 was the same event and the first one was spent as a
+// revocation, so a permission refusal ended the credential and a revocation
+// arriving after it was never delivered.
+func TestResponseLimitTransport_A401NamingNothing_ReportsUnexplainedEveryTime(t *testing.T) {
+	client := &Client{}
+	answers := answersHook(client)
+	plain := &responseLimitTransport{
+		base:                &stubRoundTripper{body: plainUnauthorizedBody, status: http.StatusUnauthorized},
+		client:              client,
+		reportsUnauthorized: true,
+	}
+	for range 3 {
+		roundTripDrained(t, plain, restURL)
+	}
+	expired := &responseLimitTransport{
+		base:                &stubRoundTripper{body: expiredTokenBody, status: http.StatusUnauthorized},
+		client:              client,
+		reportsUnauthorized: true,
+	}
+	roundTripDrained(t, expired, restURL)
+
+	want := []UnauthorizedAnswer{UnauthorizedUnexplained, UnauthorizedUnexplained, UnauthorizedUnexplained, UnauthorizedCredential}
+	if !slices.Equal(*answers, want) {
+		t.Errorf("the hook was told %v, want %v", *answers, want)
+	}
+}
+
+// TestResponseLimitTransport_WhatIsNotReported_LeavesTheHookAlone verifies the
+// cases the hook must not hear about: a status other than 401, a client that
+// registered nothing or cleared what it registered, and a transport that does
+// not report.
+//
+// The last is the health client's. Every request it makes is a probe whose
+// caller acts on the answer, and one of them is the probe that confirms a 401
+// naming nothing, whose own 401 must not raise another.
+func TestResponseLimitTransport_WhatIsNotReported_LeavesTheHookAlone(t *testing.T) {
+	t.Run("any other status", func(t *testing.T) {
 		client := &Client{}
-		fired := 0
-		client.SetOnUnauthorized(func() { fired++ })
-		// sequential: one hook counts across every status, asserted once below
+		answers := answersHook(client)
+		// sequential: one hook records across every status, asserted once below
 		for _, status := range []int{http.StatusOK, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError} {
-			roundTrip(t, &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: status}, client: client})
+			roundTripDrained(t, &responseLimitTransport{
+				base:                &stubRoundTripper{body: expiredTokenBody, status: status},
+				client:              client,
+				reportsUnauthorized: true,
+			}, graphQLURL)
 		}
-		if fired != 0 {
-			t.Errorf("the hook fired %d times without a 401", fired)
+		if len(*answers) != 0 {
+			t.Errorf("the hook was told %v without a 401", *answers)
 		}
 	})
-	t.Run("a client with no hook is untouched by a 401", func(t *testing.T) {
-		t.Parallel()
-		roundTrip(t, &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: http.StatusUnauthorized}, client: &Client{}})
+	t.Run("a client with no hook", func(t *testing.T) {
+		body := roundTripDrained(t, &responseLimitTransport{
+			base:                &stubRoundTripper{body: plainUnauthorizedBody, status: http.StatusUnauthorized},
+			client:              &Client{},
+			reportsUnauthorized: true,
+		}, restURL)
+		if string(body) != plainUnauthorizedBody {
+			t.Errorf("body = %q, want %q", body, plainUnauthorizedBody)
+		}
 	})
-	t.Run("a nil hook clears it", func(t *testing.T) {
-		t.Parallel()
+	t.Run("a cleared hook", func(t *testing.T) {
 		client := &Client{}
-		fired := 0
-		client.SetOnUnauthorized(func() { fired++ })
+		answers := answersHook(client)
 		client.SetOnUnauthorized(nil)
-		roundTrip(t, &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: http.StatusUnauthorized}, client: client})
-		if fired != 0 {
-			t.Errorf("a cleared hook fired %d times", fired)
+		roundTripDrained(t, &responseLimitTransport{
+			base:                &stubRoundTripper{body: expiredTokenBody, status: http.StatusUnauthorized},
+			client:              client,
+			reportsUnauthorized: true,
+		}, restURL)
+		if len(*answers) != 0 {
+			t.Errorf("a cleared hook was told %v", *answers)
+		}
+	})
+	t.Run("a transport that does not report", func(t *testing.T) {
+		client := &Client{}
+		answers := answersHook(client)
+		body := roundTripDrained(t, &responseLimitTransport{
+			base:   &stubRoundTripper{body: expiredTokenBody, status: http.StatusUnauthorized},
+			client: client,
+		}, restURL)
+		if len(*answers) != 0 {
+			t.Errorf("a transport that does not report told the hook %v", *answers)
+		}
+		if string(body) != expiredTokenBody {
+			t.Errorf("body = %q, want %q", body, expiredTokenBody)
 		}
 	})
 }
 
+// failAfterBody answers a fixed prefix together with an error, and afterwards,
+// if read again, more bytes: the shape of a body whose error is not sticky,
+// which nothing in [io.Reader]'s contract rules out. Closing it is recorded.
+type failAfterBody struct {
+	prefix string
+	err    error
+	later  string
+	calls  int
+	closed bool
+}
+
+// Read answers the prefix and the error first, then the later bytes, then EOF.
+func (b *failAfterBody) Read(p []byte) (int, error) {
+	b.calls++
+	switch b.calls {
+	case 1:
+		return copy(p, b.prefix), b.err
+	case 2:
+		return copy(p, b.later), nil
+	default:
+		return 0, io.EOF
+	}
+}
+
+// Close records that the body was closed.
+func (b *failAfterBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+// bodyRoundTripper answers 401 with the body it is given.
+type bodyRoundTripper struct{ body io.ReadCloser }
+
+// RoundTrip answers 401 with the stubbed body.
+func (s *bodyRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusUnauthorized, Body: s.body, Header: make(http.Header)}, nil
+}
+
+// TestResponseLimitTransport_Peeked401Body_IsReplayedWhole verifies that the
+// prefix read to classify a 401 is delivered again, so what the SDK and the
+// response capture read is exactly what GitLab sent.
+//
+// A body longer than the peek is delivered whole and names nothing even when
+// the code sits past the bound, which is the direction that asks GitLab again
+// rather than acting. One that ends exactly at the bound is read whole by the
+// peek and still classified.
+func TestResponseLimitTransport_Peeked401Body_IsReplayedWhole(t *testing.T) {
+	longPlain := `{"message":"` + strings.Repeat("x", 2*unauthorizedPeekBytes) + `"}`
+	longWithCodeLate := `{"message":"` + strings.Repeat("x", 2*unauthorizedPeekBytes) + `","error":"invalid_token"}`
+
+	tests := []struct {
+		name string
+		body string
+		want UnauthorizedAnswer
+	}{
+		{name: "a short body naming the credential", body: expiredTokenBody, want: UnauthorizedCredential},
+		{name: "a short body naming nothing", body: plainUnauthorizedBody, want: UnauthorizedUnexplained},
+		{name: "a body longer than the peek", body: longPlain, want: UnauthorizedUnexplained},
+		{name: "invalid_token past the bound", body: longWithCodeLate, want: UnauthorizedUnexplained},
+		{name: "a body that ends exactly at the bound", body: expiredTokenBody + strings.Repeat(" ", unauthorizedPeekBytes-len(expiredTokenBody)), want: UnauthorizedCredential},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &Client{}
+			client.SetMaxResponseBytes(1 << 20)
+			answers := answersHook(client)
+			got := roundTripDrained(t, &responseLimitTransport{
+				base:                &stubRoundTripper{body: tt.body, status: http.StatusUnauthorized},
+				client:              client,
+				reportsUnauthorized: true,
+			}, restURL)
+			if string(got) != tt.body {
+				t.Errorf("the caller read %d bytes, want the %d GitLab sent, byte for byte", len(got), len(tt.body))
+			}
+			if len(*answers) != 1 || (*answers)[0] != tt.want {
+				t.Errorf("the hook was told %v, want [%v]", *answers, tt.want)
+			}
+		})
+	}
+}
+
+// TestResponseLimitTransport_Peeked401Body_StaysUnderTheCeiling verifies that
+// peeking a 401 does not take its body out from under the response ceiling:
+// the peek happens first, and the limit still counts every byte of the replay,
+// the peeked ones included.
+func TestResponseLimitTransport_Peeked401Body_StaysUnderTheCeiling(t *testing.T) {
+	client := &Client{}
+	client.SetMaxResponseBytes(16)
+	answers := answersHook(client)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, restURL, http.NoBody)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := (&responseLimitTransport{
+		base:                &stubRoundTripper{body: plainUnauthorizedBody, status: http.StatusUnauthorized},
+		client:              client,
+		reportsUnauthorized: true,
+	}).RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+	defer resp.Body.Close()
+	if _, readErr := readBounded(resp.Body); !errors.Is(readErr, ErrResponseTooLarge) {
+		t.Errorf("reading a 401 body past the ceiling = %v, want ErrResponseTooLarge", readErr)
+	}
+	if len(*answers) != 1 {
+		t.Errorf("the hook was told %v, want one answer", *answers)
+	}
+}
+
+// TestResponseLimitTransport_PeekThatFails_HandsTheFailureOn verifies that a
+// read failing during the peek is replayed to the caller rather than
+// swallowed, and that nothing is read past it: a body free to answer more after
+// an error would otherwise have those bytes spliced in after the gap, and the
+// caller would decode a body GitLab never sent. The prefix it did read names
+// nothing, and closing the replay closes the body GitLab sent.
+func TestResponseLimitTransport_PeekThatFails_HandsTheFailureOn(t *testing.T) {
+	readErr := errors.New("connection reset mid-body")
+	body := &failAfterBody{prefix: `{"error":"inv`, err: readErr, later: `alid_token"}`}
+	client := &Client{}
+	client.SetMaxResponseBytes(1 << 20)
+	answers := answersHook(client)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, restURL, http.NoBody)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := (&responseLimitTransport{
+		base:                &bodyRoundTripper{body: body},
+		client:              client,
+		reportsUnauthorized: true,
+	}).RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+	got, gotErr := readBounded(resp.Body)
+	if !errors.Is(gotErr, readErr) {
+		t.Errorf("reading the body = %v, want the error the peek met", gotErr)
+	}
+	if string(got) != body.prefix {
+		t.Errorf("the caller read %q, want the prefix %q and nothing spliced in after the failure", got, body.prefix)
+	}
+	if len(*answers) != 1 || (*answers)[0] != UnauthorizedUnexplained {
+		t.Errorf("the hook was told %v, want [UnauthorizedUnexplained]", *answers)
+	}
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		t.Errorf("Close() = %v", closeErr)
+	}
+	if !body.closed {
+		t.Error("closing the replayed body did not close the one GitLab sent")
+	}
+}
+
+// TestResponseLimitTransport_PassesThroughUnlimited verifies a client whose
+// ceiling is removed gets the untouched body back, and that a transport error
+// is returned as-is rather than being wrapped in a limiter.
 func TestResponseLimitTransport_PassesThroughUnlimited(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -553,66 +841,84 @@ func (s *stubRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 // GitLab cannot, so nothing else in this package reaches them: net/http's own
 // transport always returns one of the two valid shapes.
 func TestResponseLimitTransport_ContractViolatingBase_IsPassedThrough(t *testing.T) {
-	// roundTrip reports the shape of what came back rather than the response
-	// itself: every case here is about a response with no body to hand on,
-	// and returning one would only be a body nothing can close.
-	roundTrip := func(t *testing.T, base http.RoundTripper) (respWasNil, bodyWasNil bool, fired int) {
-		t.Helper()
-		client := &Client{}
-		client.SetMaxResponseBytes(1 << 20)
-		client.SetOnUnauthorized(func() { fired++ })
-
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://gitlab.example.com/x", http.NoBody)
-		if err != nil {
-			t.Fatalf("NewRequest unexpected error: %v", err)
-		}
-		resp, err := (&responseLimitTransport{base: base, client: client}).RoundTrip(req)
-		if err != nil {
-			t.Fatalf("RoundTrip() unexpected error: %v", err)
-		}
-		if resp == nil {
-			return true, true, fired
-		}
-		if resp.Body == nil {
-			return false, true, fired
-		}
-		defer resp.Body.Close()
-		return false, false, fired
-	}
-
 	t.Run("a base that answers nothing at all", func(t *testing.T) {
-		respWasNil, _, fired := roundTrip(t, &stubRoundTripper{nilResponse: true})
+		respWasNil, _, answers := roundTripContractViolation(t, &stubRoundTripper{nilResponse: true}, restURL)
 		if !respWasNil {
 			t.Error("RoundTrip() invented a response, want the base's nil passed through")
 		}
-		if fired != 0 {
-			t.Errorf("the unauthorized hook fired %d times for a response that never existed", fired)
+		if len(answers) != 0 {
+			t.Errorf("the unauthorized hook was told %v for a response that never existed", answers)
 		}
 	})
 
 	t.Run("a base that answers a response with no body", func(t *testing.T) {
-		respWasNil, bodyWasNil, fired := roundTrip(t, &stubRoundTripper{nilBody: true})
+		respWasNil, bodyWasNil, answers := roundTripContractViolation(t, &stubRoundTripper{nilBody: true}, restURL)
 		if respWasNil {
 			t.Fatal("RoundTrip() = nil, want the base's response passed through")
 		}
 		if !bodyWasNil {
 			t.Error("the nil body was replaced, want it passed through unwrapped")
 		}
-		if fired != 0 {
-			t.Errorf("the unauthorized hook fired %d times on a 200", fired)
+		if len(answers) != 0 {
+			t.Errorf("the unauthorized hook was told %v on a 200", answers)
 		}
 	})
+}
 
-	t.Run("a 401 with no body still fires the hook", func(t *testing.T) {
-		respWasNil, bodyWasNil, fired := roundTrip(t, &stubRoundTripper{nilBody: true, status: http.StatusUnauthorized})
-		if respWasNil {
-			t.Fatal("RoundTrip() = nil, want the base's response passed through")
-		}
-		if !bodyWasNil {
-			t.Error("the nil body was replaced, want it passed through unwrapped")
-		}
-		if fired != 1 {
-			t.Errorf("the unauthorized hook fired %d times on a 401, want once", fired)
-		}
-	})
+// roundTripContractViolation sends one request through the innermost
+// transport over base, and reports the shape of what came back rather than
+// the response itself: every case it serves is about a response with no body
+// to hand on, and returning one would only be a body nothing can close.
+func roundTripContractViolation(t *testing.T, base http.RoundTripper, url string) (respWasNil, bodyWasNil bool, answers []UnauthorizedAnswer) {
+	t.Helper()
+	client := &Client{}
+	client.SetMaxResponseBytes(1 << 20)
+	told := answersHook(client)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
+	if err != nil {
+		t.Fatalf("NewRequest unexpected error: %v", err)
+	}
+	resp, err := (&responseLimitTransport{base: base, client: client, reportsUnauthorized: true}).RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip() unexpected error: %v", err)
+	}
+	if resp == nil {
+		return true, true, *told
+	}
+	if resp.Body == nil {
+		return false, true, *told
+	}
+	defer resp.Body.Close()
+	return false, false, *told
+}
+
+// TestResponseLimitTransport_A401WithNoBody_IsStillReported verifies that a
+// 401 whose response carries no body, which only a contract-violating base can
+// hand over, still reaches the hook and is passed on untouched: as naming
+// nothing over REST, since there is no body to carry a code, and as naming the
+// credential over GraphQL, where the endpoint alone decides.
+func TestResponseLimitTransport_A401WithNoBody_IsStillReported(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want UnauthorizedAnswer
+	}{
+		{name: "a REST 401 with no body names nothing", url: restURL, want: UnauthorizedUnexplained},
+		{name: "a GraphQL 401 with no body names the credential", url: graphQLURL, want: UnauthorizedCredential},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			respWasNil, bodyWasNil, answers := roundTripContractViolation(t, &stubRoundTripper{nilBody: true, status: http.StatusUnauthorized}, tt.url)
+			if respWasNil {
+				t.Fatal("RoundTrip() = nil, want the base's response passed through")
+			}
+			if !bodyWasNil {
+				t.Error("the nil body was replaced, want it passed through unwrapped")
+			}
+			if len(answers) != 1 || answers[0] != tt.want {
+				t.Errorf("the unauthorized hook was told %v on a 401, want [%v]", answers, tt.want)
+			}
+		})
+	}
 }

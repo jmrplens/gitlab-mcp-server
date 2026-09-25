@@ -123,82 +123,544 @@ func TestBuildEntry_UnpublishedInstance_IsCallerNamed(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_A401OnACallDropsTheEntry verifies the first data call
-// GitLab refuses drops the entry, so the next request re-verifies the
-// credential instead of being served a revoked token until the periodic
-// check notices, which could be an hour later. The signal is the 401 itself,
-// seen by the client's own transport, so every tool, resource and prompt
-// call counts and no text is matched.
-func TestGetOrCreate_A401OnACallDropsTheEntry(t *testing.T) {
-	var revoked atomic.Bool
+// The bodies GitLab answers a 401 with: Grape's unauthorized!, which a
+// permission refusal and a token GitLab no longer finds both get, and the API
+// guard's invalid_token for an expired one.
+const (
+	plainUnauthorizedBody = `{"message":"401 Unauthorized"}`
+	expiredTokenBody      = `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`
+)
+
+// refusingGitLab is a GitLab that refuses the one call the tests make,
+// approving merge request 1 of project 1, with a 401 carrying approveBody, and
+// answers the credential probe, GET /api/v4/user, with the status it is set to.
+//
+// The probes are counted, and the count is reset once the entry is built so a
+// test reads only the confirmations: building an entry asks /user twice, once
+// to verify the credential and once to resolve who it belongs to.
+type refusingGitLab struct {
+	*httptest.Server
+	approveBody string
+	// userStatus is what /user answers; zero means 200.
+	userStatus atomic.Int32
+	userCalls  atomic.Int64
+	// hold, when set, keeps every /user request waiting until it is closed,
+	// so a test can have its refusals arrive while a confirmation is in
+	// flight.
+	hold atomic.Pointer[chan struct{}]
+}
+
+func newRefusingGitLab(t *testing.T, approveBody string) *refusingGitLab {
+	t.Helper()
+	g := &refusingGitLab{approveBody: approveBody}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		g.userCalls.Add(1)
+		if hold := g.hold.Load(); hold != nil {
+			<-*hold
+		}
+		status := int(g.userStatus.Load())
+		if status == 0 {
+			status = http.StatusOK
+		}
 		w.Header().Set("Content-Type", "application/json")
-		if revoked.Load() {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+		w.WriteHeader(status)
+		if status == http.StatusOK {
+			_, _ = w.Write([]byte(`{"id":7,"username":"approver"}`))
 			return
 		}
-		_, _ = w.Write([]byte("[]"))
+		_, _ = w.Write([]byte(plainUnauthorizedBody))
+	})
+	mux.HandleFunc("/api/v4/projects/1/merge_requests/1/approve", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(g.approveBody))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("{}"))
 	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	g.Server = httptest.NewServer(mux)
+	t.Cleanup(g.Close)
+	return g
+}
 
-	pool := New(testConfig(srv.URL), testFactory())
-	if _, err := pool.GetOrCreate("glpat-live", srv.URL); err != nil {
-		t.Fatalf("GetOrCreate: %v", err)
+// refusedEntry builds a pool over g and the one entry the tests refuse calls
+// on, returning the pool, the entry and its key, with g's probe count reset.
+func refusedEntry(t *testing.T, g *refusingGitLab, options ...Option) (*ServerPool, *Entry, string) {
+	t.Helper()
+	pool := New(testConfig(g.URL), testFactory(), options...)
+	t.Cleanup(pool.Close)
+	entry, err := pool.GetOrCreateEntry("glpat-approver", g.URL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
 	}
-	pool.mu.RLock()
-	entry := pool.entries[sessionKey("glpat-live", srv.URL)]
-	pool.mu.RUnlock()
-	if entry == nil {
-		t.Fatal("no entry after GetOrCreate")
-	}
+	g.userCalls.Store(0)
+	return pool, entry, sessionKey("glpat-approver", g.URL)
+}
 
-	// A call GitLab answers changes nothing.
-	if _, _, err := entry.client.GL().Projects.ListProjects(nil); err != nil {
-		t.Fatalf("a call before revocation failed: %v", err)
+// approve makes the call g refuses, through the entry's own client, so the
+// 401 reaches the pool the way every tool call's does.
+func approve(t *testing.T, entry *Entry) {
+	t.Helper()
+	if _, _, err := entry.client.GL().MergeRequestApprovals.ApproveMergeRequest(1, 1, nil); err == nil {
+		t.Error("the approve call succeeded, so the stub did not refuse it")
 	}
-	if got := pool.Size(); got != 1 {
-		t.Fatalf("pool size = %d after an answered call, want 1", got)
-	}
+}
 
-	// The token is revoked: the next call is refused, and the entry with it.
-	// The drop runs off the calling goroutine, so it is waited for rather
-	// than read straight after the call.
-	revoked.Store(true)
-	if _, _, err := entry.client.GL().Projects.ListProjects(nil); err == nil {
-		t.Fatal("the call after revocation succeeded, so the stub did not refuse it")
-	}
+// awaitCondition polls cond until it holds or five seconds pass. The pool acts
+// on a 401 off the calling goroutine, so what it did is waited for rather than
+// read straight after the call.
+func awaitCondition(t *testing.T, what string, cond func() bool) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for pool.Size() != 0 {
+	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatalf("pool size = %d five seconds after a 401 on a call, want 0: the entry outlived its credential", pool.Size())
+			t.Fatalf("five seconds passed without %s", what)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// lastValidatedOf reads the entry's lastValidated under the lock that guards it.
+func lastValidatedOf(pool *ServerPool, entry *Entry) time.Time {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	return entry.lastValidated
+}
+
+// TestGetOrCreate_APermissionRefusalWith401_KeepsTheEntry is issue 907's
+// case: GitLab refuses a valid credential a permission with a plain 401, as it
+// does for approving a merge request one opened where author approval is
+// prevented, and the pool keeps the entry.
+//
+// It used to evict on the status alone, which ended the caller's watchers and
+// listen streams with a "re-authenticate" they had no reason to follow,
+// terminated their stateful sessions, reset their rate bucket, and counted a
+// revocation that never happened. Now the 401 is confirmed with the credential
+// probe, which GitLab answers 200, so the entry stays, is still the one the
+// next request is served, and has just had its credential checked.
+func TestGetOrCreate_APermissionRefusalWith401_KeepsTheEntry(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	var evicted atomic.Int32
+	pool, entry, _ := refusedEntry(t, g, WithOnEvict(func(*Entry, EvictionCause) { evicted.Add(1) }))
+	// The baseline is moved a minute back rather than read as it stands:
+	// insertEntry stamps time.Now() and the probe stamps it again moments
+	// later, and on a clock that advances in ticks (Windows) both readings can
+	// be equal, which would fail the After check below with the fix in place.
+	pool.mu.Lock()
+	entry.lastValidated = entry.lastValidated.Add(-time.Minute)
+	before := entry.lastValidated
+	pool.mu.Unlock()
+
+	approve(t, entry)
+	awaitCondition(t, "the pool confirming the 401 and keeping the entry", func() bool {
+		return pool.Stats().UnauthorizedKept == 1
+	})
+
+	again, err := pool.GetOrCreateEntry("glpat-approver", g.URL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry after the refusal: %v", err)
+	}
+	if again != entry {
+		t.Error("the next request was served a rebuilt entry, want the one GitLab still accepts")
+	}
+	stats := pool.Stats()
+	if stats.RejectedCredentialEvictions != 0 {
+		t.Errorf("RejectedCredentialEvictions = %d, want 0: a permission refusal is not a revocation", stats.RejectedCredentialEvictions)
+	}
+	if got := evicted.Load(); got != 0 {
+		t.Errorf("the eviction callback ran %d times, want never", got)
+	}
+	if got := g.userCalls.Load(); got != 1 {
+		t.Errorf("the credential probe was asked %d times, want once", got)
+	}
+	if after := lastValidatedOf(pool, entry); !after.After(before) {
+		t.Errorf("lastValidated = %v, want it moved past %v by the probe GitLab answered", after, before)
+	}
+}
+
+// TestGetOrCreate_A401NamingTheCredential_DropsTheEntryWithoutAProbe verifies
+// the path the fix leaves as it was: a 401 carrying invalid_token is GitLab's
+// verdict on the credential, so the entry goes at once, as a rejected
+// credential, with no probe asking a question GitLab has already answered.
+//
+// The rebuilt entry then survives the old client's later refusals, since the
+// verdict reaches the pool once per client.
+func TestGetOrCreate_A401NamingTheCredential_DropsTheEntryWithoutAProbe(t *testing.T) {
+	g := newRefusingGitLab(t, expiredTokenBody)
+	var causes []EvictionCause
+	var mu sync.Mutex
+	pool, entry, _ := refusedEntry(t, g, WithOnEvict(func(_ *Entry, cause EvictionCause) {
+		mu.Lock()
+		defer mu.Unlock()
+		causes = append(causes, cause)
+	}))
+
+	approve(t, entry)
+	awaitCondition(t, "the entry being dropped", func() bool { return pool.Size() == 0 })
+
 	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
 		t.Errorf("RejectedCredentialEvictions = %d, want 1", got)
 	}
-
-	// The next request rebuilds, which is the re-verification. The old
-	// client's later refusals fire nothing: the hook is once per client.
-	revoked.Store(false)
-	if _, err := pool.GetOrCreate("glpat-live", srv.URL); err != nil {
-		t.Fatalf("GetOrCreate after the drop: %v", err)
+	mu.Lock()
+	if len(causes) != 1 || causes[0] != CauseRejectedCredential {
+		t.Errorf("eviction causes = %v, want [%s]", causes, CauseRejectedCredential)
 	}
-	revoked.Store(true)
-	_, _, _ = entry.client.GL().Projects.ListProjects(nil)
+	mu.Unlock()
+	if got := g.userCalls.Load(); got != 0 {
+		t.Errorf("the credential probe was asked %d times, want none: GitLab had named the credential", got)
+	}
+
+	if _, err := pool.GetOrCreateEntry("glpat-approver", g.URL, nil); err != nil {
+		t.Fatalf("GetOrCreateEntry after the drop: %v", err)
+	}
+	approve(t, entry)
 	time.Sleep(50 * time.Millisecond)
 	if got := pool.Size(); got != 1 {
 		t.Errorf("pool size = %d after the old client's second 401, want the rebuilt entry kept", got)
 	}
 	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
 		t.Errorf("RejectedCredentialEvictions = %d after the old client's second 401, want still 1", got)
+	}
+}
+
+// TestGetOrCreate_A401ForATokenGitLabNoLongerFinds_DropsTheEntryAfterOneProbe
+// pins the other half of the posture: a token GitLab no longer has a record of
+// is answered with the same plain 401 a permission refusal gets, and it is
+// still dropped on the first call refused, one probe later, rather than
+// served until the next revalidation.
+//
+// The probe's own 401 does not start another probe: the health client does
+// not report it, so exactly one confirmation is made.
+func TestGetOrCreate_A401ForATokenGitLabNoLongerFinds_DropsTheEntryAfterOneProbe(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	var causes []EvictionCause
+	var mu sync.Mutex
+	pool, entry, _ := refusedEntry(t, g, WithOnEvict(func(_ *Entry, cause EvictionCause) {
+		mu.Lock()
+		defer mu.Unlock()
+		causes = append(causes, cause)
+	}))
+	g.userStatus.Store(http.StatusUnauthorized)
+
+	approve(t, entry)
+	awaitCondition(t, "the entry being dropped", func() bool { return pool.Size() == 0 })
+
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d, want 1", got)
+	}
+	if got := pool.Stats().UnauthorizedKept; got != 0 {
+		t.Errorf("UnauthorizedKept = %d, want 0", got)
+	}
+	mu.Lock()
+	if len(causes) != 1 || causes[0] != CauseRejectedCredential {
+		t.Errorf("eviction causes = %v, want [%s]", causes, CauseRejectedCredential)
+	}
+	mu.Unlock()
+	time.Sleep(50 * time.Millisecond)
+	if got := g.userCalls.Load(); got != 1 {
+		t.Errorf("the credential probe was asked %d times, want exactly once", got)
+	}
+	if !entry.rejected.Load() {
+		t.Error("the dropped entry was not marked rejected")
+	}
+}
+
+// TestGetOrCreate_ConcurrentUnexplained401s_ProbeOnce verifies that refusals
+// arriving together are confirmed once: the first claims the window and the
+// rest find it taken, even while the one probe they share is still waiting on
+// GitLab.
+func TestGetOrCreate_ConcurrentUnexplained401s_ProbeOnce(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, _ := refusedEntry(t, g)
+	hold := make(chan struct{})
+	g.hold.Store(&hold)
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			close(hold)
+		}
+	}
+	t.Cleanup(release)
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if _, _, err := entry.client.GL().MergeRequestApprovals.ApproveMergeRequest(1, 1, nil); err == nil {
+				t.Error("an approve call succeeded, so the stub did not refuse it")
+			}
+		})
+	}
+	wg.Wait()
+	awaitCondition(t, "the confirmation reaching GitLab", func() bool { return g.userCalls.Load() >= 1 })
+	release()
+	awaitCondition(t, "the confirmation keeping the entry", func() bool { return pool.Stats().UnauthorizedKept == 1 })
+
+	if got := g.userCalls.Load(); got != 1 {
+		t.Errorf("eight refusals made %d confirmations, want one", got)
+	}
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d, want the entry kept", got)
+	}
+}
+
+// TestGetOrCreate_AnUnexplained401InsideTheCooldown_DoesNotProbe verifies the
+// window: once a refusal has been confirmed, the next one inside
+// [unauthorizedConfirmCooldown] costs GitLab nothing more, which is what keeps
+// a client retrying a refused approval from doubling its upstream traffic.
+func TestGetOrCreate_AnUnexplained401InsideTheCooldown_DoesNotProbe(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, _ := refusedEntry(t, g)
+
+	approve(t, entry)
+	awaitCondition(t, "the first refusal being confirmed", func() bool { return pool.Stats().UnauthorizedKept == 1 })
+	claimed := entry.lastConfirmProbe.Load()
+	// The claim a real refusal makes carries the monotonic reading, which is
+	// what keeps a step of the system clock from holding the window shut:
+	// [time.Time.String] prints it as a final "m=" field only when it is there.
+	if claimed == nil || !strings.Contains(claimed.String(), " m=") {
+		t.Errorf("the claim = %v, want a time.Now reading with its monotonic clock", claimed)
+	}
+
+	approve(t, entry)
+	if got := entry.lastConfirmProbe.Load(); got != claimed {
+		t.Errorf("a refusal inside the window claimed it again (%v, was %v)", got, claimed)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := g.userCalls.Load(); got != 1 {
+		t.Errorf("two refusals inside one window made %d confirmations, want one", got)
+	}
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d, want the entry kept", got)
+	}
+}
+
+// TestHandleUnauthorized_AnEntryAlreadyRejected_IsNotProbedAgain verifies
+// that a refusal naming nothing on an entry whose credential GitLab has
+// already refused spends no probe and claims no window: the entry is on its
+// way out, and the verdict has been given.
+func TestHandleUnauthorized_AnEntryAlreadyRejected_IsNotProbedAgain(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, key := refusedEntry(t, g)
+	entry.rejected.Store(true)
+
+	pool.handleUnauthorized(key, entry, gitlabclient.UnauthorizedUnexplained)
+
+	if got := entry.lastConfirmProbe.Load(); got != nil {
+		t.Errorf("a rejected entry claimed the confirmation window (%v)", got)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := g.userCalls.Load(); got != 0 {
+		t.Errorf("a rejected entry was probed %d times, want none", got)
+	}
+}
+
+// TestConfirmUnexplainedRefusal_WithoutAVerdict_ChangesNothing verifies the
+// cases where the confirmation learns nothing, and so changes nothing: GitLab
+// answers the probe with neither an acceptance nor a refusal, no probe slot is
+// free, or the entry was replaced before the probe could be sent. The entry is
+// neither dropped nor recorded as checked, the rule admission follows: no
+// verdict never rejects, and it never accepts either.
+//
+// Each case calls the confirmation directly, on the test goroutine, so what it
+// did is complete when the assertions read it.
+func TestConfirmUnexplainedRefusal_WithoutAVerdict_ChangesNothing(t *testing.T) {
+	tests := []struct {
+		name       string
+		arrange    func(t *testing.T, g *refusingGitLab, pool *ServerPool, key string)
+		wantProbes int64
+		wantPooled int
+	}{
+		{
+			name: "the probe is answered 500",
+			arrange: func(_ *testing.T, g *refusingGitLab, _ *ServerPool, _ string) {
+				g.userStatus.Store(http.StatusInternalServerError)
+			},
+			wantProbes: 1,
+			wantPooled: 1,
+		},
+		{
+			name: "no probe slot is free",
+			arrange: func(t *testing.T, _ *refusingGitLab, pool *ServerPool, _ string) {
+				t.Helper()
+				// Filled until a send would block rather than a fixed number
+				// of times: a slot something else still holds must not turn
+				// the arrangement into a hang.
+				taken := 0
+				for full := false; !full; {
+					select {
+					case pool.probes <- struct{}{}:
+						taken++
+					default:
+						full = true
+					}
+				}
+				t.Cleanup(func() {
+					for range taken {
+						<-pool.probes
+					}
+				})
+			},
+			wantProbes: 0,
+			wantPooled: 1,
+		},
+		{
+			name: "the entry was replaced first",
+			arrange: func(_ *testing.T, _ *refusingGitLab, pool *ServerPool, key string) {
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
+				pool.entries[key] = &Entry{}
+			},
+			wantProbes: 0,
+			wantPooled: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry, key := refusedEntry(t, g)
+			before := lastValidatedOf(pool, entry)
+			tt.arrange(t, g, pool, key)
+
+			pool.confirmUnexplainedRefusal(key, entry)
+
+			if got := g.userCalls.Load(); got != tt.wantProbes {
+				t.Errorf("the credential probe was asked %d times, want %d", got, tt.wantProbes)
+			}
+			stats := pool.Stats()
+			if stats.RejectedCredentialEvictions != 0 || stats.UnauthorizedKept != 0 {
+				t.Errorf("RejectedCredentialEvictions = %d, UnauthorizedKept = %d, want both 0",
+					stats.RejectedCredentialEvictions, stats.UnauthorizedKept)
+			}
+			if got := pool.Size(); got != tt.wantPooled {
+				t.Errorf("pool size = %d, want %d", got, tt.wantPooled)
+			}
+			if entry.rejected.Load() {
+				t.Error("the entry was marked rejected without a refusal")
+			}
+			if after := lastValidatedOf(pool, entry); !after.Equal(before) {
+				t.Errorf("lastValidated moved from %v to %v without an answer from GitLab", before, after)
+			}
+		})
+	}
+}
+
+// TestConfirmUnexplainedRefusal_AcceptedAfterTheEntryWasReplaced_CountsNothing
+// verifies that an acceptance arriving for an entry that is no longer pooled
+// is not recorded: nothing was kept, and the entry under the key now is
+// somebody else's to check.
+func TestConfirmUnexplainedRefusal_AcceptedAfterTheEntryWasReplaced_CountsNothing(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, key := refusedEntry(t, g)
+	replacement := &Entry{}
+
+	pool.keepConfirmedEntry(key, entry)
+	if got := pool.Stats().UnauthorizedKept; got != 1 {
+		t.Fatalf("UnauthorizedKept = %d for the pooled entry, want 1", got)
+	}
+	pool.mu.Lock()
+	pool.entries[key] = replacement
+	pool.mu.Unlock()
+
+	pool.keepConfirmedEntry(key, entry)
+
+	if got := pool.Stats().UnauthorizedKept; got != 1 {
+		t.Errorf("UnauthorizedKept = %d after keeping an entry no longer pooled, want still 1", got)
+	}
+	if !replacement.lastValidated.IsZero() {
+		t.Errorf("the replacement's lastValidated = %v, want it untouched", replacement.lastValidated)
+	}
+}
+
+// TestClaimConfirmation_WindowEdges verifies the confirmation window at its
+// edges: an entry that never confirmed may, one exactly a cooldown after its
+// last claim may, and one a nanosecond short of that, or at the same instant,
+// may not. A claim that succeeds replaces the last one with the moment it was
+// made, and one that fails leaves the last one in place.
+//
+// The first row is a brand-new entry meeting its first refusal: nothing marks
+// it as having claimed, so it is confirmed however soon after the entry was
+// built the refusal arrives. The times are [time.Now] readings, so the window
+// is measured between two monotonic readings, as it is when a refusal makes
+// the claim.
+func TestClaimConfirmation_WindowEdges(t *testing.T) {
+	const cooldown = 30 * time.Second
+	start := time.Now()
+	tests := []struct {
+		name string
+		last *time.Time
+		now  time.Time
+		want bool
+	}{
+		{name: "a brand-new entry that never confirmed", last: nil, now: start, want: true},
+		{name: "exactly a cooldown later", last: &start, now: start.Add(cooldown), want: true},
+		{name: "a nanosecond short", last: &start, now: start.Add(cooldown - time.Nanosecond), want: false},
+		{name: "at the same instant", last: &start, now: start, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := &Entry{}
+			entry.lastConfirmProbe.Store(tt.last)
+			if got := entry.claimConfirmation(tt.now, cooldown); got != tt.want {
+				t.Errorf("claimConfirmation() = %v, want %v", got, tt.want)
+			}
+			got := entry.lastConfirmProbe.Load()
+			if !tt.want {
+				if got != tt.last {
+					t.Errorf("a refused claim replaced the last one: %v, was %v", got, tt.last)
+				}
+				return
+			}
+			if got == nil || got == tt.last || !got.Equal(tt.now) {
+				t.Errorf("the claim = %v after it succeeded, want a new one at %v", got, tt.now)
+			}
+		})
+	}
+}
+
+// TestUnauthorizedConfirmCooldown_OutlastsTheProbe pins the relation the
+// single flight rests on: the window the first refusal claims must still be
+// open when its probe returns, or a refusal arriving while that probe waits
+// would start a second. And [New] must hand the pool the constant.
+func TestUnauthorizedConfirmCooldown_OutlastsTheProbe(t *testing.T) {
+	if unauthorizedConfirmCooldown <= credentialCheckTimeout {
+		t.Errorf("unauthorizedConfirmCooldown = %v, want it longer than the probe's own bound %v",
+			unauthorizedConfirmCooldown, credentialCheckTimeout)
+	}
+	if got := New(testConfig(stubGitLabBase), testFactory()).confirmCooldown; got != unauthorizedConfirmCooldown {
+		t.Errorf("New() confirmCooldown = %v, want %v", got, unauthorizedConfirmCooldown)
+	}
+}
+
+// TestTryProbeSlot_NoLimiter_AlwaysGrants verifies that a pool built without
+// a probe limiter, which only one assembled outside [New] can be, grants the
+// confirmation a slot and hands back a release that is safe to call.
+func TestTryProbeSlot_NoLimiter_AlwaysGrants(t *testing.T) {
+	pool := &ServerPool{}
+	release, ok := pool.tryProbeSlot()
+	if !ok || release == nil {
+		t.Fatalf("tryProbeSlot() = (%v, %v) with no limiter, want a slot", release != nil, ok)
+	}
+	release()
+}
+
+// TestTryProbeSlot_GivesTheSlotBack verifies that a slot taken for a
+// confirmation is returned by its release, so the confirmations cannot shrink
+// the ceiling admission shares with them.
+func TestTryProbeSlot_GivesTheSlotBack(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+	release, ok := pool.tryProbeSlot()
+	if !ok {
+		t.Fatal("tryProbeSlot() found no slot free in an idle pool")
+	}
+	if got := len(pool.probes); got != 1 {
+		t.Errorf("slots in use = %d after taking one, want 1", got)
+	}
+	release()
+	if got := len(pool.probes); got != 0 {
+		t.Errorf("slots in use = %d after the release, want 0", got)
 	}
 }
 

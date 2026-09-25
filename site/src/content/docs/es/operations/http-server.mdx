@@ -348,6 +348,7 @@ graph TD
 2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
 3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
 4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada desalojable más antigua se elimina completamente, y se avisa a su cliente en lugar de dejarlo mudo: sus vigilantes se detienen, sus peticiones `subscriptions/listen` abiertas se completan con un resultado que nombra el final (`credential_evicted` por capacidad, `credential_revoked` por un token que GitLab rechazó, y [cinco más](/gitlab-mcp-server/es/capabilities/subscriptions/#por-qué-terminó-una-suscripción)) y, con `--stateless=false`, las sesiones que ningún stream terminó se cierran, de modo que su siguiente petición vuelve a inicializar
+5. **Una llamada que GitLab rechaza con `401`**: un `401` que nombra el token (el código `invalid_token`, o cualquier `401` de GraphQL) elimina la entrada al momento y termina sus streams con `credential_revoked`. Un `401` sin más no basta por sí solo, porque GitLab también responde así a algunos permisos que faltan, como aprobar una merge request que abriste tú: el servidor pregunta primero a `GET /api/v4/user`, como mucho una vez cada 30 segundos por credencial, y conserva la entrada, sus suscripciones y sus sesiones si GitLab sigue aceptando el token
 
 #### La palanca y lo que cuesta
 
