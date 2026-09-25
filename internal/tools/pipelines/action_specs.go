@@ -3,7 +3,6 @@ package pipelines
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -49,15 +48,9 @@ func createRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func pipelineGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
-					toolutil.ParamText(input["pipeline_id"]), toolutil.ParamText(input["project_id"]))}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+			toolutil.ParamText(params["pipeline_id"]), toolutil.ParamText(params["project_id"]))}
 	})
 }
 

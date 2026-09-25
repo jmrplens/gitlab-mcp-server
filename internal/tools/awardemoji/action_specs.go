@@ -3,7 +3,6 @@ package awardemoji
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -269,14 +268,8 @@ func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 }
 
 func awardEmojiGetRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (Output, error), notFound func(map[string]any) awardEmojiNotFoundOutput) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, fn).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return notFound(input), nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, fn).WrapNotFound(func(params map[string]any) any {
+		return notFound(params)
 	})
 }
 

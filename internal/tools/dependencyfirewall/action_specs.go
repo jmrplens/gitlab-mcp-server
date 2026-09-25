@@ -1,10 +1,6 @@
 package dependencyfirewall
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -106,26 +102,22 @@ func ecosystemEnum() []any {
 // so a caller told only "not found" concludes the project is wrong and retries
 // with another one forever.
 func evaluateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, EvaluatePackage).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return notFoundOutput{ProjectID: projectIdentifier(input)}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, EvaluatePackage).WrapNotFound(func(params map[string]any) any {
+		return notFoundOutput{ProjectID: projectIdentifier(params)}
 	})
 }
 
 // projectIdentifier renders the project_id the caller passed, for the
-// not-found message. An absent or unreadable value degrades to "the requested
-// project" rather than an empty pair of asterisks.
+// not-found message, the way the caller wrote it: a JSON number arrives as a
+// float64, which %v printed in exponent form from a million up, so project
+// 12345678 was named 1.2345678e+07. An absent or unreadable value degrades to
+// "the requested project" rather than an empty pair of asterisks.
 func projectIdentifier(input map[string]any) string {
 	value, ok := input["project_id"]
 	if !ok || value == nil {
 		return "the requested project"
 	}
-	if text := fmt.Sprintf("%v", value); text != "" {
+	if text := toolutil.ParamText(value); text != "" {
 		return "project " + text
 	}
 	return "the requested project"

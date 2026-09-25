@@ -3,7 +3,6 @@ package badges
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -228,17 +227,11 @@ func badgeEditGuidance(actionName string, options toolutil.ActionSpecOptions) to
 // in the identifier sentence (e.g. "project"), the input-map key for the scope ID
 // (e.g. "project_id"), and the hint strings shown to the model.
 func wrapBadgeNotFound(route toolutil.ActionRoute, resource, scope, scopeKey string, hints []string) toolutil.ActionRoute {
-	return route.WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return badgeNotFoundOutput{
-					Resource:   resource,
-					Identifier: fmt.Sprintf("badge %s in %s %s", toolutil.ParamText(input["badge_id"]), scope, toolutil.ParamText(input[scopeKey])),
-					Hints:      hints,
-				}, nil
-			}
-			return result, err
+	return route.WrapNotFound(func(params map[string]any) any {
+		return badgeNotFoundOutput{
+			Resource:   resource,
+			Identifier: fmt.Sprintf("badge %s in %s %s", toolutil.ParamText(params["badge_id"]), scope, toolutil.ParamText(params[scopeKey])),
+			Hints:      hints,
 		}
 	})
 }

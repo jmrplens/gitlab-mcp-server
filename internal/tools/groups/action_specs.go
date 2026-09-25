@@ -3,7 +3,6 @@ package groups
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -188,14 +187,8 @@ func DeletePushRuleOutput(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 func groupGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return groupNotFoundOutput{Identifier: toolutil.ParamText(input[paramGroupID])}, nil
-			}
-			return result, err
-		}
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return groupNotFoundOutput{Identifier: toolutil.ParamText(params[paramGroupID])}
 	})
 }
 

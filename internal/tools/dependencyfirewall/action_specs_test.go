@@ -4,6 +4,7 @@
 package dependencyfirewall
 
 import (
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -191,6 +192,39 @@ func TestActionSpecs_NotFoundNamesTheFeatureFlag(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_NotFoundNamesTheProjectAsTheCallerWroteIt verifies the
+// project the not-found result names is the one the caller sent, however it
+// was sent: a JSON number of eight digits, which reaches the route as a
+// float64 and was named in exponent form, and the project under its
+// documented project_path alias, which the meta surface hands the route as
+// written and which was named as no project at all.
+func TestActionSpecs_NotFoundNamesTheProjectAsTheCallerWroteIt(t *testing.T) {
+	spec := newSpec(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	evaluated := map[string]any{"ecosystem": "npm", "name": "lodash", "version": "1"}
+	for _, tt := range []struct {
+		name    string
+		project map[string]any
+		want    string
+	}{
+		{name: "a JSON number", project: map[string]any{"project_id": float64(12345678)}, want: "project 12345678"},
+		{name: "project_path alias", project: map[string]any{"project_path": "group/project"}, want: "project group/project"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			input := maps.Clone(evaluated)
+			maps.Copy(input, tt.project)
+			result, err := spec.Route.Handler(t.Context(), input)
+			if err != nil {
+				t.Fatalf("Route.Handler() error = %v, want nil so the guidance is returned instead", err)
+			}
+			if notFound, ok := result.(notFoundOutput); !ok || notFound.ProjectID != tt.want {
+				t.Fatalf("result = %#v, want notFoundOutput naming %s", result, tt.want)
+			}
+		})
+	}
+}
+
 // TestProjectIdentifier verifies the not-found message degrades gracefully
 // when the caller passed no readable project reference.
 func TestProjectIdentifier(t *testing.T) {
@@ -201,6 +235,9 @@ func TestProjectIdentifier(t *testing.T) {
 	}{
 		{name: "string id", input: map[string]any{"project_id": "group/project"}, want: "project group/project"},
 		{name: "numeric id", input: map[string]any{"project_id": 42}, want: "project 42"},
+		// A JSON number arrives as a float64, and %v printed one of eight
+		// digits as 1.2345678e+07.
+		{name: "JSON number of eight digits", input: map[string]any{"project_id": float64(12345678)}, want: "project 12345678"},
 		{name: "absent", input: map[string]any{}, want: "the requested project"},
 		{name: "nil", input: map[string]any{"project_id": nil}, want: "the requested project"},
 		{name: "empty", input: map[string]any{"project_id": ""}, want: "the requested project"},

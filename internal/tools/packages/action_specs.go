@@ -3,7 +3,6 @@ package packages
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -70,15 +69,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // answers 404 for is reported as a structured not-found result naming the
 // package and its project, logged at INFO, rather than as a Go error.
 func packageGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
-		return func(ctx context.Context, input map[string]any) (any, error) {
-			result, err := next(ctx, input)
-			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-				return packageNotFoundOutput{
-					Identifier: toolutil.ParamText(input[paramPackageID]) + " in project " + toolutil.ParamText(input[paramProjectID]),
-				}, nil
-			}
-			return result, err
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return packageNotFoundOutput{
+			Identifier: toolutil.ParamText(params[paramPackageID]) + " in project " + toolutil.ParamText(params[paramProjectID]),
 		}
 	})
 }

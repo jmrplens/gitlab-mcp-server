@@ -1,7 +1,9 @@
 package toolutil
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,16 +39,47 @@ func NotFoundResult(resource, identifier string, hints ...string) *mcp.CallToolR
 	return ErrorResultAnnotated(b.String(), ContentDetail)
 }
 
-// ParamText renders a tool argument the way the caller wrote it, for the
-// identifier a not-found result names. A route wrapper reads the arguments as
-// they were decoded, before anything coerced them, so a JSON number arrives as
-// a float64, and %v prints one of a million or more in exponent form: a
+// ParamText renders a tool argument's value the way the caller wrote it, for
+// the identifier a not-found result names. A route wrapper reads the arguments
+// as they were decoded, before anything coerced them, so a JSON number arrives
+// as a float64, and %v prints one of a million or more in exponent form: a
 // package_id of 31234567 was named "3.1234567e+07" on the dynamic, meta and
 // individual surfaces alike. A whole number is printed as the integer it is,
 // and anything else as fmt prints it.
+//
+// It renders a value and never looks up a name: which key the value is read
+// from is [ActionRoute.WrapNotFound]'s concern, which hands its builder the
+// arguments with the documented aliases already resolved.
 func ParamText(value any) string {
 	if text, ok := numericIDString(value); ok {
 		return text
 	}
 	return fmt.Sprint(value)
+}
+
+// WrapNotFound returns the route with GitLab's 404 answered by the value
+// notFound builds from the call's arguments, in place of the error, now and on
+// every later rebinding. The value is a typed not-found output whose formatter
+// renders [NotFoundResult].
+//
+// notFound reads the arguments as the handler read them: with the documented
+// parameter aliases resolved against the route's input type, which is what
+// [UnmarshalParams] does before any handler runs. The meta surface hands a
+// route the arguments as the caller spelled them and resolves the aliases only
+// inside that call, on a copy, so a builder reading the map it was handed named
+// a project given as project_path, or a milestone given as iid, as "<nil>",
+// although the request GitLab refused was for exactly that project. The map
+// notFound receives is a copy wherever anything was resolved, so the handler's
+// own arguments are never changed.
+func (route ActionRoute) WrapNotFound(notFound func(params map[string]any) any) ActionRoute {
+	target := route.InputType
+	return route.WrapHandler(func(next ActionFunc) ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && IsHTTPStatus(err, http.StatusNotFound) {
+				return notFound(normalizeParamAliases(stripReservedKeys(input), target)), nil
+			}
+			return result, err
+		}
+	})
 }

@@ -1401,6 +1401,14 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 			input: map[string]any{"project_id": float64(12345678), "label_id": float64(31234567)},
 			want:  "ID 31234567 in project 12345678",
 		},
+		{
+			// The project under its documented alias, which the meta surface
+			// hands the route as written: read from the map as it arrived it
+			// named project <nil>.
+			name:  "project_path alias",
+			input: map[string]any{"project_path": "group/project", "label_id": "bug"},
+			want:  "ID bug in project group/project",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := byTool["gitlab_label_get"].Route.Handler(t.Context(), tt.input)
