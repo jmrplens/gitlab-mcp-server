@@ -315,13 +315,15 @@ func TestCheckCharges_ALiteralOfATypeTheRulesDoNotRead_IsUnreadable(t *testing.T
 	r.refusalTypes = r.refusalTypes[:2]
 	report := fixture{files: map[string]string{"site/site.go": gateSource + resolveBody}, fails: resolveFailures(), rules: &r}.run(t)
 	got := findings(report, "G7")
-	for _, want := range []string{
-		siteDir + ":gate.resolve: returns a refusal the gate cannot read",
-		siteDir + ":gate.resolve: returns a refusal from " + siteDir + ":gate.rejected, which builds 0 gate refusals rather than one",
+	for name, want := range map[string]string{
+		"literal":     siteDir + ":gate.resolve: returns a refusal the gate cannot read",
+		"constructor": siteDir + ":gate.resolve: returns a refusal from " + siteDir + ":gate.rejected, which builds 0 gate refusals rather than one",
 	} {
-		if !slices.Contains(got, want) {
-			t.Fatalf("G7 findings = %q, want %q among them", got, want)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !slices.Contains(got, want) {
+				t.Fatalf("G7 findings = %q, want %q among them", got, want)
+			}
+		})
 	}
 }
 

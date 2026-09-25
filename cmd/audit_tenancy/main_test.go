@@ -305,16 +305,18 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 		t.Fatalf("exit = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, stdout.String(), stderr.String())
 	}
 	out := stdout.String()
-	for _, want := range []string{
-		"pending (G2, G3 and G6 deferred until the layer that moves their values): " + strings.Join(sortedPending(), ", ") + "\n",
-		"cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
-		"internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
-		"; 0 findings, 27 rows pending, 51 declarations exempted\n",
-		"(21 refusal returns, 70 refusals, 10 reasons and 31 settings read)",
+	for name, want := range map[string]string{
+		"pending rows":        "pending (G2, G3 and G6 deferred until the layer that moves their values): " + strings.Join(sortedPending(), ", ") + "\n",
+		"exempted literal":    "cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
+		"exempted name":       "internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
+		"verdict":             "; 0 findings, 27 rows pending, 51 declarations exempted\n",
+		"what the rules read": "(21 refusal returns, 70 refusals, 10 reasons and 31 settings read)",
 	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("stdout does not contain %q:\n%s", want, out)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Fatalf("stdout does not contain %q:\n%s", want, out)
+			}
+		})
 	}
 }
 

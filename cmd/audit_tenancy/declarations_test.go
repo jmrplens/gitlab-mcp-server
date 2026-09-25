@@ -147,9 +147,15 @@ func TestProductionRules_NameWhatTheTreeSpells(t *testing.T) {
 	if !found {
 		t.Fatalf("the gate type %s is not a refusal type", r.gateType)
 	}
-	for _, source := range []tenancy.RetryAfter{tenancy.RetryAfterFixed, tenancy.RetryAfterUpstreamOrFixed, tenancy.RetryAfterLongestBlock} {
-		if len(r.retryAfterReads[source]) == 0 {
-			t.Fatalf("Retry-After source %d names nothing to read", source)
-		}
+	for name, source := range map[string]tenancy.RetryAfter{
+		"fixed":             tenancy.RetryAfterFixed,
+		"upstream or fixed": tenancy.RetryAfterUpstreamOrFixed,
+		"longest block":     tenancy.RetryAfterLongestBlock,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if len(r.retryAfterReads[source]) == 0 {
+				t.Fatalf("Retry-After source %d names nothing to read", source)
+			}
+		})
 	}
 }

@@ -145,10 +145,12 @@ func TestCompareBinaries_ASectionInOnlyOne_Differs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compare: %v", err)
 	}
-	for _, want := range []string{".noptrdata: only in " + path, ".noptrdatX: only in " + other} {
-		if !slices.Contains(differences, want) {
-			t.Fatalf("differences = %v, want %q among them", differences, want)
-		}
+	for name, want := range map[string]string{"original": ".noptrdata: only in " + path, "copy": ".noptrdatX: only in " + other} {
+		t.Run(name, func(t *testing.T) {
+			if !slices.Contains(differences, want) {
+				t.Fatalf("differences = %v, want %q among them", differences, want)
+			}
+		})
 	}
 }
 
