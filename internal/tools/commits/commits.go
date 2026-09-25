@@ -117,7 +117,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("commitCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("commitCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	actions := make([]*gl.CommitActionOptions, len(input.Actions))
@@ -298,7 +298,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("commitList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("commitList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.ListCommitsOptions{}
@@ -385,7 +385,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 		return DetailOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DetailOutput{}, errors.New("commitGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DetailOutput{}, errors.New("commitGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	var opts *gl.GetCommitOptions
@@ -454,7 +454,7 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 		return DiffOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DiffOutput{}, errors.New("commitDiff: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DiffOutput{}, errors.New("commitDiff: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.GetCommitDiffOptions{}

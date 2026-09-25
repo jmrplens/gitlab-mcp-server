@@ -96,7 +96,7 @@ func CreateTargetBranchRule(ctx context.Context, client *gitlabclient.Client, in
 	}
 	pid, err := input.ProjectID.Int64()
 	if err != nil {
-		return TargetBranchRuleOutput{}, errors.New("projectCreateTargetBranchRule: project_id must be a numeric project ID for this action; use gitlab_project_get to resolve a path to its ID")
+		return TargetBranchRuleOutput{}, errors.New("projectCreateTargetBranchRule: project_id must be a numeric project ID for this action; use project.get to resolve a path to its ID")
 	}
 	if input.Name == "" {
 		return TargetBranchRuleOutput{}, errors.New("projectCreateTargetBranchRule: name is required (the source branch name or wildcard pattern)")

@@ -136,41 +136,78 @@ func TestClassify_HintProseToken_IsFilteredLikeAUsageLine(t *testing.T) {
 	}
 }
 
-// TestClassify_DeclaredHintToolToken_IsExcusedAndTracked holds the one
-// declaration this rule has: a gitlab_-shaped token that names a GitLab
-// template family rather than a tool is excused, and the entry it used is
-// recorded so the stale check can tell a live declaration from a dead one.
+// dynamicSentence is one sentence of the dynamic surface's own prose, which
+// spells both of that surface's tools, so a whole-tree fixture can use every
+// declaration of the served-prose rule.
+func dynamicSentence(line int) site {
+	return site{
+		Package: "internal/tools/dynamic", File: "internal/tools/dynamic/register.go", Line: line,
+		Kind: kindMessage, Value: "search with gitlab_find_action, then call gitlab_execute_action", Resolved: true,
+	}
+}
+
+// TestClassify_DeclaredHintToolToken_IsExcusedAndTracked holds the two
+// declarations this rule has: a gitlab_-shaped token that names a GitLab
+// template family rather than a tool is excused anywhere, a tool the dynamic
+// surface registers is excused in that surface's own package, and each entry
+// used is recorded so the stale check can tell a live declaration from a dead
+// one.
 func TestClassify_DeclaredHintToolToken_IsExcusedAndTracked(t *testing.T) {
 	report := classify([]site{
 		hintSite(1, "verify template_type (dockerfiles, gitlab_ci_ymls, licenses)"),
+		dynamicSentence(2),
 	}, stubCatalog(), true)
 
 	if len(report.Hints.Rows) != 0 {
-		t.Errorf("hint findings = %+v, want the declared token excused", report.Hints.Rows)
+		t.Errorf("hint findings = %+v, want every declared token excused", report.Hints.Rows)
 	}
 	if len(report.Hints.StaleDeclarations) != 0 {
-		t.Errorf("stale declarations = %v, want none: the entry excused a token", report.Hints.StaleDeclarations)
+		t.Errorf("stale declarations = %v, want none: every entry excused a token", report.Hints.StaleDeclarations)
+	}
+}
+
+// TestClassify_DeclaredSurfaceToolMention_IsExcusedOnlyInItsPackage holds why
+// the dynamic surface's tools are declared per package and not in the table
+// that excuses a token anywhere: the same name in a sentence of any other
+// package is served on a surface that does not register it.
+func TestClassify_DeclaredSurfaceToolMention_IsExcusedOnlyInItsPackage(t *testing.T) {
+	report := classify([]site{
+		dynamicSentence(1),
+		hintSite(2, "search with gitlab_find_action first"),
+	}, stubCatalog(), false)
+
+	want := []HintFinding{{Package: "p", File: "p/a.go", Line: 2, Kind: kindErrorHint, Rule: ruleToolName, Name: "gitlab_find_action"}}
+	if !slices.Equal(report.Hints.Rows, want) {
+		t.Errorf("hint findings = %+v, want only the other package's mention: %+v", report.Hints.Rows, want)
 	}
 }
 
 // TestClassify_UnusedHintDeclaration_IsReportedStale holds the other half: a
-// declaration that no hint spells any more is reported, on the terms every
-// declaration table here is held to.
+// declaration that no served prose spells any more is reported, and it fails
+// the gate on the terms every declaration table here is held to, in the
+// section of the rule it belongs to rather than in the published-ID one.
 func TestClassify_UnusedHintDeclaration_IsReportedStale(t *testing.T) {
 	report := classify([]site{hintSite(1, "nothing declared here")}, stubCatalog(), true)
 
-	if len(report.Hints.StaleDeclarations) != 1 ||
-		!strings.Contains(report.Hints.StaleDeclarations[0], "gitlab_ci_ymls") {
-		t.Errorf("stale declarations = %v, want the unused entry named", report.Hints.StaleDeclarations)
+	want := []string{
+		"gitlab_ci_ymls is no longer spelled in any served prose (hintToolExemptions)",
+		"gitlab_execute_action is no longer spelled in the served prose of internal/tools/dynamic (declaredSurfaceToolMentions)",
+		"gitlab_find_action is no longer spelled in the served prose of internal/tools/dynamic (declaredSurfaceToolMentions)",
+	}
+	if !slices.Equal(report.Hints.StaleDeclarations, want) {
+		t.Errorf("stale declarations = %v, want every unused entry named: %v", report.Hints.StaleDeclarations, want)
 	}
 	for _, entry := range report.StaleExemptions {
-		if strings.Contains(entry, "hintToolExemptions") {
-			t.Errorf("the gate's stale list carries %q, which belongs to the rule that reports", entry)
+		if strings.Contains(entry, "hintToolExemptions") || strings.Contains(entry, "declaredSurfaceToolMentions") {
+			t.Errorf("the published-ID stale list carries %q, which belongs to the served-prose rule", entry)
 		}
 	}
 	if report.Summary.Stale != len(report.StaleExemptions) {
-		t.Errorf("stale count = %d over %d gate declaration(s); the hint table must not be counted there",
+		t.Errorf("stale count = %d over %d gate declaration(s); the served-prose tables must not be counted there",
 			report.Summary.Stale, len(report.StaleExemptions))
+	}
+	if report.Clean() {
+		t.Error("Clean() = true over declarations that excuse nothing")
 	}
 }
 
@@ -183,6 +220,188 @@ func TestClassify_NarrowedRun_LeavesTheHintDeclarationUnjudged(t *testing.T) {
 
 	if len(report.Hints.StaleDeclarations) != 0 {
 		t.Errorf("stale declarations = %v, want none from a narrowed run", report.Hints.StaleDeclarations)
+	}
+}
+
+// TestClassify_UsageLine_IsJudgedForToolNamesAndItsIDsOnce holds the one site
+// judged in both sections, and what each section asks of it.
+//
+// A Usage line is served on every surface, so a tool name in it is the
+// served-prose rule's finding. Its dotted IDs stay the published-ID section's:
+// judged there once, with the declared alias mentions excused, where judging
+// them in both sections would count a bad ID twice and refuse the issue.update
+// line that names issue.close on purpose. A Description with the same text is
+// not judged for tool names, since an individual tool's Description is served
+// by that tool alone.
+func TestClassify_UsageLine_IsJudgedForToolNamesAndItsIDsOnce(t *testing.T) {
+	usage := func(line int, value string) site {
+		return site{Package: "p", File: "p/specs.go", Line: line, Kind: kindUsage, Value: value, Resolved: true}
+	}
+	report := classify([]site{
+		usage(1, "Use after gitlab_demo_list."),
+		usage(2, "Execute also accepts issue.close."),
+		usage(3, "Use after demo.gone."),
+		{Package: "p", File: "p/specs.go", Line: 4, Kind: kindDescription, Value: "See also: gitlab_demo_list.", Resolved: true},
+	}, stubCatalog("issue.update"), false)
+
+	wantRows := []HintFinding{{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Rule: ruleToolName, Name: "gitlab_demo_list"}}
+	if !slices.Equal(report.Hints.Rows, wantRows) {
+		t.Errorf("served prose findings = %+v, want only the Usage line's tool name: %+v", report.Hints.Rows, wantRows)
+	}
+	if report.Summary.Findings != 1 || report.Findings[0].ID != "demo.gone" {
+		t.Errorf("published-ID findings = %+v, want the one unknown ID, counted once", report.Findings)
+	}
+	if report.Summary.AliasHits != 0 {
+		t.Errorf("alias references = %+v, want the declared mentions excused", report.AliasRefs)
+	}
+	if report.Hints.ReadByKind[kindUsage] != 3 || report.Hints.Read != 3 {
+		t.Errorf("read by kind = %v over %d, want the three Usage lines and no Description", report.Hints.ReadByKind, report.Hints.Read)
+	}
+}
+
+// TestClassify_UsageLineNothingFolds_IsServedProseNotFolded holds where a
+// Usage line folded as a sentence leaves what it cannot read: the half of it
+// nothing folds is listed with the served prose nothing folds, and a value a
+// format of it reports is counted as passed over. Neither is a published ID
+// nobody can read, so neither fails the gate, and neither is counted as read.
+func TestClassify_UsageLineNothingFolds_IsServedProseNotFolded(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Expr: "leads[action]"},
+		{Package: "p", File: "p/specs.go", Line: 2, Kind: kindUsage, Expr: "name", PassedOver: true},
+	}, stubCatalog(), false)
+
+	if len(report.Unresolved) != 0 || !report.Clean() {
+		t.Errorf("published-ID unresolved = %+v, clean %t; want neither site in that section", report.Unresolved, report.Clean())
+	}
+	if report.Hints.Unfolded != 1 || report.Hints.NotFolded[0].Expression != "leads[action]" {
+		t.Errorf("served prose not folded = %+v, want the one half nothing folds", report.Hints.NotFolded)
+	}
+	if report.Hints.PassedOver != 1 || report.Hints.Read != 0 {
+		t.Errorf("passed over %d, read %d; want the format's value counted and nothing read", report.Hints.PassedOver, report.Hints.Read)
+	}
+}
+
+// TestClassify_UsageLineFromAFormat_IsJudgedWithItsVerbsMasked holds both
+// rules a Usage line is judged by to the masking every other sentence gets.
+// The line keeps its verbs for the fixer; unmasked, "%s.get" is the dotted
+// token s.get, which the published-ID rule would refuse, and
+// "%sgitlab_demo_list" hides the tool name the served-prose rule refuses.
+func TestClassify_UsageLineFromAFormat_IsJudgedWithItsVerbsMasked(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Value: "Read %s.get after %sgitlab_demo_list.", Resolved: true},
+	}, stubCatalog(), false)
+
+	want := []HintFinding{{Package: "p", File: "p/specs.go", Line: 1, Kind: kindUsage, Rule: ruleToolName, Name: "gitlab_demo_list"}}
+	if !slices.Equal(report.Hints.Rows, want) {
+		t.Errorf("served prose findings = %+v, want the tool name the verb hid: %+v", report.Hints.Rows, want)
+	}
+	if report.Summary.Findings != 0 {
+		t.Errorf("published-ID findings = %+v, want none from a verb", report.Findings)
+	}
+}
+
+// TestClassify_FormatVerbs_AreMaskedBeforeJudging holds what a format's verbs
+// are to the two rules: a word the sentence does not spell.
+//
+// Unmasked, "%s.get" reads as the dotted token s.get, whose right half is an
+// action name the catalog uses, and "%sgitlab_demo_list" hides the tool name
+// behind a word character. A verb with flags and a width is a verb too.
+func TestClassify_FormatVerbs_AreMaskedBeforeJudging(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/a.go", Line: 1, Kind: kindMessage, Value: "lookup %s.get failed: %w", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindMessage, Value: "use %sgitlab_demo_list", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 3, Kind: kindMessage, Value: "%-10qgitlab_demo_get and 100%% of %[1]d.list", Resolved: true},
+	}, stubCatalog(), false)
+
+	want := []HintFinding{
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindMessage, Rule: ruleToolName, Name: "gitlab_demo_list"},
+		{Package: "p", File: "p/a.go", Line: 3, Kind: kindMessage, Rule: ruleToolName, Name: "gitlab_demo_get"},
+	}
+	if !slices.Equal(report.Hints.Rows, want) {
+		t.Errorf("findings = %+v, want the tool names the verbs hid and no ID they spelled: %+v", report.Hints.Rows, want)
+	}
+}
+
+// TestMaskVerbs_OnlyVerbsAreMasked holds the masking on its own: every verb is
+// a space, and the text around it is kept as written.
+func TestMaskVerbs_OnlyVerbsAreMasked(t *testing.T) {
+	for text, want := range map[string]string{
+		"demo %d: use %q":           "demo  : use  ",
+		"100%% sure":                "100  sure",
+		"%-10.2f and %[2]*d":        "  and  ",
+		"no verbs, 50% of them":     "no verbs, 50% of them",
+		"50% gitlab_demo_list here": "50% gitlab_demo_list here",
+		"issue.get stays as is.":    "issue.get stays as is.",
+	} {
+		t.Run(text, func(t *testing.T) {
+			if got := maskVerbs(text); got != want {
+				t.Errorf("maskVerbs(%q) = %q, want %q", text, got, want)
+			}
+		})
+	}
+}
+
+// TestClassify_SchemaDescription_MayNameADeclaredAliasInDynamicAlone holds
+// the one served sentence that consults the declared alias mentions: the
+// description of dynamic execute's action parameter, whose subject is that
+// execute accepts an alias, names issue.close as its example.
+//
+// Two things are held. The allowance is dynamic's: a schema description in
+// any other package naming the alias is refused like any other sentence. And
+// the use keeps the declaration alive, because the declaration now gives that
+// description as its reason: with no Usage line naming issue.close, the entry
+// is still in use, while issue.reopen, which no sentence here names, is stale.
+func TestClassify_SchemaDescription_MayNameADeclaredAliasInDynamicAlone(t *testing.T) {
+	report := classify([]site{
+		{Package: dynamicPackage, File: "internal/tools/dynamic/register.go", Line: 1, Kind: kindSchemaDescription, Value: "An ID, or an alias such as issue.close.", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindSchemaDescription, Value: "An alias such as issue.close.", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 3, Kind: kindMessage, Value: "then call issue.close", Resolved: true},
+	}, stubCatalog("issue.update"), true)
+
+	want := []HintFinding{
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindSchemaDescription, Rule: ruleAlias, Name: "issue.close", Canonical: "issue.update"},
+		{Package: "p", File: "p/a.go", Line: 3, Kind: kindMessage, Rule: ruleAlias, Name: "issue.close", Canonical: "issue.update"},
+	}
+	if !slices.Equal(report.Hints.Rows, want) {
+		t.Errorf("findings = %+v, want every alias outside dynamic: %+v", report.Hints.Rows, want)
+	}
+	stale := strings.Join(report.StaleExemptions, "\n")
+	if strings.Contains(stale, "issue.close") {
+		t.Errorf("stale = %v, want issue.close kept alive by dynamic's description", report.StaleExemptions)
+	}
+	if !strings.Contains(stale, "issue.reopen") {
+		t.Errorf("stale = %v, want issue.reopen named: the judgement ran and nothing used it", report.StaleExemptions)
+	}
+}
+
+// TestClassify_AQuotedAlias_KeepsNoDeclarationAlive holds the other site that
+// consults the declared alias mentions. A quotation of issue.close is excused,
+// since the Usage line it quotes names it on purpose, and it keeps no entry
+// alive, since the entry is about the served source and not about its test.
+func TestClassify_AQuotedAlias_KeepsNoDeclarationAlive(t *testing.T) {
+	report := classify([]site{
+		{Package: "test/e2e/gitlab/common", File: "test/e2e/gitlab/common/issues_test.go", Line: 1, Kind: kindAssertion, Value: "issue.close", Resolved: true},
+	}, stubCatalog("issue.update"), true)
+
+	if len(report.Assertions.Rows) != 0 {
+		t.Errorf("assertion findings = %+v, want the quoted alias excused", report.Assertions.Rows)
+	}
+	if !strings.Contains(strings.Join(report.StaleExemptions, "\n"), "issue.close") {
+		t.Errorf("stale = %v, want issue.close stale: a quotation keeps nothing alive", report.StaleExemptions)
+	}
+}
+
+// TestClassify_PassedOverValues_AreCountedAndNotJudged holds what a value a
+// sentence reports is to the report: a count, apart from both the sentences
+// read and the sites nothing folds.
+func TestClassify_PassedOverValues_AreCountedAndNotJudged(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/a.go", Line: 1, Kind: kindMessage, Expr: "c.Message", PassedOver: true},
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindMessage, Expr: "err", PassedOver: true},
+	}, stubCatalog(), false)
+
+	if report.Hints.PassedOver != 2 || report.Hints.Read != 0 || report.Hints.Unfolded != 0 || !report.Clean() {
+		t.Errorf("passed over %d, read %d, not folded %d, clean %t; want two counted and nothing else", report.Hints.PassedOver, report.Hints.Read, report.Hints.Unfolded, report.Clean())
 	}
 }
 
@@ -223,15 +442,15 @@ func TestWriteHintReport_QuietRun_PrintsTheRowsAndNotWhatFailsNothing(t *testing
 	writeHintReport(&loud, report.Hints, true)
 
 	const row = `  p/a.go:1 error_hint "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`
-	const count = "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read; 1 not folded (reported, not gated)"
-	for _, want := range []string{hintRowsHeading, row, count, "hint findings by rule: tool_name 1"} {
+	const count = "served prose: 1 finding(s) in 1 package(s) over 1 sentence(s) read; 1 not folded (reported, not gated); 0 value(s) passed over"
+	for _, want := range []string{hintRowsHeading, row, count, "served prose findings by rule: tool_name 1"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(quiet.String(), want) {
 				t.Errorf("the quiet report left out %q; got %q", want, quiet.String())
 			}
 		})
 	}
-	for _, verboseOnly := range []string{hintNotFoldedHeading, "  p/a.go:2 error_hint buildHint(x)", "hints read by kind: error_hint 1"} {
+	for _, verboseOnly := range []string{hintNotFoldedHeading, "  p/a.go:2 error_hint buildHint(x)", "served prose read by kind: error_hint 1"} {
 		t.Run(verboseOnly, func(t *testing.T) {
 			if strings.Contains(quiet.String(), verboseOnly) {
 				t.Errorf("the quiet report printed %q, which -v is for; got %q", verboseOnly, quiet.String())
@@ -287,7 +506,7 @@ func TestWriteHintReport_StaleDeclaration_IsPrintedWhateverVerbosityAsks(t *test
 
 	var quiet bytes.Buffer
 	writeHintReport(&quiet, report.Hints, false)
-	if !strings.Contains(quiet.String(), "gitlab_ci_ymls is no longer spelled in any hint (hintToolExemptions). Remove the entry.") {
+	if !strings.Contains(quiet.String(), "gitlab_ci_ymls is no longer spelled in any served prose (hintToolExemptions). Remove the entry.") {
 		t.Errorf("the quiet report left out the stale declaration: %q", quiet.String())
 	}
 }
@@ -306,7 +525,7 @@ func TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown(t *testing.T) 
 
 	var out bytes.Buffer
 	writeHintReport(&out, report.Hints, true)
-	if !strings.Contains(out.String(), "error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read; 0 not folded") {
+	if !strings.Contains(out.String(), "served prose: 0 finding(s) in 0 package(s) over 0 sentence(s) read; 0 not folded (reported, not gated); 0 value(s) passed over") {
 		t.Errorf("report = %q, want the empty count", out.String())
 	}
 	if strings.Contains(out.String(), "by rule") || strings.Contains(out.String(), "by kind") {
@@ -323,7 +542,7 @@ func TestWriteHintReport_NothingRead_PrintsTheCountAndNoBreakdown(t *testing.T) 
 
 // TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows holds the
 // suite's section in its own words. It is printed by the printer the hint
-// section uses, so every label is asserted: a section that said "error hints"
+// section uses, so every label is asserted: a section that said "served prose"
 // about the suite would send a reader to fix the server when the test is what
 // quotes the wrong name.
 func TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows(t *testing.T) {
@@ -341,7 +560,7 @@ func TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows(t *testing.T)
 		assertionRowsHeading,
 		"=== s ===",
 		`  s/a_test.go:1 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
-		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated)",
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated); 0 value(s) passed over",
 		"    assertion findings by rule: tool_name 1",
 		"",
 	}, "\n")
@@ -354,7 +573,7 @@ func TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows(t *testing.T)
 		`  s/a_test.go:1 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
 		assertionNotFoldedHeading,
 		"  s/a_test.go:2 assertion e.Name(x)",
-		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated)",
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 1 not folded (reported, not gated); 0 value(s) passed over",
 		"    assertion findings by rule: tool_name 1",
 		"    assertions read by kind: assertion 1",
 		"",
@@ -362,7 +581,7 @@ func TestWriteAssertionReport_OneSection_PrintsItsOwnLabelsAndRows(t *testing.T)
 	if loud.String() != wantLoud {
 		t.Errorf("the verbose section:\n%s\nwant:\n%s", loud.String(), wantLoud)
 	}
-	const wantEmpty = "  e2e assertions: 0 finding(s) in 0 package(s) over 0 assertion(s) read; 0 not folded (reported, not gated)\n"
+	const wantEmpty = "  e2e assertions: 0 finding(s) in 0 package(s) over 0 assertion(s) read; 0 not folded (reported, not gated); 0 value(s) passed over\n"
 	if empty.String() != wantEmpty {
 		t.Errorf("an empty section = %q, want the count and no heading: %q", empty.String(), wantEmpty)
 	}

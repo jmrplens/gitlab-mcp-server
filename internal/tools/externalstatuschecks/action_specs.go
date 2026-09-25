@@ -97,7 +97,7 @@ const (
 // to its discovery metadata.
 var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntry{
 	"gitlab_list_project_status_checks": {
-		usage:       "List a project's external status check services (deprecated path). Prefer gitlab_list_project_external_status_checks. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.",
+		usage:       "List a project's external status check services (deprecated path). Prefer external_status_check.list_project. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.",
 		aliases:     []string{"list project status checks", "show project external status checks", "external status check services"},
 		related:     []string{actionListProject, actionCreateProject, actionListProjectMR},
 		description: "List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.",

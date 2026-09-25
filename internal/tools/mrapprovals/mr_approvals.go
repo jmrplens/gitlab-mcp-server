@@ -278,7 +278,7 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 		return StateOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return StateOutput{}, errors.New("mrApprovalState: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return StateOutput{}, errors.New("mrApprovalState: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return StateOutput{}, toolutil.ErrRequiredInt64("mrApprovalState", "merge_request_iid")
@@ -309,7 +309,7 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 		return RulesOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return RulesOutput{}, errors.New("mrApprovalRules: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return RulesOutput{}, errors.New("mrApprovalRules: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return RulesOutput{}, toolutil.ErrRequiredInt64("mrApprovalRules", "merge_request_iid")

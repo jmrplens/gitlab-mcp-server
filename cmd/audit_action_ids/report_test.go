@@ -319,6 +319,18 @@ func TestClean_OneBucketAtATime_FailsTheRun(t *testing.T) {
 	}
 }
 
+// TestClean_StaleServedProseDeclaration_AloneFailsTheRun holds the term the
+// served-prose rule's declarations added, on the terms of the test above: a
+// report whose only defect is a declaration of that rule excusing nothing.
+// It was reported and passed while the rule was staged, and it fails now,
+// because the rule gates.
+func TestClean_StaleServedProseDeclaration_AloneFailsTheRun(t *testing.T) {
+	report := Report{Hints: HintReport{StaleDeclarations: []string{"gitlab_ci_ymls is no longer spelled in any served prose (hintToolExemptions)"}}}
+	if report.Clean() {
+		t.Error("Clean() = true over a stale served-prose declaration")
+	}
+}
+
 // TestSortFindings_OneFieldAtATime_DecidesTheOrder holds each of the three
 // position fields deciding the order on its own, with the ID order pointing
 // the other way so a comparator that fell through to the ID is visible. The
@@ -506,8 +518,10 @@ func TestWriteReport_Rows_ReadFileLineKindAndIDInThatOrder(t *testing.T) {
 		"audit_action_ids: 2 published ID(s) to fix in 1 package(s); 1 alias(es) named in prose; 1 site(s) not folded; 3 stale declaration(s)",
 		"  judged 3 published ID(s) against 4 catalog ID(s) and 2 alias(es)",
 		"  findings by kind: hint 1, related 1",
-		"  gitlab_ci_ymls is no longer spelled in any hint (hintToolExemptions). Remove the entry.",
-		"  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read; 0 not folded (reported, not gated)",
+		"  gitlab_ci_ymls is no longer spelled in any served prose (hintToolExemptions). Remove the entry.",
+		"  gitlab_execute_action is no longer spelled in the served prose of internal/tools/dynamic (declaredSurfaceToolMentions). Remove the entry.",
+		"  gitlab_find_action is no longer spelled in the served prose of internal/tools/dynamic (declaredSurfaceToolMentions). Remove the entry.",
+		"  served prose: 0 finding(s) in 0 package(s) over 1 sentence(s) read; 0 not folded (reported, not gated); 0 value(s) passed over",
 		"",
 	}, "\n")
 	if out.String() != want {
@@ -556,10 +570,12 @@ func TestWriteReport_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 // empty so a stale file cannot pass for today's answer.
 //
 // The suite's section is in it under its own keys, and the two prose sections
-// share the neutral ones, which is what schema version 5 is.
+// share the neutral ones, which schema version 5 settled; version 6 adds the
+// count of the values the served-prose rule passed over.
 func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 6, Kind: kindMessage, Expr: "err", PassedOver: true},
 		{Package: "s", File: "s/a_test.go", Line: 4, Kind: kindAssertion, Value: "use gitlab_demo_list", Resolved: true},
 	}, stubCatalog(), true)
 	report.judgeHelpers(suiteRead{calls: map[string]int{"assertMentions": 1}}, false)
@@ -576,8 +592,11 @@ func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(data, &decoded); unmarshalErr != nil {
 		t.Fatalf("decode: %v", unmarshalErr)
 	}
-	if decoded.SchemaVersion != 5 || schemaVersion != 5 {
-		t.Errorf("schema version = %d (constant %d), want 5", decoded.SchemaVersion, schemaVersion)
+	if decoded.SchemaVersion != 6 || schemaVersion != 6 {
+		t.Errorf("schema version = %d (constant %d), want 6", decoded.SchemaVersion, schemaVersion)
+	}
+	if decoded.Hints.PassedOver != 1 {
+		t.Errorf("values passed over = %d, want the one carried", decoded.Hints.PassedOver)
 	}
 	if len(decoded.Findings) != 1 || decoded.Findings[0].ID != "demo.gone" {
 		t.Errorf("findings = %+v, want the one finding", decoded.Findings)
@@ -589,7 +608,7 @@ func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	if decoded.CallsByHelper["assertMentions"] != 1 {
 		t.Errorf("calls by helper = %v, want the one call carried", decoded.CallsByHelper)
 	}
-	for _, key := range []string{`"e2e_assertions": {`, `"suite_judged": true`, `"helpers_judged": false`, `"assertion_calls_by_helper"`, `"rows": [`, `"read": 1`, `"read_by_kind"`, `"not_folded": 0`} {
+	for _, key := range []string{`"e2e_assertions": {`, `"suite_judged": true`, `"helpers_judged": false`, `"assertion_calls_by_helper"`, `"rows": [`, `"read": 1`, `"read_by_kind"`, `"not_folded": 0`, `"values_passed_over": 1`} {
 		t.Run(key, func(t *testing.T) {
 			if !strings.Contains(string(data), key) {
 				t.Errorf("work list = %s, want %s", data, key)
@@ -752,12 +771,12 @@ func TestWriteReport_SuiteJudged_PrintsTheSectionAndItsStaleHelpers(t *testing.T
 	writeReport(&quiet, report, false)
 	writeReport(&loud, report, true)
 
-	const hintCount = "  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read; 0 not folded (reported, not gated)\n"
+	const hintCount = "  served prose: 0 finding(s) in 0 package(s) over 0 sentence(s) read; 0 not folded (reported, not gated); 0 value(s) passed over\n"
 	wantTail := hintCount + strings.Join([]string{
 		assertionRowsHeading,
 		"=== s ===",
 		`  s/a_test.go:7 assertion "gitlab_demo_list" is a tool name; the dynamic surface registers no such tool`,
-		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated)",
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated); 0 value(s) passed over",
 		"    assertion findings by rule: tool_name 1",
 		"=== assertion helpers that describe no call ===",
 		"  s: mentionsAny takes no parameter named substrings (servedTextAssertions). The entry names one parameter " +
@@ -815,7 +834,7 @@ func TestWriteSuiteReport_NothingStaleOrCounted_PrintsTheCountAlone(t *testing.T
 
 	var out bytes.Buffer
 	writeSuiteReport(&out, report, true)
-	const want = "  e2e assertions: 0 finding(s) in 0 package(s) over 0 assertion(s) read; 0 not folded (reported, not gated)\n"
+	const want = "  e2e assertions: 0 finding(s) in 0 package(s) over 0 assertion(s) read; 0 not folded (reported, not gated); 0 value(s) passed over\n"
 	if out.String() != want {
 		t.Errorf("suite report = %q, want %q", out.String(), want)
 	}

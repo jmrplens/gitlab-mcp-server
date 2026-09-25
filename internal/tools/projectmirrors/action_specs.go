@@ -108,7 +108,7 @@ var projectIDGuidance = toolutil.ParameterGuidance{
 // the numeric remote-mirror identifier returned by gitlab_list_project_mirrors.
 var mirrorIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     "mirror_id",
-	ValueSource:      "Numeric remote-mirror id from a prior gitlab_list_project_mirrors response.",
+	ValueSource:      "Numeric remote-mirror id from a prior project.mirror_list response.",
 	ExampleBinding:   "params.mirror_id:42",
 	CommonConfusions: []string{"mirror_id is the remote-mirror's own id, not the project id and not the mirror URL."},
 }

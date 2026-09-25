@@ -221,8 +221,8 @@ func FormatPublishAndLinkMarkdown(out PublishAndLinkOutput) string {
 	link.Field("Name", out.ReleaseLink.Name)
 	link.URL(out.ReleaseLink.URL)
 	c.End(
-		"Repeat for more files, or use 'publish_directory' to batch-upload a directory",
-		"Use gitlab_release action 'get' to verify the release links",
+		toolutil.HintAction("package.publish_directory", "batch-upload a directory instead of repeating this for each file"),
+		toolutil.HintAction("release.get", "verify the release links"),
 	)
 	return b.String()
 }
@@ -260,9 +260,9 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 		}
 	}
 	c.End(
-		"Use 'publish_and_link' to also create release asset links for each file",
-		"Use gitlab_release to create/manage releases and link these packages",
-		"Use action 'list' to verify the uploaded packages",
+		toolutil.HintAction("package.publish_and_link", "also create a release asset link for each file"),
+		toolutil.HintAction("release.link_create_batch", "link these packages to a release"),
+		toolutil.HintAction("package.list", "verify the uploaded packages"),
 	)
 	return b.String()
 }

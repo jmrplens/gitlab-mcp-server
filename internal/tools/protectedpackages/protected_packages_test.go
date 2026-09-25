@@ -594,8 +594,8 @@ func TestList_FillsPaginationFromTheResponse(t *testing.T) {
 
 // ruleCardHints is the guidance section a protection rule card closes with.
 const ruleCardHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use `gitlab_update_package_protection_rule` to modify this rule\n" +
-	"- Use `gitlab_delete_package_protection_rule` to remove it\n"
+	"- Use `package.protection_rule_update` to modify this rule\n" +
+	"- Use `package.protection_rule_delete` to remove it\n"
 
 // TestFormatOutputMarkdown_Basic verifies FormatOutputMarkdown renders a
 // fully populated rule as the whole card: the heading, the pattern as a code
@@ -672,7 +672,7 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		"| 1 | `@scope/pkg*` | npm | maintainer |  |\n" +
 		"| 2 | `mylib*` | pypi |  |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_create_package_protection_rule` to add a new rule\n"
+		"- Use `package.protection_rule_create` to add a new rule\n"
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
@@ -693,7 +693,7 @@ func TestFormatListMarkdown_CountsTheTotalGitLabSent(t *testing.T) {
 		"| 1 | `a*` | npm |  |  |\n" +
 		"\nPage 1 of 45 | 45 items total | 1 per page\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_create_package_protection_rule` to add a new rule\n"
+		"- Use `package.protection_rule_create` to add a new rule\n"
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}

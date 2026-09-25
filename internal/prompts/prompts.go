@@ -19,6 +19,25 @@ import (
 
 const fmtFilesChanged = "- **Files changed**: %d\n"
 
+// The actions the review prompt tells a model to call, by canonical catalog
+// ID. The ID is the one spelling every surface resolves: dynamic execute takes
+// it as it is, and the meta and individual surfaces map it to their own tool.
+// A tool name here was right for one surface of three, which is what the
+// prompt said until issue 910, naming the meta tool gitlab_mr_review on every
+// surface.
+//
+// No gate reads this package: cmd/audit_action_ids loads internal/tools and
+// internal/toolutil, where the served prose it judges is written, and a
+// prompt is assembled here. TestReviewMR_NamesActionsByCanonicalID holds
+// these to the catalog instead.
+const (
+	actionDraftNoteCreate     = "mr_review.draft_note_create"
+	actionDraftNotePublishAll = "mr_review.draft_note_publish_all"
+	actionDiscussionCreate    = "mr_review.discussion_create"
+	actionDiscussionReply     = "mr_review.discussion_reply"
+	actionNoteCreate          = "mr_review.note_create"
+)
+
 // descriptionExcerptBytes is how much of a merge request description the two
 // list prompts show before they cut it. It is a byte budget, applied on a rune
 // boundary by [truncateRunes], because what it bounds is the size of the
@@ -316,16 +335,16 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	b.WriteString("\n## How to Submit Review Comments\n")
 	b.WriteString("Use the batch review workflow to avoid sending one notification per comment:\n")
-	b.WriteString("1. For each finding, call `gitlab_mr_review` with action=`draft_note_create` and include the `position` object for inline comments on specific diff lines.\n")
+	b.WriteString("1. For each finding, call `" + actionDraftNoteCreate + "` and include the `position` object for inline comments on specific diff lines.\n")
 	b.WriteString("   Position fields: base_sha, start_sha, head_sha, new_path, old_path, and EITHER new_line OR old_line (not both).\n")
 	b.WriteString("   - Modified/added line -> set `new_line` only (line number in the new file).\n")
 	b.WriteString("   - Removed line -> set `old_line` only (line number in the old file).\n")
 	b.WriteString("   - Unchanged context line -> set both `old_line` and `new_line`.\n")
 	writeDiffRefs(&b, mr.DiffRefs)
-	b.WriteString("2. For general comments not tied to a specific line, call `draft_note_create` without the position field.\n")
-	b.WriteString("3. To reply to existing open discussions, call `draft_note_create` with `in_reply_to_discussion_id` set to the discussion ID. You can also set `resolve_discussion: true` to resolve it when published.\n")
-	b.WriteString("4. After ALL comments and replies are created as draft notes, call `draft_note_publish_all` ONCE to publish them all at once (single notification to the MR author).\n")
-	b.WriteString("5. Do NOT use `discussion_create`, `discussion_reply`, or `note_create` for review comments. Those publish immediately and generate one notification each.\n")
+	b.WriteString("2. For general comments not tied to a specific line, call `" + actionDraftNoteCreate + "` without the position field.\n")
+	b.WriteString("3. To reply to existing open discussions, call `" + actionDraftNoteCreate + "` with `in_reply_to_discussion_id` set to the discussion ID. You can also set `resolve_discussion: true` to resolve it when published.\n")
+	b.WriteString("4. After ALL comments and replies are created as draft notes, call `" + actionDraftNotePublishAll + "` ONCE to publish them all at once (single notification to the MR author).\n")
+	b.WriteString("5. Do NOT use `" + actionDiscussionCreate + "`, `" + actionDiscussionReply + "`, or `" + actionNoteCreate + "` for review comments. Those publish immediately and generate one notification each.\n")
 
 	return promptResult(b.String()), nil
 }

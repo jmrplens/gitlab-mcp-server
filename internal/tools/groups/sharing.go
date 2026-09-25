@@ -42,10 +42,10 @@ func ShareGroupWithGroup(ctx context.Context, client *gitlabclient.Client, input
 		return ShareGroupOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ShareGroupOutput{}, errors.New("groupShareWithGroup: group_id is required. Use gitlab_group_list to find the ID, then pass it as group_id")
+		return ShareGroupOutput{}, errors.New("groupShareWithGroup: group_id is required. Use group.list to find the ID, then pass it as group_id")
 	}
 	if input.SharedGroupID == 0 {
-		return ShareGroupOutput{}, errors.New("groupShareWithGroup: shared_group_id is required. Use gitlab_group_list to find the group ID to share with")
+		return ShareGroupOutput{}, errors.New("groupShareWithGroup: shared_group_id is required. Use group.list to find the group ID to share with")
 	}
 	if input.GroupAccess == 0 {
 		return ShareGroupOutput{}, errors.New("groupShareWithGroup: group_access is required. Valid levels: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer), 50 (Owner)")

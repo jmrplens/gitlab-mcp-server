@@ -28,7 +28,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				"list SAST and DAST findings",
 				"find security report findings for pipeline",
 			},
-			Usage:          "List the security report findings produced by one pipeline run. Filter by severity, scanner, state, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection), sort by severity, and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use gitlab_pipeline_security_summary first for an aggregate count, then this action for individual findings.",
+			Usage:          "List the security report findings produced by one pipeline run. Filter by severity, scanner, state, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection), sort by severity, and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use vulnerability.pipeline_security_summary first for an aggregate count, then this action for individual findings.",
 			Tags:           []string{"security", "finding"},
 			RelatedActions: []string{actionVulnList, actionVulnPipelineSummary, actionVulnSeverityCount, actionProjectGet},
 			OpenWorld:      true,

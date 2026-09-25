@@ -62,7 +62,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("milestoneList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("milestoneList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.ListMilestonesOptions{}
@@ -143,7 +143,7 @@ func ToOutput(m *gl.Milestone) Output {
 // GetInput defines parameters for getting a single milestone.
 type GetInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
 }
 
 // CreateInput defines parameters for creating a milestone.
@@ -158,7 +158,7 @@ type CreateInput struct {
 // UpdateInput defines parameters for updating a milestone.
 type UpdateInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"           jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"           jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
 	Title        string               `json:"title,omitempty"         jsonschema:"Milestone title"`
 	Description  string               `json:"description,omitempty"   jsonschema:"Milestone description"`
 	StartDate    string               `json:"start_date,omitempty"    jsonschema:"Start date (YYYY-MM-DD)"`
@@ -169,13 +169,13 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting a milestone.
 type DeleteInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
 }
 
 // GetIssuesInput defines parameters for listing issues assigned to a milestone.
 type GetIssuesInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -185,7 +185,7 @@ type GetIssuesInput struct {
 // GetMergeRequestsInput defines parameters for listing merge requests assigned to a milestone.
 type GetMergeRequestsInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput

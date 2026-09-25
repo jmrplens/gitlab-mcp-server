@@ -156,7 +156,7 @@ func MarkDone(ctx context.Context, client *gitlabclient.Client, input MarkDoneIn
 		return MarkDoneOutput{}, err
 	}
 	if input.ID == 0 {
-		return MarkDoneOutput{}, errors.New("todoMarkDone: id is required. Use gitlab_todo_list to find to-do item IDs")
+		return MarkDoneOutput{}, errors.New("todoMarkDone: id is required. Use user.todo_list to find to-do item IDs")
 	}
 
 	_, err := client.GL().Todos.MarkTodoAsDone(input.ID, gl.WithContext(ctx))

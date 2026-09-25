@@ -75,7 +75,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("mrChangesGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("mrChangesGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrChangesGet", "merge_request_iid")
@@ -355,7 +355,7 @@ func RawDiffs(ctx context.Context, client *gitlabclient.Client, input RawDiffsIn
 		return RawDiffsOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return RawDiffsOutput{}, errors.New("mrRawDiffs: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return RawDiffsOutput{}, errors.New("mrRawDiffs: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return RawDiffsOutput{}, toolutil.ErrRequiredInt64("mrRawDiffs", "merge_request_iid")

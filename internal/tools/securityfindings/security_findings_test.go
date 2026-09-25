@@ -511,7 +511,7 @@ func TestList_PipelineNotFound(t *testing.T) {
 		t.Fatal("expected error for missing pipeline_iid")
 	}
 	errText := err.Error()
-	for _, want := range []string{"pipeline_iid", "gitlab_pipeline", "security scan report artifacts"} {
+	for _, want := range []string{"pipeline_iid", "pipeline.list", "security scan report artifacts"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errText, want) {
 				t.Fatalf("error missing %q: %v", want, err)

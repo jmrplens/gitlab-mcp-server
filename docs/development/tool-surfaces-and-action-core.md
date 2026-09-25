@@ -376,6 +376,28 @@ and keeps one a filter withheld, because asking for that one is answered with
 the narrowing rather than with `unknown action`. A cross-link that resolves is
 published under its canonical ID whatever spelling it was written in.
 
+The same demand holds for every sentence a model reads, not only the fields
+that carry IDs: a hint, the message of an error a handler returns, a refusal,
+the next steps of a result, a `Usage` line, parameter guidance (`ValueSource`,
+`CommonConfusions`) and a field's description, a `jsonschema` tag or a schema
+map's `description` entry, all name an action by its canonical ID. Each is
+served on every surface, and a tool name is right on one of three.
+`cmd/audit_action_ids` reads them, and lets `internal/tools/dynamic` alone
+name a tool, its own two, since only the two tools of the dynamic surface
+return its text. A domain action's individual tool `Description` keeps its
+tool names, since only that tool serves it. A standalone surface tool's does
+not: the guided flows and project discovery are registered on meta and
+individual alike and served as their `Usage` on dynamic, so each writes its
+one text as its `Usage` and its `Description` both
+(`actioncatalog.SurfaceToolSpec` carries the two apart), and names actions by
+canonical ID, its `See also:` clause included. What the rule does not read is
+listed with it in
+[cmd-utilities.md](cmd-utilities.md#the-rule-over-served-prose): the
+operation label a `WrapErr*` or `ErrRequired*` call prefixes an error with,
+which is sometimes spelled as a tool name, a value a format reports, a bare
+meta action name (`Use action 'list'`), and `internal/prompts` and
+`internal/resources`, which are outside its load.
+
 ## When Adding A GitLab Action
 
 1. Add or update the typed handler in the appropriate domain package.

@@ -76,8 +76,8 @@ func TestUploadCurrentUserAvatar_GitLab19AvatarURLOnly_SetsRecoveryHint(t *testi
 	if out.AvatarURL == "" {
 		t.Error("AvatarURL is empty, want the uploaded avatar URL")
 	}
-	if len(out.NextSteps) != 1 || !strings.Contains(out.NextSteps[0], "gitlab_user_current") {
-		t.Errorf("NextSteps = %v, want one hint pointing at gitlab_user_current", out.NextSteps)
+	if len(out.NextSteps) != 1 || !strings.Contains(out.NextSteps[0], "user.current") {
+		t.Errorf("NextSteps = %v, want one hint pointing at user.current", out.NextSteps)
 	}
 }
 

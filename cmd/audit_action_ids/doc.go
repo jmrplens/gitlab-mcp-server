@@ -11,9 +11,9 @@
 // that is that the capability is missing rather than that the cross-link is
 // wrong.
 //
-// A fourth kind is the corrective prose an error helper hands a model, which
-// names capabilities in whatever spelling the handler happened to write. See
-// the rule over error hints below. A fifth is that prose read back: the
+// A fourth kind is the prose the server serves around them, which names
+// capabilities in whatever spelling the handler happened to write. See the
+// rule over served prose below. A fifth is that prose read back: the
 // substrings the e2e suite asserts a served text carries. See the suite that
 // quotes it, further down.
 //
@@ -53,7 +53,7 @@
 // name: a pattern under test/e2e/ goes to the suite and any other to the
 // served tree, so an explicit ./internal/tools/... reads no suite and prints
 // no section for it, and a run naming only suite packages reads no served
-// source and says the published-ID and hint rules were not run rather than
+// source and says the published-ID and served-prose rules were not run rather than
 // printing their counts over nothing. Only a run over the whole suite holds
 // the helper table to it: the bare run, one naming ./test/e2e/gitlab/...
 // itself, and one naming a wildcard that encloses it, ./... or ./test/...,
@@ -118,43 +118,111 @@
 // The remedy is to spell the ID as a constant, which every site in the tree
 // does today.
 //
-// # The rule over error hints
+// # The rule over served prose
 //
-// A model reads the prose a handler hands it when a call fails exactly as it
-// reads the rest, and nothing judged it. A hint saying "verify project_id with
-// gitlab_project_get" names a tool the default dynamic surface does not
-// register at all, and on meta only the bare domain tools exist, so the name
-// is right for one surface of three. The canonical ID is the portable form
-// here for the reason it is the portable form in a documentation example: it
-// does not depend on GITLAB_MCP_TOOL_SURFACE.
+// A model reads the prose a handler hands it exactly as it reads the rest, and
+// nothing judged it. A hint saying "verify project_id with gitlab_project_get"
+// names a tool the default dynamic surface does not register at all, and on
+// meta only the bare domain tools exist, so the name is right for one surface
+// of three. The canonical ID is the portable form here for the reason it is
+// the portable form in a documentation example: it does not depend on
+// GITLAB_MCP_TOOL_SURFACE.
 //
-// So the hint argument of toolutil.WrapErrWithHint, WrapErrWithStatusHint and
-// NotFoundResult is read too, along with the struct fields such a hint is
-// written into on its way to one, since nineteen domains reach those helpers
-// through a field of their own output. The two are counted apart, because the
-// field rule is the wider of the two and a reader should be able to tell which
-// figure is which. Three spellings are reported: a gitlab_* tool name, a
-// registered alias, and a dotted ID that resolves nowhere.
+// The sinks are a table keyed by a function's full name (proseSinks), each
+// with the argument its prose starts at and the kind of site it is counted
+// under: the hint of toolutil.WrapErrWithHint, WrapErrWithStatusHint and
+// NotFoundResult (error_hint); the message of errors.New, fmt.Errorf,
+// toolutil.ErrorResult and toolutil.CancelledResult (message); and the next
+// steps toolutil.WriteHints, WriteListFooter and Card.End write (next_step).
+// Fields are read by their names: a hint's, NextSteps included (hint_field),
+// a message's where what is written into it folds (message), and
+// ParameterGuidance's ValueSource and CommonConfusions (param_guidance). The
+// jsonschema tag of every struct field is read as the description the schema
+// serves (schema_description), and so is the description entry of a schema
+// written as a map, which is what an input schema override is
+// (toolutil.SchemaPropertyOverride) and what toolutil and dynamic build whole
+// schemas from. A Usage line, whose dotted IDs the published-ID rule judges,
+// is judged here for tool names too, and one assembled at run time is folded
+// as a hint is, a helper that picks it by the action's name followed to every
+// branch it returns from, and a call a Usage format is handed is followed the
+// same way, which is how badges' scope boundary is read. A domain action's
+// individual tool Description is not read: only that tool serves it, and the
+// tool name is right there. A standalone surface tool's is served on every
+// surface, as its tool's description on meta and individual and as its Usage
+// on dynamic, so the guided flows and project discovery write their one text
+// as the Usage too, where it is read. Three spellings are
+// reported: a gitlab_* tool name, a registered alias, and a dotted ID that
+// resolves nowhere. A tool the package's own surface registers is declared
+// (declaredSurfaceToolMentions), which is dynamic's two tools in dynamic's own
+// package and nowhere else, and dynamic's schema descriptions alone may name
+// a declared alias (declaredAliasMentions), which keeps the declaration alive.
 //
-// It **gates**, and it was staged for exactly one release of the rule before
-// it did. The first whole-tree run reported 785 findings across 137 packages
-// of the 1327 hints this tree writes, every one of them a tool name, and a
-// gate cannot land before the code it judges is clean. -fix-hints closed 712
-// of them mechanically, the rest were judgement, and the flip is the layer
-// after the count reached zero.
+// A sink's own prose parameters are not followed back out, since the sink's
+// visit reads every call of it; toolutil's sinks forward their prose to one
+// another, and following that reached every caller's argument a second time
+// under another kind, whichever route the walk met first deciding which.
+//
+// A format folds to its format as written, verbs and all, followed by each
+// constant argument, and its verbs are masked only in the text judged, so the
+// fixer still finds the literal inside the value. An argument named for a hint
+// is followed, and so is a parameter named for a message where the site's
+// kind follows one (a helper handing on its caller's sentence); a local or a
+// field named for a message is GitLab's text (glMsg) and is not. A read of a
+// recorded field is a copy, and a sink call is read by its own visit. Every
+// other argument is a value the sentence reports, and is passed over and
+// counted rather than listed (values_passed_over), which is the rule's one
+// deliberate exception to naming its blind spots: with some four hundred
+// formats in the tree the list would be GitLab data from end to end. Inside a
+// one-line helper such a value is passed over without being counted, since
+// the fold reads the helper's body once per call and the value has no site of
+// its own to count at (dynamic's queryTooLongMessage). A message field written
+// from another struct's field is passed over and counted on the same terms.
+//
+// A helper handed only parameters named for this kind of prose, and no
+// recorded read beside them, is followed into as well as out, which is where
+// one that appends a sentence of its own to what it was handed writes it; the
+// value variable of a range over a list of strings is followed to that list,
+// which is how toolutil's list-footer filter reads. A helper handed a recorded
+// read is a copy or a merge, and a sentence its body adds is not read.
+//
+// It **gates**. The first whole-tree run of the hint rule reported 785
+// findings across 137 packages, and -fix-hints closed 712 of them; the run
+// that widened it to the served prose reported 328 over 9671 sentences, and
+// the tree was rewritten in the change below the one that widened the rule,
+// so the gate turned on green. A declaration of either table that excuses
+// nothing fails the run, like every declaration table here.
 //
 // Its own blind spots are counted beside the findings and do NOT fail, which
-// is the one place this departs from the rule above. A hint the type checker
-// cannot fold is still text a reader can read, and the seven sites in that
-// state build one from a function call, a format string or a parameter no rule
-// follows, or read one back out of rendered text (toolutil's safe-mode preview
-// parser), and carry no tool name between them. A hint concatenated from a
-// literal and a value is folded to its literal halves, and the half it leaves
-// unfolded is read on its own: a name is followed to the values it is handed,
-// where a tool name is judged, and anything else is counted with the sites
-// nothing folds. Three of the seven are such halves. Keeping only the literal
-// half used to count the sentence as read whole, and awardemoji handed three
-// note deletes a list tool's name through exactly that shape.
+// is the one place this departs from the rule above. A sentence the type
+// checker cannot fold is still text a reader can read, and the twenty-three
+// in the tree build one from a helper that branches, a map read, a call into
+// another module (accesstokens' operation phrase, whose last branch spells the
+// action's name) or a parameter no rule follows, or read one back out of
+// rendered text (toolutil's safe-mode preview parser). Five came with the
+// run-time Usage lines and the map schemas this rule used to pass in silence,
+// and one with following a Usage format's helper calls. A sentence concatenated
+// from a literal and a value is folded to its literal halves, and the half it
+// leaves unfolded is read on its own: a name is followed to the values it is
+// handed, where a tool name is judged, and anything else is counted with the
+// sites nothing folds. Keeping only the literal half used to count the
+// sentence as read whole, and awardemoji handed three note deletes a list
+// tool's name through exactly that shape.
+//
+// Its limits: a package-level map of prose read through a local, as
+// mergerequests' mergeStatusHints is, carries no name the walk follows; the
+// operation label a WrapErr* or ErrRequired* call prefixes an error with is
+// not read, although some hundred of them spell it as a tool name, since it
+// names what failed rather than inviting a call; a value a format reports is
+// counted rather than read, as above; a bare meta action name ("Use action
+// 'list'") is not read at all, having neither the gitlab_ prefix nor a dot,
+// and naming the ID it means needs the domain the sentence belongs to, which
+// it does not spell, so it is rewritten to toolutil.HintAction by hand; a
+// merge's body adds prose unread, as above; a domain action's individual tool
+// Description assembled at run time is read by no rule; and internal/prompts
+// and internal/resources are outside the load, the review prompt being held to
+// the catalog by a test of its own and the resource manifests projecting only
+// a description's "See also" clause per surface, with no gate over the names
+// the rest of their prose spells.
 //
 // The dotted-ID half of it was never large: the five unresolvable IDs the
 // first run found were one constant in internal/tools/workitemsavedviews

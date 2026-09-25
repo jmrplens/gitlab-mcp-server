@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -39,7 +40,13 @@ const maxFoldDepth = 3
 // at what the expression is. A second copy of the test here would be a branch
 // no depth can take, and it read as the bound while the one that enforces it
 // sat one function away.
-func (w *walker) foldCall(call *ast.CallExpr, argBound map[*types.Var]string, depth int) (string, bool) {
+//
+// prose says the fold is of a sentence rather than of an ID, which is the one
+// thing that lets a format call fold ([walker.foldFormatExpr]). An ID a helper
+// builds with fmt.Sprintf("%s.%s", ...) would fold to its format and be
+// judged as the ID "%s.%s", which is neither true nor useful: it is reported
+// as a site nothing folds, which says what is wrong with it.
+func (w *walker) foldCall(call *ast.CallExpr, argBound map[*types.Var]string, depth int, prose bool) (string, bool) {
 	callee, ok := w.callee(call)
 	if !ok {
 		return "", false
@@ -61,13 +68,13 @@ func (w *walker) foldCall(call *ast.CallExpr, argBound map[*types.Var]string, de
 	}
 	bound := map[*types.Var]string{}
 	for index := range signature.Params().Len() {
-		value, isConstant := w.foldExpr(w.pkg, call.Args[index], argBound, depth+1)
+		value, isConstant := w.foldExpr(w.pkg, call.Args[index], argBound, depth+1, prose)
 		if !isConstant {
 			continue
 		}
 		bound[signature.Params().At(index)] = value
 	}
-	return w.foldExpr(declared.pkg, result, bound, depth+1)
+	return w.foldExpr(declared.pkg, result, bound, depth+1, prose)
 }
 
 // singleReturnExpr is the one expression a one-line helper returns, or nothing
@@ -90,8 +97,9 @@ func singleReturnExpr(decl *ast.FuncDecl) (ast.Expr, bool) {
 // constant, and a concatenation of constants all fold there. What is left is
 // exactly what a parameter makes non-constant, so only the three shapes a
 // concatenation can take are handled here: parentheses, a plus, and an
-// identifier that names a bound parameter or another helper's call.
-func (w *walker) foldExpr(pkg *packages.Package, expr ast.Expr, bound map[*types.Var]string, depth int) (string, bool) {
+// identifier that names a bound parameter or another helper's call. A prose
+// fold handles a fourth, the format call a helper builds its sentence with.
+func (w *walker) foldExpr(pkg *packages.Package, expr ast.Expr, bound map[*types.Var]string, depth int, prose bool) (string, bool) {
 	if depth > maxFoldDepth {
 		return "", false
 	}
@@ -100,13 +108,13 @@ func (w *walker) foldExpr(pkg *packages.Package, expr ast.Expr, bound map[*types
 	}
 	switch typed := expr.(type) {
 	case *ast.ParenExpr:
-		return w.foldExpr(pkg, typed.X, bound, depth)
+		return w.foldExpr(pkg, typed.X, bound, depth, prose)
 	case *ast.BinaryExpr:
 		if typed.Op != token.ADD {
 			return "", false
 		}
-		left, leftOK := w.foldExpr(pkg, typed.X, bound, depth)
-		right, rightOK := w.foldExpr(pkg, typed.Y, bound, depth)
+		left, leftOK := w.foldExpr(pkg, typed.X, bound, depth, prose)
+		right, rightOK := w.foldExpr(pkg, typed.Y, bound, depth, prose)
 		if !leftOK || !rightOK {
 			return "", false
 		}
@@ -119,10 +127,39 @@ func (w *walker) foldExpr(pkg *packages.Package, expr ast.Expr, bound map[*types
 		value, isBound := bound[variable]
 		return value, isBound
 	case *ast.CallExpr:
-		return w.inPackage(pkg).foldCall(typed, bound, depth)
+		inner := w.inPackage(pkg)
+		if prose && inner.isFormatCall(typed) {
+			return inner.foldFormatExpr(typed, bound, depth)
+		}
+		return inner.foldCall(typed, bound, depth, prose)
 	default:
 		return "", false
 	}
+}
+
+// foldFormatExpr folds a format call inside a one-line helper, with the
+// helper's parameters bound: the format verbatim, then each argument that
+// folds, each after a space, which is [walker.foldFormat]'s rendering.
+//
+// What is bound is what the helper's caller passed, so an argument that folds
+// here is a constant the caller handed the sentence, and one that does not is
+// a value it reports. The second is passed over without being counted, which
+// is the one place a value goes uncounted: it belongs to an expression inside
+// a helper body the walk folds once per call, and there is no site of its own
+// to count it at. dynamic's queryTooLongMessage is the shape, a sentence
+// naming the tool it is handed.
+func (w *walker) foldFormatExpr(call *ast.CallExpr, bound map[*types.Var]string, depth int) (string, bool) {
+	format, ok := w.foldExpr(w.pkg, call.Args[0], bound, depth, true)
+	if !ok {
+		return "", false
+	}
+	parts := []string{format}
+	for _, arg := range call.Args[1:] {
+		if value, folds := w.foldExpr(w.pkg, arg, bound, depth, true); folds {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, " "), true
 }
 
 // constantStringIn folds an expression to the string constant it denotes in

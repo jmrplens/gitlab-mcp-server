@@ -1313,7 +1313,7 @@ func TestFormatCodeMarkdown_WithResults(t *testing.T) {
 	want := "## Code Search Results (1)\n\n" +
 		"| Project | File | Path | Ref | Line |\n| --- | --- | --- | --- | --- |\n" +
 		"| 0 | main.go | cmd/main.go | main | 10 |\n" +
-		onePageFooter("Use gitlab_repository action 'file_get' with path to read a found file")
+		onePageFooter("Use action 'repository.file_get' to read a found file by its path")
 	if got != want {
 		t.Errorf("code search:\n got %q\nwant %q", got, want)
 	}
@@ -1338,7 +1338,7 @@ func TestFormatMRsMarkdown_WithResults(t *testing.T) {
 		"| IID | Title | State | Author | Project | Source -> Target |\n| --- | --- | --- | --- | --- | --- |\n" +
 		"| !5 | Fix | " + toolutil.MRStateEmoji("merged") + " merged |  |  | fix -> main |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_merge_request action 'get' with project_id and merge_request_iid to see full details")
+			"Use action 'merge_request.get' to see full details, with project_id and merge_request_iid")
 	if got != want {
 		t.Errorf("MR search:\n got %q\nwant %q", got, want)
 	}
@@ -1356,7 +1356,7 @@ func TestFormatMRsMarkdown_DraftMarked(t *testing.T) {
 		"| IID | Title | State | Author | Project | Source -> Target |\n| --- | --- | --- | --- | --- | --- |\n" +
 		"| !5 | Fix " + toolutil.EmojiDraft + " | " + toolutil.MRStateEmoji("opened") + " opened |  |  | fix -> main |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_merge_request action 'get' with project_id and merge_request_iid to see full details")
+			"Use action 'merge_request.get' to see full details, with project_id and merge_request_iid")
 	if got != want {
 		t.Errorf("draft MR search:\n got %q\nwant %q", got, want)
 	}
@@ -1413,7 +1413,7 @@ func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 		"| IID | Title | State | Author | Labels |\n| --- | --- | --- | --- | --- |\n" +
 		"| #3 | Fix login | " + toolutil.IssueStateEmoji("opened") + " opened | dev1 | bug, critical |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_issue action 'get' with project_id and issue_iid to see full details")
+			"Use action 'issue.get' to see full details, with project_id and issue_iid")
 	if got != want {
 		t.Errorf("issue search:\n got %q\nwant %q", got, want)
 	}
@@ -1443,7 +1443,7 @@ func TestFormatCommitsMarkdown_WithResults(t *testing.T) {
 		"| Short ID | Title | Author | Date |\n| --- | --- | --- | --- |\n" +
 		"| abc123 | Initial commit | Dev | 1 Jan 2026 09:30 UTC |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_repository action 'commit_get' with short_id to see full commit details")
+			"Use action 'repository.commit_get' to see full commit details, with short_id")
 	if got != want {
 		t.Errorf("commit search:\n got %q\nwant %q", got, want)
 	}
@@ -1472,7 +1472,7 @@ func TestFormatMilestonesMarkdown_WithResults(t *testing.T) {
 		"| IID | Title | State | Due Date |\n| --- | --- | --- | --- |\n" +
 		"| 1 | v1.0 | active | 1 Jun 2026 |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_project action 'milestone_get' with project_id and milestone_id to see full details")
+			"Use action 'project.milestone_get' to see full details, with project_id and milestone_iid (the IID column)")
 	if got != want {
 		t.Errorf("milestone search:\n got %q\nwant %q", got, want)
 	}
@@ -1489,7 +1489,7 @@ func TestFormatMilestonesMarkdown_NoDueDate(t *testing.T) {
 		"| IID | Title | State | Due Date |\n| --- | --- | --- | --- |\n" +
 		"| 2 | v2.0 | active | \u2014 |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_project action 'milestone_get' with project_id and milestone_id to see full details")
+			"Use action 'project.milestone_get' to see full details, with project_id and milestone_iid (the IID column)")
 	if got != want {
 		t.Errorf("milestone search without a due date:\n got %q\nwant %q", got, want)
 	}
@@ -1518,7 +1518,7 @@ func TestFormatNotesMarkdown_WithResults(t *testing.T) {
 	want := "## Note Search Results (1)\n\n" +
 		"| Author | Type | Ref | Body |\n| --- | --- | --- | --- |\n" +
 		"| reviewer | Issue | #5 | Looks good |\n" +
-		onePageFooter("Use the note's parent tool (gitlab_issue note actions or gitlab_mr_review note actions) to see full note")
+		onePageFooter("Use `issue.note_get` or `mr_review.note_get`, whichever the note's parent is, to see the full note")
 	if got != want {
 		t.Errorf("note search:\n got %q\nwant %q", got, want)
 	}
@@ -1547,7 +1547,7 @@ func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
 		"| Name | Path | Visibility | Default Branch |\n| --- | --- | --- | --- |\n" +
 		"| my-project | user/my-project | private | main |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_project action 'get' with the project path to see full details")
+			"Use action 'project.get' to see full details, with the project path")
 	if got != want {
 		t.Errorf("project search:\n got %q\nwant %q", got, want)
 	}
@@ -1576,7 +1576,7 @@ func TestFormatSnippetsMarkdown_WithResults(t *testing.T) {
 		"| Title | File | Visibility | Author |\n| --- | --- | --- | --- |\n" +
 		"| My snippet | notes.md | private | dev1 |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_snippet action 'get' with snippet_id to see full content")
+			"Use action 'snippet.get' to see full content, with snippet_id")
 	if got != want {
 		t.Errorf("snippet search:\n got %q\nwant %q", got, want)
 	}
@@ -1605,7 +1605,7 @@ func TestFormatUsersMarkdown_WithResults(t *testing.T) {
 		"| Username | Name | State |\n| --- | --- | --- |\n" +
 		"| @admin | Admin User | active |\n" +
 		onePageFooter(toolutil.HintPreserveLinks,
-			"Use gitlab_user action 'get' with user_id to see full profile")
+			"Use action 'user.get' to see full profile, with user_id")
 	if got != want {
 		t.Errorf("user search:\n got %q\nwant %q", got, want)
 	}
@@ -1633,7 +1633,7 @@ func TestFormatWikiMarkdown_WithResults(t *testing.T) {
 	want := "## Wiki Search Results (1)\n\n" +
 		"| Title | Slug | Format |\n| --- | --- | --- |\n" +
 		"| Home | home | markdown |\n" +
-		onePageFooter("Use gitlab_wiki action 'get' with slug to read the full wiki page")
+		onePageFooter("Use action 'wiki.get' to read the full wiki page, with slug")
 	if got != want {
 		t.Errorf("wiki search:\n got %q\nwant %q", got, want)
 	}

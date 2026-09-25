@@ -1845,10 +1845,17 @@ check-md-escaping:
 ## Constants are folded by the type checker rather than matched as text, and
 ## the IDs are judged against the catalog built at Ultimate for a self-managed
 ## instance and for GitLab.com together, so the Orbit family does not read as
-## dead. It reads a fifth kind of site too: the substrings the e2e suite
-## asserts a served text carries (assertMentions, mentionsAny, containsAny and
-## harness.ExpectToolError), loaded from ./test/e2e/gitlab/... under the e2e
-## tag the command states itself. The work list lands in plan/action-ids.json.
+## dead. It reads the served prose besides, for a gitlab_* tool name, an alias
+## or an ID that resolves nowhere: error hints and messages (errors.New,
+## fmt.Errorf, toolutil.ErrorResult, toolutil.CancelledResult), next steps
+## (WriteHints, WriteListFooter, Card.End), NextSteps and message fields,
+## parameter guidance, jsonschema tag descriptions and the description entry of
+## a schema written as a map (an input schema override), and Usage lines, the
+## text a standalone surface tool serves on every surface included. And it
+## reads the substrings the e2e suite asserts a served text carries
+## (assertMentions, mentionsAny, containsAny and harness.ExpectToolError),
+## loaded from ./test/e2e/gitlab/... under the e2e tag the command states
+## itself. The work list lands in plan/action-ids.json.
 audit-action-ids:
 	go run ./cmd/audit_action_ids/ -v -json plan/action-ids.json
 
@@ -1858,9 +1865,11 @@ audit-action-ids:
 ## gitlab_find_action publishes IDs, so a cross-link spelled as an alias works
 ## when it is followed and can be found in no listing. A site the type checker
 ## could not fold fails as well, since a gate with a silent blind spot is one a
-## new site can step into. So does an e2e assertion quoting a tool name, which
-## passes against a defective hint and breaks the day the hint is fixed, and a
-## helper table entry that describes no call. CI gate.
+## new site can step into. So does served prose naming a tool, which is right
+## for one surface of three, a declaration of that rule that excuses nothing,
+## an e2e assertion quoting a tool name, which passes against a defective hint
+## and breaks the day the hint is fixed, and a helper table entry that
+## describes no call. CI gate.
 check-action-ids:
 	go run ./cmd/audit_action_ids/ -check -json ''
 

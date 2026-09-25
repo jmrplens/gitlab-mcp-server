@@ -95,7 +95,7 @@ func projectScopeGuidance() map[string]toolutil.ParameterGuidance {
 // discussionIDGuidance returns the parameter guidance for the discussion_id
 // parameter used by discussion-scoped actions.
 func discussionIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior gitlab_list_issue_discussions response.")
+	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior issue.discussion_list response.")
 }
 
 // noteIDGuidance returns the parameter guidance for the note_id parameter used
@@ -110,7 +110,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateIssueDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_issue_discussions":
-		options.Usage = "List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with gitlab_add_issue_discussion_note. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with issue.discussion_add_note. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"gitlab_list_issue_discussions", "list issue discussions", "show issue comment threads", "get issue conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionIssueGet, actionIssueNoteList}
 		options.ParameterGuidance = projectScopeGuidance()
@@ -122,14 +122,14 @@ func decorateIssueDiscussionMeta(options *toolutil.ActionSpecOptions, individual
 		}
 		options.IndividualTool.Description = "List discussion threads on an issue with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_issue_discussion, gitlab_create_issue_discussion, gitlab_issue_get, gitlab_issue_note_list."
 	case "gitlab_get_issue_discussion":
-		options.Usage = "Fetch one discussion thread on an issue by its discussion_id, returning every note in the thread. Use this after gitlab_list_issue_discussions when the target thread is already known."
+		options.Usage = "Fetch one discussion thread on an issue by its discussion_id, returning every note in the thread. Use this after issue.discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_issue_discussion", "get issue discussion", "show issue discussion thread", "fetch issue discussion"}
 		options.RelatedActions = []string{actionDiscussionList, actionDiscussionAddNote, actionIssueGet}
 		options.ParameterGuidance = projectScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.IndividualTool.Description = "Get a single issue discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state). See also: gitlab_list_issue_discussions, gitlab_add_issue_discussion_note, gitlab_issue_get."
 	case "gitlab_create_issue_discussion":
-		options.Usage = "Open a new discussion thread on an issue with an initial note. Use this to start a threaded conversation rather than a flat comment (use gitlab_issue_note_create for a non-threaded note). Supports backdating via created_at for admins/owners."
+		options.Usage = "Open a new discussion thread on an issue with an initial note. Use this to start a threaded conversation rather than a flat comment (use issue.note_create for a non-threaded note). Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_create_issue_discussion", "create issue discussion", "start issue discussion thread", "open issue discussion"}
 		options.RelatedActions = []string{actionDiscussionAddNote, actionDiscussionList, actionIssueNoteList, actionIssueGet}
 		options.ParameterGuidance = projectScopeGuidance()
@@ -140,7 +140,7 @@ func decorateIssueDiscussionMeta(options *toolutil.ActionSpecOptions, individual
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on an issue with an initial note. Returns: the created thread with its first note. See also: gitlab_add_issue_discussion_note, gitlab_list_issue_discussions, gitlab_issue_note_create."
 	case "gitlab_add_issue_discussion_note":
-		options.Usage = "Reply to an existing issue discussion thread by adding a note. Use this after gitlab_list_issue_discussions or gitlab_create_issue_discussion to continue a thread. Supports backdating via created_at for admins/owners."
+		options.Usage = "Reply to an existing issue discussion thread by adding a note. Use this after issue.discussion_list or issue.discussion_create to continue a thread. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_add_issue_discussion_note", "reply to issue discussion", "add note to issue discussion", "comment on issue thread"}
 		options.RelatedActions = []string{actionDiscussionCreate, actionDiscussionGet, actionDiscussionUpdateNote, actionIssueNoteList}
 		options.ParameterGuidance = projectScopeGuidance()

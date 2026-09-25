@@ -173,11 +173,11 @@ func TestDelete_Error(t *testing.T) {
 // The guidance sections the three formatters end with.
 const (
 	listHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_set_feature_flag` to toggle a specific feature\n"
+		"- Use `admin.feature_set` to toggle a specific feature\n"
 	definitionsHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_set_feature_flag` to enable or disable a feature\n"
+		"- Use `admin.feature_set` to enable or disable a feature\n"
 	featureHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use `gitlab_set_feature_flag` to toggle this feature\n"
+		"- Use `admin.feature_set` to toggle this feature\n"
 )
 
 // markdownText returns the one text block a formatter's result carries.

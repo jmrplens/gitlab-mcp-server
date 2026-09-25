@@ -95,7 +95,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("labelList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("labelList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := labeldata.NewProjectListOptions(input.Page, input.PerPage, input.Search, input.WithCounts, input.IncludeAncestorGroups)
@@ -132,7 +132,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("labelGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("labelGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().Labels.GetLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
@@ -151,7 +151,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("labelCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("labelCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.CreateLabelOptions{
 		Name:  new(input.Name),
@@ -189,7 +189,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("labelUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("labelUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.UpdateLabelOptions{}
 	if input.Name != "" {
@@ -240,7 +240,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("labelDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("labelDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	delOpts := &gl.DeleteLabelOptions{}
 	if input.Name != "" {
@@ -263,7 +263,7 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("labelSubscribe: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("labelSubscribe: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().Labels.SubscribeToLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
@@ -283,7 +283,7 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("labelUnsubscribe: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("labelUnsubscribe: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	_, err := client.GL().Labels.UnsubscribeFromLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
@@ -302,7 +302,7 @@ func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInpu
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("labelPromote: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("labelPromote: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	_, err := client.GL().Labels.PromoteLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {

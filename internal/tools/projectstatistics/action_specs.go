@@ -15,14 +15,14 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				"repository fetch activity",
 			},
 			Tags:           []string{"project", "statistics", "analytics"},
-			Usage:          "Get the last 30 days of repository fetch statistics (git clone/pull counts) for a project, broken down by day. Use this when the prompt asks how often a project is being cloned or pulled, or for recent fetch activity. The caller must have at least Reporter access to the project. This returns fetch counts only. It is not the project-size/storage statistics that gitlab_project_get exposes via with_statistics.",
+			Usage:          "Get the last 30 days of repository fetch statistics (git clone/pull counts) for a project, broken down by day. Use this when the prompt asks how often a project is being cloned or pulled, or for recent fetch activity. The caller must have at least Reporter access to the project. This returns fetch counts only. It is not the project-size/storage statistics that project.get exposes via with_statistics.",
 			RelatedActions: []string{"project.get"},
 			ParameterGuidance: map[string]toolutil.ParameterGuidance{
 				"project_id": {
 					SemanticRole:     "scope_project",
 					ValueSource:      "Project ID or URL-encoded path whose fetch statistics should be retrieved.",
 					ExampleBinding:   `params.project_id:"group/project"`,
-					CommonConfusions: []string{"This returns git fetch (clone/pull) counts, not storage/size statistics. For repository or storage size use gitlab_project_get with statistics enabled."},
+					CommonConfusions: []string{"This returns git fetch (clone/pull) counts, not storage/size statistics. For repository or storage size use project.get with statistics enabled."},
 				},
 			},
 			OpenWorld:    true,

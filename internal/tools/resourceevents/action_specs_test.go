@@ -162,7 +162,7 @@ const (
 	iterationListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use filters to narrow down iteration events by date or action\n"
 	iterationCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use `gitlab_issue_iteration_event_list` to see all iteration changes\n"
+		"- Use `issue.event_issue_iteration_list` to see all iteration changes\n"
 	weightListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use filters to narrow down weight events by date\n"
 )

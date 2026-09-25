@@ -93,7 +93,7 @@ func projectIDGuidance() toolutil.ParameterGuidance {
 func snippetIDGuidance() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:     "snippet_id",
-		ValueSource:      "Numeric snippet ID from a prior gitlab_project_snippet_list result.",
+		ValueSource:      "Numeric snippet ID from a prior snippet.project_list result.",
 		ExampleBinding:   "params.snippet_id:7",
 		CommonConfusions: []string{"snippet_id is the project snippet ID, not the note_id."},
 	}

@@ -243,7 +243,7 @@ type ListOutput struct {
 type GetInput struct {
 	GroupID              toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
-	WithProjects         *bool                `json:"with_projects,omitempty"          jsonschema:"Include the group's projects in the response (deprecated. Prefer gitlab_group_projects)"`
+	WithProjects         *bool                `json:"with_projects,omitempty"          jsonschema:"Include the group's projects in the response (deprecated. Prefer group.projects)"`
 	OrderBy              string               `json:"order_by,omitempty"               jsonschema:"Order embedded projects by field (only applies with with_projects)"`
 	Sort                 string               `json:"sort,omitempty"                   jsonschema:"Sort direction for embedded projects (asc, desc)"`
 	toolutil.PaginationInput
@@ -810,7 +810,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 		return DetailOutput{}, err
 	}
 	if input.GroupID == "" {
-		return DetailOutput{}, errors.New("Get: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return DetailOutput{}, errors.New("Get: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := &gl.GetGroupOptions{}
@@ -871,7 +871,7 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 		return MemberListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return MemberListOutput{}, errors.New("MembersList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return MemberListOutput{}, errors.New("MembersList: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := membersListOptions(input)
@@ -905,7 +905,7 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 		return ListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ListOutput{}, errors.New("SubgroupsList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return ListOutput{}, errors.New("SubgroupsList: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := subgroupsListOptions(input)
@@ -1681,7 +1681,7 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 		return ListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ListOutput{}, errors.New("SharedWithList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return ListOutput{}, errors.New("SharedWithList: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := sharedWithListOptions(input)
@@ -1746,7 +1746,7 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 		return ListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ListOutput{}, errors.New("InvitedList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return ListOutput{}, errors.New("InvitedList: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := invitedListOptions(input)
@@ -1798,7 +1798,7 @@ func TransferLocationsList(ctx context.Context, client *gitlabclient.Client, inp
 		return TransferLocationsListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return TransferLocationsListOutput{}, errors.New("TransferLocationsList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return TransferLocationsListOutput{}, errors.New("TransferLocationsList: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts := &gl.ListTransferLocationsOptions{}

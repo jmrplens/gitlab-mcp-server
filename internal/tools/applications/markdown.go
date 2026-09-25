@@ -26,7 +26,7 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&sb, out.Pagination, false,
-		"Use `gitlab_create_application` to register a new application")
+		"Use `admin.application_create` to register a new application")
 	return sb.String()
 }
 

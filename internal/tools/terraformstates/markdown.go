@@ -14,8 +14,8 @@ import (
 // instead sent a reader to a call that always fails.
 const (
 	hintLockNeedsCLI = "Locking a state needs the terraform CLI against the GitLab HTTP backend: " +
-		"`gitlab_lock_terraform_state` sends no lock-info body, which GitLab refuses"
-	hintUnlockStaleLock = "Use `gitlab_unlock_terraform_state` to clear a stale lock"
+		"`admin.terraform_state_lock` sends no lock-info body, which GitLab refuses"
+	hintUnlockStaleLock = "Use `admin.terraform_state_unlock` to clear a stale lock"
 )
 
 // FormatListMarkdown formats Terraform states as markdown.
@@ -38,7 +38,7 @@ func FormatListMarkdown(out ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
-		"Use `gitlab_get_terraform_state` to view details of a specific state")
+		"Use `admin.terraform_state_get` to view details of a specific state")
 	return sb.String()
 }
 
@@ -76,7 +76,7 @@ func FormatStateMarkdown(s StateItem) string {
 	c.End(
 		hintLockNeedsCLI,
 		hintUnlockStaleLock,
-		"Use `gitlab_delete_terraform_state` to remove it",
+		"Use `admin.terraform_state_delete` to remove it",
 	)
 	return b.String()
 }

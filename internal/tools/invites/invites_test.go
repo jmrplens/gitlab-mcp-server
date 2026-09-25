@@ -1270,7 +1270,7 @@ var inviteScopeExpectations = []inviteScopeExpectation{
 			SemanticRole:     "scope_project",
 			ValueSource:      "Project ID or full namespace path the user is being invited to.",
 			ExampleBinding:   `params.project_id:"group/project"`,
-			CommonConfusions: []string{"Use the target project here. Use group_id only with group.invite_group."},
+			CommonConfusions: []string{"Use the target project here. Use group_id only with access.invite_group."},
 		},
 	},
 	{
@@ -1285,7 +1285,7 @@ var inviteScopeExpectations = []inviteScopeExpectation{
 			SemanticRole:     "scope_group",
 			ValueSource:      "Group ID or full group path the user is being invited to.",
 			ExampleBinding:   `params.group_id:"platform/backend"`,
-			CommonConfusions: []string{"Use group_id for the group scope. Use project_id only with project.invite_project."},
+			CommonConfusions: []string{"Use group_id for the group scope. Use project_id only with access.invite_project."},
 		},
 	},
 	{

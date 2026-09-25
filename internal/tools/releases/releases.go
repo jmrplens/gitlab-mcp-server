@@ -144,7 +144,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("releaseCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("releaseCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.CreateReleaseOptions{
 		TagName: new(input.TagName),
@@ -193,7 +193,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("releaseUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("releaseUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.UpdateReleaseOptions{}
 	if input.Name != "" {
@@ -227,7 +227,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("releaseDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("releaseDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	r, _, err := client.GL().Releases.DeleteRelease(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
@@ -243,7 +243,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("releaseGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("releaseGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	r, _, err := client.GL().Releases.GetRelease(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
@@ -259,7 +259,7 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("releaseGetLatest: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("releaseGetLatest: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	r, _, err := client.GL().Releases.GetLatestRelease(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
@@ -276,7 +276,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("releaseList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("releaseList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListReleasesOptions{}
 	if input.OrderBy != "" {

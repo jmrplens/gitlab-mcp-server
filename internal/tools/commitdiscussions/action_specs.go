@@ -98,7 +98,7 @@ func commitScopeGuidance() map[string]toolutil.ParameterGuidance {
 		},
 		"commit_sha": {
 			SemanticRole:   "commit_sha",
-			ValueSource:    "Commit SHA where the discussion lives, from a prior gitlab_commit_get or branch/tag response.",
+			ValueSource:    "Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.",
 			ExampleBinding: `params.commit_sha:"abc123def"`,
 		},
 	}
@@ -107,7 +107,7 @@ func commitScopeGuidance() map[string]toolutil.ParameterGuidance {
 // discussionIDGuidance returns the parameter guidance for the discussion_id
 // parameter used by discussion-scoped actions.
 func discussionIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior gitlab_list_commit_discussions response.")
+	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior repository.commit_discussion_list response.")
 }
 
 // noteIDGuidance returns the parameter guidance for the note_id parameter used
@@ -137,7 +137,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 		}
 		options.IndividualTool.Description = "List discussion threads on a commit with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_get_commit_discussion, gitlab_create_commit_discussion, gitlab_commit_get."
 	case "gitlab_get_commit_discussion":
-		options.Usage = "Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after gitlab_list_commit_discussions when the target thread is already known."
+		options.Usage = "Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after repository.commit_discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_commit_discussion", "get commit discussion", "show commit discussion thread", "fetch commit discussion"}
 		options.RelatedActions = []string{canonicalID(specList), canonicalID(specAddNote), actionCommitGet}
 		options.ParameterGuidance = commitScopeGuidance()
@@ -155,7 +155,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_commit_diff. Omit for a general discussion.",
+			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from repository.commit_diff. Omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","position_type":"text","new_path":"main.go","new_line":12}`,
 			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line."},
 		}
@@ -170,7 +170,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 			toolutil.SchemaEnumOverride("position.line_range.end.type", "new", "old"),
 		}
 	case "gitlab_add_commit_discussion_note":
-		options.Usage = "Reply to an existing commit discussion thread by adding a note. Use this after gitlab_list_commit_discussions or gitlab_create_commit_discussion to continue a thread. Supports backdating via created_at for admins/owners."
+		options.Usage = "Reply to an existing commit discussion thread by adding a note. Use this after repository.commit_discussion_list or repository.commit_discussion_create to continue a thread. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_add_commit_discussion_note", "reply to commit discussion", "add note to commit discussion", "comment on commit thread"}
 		options.RelatedActions = []string{canonicalID(specCreate), canonicalID(specGet), canonicalID(specUpdateNote), canonicalID(specList)}
 		options.ParameterGuidance = commitScopeGuidance()

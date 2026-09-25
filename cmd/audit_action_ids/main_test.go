@@ -163,7 +163,7 @@ var Unfolded = toolutil.ActionSpecOptions{
 	if code != 1 {
 		t.Fatalf("run with -check = %d, want 1; stdout %q", code, stdout.String())
 	}
-	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing, 0 hint(s) name a tool rather than an action, 0 e2e assertion(s) name a tool rather than an action, 0 assertion helper declaration(s) match no call\n"
+	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing, 0 finding(s) in served prose name a tool, an alias or no action, 0 served-prose declaration(s) excuse nothing, 0 e2e assertion(s) name a tool rather than an action, 0 assertion helper declaration(s) match no call\n"
 	if stderr.String() != want {
 		t.Errorf("stderr = %q, want %q", stderr.String(), want)
 	}
@@ -224,11 +224,51 @@ func Get() error {
 	if !strings.Contains(stdout.String(), "gitlab_project_get") {
 		t.Errorf("stdout = %q, want the tool name named", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read") {
+	// Two sentences are read: the hint, and the message errDemo is built with,
+	// which is served prose too since an error a handler returns is what a
+	// model reads.
+	if !strings.Contains(stdout.String(), "served prose: 1 finding(s) in 1 package(s) over 2 sentence(s) read") {
 		t.Errorf("stdout = %q, want the count of what the rule read", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "hint(s) name a tool rather than an action") {
+	if !strings.Contains(stderr.String(), "1 finding(s) in served prose name a tool, an alias or no action") {
 		t.Errorf("stderr = %q, want the failure line to name this rule rather than only the count", stderr.String())
+	}
+}
+
+// TestRun_Check_ToolNameInAnErrorMessage_FailsTheRun drives the whole command
+// over a fixture whose only defect is the message of an error a handler
+// returns, which no rule read until the served prose was: the class issue 910
+// found some two hundred of, the commonest being "project_id is required. Use
+// gitlab_project_list to find the ID first".
+func TestRun_Check_ToolNameInAnErrorMessage_FailsTheRun(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import "errors"
+
+// Get refuses a call it cannot make, naming a tool the dynamic surface does
+// not register.
+func Get(projectID string) error {
+	if projectID == "" {
+		return errors.New("demoGet: project_id is required. Use gitlab_project_list to find the ID first")
+	}
+	return nil
+}
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, check: true}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("run with -check = %d over an error message naming a tool, want 1; stdout %q", code, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), `message "gitlab_project_list" is a tool name`) {
+		t.Errorf("stdout = %q, want the row naming the tool and the kind of site", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "1 finding(s) in served prose name a tool, an alias or no action") {
+		t.Errorf("stderr = %q, want the failure line to name the served-prose rule", stderr.String())
 	}
 }
 
@@ -559,7 +599,7 @@ func TestRun_Check_SuiteAssertionNamingATool_FailsAndNamesIt(t *testing.T) {
 	for _, want := range []string{
 		assertionRowsHeading + "\n=== " + suiteFixtureDir + " ===\n",
 		`  ` + suiteFixtureDir + `/planted_test.go:9 assertion "gitlab_todo_list" is a tool name; the dynamic surface registers no such tool` + "\n",
-		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated)\n",
+		"  e2e assertions: 1 finding(s) in 1 package(s) over 1 assertion(s) read; 0 not folded (reported, not gated); 0 value(s) passed over\n",
 	} {
 		t.Run(strings.TrimSpace(want), func(t *testing.T) {
 			if !strings.Contains(stdout.String(), want) {
@@ -641,7 +681,7 @@ func TestRenamed(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("run with -check = %d, want 1; stdout %q", code, stdout.String())
 	}
-	const want = "\nERROR: 0 published ID(s) resolve to no action, 0 name a registered alias rather than a catalog ID, 0 site(s) could not be folded, 0 declaration(s) excuse nothing, 0 hint(s) name a tool rather than an action, 2 e2e assertion(s) name a tool rather than an action, 1 assertion helper declaration(s) match no call\n"
+	const want = "\nERROR: 0 published ID(s) resolve to no action, 0 name a registered alias rather than a catalog ID, 0 site(s) could not be folded, 0 declaration(s) excuse nothing, 0 finding(s) in served prose name a tool, an alias or no action, 0 served-prose declaration(s) excuse nothing, 2 e2e assertion(s) name a tool rather than an action, 1 assertion helper declaration(s) match no call\n"
 	if stderr.String() != want {
 		t.Errorf("stderr = %q, want %q", stderr.String(), want)
 	}
@@ -706,7 +746,7 @@ func TestOne(t *testing.T) {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	for _, want := range []string{
-		toolName + ": no served source loaded: the published-ID and hint rules were not run\n",
+		toolName + ": no served source loaded: the published-ID and served-prose rules were not run\n",
 		"  e2e assertions: 0 finding(s) in 0 package(s) over 1 assertion(s) read;",
 		"  the assertion helper table was not judged whole: only a run over the whole suite can tell an entry nothing calls from a narrowed run\n",
 		"    assertion calls by helper: assertMentions 1\n",
@@ -717,7 +757,7 @@ func TestOne(t *testing.T) {
 			}
 		})
 	}
-	for _, unwanted := range []string{"published ID(s)", "error hints:", "the declaration tables were not judged"} {
+	for _, unwanted := range []string{"published ID(s)", "served prose:", "the declaration tables were not judged"} {
 		t.Run(unwanted, func(t *testing.T) {
 			if strings.Contains(stdout.String(), unwanted) {
 				t.Errorf("stdout = %q, want nothing about a served tree the run did not load", stdout.String())

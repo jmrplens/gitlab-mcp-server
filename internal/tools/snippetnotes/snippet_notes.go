@@ -77,7 +77,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("snippetNoteList: project_id is required. Use gitlab_project_list to find the ID first")
+		return ListOutput{}, errors.New("snippetNoteList: project_id is required. Use project.list to find the ID first")
 	}
 	if input.SnippetID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("snippetNoteList", "snippet_id")

@@ -38,7 +38,7 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				"- **Size**: 1024 bytes\n\n" +
 				"_Content is base64-encoded in the structured JSON output._\n\n" +
 				"---\n💡 **Next steps:**\n" +
-				"- Use `gitlab_package_list` to browse available model packages\n",
+				"- Use `package.list` to browse available model packages\n",
 		},
 		{
 			name: "empty fields render the resource heading and the size alone",
@@ -53,7 +53,7 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				"- **Size**: 0 bytes\n\n" +
 				"_Content is base64-encoded in the structured JSON output._\n\n" +
 				"---\n💡 **Next steps:**\n" +
-				"- Use `gitlab_package_list` to browse available model packages\n",
+				"- Use `package.list` to browse available model packages\n",
 		},
 		{
 			name: "large file size renders correctly",
@@ -72,7 +72,7 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				"- **Size**: 104857600 bytes\n\n" +
 				"_Content is base64-encoded in the structured JSON output._\n\n" +
 				"---\n💡 **Next steps:**\n" +
-				"- Use `gitlab_package_list` to browse available model packages\n",
+				"- Use `package.list` to browse available model packages\n",
 		},
 	}
 

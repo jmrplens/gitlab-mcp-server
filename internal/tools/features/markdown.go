@@ -27,7 +27,7 @@ func FormatListMarkdown(output ListOutput) *mcp.CallToolResult {
 		))
 	}
 	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
-		"Use `gitlab_set_feature_flag` to toggle a specific feature")
+		"Use `admin.feature_set` to toggle a specific feature")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -51,7 +51,7 @@ func FormatListDefinitionsMarkdown(output ListDefinitionsOutput) *mcp.CallToolRe
 		))
 	}
 	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
-		"Use `gitlab_set_feature_flag` to enable or disable a feature")
+		"Use `admin.feature_set` to enable or disable a feature")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -66,7 +66,7 @@ func FormatFeatureMarkdown(output SetOutput) *mcp.CallToolResult {
 	c.Field("State", f.State)
 	c.Field("Gates", formatGates(f.Gates))
 	writeDefinition(c, f.Definition)
-	c.End("Use `gitlab_set_feature_flag` to toggle this feature")
+	c.End("Use `admin.feature_set` to toggle this feature")
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 

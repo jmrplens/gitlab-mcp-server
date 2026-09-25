@@ -29,7 +29,7 @@ type branchNotFoundOutput struct {
 func formatBranchNotFound(out branchNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Branch", out.Identifier,
-		"Use branch.list with project_id to list available branches",
+		toolutil.HintAction("branch.list", "list the project's branches"),
 		"Verify the branch name is spelled correctly (case-sensitive)",
 	)
 }

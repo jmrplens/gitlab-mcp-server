@@ -37,7 +37,7 @@ type CreateInput struct {
 	// Basic metadata
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SourceBranch string               `json:"source_branch" jsonschema:"Source branch name,required"`
-	TargetBranch string               `json:"target_branch" jsonschema:"Target branch name. If not specified by the user use the project default branch from gitlab_project_get (do NOT assume main),required"`
+	TargetBranch string               `json:"target_branch" jsonschema:"Target branch name. If not specified by the user use the project default branch from project.get (do NOT assume main),required"`
 	Title        string               `json:"title" jsonschema:"Merge request title,required"`
 	Description  string               `json:"description,omitempty" jsonschema:"Merge request description (Markdown supported)"`
 
@@ -529,7 +529,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("mrCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("mrCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.CreateMergeRequestOptions{
 		SourceBranch: new(input.SourceBranch),
@@ -592,7 +592,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("mrGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("mrGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrGet", "merge_request_iid")
@@ -627,7 +627,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("mrList: project_id is required. Use gitlab_project_list to find the project ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("mrList: project_id is required. Use project.list to find the project ID first, then pass it as project_id")
 	}
 	opts, err := buildListOptions(input)
 	if err != nil {
@@ -746,7 +746,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("mrUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("mrUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrUpdate", "merge_request_iid")
@@ -774,7 +774,7 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("mrMerge: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("mrMerge: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrMerge", "merge_request_iid")
@@ -842,7 +842,7 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 		return ApproveOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ApproveOutput{}, errors.New("mrApprove: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ApproveOutput{}, errors.New("mrApprove: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return ApproveOutput{}, toolutil.ErrRequiredInt64("mrApprove", "merge_request_iid")
@@ -877,7 +877,7 @@ func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveIn
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("mrUnapprove: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("mrUnapprove: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return toolutil.ErrRequiredInt64("mrUnapprove", "merge_request_iid")
@@ -987,7 +987,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
-		missingProjectMsg: "mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		missingProjectMsg: "mrCommits: project_id is required. Use project.list to find the ID first, then pass it as project_id",
 		notFoundHint:      "verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with merge_request.get",
 	},
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
@@ -1017,7 +1017,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 		return PipelinesOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return PipelinesOutput{}, errors.New("mrPipelines: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return PipelinesOutput{}, errors.New("mrPipelines: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return PipelinesOutput{}, toolutil.ErrRequiredInt64("mrPipelines", "merge_request_iid")
@@ -1048,7 +1048,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("mrDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("mrDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return toolutil.ErrRequiredInt64("mrDelete", "merge_request_iid")
@@ -1084,7 +1084,7 @@ func Rebase(ctx context.Context, client *gitlabclient.Client, input RebaseInput)
 		return RebaseOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return RebaseOutput{}, errors.New("mrRebase: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return RebaseOutput{}, errors.New("mrRebase: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return RebaseOutput{}, toolutil.ErrRequiredInt64("mrRebase", "merge_request_iid")
@@ -1920,7 +1920,7 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
-		missingProjectMsg: "mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		missingProjectMsg: "mrRelatedIssues: project_id is required. Use project.list to find the ID first, then pass it as project_id",
 		notFoundHint:      "verify project_id and merge_request_iid with merge_request.get - only issues referenced in MR description/commits/notes are returned",
 	},
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
@@ -1970,7 +1970,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		return CreateTodoOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return CreateTodoOutput{}, errors.New("mrCreateTodo: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return CreateTodoOutput{}, errors.New("mrCreateTodo: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return CreateTodoOutput{}, toolutil.ErrRequiredInt64("mrCreateTodo", "merge_request_iid")
@@ -2080,7 +2080,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		return DependencyOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DependencyOutput{}, errors.New("mrCreateDependency: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DependencyOutput{}, errors.New("mrCreateDependency: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "merge_request_iid")
@@ -2126,7 +2126,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("mrDeleteDependency: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("mrDeleteDependency: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return toolutil.ErrRequiredInt64("mrDeleteDependency", "merge_request_iid")
@@ -2155,7 +2155,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 		return DependenciesOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DependenciesOutput{}, errors.New("mrGetDependencies: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DependenciesOutput{}, errors.New("mrGetDependencies: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
 		return DependenciesOutput{}, toolutil.ErrRequiredInt64("mrGetDependencies", "merge_request_iid")
@@ -2189,12 +2189,12 @@ var mergeStatusHints = map[string]string{ // #nosec G101 -- not credentials, the
 	"checking":                 "GitLab is still checking mergeability. Wait a moment and retry",
 	"ci_must_pass":             "a CI/CD pipeline must succeed before merge. Use auto_merge=true to merge automatically when the pipeline passes, or wait for the pipeline to finish",
 	"ci_still_running":         "CI/CD pipeline is still running. Use auto_merge=true to merge automatically when the pipeline passes, or wait for completion",
-	"conflict":                 "there are merge conflicts with the target branch. Rebase or resolve conflicts before merging (use gitlab_mr_rebase)",
+	"conflict":                 "there are merge conflicts with the target branch. Rebase or resolve conflicts before merging (use merge_request.rebase)",
 	"discussions_not_resolved": "all threads/discussions must be resolved before merge. Resolve pending discussions first",
 	"draft_status":             "the merge request is a draft. Mark it as ready (remove draft status) before merging",
 	"external_status_checks":   "external status checks must pass before merge. Wait for all external checks to complete",
 	"jira_association_missing": "the title or description must reference a Jira issue. Add a Jira issue key to the title or description",
-	"need_rebase":              "the source branch needs to be rebased onto the target branch (use gitlab_mr_rebase)",
+	"need_rebase":              "the source branch needs to be rebased onto the target branch (use merge_request.rebase)",
 	"not_approved":             "the merge request has not received the required approvals. Request reviewers to approve it first",
 	"not_open":                 "the merge request is not open (it may be closed or already merged). Only open MRs can be merged",
 	"policies_denied":          "merge policies deny this merge request. Check project merge policies",

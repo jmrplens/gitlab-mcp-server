@@ -129,15 +129,11 @@ func TestFixHints_LeavesALiteralThatIsOnlyAName(t *testing.T) {
 	}
 }
 
-// TestFixHints_TestFilesMoveOnlyWhenAskedAndOnlyWithTheProductionPass holds
-// both halves of the test rewrite.
-//
-// A test that pins a hint has to move with it, or the pass leaves the suite
-// red for a reason that is not a defect. It has to move in the SAME pass,
-// which is why the fixer walks both file sets from one set of folded values:
-// once the production text is rewritten, no test literal spelling the old name
-// is part of any hint any more, so a second run would find nothing.
-func TestFixHints_TestFilesMoveOnlyWhenAskedAndOnlyWithTheProductionPass(t *testing.T) {
+// TestFixHints_TestFilesMoveOnlyWhenAsked holds both halves of the test
+// rewrite: a test that pins a hint has to move with it, or the pass leaves the
+// suite red for a reason that is not a defect, and it moves only under
+// -fix-hints-tests, so a reviewer can read the production half on its own.
+func TestFixHints_TestFilesMoveOnlyWhenAsked(t *testing.T) {
 	const hint = "verify demo_id with gitlab_fetch_demo first"
 	files := map[string]string{
 		"demo.go":      "package demo\n\nconst notFound = \"" + hint + "\"\n",
@@ -169,11 +165,11 @@ func TestFixHints_TestFilesMoveOnlyWhenAskedAndOnlyWithTheProductionPass(t *test
 	})
 }
 
-// TestFixHints_ATestFileIsLeftWhenProductionDidNotMove holds the guard that
-// keeps the test pass tied to the production one: a package whose hints named
-// nothing has no assertion to move either, and walking its tests anyway would
-// be a rewrite with no fix behind it.
-func TestFixHints_ATestFileIsLeftWhenProductionDidNotMove(t *testing.T) {
+// TestFixHints_ATestLiteralHoldingNoHint_IsLeft holds what keeps the test
+// pass from being a rename: a test literal that spells a tool and, rewritten,
+// would hold no hint the walk folded is an assertion about something else,
+// and a rewrite there would have no fix behind it.
+func TestFixHints_ATestLiteralHoldingNoHint_IsLeft(t *testing.T) {
 	const hint = "verify demo_id first"
 	root := stagePackage(t, "demo", map[string]string{
 		"demo.go":      "package demo\n\nconst notFound = \"" + hint + "\"\n",
@@ -189,6 +185,214 @@ func TestFixHints_ATestFileIsLeftWhenProductionDidNotMove(t *testing.T) {
 	}
 	if body := readStaged(t, root, "demo", "demo_test.go"); !strings.Contains(body, "gitlab_fetch_demo") {
 		t.Errorf("a test moved although no hint did:\n%s", body)
+	}
+}
+
+// TestFixHints_ATestPinningARenderedHint_MovesAfterProductionAlreadyDid holds
+// the shape a formatter's test is written in, and the order the tree was
+// fixed in.
+//
+// A test pins the bullet a hint renders as ("- " + hint + "\n"), or the card
+// around it, and that literal contains the hint rather than being contained in
+// it, which is the only thing the production rule admits. Read as it will be
+// written, it contains the hint exactly when the assertion is about that
+// sentence. The production text here is already canonical, as it is once a
+// first run has moved it, and the test still moves, while a literal that
+// names the same tool beside no hint (an individual tool's description) stays.
+func TestFixHints_ATestPinningARenderedHint_MovesAfterProductionAlreadyDid(t *testing.T) {
+	const hint = "verify demo_id with demo.get first"
+	root := stagePackage(t, "demo", map[string]string{
+		"demo.go": "package demo\n\nconst notFound = \"" + hint + "\"\n",
+		"demo_test.go": "package demo\n\n" +
+			"const wantBullet = \"\\n---\\n- verify demo_id with gitlab_fetch_demo first\\n\"\n\n" +
+			"const wantDescription = \"Get one demo. See also: gitlab_fetch_demo.\"\n\n" +
+			"const wantName = \"gitlab_fetch_demo\"\n",
+	})
+
+	report, err := fixHints(root, []site{fixerSite(hint)}, fixerCatalog(), true)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	body := readStaged(t, root, "demo", "demo_test.go")
+	if !strings.Contains(body, `"\n---\n- verify demo_id with demo.get first\n"`) {
+		t.Errorf("the rendered bullet did not move:\n%s", body)
+	}
+	for _, kept := range []string{"See also: gitlab_fetch_demo.", `wantName = "gitlab_fetch_demo"`} {
+		t.Run(kept, func(t *testing.T) {
+			if !strings.Contains(body, kept) {
+				t.Errorf("a literal holding no hint moved:\n%s", body)
+			}
+		})
+	}
+	if report.Files != 1 || len(report.Fixes) != 1 {
+		t.Errorf("report = %+v, want the one test file and the one name", report)
+	}
+}
+
+// TestFixHints_ATestPinningARenderedHint_MovesInTheRunThatMovesProduction
+// holds the other order: the production text still spells the tool, and one
+// run moves it and the test that pins it.
+//
+// The values the fixer judges a test literal against are the ones the walk
+// folded before anything was rewritten, so they still spell the old name. A
+// test literal read with its tool names rewritten no longer contains a value
+// that spells the old one, and was left pinning a sentence the same run had
+// just moved; the value is read with its tool names rewritten too.
+func TestFixHints_ATestPinningARenderedHint_MovesInTheRunThatMovesProduction(t *testing.T) {
+	const hint = "verify demo_id with gitlab_fetch_demo first"
+	root := stagePackage(t, "demo", map[string]string{
+		"demo.go":      "package demo\n\nconst notFound = \"" + hint + "\"\n",
+		"demo_test.go": "package demo\n\nconst wantBullet = \"\\n---\\n- verify demo_id with gitlab_fetch_demo first\\n\"\n",
+	})
+
+	report, err := fixHints(root, []site{fixerSite(hint)}, fixerCatalog(), true)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	for file, want := range map[string]string{
+		"demo.go":      `"verify demo_id with demo.get first"`,
+		"demo_test.go": `"\n---\n- verify demo_id with demo.get first\n"`,
+	} {
+		t.Run(file, func(t *testing.T) {
+			if body := readStaged(t, root, "demo", file); !strings.Contains(body, want) {
+				t.Errorf("%s did not move:\n%s", file, body)
+			}
+		})
+	}
+	if report.Files != 2 || len(report.Fixes) != 2 {
+		t.Errorf("report = %+v, want the production file and its test, one name each", report)
+	}
+}
+
+// TestFixHints_AOneWordHint_AdmitsNoTestLiteral holds the second half of the
+// sentence test for the pinning rule: a folded value with no space in it is a
+// name rather than a hint, and a literal containing it is not one pinning it.
+func TestFixHints_AOneWordHint_AdmitsNoTestLiteral(t *testing.T) {
+	root := stagePackage(t, "demo", map[string]string{
+		"demo.go":      "package demo\n\nconst tag = \"demo.get\"\n",
+		"demo_test.go": "package demo\n\nconst want = \"use gitlab_fetch_demo for demo.get\"\n",
+	})
+	report, err := fixHints(root, []site{fixerSite("demo.get")}, fixerCatalog(), true)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	if len(report.Fixes) != 0 {
+		t.Errorf("fixes = %+v, want nothing moved by a one-word value", report.Fixes)
+	}
+}
+
+// TestPinsAHint_TheHintMustReadAsASentence holds the pinning rule on its own:
+// a literal holding a whole sentence the walk folded pins it, and one holding
+// a one-word value pins nothing, since that value is contained in every
+// literal that spells it.
+func TestPinsAHint_TheHintMustReadAsASentence(t *testing.T) {
+	if pinsAHint("use demo.get", []string{"demo.get"}) {
+		t.Error("a literal holding a one-word value was read as pinning a hint")
+	}
+	if !pinsAHint("- read it with demo.get\n", []string{"read it with demo.get"}) {
+		t.Error("a bullet holding the whole hint was not read as pinning it")
+	}
+}
+
+// TestFixHints_EveryKindOfServedProse_IsRewritten holds that the fixer takes
+// its values from every kind the served-prose rule judges: an error's message,
+// a format kept verbatim, a next step and a Usage line, each rewritten in the
+// literal it was written as, while the individual tool's Description in the
+// same file keeps the name that is right there.
+func TestFixHints_EveryKindOfServedProse_IsRewritten(t *testing.T) {
+	root := stagePackage(t, "demo", map[string]string{
+		"demo.go": "package demo\n\n" +
+			"var errMissing = errors.New(\"project_id is required. Use gitlab_demo_list to find it\")\n\n" +
+			"func wrap(id int) error { return fmt.Errorf(\"demo %q: read it with gitlab_fetch_demo\", id) }\n\n" +
+			"func end(c *Card) { c.End(\"Use `gitlab_demo_list` to see the others\") }\n\n" +
+			"var usage = \"Use after gitlab_demo_list returns an id.\"\n\n" +
+			"var description = \"Get one demo. See also: gitlab_demo_list.\"\n",
+	})
+	sites := []site{
+		{Package: "demo", File: "demo/demo.go", Line: 3, Kind: kindMessage, Value: "project_id is required. Use gitlab_demo_list to find it", Resolved: true},
+		{Package: "demo", File: "demo/demo.go", Line: 5, Kind: kindMessage, Value: "demo %q: read it with gitlab_fetch_demo", Resolved: true},
+		{Package: "demo", File: "demo/demo.go", Line: 7, Kind: kindNextStep, Value: "Use `gitlab_demo_list` to see the others", Resolved: true},
+		{Package: "demo", File: "demo/demo.go", Line: 9, Kind: kindUsage, Value: "Use after gitlab_demo_list returns an id.", Resolved: true},
+	}
+
+	report, err := fixHints(root, sites, fixerCatalog(), false)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	body := readStaged(t, root, "demo", "demo.go")
+	for _, want := range []string{
+		`"project_id is required. Use demo.list to find it"`,
+		`"demo %q: read it with demo.get"`,
+		"\"Use `demo.list` to see the others\"",
+		`"Use after demo.list returns an id."`,
+		`"Get one demo. See also: gitlab_demo_list."`,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("rewritten file is missing %s:\n%s", want, body)
+			}
+		})
+	}
+	if len(report.Fixes) != 4 {
+		t.Errorf("fixes = %+v, want the four sentences and not the description", report.Fixes)
+	}
+}
+
+// TestRenameTools_OnlyNamesTheCatalogResolves_AreRewritten holds the text a
+// test literal is judged as: every tool the individual surface registers
+// becomes its action's ID, and a name the catalog cannot answer for stays as
+// written, since a guess there would pin a sentence nobody wrote.
+func TestRenameTools_OnlyNamesTheCatalogResolves_AreRewritten(t *testing.T) {
+	if got, want := renameTools("use gitlab_demo, then gitlab_fetch_demo", fixerCatalog()), "use gitlab_demo, then demo.get"; got != want {
+		t.Errorf("renameTools() = %q, want %q", got, want)
+	}
+}
+
+// TestFixHints_DeclaredTokens_AreNeitherRewrittenNorReported holds that the
+// fixer reads the rule's declarations: a template family spelled like a tool
+// and a tool the package's own surface registers are correct where they are,
+// so they are neither rewritten nor sent to the list a reader works through
+// by hand.
+func TestFixHints_DeclaredTokens_AreNeitherRewrittenNorReported(t *testing.T) {
+	const hint = "call gitlab_execute_action with a gitlab_ci_ymls template"
+	const pkg = "internal/tools/dynamic"
+	root := stagePackage(t, pkg, map[string]string{
+		"register.go": "package dynamic\n\nconst refusal = \"" + hint + "\"\n",
+	})
+	at := site{Package: pkg, File: pkg + "/register.go", Line: 1, Kind: kindMessage, Value: hint, Resolved: true}
+
+	report, err := fixHints(root, []site{at}, fixerCatalog(), false)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	if len(report.Fixes) != 0 || len(report.Unresolved) != 0 {
+		t.Errorf("report = %+v, want the declared tokens neither moved nor listed", report)
+	}
+}
+
+// TestFeedsFixer_ServedProseAndUsage_ButNotASchemaTag holds which sites the
+// fixer takes its values from: every kind of served prose, the Usage line the
+// served-prose rule judges too, and not a schema description, whose tag is one
+// literal the fixer never rewrites, nor a published ID.
+func TestFeedsFixer_ServedProseAndUsage_ButNotASchemaTag(t *testing.T) {
+	for kind, want := range map[string]bool{
+		kindErrorHint:         true,
+		kindHintField:         true,
+		kindMessage:           true,
+		kindNextStep:          true,
+		kindParamGuidance:     true,
+		kindUsage:             true,
+		kindSchemaDescription: false,
+		kindDescription:       false,
+		kindRelated:           false,
+		kindHint:              false,
+		kindAssertion:         false,
+	} {
+		t.Run(kind, func(t *testing.T) {
+			if got := feedsFixer(kind); got != want {
+				t.Errorf("feedsFixer(%q) = %t, want %t", kind, got, want)
+			}
+		})
 	}
 }
 

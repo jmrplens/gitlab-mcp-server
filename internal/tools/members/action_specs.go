@@ -100,7 +100,7 @@ var projectIDGuidance = toolutil.ParameterGuidance{
 // across the member get/edit/delete actions.
 var userIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     paramUserID,
-	ValueSource:      "Numeric user ID of the member, from gitlab_list_users or prior member list output.",
+	ValueSource:      "Numeric user ID of the member, from user.list or prior member list output.",
 	ExampleBinding:   "params.user_id:42",
 	CommonConfusions: []string{"Use the global user ID, not a username. Pass username only on the add action."},
 }

@@ -33,17 +33,20 @@ func surfaceSpecRoute() toolutil.ActionRoute {
 // TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata verifies that
 // every field of a surface tool spec reaches the ActionSpec it projects to:
 // the action name, the individual tool's name, title and description, the
-// description again as the usage, the aliases, tags, related actions,
-// compatibility policy and owner, with both route schemas in place.
+// usage, the aliases, tags, related actions, compatibility policy and owner,
+// with both route schemas in place.
 //
 // Each field holds a value no other field holds, so a projection reading a
-// neighbor is seen; the description is the one value that lands twice, as
-// the usage and as the individual tool's description, and both are held.
+// neighbor is seen. The usage is the case that needs it: it was the
+// description projected a second time, which put a standalone tool's
+// description on every surface as its Usage while cmd/audit_action_ids read
+// the Usage line it was written as and never the description served.
 func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	spec := SurfaceToolSpec{
 		Name:          "gitlab_test_surface",
 		Title:         "Test Surface",
 		Description:   "Test surface utility.",
+		Usage:         "Use the test surface.",
 		GroupToolName: "gitlab_test",
 		BaseDomain:    "test",
 		ActionName:    "surface",
@@ -76,8 +79,8 @@ func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	if actionSpec.IndividualTool != wantTool {
 		t.Errorf("ActionSpec().IndividualTool = %+v, want %+v", actionSpec.IndividualTool, wantTool)
 	}
-	if actionSpec.Usage != "Test surface utility." {
-		t.Errorf("ActionSpec().Usage = %q, want the description", actionSpec.Usage)
+	if actionSpec.Usage != "Use the test surface." {
+		t.Errorf("ActionSpec().Usage = %q, want the spec's own usage", actionSpec.Usage)
 	}
 	if !slices.Equal(actionSpec.Aliases, []string{"surface_alias"}) {
 		t.Errorf("ActionSpec().Aliases = %v, want [surface_alias]", actionSpec.Aliases)
@@ -148,11 +151,11 @@ func TestSurfaceToolSpec_ActionSpec_ProjectsEachFlagOnItsOwn(t *testing.T) {
 }
 
 // TestCloneSurfaceToolSpec_TrimsEveryNameAndOwnsEverySlice verifies that the
-// defensive copy trims each of the ten string fields, drops blank and
+// defensive copy trims each of the eleven string fields, drops blank and
 // repeated entries from each string list, and copies the icons and the
 // compatibility policy so an edit to the original reaches none of them.
 //
-// Ten trims and five copies are fifteen plain statements no gate reports
+// Eleven trims and five copies are sixteen plain statements no gate reports
 // on, and a field the copy forgets is one Validate judges untrimmed.
 func TestCloneSurfaceToolSpec_TrimsEveryNameAndOwnsEverySlice(t *testing.T) {
 	icons := []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
@@ -161,6 +164,7 @@ func TestCloneSurfaceToolSpec_TrimsEveryNameAndOwnsEverySlice(t *testing.T) {
 		Name:                   " name ",
 		Title:                  " title ",
 		Description:            " description ",
+		Usage:                  " usage ",
 		GroupDescription:       " group description ",
 		GroupToolName:          " group tool ",
 		BaseDomain:             " domain ",
@@ -186,6 +190,7 @@ func TestCloneSurfaceToolSpec_TrimsEveryNameAndOwnsEverySlice(t *testing.T) {
 		Name:                   "name",
 		Title:                  "title",
 		Description:            "description",
+		Usage:                  "usage",
 		GroupDescription:       "group description",
 		GroupToolName:          "group tool",
 		BaseDomain:             "domain",

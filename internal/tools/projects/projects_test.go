@@ -548,8 +548,8 @@ func TestProjectDelete_AlreadyMarked(t *testing.T) {
 	if !strings.Contains(out.Message, "permanently_remove=true") {
 		t.Error("Delete() Message should suggest permanently_remove=true")
 	}
-	if !strings.Contains(out.Message, "gitlab_project_restore") {
-		t.Error("Delete() Message should suggest gitlab_project_restore")
+	if !strings.Contains(out.Message, "project.restore") {
+		t.Error("Delete() Message should suggest project.restore")
 	}
 }
 

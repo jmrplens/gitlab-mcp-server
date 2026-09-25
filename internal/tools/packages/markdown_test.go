@@ -28,12 +28,12 @@ const (
 		"- Use action 'file_list' to see all files in this package\n" +
 		"- Use action 'list' to browse other packages in the project\n"
 	publishAndLinkHints = "\n---\n💡 **Next steps:**\n" +
-		"- Repeat for more files, or use 'publish_directory' to batch-upload a directory\n" +
-		"- Use gitlab_release action 'get' to verify the release links\n"
+		"- Use action 'package.publish_directory' to batch-upload a directory instead of repeating this for each file\n" +
+		"- Use action 'release.get' to verify the release links\n"
 	publishDirHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use 'publish_and_link' to also create release asset links for each file\n" +
-		"- Use gitlab_release to create/manage releases and link these packages\n" +
-		"- Use action 'list' to verify the uploaded packages\n"
+		"- Use action 'package.publish_and_link' to also create a release asset link for each file\n" +
+		"- Use action 'release.link_create_batch' to link these packages to a release\n" +
+		"- Use action 'package.list' to verify the uploaded packages\n"
 	listHints = "\n---\n💡 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'file_list' with a package_id to see individual files\n" +

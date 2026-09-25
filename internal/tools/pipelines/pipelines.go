@@ -126,7 +126,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("pipelineList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("pipelineList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := buildListOpts(input)
@@ -240,7 +240,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 		return DetailOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DetailOutput{}, errors.New("pipelineGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DetailOutput{}, errors.New("pipelineGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.PipelineID <= 0 {
 		return DetailOutput{}, toolutil.ErrRequiredInt64("pipelineGet", "pipeline_id")
@@ -318,7 +318,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input ActionInput)
 		return DetailOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DetailOutput{}, errors.New("pipelineCancel: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DetailOutput{}, errors.New("pipelineCancel: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.PipelineID <= 0 {
 		return DetailOutput{}, toolutil.ErrRequiredInt64("pipelineCancel", "pipeline_id")
@@ -342,7 +342,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return DetailOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return DetailOutput{}, errors.New("pipelineRetry: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DetailOutput{}, errors.New("pipelineRetry: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.PipelineID <= 0 {
 		return DetailOutput{}, toolutil.ErrRequiredInt64("pipelineRetry", "pipeline_id")
@@ -372,7 +372,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("pipelineDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("pipelineDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.PipelineID <= 0 {
 		return toolutil.ErrRequiredInt64("pipelineDelete", "pipeline_id")

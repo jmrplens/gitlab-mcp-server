@@ -12,7 +12,7 @@ import (
 func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(
 		appearanceCard("Application Appearance", out.Appearance,
-			"Use `gitlab_update_appearance` to modify appearance settings"),
+			"Use `admin.appearance_update` to modify appearance settings"),
 	)
 }
 
@@ -24,7 +24,7 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(
 		appearanceCard("Application Appearance Updated", out.Appearance,
-			"Use `gitlab_get_appearance` to read the settings back"),
+			"Use `admin.appearance_get` to read the settings back"),
 	)
 }
 

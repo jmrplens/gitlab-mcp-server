@@ -77,7 +77,7 @@ func applyProtectedPackageDiscovery(options *toolutil.ActionSpecOptions, individ
 		options.RelatedActions = []string{actionPackageProtectionRuleList, "package.protection_rule_update", "package.protection_rule_delete"}
 		options.IndividualTool.Description = "Create a package protection rule for a project. Returns: the new rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: gitlab_list_package_protection_rules, gitlab_update_package_protection_rule, gitlab_delete_package_protection_rule."
 	case "gitlab_update_package_protection_rule":
-		options.Usage = "Update an existing package protection rule by its id. Use to change the package name pattern, package type, or the minimum push/delete access levels of a rule located via gitlab_list_package_protection_rules."
+		options.Usage = "Update an existing package protection rule by its id. Use to change the package name pattern, package type, or the minimum push/delete access levels of a rule located via package.protection_rule_list."
 		options.Aliases = []string{"update package protection rule", "change package push access levels", "edit package protection rule"}
 		options.RelatedActions = []string{actionPackageProtectionRuleList, actionPackageProtectionRuleCreate, "package.protection_rule_delete"}
 		options.IndividualTool.Description = "Update an existing package protection rule by its id. Returns: the updated rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: gitlab_list_package_protection_rules, gitlab_create_package_protection_rule, gitlab_delete_package_protection_rule."

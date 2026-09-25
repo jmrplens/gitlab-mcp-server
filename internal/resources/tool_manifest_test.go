@@ -427,16 +427,20 @@ func TestActionTitle_NeedsBothNamesOrADeclaredOne(t *testing.T) {
 	}
 }
 
-// TestSeeAlsoIndex_SkipsActionsWithNoIndividualToolName verifies that an
-// action projecting no individual tool is left out of the index rather than
-// stored under the empty name, and that a resolver built on that index says
+// TestSeeAlsoIndex_HoldsBothNamespacesAndNeverTheEmptyName verifies that the
+// index holds every action under its canonical ID and, where it projects an
+// individual tool, under that tool's name as well, and never under the empty
+// name; and that a resolver built on it answers either spelling and says
 // "unknown" for a name it does not hold.
 //
-// Both halves are about the same failure: "See also: " clauses are addressed
-// in individual-tool names, so an action indexed under "" would be the answer
-// to every reference this surface cannot resolve, and the clause it rewrote
-// would point a model at an action it was never asked about.
-func TestSeeAlsoIndex_SkipsActionsWithNoIndividualToolName(t *testing.T) {
+// The empty name is the failure the first half is about: an action indexed
+// under "" would be the answer to every reference this surface cannot
+// resolve, and the clause it rewrote would point a model at an action it was
+// never asked about. The canonical ID is the other namespace a clause is
+// written in: a standalone surface tool's description reaches every surface
+// verbatim, so its clause names IDs, and an index of tool names alone dropped
+// every one of them from the dynamic and meta manifests.
+func TestSeeAlsoIndex_HoldsBothNamespacesAndNeverTheEmptyName(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
 	group.SetAction(actioncatalog.Action{
@@ -452,16 +456,29 @@ func TestSeeAlsoIndex_SkipsActionsWithNoIndividualToolName(t *testing.T) {
 	if _, indexed := index[""]; indexed {
 		t.Error("newSeeAlsoIndex indexed an action under the empty name; every unresolvable reference would resolve to it")
 	}
-	if len(index) != 1 {
-		t.Errorf("newSeeAlsoIndex() holds %d entries, want only the action that projects an individual tool", len(index))
+	keys := slices.Sorted(maps.Keys(index))
+	if want := []string{"gitlab_widget_create", "widget.create", "widget.delete"}; !slices.Equal(keys, want) {
+		t.Errorf("newSeeAlsoIndex() keys = %v, want %v: every canonical ID, and the individual tool name where one is projected", keys, want)
 	}
 
-	resolve := metaSeeAlso(index, map[string]toolutil.ActionMap{"gitlab_widget": {"create": {}}})
-	if id, ok := resolve("gitlab_widget_create"); !ok || id != "gitlab_widget.create" {
-		t.Errorf("metaSeeAlso(known name) = (%q, %v), want (gitlab_widget.create, true)", id, ok)
+	meta := metaSeeAlso(index, map[string]toolutil.ActionMap{"gitlab_widget": {"create": {}}})
+	for _, name := range []string{"gitlab_widget_create", "widget.create"} {
+		t.Run(name, func(t *testing.T) {
+			if id, ok := meta(name); !ok || id != "gitlab_widget.create" {
+				t.Errorf("metaSeeAlso(%q) = (%q, %v), want (gitlab_widget.create, true)", name, id, ok)
+			}
+		})
 	}
-	if id, ok := resolve("gitlab_widget_delete"); ok {
+	if id, ok := meta("gitlab_widget_delete"); ok {
 		t.Errorf("metaSeeAlso(name the index does not hold) = (%q, true), want unresolved", id)
+	}
+	if id, ok := meta("widget.delete"); ok {
+		t.Errorf("metaSeeAlso(ID of a route the surface hides) = (%q, true), want unresolved", id)
+	}
+
+	dynamic := dynamicSeeAlso(index)
+	if id, ok := dynamic("widget.delete"); !ok || id != "widget.delete" {
+		t.Errorf("dynamicSeeAlso(widget.delete) = (%q, %v), want (widget.delete, true)", id, ok)
 	}
 }
 
@@ -1131,13 +1148,15 @@ func TestToolManifest_SeeAlsoReferencesResolve_OnEverySurface(t *testing.T) {
 	}
 
 	// The individual surface has no snapshot projection to check (its
-	// descriptions pass through untouched), but its namespace is where the
-	// clauses are written — so every referenced name must be a real
-	// individual tool. This is the leg that catches stale hand-written
-	// names at their source.
+	// descriptions pass through untouched), but its namespace is where a
+	// domain action's clause is written, so every referenced name must be a
+	// real individual tool or, for a standalone surface tool whose clause is
+	// served on every surface verbatim, a canonical action ID. This is the
+	// leg that catches stale hand-written names at their source.
 	t.Run(toolSurfaceIndividual, func(t *testing.T) {
 		valid := make(map[string]bool)
 		for _, action := range catalog.Actions() {
+			valid[string(action.ID)] = true
 			if action.IndividualTool.Name != "" {
 				valid[action.IndividualTool.Name] = true
 			}
@@ -1146,11 +1165,72 @@ func TestToolManifest_SeeAlsoReferencesResolve_OnEverySurface(t *testing.T) {
 			assertSeeAlsoFormat(t, string(action.ID), action.IndividualTool.Description)
 			for _, name := range seeAlsoNames(action.IndividualTool.Description) {
 				if !valid[name] {
-					t.Errorf("action %s references %q in its See-also clause, but no individual tool has that name — fix the spec", action.ID, name)
+					t.Errorf("action %s references %q in its See-also clause, but no individual tool or action has that name: fix the spec", action.ID, name)
 				}
 			}
 		}
 	})
+}
+
+// TestToolManifest_StandaloneSeeAlso_IsProjectedOntoEachSurface holds the
+// clause a standalone surface tool writes in canonical IDs to the projection
+// a domain action's clause gets: the dynamic manifest keeps the IDs, which
+// are what gitlab_execute_action takes, and the meta manifest rewrites each
+// to the entry its tool and action are invoked by.
+//
+// The drift guard above cannot see this half. It checks that every name an
+// emitted clause spells resolves, and an index that knew only tool names
+// answered a flow's IDs by dropping its clause whole, which left nothing for
+// that guard to refuse.
+func TestToolManifest_StandaloneSeeAlso_IsProjectedOntoEachSurface(t *testing.T) {
+	catalog := fullSurfaceCatalog(t)
+	dynamic := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+		Surface: toolSurfaceDynamic,
+		Tools: []*mcp.Tool{
+			{Name: "gitlab_execute_action", Title: "Execute"},
+			{Name: "gitlab_find_action", Title: "Find"},
+		},
+		Catalog: catalog,
+	})
+	meta := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+		Surface:    toolSurfaceMeta,
+		Catalog:    catalog,
+		MetaRoutes: catalog.ActionMaps(),
+	})
+
+	tests := []struct {
+		name     string
+		snapshot toolSurfaceSnapshot
+		id       string
+		want     string
+	}{
+		{name: "dynamic flow", snapshot: dynamic, id: "interactive.issue_create", want: "See also: issue.create, issue.get."},
+		{name: "meta flow", snapshot: meta, id: "gitlab_interactive.issue_create", want: "See also: gitlab_issue.create, gitlab_issue.get."},
+		{name: "dynamic discovery", snapshot: dynamic, id: "discover_project.resolve", want: "See also: project.get, server.status, search.projects."},
+		{name: "meta discovery", snapshot: meta, id: "gitlab_discover_project.resolve", want: "See also: gitlab_project.get, gitlab_server.status, gitlab_search.projects."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, entry := range tt.snapshot.manifest.Entries {
+				if entry.ID != tt.id {
+					continue
+				}
+				if !strings.HasSuffix(entry.Description, tt.want) {
+					t.Errorf("entry %s description ends %q, want it to end %q", tt.id, tail(entry.Description, len(tt.want)), tt.want)
+				}
+				return
+			}
+			t.Errorf("manifest has no entry %s", tt.id)
+		})
+	}
+}
+
+// tail is the last n bytes of a text, or all of it when it is shorter.
+func tail(text string, n int) string {
+	if len(text) <= n {
+		return text
+	}
+	return text[len(text)-n:]
 }
 
 // withoutRoute returns routes with one tool's action map removed,

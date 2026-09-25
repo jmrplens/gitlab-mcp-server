@@ -77,7 +77,7 @@ func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, i
 	// legitimately zero even though the upload succeeded.
 	if out.ID == 0 && out.AvatarURL != "" {
 		out.NextSteps = []string{
-			"The avatar was updated; GitLab 19 returns only avatar_url for this endpoint. Use gitlab_user_current to fetch the caller's full profile",
+			"The avatar was updated; GitLab 19 returns only avatar_url for this endpoint. Use user.current to fetch the caller's full profile",
 		}
 	}
 	return out, nil

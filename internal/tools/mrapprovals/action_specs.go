@@ -125,7 +125,7 @@ var mrIIDGuidance = toolutil.ParameterGuidance{
 // argument carried by the rule update and delete actions.
 var ruleIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     "approval_rule_id",
-	ValueSource:      "Approval rule ID from a prior gitlab_mr_approval_rules listing.",
+	ValueSource:      "Approval rule ID from a prior merge_request.approval_rules listing.",
 	ExampleBinding:   "params.approval_rule_id:5",
 	CommonConfusions: []string{"This is the MR-level approval rule ID, not the project-level approval rule ID or the merge request IID."},
 }
@@ -208,7 +208,7 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_delete.",
 	},
 	"gitlab_mr_approval_rule_delete": {
-		Usage:   "Delete an approval rule from a merge request. Destructive and irreversible. Confirm the approval_rule_id with gitlab_mr_approval_rules before calling.",
+		Usage:   "Delete an approval rule from a merge request. Destructive and irreversible. Confirm the approval_rule_id with merge_request.approval_rules before calling.",
 		Aliases: []string{"delete mr approval rule", "remove merge request approval rule", "destroy mr approval rule", "drop merge request approval rule"},
 		Related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleCreate},
 		Guidance: map[string]toolutil.ParameterGuidance{

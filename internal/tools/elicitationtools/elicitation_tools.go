@@ -84,10 +84,12 @@ func CancelledResult(message string) *mcp.CallToolResult {
 // description names. The refused flow used to be named by its tool alone,
 // which the default surface does not register, so it now leads with the ID and
 // gives the tool only as the name the other two surfaces call it by.
-// toolutil.ErrorResult is not one of the error helpers cmd/audit_action_ids
-// reads, so no source gate holds this sentence to the catalog: a test of the
-// catalog in internal/tools holds every flow's two IDs to actions it serves,
-// and the e2e scenario that quotes both holds the served text.
+// cmd/audit_action_ids reads toolutil.ErrorResult's message, but this one is
+// a format whose three values are this function's parameters, which that rule
+// passes over as values the sentence reports: the tool name is one of them on
+// purpose. So no source gate holds the IDs to the catalog here either: a test
+// of the catalog in internal/tools holds every flow's two IDs to actions it
+// serves, and the e2e scenario that quotes both holds the served text.
 func UnsupportedResult(actionID, toolName, alternative string) *mcp.CallToolResult {
 	return toolutil.ErrorResult(fmt.Sprintf(
 		"The %s action (the %s tool on the meta and individual surfaces) requires the MCP elicitation capability. "+

@@ -414,7 +414,7 @@ func TestLockAndUnlock_EachReportsItsOwnOutcome(t *testing.T) {
 
 // listHints is the guidance a Terraform state list closes with.
 const listHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use `gitlab_get_terraform_state` to view details of a specific state\n"
+	"- Use `admin.terraform_state_get` to view details of a specific state\n"
 
 // TestFormatListMarkdown verifies FormatListMarkdown renders the whole table:
 // a heading counting the states, one row each, and a state nothing has
@@ -485,8 +485,8 @@ func TestDeleteVersion_NotFound_HintsTheSerialAndTheWholeStateAlternative(t *tes
 // whole reason the sentence was rewritten, with every test still green.
 const (
 	wantLockHint = "Locking a state needs the terraform CLI against the GitLab HTTP backend: " +
-		"`gitlab_lock_terraform_state` sends no lock-info body, which GitLab refuses"
-	wantUnlockHint = "Use `gitlab_unlock_terraform_state` to clear a stale lock"
+		"`admin.terraform_state_lock` sends no lock-info body, which GitLab refuses"
+	wantUnlockHint = "Use `admin.terraform_state_unlock` to clear a stale lock"
 )
 
 // stateHints is the guidance a Terraform state card closes with: what
@@ -494,7 +494,7 @@ const (
 const stateHints = "\n---\n💡 **Next steps:**\n" +
 	"- " + wantLockHint + "\n" +
 	"- " + wantUnlockHint + "\n" +
-	"- Use `gitlab_delete_terraform_state` to remove it\n"
+	"- Use `admin.terraform_state_delete` to remove it\n"
 
 // TestFormatStateMarkdown_Coverage verifies FormatStateMarkdown renders the
 // whole card for a written state, and that the guidance no longer sends a

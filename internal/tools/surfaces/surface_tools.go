@@ -207,7 +207,11 @@ func surfaceToolSpecsFromActions(opts surfaceToolGroupOptions, specs []toolutil.
 			// group's from the first action's, which is what happened until
 			// GroupDescription existed, made a dispatcher introduce itself as
 			// whichever action was registered first.
-			Description:            spec.IndividualTool.Description,
+			Description: spec.IndividualTool.Description,
+			// The Usage is carried as the Usage. A standalone action writes
+			// its text as both, since the one text is served on every surface
+			// and the Usage is where cmd/audit_action_ids judges it.
+			Usage:                  spec.Usage,
 			GroupDescription:       opts.Description,
 			GroupToolName:          opts.GroupToolName,
 			BaseDomain:             opts.BaseDomain,

@@ -89,7 +89,7 @@ func mrScopeGuidance() map[string]toolutil.ParameterGuidance {
 // discussionIDGuidance returns the parameter guidance for the discussion_id
 // parameter used by discussion-scoped actions.
 func discussionIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior gitlab_mr_discussion_list response.")
+	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior mr_review.discussion_list response.")
 }
 
 // noteIDGuidance returns the parameter guidance for the note_id parameter used
@@ -116,7 +116,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get. Omit for a general discussion.",
+			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","new_path":"main.go","new_line":12}`,
 			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line."},
 		}
@@ -143,14 +143,14 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.IndividualTool.Description = "List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_notes_list."
 	case "gitlab_mr_discussion_get":
-		options.Usage = "Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after gitlab_mr_discussion_list when the target thread is already known."
+		options.Usage = "Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after mr_review.discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_mr_discussion_get", "get merge request discussion", "show MR discussion thread", "fetch merge request discussion"}
 		options.RelatedActions = []string{actionDiscussionList, actionDiscussionReply, actionDiscussionResolve}
 		options.ParameterGuidance = mrScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.IndividualTool.Description = "Get a single merge request discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state, diff position). See also: gitlab_mr_discussion_list, gitlab_mr_discussion_reply, gitlab_mr_discussion_resolve."
 	case "gitlab_mr_discussion_reply":
-		options.Usage = "Reply to an existing merge request discussion thread by adding a note. Use this after gitlab_mr_discussion_list or gitlab_mr_discussion_create to continue a thread. Supports backdating via created_at for admins/owners."
+		options.Usage = "Reply to an existing merge request discussion thread by adding a note. Use this after mr_review.discussion_list or mr_review.discussion_create to continue a thread. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_mr_discussion_reply", "reply to merge request discussion", "add note to MR discussion", "comment on merge request thread"}
 		options.RelatedActions = []string{actionDiscussionCreate, actionDiscussionGet, actionDiscussionNoteUpdate, actionDiscussionResolve}
 		options.ParameterGuidance = mrScopeGuidance()

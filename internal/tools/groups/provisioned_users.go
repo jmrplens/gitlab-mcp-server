@@ -285,7 +285,7 @@ func ListProvisionedUsers(ctx context.Context, client *gitlabclient.Client, inpu
 		return ProvisionedUsersListOutput{}, err
 	}
 	if input.GroupID == "" {
-		return ProvisionedUsersListOutput{}, errors.New("ListProvisionedUsers: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return ProvisionedUsersListOutput{}, errors.New("ListProvisionedUsers: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
 	opts, err := provisionedUsersOptions(input)

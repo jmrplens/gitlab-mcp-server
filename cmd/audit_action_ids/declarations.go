@@ -53,9 +53,14 @@ var proseNonDomains = map[string]string{
 //
 // It stays a table of two because a run also refuses an entry that no longer
 // resolves as an alias: if the spelling is retired, or promoted to a canonical
-// ID of its own, the entry excuses nothing and is reported stale.
+// ID of its own, the entry excuses nothing and is reported stale. Whether one
+// is used is decided by the Usage lines and by the schema descriptions of
+// internal/tools/dynamic, the two places the reasons below name; a schema
+// description anywhere else may not name one at all. The suite's quotations
+// consult the table without keeping an entry alive, since what they quote is
+// the served source the entries are written about.
 var declaredAliasMentions = map[string]string{
-	"issue.close":  "the gitlab_issue_update Usage line, which exists to tell a model that dynamic execute accepts this spelling and fills state_event from it",
+	"issue.close":  "the gitlab_issue_update Usage line, which exists to tell a model that dynamic execute accepts this spelling and fills state_event from it; dynamic execute's own action description names it as its example of an alias for the same reason",
 	"issue.reopen": "the other half of that same sentence",
 }
 
@@ -79,17 +84,72 @@ func exemptHintTool(token string) bool {
 	return declared
 }
 
+// surfaceMention is one tool name one package's served prose may spell.
+type surfaceMention struct {
+	pkg  string
+	tool string
+}
+
+// declaredSurfaceToolMentions are the tool names a package's served prose may
+// spell, because every sentence that package writes is served by the one
+// surface that registers the tool, each with the reason.
+//
+// The served-prose rule refuses a tool name because it is right for one
+// surface of three, and that premise fails for exactly one package:
+// internal/tools/dynamic is the dynamic surface. Its two tools are registered
+// only there, and everything it writes (a refusal of an over-long query, the
+// unknown-action answer, the description of a result field) is text one of
+// those two tools returns, so telling a model to call the other is the one
+// portable instruction it has. The canonical ID is no substitute: it names an
+// action, and these sentences name the tool an action is passed to.
+//
+// It is keyed by package rather than added to [hintToolExemptions] because
+// the same token anywhere else is the defect the rule exists for: a meta or
+// individual sentence naming gitlab_execute_action names a tool that surface
+// does not register. A run over the whole tree reports an entry that excused
+// nothing, and the gate fails on it, as on every declaration table here.
+var declaredSurfaceToolMentions = map[surfaceMention]string{
+	{pkg: dynamicPackage, tool: "gitlab_find_action"}:    "the dynamic surface's search tool, named in the text that surface's two tools return",
+	{pkg: dynamicPackage, tool: "gitlab_execute_action"}: "the dynamic surface's execute tool, named in the text that surface's two tools return",
+}
+
+// dynamicPackage is the one package that is a surface of its own, so the
+// served-prose declarations scoped to a package are scoped to it.
+const dynamicPackage = "internal/tools/dynamic"
+
+// exemptSurfaceMention reports whether a tool name is declared correct in the
+// served prose of the package that spells it.
+func exemptSurfaceMention(mention surfaceMention) bool {
+	_, declared := declaredSurfaceToolMentions[mention]
+	return declared
+}
+
 // staleHintDeclarations names the entries of [hintToolExemptions] that excused
 // nothing this run.
 //
-// It is reported rather than gated, like everything else the hint rule says:
-// the rule it belongs to reports, and a stale entry there cannot be worth more
-// than the findings around it.
+// It fails the gate, on the terms every declaration table here is held to: a
+// declaration that has stopped describing the tree is one a reader would
+// otherwise trust. It was reported and not gated while the rule it belongs to
+// was staged, and kept that way when the rule began gating, which left it the
+// one table here whose staleness passed.
 func staleHintDeclarations(used map[string]struct{}) []string {
 	var stale []string
 	for token := range hintToolExemptions {
 		if _, wasUsed := used[token]; !wasUsed {
-			stale = append(stale, token+" is no longer spelled in any hint (hintToolExemptions)")
+			stale = append(stale, token+" is no longer spelled in any served prose (hintToolExemptions)")
+		}
+	}
+	sort.Strings(stale)
+	return stale
+}
+
+// staleSurfaceMentions names the entries of [declaredSurfaceToolMentions]
+// that excused nothing this run, on the terms of [staleHintDeclarations].
+func staleSurfaceMentions(used map[surfaceMention]struct{}) []string {
+	var stale []string
+	for mention := range declaredSurfaceToolMentions {
+		if _, wasUsed := used[mention]; !wasUsed {
+			stale = append(stale, mention.tool+" is no longer spelled in the served prose of "+mention.pkg+" (declaredSurfaceToolMentions)")
 		}
 	}
 	sort.Strings(stale)

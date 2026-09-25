@@ -132,7 +132,7 @@ var mrIIDGuidance = toolutil.ParameterGuidance{
 // noteIDGuidance is the shared parameter guidance for note_id.
 var noteIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     "draft_note_id",
-	ValueSource:      "Draft note ID from a prior gitlab_mr_draft_note_list response.",
+	ValueSource:      "Draft note ID from a prior mr_review.draft_note_list response.",
 	ExampleBinding:   "params.note_id:10",
 	CommonConfusions: []string{"Draft notes are author-private until published. List them first to obtain a valid note_id."},
 }
@@ -219,7 +219,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_publish_all, gitlab_mr_draft_note_list.",
 	},
 	"gitlab_mr_draft_note_publish_all": {
-		Usage:   "Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone. Review with gitlab_mr_draft_note_list first.",
+		Usage:   "Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone. Review with mr_review.draft_note_list first.",
 		Aliases: []string{"publish all draft notes", "submit mr review", "post all pending comments", "finish mr review"},
 		Related: []string{actionDraftNoteList, actionDraftNotePublish},
 		Guidance: map[string]toolutil.ParameterGuidance{

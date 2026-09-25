@@ -217,9 +217,9 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 		guidance: map[string]toolutil.ParameterGuidance{
 			"member_role_id": {
 				SemanticRole:     "member_role_id",
-				ValueSource:      "Numeric ID of the instance member role to delete, usually from gitlab_list_instance_member_roles output.",
+				ValueSource:      "Numeric ID of the instance member role to delete, usually from member_role.list_instance output.",
 				ExampleBinding:   "params.member_role_id:42",
-				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_instance_member_roles first."},
+				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID. Verify it with member_role.list_instance first."},
 			},
 		},
 		description: "Delete an instance-level custom member role. Returns: a success confirmation naming the deleted role. See also: gitlab_list_instance_member_roles, gitlab_create_instance_member_role.",
@@ -237,9 +237,9 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 			},
 			"member_role_id": {
 				SemanticRole:     "member_role_id",
-				ValueSource:      "Numeric ID of the group member role to delete, usually from gitlab_list_group_member_roles output.",
+				ValueSource:      "Numeric ID of the group member role to delete, usually from member_role.list_group output.",
 				ExampleBinding:   "params.member_role_id:42",
-				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_group_member_roles first."},
+				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID. Verify it with member_role.list_group first."},
 			},
 		},
 		description: "Delete a group-level custom member role. Returns: a success confirmation naming the deleted role and group. See also: gitlab_list_group_member_roles, gitlab_create_group_member_role.",

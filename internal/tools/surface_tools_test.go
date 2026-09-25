@@ -64,10 +64,11 @@ var refusalActionID = regexp.MustCompile(`\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b`)
 // packages but never sees the IDs they are aggregated under, since the domain
 // half is added here, and never sees the one the flows themselves are
 // aggregated under either, since internal/tools/surfaces adds that. No source
-// gate reads the sentence: it is rendered through toolutil.ErrorResult, which
-// is not one of the error helpers cmd/audit_action_ids reads, and the e2e
-// scenario quotes only the issue flow's. This is where all four meet the
-// catalog. The flow's ID is held to the one the standalone assembly gives the
+// gate holds the IDs in the sentence: cmd/audit_action_ids reads the message
+// toolutil.ErrorResult is handed, but the refusal is a format whose IDs are
+// parameters of it, which that rule passes over as values the sentence
+// reports, and the e2e scenario quotes only the issue flow's. This is where
+// all four meet the catalog. The flow's ID is held to the one the standalone assembly gives the
 // spec that was driven, not merely to some served ID, because a refusal naming
 // a sibling flow would read as served and be wrong. The flows are driven with
 // no request on the context, which is a client without elicitation, so each

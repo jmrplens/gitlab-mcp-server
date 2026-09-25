@@ -47,7 +47,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 
 	switch individualTool {
 	case "gitlab_group_saml_link_list":
-		options.Usage = "List the SAML group links configured on a group (Premium/Ultimate). Use to see which SAML group names map to access levels. To list the actual users provisioned through SAML SSO, use gitlab_group_saml_users_list instead."
+		options.Usage = "List the SAML group links configured on a group (Premium/Ultimate). Use to see which SAML group names map to access levels. To list the actual users provisioned through SAML SSO, use group.saml_users_list instead."
 		options.Aliases = []string{"list saml links", "show group saml links", "saml group mappings"}
 		options.RelatedActions = []string{actionGroupGet, actionGroupSAMLLinkAdd, actionGroupSAMLUsersList}
 		options.IndividualTool.Description = "List a GitLab group's SAML group links. Returns: each link's SAML group name, access level, and provider. See also: gitlab_group_saml_users_list, gitlab_group_saml_link_add, gitlab_group_get."
@@ -60,7 +60,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group numeric ID or full path with SAML SSO configured.",
 				ExampleBinding:   `params.group_id:"my-org"`,
-				CommonConfusions: []string{"Only top-level groups with SAML SSO have SAML users. Subgroups return nothing.", "This lists users, not the SAML group links. Use gitlab_group_saml_link_list for the link mappings."},
+				CommonConfusions: []string{"Only top-level groups with SAML SSO have SAML users. Subgroups return nothing.", "This lists users, not the SAML group links. Use group.saml_link_list for the link mappings."},
 			},
 			"username": {
 				ValueSource:    "Exact username to filter to a single SAML user.",

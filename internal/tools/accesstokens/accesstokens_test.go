@@ -697,8 +697,8 @@ func TestPersonalRevoke_Validation(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // tokenCardHints is the guidance section every access-token card ends with.
-const tokenCardHints = "- Use `gitlab_project_access_token_revoke`, `gitlab_group_access_token_revoke`, or `gitlab_personal_access_token_revoke` to revoke this token from the matching scope\n" +
-	"- Use `gitlab_project_access_token_rotate`, `gitlab_group_access_token_rotate`, or `gitlab_personal_access_token_rotate` to rotate this token from the matching scope\n"
+const tokenCardHints = "- Use `access.token_project_revoke`, `access.token_group_revoke`, or `access.token_personal_revoke` to revoke this token from the matching scope\n" +
+	"- Use `access.token_project_rotate`, `access.token_group_rotate`, or `access.token_personal_rotate` to rotate this token from the matching scope\n"
 
 // tokenListHints is the guidance section every access-token list ends with.
 // The table carries no link, so the preserve-links reminder is not written.

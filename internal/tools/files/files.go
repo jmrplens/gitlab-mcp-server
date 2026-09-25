@@ -58,7 +58,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("fileGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("fileGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
 	opts := &gl.GetFileOptions{}
@@ -654,7 +654,7 @@ type RawMetaDataInput struct {
 // (HEAD request). Returns the same metadata as GetFileMetaData but uses
 // a different API endpoint. Useful for checking file existence efficiently.
 func GetRawFileMetaData(ctx context.Context, client *gitlabclient.Client, input RawMetaDataInput) (MetaDataOutput, error) {
-	return getFileMetadata(ctx, input.ProjectID, input.FilePath, input.Ref, "fileGetRawMetaData", "fileGetRawMetaData: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+	return getFileMetadata(ctx, input.ProjectID, input.FilePath, input.Ref, "fileGetRawMetaData", "fileGetRawMetaData: project_id is required. Use project.list to find the ID first, then pass it as project_id",
 		func(projectID, filePath, ref string) (*gl.File, error) {
 			opts := &gl.GetRawFileOptions{}
 			if ref != "" {

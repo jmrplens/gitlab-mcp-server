@@ -43,7 +43,7 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		return WaitOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return WaitOutput{}, errors.New("pipelineWait: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return WaitOutput{}, errors.New("pipelineWait: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.PipelineID <= 0 {
 		return WaitOutput{}, toolutil.ErrRequiredInt64("pipelineWait", "pipeline_id")

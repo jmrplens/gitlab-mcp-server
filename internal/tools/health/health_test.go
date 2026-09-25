@@ -429,8 +429,8 @@ func decodeOutputAsJSON(t *testing.T, out Output) map[string]any {
 
 // healthHints is the guidance section every health card ends with.
 const healthHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use gitlab_project action 'list' to explore available projects\n" +
-	"- Use gitlab_user action 'me' to see current user details\n"
+	"- Use action 'project.list' to explore available projects\n" +
+	"- Use action 'user.me' to see current user details\n"
 
 // TestFormatMarkdownString_Healthy verifies the whole card a reachable,
 // authenticated instance renders as: every field the check filled, the flag as

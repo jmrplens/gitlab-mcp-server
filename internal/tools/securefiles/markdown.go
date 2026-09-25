@@ -40,7 +40,7 @@ func FormatListMarkdown(out ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&sb, out.Pagination, false,
-		"Use `gitlab_show_secure_file` to view details of a specific file")
+		"Use `admin.secure_file_get` to view details of a specific file")
 	return sb.String()
 }
 
@@ -70,8 +70,8 @@ func FormatShowMarkdown(f SecureFileItem) string {
 	}
 	writeMetadataSection(c, f)
 	c.End(
-		"Use `gitlab_list_secure_files` to see the other secure files in this project",
-		"Use `gitlab_remove_secure_file` to delete it",
+		"Use `admin.secure_file_list` to see the other secure files in this project",
+		"Use `admin.secure_file_delete` to delete it",
 	)
 	return b.String()
 }
