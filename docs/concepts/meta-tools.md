@@ -92,7 +92,7 @@ Action counts are the Free/CE catalog as served by the binary (read them from th
 | #   | Tool Name              | Actions | Sources                                                             |
 | --- | ---------------------- | ------- | ------------------------------------------------------------------- |
 | 18  | `gitlab_access`        | 48      | Access tokens, deploy tokens, deploy keys, access requests, invites |
-| 19  | `gitlab_package`       | 29      | Packages, container registry                                        |
+| 19  | `gitlab_package`       | 30      | Packages, container registry                                        |
 | 20  | `gitlab_snippet`       | 34      | Snippets, snippet discussions, snippet emoji                        |
 | 21  | `gitlab_feature_flags` | 10      | Feature flags, feature flag user lists                              |
 

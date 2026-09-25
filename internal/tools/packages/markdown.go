@@ -15,6 +15,10 @@ import (
 // ellipsis always means something was cut.
 const shortDigestLength = 12
 
+// packageTypeGeneric is the one package type the Generic Package Registry
+// serves, and so the one whose files package.download can fetch.
+const packageTypeGeneric = "generic"
+
 // packageNotFoundOutput is the answer to a package GitLab answered 404 for,
 // naming the package and its project as the caller gave them.
 type packageNotFoundOutput struct {
@@ -22,18 +26,26 @@ type packageNotFoundOutput struct {
 }
 
 // formatPackageNotFound renders a package GitLab could not find as the
-// structured not-found result, with the two ways a package_id goes stale.
+// structured not-found result, with the two reasons GitLab answers 404 for a
+// package_id: a package whose status this read refuses, which still exists and
+// which package.list still shows, and a version that was deleted. client-go
+// hands back its not-found sentinel without the body, so the handler cannot
+// tell them apart and the result names both, the one re-listing cannot explain
+// first.
 func formatPackageNotFound(out packageNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Package", out.Identifier,
-		"Use package.list with project_id to list the project's packages and their package_id",
+		"GitLab reads only a package whose status is default or deprecated here, and answers 404 for one "+
+			"package.list shows in error status, or in hidden, processing or pending_destruction when asked "+
+			"for by status: read the status column there rather than listing again",
 		"Each version of a package has its own package_id, and deleting that version retires it",
 	)
 }
 
 // FormatGetMarkdown renders one package as the card of one object: its own
 // fields, the pipeline that last built it, and the package's other versions
-// as a nested table, which only this read is sent.
+// as a nested table, which only this read is sent. It offers package.download
+// only for a generic package, the one type whose files that action can fetch.
 func FormatGetMarkdown(out GetOutput) string {
 	p := out.Package
 	var b strings.Builder
@@ -55,11 +67,12 @@ func FormatGetMarkdown(out GetOutput) string {
 	c.Markdown("Pipeline", pipelineSummary(p))
 	c.Field("Tags", listTagNames(p.Tags))
 	writeVersionsTable(c, p.Versions)
-	c.End(
-		toolutil.HintAction(actionPackageFileList, "list the files inside this package"),
-		toolutil.HintAction("package.download", "download one of its files"),
-		toolutil.HintAction(actionPackageDelete, "delete this version of the package"),
-	)
+	hints := []string{toolutil.HintAction(actionPackageFileList, "list the files inside this package")}
+	if p.PackageType == packageTypeGeneric {
+		hints = append(hints, toolutil.HintAction("package.download", "download one of its files"))
+	}
+	hints = append(hints, toolutil.HintAction(actionPackageDelete, "delete this version of the package"))
+	c.End(hints...)
 	return b.String()
 }
 
@@ -109,7 +122,7 @@ func versionPipelineSummary(pipeline *toolutil.PackagePipelineOutput) string {
 	if pipeline == nil {
 		return ""
 	}
-	return pipelineItemSummary(PipelineItem{ID: pipeline.ID, Status: pipeline.Status, Ref: pipeline.Ref, WebURL: pipeline.WebURL})
+	return pipelineItemSummary(*pipeline)
 }
 
 // FormatPublishMarkdown renders a published package file as the card of one
@@ -228,7 +241,7 @@ func pipelineSummary(pkg ListItem) string {
 // linked to its page when GitLab gave one. The ref is a branch or tag name, so
 // the text is escaped here on the path with no link, and by the link helper on
 // the other.
-func pipelineItemSummary(pipeline PipelineItem) string {
+func pipelineItemSummary(pipeline toolutil.PackagePipelineOutput) string {
 	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
 	if pipeline.WebURL == "" {
 		return toolutil.EscapeMdTableCell(summary)

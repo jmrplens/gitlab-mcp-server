@@ -212,13 +212,14 @@ Re-verified on 2026-09-25 against the trackers and the tags. One row moved:
 [gitlab-org/api/client-go!3052](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3052)
 merged at 18:46 UTC on 2026-09-24 and is in **v3.14.0**, tagged thirteen
 minutes later, so row 34 reads 13 of 14 and every merged client-go row is
-released. The pin moved from v3.12.0 to v3.14.0 the same day, so it lags no
-merge this file records, and the `Package` fields are read off the struct
-rather than the capture. Every `client-go` row was re-read against the v3.14.0
-source rather than the tracker, and only row 34 moved: between the two tags
-the non-test sources differ in `gitlab.go`, which gains `StatusCode`, and
-`packages.go`, which is that merge request, so no struct, method or route
-another row names changed. v3.13.1, tagged at 18:23 the same day, carries
+released. The pin moved from v3.12.0 to v3.14.0 on 2026-09-25, so it lags no
+merge this file records, and the `Package` fields that merge request added are
+read off the struct rather than the capture. Every `client-go` row was re-read
+against the v3.14.0 source rather than the tracker, and only row 34 moved:
+between the two tags the non-test Go sources differ in `gitlab.go`, which
+gains `StatusCode`, and in `packages.go` with its generated mock,
+`testing/packages_mock.go`, which are that merge request, so no struct, method
+or route another row names changed. v3.13.1, tagged at 18:23 the same day, carries
 nothing a row waits on; its fix is to the separate `config` module, which this
 server does not import. The
 fork pipeline of
@@ -1189,10 +1190,12 @@ of change whose test is one assertion on the built URL.
 
   `packages` followed when the pin moved to **v3.14.0**, checked against that
   release's `packages.go` in the module cache: both listings read `creator_id`
-  and `conan_package_name` off `Package` and capture nothing, and
-  `PackageExtra` now holds only the five pipeline keys the fourth finding
-  below records, read by `package.get`, the action the bump's
-  `GetProjectPackage` made possible. The rest of what that capture
+  and `conan_package_name` off `Package`, and `PackageExtra` now holds only the
+  five pipeline keys the `PackagePipeline` gap below records. Those are read on
+  every route that renders a package: on the package's own `pipeline` and
+  `pipelines` by both listings and by `package.get`, the action the bump's
+  `GetProjectPackage` made possible, and on the pipeline of each other version
+  by `package.get` alone. The rest of what that capture
   read needed no field of `gitlab-org/api/client-go!3052`, and is not lost:
   the owning project's `project_id` and `project_path` are sent only to a
   group's listing, where `GroupPackage` already decodes them, and `versions`
@@ -1407,7 +1410,7 @@ gives the distinct count, 897 fields, its table of merge requests reads as the
 tracker does, it counts the fields that have landed since the measurement, and
 it says the rest will follow as that one merge request without saying when.
 
-**Four findings from that batch that are not merge requests**, because sending
+**Three findings from that batch that are not merge requests**, because sending
 them would have been wrong:
 
 - `projects_with_write_access` and `projects_with_readonly_access` are gated on
@@ -1420,22 +1423,24 @@ them would have been wrong:
 - `ContributionEvent.Title`, `ProjectEvent.Title` and `ProjectEvent.Data` are
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
-- `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
-  keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
-  into `BasicUser`, which is missing the `public_email` and `locked` of the
-  `UserBasic` GitLab renders there. This server publishes all five on the
-  other versions `package.get` returns, reading them off the captured response
-  beside the SDK's decode (`toolutil.CapturedPackage`, under
-  [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  and only on that route, the one that sends versions; a bump carrying the
-  fields retires the read. The package's own `pipeline` and `pipelines`
-  decode into the same struct and are published without the three, as they
-  were before versions were.
 
-**Three more gaps are recorded and not yet sent**, held back by the batching
+**Four more gaps are recorded and not yet sent**, held back by the batching
 the maintainer asked for above. Each is a field this server now reads from the
 captured response, so each carries a live workaround:
 
+- `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
+  keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
+  into `BasicUser`, which is missing the `public_email` and `locked` of the
+  `UserBasic` GitLab renders there, and carries a `created_at` that entity
+  never sends. Every route that renders a package renders that pipeline: as
+  the package's own `pipeline` and `pipelines` on both listings and on a
+  request for one package, and as the pipeline of each other version on the
+  last. This server publishes all five on every one of them, reading them off
+  the captured response beside the SDK's decode (`toolutil.CapturedPackage`
+  and `toolutil.CapturedPackages`, under
+  [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  and publishes no `created_at` for the user; a bump carrying the five retires
+  the read.
 - `PendingInvite` has no `invite_token`, which
   `lib/api/entities/invitation.rb` exposes with no condition. The same struct
   declares an `ID` the entity does not expose, which the audit already reports

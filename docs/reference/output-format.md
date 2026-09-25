@@ -227,7 +227,7 @@ The branch **"nonexistent" in project 42** does not exist or is not accessible w
 - Verify the branch name is spelled correctly (case-sensitive)
 ```
 
-Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 19 "get" handlers across 19 domains (`toolutil.NotFoundResult` call sites under `internal/tools/`).
+Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 20 "get" handlers across 20 domains (`toolutil.NotFoundResult` call sites under `internal/tools/`).
 
 ## Embedded Resources
 

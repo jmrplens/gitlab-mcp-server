@@ -245,7 +245,7 @@ The `NotFoundResult(resource, identifier string, hints ...string)` function in `
 3. Appends `💡 Next steps` hints specific to the domain
 4. The route returns a `nil` Go error, so the call is logged at INFO level rather than ERROR; `LogToolCallAll` receives the formatted result and reads `IsError` off it to stamp `is_error: true` on that record. Without that, every 404 the server turns into a helpful message would be counted as a success
 
-This pattern is applied through one shared not-found formatter in each of **19 domains**: award emoji, badges, branches, dependency firewall, deployments, environments, files, groups, labels, merge requests, milestones, Orbit, pipelines, projects, releases, snippets, tags, users, and wikis. A domain's formatter covers every get variant it has (project and group badges, each award-emoji target), which is why the typed output carries the identifier and hints rather than the formatter hardcoding them.
+This pattern is applied through one shared not-found formatter in each of **20 domains**: award emoji, badges, branches, dependency firewall, deployments, environments, files, groups, labels, merge requests, milestones, Orbit, packages, pipelines, projects, releases, snippets, tags, users, and wikis. A domain's formatter covers every get variant it has (project and group badges, each award-emoji target), which is why the typed output carries the identifier and hints rather than the formatter hardcoding them.
 
 ### ErrorResultMarkdown
 

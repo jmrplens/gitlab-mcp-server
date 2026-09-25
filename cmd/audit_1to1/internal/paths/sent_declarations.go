@@ -264,6 +264,20 @@ const reasonIncludeSubscribedTurnedOff = "lib/api/entities/issue.rb exposes subs
 	"lib/api/issue_links.rb passes `include_subscribed: false`, so the key has never been on one of its responses. The entity says why above the " +
 	"exposure: the value triggers Markdown processing, which GitLab will not do for every row of a list."
 
+// The package item and the entity it is read against, spelled once for the two
+// declarations below that share them.
+const (
+	packagesPkg   = toolsDir + "/packages"
+	packageEntity = "API::Entities::Package"
+)
+
+// reasonPackageGroupOptionNeverPassed answers the owning project held against
+// the package item a project's listing and a request for one package fill.
+const reasonPackageGroupOptionNeverPassed = "lib/api/entities/package.rb exposes project_id under `opts[:group]` and project_path " +
+	"under the same option and the caller's read access. lib/api/project_packages.rb presents both GET /projects/:id/packages " +
+	"and GET /projects/:id/packages/:package_id with `namespace:` and no `group:`, so neither route has ever sent either key; " +
+	"lib/api/group_packages.rb passes `group: true`, and packages.GroupListItem, which that route fills, publishes both."
+
 // declaredUnsurfaced holds every field GitLab's document lists that the
 // endpoint does not send, each with the source that says so.
 //
@@ -456,6 +470,12 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// that no response can ever satisfy.
 	{Package: projectsPkg, Entity: "API::Entities::ProjectHook", Field: "organization_id", Category: categorySubclassCannotSatisfy, Reason: reasonSystemHookSibling},
 	{Package: groupsPkg, Entity: "API::Entities::GroupHook", Field: "organization_id", Category: categorySubclassCannotSatisfy, Reason: reasonSystemHookSibling},
+
+	// The owning project on the package item the two project-scoped routes
+	// fill. Named with the type, since the group listing's item publishes both
+	// keys and is judged on its own.
+	{Package: packagesPkg, Type: "ListItem", Entity: packageEntity, Field: "project_id", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
+	{Package: packagesPkg, Type: "ListItem", Entity: packageEntity, Field: "project_path", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
 
 	// subscribed on the related issue, named alone rather than with a splat:
 	// every other key of that entity is published on the same type, and a

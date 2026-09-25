@@ -75,7 +75,7 @@ func packageGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 			result, err := next(ctx, input)
 			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 				return packageNotFoundOutput{
-					Identifier: fmt.Sprintf("%v in project %v", input[paramPackageID], input[paramProjectID]),
+					Identifier: toolutil.ParamText(input[paramPackageID]) + " in project " + toolutil.ParamText(input[paramProjectID]),
 				}, nil
 			}
 			return result, err
@@ -173,7 +173,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		description: "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_get, gitlab_package_file_list, gitlab_package_delete.",
 	},
 	actionNameGet: {
-		usage:       "Get one package of a project by the package_id package.list or package.group_list returns. The answer carries every field a listing does plus the package's other versions, each with its tags and the pipeline that built it, which no listing sends. To read the files inside the package, use package.file_list.",
+		usage:       "Get one package of a project by the package_id package.list or package.group_list returns. GitLab reads only a package whose status is default or deprecated here, so one listed with another status (error, hidden, processing or pending_destruction) answers 404 while it still exists. The answer carries every field package.list does plus the package's other versions, each with its tags and the pipeline that built it, which no listing sends. To read the files inside the package, use package.file_list.",
 		aliases:     []string{"get package", "show package details", "list other versions of a package", "retrieve a project package", "inspect a registry package"},
 		related:     []string{actionPackageList, actionPackageGroupList, actionPackageFileList, actionPackageDelete},
 		description: "Get one package of a project with its other versions. Returns: the package's type, status, creator, pipeline metadata, tags, _links, and its other versions with their tags and the pipeline that built each. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
@@ -290,7 +290,7 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramPackageID: {
 				SemanticRole: "package_registry_id",
-				ValueSource:  "The numeric id package.list or package.group_list returns for the package.",
+				ValueSource:  "The numeric id package.list or package.group_list returns for the package, whose status there must be default or deprecated: GitLab answers 404 for a package in any other status, one package.list shows in error status included, as it does for a deleted version.",
 				CommonConfusions: []string{
 					"Do not pass the package name or a version string: every version of a package is a package of its own, with its own package_id.",
 					"Do not pass a package_file_id from package.file_list.",

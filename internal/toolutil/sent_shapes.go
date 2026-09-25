@@ -820,8 +820,10 @@ type PackageTagOutput struct {
 	UpdatedAt *time.Time `json:"updated_at"`
 }
 
-// PackagePipelineOutput is the pipeline that built a package version, sent to
-// a caller allowed to read it. client-go's PackagePipeline carries eight of its
+// PackagePipelineOutput is a pipeline lib/api/entities/package/pipeline.rb
+// renders on a package, sent to a caller allowed to read it: the one that last
+// built the package, one of the pipelines it lists, or the one that built one
+// of its other versions. client-go's PackagePipeline carries eight of its
 // keys; iid, project_id and source, and the user's locked and public_email,
 // come from [PackagePipelineExtra].
 type PackagePipelineOutput struct {
@@ -842,7 +844,8 @@ type PackagePipelineOutput struct {
 // pointing at it and the pipeline that built it, which GitLab sends only when
 // one package is asked for and never on a page of them. It is published in
 // this shape rather than decoded into it: client-go's PackageVersion carries
-// the version and its tags, and [PackageExtra] completes the pipeline.
+// the version, when it was published, its tags and eight keys of the pipeline
+// that built it, and [PackageExtra] supplies the other five.
 type PackageVersionOutput struct {
 	ID        int64                  `json:"id"`
 	Version   string                 `json:"version"`
@@ -851,13 +854,17 @@ type PackageVersionOutput struct {
 	Pipeline  *PackagePipelineOutput `json:"pipeline"`
 }
 
-// PackageExtra is what GitLab's package entity sends on a single package that
-// client-go's Package does not carry. client-go v3.14.0 models the package's
-// creator, its Conan recipe name and its other versions with their tags; what
-// it leaves out is on the pipeline that built each of those versions, listed
-// on [PackagePipelineExtra].
+// PackageExtra is what GitLab's package entity sends on a package that
+// client-go's Package does not carry, on every route that renders one.
+// client-go v3.14.0 models the package's creator, its Conan recipe name and its
+// other versions with their tags; what it leaves out is on the pipelines: the
+// one that last built the package, the ones it lists, and the one that built
+// each of its other versions, which only a request for one package is sent.
+// Each of them is short the keys [PackagePipelineExtra] names.
 type PackageExtra struct {
-	Versions []PackageVersionExtra `json:"versions"`
+	Pipeline  *PackagePipelineExtra  `json:"pipeline"`
+	Pipelines []PackagePipelineExtra `json:"pipelines"`
+	Versions  []PackageVersionExtra  `json:"versions"`
 }
 
 // PackageVersionExtra is the part of one other version of a package that
@@ -867,8 +874,8 @@ type PackageVersionExtra struct {
 }
 
 // PackagePipelineExtra is what lib/api/entities/package/pipeline.rb sends on a
-// package version's pipeline that client-go's PackagePipeline does not carry:
-// the pipeline's iid, its project and its source, three of the eleven keys the
+// package's pipeline that client-go's PackagePipeline does not carry: the
+// pipeline's iid, its project and its source, three of the eleven keys the
 // entity exposes, and the two keys of the UserBasic who ran it that client-go's
 // BasicUser leaves out.
 type PackagePipelineExtra struct {
@@ -878,19 +885,58 @@ type PackagePipelineExtra struct {
 	User      *UserBasicExtra `json:"user"`
 }
 
+// PackageCounts is how many pipelines and other versions client-go decoded on
+// one package. A capture of the same answer is held to both, because its
+// extras are paired with what client-go decoded by position, and a count that
+// differed would put one pipeline's keys on its neighbor.
+type PackageCounts struct {
+	Pipelines int
+	Versions  int
+}
+
 // CapturedPackage reads them off the captured answer to a request for one
-// package, one extra per other version in order, the count held to what the
-// SDK decoded.
-func CapturedPackage(capture *gitlabclient.ResponseCapture, decodedVersions int) (PackageExtra, error) {
+// package, one extra per listed pipeline and per other version in order, both
+// counts held to what the SDK decoded.
+func CapturedPackage(capture *gitlabclient.ResponseCapture, decoded PackageCounts) (PackageExtra, error) {
 	extra, err := capturedOne[PackageExtra](capture)
 	if err != nil {
 		return PackageExtra{}, err
 	}
-	if len(extra.Versions) != decodedVersions {
-		return PackageExtra{}, fmt.Errorf("the captured answer holds %d package versions and the SDK decoded %d",
-			len(extra.Versions), decodedVersions)
+	if countErr := extra.holdTo(decoded); countErr != nil {
+		return PackageExtra{}, countErr
 	}
 	return extra, nil
+}
+
+// CapturedPackages reads the same off a page of packages, one extra per
+// package in order, the number of packages and each package's two counts held
+// to what the SDK decoded. A package GitLab sent as null has nothing to hold,
+// so the SDK's count for it is zero of each.
+func CapturedPackages(capture *gitlabclient.ResponseCapture, decoded []PackageCounts) ([]PackageExtra, error) {
+	extras, err := capturedList[PackageExtra](capture, len(decoded), "packages")
+	if err != nil {
+		return nil, err
+	}
+	for i, extra := range extras {
+		if countErr := extra.holdTo(decoded[i]); countErr != nil {
+			return nil, fmt.Errorf("package %d of the page: %w", i+1, countErr)
+		}
+	}
+	return extras, nil
+}
+
+// holdTo refuses an extra holding another number of listed pipelines or of
+// other versions than the SDK decoded on the same package.
+func (e PackageExtra) holdTo(decoded PackageCounts) error {
+	if len(e.Pipelines) != decoded.Pipelines {
+		return fmt.Errorf("the captured answer holds %d package pipelines and the SDK decoded %d",
+			len(e.Pipelines), decoded.Pipelines)
+	}
+	if len(e.Versions) != decoded.Versions {
+		return fmt.Errorf("the captured answer holds %d package versions and the SDK decoded %d",
+			len(e.Versions), decoded.Versions)
+	}
+	return nil
 }
 
 // AccessRequesterExtra is what lib/api/entities/access_requester.rb sends on a
@@ -1327,7 +1373,7 @@ func CapturedProjects(capture *gitlabclient.ResponseCapture, decoded int) ([]Pro
 
 // UserBasicExtra is what lib/api/entities/user_basic.rb sends that client-go's
 // ProjectUser does not model, and neither does its BasicUser, which is what the
-// user who ran a package version's pipeline decodes into. Both are
+// user who ran a package's pipeline decodes into. Both are
 // unconditional on that entity, so a plain value is the honest shape here.
 type UserBasicExtra struct {
 	Locked      bool   `json:"locked"`

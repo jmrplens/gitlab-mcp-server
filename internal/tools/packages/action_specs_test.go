@@ -164,19 +164,31 @@ func TestActionSpecs_ListOrderingGuidance(t *testing.T) {
 // as the error it is.
 func TestActionSpecs_GetRoute_NotFoundIsAResultNotAnError(t *testing.T) {
 	for _, tt := range []struct {
-		name         string
-		status       int
-		wantNotFound bool
+		name           string
+		status         int
+		input          map[string]any
+		wantIdentifier string
 	}{
-		{name: "not found", status: http.StatusNotFound, wantNotFound: true},
-		{name: "forbidden", status: http.StatusForbidden},
+		{
+			name: "not found", status: http.StatusNotFound,
+			input: map[string]any{"project_id": "1", "package_id": "10"}, wantIdentifier: "10 in project 1",
+		},
+		{
+			// A JSON number reaches the route as a float64, and %v printed one
+			// of a million or more in exponent form: 3.1234567e+07 in project
+			// 1.2345678e+07.
+			name: "not found, numbers of eight digits", status: http.StatusNotFound,
+			input:          map[string]any{"project_id": float64(12345678), "package_id": float64(31234567)},
+			wantIdentifier: "31234567 in project 12345678",
+		},
+		{name: "forbidden", status: http.StatusForbidden, input: map[string]any{"project_id": "1", "package_id": "10"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
 			}))))
-			result, err := byTool["gitlab_package_get"].Route.Handler(t.Context(), map[string]any{"project_id": "1", "package_id": "10"})
-			if !tt.wantNotFound {
+			result, err := byTool["gitlab_package_get"].Route.Handler(t.Context(), tt.input)
+			if tt.wantIdentifier == "" {
 				if err == nil || !toolutil.IsHTTPStatus(err, tt.status) {
 					t.Fatalf("Route.Handler error = %v (result %v), want status %d", err, result, tt.status)
 				}
@@ -186,16 +198,20 @@ func TestActionSpecs_GetRoute_NotFoundIsAResultNotAnError(t *testing.T) {
 				t.Fatalf("Route.Handler error = %v, want the not-found result", err)
 			}
 			notFound, ok := result.(packageNotFoundOutput)
-			if !ok || notFound.Identifier != "10 in project 1" {
-				t.Fatalf("Route.Handler result = %#v, want packageNotFoundOutput for 10 in project 1", result)
+			if !ok || notFound.Identifier != tt.wantIdentifier {
+				t.Fatalf("Route.Handler result = %#v, want packageNotFoundOutput for %s", result, tt.wantIdentifier)
 			}
 		})
 	}
 }
 
 // TestActionSpecs_GetGuidance verifies the get action tells a model where a
-// package_id comes from and what it is not, and links the listings it comes
-// from by their canonical IDs.
+// package_id comes from, which statuses GitLab reads here, and what the id is
+// not, and links the listings it comes from by their canonical IDs. The
+// statuses are the half a model cannot work out for itself: package.list
+// shows a package in error status by default, and this read answers 404 for
+// it while it still exists, so without them the recovery is to list again
+// and be handed the same package_id.
 func TestActionSpecs_GetGuidance(t *testing.T) {
 	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
 	spec := byTool["gitlab_package_get"]
@@ -203,9 +219,17 @@ func TestActionSpecs_GetGuidance(t *testing.T) {
 	if spec.Name != actionNameGet || !strings.Contains(spec.Usage, "other versions") {
 		t.Fatalf("spec %q Usage = %q, want the get action naming the other versions", spec.Name, spec.Usage)
 	}
+	for _, want := range []string{"default or deprecated", "error, hidden, processing or pending_destruction", "every field package.list does"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(spec.Usage, want) {
+				t.Errorf("Usage = %q, want it to say %q", spec.Usage, want)
+			}
+		})
+	}
 	guidance := spec.ParameterGuidance[paramPackageID]
-	if guidance.SemanticRole != "package_registry_id" || !strings.Contains(guidance.ValueSource, actionPackageList) {
-		t.Fatalf("package_id guidance = %+v, want its role and the listing it comes from", guidance)
+	if guidance.SemanticRole != "package_registry_id" || !strings.Contains(guidance.ValueSource, actionPackageList) ||
+		!strings.Contains(guidance.ValueSource, "default or deprecated") {
+		t.Fatalf("package_id guidance = %+v, want its role, the listing it comes from and the statuses GitLab reads", guidance)
 	}
 	if !containsText(guidance.CommonConfusions, "package_file_id") {
 		t.Fatalf("package_id CommonConfusions = %v, want the package file id warning", guidance.CommonConfusions)
