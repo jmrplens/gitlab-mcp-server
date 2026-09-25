@@ -51,7 +51,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		packageReadSpec(actionNameList, toolutil.RouteAction(client, List), "gitlab_package_list"),
 		// gitlab_list_group_packages — list packages across a group and its descendant projects.
 		packageReadSpec(actionNameGroupList, toolutil.RouteAction(client, GroupList), "gitlab_list_group_packages"),
-		// gitlab_package_get — get one package with the package's other versions.
+		// gitlab_package_get: get one package with the package's other versions.
 		packageReadSpec(actionNameGet, packageGetRoute(client), "gitlab_package_get"),
 		// gitlab_package_file_list — list files within a single package.
 		packageReadSpec(actionNameFileList, toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
