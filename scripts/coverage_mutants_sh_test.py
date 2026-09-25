@@ -42,9 +42,12 @@ SCRIPT = os.path.join(ROOT, "scripts", "coverage-mutants.sh")
 # stays in seconds: every successful case runs the baseline twice.
 SLEEP = 0.3
 
-# The script's own defaults, which the Makefile passes as MUTANT_BUDGET and
-# MUTANT_DEADLINE_MAX.
+# The script's own defaults. `make coverage-mutants` always passes all three,
+# as MUTANT_BUDGET, MUTANT_BUDGET_FLOOR and MUTANT_DEADLINE_MAX, so the
+# Makefile's are the ones a run gets, and
+# test_makefile_passes_the_scripts_defaults holds the two sets together.
 DEFAULT_BUDGET = 300
+DEFAULT_FLOOR = 10
 DEFAULT_CEILING = 3600
 
 # Stands in for the go command. Configured through STUB_* variables, which
@@ -87,6 +90,26 @@ def render(template, fields):
     return template
 
 
+def import_path(directory):
+    below = os.path.relpath(directory, env["STUB_ROOT"])
+    return "example.com/m" if below == "." else "example.com/m/" + below.replace(os.sep, "/")
+
+
+def import_paths(pattern):
+    """The packages a pattern names, as go list resolves it from the working
+    directory: a directory, or one ending in /... that takes every package
+    below it. A pattern matching nothing names nothing."""
+    recursive = pattern.endswith("/...")
+    base = os.path.normpath(os.path.join(os.getcwd(), pattern[:-4] if recursive else pattern))
+    found = []
+    for directory, _, files in os.walk(base):
+        if any(name.endswith(".go") for name in files):
+            found.append(import_path(directory))
+        if not recursive:
+            break
+    return found
+
+
 entry = {"argv": args, "cwd": os.getcwd(), "goflags": env.get("GOFLAGS", "")}
 try:
     entry["stdout"] = os.readlink("/proc/self/fd/1")
@@ -96,9 +119,21 @@ except OSError:
 status = 0
 if args[:2] == ["list", "-m"]:
     print(render(args[args.index("-f") + 1], {"{{.Dir}}": env["STUB_ROOT"]}))
+elif args[:1] == ["list"] and args[args.index("-f") + 1] == "{{.ImportPath}}":
+    # The -coverpkg resolution: every pattern after the template.
+    for pattern in args[args.index("-f") + 2:]:
+        for listed in import_paths(pattern):
+            print(listed)
 elif args[:1] == ["list"]:
     pkgdir = os.path.normpath(os.path.join(os.getcwd(), args[-1]))
     name = env.get("STUB_PKG_NAME") or os.path.basename(pkgdir)
+    shown = pkgdir
+    separator = env.get("STUB_DIR_SEPARATOR")
+    if separator and pkgdir != env["STUB_ROOT"]:
+        # The part below the module root as Windows prints it: the root is
+        # left as it is, since the script changes into it.
+        below = os.path.relpath(pkgdir, env["STUB_ROOT"])
+        shown = env["STUB_ROOT"] + separator + below.replace("/", separator)
     counts = env.get("STUB_TEST_FILES", "3 0") if tagged(args) else "0 0"
     error = ""
     if not tagged(args) and env.get("STUB_ALL_TAGGED"):
@@ -112,7 +147,8 @@ elif args[:1] == ["list"]:
         tests, xtests = counts.split()
         print(render(args[args.index("-f") + 1], {
             "{{.Name}}": name,
-            "{{.Dir}}": pkgdir,
+            "{{.Dir}}": shown,
+            "{{.ImportPath}}": import_path(pkgdir),
             "{{len .TestGoFiles}}": tests,
             "{{len .XTestGoFiles}}": xtests,
             "{{with .Error}}{{.}}{{end}}": error,
@@ -267,21 +303,116 @@ class CoverageMutantsTest(unittest.TestCase):
 
     def test_baseline_without_a_duration_on_its_last_line_is_timed_by_the_clock(self):
         # A -cover run ends in a coverage figure, so the last field of its
-        # last line is "statements" and carries no duration at all.
-        proc, calls = self.run_script("./internal/pkg", env={"STUB_TEST_SLEEP": str(SLEEP)})
+        # last line is "statements" and carries no duration at all. The other
+        # two lines carry a duration go test would report, far above and far
+        # below the clock's, so a script that read either figure off the
+        # summary line, or the larger of the two, prints a base outside
+        # [SLEEP, 42).
+        cases = [
+            ("no duration", None),
+            ("a duration far above the clock's",
+             "ok  \t./internal/pkg/...\t42.000s\tcoverage: 71.4% of statements"),
+            ("a duration far below the clock's",
+             "ok  \t./internal/pkg/...\t0.001s\tcoverage: 71.4% of statements"),
+        ]
+        for name, last_line in cases:
+            with self.subTest(name):
+                env = {"STUB_TEST_SLEEP": str(SLEEP)}
+                if last_line is not None:
+                    env["STUB_TEST_LAST_LINE"] = last_line
+                proc, calls = self.run_script("./internal/pkg", env=env)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                base = self.printed_base(proc)
+                self.assertGreaterEqual(base, SLEEP)
+                self.assertLess(base, 42)
+                coefficient = self.coefficient(proc, calls)
+                self.assertEqual(coefficient, expected_coefficient(DEFAULT_BUDGET, base, DEFAULT_CEILING))
+                # The budget is what each mutant gets, give or take one
+                # multiple of the base, rather than the multiple of it a
+                # misread base used to hand gremlins: about 9 times the budget
+                # on elicitationtools, and about 11,400 times on the e2e
+                # harness.
+                deadline = self.printed_deadline(proc)
+                self.assertAlmostEqual(deadline, base * coefficient, delta=0.1)
+                self.assertGreaterEqual(deadline, DEFAULT_BUDGET)
+                self.assertLessEqual(deadline, DEFAULT_BUDGET + base + 0.1)
+
+    def test_coefficient_is_never_under_eight(self):
+        # A budget of 2 s over a base of at least 0.25 s is a multiple of 8 or
+        # less, so the floor of 8 is what gives the package a real multiple
+        # of its own runtime, and the deadline lands above the budget.
+        proc, calls = self.run_script("./internal/pkg", "2", "1", env={"STUB_TEST_SLEEP": str(SLEEP)})
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         base = self.printed_base(proc)
-        self.assertGreaterEqual(base, SLEEP)
+        self.assertGreaterEqual(base, 0.25)
         coefficient = self.coefficient(proc, calls)
-        self.assertEqual(coefficient, expected_coefficient(DEFAULT_BUDGET, base, DEFAULT_CEILING))
-        # The budget is what each mutant gets, give or take one multiple of
-        # the base, rather than the multiple of it a misread base used to hand
-        # gremlins: about 9 times the budget on elicitationtools, and about
-        # 11,400 times on the e2e harness.
+        self.assertEqual(coefficient, 8)
+        self.assertEqual(coefficient, expected_coefficient(2, base, DEFAULT_CEILING))
         deadline = self.printed_deadline(proc)
-        self.assertAlmostEqual(deadline, base * coefficient, delta=0.1)
-        self.assertGreaterEqual(deadline, DEFAULT_BUDGET)
-        self.assertLessEqual(deadline, DEFAULT_BUDGET + base + 0.1)
+        self.assertAlmostEqual(deadline, 8 * base, delta=0.1)
+        self.assertGreater(deadline, 2)
+
+    def test_coefficient_is_never_over_six_thousand(self):
+        # A 6000 s budget over a base under a second asks for a multiple past
+        # 6000, and a ceiling of 100000 s leaves room for all of it, so only
+        # the coefficient's own clamp holds it, and no ceiling is reported
+        # as having done so.
+        proc, calls = self.run_script("./internal/pkg", "6000", "1", "100000",
+                                      env={"STUB_TEST_SLEEP": str(SLEEP)})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        base = self.printed_base(proc)
+        self.assertLess(base, 1)
+        self.assertEqual(self.coefficient(proc, calls), 6000)
+        self.assertEqual(expected_coefficient(6000, base, 100000), 6000)
+        self.assertNotIn("ceiling holds", proc.stdout)
+
+    def test_ceiling_past_what_awk_prints_as_an_integer_is_still_compared(self):
+        # awk prints an integer past 2^31 in exponent form, so the ceiling's
+        # multiple has to be clamped before bash compares it: a ceiling of
+        # 1e9 s over a base of about 0.3 s is a multiple of about 3e9.
+        proc, calls = self.run_script("./internal/pkg", "30", "1", "1000000000",
+                                      env={"STUB_TEST_SLEEP": str(SLEEP)})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("integer expression expected", proc.stderr)
+        self.assertEqual(self.coefficient(proc, calls),
+                         expected_coefficient(30, self.printed_base(proc), 1000000000))
+
+    def test_knobs_that_are_not_seconds_are_refused(self):
+        # awk reads the leading digits of anything and drops the rest, so a
+        # ceiling written 2h would have been read as 2 and raised to the
+        # floor, handing every mutant about ten seconds.
+        cases = [
+            (("./internal/pkg", "30", "10", "2h"), "MUTANT_DEADLINE_MAX=2h"),
+            (("./internal/pkg", "5m"), "MUTANT_BUDGET=5m"),
+            (("./internal/pkg", "30", "ten"), "MUTANT_BUDGET_FLOOR=ten"),
+            (("./internal/pkg", "30", "10", "-1"), "MUTANT_DEADLINE_MAX=-1"),
+            (("./internal/pkg", "30", "10", "1e9"), "MUTANT_DEADLINE_MAX=1e9"),
+        ]
+        for args, says in cases:
+            with self.subTest(args=args):
+                proc, calls = self.run_script(*args)
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(calls, [], "a go command ran before the knobs were read")
+                self.assertIn(says + " is not a number of seconds", proc.stderr)
+
+    def test_makefile_passes_the_scripts_defaults(self):
+        # make always passes the three knobs, so the script's own defaults
+        # never apply through it: the 300 s budget that measured first-mutant
+        # recompiles as kills rather than timeouts holds only as long as the
+        # Makefile says 300 too.
+        with open(os.path.join(ROOT, "Makefile"), encoding="utf-8") as fh:
+            makefile = fh.read()
+        for name, want in (("MUTANT_BUDGET", DEFAULT_BUDGET), ("MUTANT_BUDGET_FLOOR", DEFAULT_FLOOR),
+                           ("MUTANT_DEADLINE_MAX", DEFAULT_CEILING)):
+            with self.subTest(name):
+                match = re.search(r"^%s \?= (\S+)$" % name, makefile, re.MULTILINE)
+                self.assertIsNotNone(match, "no `%s ?=` default in the Makefile" % name)
+                self.assertEqual(match.group(1), str(want))
+        with self.subTest("the recipe passes all four, in order"):
+            self.assertRegex(
+                makefile,
+                r"(?m)^\t@scripts/coverage-mutants\.sh \$\(PKG\) \$\(MUTANT_BUDGET\) "
+                r"\$\(MUTANT_BUDGET_FLOOR\) \$\(MUTANT_DEADLINE_MAX\)$")
 
     def test_build_tags_given_to_gremlins_reach_every_go_command_before_it(self):
         # Every spelling pflag reads a value for -t/--tags in, including a
@@ -322,22 +453,80 @@ class CoverageMutantsTest(unittest.TestCase):
     def test_package_with_no_test_files_under_its_tags_is_refused(self):
         cases = [
             # Tests exist only behind a tag nobody passed: the harness case.
-            ("tagged tests, untagged run", {"STUB_NEEDS_TAG": "e2e"}, "no test files"),
+            ("tagged tests, untagged run", "", {"STUB_NEEDS_TAG": "e2e"}, "no test files"),
             # No tests at all.
-            ("no tests", {"STUB_TEST_FILES": "0 0"}, "no test files"),
+            ("no tests", "", {"STUB_TEST_FILES": "0 0"}, "no test files"),
+            # One of the two that would let tests elsewhere measure it is not
+            # enough: without --integration each mutant runs only this
+            # package's tests, and without -coverpkg nothing covers it.
+            ("no tests, integration alone", "-i", {"STUB_TEST_FILES": "0 0"}, "no test files"),
+            ("no tests, -coverpkg alone", "--coverpkg ./...", {"STUB_TEST_FILES": "0 0"}, "no test files"),
             # Every file behind the tag: go list itself reports the package
             # unloadable, which must reach the reader as the same refusal.
-            ("every file tagged", {"STUB_NEEDS_TAG": "e2e", "STUB_ALL_TAGGED": "1"},
+            ("every file tagged", "", {"STUB_NEEDS_TAG": "e2e", "STUB_ALL_TAGGED": "1"},
              "build constraints exclude all Go files"),
         ]
-        for name, env, says in cases:
+        for name, flags, env, says in cases:
             with self.subTest(name):
-                proc, calls = self.run_script("./internal/pkg", env=env)
+                proc, calls = self.run_script("./internal/pkg", flags=flags, env=env)
                 self.assert_refused_before_gremlins(proc, calls)
                 self.assertEqual(self.of(calls, "test"), [])
                 self.assertIn(says, proc.stderr)
                 self.assertIn("GREMLINS_FLAGS='--tags", proc.stderr)
+                self.assertIn("GREMLINS_FLAGS='-i --coverpkg", proc.stderr)
                 self.assertIn("build tags (none)", proc.stderr)
+
+    def test_package_whose_tests_are_elsewhere_is_measured_under_integration_and_coverpkg(self):
+        # Under both, the module's other tests cover the package's blocks and
+        # gremlins runs them against each mutant, so a mutant can be killed
+        # and the run is measured rather than refused. The -coverpkg names the
+        # package in each spelling go test reads one in: a pattern enclosing
+        # it, the package itself, and a comma-separated list whose second
+        # entry is the one naming it.
+        for flags in ("-i --coverpkg ./...", "--integration --coverpkg=./internal/...",
+                      "-i --coverpkg ./internal/pkg", "-i --coverpkg ./cmd/...,./internal/pkg"):
+            with self.subTest(flags=flags):
+                proc, calls = self.run_script("./internal/pkg", flags=flags, env={"STUB_TEST_FILES": "0 0"})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertNotIn("refusing", proc.stderr)
+                self.assertIn("measuring it through the module's other tests", proc.stdout)
+                self.gremlins(proc, calls)
+                for call in self.of(calls, "test"):
+                    self.assertEqual(call["argv"][-1], "./...")
+        with self.subTest("the pattern is resolved from the root under the tags gremlins is given"):
+            proc, calls = self.run_script("./internal/pkg", flags="--tags e2e -i --coverpkg ./internal/...",
+                                          env={"STUB_TEST_FILES": "0 0"})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            resolutions = [c for c in self.package_lists(calls) if "{{.ImportPath}}" in c["argv"]]
+            self.assertEqual(len(resolutions), 1, calls)
+            self.assertEqual(resolutions[0]["cwd"], self.root)
+            self.assertEqual(self.tags_of(resolutions[0]["argv"]), "e2e")
+            self.assertEqual(resolutions[0]["argv"][-1], "./internal/...")
+
+    def test_coverpkg_that_does_not_name_the_package_is_refused(self):
+        # A -coverpkg that names only other packages leaves this one's blocks
+        # exactly as uncovered as none would, so every mutant would be NOT
+        # COVERED: the outcome the refusal exists to prevent, which the run
+        # used to proceed into while saying the -coverpkg let it be covered.
+        for flags in ("-i --coverpkg ./cmd/...", "-i --coverpkg ./internal/other/...",
+                      "--integration --coverpkg=./cmd/tool,./internal/pkg/sub"):
+            with self.subTest(flags=flags):
+                proc, calls = self.run_script("./internal/pkg", flags=flags, env={"STUB_TEST_FILES": "0 0"})
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(self.of(calls, "test"), [])
+                self.assertIn("does not name example.com/m/internal/pkg", proc.stderr)
+                self.assertNotIn("measuring it through the module's other tests", proc.stdout)
+                self.assertIn("GREMLINS_FLAGS='-i --coverpkg <pattern>', a pattern that names it", proc.stderr)
+
+    def test_package_with_test_files_of_either_kind_is_measured(self):
+        # internal/cachehints is the shape of the second case: its one test
+        # file declares package cachehints_test.
+        for files in ("0 2", "2 0"):
+            with self.subTest(files=files):
+                proc, calls = self.run_script("./internal/pkg", env={"STUB_TEST_FILES": files})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertNotIn("no test files", proc.stdout + proc.stderr)
+                self.gremlins(proc, calls)
 
     def test_ceiling_caps_the_coefficient_and_says_so(self):
         # A floor of 1 keeps the ceilings small enough for a stub that
@@ -409,6 +598,12 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 self.assertEqual("GREMLINS_UNLEASH_INTEGRATION is set" in proc.stdout,
                                  "GREMLINS_UNLEASH_INTEGRATION" in env, proc.stdout)
+                # The notice says what decided the run: that it is not an
+                # integration run only where no flag made it one.
+                self.assertEqual("so this is not an integration run" in proc.stdout,
+                                 "GREMLINS_UNLEASH_INTEGRATION" in env and scan != "./...", proc.stdout)
+                self.assertEqual("this is an integration run because GREMLINS_FLAGS asks for one" in proc.stdout,
+                                 "GREMLINS_UNLEASH_INTEGRATION" in env and scan == "./...", proc.stdout)
                 sequence = [c["argv"][0] for c in calls if c["argv"][:1] != ["list"]]
                 # Downloads first and one untimed run, so the timed one finds
                 # the cache as warm as gremlins' own run will.
@@ -434,6 +629,17 @@ class CoverageMutantsTest(unittest.TestCase):
             self.assertEqual(len(tests), 2)
             for call in tests:
                 self.assertEqual(call["argv"][-1], "./...")
+        # go list prints native paths, so on Windows the package directory
+        # carries backslashes below the root, and the pattern must still be
+        # the package's subtree written with slashes.
+        with self.subTest("a package directory with backslashes"):
+            proc, calls = self.run_script("./internal/pkg", env={"STUB_DIR_SEPARATOR": "\\"})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            tests = self.of(calls, "test")
+            self.assertEqual(len(tests), 2)
+            for call in tests:
+                self.assertEqual(call["argv"][-1], pkg)
+                self.assertTrue(call["pattern_dir_exists"], call["argv"])
 
     def test_staged_package_main_baseline_carries_the_tags_and_is_removed(self):
         staged = "./cmd/tool.mutants-main"
@@ -463,6 +669,15 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.assert_refused_before_gremlins(proc, calls)
                 self.assertIn(says, proc.stderr)
                 self.assertIn("--- FAIL: TestPlanted", proc.stderr)
+        # A staged copy that fails where it was staged is refused with a
+        # reason of its own, since the verdicts would be about the staging,
+        # and the copy is removed all the same (issue 872).
+        with self.subTest("the staged copy fails"):
+            proc, calls = self.run_script("./cmd/tool", env={"STUB_PKG_NAME": "main", "STUB_TEST_FAIL_RUN": "1"})
+            self.assert_refused_before_gremlins(proc, calls)
+            self.assertIn("the staged copy of ./cmd/tool does not pass its own tests there", proc.stderr)
+            self.assertIn("--- FAIL: TestPlanted", proc.stderr)
+            self.assertFalse(os.path.exists(os.path.join(self.root, "cmd", "tool.mutants-main")))
 
     def test_gremlins_runs_under_count_1_with_invert_logical_and_the_default_exclusion(self):
         cases = [
@@ -479,6 +694,14 @@ class CoverageMutantsTest(unittest.TestCase):
             ("-s", {}, True),
             ("-h", {}, True),
             ("-sdE x", {}, False),
+            # The value-taking shorthands, in every spelling pflag reads a
+            # value in: the next word, joined to the letter, or behind a
+            # switch in a cluster. SKILL.md's own example is `-S l`.
+            ("-S l", {}, True),
+            ("-Sl", {}, True),
+            ("-dS l", {}, True),
+            ("-D main", {}, True),
+            ("-o out.json", {}, True),
         ]
         for flags, env, default in cases:
             with self.subTest(flags=flags, env=env):
@@ -504,8 +727,12 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.assertIn("cannot read %s" % says, proc.stderr)
 
     def test_comma_decimal_locale_leaves_the_reading_intact(self):
-        # bash formats `time` with the locale's decimal separator, and awk
-        # reads 0,940 as 0, which would turn every bound into infinity.
+        # bash formats `time` with the locale's decimal separator. Under such
+        # a locale the base would read 0,940, which the script's
+        # positive-number check refuses, so every run would stop; without
+        # the check awk would read it as 0, the coefficient and the ceiling's
+        # cap would both hit the 6000 clamp and the ceiling would bound
+        # nothing, and gawk would fail on the division outright.
         found = comma_decimal_locale(self.scratch)
         if found is None:
             self.skipTest("no comma-decimal locale is installed and none could be compiled")

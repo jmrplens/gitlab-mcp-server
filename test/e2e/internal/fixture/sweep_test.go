@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -642,8 +643,10 @@ func TestResolveOrphanScope_Settings_PickTheSweep(t *testing.T) {
 // The floor is the only thing keeping the default sweep off a run still
 // going, and nothing else ties it to the two timeouts, which are defined
 // hundreds of lines away from it. E2E_GITLAB_TIMEOUT has been raised once
-// already; raised again past the floor, it would let the sweep delete a live
-// package's fixtures with every test green. The timeout's alarm is a fatal
+// already; raised again until it plus the exit hooks' budgets reached the
+// floor, it would let the sweep delete a live package's fixtures with every
+// test green. This test fails from that point on, which at the 2h default is
+// a timeout of 112 minutes or more. The timeout's alarm is a fatal
 // panic, so the exit hooks run only after tests that ended in time, and then
 // under their own budgets: the floor must clear the longer timeout by those
 // two budgets. go test's backstop, a SIGQUIT a tenth of the timeout past it
@@ -665,6 +668,151 @@ func TestSweepMinAge_MakefileDefaults_OutlastEveryPackage(t *testing.T) {
 		t.Errorf("E2E_SWEEP_MIN_AGE defaults to %s, want more than %s: the longer suite timeout, %s, plus the exit sweep's %s and the World teardown's %s",
 			floor, inUse, longest, sweepBudget, worldTeardownBudget)
 	}
+}
+
+// TestCleanOrphansRecipe_SweepMinAge_CommandLineThenEnvironmentThenDotEnv
+// renders the make e2e-clean-orphans recipe and runs it against a stand-in
+// go, holding the floor it hands the sweep to the order the Makefile
+// documents: the make command line, then the environment, then .env, and only
+// then the 2h default.
+//
+// The floor is the one thing keeping the default sweep off a run still going,
+// and the recipe used to prefix go test with make's own value, which is the 2h
+// default whenever the variable is not on the command line or in the
+// environment, because the Makefile does not include .env: a floor raised
+// there was dropped without a word. The recipe is rendered with make -n
+// rather than read as text, so what is judged is the command make would run,
+// and it runs in a directory of its own, so the .env it sources is the one the
+// case writes and never the repository's.
+func TestCleanOrphansRecipe_SweepMinAge_CommandLineThenEnvironmentThenDotEnv(t *testing.T) {
+	recipe := newCleanOrphansRecipe(t)
+
+	cases := []struct {
+		name string
+		// environment is the floor in make's environment, "" for none.
+		environment string
+		// commandLine is the floor on make's command line, "" for none.
+		commandLine string
+		// dotEnv is whether the directory the recipe runs in holds a .env
+		// setting the floor to 5h.
+		dotEnv bool
+		want   string
+	}{
+		{name: "set nowhere", want: "2h"},
+		{name: "set in .env alone", dotEnv: true, want: "5h"},
+		{name: "set in the environment and in .env", environment: "4h", dotEnv: true, want: "4h"},
+		{name: "set on the command line, in the environment and in .env", environment: "4h", commandLine: "3h", dotEnv: true, want: "3h"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			environ := recipeEnviron(testCase.environment)
+			out := recipe.run(t, recipe.render(t, environ, testCase.commandLine), environ, testCase.dotEnv)
+
+			if !strings.Contains(out, "floor="+testCase.want+"\n") {
+				t.Errorf("the sweep was handed %q, want the floor %s", out, testCase.want)
+			}
+			if !strings.Contains(out, "-run ^TestSweepOrphans_Leftovers_OnDemand$ ./test/e2e/internal/fixture/") {
+				t.Errorf("the recipe ran %q, want the on-demand sweep of this package", out)
+			}
+		})
+	}
+}
+
+// cleanOrphansRecipe is what rendering and running the e2e-clean-orphans
+// recipe needs: make, the shell make runs a recipe line with, the repository
+// the Makefile sits in, and a directory holding the stand-in go.
+type cleanOrphansRecipe struct {
+	makeBin, shell, root, stubs string
+}
+
+// newCleanOrphansRecipe finds the tools the recipe needs, skipping the test
+// where one is missing, and writes the stand-in go. It says which floor it was
+// handed and what it was asked to run, and does nothing else: no GitLab is
+// reached and nothing is swept.
+func newCleanOrphansRecipe(t *testing.T) cleanOrphansRecipe {
+	t.Helper()
+	var recipe cleanOrphansRecipe
+	var err error
+	if recipe.makeBin, err = exec.LookPath("make"); err != nil {
+		t.Skipf("make is not installed here, so the recipe cannot be rendered: %v", err)
+	}
+	// make runs a recipe line with sh, and this recipe hands its body to bash.
+	if recipe.shell, err = exec.LookPath("sh"); err != nil {
+		t.Skipf("sh is not installed here, so the rendered recipe cannot be run: %v", err)
+	}
+	if _, err = exec.LookPath("bash"); err != nil {
+		t.Skipf("bash is not installed here, so the rendered recipe cannot be run: %v", err)
+	}
+	if recipe.root, err = filepath.Abs(filepath.Join("..", "..", "..", "..")); err != nil {
+		t.Fatalf("resolving the repository root: %v", err)
+	}
+	recipe.stubs = t.TempDir()
+	stub := "#!/bin/sh\nprintf 'floor=%s\\n' \"$E2E_SWEEP_MIN_AGE\"\nprintf 'args=%s\\n' \"$*\"\n"
+	//#nosec G306 -- the stand-in go is a script the rendered recipe must execute
+	if err = os.WriteFile(filepath.Join(recipe.stubs, "go"), []byte(stub), 0o700); err != nil {
+		t.Fatalf("writing the stand-in go: %v", err)
+	}
+	return recipe
+}
+
+// render asks make for the recipe it would run under environ, with the floor
+// on its command line when commandLine is not empty.
+func (r cleanOrphansRecipe) render(t *testing.T, environ []string, commandLine string) string {
+	t.Helper()
+	args := []string{"-n", "-s", "--no-print-directory", "e2e-clean-orphans"}
+	if commandLine != "" {
+		args = append(args, sweepMinAgeEnv+"="+commandLine)
+	}
+	//#nosec G204 -- make from the PATH, with this file's own arguments and a case's duration
+	render := exec.CommandContext(t.Context(), r.makeBin, args...)
+	render.Dir = r.root
+	render.Env = environ
+	recipe, err := render.Output()
+	if err != nil {
+		t.Fatalf("make -n e2e-clean-orphans: %v", err)
+	}
+	return string(recipe)
+}
+
+// run runs a rendered recipe the way make would, in a directory of its own
+// holding a .env that sets the floor to 5h when dotEnv is true, with the
+// stand-in go first on the PATH, and returns what the stand-in printed.
+func (r cleanOrphansRecipe) run(t *testing.T, recipe string, environ []string, dotEnv bool) string {
+	t.Helper()
+	work := t.TempDir()
+	if dotEnv {
+		if err := os.WriteFile(filepath.Join(work, ".env"), []byte(sweepMinAgeEnv+"=5h\n"), 0o600); err != nil {
+			t.Fatalf("writing .env: %v", err)
+		}
+	}
+	//#nosec G204 -- the recipe is what make rendered from this repository's own Makefile
+	run := exec.CommandContext(t.Context(), r.shell, "-c", recipe)
+	run.Dir = work
+	// The last PATH wins, which puts the stand-in first.
+	run.Env = append(slices.Clone(environ), "PATH="+r.stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := run.CombinedOutput()
+	if err != nil {
+		t.Fatalf("running the rendered recipe: %v\n%s", err, out)
+	}
+	return string(out)
+}
+
+// recipeEnviron is this process's environment with nothing in it that would
+// decide the floor or the make invocation on the test's behalf: neither sweep
+// variable, and none of the variables a parent make hands a child, since a
+// variable given on a parent's command line reaches a child make through
+// MAKEFLAGS as a command-line variable of its own. The floor is added back
+// when the case puts one in the environment.
+func recipeEnviron(floor string) []string {
+	dropped := []string{sweepMinAgeEnv, sweepPrefixEnv, "MAKEFLAGS", "MFLAGS", "GNUMAKEFLAGS", "MAKELEVEL", "MAKEOVERRIDES"}
+	environ := slices.DeleteFunc(os.Environ(), func(entry string) bool {
+		name, _, _ := strings.Cut(entry, "=")
+		return slices.Contains(dropped, name)
+	})
+	if floor != "" {
+		environ = append(environ, sweepMinAgeEnv+"="+floor)
+	}
+	return environ
 }
 
 // makefileDefault reads the duration a `NAME ?= value` line of the Makefile

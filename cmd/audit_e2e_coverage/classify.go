@@ -381,11 +381,13 @@ type diagnostics struct {
 	// had the server's span of one arrive, which says their telemetry did not
 	// reach the harness. Each holds its shape's dispatch_observed false.
 	UnobservedSessions []string `json:"unobserved_sessions,omitempty"`
-	// IdleSessions names the sessions that made no traced call at all: they
-	// started, listed what they serve, and were asked nothing, which is what
-	// the tier-pin sessions do. Their spans cannot have arrived, and that is no
-	// finding about their telemetry, so they are named here and hold no shape
-	// false.
+	// IdleSessions names the sessions that issued no trace: they started,
+	// listed what they serve, and made no call that carried one (a subscribe
+	// on protocol 2026-07-28 carries none), which is what the tier-pin
+	// sessions do. Their spans cannot have arrived, and that is no finding
+	// about their telemetry, so they are named here and hold no shape false on
+	// their own. A shape of idle sessions alone reads false all the same, with
+	// its idle count equal to its session count ([sessionShape.dispatchObserved]).
 	IdleSessions []string `json:"idle_sessions,omitempty"`
 }
 
@@ -555,22 +557,28 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 // capability surface.
 //
 // A session that was not dispatch-observed holds its shape false unless it
-// was idle. The idle sessions are the ones that asked nothing, and the record
-// committed before this rule shows why they are set apart. Both runtimes
-// published the three default rows as unobserved, and for two causes. On
-// dynamic, three tier-pin sessions only listed what they serve and made no
-// call at all, beside a minimal capability-surface session whose only calls
-// were a resource read and a completion; on meta and individual, the minimal
-// sessions' only calls were reads of the tool manifest. Neither says anything
-// about whether the row's telemetry worked. Setting the idle sessions apart
-// clears the first cause, and counting the server span of every method as
-// arriving, which the harness now does, clears the second, so all three rows
-// should read observed at the next record. Idleness is the session line's own
-// word rather than something inferred from the call lines beside it, because
-// a label is not unique within a shard: the HTTP transport session and a
-// read_api session narrowed to read-only each share theirs with another
-// session of the same process, and a join on the label would lend one the
-// other's calls.
+// was idle. The idle sessions are the ones that issued no trace. Classified
+// without this rule, the 2026-09-23 shards behind the committed record hold
+// unobserved default sessions on both runtimes, of two kinds. On dynamic,
+// three tier-pin sessions only listed what they serve and made no call at
+// all. On every surface, the sessions whose traced calls were all non-tool
+// calls read unobserved: the minimal capability-surface session (reads of
+// the tool manifest, plus a completion on dynamic) and, on dynamic, the
+// subscription sweep's private session (one traced resource read beside
+// untraced subscribes). Neither kind says anything about whether the row's
+// telemetry worked. The record on main reads those rows observed only
+// because its fold judged a session only when a call line under its label was
+// a tools/call, which left every one of those sessions out, and that label
+// join is what this rule replaces. Setting the idle sessions apart clears the
+// first kind, and counting the server span of every method as arriving, which
+// the harness now does, clears the second, so the default rows keep reading
+// observed at the next record, now without the join.
+//
+// Idleness is the session line's own word rather than something inferred
+// from the call lines beside it, because a label is not unique within a
+// shard: the HTTP transport session and a read_api session narrowed to
+// read-only each share theirs with another session of the same process, and
+// a join on the label would lend one the other's calls.
 func (c *classification) foldSessions() {
 	for _, session := range c.rt.sessions {
 		key := shapeKey{surface: session.Surface, mode: session.Mode}

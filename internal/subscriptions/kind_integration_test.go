@@ -233,3 +233,50 @@ func TestClassify_AgreesWithResourceRouter(t *testing.T) {
 		})
 	}
 }
+
+// TestClassify_EncodedNumericIdentifier_AgreesWithTheRead holds the whitelist
+// and the resource read to one answer for a numeric identifier written
+// percent-encoded.
+//
+// Since issue 912 the resource handlers decode every variable before they
+// parse it, so gitlab://project/42/pipeline/%34%32 is read as pipeline 42. The
+// whitelist kept judging the raw segment, which is not digits, so the same URI
+// could be read and not subscribed to, the one outcome the whitelist exists to
+// rule out. A URI the read serves must classify as subscribable and ask GitLab
+// for the decoded identifier; a raw "+", which the router matches with no
+// template, must be neither read nor subscribable.
+func TestClassify_EncodedNumericIdentifier_AgreesWithTheRead(t *testing.T) {
+	var asked atomic.Pointer[string]
+	session := mcpSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		asked.Store(&path)
+		http.Error(w, `{"message":"404 Not Found"}`, http.StatusNotFound)
+	}))
+
+	tests := []struct {
+		name, uri, wantPath string
+	}{
+		{name: "a pipeline", uri: "gitlab://project/42/pipeline/%34%32", wantPath: "/api/v4/projects/42/pipelines/42"},
+		{name: "a merge request's notes", uri: "gitlab://project/42/mr/%37/notes", wantPath: "/api/v4/projects/42/merge_requests/7/notes"},
+		{name: "an issue with an encoded sign", uri: "gitlab://project/42/issue/%2B7", wantPath: "/api/v4/projects/42/issues/7"},
+		{name: "a snippet", uri: "gitlab://snippet/%31%30%30", wantPath: "/api/v4/snippets/100"},
+		{name: "a raw sign", uri: "gitlab://project/42/issue/+7"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			asked.Store(nil)
+			_, _ = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: tt.uri})
+			var gotPath string
+			if p := asked.Load(); p != nil {
+				gotPath = *p
+			}
+			_, subscribable := subscriptions.Classify(tt.uri)
+			if gotPath != tt.wantPath {
+				t.Errorf("reading %s asked GitLab for %q, want %q", tt.uri, gotPath, tt.wantPath)
+			}
+			if subscribable != (tt.wantPath != "") {
+				t.Errorf("subscriptions.Classify(%q) subscribable = %v, but the read asked GitLab for %q", tt.uri, subscribable, gotPath)
+			}
+		})
+	}
+}

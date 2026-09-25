@@ -296,6 +296,50 @@ func TestDispatch_RequestCount_SurvivesTheRoundTripAndIsOmittedAtZero(t *testing
 	}
 }
 
+// TestSession_Idle_SurvivesTheRoundTripAndIsOmittedWhenFalse verifies that a
+// session line carries idle only when the session issued no trace, and that
+// a reader gets back what the writer wrote either way.
+//
+// The omission is what the field's own comment relies on: every session that
+// made a traced call is the common case, and spelling idle:false on each of
+// them would say nothing a reader needs while making the flag's presence mean
+// nothing either.
+func TestSession_Idle_SurvivesTheRoundTripAndIsOmittedWhenFalse(t *testing.T) {
+	cases := []struct {
+		name string
+		idle bool
+	}{
+		{name: "a session that issued a trace", idle: false},
+		{name: "a session that issued none", idle: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			line := &Session{
+				Label: "dynamic/default", Surface: "dynamic", Mode: "default", Capabilities: "full",
+				Transport: "stdio", DispatchObserved: !testCase.idle, Idle: testCase.idle,
+			}
+			encoded, err := json.Marshal(line.record())
+			if err != nil {
+				t.Fatalf("Marshal error = %v", err)
+			}
+
+			var decoded Record
+			if unmarshalErr := json.Unmarshal(encoded, &decoded); unmarshalErr != nil {
+				t.Fatalf("Unmarshal error = %v", unmarshalErr)
+			}
+			if validateErr := decoded.validate(); validateErr != nil {
+				t.Fatalf("validate() error = %v, want nil", validateErr)
+			}
+			if decoded.Session.Idle != testCase.idle {
+				t.Errorf("Idle = %t, want %t", decoded.Session.Idle, testCase.idle)
+			}
+			if strings.Contains(string(encoded), `"idle"`) != testCase.idle {
+				t.Errorf("encoded record = %s, want an idle field present = %t", encoded, testCase.idle)
+			}
+		})
+	}
+}
+
 // TestDirEnv_IsTheNameTheMakefileAndTheWorkflowExport pins the spelling of the
 // variable that turns recording on.
 //

@@ -84,12 +84,14 @@ type dispatchRecord struct {
 // attributes.
 //
 // It is one of the two ways [isServerSpan] recognizes the server's own span,
-// and it is no longer the arrival test. It used to be both, and a span of any
-// method but tools/call carries none of these: a resource read, a prompt, a
-// completion or a subscribe is spanned with mcp.method.name and the attributes
-// of what it addressed, so its span was dropped as saying nothing, its trace
-// never arrived, and every flush that held one waited the whole budget for a
-// span that had come and gone.
+// and it is no longer the arrival test. It used to be both, and the span of a
+// successful resource read, prompt, completion or subscribe carries none of
+// these: such a call is spanned with mcp.method.name and the attributes of
+// what it addressed, and only a call of any method that failed with a code
+// the server counts as its own failure carries error.type. So the span of a
+// call that succeeded, or that failed through the caller's fault, was dropped
+// as saying nothing, its trace never arrived, and every flush that held one
+// waited the whole budget for a span that had come and gone.
 func (d dispatchRecord) carriesFacts() bool {
 	return d.tool != "" || d.action != "" || d.domain != "" || d.refusalReason != "" || d.errorType != ""
 }
@@ -172,9 +174,11 @@ type spanReceiver struct {
 
 	// observed is set the first time any server span arrives, so a run whose
 	// telemetry never worked can stop waiting for spans that are not coming.
-	// Any method's span sets it: a run whose first calls were all resource
-	// reads has working telemetry, and a flag that waited for a tools/call to
-	// say so gave up on it and told the log that nothing had arrived.
+	// Any method's span sets it: a run whose first calls were all successful
+	// resource reads has working telemetry, and a flag that waited for a span
+	// carrying the dispatch facts, which only a tools/call span or the span of
+	// a call that failed on the server's side carries, gave up on it and told
+	// the log that nothing had arrived.
 	observed atomic.Bool
 
 	server   *http.Server

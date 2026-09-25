@@ -13,22 +13,32 @@ import (
 // The spec carries content and nothing else. What a failure costs is not a
 // choice made here: a line's own failure costs that line, and a directory or a
 // file the writer cannot use stops it, for this record as for the other.
-var shards = shardio.New(shardio.Spec[Record, Line]{
-	DirEnv: DirEnv,
-	Prefix: shardPrefix,
-	Ext:    shardExt,
-	Noun:   "an e2e call",
-	TypeOf: func(r Record) string { return r.Type },
-	// Envelope is a closure over the unexported method, so the closed set of
-	// line types argued at [Line] stays closed: nothing is exported to make
-	// the shared mechanism generic over this record.
-	Envelope: func(l Line) Record { return l.record() },
-	Validate: Record.validate,
-	// Check is nil and CapHint empty on purpose. Every field of this record is
-	// a string, a bool, an int, a string slice or one float the harness
-	// computes from a [time.Duration], so no line here carries JSON somebody
-	// else wrote, and none is within two orders of magnitude of the line cap.
-})
+var shards = newShards(Record.validate)
+
+// newShards returns this record's shard mechanism holding every line it reads
+// to validate. [shards] holds each line to the current schema and is the one
+// every writer comes from; [callShards] admits the older schemas
+// [ReadShardsForCalls] reads and is never written through, so the two differ
+// in that rule alone and cannot come to disagree about a shard's name.
+func newShards(validate func(Record) error) *shardio.Shards[Record, Line] {
+	return shardio.New(shardio.Spec[Record, Line]{
+		DirEnv: DirEnv,
+		Prefix: shardPrefix,
+		Ext:    shardExt,
+		Noun:   "an e2e call",
+		TypeOf: func(r Record) string { return r.Type },
+		// Envelope is a closure over the unexported method, so the closed set
+		// of line types argued at [Line] stays closed: nothing is exported to
+		// make the shared mechanism generic over this record.
+		Envelope: func(l Line) Record { return l.record() },
+		Validate: validate,
+		// Check is nil and CapHint empty on purpose. Every field of this
+		// record is a string, a bool, an int, a string slice or one float the
+		// harness computes from a [time.Duration], so no line here carries
+		// JSON somebody else wrote, and none is within two orders of magnitude
+		// of the line cap.
+	})
+}
 
 // Reporter is the part of [testing.TB] the writer reports a broken shard
 // through. See [shardio.Reporter] for why it is an interface and why it is

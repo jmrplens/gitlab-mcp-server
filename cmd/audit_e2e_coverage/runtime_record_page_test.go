@@ -260,9 +260,35 @@ func TestRenderRecordPage_EntryBeforeTheGrain_NamesTheOlderGrain(t *testing.T) {
 	}
 }
 
-// TestRecordPageOrder_UnknownKey_ComesAfterTheKnownOnes verifies that a key
-// nothing here writes is still drawn, and drawn last: the page is a reading
-// of the record and hiding an entry would make the two disagree.
+// TestRenderRecordPage_UnlistedCapabilities_DrawnInTheirRuntime verifies that
+// the calls a runtime made outside what its sessions listed are named in that
+// runtime's section, after its histogram, and in no other section. The
+// histogram leaves them out so that each of its rows sums to the figure it is
+// counted against, so a page that drew the histogram and dropped the list
+// would lose them altogether.
+func TestRenderRecordPage_UnlistedCapabilities_DrawnInTheirRuntime(t *testing.T) {
+	doc := pageFixture(t)
+	unlisted := map[string][]cellRow{capabilityCompletions: {{
+		Capabilities: "full", Target: "summarize_open_mrs issue_iid", State: stateAsserted,
+		Tests: []string{"TestExcludeTools"},
+	}}}
+	doc.Runtimes["ee"].Summary.UnlistedCapabilities = unlisted
+	doc.Runtimes["ce"].Summary.UnlistedCapabilities = nil
+	page := renderRecordPage(doc)
+	ee, ce := runtimeSection(t, page, "ee"), runtimeSection(t, page, "ce")
+
+	want := renderUnlistedCapabilities(unlisted)
+	if !strings.Contains(ee, want) {
+		t.Errorf("the ee section does not name its unlisted call:\n%s", ee)
+	}
+	if strings.Index(ee, want) < strings.Index(ee, "| `prompts`") {
+		t.Errorf("the ee section names its unlisted call before the histogram it is left out of:\n%s", ee)
+	}
+	if strings.Contains(ce, "Called outside what any session listed") {
+		t.Errorf("the ce section, which made no such call, names one:\n%s", ce)
+	}
+}
+
 // TestRenderUnlistedCapabilities_NamesEachCallApart verifies the list of
 // capability calls made outside what any session listed: nothing at all when
 // there are none, since a heading over an empty list reads as data that went
@@ -302,6 +328,9 @@ func TestRenderUnlistedCapabilities_NamesEachCallApart(t *testing.T) {
 	}
 }
 
+// TestRecordPageOrder_UnknownKey_ComesAfterTheKnownOnes verifies that a key
+// nothing here writes is still drawn, and drawn last: the page is a reading
+// of the record and hiding an entry would make the two disagree.
 func TestRecordPageOrder_UnknownKey_ComesAfterTheKnownOnes(t *testing.T) {
 	doc := pageFixture(t)
 	doc.Runtimes["self-hosted"] = doc.Runtimes["ce"]

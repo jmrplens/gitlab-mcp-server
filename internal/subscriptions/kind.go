@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"net/url"
 	"slices"
 	"strings"
 )
@@ -268,7 +269,7 @@ func Classify(uri string) (Kind, bool) {
 	}
 	// Snippets are addressed by a numeric ID; projects and groups accept
 	// either a numeric ID or an encoded path.
-	if prefix == snippetPrefix && !isPositiveInt(ref) {
+	if prefix == snippetPrefix && !isPositiveIntSegment(ref) {
 		return KindUnknown, false
 	}
 
@@ -331,7 +332,7 @@ func matchSegments(segs, pattern []string) bool {
 func matchSegment(seg, p string) bool {
 	switch p {
 	case patNumeric:
-		return isPositiveInt(seg)
+		return isPositiveIntSegment(seg)
 	case patName:
 		return seg != ""
 	default:
@@ -339,20 +340,47 @@ func matchSegment(seg, p string) bool {
 	}
 }
 
+// isPositiveIntSegment reports whether a numeric URI segment names an object,
+// judged the way the resource handlers read it.
+//
+// A handler decodes every template variable once and then parses the number
+// with strconv, so a client that percent-encoded an identifier (%34%32 for
+// 42) is served the object, and refusing the same URI here would leave one a
+// client can read and not subscribe to, the case [isPositiveInt] exists to
+// prevent. A segment that does not decode names nothing, and neither does one
+// that decodes to nothing.
+//
+// The sign is the one place the decoded value is not simply handed to
+// [isPositiveInt]. The handlers' strconv reads "+42" as 42, so %2B42 is read
+// and must be subscribable; a raw "+" is a reserved character a simple
+// expansion never leaves unencoded, the resource router matches no such
+// segment, and so a raw one stays refused.
+func isPositiveIntSegment(seg string) bool {
+	if strings.HasPrefix(seg, "+") {
+		return false
+	}
+	decoded, err := url.PathUnescape(seg)
+	if err != nil {
+		return false
+	}
+	return isPositiveInt(strings.TrimPrefix(decoded, "+"))
+}
+
 // isPositiveInt reports whether s is a base-10 integer greater than zero.
 //
 // Leading zeros are accepted deliberately: GitLab resolves a zero-padded
 // identifier to the same object as its bare form (verified against a live
-// instance — GET /projects/02317 and GET /projects/2317 both return the same
+// instance: GET /projects/02317 and GET /projects/2317 both return the same
 // project), and this server's own resource read path parses identifiers with
 // strconv.ParseInt, which accepts them too. Rejecting them here would create
 // a URI a client can read but not subscribe to.
 //
 // Zero and negatives are rejected: GitLab identifiers and IIDs are
 // auto-increment integers starting at 1, so neither can ever name a real
-// object. A sign character is rejected for the same reason — GitLab returns
-// 404 for "+2317", so accepting it would only create a subscription
-// guaranteed to be dropped on its first read.
+// object. A sign is not a digit here either, and never needs to be:
+// [isPositiveIntSegment] strips the one sign an encoded segment may carry,
+// since the handlers' strconv reads it and asks GitLab for the bare number,
+// and refuses a raw one, which the resource router never matches.
 func isPositiveInt(s string) bool {
 	nonZero := false
 	for i := range len(s) {

@@ -32,7 +32,8 @@ type options struct {
 	results string
 	// runtime is the comma-separated runtime selectors.
 	runtime string
-	// baseline is the shard directory of the old suite.
+	// baseline is the shard directory to compare against, the old suite's
+	// included, whose schema 1 shards it reads.
 	baseline string
 	// portMap, static, check and report select the gates and the output.
 	portMap bool
@@ -100,7 +101,7 @@ func main() {
 	flag.StringVar(&opts.calls, "calls", "", "shard directory written by the e2e suite, or a directory holding one per runtime")
 	flag.StringVar(&opts.results, "results", "", "go test -json stream (gotestsum --jsonfile) to join with the calls")
 	flag.StringVar(&opts.runtime, "runtime", "", "comma-separated runtimes to report and, with -check, to require: ce, ee, or edition/tier")
-	flag.StringVar(&opts.baseline, "baseline", "", "shard directory of the old suite; fails on any credit it reached that -calls does not")
+	flag.StringVar(&opts.baseline, "baseline", "", "shard directory to compare against, such as the old suite's, whose schema 1 shards it reads without their session lines; fails on any credit it reached that -calls does not")
 	flag.BoolVar(&opts.portMap, "port-map", false, "check that every old Test function has a Replaces: successor or a declared drop")
 	flag.BoolVar(&opts.static, "static", false, "run the push-time gate over the typed action ids of test/e2e/gitlab, without GitLab")
 	flag.BoolVar(&opts.check, "check", false, "apply the floors: expected runtimes present, test calls recorded, no package refused or filtered with -run, asserted count at or above its floor")
@@ -296,7 +297,7 @@ func classifyRuntimes(opts options, runtimes []*runtimeRecords, selectors []stri
 		}
 	}
 	if opts.baseline != "" {
-		if baseline, err = readRuntimes(opts.baseline); err != nil {
+		if baseline, err = readBaselineRuntimes(opts.baseline); err != nil {
 			fmt.Fprintln(stderr, "audit_e2e_coverage: baseline:", err)
 			return nil, exitUsage
 		}

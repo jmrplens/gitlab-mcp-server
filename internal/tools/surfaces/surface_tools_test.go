@@ -565,16 +565,16 @@ func TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed(t *testing.
 	}
 }
 
-// TestExcludedToolSpecs_ReportsWhatItRemovedAndWhatNamedNothing asserts the
-// resolver every surface asks about the standalone utilities: the names it
-// returns are the ones the specs register under, whichever spelling reached
-// them, and the entries it returns are the ones that reached none, in the
-// order the operator wrote them.
+// TestExcludedToolSpecs_EverySpelling_ReportsRemovedNamesAndDeadEntries
+// asserts the resolver every surface asks about the standalone utilities: the
+// names it returns are the ones the specs register under, whichever spelling
+// reached them, and the entries it returns are the ones that reached none, in
+// the order the operator wrote them.
 //
 // The unmatched half is what the exclusion warning is built from, so an entry
 // reported there that did remove something accuses a working configuration,
 // and one left out hides a dead entry.
-func TestExcludedToolSpecs_ReportsWhatItRemovedAndWhatNamedNothing(t *testing.T) {
+func TestExcludedToolSpecs_EverySpelling_ReportsRemovedNamesAndDeadEntries(t *testing.T) {
 	flows := []string{
 		"gitlab_interactive_issue_create",
 		"gitlab_interactive_mr_create",

@@ -160,9 +160,10 @@ ORBIT_FIXTURES_MIRROR ?= false
 # E2E_SWEEP_MIN_AGE, at e2e-clean-orphans, must stay above this timeout plus
 # the exit hooks' budgets: it is the only thing that keeps the orphan sweep off
 # a package still running.
-# TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when this default
-# is raised past it; a run given a longer timeout on the command line is one
-# that test cannot see, and e2e-clean-orphans below says what to do then.
+# TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails once this default
+# plus those budgets' 8m reaches it, a timeout of 112 minutes or more at the 2h
+# default; a run given a longer timeout on the command line is one that test
+# cannot see, and e2e-clean-orphans below says what to do then.
 E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # Where the e2e Docker fixture is reached from the machine running the suite.
 # Docker itself follows DOCKER_HOST or the active context, so the fixture can
@@ -418,9 +419,10 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # e2e-clean-orphans, must stay above this timeout plus the exit hooks'
 # budgets, or make e2e-clean-orphans could delete the fixtures of a package
 # still running. TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails
-# when this default is raised past it; raising it for one run on the command
-# line (E2E_GITLAB_TIMEOUT=3h) is invisible to that test, and
-# e2e-clean-orphans below says what to do then.
+# once this default plus those budgets' 8m reaches it, a timeout of 112 minutes
+# or more at the 2h default; raising it for one run on the command line
+# (E2E_GITLAB_TIMEOUT=3h) is invisible to that test, and e2e-clean-orphans
+# below says what to do then.
 E2E_GITLAB_TIMEOUT ?= 3600s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
@@ -487,15 +489,21 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 # only shortens that: it sends SIGQUIT max(1m, timeout/10) past the timeout,
 # 6m at 3600s, and kills the binary up to timeout/10 after that.
 # TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when a default
-# timeout is raised past the floor. It cannot see a run started with a longer
+# timeout plus the exit hooks' 8m reaches E2E_SWEEP_MIN_AGE, a timeout of 112
+# minutes or more at the 2h default. It cannot see a run started with a longer
 # timeout on the command line or through a go test of its own: after such a
 # run, set E2E_SWEEP_MIN_AGE above that timeout plus 8m, and while a run
 # started with -timeout 0 is going, do not run this at all. Set it to 0 only
-# when no run is going.
+# when no run is going. It is read from the make command line
+# (make e2e-clean-orphans E2E_SWEEP_MIN_AGE=3h10m), then from the environment,
+# then from .env, and only then is the 2h default used: the recipe sources .env
+# before it runs the sweep, so a floor raised there has to survive the recipe
+# rather than be replaced by the default below.
 #
 # A self-hosted run going at the same time is not failed by this either. Such
 # a run fails at its end when a group or project it saw at its start is gone
-# or renamed, and it leaves out of that check every object named after a run,
+# or renamed, and it leaves out of that check every object whose name carries
+# a run identifier the harness minted (not one an E2E_RUN_ID override named),
 # so an older run's leftover deleted here does not count against it.
 #
 # A run started with E2E_RUN_ID carries no date in its names, so this default
@@ -516,7 +524,7 @@ E2E_SWEEP_MIN_AGE ?= 2h
 E2E_SWEEP_PREFIX ?=
 e2e-clean-orphans:
 	bash -o pipefail -c 'if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
-	  E2E_SWEEP_MIN_AGE=$(E2E_SWEEP_MIN_AGE) E2E_SWEEP_PREFIX=$(E2E_SWEEP_PREFIX) go test -tags e2e -count=1 -v -run "^TestSweepOrphans_Leftovers_OnDemand$$" ./test/e2e/internal/fixture/'
+	  E2E_SWEEP_MIN_AGE="$(if $(filter command line environment,$(origin E2E_SWEEP_MIN_AGE)),$(E2E_SWEEP_MIN_AGE),$${E2E_SWEEP_MIN_AGE:-$(E2E_SWEEP_MIN_AGE)})" E2E_SWEEP_PREFIX=$(E2E_SWEEP_PREFIX) go test -tags e2e -count=1 -v -run "^TestSweepOrphans_Leftovers_OnDemand$$" ./test/e2e/internal/fixture/'
 
 ## test-e2e-gitlab-com: end-to-end live test of the Orbit knowledge graph
 ## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,
@@ -736,7 +744,10 @@ coverage-conditions:
 # root, so the script runs that command, with the tags and -coverpkg it reads
 # out of GREMLINS_FLAGS or gremlins' own GREMLINS_UNLEASH_TAGS and
 # GREMLINS_UNLEASH_COVERPKG, and --integration from the flag alone, since
-# gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. It runs
+# gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. The flag
+# is the only source of it the script can read: integration set in a
+# .gremlins.yaml, where a YAML bool does pass that assertion, reaches gremlins
+# and not the baseline, so an integration run is asked for with -i. It runs
 # it once untimed, which is the gate below and warms the build cache the way
 # gremlins' run will find it, and once under bash's `time`. It used to read the
 # duration off go test's summary line, which is the test binary's run without
@@ -744,7 +755,10 @@ coverage-conditions:
 # reached gremlins and not the baseline left the harness printing `[no test
 # files]`, and the guess turned 114 seconds of tests into a deadline of 95
 # hours per mutant (issue 915). A package with no test file under its tags is
-# refused instead, since every mutant of it would be reported NOT COVERED.
+# refused instead, since each mutant runs only that package's tests and so none
+# could be killed, unless GREMLINS_FLAGS asks for an integration run with a
+# -coverpkg that names the package, under which the module's other tests cover
+# and kill its mutants; a -coverpkg naming only other packages is refused too.
 #
 # The budget has to cover a compile as well as a run, which is why it is five
 # minutes. gremlins copies the module into a directory per worker, and Go keys
@@ -772,13 +786,18 @@ coverage-conditions:
 # rather than silently: a run told to use one second and given ten should say
 # so, or the printed budget is a second lie on top of the first.
 #
-# MUTANT_DEADLINE_MAX bounds each mutant's deadline outright, in seconds: the
-# coefficient is held at the ceiling's multiple of the baseline, so a mutant
-# that makes the tests hang is reported TIMED OUT within it instead of holding
-# a worker for as long as the coefficient allows. It answers to the floor as
+# MUTANT_DEADLINE_MAX holds each mutant's deadline to about its value, in
+# seconds: the coefficient is held at the ceiling's multiple of the baseline,
+# so a mutant that makes the tests hang is reported TIMED OUT within about that
+# long instead of holding a worker for as long as the coefficient allows. About,
+# because gremlins multiplies the coefficient by its own coverage run rather
+# than by the script's baseline, and a run of that command a few percent slower
+# gives a deadline a few percent over the ceiling. It answers to the floor as
 # the budget does, and a baseline longer than half of it is refused, since no
 # mutant could run the suite twice inside it. At an hour it binds only on a
 # baseline over 450 seconds, where the floor of 8 would otherwise exceed it.
+# All three knobs are written in seconds as a plain number; anything else is
+# refused, since awk would read 2h as 2.
 #
 # -count=1 is what makes the coefficient mean what the line above says, and it
 # is a second defect rather than the same one. The coefficient is not applied to

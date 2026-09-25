@@ -469,27 +469,57 @@ func TestSpanReceiver_FailedOutboundMCPSpan_LeavesTheServerSpanIntact(t *testing
 // reported as arrived. Neither half may break it: an empty id is not issued,
 // and a span with no trace id is dropped however much it looks like the
 // server's own.
+//
+// Each half has a subtest of its own, because with both guards in place a
+// test of the two together cannot see the second: a span with no trace id is
+// dropped by the issued lookup anyway, since the first guard left nothing
+// issued under the empty id. The second subtest therefore puts an entry there
+// by hand, which is the state the absorb guard alone has to answer.
 func TestSpanReceiver_EmptyTraceID_IsNeitherIssuedNorKept(t *testing.T) {
-	received := startTestReceiver(t)
-	conn := &sessionConn{}
+	untracedSpan := func() *tracepb.Span {
+		span := stubServerSpan(testTraceID, methodReadResource, nil, tracepb.Status_STATUS_CODE_UNSET)
+		span.TraceId = nil
+		return span
+	}
+	assertNothingArrived := func(t *testing.T, received *spanReceiver, conn *sessionConn) {
+		t.Helper()
+		if len(received.all()) != 0 {
+			t.Errorf("the receiver kept %d trace(s) from a span carrying no trace id", len(received.all()))
+		}
+		if _, arrived := received.lookup(""); arrived {
+			t.Error("the empty trace id reads as arrived")
+		}
+		if conn.dispatchObserved.Load() || received.observed.Load() {
+			t.Error("a span carrying no trace id marked the session or the receiver as observed")
+		}
+	}
 
-	received.issue("", conn)
-	untraced := stubServerSpan(testTraceID, methodReadResource, nil, tracepb.Status_STATUS_CODE_UNSET)
-	untraced.TraceId = nil
-	received.absorbSpan(untraced)
+	t.Run("an empty id is not issued", func(t *testing.T) {
+		received := startTestReceiver(t)
+		conn := &sessionConn{}
 
-	if len(received.issued) != 0 {
-		t.Errorf("the receiver issued %d trace(s) for an empty id", len(received.issued))
-	}
-	if len(received.all()) != 0 {
-		t.Errorf("the receiver kept %d trace(s) from a span carrying no trace id", len(received.all()))
-	}
-	if _, arrived := received.lookup(""); arrived {
-		t.Error("the empty trace id reads as arrived")
-	}
-	if conn.dispatchObserved.Load() || received.observed.Load() {
-		t.Error("a span carrying no trace id marked the session or the receiver as observed")
-	}
+		received.issue("", conn)
+		received.absorbSpan(untracedSpan())
+
+		received.mu.Lock()
+		issued := len(received.issued)
+		received.mu.Unlock()
+		if issued != 0 {
+			t.Errorf("the receiver issued %d trace(s) for an empty id", issued)
+		}
+		assertNothingArrived(t, received, conn)
+	})
+	t.Run("a span with no trace id is dropped even under an issued empty id", func(t *testing.T) {
+		received := startTestReceiver(t)
+		conn := &sessionConn{}
+		received.mu.Lock()
+		received.issued[""] = conn
+		received.mu.Unlock()
+
+		received.absorbSpan(untracedSpan())
+
+		assertNothingArrived(t, received, conn)
+	})
 }
 
 // TestSpanReceiver_RequestSpanOnAnUnissuedTrace_IsDropped keeps the count to

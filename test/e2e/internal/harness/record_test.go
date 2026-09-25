@@ -835,26 +835,50 @@ func TestEnvRecorder_Record_NilCallOrRecorder_RecordsNothing(t *testing.T) {
 }
 
 // TestRecordSending_AttributionWithoutARecorder_IsPassedThrough checks that a
-// request attributed to no recorder is sent as it came: neither stamped with a
-// trace nor recorded, since there is no test to file it under.
+// request attributed to no recorder, or to nothing at all as a session's own
+// start is, is sent as it came: neither stamped with a trace nor recorded,
+// since there is no test to file it under, and without marking the session as
+// one that issued a trace, which is what lets a session nothing was asked of
+// be written idle.
 func TestRecordSending_AttributionWithoutARecorder_IsPassedThrough(t *testing.T) {
-	conn := &sessionConn{}
-	sent := 0
-	send := conn.recordSending()(func(context.Context, string, mcp.Request) (mcp.Result, error) {
-		sent++
-		return &mcp.CallToolResult{}, nil
-	})
-	params := &mcp.CallToolParams{Name: "gitlab_issue_list"}
-	ctx := withAttribution(t.Context(), callAttribution{purpose: PurposeTest})
+	cases := []struct {
+		name string
+		ctx  func(context.Context) context.Context
+	}{
+		{
+			name: "attributed to no recorder",
+			ctx: func(ctx context.Context) context.Context {
+				return withAttribution(ctx, callAttribution{purpose: PurposeTest})
+			},
+		},
+		{
+			name: "not attributed at all",
+			ctx:  func(ctx context.Context) context.Context { return ctx },
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			conn := &sessionConn{}
+			sent := 0
+			send := conn.recordSending()(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+				sent++
+				return &mcp.CallToolResult{}, nil
+			})
+			params := &mcp.CallToolParams{Name: "gitlab_issue_list"}
 
-	if _, err := send(ctx, methodCallTool, &mcp.ClientRequest[*mcp.CallToolParams]{Params: params}); err != nil {
-		t.Fatalf("the middleware answered %v, want the call passed through", err)
-	}
-	if sent != 1 {
-		t.Errorf("the call reached the transport %d times, want once", sent)
-	}
-	if _, stamped := params.GetMeta()[traceParentKey]; stamped {
-		t.Error("a call attributed to no recorder was stamped with a trace nothing will join")
+			if _, err := send(testCase.ctx(t.Context()), methodCallTool, &mcp.ClientRequest[*mcp.CallToolParams]{Params: params}); err != nil {
+				t.Fatalf("the middleware answered %v, want the call passed through", err)
+			}
+			if sent != 1 {
+				t.Errorf("the call reached the transport %d times, want once", sent)
+			}
+			if _, stamped := params.GetMeta()[traceParentKey]; stamped {
+				t.Error("a call no recorder files was stamped with a trace nothing will join")
+			}
+			if conn.issuedTrace.Load() {
+				t.Error("a call no recorder files marked the session as one that issued a trace, so it could not be written idle")
+			}
+		})
 	}
 }
 
@@ -1620,6 +1644,13 @@ func TestRecorder_NonToolCallsOnTheRealBinary_FlushWithoutTheBudgetAndObserveThe
 	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
 	if !session.conn.exportsSpans {
 		t.Fatal("a session of the real binary is not marked as exporting its spans here, so no flush waits for them")
+	}
+	// The idle rule rests on this: starting a session and listing what it
+	// serves issues no trace, so a session nothing was asked of is written
+	// idle. Were the start attributed, every session would read as one that
+	// asked something.
+	if session.conn.issuedTrace.Load() {
+		t.Fatal("starting the session issued a trace, so no session could ever be written idle")
 	}
 
 	session.ReadResource("gitlab://tools")

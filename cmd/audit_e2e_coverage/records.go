@@ -47,15 +47,40 @@ type runtimeRecords struct {
 	// skips are the skip lines.
 	skips []*e2ecalls.Skip
 	// dispatches is how many dispatch lines the shards carried, kept for the
-	// diagnostics: a runtime with calls and no dispatch lines never saw a
-	// span, which is a harness failure and not a coverage figure.
+	// diagnostics: a runtime with tool calls and no dispatch lines never saw a
+	// span that named a tool or an action, which is a harness failure and not
+	// a coverage figure. A dispatch line is written only for such a span, so
+	// the count says nothing about the spans of other methods; whether any
+	// span of a session arrived is what diagnostics.unobserved_sessions says.
 	dispatches int
 	// lateJoins counts the calls whose dispatched action came from a separate
 	// dispatch line rather than the call line itself.
 	lateJoins int
 }
 
-// readRuntimes reads every runtime under dir.
+// shardReader reads every shard under a directory, one entry per file.
+type shardReader func(dir string) ([]e2ecalls.Shard, error)
+
+// readRuntimes reads every runtime under dir, holding every line to the
+// current schema.
+func readRuntimes(dir string) ([]*runtimeRecords, error) {
+	return readRuntimesWith(dir, e2ecalls.ReadShards)
+}
+
+// readBaselineRuntimes reads every runtime under a -baseline directory.
+//
+// A baseline is compared on its action cells alone, which come from its call
+// and dispatch lines, so it is read through [e2ecalls.ReadShardsForCalls]. The
+// one baseline there is, the old suite's, was written under schema 1 by a
+// suite that has since been deleted, so it cannot be recorded again, and
+// refusing it the way -calls refuses a stale shard would leave the flag
+// nothing to compare against. Its session lines, the one kind schema 2
+// changed the meaning of, are dropped rather than folded.
+func readBaselineRuntimes(dir string) ([]*runtimeRecords, error) {
+	return readRuntimesWith(dir, e2ecalls.ReadShardsForCalls)
+}
+
+// readRuntimesWith reads every runtime under dir through read.
 //
 // A directory holding a shard is one runtime, its subdirectories included; a
 // directory holding none is read as one runtime per child directory, which is
@@ -66,13 +91,13 @@ type runtimeRecords struct {
 // Listing it a second time to find its children could only differ from the
 // first by the directory changing in between, and an error branch no input
 // but a race reaches is one no test can hold to anything.
-func readRuntimes(dir string) ([]*runtimeRecords, error) {
+func readRuntimesWith(dir string, read shardReader) ([]*runtimeRecords, error) {
 	entries, err := listDirectory(dir)
 	if err != nil {
 		return nil, err
 	}
 	if holdsShard(entries) {
-		one, readErr := readRuntime(dir)
+		one, readErr := readRuntime(dir, read)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -87,7 +112,7 @@ func readRuntimes(dir string) ([]*runtimeRecords, error) {
 		if !holdsShard(childEntries) {
 			continue
 		}
-		one, readErr := readRuntime(child)
+		one, readErr := readRuntime(child, read)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -97,7 +122,7 @@ func readRuntimes(dir string) ([]*runtimeRecords, error) {
 		// Shards deeper than one level, or none at all: the recursive read
 		// answers both, and its refusal names the variable and the pattern,
 		// which is the message a reader pointed at an empty directory needs.
-		one, readErr := readRuntime(dir)
+		one, readErr := readRuntime(dir, read)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -157,9 +182,9 @@ func childDirectories(dir string, entries []os.DirEntry) []string {
 // runtime and is refused rather than guessed at.
 var errNoRunLine = errors.New("no run line: the package never wrote its exit record, so its runtime is unknown")
 
-// readRuntime reads one directory as one runtime.
-func readRuntime(dir string) (*runtimeRecords, error) {
-	shards, err := e2ecalls.ReadShards(dir)
+// readRuntime reads one directory as one runtime through read.
+func readRuntime(dir string, read shardReader) (*runtimeRecords, error) {
+	shards, err := read(dir)
 	if err != nil {
 		return nil, err
 	}

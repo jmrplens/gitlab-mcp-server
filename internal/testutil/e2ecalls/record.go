@@ -5,6 +5,7 @@
 package e2ecalls
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -34,7 +35,29 @@ const (
 	// written under another one rather than guessing which fields it holds:
 	// these shards are read by a command in the same tree, so a mismatch means
 	// a stale artifact and not an old peer to be tolerated.
-	SchemaVersion = 1
+	//
+	// Version 2 (issue 920) changed what a session line's DispatchObserved
+	// means, a server span of any method now counting where only one carrying
+	// the dispatch facts did, and added Idle, whose absence carries meaning
+	// too. A version 1 line cannot be told apart from a non-idle one, and its
+	// false DispatchObserved said only that no fact-carrying span arrived, so
+	// folding it under the new reading would mark sessions unobserved that
+	// were only never asked a tool. Such shards are refused, to be re-recorded
+	// rather than re-folded. [ReadShardsForCalls] is the one exception, for a
+	// reader of the lines version 2 left as they were.
+	SchemaVersion = 2
+
+	// OldestCallsSchemaVersion is the oldest schema whose run, call, dispatch
+	// and skip lines read the way [SchemaVersion]'s do. Version 2 changed the
+	// session line alone, so a reader that judges nothing by a session line can
+	// still read a version 1 shard, through [ReadShardsForCalls]. A version that
+	// changes one of those four lines moves this to itself.
+	//
+	// It exists for the old suite's baseline: its shards were written under
+	// version 1 by a suite that has since been deleted, so they can never be
+	// recorded again, and what they are compared on is what their calls
+	// credited.
+	OldestCallsSchemaVersion = 1
 
 	// ShardPattern is the [os.CreateTemp] pattern a shard file is named with.
 	// One process writes one shard, so package binaries running side by side
@@ -248,6 +271,22 @@ func (r Record) validate() error {
 	return shardio.ValidateEnvelope(r, r.Schema, SchemaVersion, r.Type, payloadPresent)
 }
 
+// validateForCalls is [Record.validate] for [ReadShardsForCalls]: a line
+// written under any schema from [OldestCallsSchemaVersion] to [SchemaVersion]
+// is held to the envelope a current line is, and any other schema is refused
+// as a stale artifact.
+//
+// The schema is settled here rather than by [shardio.ValidateEnvelope], which
+// knows one version, so the envelope is then asked about the current one and
+// only its type and payload remain to be judged.
+func (r Record) validateForCalls() error {
+	if r.Schema < OldestCallsSchemaVersion || r.Schema > SchemaVersion {
+		return fmt.Errorf("schema %d is not between %d and %d: the shard was written by another version of this package",
+			r.Schema, OldestCallsSchemaVersion, SchemaVersion)
+	}
+	return shardio.ValidateEnvelope(r, SchemaVersion, SchemaVersion, r.Type, payloadPresent)
+}
+
 // FixtureProfile is what a runtime had available to the test package that ran
 // on it.
 //
@@ -349,15 +388,18 @@ type Session struct {
 	// span named, joined on the trace id; this is the statement about the
 	// session a reader checks those against.
 	DispatchObserved bool `json:"dispatch_observed"`
-	// Idle is whether the session made no call a span could answer: it was
-	// started, listed what it serves, and was never asked anything carrying a
-	// trace. Its DispatchObserved is then false for want of a question rather
-	// than for want of telemetry, and a reader folding sessions sets it apart
-	// instead of letting it read as a session whose spans never came.
+	// Idle is whether the session issued no trace: it was started, listed what
+	// it serves, and made no call that carried one (a subscribe on protocol
+	// 2026-07-28 carries none). Its DispatchObserved is then false for want of
+	// a traced call rather than for want of telemetry, and a reader folding
+	// sessions sets it apart instead of letting it read as a session whose
+	// spans never came.
 	//
-	// It is written only when true, so a line written before the harness
-	// recorded it reads as not idle, which is the reading that leaves such a
-	// line's DispatchObserved meaning what it always meant.
+	// It is written only when true. A line written before the field existed
+	// cannot be told apart from a non-idle one, and its false DispatchObserved
+	// said only that no fact-carrying span arrived, which is why
+	// [SchemaVersion] moved to 2 with it: such a line is refused, or dropped
+	// by [ReadShardsForCalls], rather than read under the new meaning.
 	Idle bool `json:"idle,omitempty"`
 }
 

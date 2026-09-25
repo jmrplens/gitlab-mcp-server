@@ -485,7 +485,9 @@ func verifySnapshot(client *gitlabclient.Client, before *resourceSnapshot) error
 }
 
 // snapshotDifferences names every group and project that disappeared or was
-// renamed between the two readings, leaving out every one named after a run.
+// renamed between the two readings, leaving out every one whose name carries
+// a run identifier the harness minted. An object named by an E2E_RUN_ID
+// override is not recognized by [namedAfterARun] and is counted like any other.
 //
 // Such an object is another run's, never the instance owner's: the snapshot
 // is taken before this run creates anything, so whatever carries a run

@@ -1416,17 +1416,26 @@ func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
 }
 
 // helpEntry returns one flag's help entry joined into a single line: the line
-// naming the flag plus every indented continuation line under it.
+// naming the flag plus every continuation line under it indented deeper than
+// that line, stopping at the first line that is not.
+//
+// The depth is what ends an entry, for flag rows and environment rows alike.
+// It used to stop only at a blank line or a line starting with "-", which ends
+// a flag row but not an environment row, since the rows of the environment
+// block carry neither between them: handed GITLAB_MCP_EXCLUDE_TOOLS it
+// returned that row and every row after it down to the end of the block, so an
+// assertion about the one row could be satisfied by another.
 func helpEntry(help, flagName string) string {
 	lines := strings.Split(help, "\n")
 	for i, candidate := range lines {
 		if !strings.Contains(candidate, flagName) {
 			continue
 		}
+		depth := helpIndent(candidate)
 		entry := []string{strings.TrimSpace(candidate)}
 		for _, next := range lines[i+1:] {
 			trimmed := strings.TrimSpace(next)
-			if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+			if trimmed == "" || helpIndent(next) <= depth {
 				break
 			}
 			entry = append(entry, trimmed)
@@ -1434,6 +1443,48 @@ func helpEntry(help, flagName string) string {
 		return strings.Join(entry, " ")
 	}
 	return ""
+}
+
+// helpIndent returns how many leading spaces and tabs line carries.
+func helpIndent(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " \t"))
+}
+
+// TestHelpEntry_SiblingRows_EndTheEntry verifies that [helpEntry] returns one
+// row and its own continuation lines, and stops at the next row of the same
+// depth, for a flag row and for an environment row.
+//
+// The environment rows are the case that matters: nothing but their indent
+// separates one from the next, and the helper used to run on past them.
+func TestHelpEntry_SiblingRows_EndTheEntry(t *testing.T) {
+	help := strings.Join([]string{
+		" Section",
+		"  -first string    first flag",
+		"                   continues here",
+		"  -second string   second flag",
+		"",
+		"  FIRST_VAR        first variable",
+		"                   continues here",
+		"  SECOND_VAR       second variable",
+		"                   also continues",
+		"  THIRD_VAR        third variable",
+	}, "\n")
+	for _, tc := range []struct {
+		name, flagName, want string
+	}{
+		{name: "flag row", flagName: "-first", want: "-first string    first flag continues here"},
+		{name: "last flag row before a blank line", flagName: "-second", want: "-second string   second flag"},
+		{name: "environment row", flagName: "FIRST_VAR", want: "FIRST_VAR        first variable continues here"},
+		{name: "environment row between two others", flagName: "SECOND_VAR", want: "SECOND_VAR       second variable also continues"},
+		{name: "last row of the text", flagName: "THIRD_VAR", want: "THIRD_VAR        third variable"},
+		{name: "name the text does not carry", flagName: "ABSENT", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := helpEntry(help, tc.flagName); got != tc.want {
+				t.Errorf("helpEntry(%q) = %q, want %q", tc.flagName, got, tc.want)
+			}
+		})
+	}
 }
 
 // TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts verifies that the

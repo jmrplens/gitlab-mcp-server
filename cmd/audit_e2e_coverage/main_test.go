@@ -511,10 +511,10 @@ func TestRun_Static_CatalogFromBuilder(t *testing.T) {
 func TestRun_Static_WithCalls_ReachesTheClassification(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "calls-x.jsonl"), strings.Join([]string{
-		`{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
-		`{"schema":1,"type":"session","session":{"label":"d","surface":"dynamic","mode":"default","capabilities":"full","transport":"stdio","tools":["gitlab_execute_action"],"dispatch_observed":true}}`,
-		`{"schema":1,"type":"call","call":{"test":"TestPlanted_DiscardedResult_Reported","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.get","dispatched":"issue.get","outcome":"ok","test_status":"passed"}}`,
-		`{"schema":1,"type":"skip","skip":{"test":"TestPlanted_HelperConstant_Resolved","reason":"no runner"}}`,
+		`{"schema":2,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+		`{"schema":2,"type":"session","session":{"label":"d","surface":"dynamic","mode":"default","capabilities":"full","transport":"stdio","tools":["gitlab_execute_action"],"dispatch_observed":true}}`,
+		`{"schema":2,"type":"call","call":{"test":"TestPlanted_DiscardedResult_Reported","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.get","dispatched":"issue.get","outcome":"ok","test_status":"passed"}}`,
+		`{"schema":2,"type":"skip","skip":{"test":"TestPlanted_HelperConstant_Resolved","reason":"no runner"}}`,
 	}, "\n")+"\n")
 	opts := fixtureOptions(t)
 	opts.calls = dir
@@ -672,8 +672,8 @@ func TestRun_Baseline_Unreadable_IsAUsageError(t *testing.T) {
 // beside it stops the run before any comparison: compared as it is, every
 // baseline call would classify as failed and the superset check would pass
 // against nothing. The committed baseline fixture carries verdicts, so a
-// shard without one is written here, in the shape the old suite's recorder
-// wrote.
+// shard without one is written here, in the shape and under the schema the
+// old suite's recorder wrote.
 func TestRun_Baseline_Unjudged_IsAUsageError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "baseline-ce")
 	if err := os.MkdirAll(dir, 0o750); err != nil {

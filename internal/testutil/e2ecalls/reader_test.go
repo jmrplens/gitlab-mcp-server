@@ -44,7 +44,7 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 	}
 	nested := filepath.Join(root, "ee")
 	writeShard(t, nested, "calls-ee.jsonl",
-		`{"schema":1,"type":"skip","skip":{"test":"TestEE_Epics","reason":"no license"}}`,
+		`{"schema":2,"type":"skip","skip":{"test":"TestEE_Epics","reason":"no license"}}`,
 		"",
 	)
 	writeShard(t, root, "notes.txt", "not a shard")
@@ -83,11 +83,11 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 func TestReadShards_KeepsTheFileBoundaries(t *testing.T) {
 	root := t.TempDir()
 	common := writeShard(t, root, "calls-common.jsonl",
-		`{"schema":1,"type":"call","call":{"test":"TestIssue_List","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok","test_status":"passed"}}`,
-		`{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+		`{"schema":2,"type":"call","call":{"test":"TestIssue_List","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok","test_status":"passed"}}`,
+		`{"schema":2,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
 	)
 	ee := writeShard(t, filepath.Join(root, "ee"), "calls-ee.jsonl",
-		`{"schema":1,"type":"run","run":{"package":"ee","requirement":"enterprise","edition":"enterprise","tier":"ultimate","run_id":"r","status":"started"}}`,
+		`{"schema":2,"type":"run","run":{"package":"ee","requirement":"enterprise","edition":"enterprise","tier":"ultimate","run_id":"r","status":"started"}}`,
 	)
 
 	shardFiles, err := ReadShards(root)
@@ -113,6 +113,99 @@ func TestReadShards_KeepsTheFileBoundaries(t *testing.T) {
 	}
 	if len(merged) != 3 {
 		t.Errorf("Read = %d records, want the 3 the shards hold together", len(merged))
+	}
+}
+
+// TestReadShardsForCalls_SchemaOneShard_KeepsItsCallsAndDropsItsSessions
+// verifies that a shard written before version 2 is read for its run, call,
+// dispatch and skip lines, with its session lines dropped, while a current
+// shard beside it keeps its session line, and that the ordinary reader still
+// refuses the same directory.
+//
+// This is the old suite's baseline: written once under version 1 by a suite
+// that no longer exists, and compared on what its calls credited, which
+// version 2 left alone. Its session lines are the ones version 2 changed the
+// meaning of, so they are the one kind a reader must not be handed.
+func TestReadShardsForCalls_SchemaOneShard_KeepsItsCallsAndDropsItsSessions(t *testing.T) {
+	root := t.TempDir()
+	old := writeShard(t, filepath.Join(root, "old"), "calls-old.jsonl",
+		`{"schema":1,"type":"run","run":{"package":"suite","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+		`{"schema":1,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","dispatch_observed":false}}`,
+		`{"schema":1,"type":"call","call":{"test":"TestOld_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok","trace_id":"t1"}}`,
+		`{"schema":1,"type":"dispatch","dispatch":{"trace_id":"t1","action":"issue.list"}}`,
+		`{"schema":1,"type":"skip","skip":{"test":"TestOld_Epics","reason":"no license"}}`,
+	)
+	current := writeShard(t, filepath.Join(root, "new"), "calls-new.jsonl",
+		`{"schema":2,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"stdio","dispatch_observed":true}}`,
+		`{"schema":2,"type":"call","call":{"test":"TestNew_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok"}}`,
+	)
+
+	shardFiles, err := ReadShardsForCalls(root)
+	if err != nil {
+		t.Fatalf("ReadShardsForCalls error = %v, want both schemas read", err)
+	}
+	types := map[string][]string{}
+	for _, shard := range shardFiles {
+		for _, record := range shard.Records {
+			types[shard.Path] = append(types[shard.Path], record.Type)
+		}
+	}
+	want := map[string][]string{
+		current: {TypeSession, TypeCall},
+		old:     {TypeRun, TypeCall, TypeDispatch, TypeSkip},
+	}
+	for path, wantTypes := range want {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			if got := strings.Join(types[path], ","); got != strings.Join(wantTypes, ",") {
+				t.Errorf("line types = %s, want %s", got, strings.Join(wantTypes, ","))
+			}
+		})
+	}
+
+	if _, strictErr := ReadShards(root); strictErr == nil || !strings.Contains(strictErr.Error(), "schema 1 is not 2") {
+		t.Errorf("ReadShards error = %v, want the schema 1 shard refused", strictErr)
+	}
+}
+
+// TestReadShardsForCalls_LineItCannotRead_IsRefused verifies that the older
+// reader widens the schema it accepts and nothing else: a schema outside the
+// range is refused as a stale artifact, and an old line that does not hold
+// together is refused as a current one would be.
+func TestReadShardsForCalls_LineItCannotRead_IsRefused(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want string
+	}{
+		{
+			name: "a schema older than any it reads",
+			line: `{"schema":0,"type":"skip","skip":{"test":"TestOld","reason":"r"}}`,
+			want: "schema 0 is not between 1 and 2",
+		},
+		{
+			name: "a schema newer than this package",
+			line: `{"schema":3,"type":"skip","skip":{"test":"TestNew","reason":"r"}}`,
+			want: "schema 3 is not between 1 and 2",
+		},
+		{
+			name: "an old line carrying two payloads",
+			line: `{"schema":1,"type":"skip","skip":{"test":"TestOld","reason":"r"},"call":{"test":"TestOld"}}`,
+			want: "carries 2 payloads",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeShard(t, dir, "calls-x.jsonl", testCase.line)
+
+			shardFiles, err := ReadShardsForCalls(dir)
+			if err == nil {
+				t.Fatalf("ReadShardsForCalls = %+v, want a refusal", shardFiles)
+			}
+			if !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("ReadShardsForCalls error = %v, want it to say %q", err, testCase.want)
+			}
+		})
 	}
 }
 
