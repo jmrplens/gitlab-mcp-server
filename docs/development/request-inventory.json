@@ -3289,7 +3289,7 @@
       "method": "GET",
       "path": "/projects/:project_id/repository/branches/missing",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -4882,7 +4882,7 @@
         "version"
       ],
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -11437,7 +11437,7 @@
       "method": "GET",
       "path": "/projects/:project_id/labels/bug",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -12349,7 +12349,7 @@
         "title"
       ],
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -17866,7 +17866,7 @@
       "method": "GET",
       "path": "/projects/:project_id/repository/tags/nonexistent",
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
