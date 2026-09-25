@@ -100,8 +100,14 @@ func addressLiteral(host string) (netip.Addr, bool) {
 
 // metadataAddress reports whether addr is a cloud metadata endpoint, and what
 // to call it in the refusal.
+//
+// The zone is dropped as well as the mapping, for the same reason: the table
+// holds each address once, bare, and fd00:ec2::254%eth0 is that address with
+// an interface named. An operating system ignores the zone of a destination
+// that is not link-local, so a lookup that kept it would let the spelling
+// reach the endpoint the table exists to refuse.
 func metadataAddress(addr netip.Addr) (string, bool) {
-	name, ok := metadataAddresses[addr.Unmap()]
+	name, ok := metadataAddresses[addr.WithZone("").Unmap()]
 	return name, ok
 }
 
@@ -146,7 +152,7 @@ func allowPrivateInstances() bool {
 // # The two tiers, and why there is never a third
 //
 // Tier A refuses the cloud metadata addresses on every hop for every client
-// and is applied in [guardDestination], above any policy, so a request that
+// and is applied in [dialTarget.judge], above any policy, so a request that
 // carries none is still covered.
 //
 // Tier B refuses the private address classes, and only for a destination this
@@ -339,6 +345,30 @@ type dialTarget struct {
 	// the instance", because net/http hands each hop to the transport as a
 	// request of its own.
 	offOrigin bool
+	// proxy is the address the transport will dial for this request when it
+	// sends it through a proxy rather than to its own host, spelled as
+	// net/http spells the address it hands the dialer; empty when the request
+	// is dialed directly. [guardedDial] reads it, because only the dialer
+	// knows which address it was asked for before resolution.
+	proxy string
+}
+
+// judge applies both tiers to one address this request would reach.
+//
+// Tier A comes first and needs nothing from the stamp, so a request that
+// carries no policy is still refused a metadata address. Two dials carry
+// none, and tier A is all either gets: a dial to the operator's proxy, which
+// [guardedDial] re-stamps so, and one by a caller outside this server that
+// borrows the transport through [HTTPTransport], which chose its own
+// destination and is not the case this guard is about.
+func (target dialTarget) judge(ctx context.Context, addr netip.Addr) error {
+	if name, ok := metadataAddress(addr); ok {
+		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API or object storage", ErrDestinationRefused, addr, name)
+	}
+	if target.policy == nil {
+		return nil
+	}
+	return target.policy.checkPrivate(ctx, addr, target.offOrigin)
 }
 
 // dialTargetKey is the private context key for [dialTarget].
@@ -380,7 +410,13 @@ func dialTargetFrom(ctx context.Context) (dialTarget, bool) {
 // that by routing each request to one of the [destinationPools] by the same
 // predicate this applies, so a request refused a private address is only
 // served connections that were dialed under that refusal, and every one of
-// those leads to a public address.
+// those leads to a public address or to the operator's proxy.
+//
+// Nor does it see the destination of a request sent through a proxy, since
+// net/http then dials the proxy and hands this the proxy's address. That dial
+// reaches it re-stamped by [guardedDial] with no policy, so the proxy gets
+// tier A and nothing else, and the destination behind it is judged, as far as
+// anything here can judge it, by [judgeProxiedDestination].
 func guardDestination(ctx context.Context, network, address string, _ syscall.RawConn) error {
 	if !strings.HasPrefix(network, "tcp") {
 		// Everything this server dials is TCP. A unix socket carries a path
@@ -391,19 +427,51 @@ func guardDestination(ctx context.Context, network, address string, _ syscall.Ra
 	if err != nil {
 		return fmt.Errorf("%w: %q is not an address this server can classify", ErrDestinationRefused, address)
 	}
-	addr := addrPort.Addr()
-	if name, ok := metadataAddress(addr); ok {
-		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API or object storage", ErrDestinationRefused, addr, name)
+	target, _ := dialTargetFrom(ctx)
+	return target.judge(ctx, addrPort.Addr())
+}
+
+// guardedDial is the DialContext of every transport this package builds: d,
+// told whether the dial is to the proxy the request is sent through.
+//
+// # Why the proxy gets tier A and nothing else
+//
+// When HTTP_PROXY or HTTPS_PROXY applies to a request, net/http dials the
+// proxy's host and port in place of the destination's, and [guardDestination]
+// is handed the address that resolved to. Judged as the destination, a proxy
+// on a private address refused every request tier B refuses a private
+// address, whatever that request was going to reach: an artifact download
+// redirected from a public instance to its object store, behind an ordinary
+// corporate proxy, failed on the proxy's address. The proxy is the operator's
+// own configuration, as much as --gitlab-url is, so it is not a destination a
+// caller or a redirect chose, and tier B has nothing to say about it. Tier A
+// still has: no proxy is served from a cloud metadata address either.
+//
+// That holds for an instance a caller named as well. The caller chose the
+// destination, not the proxy, and what the proxy is asked to reach is judged
+// apart from the dial, by [judgeProxiedDestination].
+//
+// # Why here
+//
+// The guard sees only what an address resolved to, which cannot say it was a
+// proxy; the address before resolution can, and this is the one place it is
+// visible. It is compared with the address [destinationTransport.RoundTrip]
+// recorded for the request's proxy, as a string, so a dial that is not that
+// address keeps the request's stamp and is judged as a destination. A
+// disagreement between the two spellings therefore falls back to judging the
+// proxy as the destination, which is the rule every proxy dial got before
+// this wrapper existed: it can refuse more than a match does, since a private
+// proxy is then refused wherever tier B refuses the request a private
+// address, but it never permits more, since tier A applies either way. An
+// unstamped dial, or one whose request is not proxied, has no proxy address,
+// and net/http never dials an empty one.
+func guardedDial(d *net.Dialer) func(ctx context.Context, network, address string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		if target, _ := dialTargetFrom(ctx); target.proxy == address {
+			ctx = withDialTarget(ctx, dialTarget{})
+		}
+		return d.DialContext(ctx, network, address)
 	}
-	target, ok := dialTargetFrom(ctx)
-	if !ok || target.policy == nil {
-		// Tier A applied above and is all an unstamped request gets. Nothing
-		// in this server dials without a policy; a caller outside it that
-		// borrows the transport through [HTTPTransport] chose its own
-		// destination and is not the case this guard is about.
-		return nil
-	}
-	return target.policy.checkPrivate(ctx, addr, target.offOrigin)
 }
 
 // destinationPools are the two transports every request this package makes is
@@ -419,7 +487,7 @@ func guardDestination(ctx context.Context, network, address string, _ syscall.Ra
 //     instance a caller named, a redirect hop that left it, and a redirect hop
 //     that left a public instance the operator named. Every connection in it
 //     was dialed under that refusal, so it leads to a public address, which
-//     every one of those requests may reach.
+//     every one of those requests may reach, or to a proxy (below).
 //   - permissive carries the requests tier B allows one: the operator's own
 //     instance, a deployment that passed --allow-private-instances, and a hop
 //     from an instance the operator named that is itself private. A
@@ -428,6 +496,14 @@ func guardDestination(ctx context.Context, network, address string, _ syscall.Ra
 //
 // Tier A needs no pool of its own, because no request of any policy can open a
 // connection to a metadata address in the first place.
+//
+// A connection to a proxy is the one kind either pool holds whatever the
+// proxy's address, since [guardedDial] gives a proxy dial tier A alone. That
+// does not let a request past the split: net/http keys a proxied connection
+// on the proxy it goes through, so it is only ever handed a request the same
+// transport sends through the same proxy, whose own dial would have been
+// judged the same way. What such a request asks the proxy to reach is judged
+// per request, by [judgeProxiedDestination], and never by the connection.
 //
 // The ordinary deployment pays nothing for it in idle connections. Every
 // request to the instance the operator named is permissive, so first-party
@@ -456,6 +532,11 @@ type destinationTransport struct {
 }
 
 // RoundTrip stamps the request and delegates to the pool its answer selects.
+//
+// A request the selected pool will send through a proxy is stamped with the
+// proxy's address as well, so the dialer can tell that dial from the
+// destination's, and its destination is judged here before anything is sent,
+// because the dialer will never see it.
 func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	policy := t.client.destinationPolicy()
 	if policy == nil {
@@ -464,13 +545,105 @@ func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, err
 		// answer stricter than the one its own dial would get.
 		return t.pools.permissive.RoundTrip(req)
 	}
-	offOrigin := !policy.coversInstance(req.URL)
-	ctx := withDialTarget(req.Context(), dialTarget{policy: policy, offOrigin: offOrigin})
+	target := dialTarget{policy: policy, offOrigin: !policy.coversInstance(req.URL)}
 	pool := t.pools.strict
-	if policy.permitsPrivate(ctx, offOrigin) {
+	if policy.permitsPrivate(req.Context(), target.offOrigin) {
 		pool = t.pools.permissive
 	}
-	return pool.RoundTrip(req.WithContext(ctx))
+	proxy, err := proxyDialAddress(pool, req)
+	if err != nil {
+		return nil, refuseUnsent(req, err)
+	}
+	if proxy != "" {
+		target.proxy = proxy
+		if err = judgeProxiedDestination(req.Context(), target, req.URL); err != nil {
+			return nil, refuseUnsent(req, err)
+		}
+	}
+	return pool.RoundTrip(req.WithContext(withDialTarget(req.Context(), target)))
+}
+
+// proxyDialAddress reports the address the transport serving req will dial
+// when it sends req through a proxy, and "" when it will dial req's own host.
+//
+// It asks the transport's own Proxy function, which the transport will ask
+// again for the same request, rather than reading the environment itself, so
+// for a deterministic function the two come to one answer. The function every
+// transport here carries is deterministic: [http.ProxyFromEnvironment] reads
+// the environment once per process. One that is not is covered only as far
+// as it fails: a function that fails here refuses the request unsent, while
+// one that answers "direct" here and names a proxy when the transport asks
+// again sends the request through a proxy nobody stamped, to a destination
+// nothing judged. A pool that is not an [http.Transport] has no proxy this
+// package can see, and none is assumed.
+//
+// The address is spelled as net/http spells the one it hands the dialer: the
+// proxy's host, and its port or the default of its scheme. [guardedDial]
+// compares the two as strings, so a host net/http would spell differently (a
+// name it converts to its IDNA form, which this does not) matches no dial,
+// and that dial is judged as a destination under the request's own stamp,
+// which is the rule before the stamp existed. That can refuse a proxy a match
+// would have let through; it cannot let through one a match would refuse.
+func proxyDialAddress(pool http.RoundTripper, req *http.Request) (string, error) {
+	transport, ok := pool.(*http.Transport)
+	if !ok || transport.Proxy == nil {
+		return "", nil
+	}
+	proxy, err := transport.Proxy(req)
+	if err != nil || proxy == nil {
+		return "", err
+	}
+	port := proxy.Port()
+	if port == "" {
+		port = proxySchemePorts[proxy.Scheme]
+	}
+	return net.JoinHostPort(proxy.Hostname(), port), nil
+}
+
+// proxySchemePorts are the ports net/http dials a proxy on when its URL names
+// none, one per proxy scheme it supports.
+var proxySchemePorts = map[string]string{
+	"http":    "80",
+	"https":   "443",
+	"socks5":  "1080",
+	"socks5h": "1080",
+}
+
+// judgeProxiedDestination applies the guard to the destination of a request
+// sent through a proxy, which the dialer never sees: it dials the proxy.
+//
+// Only a destination spelled as an address can be judged here, and it is
+// judged by exactly the rule the dialer would have applied to it, so a
+// redirect to 169.254.169.254 is refused behind a proxy as it is without one,
+// and so is a private address tier B refuses this request. A destination
+// spelled as a name is resolved by the proxy and not by this server, so what
+// it reaches is the proxy's decision and nothing here can see it. That is a
+// limit rather than a boundary: any name that resolves to an address reaches
+// that address through the proxy, and a deployment that proxies its outbound
+// traffic has made the proxy the place a rule about names belongs. It is the
+// same line [CheckCallerNamedInstance] draws at the door, for the same reason.
+//
+// It runs per request rather than per dial because behind any proxy the
+// dialer only ever sees the proxy's address, and because net/http keys a
+// plain-HTTP request sent through an http or https proxy on the proxy alone
+// (connectMethod.key in its transport.go), so one such connection carries
+// requests to many destinations.
+func judgeProxiedDestination(ctx context.Context, target dialTarget, dest *url.URL) error {
+	addr, spelledAsAddress := addressLiteral(dest.Hostname())
+	if !spelledAsAddress {
+		return nil
+	}
+	return target.judge(ctx, addr)
+}
+
+// refuseUnsent closes the body of a request this transport declines to send
+// and returns err, since a RoundTripper owns the body it is handed, refusals
+// included.
+func refuseUnsent(req *http.Request, err error) error {
+	if req.Body != nil {
+		_ = req.Body.Close()
+	}
+	return err
 }
 
 // destinationPolicy returns the policy this client dials under, or nil.
