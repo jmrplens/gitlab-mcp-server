@@ -136,11 +136,59 @@ func Live() string { return usedConst + otherConst }
 		Package:   fixtureDir,
 		File:      fixtureDir + "/fixture.go",
 		Line:      5,
+		Column:    2,
 		Name:      "deadConst",
 		GroupSize: 3,
 	}}
 	if !slices.Equal(found, want) {
-		t.Fatalf("findings = %+v, want %+v: the package, the file below the repository root, the line, the name and the size of the group the linter could not see", found, want)
+		t.Fatalf("findings = %+v, want %+v: the package, the file below the repository root, the line, the column, the name and the size of the group the linter could not see", found, want)
+	}
+}
+
+// TestScan_ConstantsSharingALine_AreJudgedApartAndReportedInSourceOrder holds
+// the two things a line declaring three constants asks of the scan, as
+// `const a, b, c = ...` makes one. The column is part of a constant's
+// identity, so the one the package reads does not make its neighbours read.
+// And the report comes in one order, the line's: the names are chosen to sort
+// the other way round from the columns, so an order taken from the names, or
+// from the map the scan collects into, cannot pass for the source's.
+func TestScan_ConstantsSharingALine_AreJudgedApartAndReportedInSourceOrder(t *testing.T) {
+	found := scanFixture(t, map[string]string{"fixture.go": `package fixture
+
+// The line below declares three constants and reads one.
+const zeta, usedConst, alpha = "z", "used", "a"
+
+func Live() string { return usedConst }
+`})
+	want := []Constant{
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 4, Column: 7, Name: "zeta", GroupSize: 3},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 4, Column: 24, Name: "alpha", GroupSize: 3},
+	}
+	if !slices.Equal(found, want) {
+		t.Fatalf("findings = %+v, want %+v: the two unread constants of the line, as the line declares them", found, want)
+	}
+}
+
+// TestScan_ConstantsAtOnePlaceInTwoFiles_AreJudgedApart keeps the file in a
+// constant's identity. The two files of this package declare a constant at
+// the same line and column, and only the first is read, so a key made of the
+// line and the column alone would lend the second the first one's read.
+func TestScan_ConstantsAtOnePlaceInTwoFiles_AreJudgedApart(t *testing.T) {
+	found := scanFixture(t, map[string]string{
+		"fixture.go": `package fixture
+
+const usedConst = "used"
+
+func Live() string { return usedConst }
+`,
+		"other.go": `package fixture
+
+const deadConst = "declared where fixture.go declares usedConst"
+`,
+	})
+	want := []Constant{{Package: fixtureDir, File: fixtureDir + "/other.go", Line: 3, Column: 7, Name: "deadConst", GroupSize: 1}}
+	if !slices.Equal(found, want) {
+		t.Fatalf("findings = %+v, want %+v: a read in one file is no read of the other", found, want)
 	}
 }
 
@@ -246,7 +294,7 @@ func TestExternal(t *testing.T) {
 		if report.Summary.Packages != 2 {
 			t.Fatalf("Summary.Packages = %d, want 2: the external test package is a package of its own", report.Summary.Packages)
 		}
-		want := []Constant{{Package: fixtureDir + "_test", File: fixtureDir + "/fixture_ext_test.go", Line: 7, Name: "externalDead", GroupSize: 2}}
+		want := []Constant{{Package: fixtureDir + "_test", File: fixtureDir + "/fixture_ext_test.go", Line: 7, Column: 2, Name: "externalDead", GroupSize: 2}}
 		if !slices.Equal(report.Findings, want) {
 			t.Fatalf("findings = %+v, want %+v: the finding is filed under the external test package's own name", report.Findings, want)
 		}
@@ -367,7 +415,7 @@ const (
 
 func Live() level { return levelFirst }
 `})
-	want := []Constant{{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 8, Name: "levelSecond", GroupSize: 2}}
+	want := []Constant{{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 8, Column: 2, Name: "levelSecond", GroupSize: 2}}
 	if !slices.Equal(found, want) {
 		t.Fatalf("findings = %+v, want %+v", found, want)
 	}
@@ -593,8 +641,8 @@ func (p *pair[K, V]) Two() {
 func Live() {}
 `})
 	want := []Constant{
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Name: "oneLocal", Func: "box.One", GroupSize: 1},
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 12, Name: "twoLocal", Func: "pair.Two", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Column: 8, Name: "oneLocal", Func: "box.One", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 12, Column: 8, Name: "twoLocal", Func: "pair.Two", GroupSize: 1},
 	}
 	if !slices.Equal(found, want) {
 		t.Fatalf("findings = %+v, want %+v", found, want)
@@ -626,9 +674,9 @@ func (w (*walker)) PtrParen() {
 func Live() {}
 `})
 	want := []Constant{
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Name: "walkLocal", Func: "walker.Walk", GroupSize: 1},
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 10, Name: "ptrLocal", Func: "walker.Ptr", GroupSize: 1},
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 14, Name: "ptrParenLocal", Func: "walker.PtrParen", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Column: 8, Name: "walkLocal", Func: "walker.Walk", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 10, Column: 8, Name: "ptrLocal", Func: "walker.Ptr", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 14, Column: 8, Name: "ptrParenLocal", Func: "walker.PtrParen", GroupSize: 1},
 	}
 	if !slices.Equal(found, want) {
 		t.Fatalf("findings = %+v, want %+v", found, want)

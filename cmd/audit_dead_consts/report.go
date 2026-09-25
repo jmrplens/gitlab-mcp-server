@@ -82,12 +82,17 @@ func groupNote(groupSize int) string {
 	return fmt.Sprintf("1 of %d in its const declaration", groupSize)
 }
 
-// sortConstants puts findings in a stable order: by file, then by line.
+// sortConstants puts findings in source order: by file, then by line, then
+// by column. The column is what makes the order total, since two constants
+// may share a line but never a position.
 func sortConstants(found []Constant) {
 	sort.Slice(found, func(i, j int) bool {
 		if found[i].File != found[j].File {
 			return found[i].File < found[j].File
 		}
-		return found[i].Line < found[j].Line
+		if found[i].Line != found[j].Line {
+			return found[i].Line < found[j].Line
+		}
+		return found[i].Column < found[j].Column
 	})
 }

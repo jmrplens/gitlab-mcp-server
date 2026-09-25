@@ -17,7 +17,13 @@ type Constant struct {
 	Package string `json:"package"`
 	File    string `json:"file"`
 	Line    int    `json:"line"`
-	Name    string `json:"name"`
+	// Column is where the name starts on its line. A finding is printed as
+	// file:line, so the column is not shown; it is what orders two constants
+	// declared on one line, `const a, b = ...`, the way the line declares
+	// them, where the order used to come from the map the scan collects into
+	// and two runs over one tree printed the report two ways.
+	Column int    `json:"column"`
+	Name   string `json:"name"`
 	// Func is the function a constant is declared inside, as the file spells
 	// it (`Type.Method` for a method), and empty for one at package scope. It
 	// is part of the constant's identity in the declaration table: a local
@@ -147,6 +153,7 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 				Package:   trimModulePath(variantName(pkg.PkgPath)),
 				File:      relativePath(at.file, s.root),
 				Line:      at.line,
+				Column:    at.col,
 				Name:      constant.Name(),
 				Func:      enclosing,
 				GroupSize: len(names),
