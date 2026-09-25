@@ -1683,3 +1683,122 @@ func TestHTTPTransportConfigured(t *testing.T) {
 		})
 	}
 }
+
+// replaceForTest sets a package seam for the rest of the test and restores it
+// afterwards. A test calling it must not run in parallel, since the seam is
+// shared by every caller in the package.
+func replaceForTest[T any](t *testing.T, seam *T, value T) {
+	t.Helper()
+	previous := *seam
+	*seam = value
+	t.Cleanup(func() { *seam = previous })
+}
+
+// errRaced stands in for the answer a file system gives when the file a path
+// named was removed after the path was resolved and checked.
+var errRaced = errors.New("the file went away after it was checked")
+
+// TestOpenAndValidateFile_TheFileChangesAfterItWasResolved verifies each check
+// the open repeats refuses what a race leaves behind, closing whatever it had
+// opened: the file removed before the Lstat, and, once the path passed every
+// check, a descriptor whose own stat fails, one naming a directory, and one
+// naming a file larger than the limit, which is what a swap between the Lstat
+// and the open hands back. No input can schedule the race, so the seams stand
+// in for it, and each case says which check caught it.
+func TestOpenAndValidateFile_TheFileChangesAfterItWasResolved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "data.bin")
+	if err := os.WriteFile(path, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	larger := filepath.Join(dir, "larger.bin")
+	if err := os.WriteFile(larger, []byte("a good deal more data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	closed, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("removed before the lstat", func(t *testing.T) {
+		replaceForTest(t, &lstatResolved, func(string) (os.FileInfo, error) { return nil, errRaced })
+		if _, _, openErr := OpenAndValidateFile(path, 0); !errors.Is(openErr, errRaced) || !strings.Contains(openErr.Error(), "stat ") {
+			t.Errorf("OpenAndValidateFile() error = %v, want the stat failure", openErr)
+		}
+	})
+	for _, tt := range []struct {
+		name   string
+		opened func(string) (*os.File, error)
+		want   string
+	}{
+		{name: "a descriptor whose stat fails", opened: func(string) (*os.File, error) { return closed, nil }, want: "stat "},
+		{name: "a directory in its place", opened: func(string) (*os.File, error) { return os.Open(dir) }, want: "is not a regular file"},
+		{name: "a larger file in its place", opened: func(string) (*os.File, error) { return os.Open(larger) }, want: "exceeds maximum allowed size of 4 bytes"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var handed *os.File
+			replaceForTest(t, &openResolved, func(name string) (*os.File, error) {
+				f, openErr := tt.opened(name)
+				handed = f
+				return f, openErr
+			})
+			f, info, openErr := OpenAndValidateFile(path, 4)
+			if f != nil || info != nil || openErr == nil || !strings.Contains(openErr.Error(), tt.want) {
+				t.Fatalf("OpenAndValidateFile() = %v, %v, %v; want no file and an error saying %q", f, info, openErr, tt.want)
+			}
+			// The descriptor the race handed back is closed, not leaked: a
+			// second close reports it already was.
+			if closeErr := handed.Close(); !errors.Is(closeErr, os.ErrClosed) {
+				t.Errorf("the refused descriptor was left open: Close() = %v", closeErr)
+			}
+		})
+	}
+}
+
+// TestCanonicalizeThroughExistingAncestor_NoAncestorExists verifies the walk
+// toward the root stops at the root and says so, rather than climbing for
+// ever, when not even the root resolves: the one file system that answers
+// every ancestor as missing is one the seam stands in for.
+func TestCanonicalizeThroughExistingAncestor_NoAncestorExists(t *testing.T) {
+	replaceForTest(t, &evalAncestorSymlinks, func(string) (string, error) { return "", fs.ErrNotExist })
+	path := filepath.Join(t.TempDir(), "nested", "out.bin")
+	_, err := canonicalizeThroughExistingAncestor(path)
+	if err == nil || !strings.Contains(err.Error(), "no existing ancestor directory for "+path) {
+		t.Errorf("canonicalizeThroughExistingAncestor() error = %v, want the walk to stop at the root", err)
+	}
+}
+
+// TestCanonicalImportArchivePath_TheArchiveGoesAwayAfterItWasResolved verifies
+// the stat that follows the archive's resolution reports the archive removed
+// in between, rather than judging a file no longer there.
+func TestCanonicalImportArchivePath_TheArchiveGoesAwayAfterItWasResolved(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "export.tar.gz")
+	if err := os.WriteFile(archive, []byte("archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := filepath.EvalSymlinks(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaceForTest(t, &statResolved, func(name string) (os.FileInfo, error) {
+		if name == canonical {
+			return nil, errRaced
+		}
+		return os.Stat(name)
+	})
+	if _, err = CanonicalImportArchivePath(archive); !errors.Is(err, errRaced) || !strings.Contains(err.Error(), "stat archive") {
+		t.Errorf("CanonicalImportArchivePath() error = %v, want the archive's stat failure", err)
+	}
+}
+
+// TestCanonicalDirPath_TheDirectoryGoesAwayAfterItWasResolved verifies the
+// stat that follows a directory's resolution reports it removed in between.
+func TestCanonicalDirPath_TheDirectoryGoesAwayAfterItWasResolved(t *testing.T) {
+	replaceForTest(t, &statResolved, func(string) (os.FileInfo, error) { return nil, errRaced })
+	if _, err := canonicalDirPath(t.TempDir()); !errors.Is(err, errRaced) {
+		t.Errorf("canonicalDirPath() error = %v, want the stat failure", err)
+	}
+}

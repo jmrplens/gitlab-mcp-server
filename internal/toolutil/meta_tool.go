@@ -470,18 +470,30 @@ func schemaForType(rt reflect.Type) map[string]any {
 	return outputSchemaCache.Load(rt, func() map[string]any { return buildSchemaForType(rt) })
 }
 
+// schemaToJSON and schemaFromJSON are the round trip a reflected schema takes
+// into the map every surface publishes. A schema jsonschema-go reflected from
+// a Go type always marshals, since its MarshalJSON writes nothing but JSON's
+// own kinds, and what it writes is an object, which always decodes into a
+// map; so the branches reading their errors guard against a library change
+// no input can bring about. They are package variables so a test can take
+// those branches.
+var (
+	schemaToJSON   = json.Marshal
+	schemaFromJSON = json.Unmarshal
+)
+
 // buildSchemaForType reflects one type into a shared JSON Schema map.
 func buildSchemaForType(rt reflect.Type) map[string]any {
 	schema, err := jsonschema.ForType(rt, schemaForOptions())
 	if err != nil {
 		return nil
 	}
-	data, marshalErr := json.Marshal(schema)
+	data, marshalErr := schemaToJSON(schema)
 	if marshalErr != nil {
 		return nil
 	}
 	var m map[string]any
-	if json.Unmarshal(data, &m) != nil {
+	if schemaFromJSON(data, &m) != nil {
 		return nil
 	}
 	normalizeSchemaDescriptions(m)

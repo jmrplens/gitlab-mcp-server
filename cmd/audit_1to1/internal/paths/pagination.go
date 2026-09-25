@@ -241,7 +241,7 @@ func inspectOutput(outputType reflect.Type) outputShape {
 	// One list and nothing else beside it is the envelope of a collection.
 	// Anything else is an object that happens to carry a list, whose caller
 	// asked for the object.
-	if walk.lists != 1 || walk.others != 0 {
+	if walk.lists != 1 || walk.content {
 		walk.shape.Collection = ""
 	}
 	return walk.shape
@@ -251,12 +251,17 @@ func inspectOutput(outputType reflect.Type) outputShape {
 // being assembled, and the tally that decides whether the type is an envelope.
 //
 // The tally cannot live on the shape, because it is not part of the answer: a
-// reader of a finding needs the list's name and the pagination block, and the
-// count of scalars beside them is the working the rule showed itself.
+// reader of a finding needs the list's name and the pagination block, and what
+// else sits beside them is the working the rule showed itself.
+//
+// The lists are counted because an envelope holds exactly one. The content
+// beside them is only ever asked whether there is any, so it is a flag: kept
+// as a count, it read the same whether it went up or down, and a decrement in
+// its place survived every test.
 type outputWalk struct {
-	shape  outputShape
-	lists  int
-	others int
+	shape   outputShape
+	lists   int
+	content bool
 }
 
 // visit reads one struct's fields, following the untagged embeds that promote
@@ -272,11 +277,12 @@ func (w *outputWalk) visit(structType reflect.Type, depth int) {
 
 // field classifies one field as framing, an embed to follow, the list, or
 // content beside it.
+//
+// A field the reflect package lists always has a type, and dereferencing a
+// pointer chain ends at a type, so there is no nil to guard against here; the
+// guard that stood here could only ever be passed.
 func (w *outputWalk) field(field reflect.StructField, depth int) {
 	fieldType := dereference(field.Type)
-	if fieldType == nil {
-		return
-	}
 	if paginationShapes[fieldType] {
 		if w.shape.Pagination == "" {
 			w.shape.Pagination = fieldType.Name()
@@ -300,7 +306,7 @@ func (w *outputWalk) field(field reflect.StructField, depth int) {
 		}
 		return
 	}
-	w.others++
+	w.content = true
 }
 
 // publishedName is the json key a field reaches a model under, and whether it

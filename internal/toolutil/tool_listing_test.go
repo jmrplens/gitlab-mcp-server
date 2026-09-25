@@ -149,6 +149,49 @@ func TestListRegisteredTools_NilServerAndCancelledContext(t *testing.T) {
 	}
 }
 
+// TestListRegisteredTools_ServerRefusesTheSession verifies a server session
+// that cannot be connected is reported with what failed, and no client is
+// connected after it. go-sdk's Server.Connect fails only when its transport
+// does, which the in-memory transport this listing builds never does, so the
+// seam stands in for the refusal.
+func TestListRegisteredTools_ServerRefusesTheSession(t *testing.T) {
+	refused := errors.New("transport refused")
+	replaceForTest(t, &connectInspected, func(context.Context, *mcp.Server, mcp.Transport) (*mcp.ServerSession, error) {
+		return nil, refused
+	})
+	listed := false
+	replaceForTest(t, &listInspectedTools, func(context.Context, *mcp.ClientSession) (*mcp.ListToolsResult, error) {
+		listed = true
+		return &mcp.ListToolsResult{}, nil
+	})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	_, err := ListRegisteredTools(t.Context(), server, "test-list-client")
+	if !errors.Is(err, refused) || !strings.HasPrefix(err.Error(), "connect server: ") {
+		t.Errorf("ListRegisteredTools() error = %v, want the refusal wrapped as connect server", err)
+	}
+	if listed {
+		t.Error("ListRegisteredTools() listed tools on a session it never connected")
+	}
+}
+
+// TestListRegisteredTools_ANullResultListsNothing verifies a listing answered
+// with no result at all is an empty listing rather than a nil dereference.
+// A go-sdk server always answers tools/list with a result, so the seam stands
+// in for a server that sent null.
+func TestListRegisteredTools_ANullResultListsNothing(t *testing.T) {
+	replaceForTest(t, &listInspectedTools, func(context.Context, *mcp.ClientSession) (*mcp.ListToolsResult, error) {
+		return nil, nil //nolint:nilnil // a server that sent a null result is what this stub imitates
+	})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddTool(&mcp.Tool{Name: "gitlab_x", InputSchema: &map[string]any{"type": "object"}}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{}, nil
+	})
+	tools, err := ListRegisteredTools(t.Context(), server, "test-list-client")
+	if err != nil || tools != nil {
+		t.Errorf("ListRegisteredTools() = %v, %v; want no tools and no error", tools, err)
+	}
+}
+
 // TestListRegisteredTools_ListToolsErrorIsWrapped verifies that a failure of
 // the tools/list RPC itself (as opposed to failing to connect, which
 // TestListRegisteredTools_NilServerAndCancelledContext already covers) is

@@ -199,6 +199,22 @@ func TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage(t *testing.T) {
 	}
 }
 
+// TestLessAlwaysSent_IsAStrictOrder verifies the finding order compares every
+// field of the identity in turn, the last of them included, and holds no
+// finding less than itself, which is what sort.Slice asks of a less function
+// and what keeps two runs over one tree printing one list.
+func TestLessAlwaysSent_IsAStrictOrder(t *testing.T) {
+	finding := AlwaysSentField{Package: "internal/tools/x", Path: "/a", Method: "PUT", OptionType: "XOptions", Param: "b"}
+	laterParam := finding
+	laterParam.Param = "c"
+	if lessAlwaysSent(finding, finding) {
+		t.Error("lessAlwaysSent(f, f) = true, want false")
+	}
+	if !lessAlwaysSent(finding, laterParam) || lessAlwaysSent(laterParam, finding) {
+		t.Error("lessAlwaysSent did not order two findings that differ only in the param")
+	}
+}
+
 // TestLookupParam_AListOfObjects_IsTriedUnderBothSpellings verifies the one
 // accommodation the param naming makes. Grape declares the members of an array
 // of hashes with an empty subscript between the parent and the key, and several

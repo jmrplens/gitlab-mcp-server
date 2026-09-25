@@ -16,13 +16,24 @@ func snippetCreateInputSchema[T any]() *jsonschema.Schema {
 	return schema
 }
 
+// schemaToJSON and schemaFromJSON are the round trip a create schema takes
+// into the map the catalog publishes. A schema jsonschema-go reflected from a
+// Go type always marshals, and what it writes is an object, which always
+// decodes into a map, so the panics reading their errors guard against a
+// library change no input can bring about. They are package variables so a
+// test can take those branches.
+var (
+	schemaToJSON   = json.Marshal
+	schemaFromJSON = json.Unmarshal
+)
+
 func snippetCreateInputSchemaMap[T any]() map[string]any {
-	data, err := json.Marshal(snippetCreateInputSchema[T]())
+	data, err := schemaToJSON(snippetCreateInputSchema[T]())
 	if err != nil {
 		panic(fmt.Sprintf("marshal snippet create input schema: %v", err))
 	}
 	var schema map[string]any
-	if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
+	if unmarshalErr := schemaFromJSON(data, &schema); unmarshalErr != nil {
 		panic(fmt.Sprintf("unmarshal snippet create input schema: %v", unmarshalErr))
 	}
 	return schema

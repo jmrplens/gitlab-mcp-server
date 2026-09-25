@@ -520,6 +520,52 @@ func TestSnippetCreateInputSchemaMap_DeadBranches(t *testing.T) {
 	}
 }
 
+// TestSnippetCreateInputSchemaMap_ARoundTripThatFails_Panics takes the two
+// branches TestSnippetCreateInputSchemaMap_DeadBranches explains no schema
+// reaches: a schema that would not marshal and bytes that would not decode
+// each fail at registration, saying which half failed. The seams stand in for
+// a library that stopped keeping its promise. Not parallel: the seams are the
+// package's.
+func TestSnippetCreateInputSchemaMap_ARoundTripThatFails_Panics(t *testing.T) {
+	refused := errors.New("refused")
+	for _, tt := range []struct {
+		name    string
+		replace func(t *testing.T)
+		want    string
+	}{
+		{
+			name: "the marshal",
+			replace: func(t *testing.T) {
+				t.Helper()
+				previous := schemaToJSON
+				schemaToJSON = func(any) ([]byte, error) { return nil, refused }
+				t.Cleanup(func() { schemaToJSON = previous })
+			},
+			want: "marshal snippet create input schema: refused",
+		},
+		{
+			name: "the unmarshal",
+			replace: func(t *testing.T) {
+				t.Helper()
+				previous := schemaFromJSON
+				schemaFromJSON = func([]byte, any) error { return refused }
+				t.Cleanup(func() { schemaFromJSON = previous })
+			},
+			want: "unmarshal snippet create input schema: refused",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.replace(t)
+			defer func() {
+				if message, _ := recover().(string); message != tt.want {
+					t.Errorf("panic = %q, want %q", message, tt.want)
+				}
+			}()
+			_ = CreateInputSchemaMap()
+		})
+	}
+}
+
 // TestFormatFileContentMarkdown verifies the whole render of one snippet
 // file's content.
 func TestFormatFileContentMarkdown(t *testing.T) {

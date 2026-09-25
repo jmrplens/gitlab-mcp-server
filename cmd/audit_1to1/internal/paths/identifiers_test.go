@@ -86,6 +86,12 @@ func TestIdentifierCheck_AnInventoryWithNoCounts_SaysItDidNotRun(t *testing.T) {
 // rows worth reading, and the true count has to survive it, or a reader would
 // take the printed list for the whole answer.
 func TestIdentifierCheck_ManyLeads_ArePrintedSharpestFirstAndCapped(t *testing.T) {
+	t.Run("a lead is not less than itself", func(t *testing.T) {
+		lead := IdentifierLead{Package: "internal/tools/x", Method: "GET", Path: "/a/:a_id", Placeholder: ":a_id"}
+		if lessLead(lead, lead) {
+			t.Error("lessLead(l, l) = true, want false: the order has to be strict for sort.Slice")
+		}
+	})
 	rows := make([]requestinventory.Row, 0, maxIdentifierLeads+2)
 	for i := range maxIdentifierLeads + 1 {
 		rows = append(rows, requestinventory.Row{
