@@ -49,7 +49,12 @@ func streamDownloadPackageFile(
 		return 0, "", fmt.Errorf("format package URL: %w%s", err, hint)
 	}
 
-	httpReq, err := client.GL().NewRequest(http.MethodGet, apiPath, nil, nil)
+	// The request is built here rather than through a service method, so the
+	// context goes in as the same option every service call takes: without it
+	// client-go builds the request from context.Background(), and neither the
+	// action deadline nor an abandoned call would end a transfer nothing else
+	// bounds.
+	httpReq, err := client.GL().NewRequest(http.MethodGet, apiPath, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return 0, "", fmt.Errorf("create download request: %w", err)
 	}

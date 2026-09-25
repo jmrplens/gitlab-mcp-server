@@ -352,6 +352,17 @@ func LongRunningTool(ctx context.Context, req *mcp.CallToolRequest, input Input)
 }
 ```
 
+A request to GitLab only ends with the handler's context when it is given
+that context. client-go takes it as a request option and builds the request
+from `context.Background()` without one, so every SDK call passes
+`gl.WithContext(ctx)`, and a request built with `NewRequest` gets it in its
+options or through `req = req.WithContext(ctx)` before it is sent. A call
+without it compiles, answers correctly and passes its tests, while neither the
+action deadline nor an abandoned HTTP POST can stop it. `noctx` and
+`contextcheck` cannot see an option-carried context, so `make
+check-sdk-context` (`cmd/audit_sdk_context`) gates it, and
+`testutil.CancelOnArrival` is the fixture that proves a handler passes it.
+
 ## Server Options
 
 Configure server behavior with options:

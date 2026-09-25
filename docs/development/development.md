@@ -38,6 +38,7 @@ gitlab-mcp-server/
 │   ├── audit_install_buttons/   # One-click install buttons decode to one configuration per command
 │   ├── audit_metrics/           # MCP tool/resource/prompt metrics summary (+ -site-stats)
 │   ├── audit_readonly_graphql/  # No ReadOnly action can reach a GraphQL mutation
+│   ├── audit_sdk_context/       # Every client-go call hands the SDK the caller's context (gl.WithContext)
 │   ├── audit_supply_chain/      # Release-configuration invariants (pinned actions, locked release jobs, ...)
 │   ├── audit_surface_quality/   # Surface quality audit (-view metadata|output|all)
 │   ├── audit_test_goroutines/   # testing.T aborts made off the test goroutine

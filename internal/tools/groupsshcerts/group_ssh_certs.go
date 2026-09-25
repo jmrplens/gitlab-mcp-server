@@ -129,7 +129,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 		Key:   new(in.Key),
 		Title: new(in.Title),
 	}
-	cert, _, err := client.GL().GroupSSHCertificates.CreateGroupSSHCertificate(in.GroupID.String(), opts)
+	cert, _, err := client.GL().GroupSSHCertificates.CreateGroupSSHCertificate(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create group SSH certificate", err, http.StatusBadRequest, "verify the SSH certificate key is valid PEM format")
 	}
@@ -147,7 +147,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	if in.CertificateID == 0 {
 		return toolutil.ErrFieldRequired("certificate_id")
 	}
-	_, err := client.GL().GroupSSHCertificates.DeleteGroupSSHCertificate(in.GroupID.String(), in.CertificateID)
+	_, err := client.GL().GroupSSHCertificates.DeleteGroupSSHCertificate(in.GroupID.String(), in.CertificateID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete group SSH certificate", err, http.StatusNotFound, "verify cert_id with group.ssh_cert_list")
 	}

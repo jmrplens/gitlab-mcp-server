@@ -174,6 +174,13 @@ jobs:
       # the first run of this rule found twenty-five constants nothing reads.
       - name: Check no constant is left unread
         run: make check-dead-consts
+      # client-go takes the caller's context only as the gl.WithContext request
+      # option and builds the request from context.Background() without it,
+      # so a call that forgets it compiles, answers correctly and cannot be
+      # cancelled. noctx and contextcheck cannot see an option-carried context,
+      # and the class had shipped in five packages before this gate.
+      - name: Check every client-go call carries the caller's context
+        run: make check-sdk-context
       - name: Check the pinned GraphQL schema parses
         run: make check-graphql-schema
       # The REST twin of the schema pin, and the oracle that is evaluated

@@ -133,6 +133,7 @@ func publishWithTracker(
 			Status: (*gl.GenericPackageStatusValue)(ptrString(input.Status)),
 			Select: &selectVal,
 		},
+		gl.WithContext(ctx),
 	)
 	if err != nil {
 		if errors.Is(err, gl.ErrInvalidFileName) {
@@ -658,7 +659,7 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 		opts.Sort = input.Sort
 	}
 
-	files, resp, err := client.GL().Packages.ListPackageFiles(string(input.ProjectID), pkgID, opts)
+	files, resp, err := client.GL().Packages.ListPackageFiles(string(input.ProjectID), pkgID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return FileListOutput{}, toolutil.WrapErrWithStatusHint("packageFileList", err, http.StatusNotFound,
 			"verify package_id with package.list; the package may have been deleted")
@@ -710,7 +711,7 @@ func Delete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclient.Cl
 		return errors.New("packageDelete: package_id must be a positive integer")
 	}
 
-	_, err = client.GL().Packages.DeleteProjectPackage(string(input.ProjectID), pkgID)
+	_, err = client.GL().Packages.DeleteProjectPackage(string(input.ProjectID), pkgID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
 			return fmt.Errorf("packageDelete: package deletion requires Maintainer role or higher. Your current role may only allow publishing. Contact a project Maintainer to delete packages: %w", err)
@@ -749,7 +750,7 @@ func FileDelete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclien
 		return errors.New("packageFileDelete: package_file_id must be a positive integer")
 	}
 
-	_, err = client.GL().Packages.DeletePackageFile(string(input.ProjectID), pkgID, fileID)
+	_, err = client.GL().Packages.DeletePackageFile(string(input.ProjectID), pkgID, fileID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("packageFileDelete", err, http.StatusNotFound,
 			"verify package_file_id with package.file_list; deleting package files requires Maintainer role or higher")

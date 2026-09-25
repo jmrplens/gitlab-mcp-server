@@ -4,10 +4,12 @@ package groupcredentials
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -745,5 +747,49 @@ func TestParseISODate(t *testing.T) {
 	}
 	if s := got.String(); s != "2026-01-02" {
 		t.Errorf("parseISODate(\"2026-01-02\").String() = %q, want %q", s, "2026-01-02")
+	}
+}
+
+// TestGroupCredentials_ContextCancelledMidFlight_AbandonsTheRequest verifies
+// that each of the four calls hands the caller's context to the request it
+// sends, so the action deadline and an abandoned HTTP POST end it rather than
+// leaving a credential listing or a revocation running against GitLab.
+//
+// client-go takes that context only as the gl.WithContext request option and
+// builds the request from context.Background() without it, which is how all
+// four shipped. The context is cancelled once the request has arrived, since
+// the guard at the top of each handler answers one cancelled up front before
+// any request exists.
+func TestGroupCredentials_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		call   func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list_pats", http.StatusOK, patJSON, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListPATs(ctx, c, ListPATsInput{GroupID: "mygroup"})
+			return err
+		}},
+		{"list_ssh_keys", http.StatusOK, sshKeyJSON, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListSSHKeys(ctx, c, ListSSHKeysInput{GroupID: "mygroup"})
+			return err
+		}},
+		{"revoke_pat", http.StatusNoContent, "", func(ctx context.Context, c *gitlabclient.Client) error {
+			return RevokePAT(ctx, c, RevokePATInput{GroupID: "mygroup", TokenID: 1})
+		}},
+		{"delete_ssh_key", http.StatusNoContent, "", func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteSSHKey(ctx, c, DeleteSSHKeyInput{GroupID: "mygroup", KeyID: 5})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			})
+			if err := tt.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Fatalf("error = %v after the context was cancelled mid-flight, want context.Canceled", err)
+			}
+		})
 	}
 }

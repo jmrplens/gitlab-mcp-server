@@ -16,6 +16,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -30,6 +33,102 @@ func TestCancelledCtx(t *testing.T) {
 	ctx := CancelledCtx(t)
 	if ctx.Err() != context.Canceled {
 		t.Errorf("ctx.Err() = %v, want %v", ctx.Err(), context.Canceled)
+	}
+}
+
+// versionJSON is the answer the [CancelOnArrival] tests give through respond,
+// so a request that reached it can be told from one that did not by what the
+// SDK decoded.
+const versionJSON = `{"version":"17.0.0","revision":"abc"}`
+
+// TestCancelOnArrival_CancelsTheContextWhenTheFirstRequestArrives holds the
+// half of [CancelOnArrival] every caller relies on: a request that carries the
+// returned context is abandoned the moment it reaches the mock, the caller
+// sees the cancellation, and respond is never reached. Without the cancel on
+// arrival the request would wait out the hold and come back answered, which
+// is what a handler that dropped the context looks like.
+func TestCancelOnArrival_CancelsTheContextWhenTheFirstRequestArrives(t *testing.T) {
+	var answered atomic.Int64
+	ctx, client := CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		answered.Add(1)
+		RespondJSON(w, http.StatusOK, versionJSON)
+	})
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("ctx.Err() = %v before any request, want nil: the context must end on arrival, not before", err)
+	}
+
+	_, _, err := client.GL().Version.GetVersion(gl.WithContext(ctx))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("GetVersion() error = %v, want context.Canceled", err)
+	}
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		t.Errorf("ctx.Err() = %v after the request arrived, want context.Canceled", ctx.Err())
+	}
+	if n := answered.Load(); n != 0 {
+		t.Errorf("respond answered %d request(s) the client had abandoned, want 0", n)
+	}
+}
+
+// TestCancelOnArrival_AnswersARequestThatCarriesNoContext holds the other
+// half: a request built without the context, the defect the helper exists to
+// expose, is not abandoned, so the mock waits out its hold and answers it
+// through respond. The hold is shortened through the unexported seam so the
+// test does not wait five seconds for an answer it already knows the shape of.
+//
+// The request carries a body, and respond reads it: the helper drains the
+// body before it waits, and a respond that found it already consumed would
+// answer a request it could no longer see.
+//
+// The call passes no request option on purpose, which is the one shape
+// cmd/audit_sdk_context refuses in library code. Test files are outside that
+// gate, and this is the kind of test that needs to be.
+func TestCancelOnArrival_AnswersARequestThatCarriesNoContext(t *testing.T) {
+	seen := make(chan string, 1)
+	ctx, client := cancelOnArrival(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		seen <- string(body)
+		RespondJSON(w, http.StatusCreated, `{"id":1,"name":"kept"}`)
+	}, time.Millisecond)
+
+	project, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{Name: new("kept")})
+	if err != nil {
+		t.Fatalf("CreateProject() error = %v, want the answer respond gives after the hold", err)
+	}
+	if project.Name != "kept" {
+		t.Errorf("Name = %q, want %q from respond", project.Name, "kept")
+	}
+	if body := <-seen; !strings.Contains(body, `"name":"kept"`) {
+		t.Errorf("respond read body %q, want the one the client sent", body)
+	}
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		t.Errorf("ctx.Err() = %v, want context.Canceled: the arrival cancels whether or not the request carried it", ctx.Err())
+	}
+}
+
+// TestCancelOnArrival_AbandonsARequestWithABodyWithoutWaitingOutTheHold holds
+// why the helper drains the body before it waits. The server only watches the
+// connection once a request's body has been read to its end, so without the
+// drain an abandoned upload would leave its handler holding for the whole
+// hold, and the test that sent it would pay for that in its cleanup, where the
+// server waits for every handler to return.
+//
+// The call runs in a subtest so that cleanup, the server's close included,
+// is inside what the parent times. The hold is long enough that waiting it
+// out cannot be mistaken for anything else.
+func TestCancelOnArrival_AbandonsARequestWithABodyWithoutWaitingOutTheHold(t *testing.T) {
+	const hold = 30 * time.Second
+	start := time.Now()
+	t.Run("upload", func(t *testing.T) {
+		ctx, client := cancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+			RespondJSON(w, http.StatusCreated, `{"id":1}`)
+		}, hold)
+		_, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{Name: new("abandoned")}, gl.WithContext(ctx))
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("CreateProject() error = %v, want context.Canceled", err)
+		}
+	})
+	if elapsed := time.Since(start); elapsed >= hold {
+		t.Errorf("the abandoned request held its handler for %v, the whole hold: the server never saw the client go", elapsed)
 	}
 }
 

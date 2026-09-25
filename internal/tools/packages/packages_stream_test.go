@@ -462,9 +462,11 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 //     that leaves the hint empty: for a string project id, parseID accepts
 //     whatever it is given, so ErrInvalidFileName is the only error the call
 //     can return and errors.Is is never false there.
-//  2. NewRequest error: the only error path is url.PathUnescape on a
-//     malformed percent-encoded path. FormatPackageURL generates the
-//     path with PathEscape, so the result is always well-formed.
+//  2. NewRequest error: the error paths are url.PathUnescape on a
+//     malformed percent-encoded path and a request option that fails.
+//     FormatPackageURL generates the path with PathEscape, so the result is
+//     always well-formed, and the one option passed, gl.WithContext, never
+//     returns an error.
 //  3. MkdirAll error: it fails where an ancestor exists and is not a
 //     directory, and CanonicalDownloadOutputPath has already refused that
 //     path. It resolves the longest existing prefix through EvalSymlinks,
@@ -521,5 +523,33 @@ func TestStreamDownload_DeadBranches(t *testing.T) {
 	want := hex.EncodeToString(expected[:])
 	if checksum != want {
 		t.Fatalf("checksum = %q, want %q", checksum, want)
+	}
+}
+
+// TestDownload_ContextCancelledMidFlight_AbandonsTheRequest verifies that the
+// download request carries the caller's context, so the action deadline and
+// an abandoned HTTP POST end a transfer nothing else bounds.
+//
+// The download builds its request by hand through NewRequest, which takes the
+// context as a request option like every other client-go call and falls back
+// to context.Background() without one; it was built with none. The context is
+// cancelled once the GET has arrived, since the guard at the top of Download
+// answers one cancelled up front before any request exists.
+func TestDownload_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(headerContentType, testOctetStream)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("package-bytes"))
+	})
+
+	_, err := Download(ctx, nil, client, DownloadInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: testPkgVersion,
+		FileName:       testAppBin,
+		OutputPath:     filepath.Join(t.TempDir(), testOutputBin),
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Download() error = %v after the context was cancelled mid-flight, want context.Canceled", err)
 	}
 }
