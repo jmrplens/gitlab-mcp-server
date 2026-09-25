@@ -69,7 +69,9 @@ func Failures() []Failure {
 			Kind: "missing-credential", Attributable: true, Charged: true, Decision: "IDN-001",
 			At: resolveSite(), Status: 401, Prefix: "Authentication required: send a GitLab personal access token",
 		},
-		{Kind: "no-instance-selected", Decision: "ADM-011", At: resolveSite(), Status: 400, Prefix: severalPrefix},
+		// The gate's text for this one is built by missingURLMessage, so it does
+		// not fold at the return.
+		{Kind: "no-instance-selected", Decision: "ADM-011", At: resolveSite(), Status: 400},
 		{Kind: "no-instance-published", Decision: "ADM-011", At: resolveSite(), Status: 400},
 		{Kind: "invalid-instance", Decision: "ADM-011", At: resolveSite(), Status: 400},
 		{Kind: "destination-refused", Decision: "DST-001", At: resolveSite(), Status: 400},

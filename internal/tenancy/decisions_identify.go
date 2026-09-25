@@ -138,8 +138,14 @@ func identifyDecisions() []Decision {
 			ID: "ADM-011", Question: Identify, Kind: Rule, Class: ClassQ, Disposition: Ruled,
 			Resource: "the GitLab instance a request selects among the published ones",
 			Key:      KeyRequest, StdioKey: KeyNone,
+			// The gate's 400 for a missing header takes its text from
+			// missingURLMessage and writes it in resolve.
 			Refusals: []Refusal{
-				gateRefusal(400, codeInvalidRequest, severalPrefix, FixRequest, refuse(pkgServer, "mcpServerGate.resolve")),
+				{
+					Methods: []string{MethodGate}, Channel: Gate, Code: codeInvalidRequest, Status: 400,
+					Prefix: severalPrefix, Answer: FixRequest,
+					At: refuse(pkgServer, "mcpServerGate.missingURLMessage"), Via: refuse(pkgServer, "mcpServerGate.resolve"),
+				},
 				gateRefusal(400, codeInvalidRequest, "", FixRequest, refuse(pkgServer, "mcpServerGate.resolve")),
 				gateRefusal(400, codeInvalidRequest, severalPrefix, FixRequest, refuse(pkgServer, "bearerGuard.check")),
 				gateRefusal(403, CodeForbidden, "This deployment does not serve the GitLab instance", AskOperator,
@@ -148,6 +154,7 @@ func identifyDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgPool, "ResolveRequestOptionsFor"),
 				enforce(pkgServer, "requireExplicitInstance"),
+				refuse(pkgServer, "mcpServerGate.missingURLMessage"),
 				refuse(pkgServer, "mcpServerGate.resolve"),
 				refuse(pkgServer, "bearerGuard.check"),
 			},
