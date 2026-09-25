@@ -1,6 +1,6 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1085 (self-managed Ultimate) individual tools, or 1091 on GitLab.com Ultimate, **34 base meta-tools** (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1086 (self-managed Ultimate) individual tools, or 1092 on GitLab.com Ultimate, **34 base meta-tools** (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
@@ -57,7 +57,7 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | ----------------- | -------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
 | Dynamic (default) |                                2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
 | Meta-tools        |                   34 Free/CE / 40 Premium / 51 Ultimate / 52 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
-| Individual tools  | 866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
+| Individual tools  | 866 Free/CE / 1020 Premium / 1086 Ultimate / 1092 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
 

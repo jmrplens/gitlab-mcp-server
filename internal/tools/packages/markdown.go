@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -12,6 +14,103 @@ import (
 // before the ellipsis; a digest of exactly this length is left whole, so the
 // ellipsis always means something was cut.
 const shortDigestLength = 12
+
+// packageNotFoundOutput is the answer to a package GitLab answered 404 for,
+// naming the package and its project as the caller gave them.
+type packageNotFoundOutput struct {
+	Identifier string
+}
+
+// formatPackageNotFound renders a package GitLab could not find as the
+// structured not-found result, with the two ways a package_id goes stale.
+func formatPackageNotFound(out packageNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(
+		"Package", out.Identifier,
+		"Use package.list with project_id to list the project's packages and their package_id",
+		"Each version of a package has its own package_id, and deleting that version retires it",
+	)
+}
+
+// FormatGetMarkdown renders one package as the card of one object: its own
+// fields, the pipeline that last built it, and the package's other versions
+// as a nested table, which only this read is sent.
+func FormatGetMarkdown(out GetOutput) string {
+	p := out.Package
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Package: "+p.Name)
+	c.Int("ID", p.ID)
+	c.Field("Version", p.Version)
+	c.Field("Type", p.PackageType)
+	c.Field("Status", p.Status)
+	c.Field("Conan Package", p.ConanPackageName)
+	c.Count("Creator ID", p.CreatorID)
+	c.Time("Created", p.CreatedAt)
+	c.Time("Last Downloaded", p.LastDownloadedAt)
+	if p.Links != nil {
+		c.Code("Web Path", p.Links.WebPath)
+	}
+	// The summary arrives rendered: a link when GitLab gave the pipeline's
+	// page, the escaped text otherwise, which is what pipelineItemSummary
+	// writes for the listing's cell too.
+	c.Markdown("Pipeline", pipelineSummary(p))
+	c.Field("Tags", listTagNames(p.Tags))
+	writeVersionsTable(c, p.Versions)
+	c.End(
+		toolutil.HintAction(actionPackageFileList, "list the files inside this package"),
+		toolutil.HintAction("package.download", "download one of its files"),
+		toolutil.HintAction(actionPackageDelete, "delete this version of the package"),
+	)
+	return b.String()
+}
+
+// listTagNames joins the names of the tags pointing at the package, for the
+// one card row that lists them; the row escapes what it writes.
+func listTagNames(tags []TagItem) string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// versionTagNames joins the names of the tags pointing at one other version.
+func versionTagNames(tags []toolutil.PackageTagOutput) string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// writeVersionsTable writes the package's other versions as the nested
+// collection they are, under a heading of the card's own: each version's id,
+// the tags pointing at it, the pipeline that built it and when it was
+// published. A package with no other version writes nothing.
+func writeVersionsTable(c *toolutil.Card, versions []toolutil.PackageVersionOutput) {
+	if len(versions) == 0 {
+		return
+	}
+	t := c.Table("Other Versions", "ID", "Version", "Tags", "Pipeline", "Created")
+	for _, v := range versions {
+		t.Row(
+			strconv.FormatInt(v.ID, 10),
+			toolutil.EscapeMdTableCell(v.Version),
+			toolutil.EscapeMdTableCell(versionTagNames(v.Tags)),
+			versionPipelineSummary(v.Pipeline),
+			toolutil.FormatTime(toolutil.RFC3339Ptr(v.CreatedAt)),
+		)
+	}
+}
+
+// versionPipelineSummary renders the pipeline that built one other version as
+// the listing renders a package's own pipeline, or nothing when GitLab sent
+// none.
+func versionPipelineSummary(pipeline *toolutil.PackagePipelineOutput) string {
+	if pipeline == nil {
+		return ""
+	}
+	return pipelineItemSummary(PipelineItem{ID: pipeline.ID, Status: pipeline.Status, Ref: pipeline.Ref, WebURL: pipeline.WebURL})
+}
 
 // FormatPublishMarkdown renders a published package file as the card of one
 // object.
@@ -280,6 +379,8 @@ func publishDirHeading(published, failed int) string {
 }
 
 func init() {
+	toolutil.RegisterMarkdownResult(formatPackageNotFound)
+	toolutil.RegisterMarkdown(FormatGetMarkdown)
 	toolutil.RegisterMarkdown(FormatPublishMarkdown)
 	toolutil.RegisterMarkdown(FormatDownloadMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)

@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releaselinks"
@@ -522,6 +525,127 @@ func TestFormatPackageListMarkdown_SentFields(t *testing.T) {
 				t.Errorf("%s markdown =\n%q\nwant:\n%q", tt.name, tt.got, tt.want)
 			}
 		})
+	}
+}
+
+// getHints is the guidance the package card closes with.
+const getHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'package.file_list' to list the files inside this package\n" +
+	"- Use action 'package.download' to download one of its files\n" +
+	"- Use action 'package.delete' to delete this version of the package\n"
+
+// TestFormatGetMarkdown_WholeCard verifies the package card: its own fields,
+// the pipeline that last built it linked to its page, the tags pointing at it,
+// and the other versions as a nested table, each with its tags, the pipeline
+// that built it and when it was published, and empty cells for what GitLab did
+// not send.
+func TestFormatGetMarkdown_WholeCard(t *testing.T) {
+	created := time.Date(2026, 1, 4, 5, 6, 0, 0, time.UTC)
+	got := FormatGetMarkdown(GetOutput{Package: ListItem{
+		ID: 10, Name: testPackageName, Version: "1.0.0", PackageType: "conan", Status: "default",
+		ConanPackageName: "recipe-name", CreatorID: 57,
+		CreatedAt: "2026-01-02T03:04:05Z", LastDownloadedAt: "2026-01-03T04:05:06Z",
+		Links:    &LinksItem{WebPath: "/grp/proj/-/packages/10", DeleteAPIPath: "/api/v4/projects/42/packages/10"},
+		Pipeline: &PipelineItem{ID: 71, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/p/-/pipelines/71"},
+		Tags:     []TagItem{{Name: "latest"}, {Name: "stable"}},
+		Versions: []toolutil.PackageVersionOutput{
+			{
+				ID: 9, Version: "0.9.0", CreatedAt: &created,
+				Tags:     []toolutil.PackageTagOutput{{Name: "old"}, {Name: "lts"}},
+				Pipeline: &toolutil.PackagePipelineOutput{ID: 70, Status: "failed", Ref: "release", WebURL: "https://gitlab.example.com/p/-/pipelines/70"},
+			},
+			{ID: 8, Version: "0.8.0"},
+		},
+	}})
+	want := "## Package: my-pkg\n\n" +
+		"- **ID**: 10\n" +
+		"- **Version**: 1.0.0\n" +
+		"- **Type**: conan\n" +
+		"- **Status**: default\n" +
+		"- **Conan Package**: recipe-name\n" +
+		"- **Creator ID**: 57\n" +
+		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
+		"- **Last Downloaded**: 3 Jan 2026 04:05 UTC\n" +
+		"- **Web Path**: `/grp/proj/-/packages/10`\n" +
+		"- **Pipeline**: [71 success main](https://gitlab.example.com/p/-/pipelines/71)\n" +
+		"- **Tags**: latest, stable\n" +
+		"\n### Other Versions\n\n" +
+		"| ID | Version | Tags | Pipeline | Created |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 9 | 0.9.0 | old, lts | [70 failed release](https://gitlab.example.com/p/-/pipelines/70) | 4 Jan 2026 05:06 UTC |\n" +
+		"| 8 | 0.8.0 |  |  |  |\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatGetMarkdown_LeavesOutWhatGitLabDidNotSend verifies a package with
+// no creator, links, pipeline, tags or other versions is the card of what it
+// has and nothing else: no empty row, and no table heading over no rows.
+func TestFormatGetMarkdown_LeavesOutWhatGitLabDidNotSend(t *testing.T) {
+	got := FormatGetMarkdown(GetOutput{Package: ListItem{ID: 10, Name: testPackageName, Version: "1.0.0", Links: &LinksItem{}}})
+	want := "## Package: my-pkg\n\n" +
+		"- **ID**: 10\n" +
+		"- **Version**: 1.0.0\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatGetMarkdown_EscapesWhatGitLabAuthored verifies a package name, a
+// tag name and a version string carrying a pipe and markup reach the card
+// escaped, so none of them can add a column, a heading or a tag of its own.
+func TestFormatGetMarkdown_EscapesWhatGitLabAuthored(t *testing.T) {
+	const (
+		name    = "pkg|<b>x</b>"
+		tag     = "rc|<i>1</i>"
+		version = "2.0|<u>0</u>"
+	)
+	got := FormatGetMarkdown(GetOutput{Package: ListItem{
+		ID: 10, Name: name, Version: "1.0.0",
+		Tags:     []TagItem{{Name: tag}},
+		Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: version, Tags: []toolutil.PackageTagOutput{{Name: tag}}}},
+	}})
+	for _, raw := range []string{name, tag, version} {
+		if strings.Contains(got, raw) {
+			t.Errorf("card carries %q unescaped:\n%s", raw, got)
+		}
+	}
+	for _, escaped := range []string{
+		toolutil.EscapeMdHeading("Package: " + name),
+		"- **Tags**: " + toolutil.EscapeMdTableCell(tag) + "\n",
+		"| 9 | " + toolutil.EscapeMdTableCell(version) + " | " + toolutil.EscapeMdTableCell(tag) + " |  |  |\n",
+	} {
+		if !strings.Contains(got, escaped) {
+			t.Errorf("card does not carry %q:\n%s", escaped, got)
+		}
+	}
+}
+
+// TestFormatPackageNotFound_NamesThePackageAndWhereIDsComeFrom verifies the
+// not-found result is an error result naming the package as the caller gave
+// it, with the listing that holds its package_id.
+func TestFormatPackageNotFound_NamesThePackageAndWhereIDsComeFrom(t *testing.T) {
+	result := formatPackageNotFound(packageNotFoundOutput{Identifier: "10 in project 42"})
+	if !result.IsError || len(result.Content) != 1 {
+		t.Fatalf("not-found result = %+v, want one error content", result)
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("not-found content = %T, want text", result.Content[0])
+	}
+	text := content.Text
+	for _, want := range []string{
+		"Package Not Found",
+		"**10 in project 42**",
+		"Use package.list with project_id to list the project's packages and their package_id",
+		"Each version of a package has its own package_id",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("not-found result does not carry %q:\n%s", want, text)
+		}
 	}
 }
 

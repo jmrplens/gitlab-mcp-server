@@ -3,6 +3,7 @@ package packages
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -11,25 +12,30 @@ import (
 )
 
 const (
-	actionPackageList     = "package.list"
-	actionPackageFileList = "package.file_list"
-	actionPackagePublish  = "package.publish"
-	actionPackageDelete   = "package.delete"
-	actionNameList        = "list"
-	actionNameGroupList   = "group_list"
-	actionNamePublishDir  = "publish_directory"
-	actionNamePublishLink = "publish_and_link"
-	actionNameFileList    = "file_list"
-	schemaEnum            = "enum"
-	schemaDescription     = "description"
-	paramOrderBy          = "order_by"
+	actionPackageList      = "package.list"
+	actionPackageGroupList = "package.group_list"
+	actionPackageGet       = "package.get"
+	actionPackageFileList  = "package.file_list"
+	actionPackagePublish   = "package.publish"
+	actionPackageDelete    = "package.delete"
+	actionNameList         = "list"
+	actionNameGroupList    = "group_list"
+	actionNameGet          = "get"
+	actionNamePublishDir   = "publish_directory"
+	actionNamePublishLink  = "publish_and_link"
+	actionNameFileList     = "file_list"
+	schemaEnum             = "enum"
+	schemaDescription      = "description"
+	paramOrderBy           = "order_by"
+	paramPackageID         = "package_id"
+	paramProjectID         = "project_id"
 )
 
 // ActionSpecs returns canonical specs for Generic Package Registry
-// actions exposed as MCP tools. The publish, download, list, file
-// list, delete, file delete, publish-and-link, and publish-directory
-// routes are projected into the dynamic, meta, individual, and audit
-// surfaces by the action catalog (ADR-0004).
+// actions exposed as MCP tools. The publish, download, list, group list,
+// get, file list, delete, file delete, publish-and-link, and
+// publish-directory routes are projected into the dynamic, meta,
+// individual, and audit surfaces by the action catalog (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_package_publish — publish a file to the Generic Package Registry.
@@ -45,6 +51,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		packageReadSpec(actionNameList, toolutil.RouteAction(client, List), "gitlab_package_list"),
 		// gitlab_list_group_packages — list packages across a group and its descendant projects.
 		packageReadSpec(actionNameGroupList, toolutil.RouteAction(client, GroupList), "gitlab_list_group_packages"),
+		// gitlab_package_get — get one package with the package's other versions.
+		packageReadSpec(actionNameGet, packageGetRoute(client), "gitlab_package_get"),
 		// gitlab_package_file_list — list files within a single package.
 		packageReadSpec(actionNameFileList, toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
 		// gitlab_package_delete — delete a package (destructive).
@@ -56,6 +64,23 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_package_publish_directory — publish every file from a local directory.
 		packageCreateSpec(actionNamePublishDir, toolutil.RouteActionWithRequest(client, PublishDirectory), "gitlab_package_publish_directory"),
 	}
+}
+
+// packageGetRoute wraps the canonical [Get] route so that a package GitLab
+// answers 404 for is reported as a structured not-found result naming the
+// package and its project, logged at INFO, rather than as a Go error.
+func packageGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return packageNotFoundOutput{
+					Identifier: fmt.Sprintf("%v in project %v", input[paramPackageID], input[paramProjectID]),
+				}, nil
+			}
+			return result, err
+		}
+	})
 }
 
 // deleteOutput adapts the package's [Delete] handler to the
@@ -138,14 +163,20 @@ var packageActionMetadata = map[string]packageActionMeta{
 	actionNameList: {
 		// usage is set in packageOptions with extra ordering guidance.
 		aliases:     []string{"list project packages", "browse package registry", "find published packages", "enumerate package versions"},
-		related:     []string{actionPackageFileList, actionPackagePublish, actionPackageDelete},
-		description: "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
+		related:     []string{actionPackageGet, actionPackageFileList, actionPackagePublish, actionPackageDelete},
+		description: "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_get, gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
 	},
 	actionNameGroupList: {
 		// usage is set in packageOptions with extra ordering guidance.
 		aliases:     []string{"list group packages", "browse group package registry", "list packages across group projects", "enumerate packages in a group"},
-		related:     []string{actionPackageList, actionPackageFileList, actionPackageDelete},
-		description: "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
+		related:     []string{actionPackageList, actionPackageGet, actionPackageFileList, actionPackageDelete},
+		description: "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_get, gitlab_package_file_list, gitlab_package_delete.",
+	},
+	actionNameGet: {
+		usage:       "Get one package of a project by the package_id package.list or package.group_list returns. The answer carries every field a listing does plus the package's other versions, each with its tags and the pipeline that built it, which no listing sends. To read the files inside the package, use package.file_list.",
+		aliases:     []string{"get package", "show package details", "list other versions of a package", "retrieve a project package", "inspect a registry package"},
+		related:     []string{actionPackageList, actionPackageGroupList, actionPackageFileList, actionPackageDelete},
+		description: "Get one package of a project with its other versions. Returns: the package's type, status, creator, pipeline metadata, tags, _links, and its other versions with their tags and the pipeline that built each. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
 	},
 	actionNameFileList: {
 		usage:       "List the individual files belonging to one package. Provide project_id and the package_id returned by package.list to enumerate every asset, its size, and checksums.",
@@ -253,6 +284,18 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 				schemaEnum:        []any{"composer", "conan", "generic", "golang", "helm", "maven", "npm", "nuget", "pypi", "terraform_module"},
 				schemaDescription: "Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.",
 			}),
+		}
+	}
+	if actionName == actionNameGet {
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			paramPackageID: {
+				SemanticRole: "package_registry_id",
+				ValueSource:  "The numeric id package.list or package.group_list returns for the package.",
+				CommonConfusions: []string{
+					"Do not pass the package name or a version string: every version of a package is a package of its own, with its own package_id.",
+					"Do not pass a package_file_id from package.file_list.",
+				},
+			},
 		}
 	}
 	if actionName == "publish" {

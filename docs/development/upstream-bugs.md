@@ -1189,8 +1189,10 @@ of change whose test is one assertion on the built URL.
 
   `packages` followed when the pin moved to **v3.14.0**, checked against that
   release's `packages.go` in the module cache: both listings read `creator_id`
-  and `conan_package_name` off `Package` and capture nothing, and the
-  `PackageExtra` shape and its reader are gone. The rest of what that capture
+  and `conan_package_name` off `Package` and capture nothing, and
+  `PackageExtra` now holds only the five pipeline keys the fourth finding
+  below records, read by `package.get`, the action the bump's
+  `GetProjectPackage` made possible. The rest of what that capture
   read needed no field of `gitlab-org/api/client-go!3052`, and is not lost:
   the owning project's `project_id` and `project_path` are sent only to a
   group's listing, where `GroupPackage` already decodes them, and `versions`
@@ -1419,7 +1421,16 @@ them would have been wrong:
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
 - `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
-  keys `API::Entities::Package::Pipeline` exposes.
+  keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
+  into `BasicUser`, which is missing the `public_email` and `locked` of the
+  `UserBasic` GitLab renders there. This server publishes all five on the
+  other versions `package.get` returns, reading them off the captured response
+  beside the SDK's decode (`toolutil.CapturedPackage`, under
+  [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  and only on that route, the one that sends versions; a bump carrying the
+  fields retires the read. The package's own `pipeline` and `pipelines`
+  decode into the same struct and are published without the three, as they
+  were before versions were.
 
 **Three more gaps are recorded and not yet sent**, held back by the batching
 the maintainer asked for above. Each is a field this server now reads from the

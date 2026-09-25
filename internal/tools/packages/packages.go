@@ -597,6 +597,148 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 	}, nil
 }
 
+// Get Package.
+
+// GetInput defines input for retrieving one package of a project.
+type GetInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	PackageID toolutil.StringOrInt `json:"package_id" jsonschema:"Package ID, as package.list or package.group_list returns it,required"`
+}
+
+// GetOutput is one package: every field a listing publishes, and the
+// package's other versions, which only this read is sent.
+type GetOutput struct {
+	toolutil.HintableOutput
+	Package ListItem `json:"package"`
+}
+
+// Get retrieves one package of a project via the GitLab Packages API
+// (GET /projects/:id/packages/:package_id), the only endpoint that sends the
+// package's other versions.
+//
+// client-go decodes every field the listings publish, and the other versions
+// with their tags; the three keys of each version's pipeline that its
+// PackagePipeline leaves out, and two of the user who ran it, are read from
+// the captured response beside that decode (ADR-0021).
+func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return GetOutput{}, fmt.Errorf(fmtCtxCancelled, err)
+	}
+	if input.ProjectID == "" {
+		return GetOutput{}, errors.New("packageGet: project_id is required")
+	}
+	pkgID, err := input.PackageID.Int64()
+	if err != nil || pkgID <= 0 {
+		return GetOutput{}, errors.New("packageGet: package_id must be a positive integer")
+	}
+
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	pkg, _, err := client.GL().Packages.GetProjectPackage(string(input.ProjectID), pkgID, gl.WithContext(ctx))
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("packageGet", err, http.StatusNotFound,
+			"verify package_id with package.list; the package may have been deleted")
+	}
+	extra, err := toolutil.CapturedPackage(captured, len(pkg.Versions))
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErr("packageGet", err)
+	}
+
+	item := packageToListItem(pkg)
+	item.Versions = packageVersionsToOutput(pkg.Versions, extra.Versions)
+	return GetOutput{Package: item}, nil
+}
+
+// packageVersionsToOutput converts the other versions client-go decoded,
+// completing each one's pipeline with what the capture read at the same
+// position; [toolutil.CapturedPackage] holds the two counts equal. A version
+// GitLab sent as null is skipped. The item publishes its versions with
+// omitempty, so a package with no other version publishes none.
+func packageVersionsToOutput(versions []*gl.PackageVersion, extras []toolutil.PackageVersionExtra) []toolutil.PackageVersionOutput {
+	out := make([]toolutil.PackageVersionOutput, 0, len(versions))
+	for i, v := range versions {
+		if v == nil {
+			continue
+		}
+		out = append(out, toolutil.PackageVersionOutput{
+			ID:        v.ID,
+			Version:   v.Version,
+			CreatedAt: v.CreatedAt,
+			Tags:      packageTagsToOutput(v.Tags),
+			Pipeline:  packageVersionPipelineToOutput(v.Pipeline, extras[i].Pipeline),
+		})
+	}
+	return out
+}
+
+// packageTagsToOutput converts the tags pointing at a package version. The
+// shape publishes its tags without omitempty, so a version GitLab sent with
+// an empty list keeps the empty list and one sent with none keeps none.
+func packageTagsToOutput(tags []gl.PackageTag) []toolutil.PackageTagOutput {
+	if tags == nil {
+		return nil
+	}
+	out := make([]toolutil.PackageTagOutput, 0, len(tags))
+	for _, tag := range tags {
+		out = append(out, toolutil.PackageTagOutput{
+			ID:        tag.ID,
+			PackageID: tag.PackageID,
+			Name:      tag.Name,
+			CreatedAt: tag.CreatedAt,
+			UpdatedAt: tag.UpdatedAt,
+		})
+	}
+	return out
+}
+
+// packageVersionPipelineToOutput converts the pipeline that built a package
+// version, or nil when GitLab sent none: the eight keys client-go's
+// PackagePipeline decodes, and the three the capture read beside it.
+func packageVersionPipelineToOutput(pipeline *gl.PackagePipeline, extra *toolutil.PackagePipelineExtra) *toolutil.PackagePipelineOutput {
+	if pipeline == nil {
+		return nil
+	}
+	out := &toolutil.PackagePipelineOutput{
+		ID:        pipeline.ID,
+		SHA:       pipeline.SHA,
+		Ref:       pipeline.Ref,
+		Status:    pipeline.Status,
+		CreatedAt: pipeline.CreatedAt,
+		UpdatedAt: pipeline.UpdatedAt,
+		WebURL:    pipeline.WebURL,
+	}
+	var userExtra *toolutil.UserBasicExtra
+	if extra != nil {
+		out.IID = extra.IID
+		out.ProjectID = extra.ProjectID
+		out.Source = extra.Source
+		userExtra = extra.User
+	}
+	out.User = packagePipelineUserToOutput(pipeline.User, userExtra)
+	return out
+}
+
+// packagePipelineUserToOutput converts the user who ran a package version's
+// pipeline, or nil when GitLab sent none: the six keys client-go's BasicUser
+// decodes that the entity sends, and the two the capture read beside it.
+func packagePipelineUserToOutput(user *gl.BasicUser, extra *toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
+	if user == nil {
+		return nil
+	}
+	out := &toolutil.UserBasicOutput{
+		ID:        user.ID,
+		Username:  user.Username,
+		Name:      user.Name,
+		State:     user.State,
+		AvatarURL: user.AvatarURL,
+		WebURL:    user.WebURL,
+	}
+	if extra != nil {
+		out.PublicEmail = extra.PublicEmail
+		out.Locked = extra.Locked
+	}
+	return out
+}
+
 // List Package Files.
 
 // FileListInput defines input for listing files within a package.

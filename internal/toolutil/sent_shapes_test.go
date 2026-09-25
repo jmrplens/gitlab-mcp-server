@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -177,6 +178,20 @@ type capturedReaderCase struct {
 	read func(*gitlabclient.ResponseCapture) (any, error)
 	body string
 	want func(any) bool
+}
+
+// readTheSentPackage reports whether the package reader decoded the keys of an
+// other version's pipeline client-go does not model, the two of its user
+// included. It sits out here because a predicate reaching three objects deep
+// is the one shape the table cannot hold as a literal and stay readable.
+func readTheSentPackage(v any) bool {
+	e, _ := v.(PackageExtra)
+	if len(e.Versions) != 1 || e.Versions[0].Pipeline == nil {
+		return false
+	}
+	pipeline := e.Versions[0].Pipeline
+	return pipeline.IID == 4 && pipeline.ProjectID == 42 && pipeline.Source == "push" &&
+		pipeline.User != nil && pipeline.User.Locked && pipeline.User.PublicEmail == "alice@example.com"
 }
 
 // tailReaderCases is the table itself, out here rather than inside the test, so
@@ -431,6 +446,14 @@ func tailReaderCases() []capturedReaderCase {
 				return e.SharedRunnersMinutesLimit != nil && *e.SharedRunnersMinutesLimit == 400 &&
 					e.ExtraSharedRunnersMinutesLimit != nil && e.AdditionalPurchasedStorageSize != nil
 			},
+		},
+		{
+			name: "package",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedPackage(c, 1) },
+			body: `{"id":10,"creator_id":57,"versions":[{"id":9,"version":"0.9.0",` +
+				`"pipeline":{"id":77,"iid":4,"project_id":42,"source":"push",` +
+				`"user":{"id":5,"username":"alice","public_email":"alice@example.com","locked":true}}}]}`,
+			want: readTheSentPackage,
 		},
 		{
 			// The pending request is the shape that carries nothing of the
@@ -741,6 +764,27 @@ func TestCapturedMergeRequests_HoldsTheCountToTheSDKs(t *testing.T) {
 	_, err = CapturedMergeRequests(gitlabclient.CapturedBody([]byte(`[{"id":1}]`)), 2)
 	if err == nil || !strings.Contains(err.Error(), "holds 1 merge requests and the SDK decoded 2") {
 		t.Errorf("CapturedMergeRequests() with another count = %v, want the two numbers", err)
+	}
+}
+
+// TestCapturedPackage_HoldsTheVersionCountToTheSDKs verifies the package reader
+// pairs by position only when the capture holds as many other versions as the
+// SDK decoded, and refuses any other count with both numbers, fewer and more
+// alike, so a version's pipeline keys cannot land on its neighbor.
+func TestCapturedPackage_HoldsTheVersionCountToTheSDKs(t *testing.T) {
+	body := []byte(`{"versions":[{"pipeline":{"iid":4}},{}]}`)
+	extra, err := CapturedPackage(gitlabclient.CapturedBody(body), 2)
+	if err != nil || len(extra.Versions) != 2 || extra.Versions[0].Pipeline.IID != 4 || extra.Versions[1].Pipeline != nil {
+		t.Errorf("CapturedPackage() = %+v, %v; want two versions in order", extra, err)
+	}
+	for _, decoded := range []int{1, 3} {
+		t.Run(fmt.Sprintf("the SDK decoded %d", decoded), func(t *testing.T) {
+			_, countErr := CapturedPackage(gitlabclient.CapturedBody(body), decoded)
+			want := fmt.Sprintf("holds 2 package versions and the SDK decoded %d", decoded)
+			if countErr == nil || !strings.Contains(countErr.Error(), want) {
+				t.Errorf("CapturedPackage() = %v, want %q", countErr, want)
+			}
+		})
 	}
 }
 

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Packages, Container Registry & Package Protection Rules
-> **Individual tools**: 33
+> **Individual tools**: 34
 > **Meta-tool**: `gitlab_package` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `dependency.*`, `package.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Packages API](https://docs.gitlab.com/ee/api/packages.html), [Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html), [Package Protection Rules API](https://docs.gitlab.com/ee/api/project_packages_protection_rules.html)
@@ -16,11 +16,12 @@ The packages domain covers the GitLab Generic Package Registry (publish, downloa
 
 On the default dynamic surface, these operations are the `dependency.*`, `package.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `group_list`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_MCP_TIER` (Premium or Ultimate).
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `group_list`, `get`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_MCP_TIER` (Premium or Ultimate).
 
 ### Common Questions
 
 > "List packages in project 42"
+> "Which other versions of package 17 exist, and which pipeline built each?"
 > "Upload a release binary to the package registry"
 > "Show container registry images"
 
@@ -64,6 +65,13 @@ A file already at `output_path` is replaced rather than written through: the res
 ### `gitlab_package_list`
 
 List packages in a GitLab project. Can filter by name, version, type, and supports pagination and sorting. When GitLab includes package pipeline metadata, the response preserves both `pipeline` and `pipelines` fields.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_package_get`
+
+Get one package of a project by the `package_id` a listing returns (canonical ID `package.get`, `GET /projects/:id/packages/:package_id`). The answer carries every field a listing does, and the package's other versions under `versions`, each with its tags and the pipeline that built it, which GitLab sends only to this read and never to a listing. Each version of a package is a package of its own with its own `package_id`, so the package a listing names at version `1.0.0` lists `2.0.0` among its other versions, and the reverse. A `package_id` GitLab answers 404 for, which is what a deleted version leaves behind, returns a not-found result naming the package and the project rather than an error.
 
 | Annotation | **Read** |
 | ---------- | -------- |

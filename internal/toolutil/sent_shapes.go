@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"fmt"
 	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -809,7 +810,8 @@ func CapturedNamespaces(capture *gitlabclient.ResponseCapture, decoded int) ([]N
 	return capturedList[NamespaceExtra](capture, decoded, "namespaces")
 }
 
-// PackageTagOutput is one tag pointing at a package version.
+// PackageTagOutput is one tag pointing at a package version, every key of it
+// read from client-go's PackageTag.
 type PackageTagOutput struct {
 	ID        int64      `json:"id"`
 	PackageID int64      `json:"package_id"`
@@ -819,7 +821,9 @@ type PackageTagOutput struct {
 }
 
 // PackagePipelineOutput is the pipeline that built a package version, sent to
-// a caller allowed to read it.
+// a caller allowed to read it. client-go's PackagePipeline carries eight of its
+// keys; iid, project_id and source, and the user's locked and public_email,
+// come from [PackagePipelineExtra].
 type PackagePipelineOutput struct {
 	ID        int64            `json:"id"`
 	IID       int64            `json:"iid"`
@@ -836,13 +840,57 @@ type PackagePipelineOutput struct {
 
 // PackageVersionOutput is one other version of the same package, with the tags
 // pointing at it and the pipeline that built it, which GitLab sends only when
-// one package is asked for and never on a page of them.
+// one package is asked for and never on a page of them. It is published in
+// this shape rather than decoded into it: client-go's PackageVersion carries
+// the version and its tags, and [PackageExtra] completes the pipeline.
 type PackageVersionOutput struct {
 	ID        int64                  `json:"id"`
 	Version   string                 `json:"version"`
 	CreatedAt *time.Time             `json:"created_at"`
 	Tags      []PackageTagOutput     `json:"tags"`
 	Pipeline  *PackagePipelineOutput `json:"pipeline"`
+}
+
+// PackageExtra is what GitLab's package entity sends on a single package that
+// client-go's Package does not carry. client-go v3.14.0 models the package's
+// creator, its Conan recipe name and its other versions with their tags; what
+// it leaves out is on the pipeline that built each of those versions, listed
+// on [PackagePipelineExtra].
+type PackageExtra struct {
+	Versions []PackageVersionExtra `json:"versions"`
+}
+
+// PackageVersionExtra is the part of one other version of a package that
+// client-go's PackageVersion does not carry, all of it on its pipeline.
+type PackageVersionExtra struct {
+	Pipeline *PackagePipelineExtra `json:"pipeline"`
+}
+
+// PackagePipelineExtra is what lib/api/entities/package/pipeline.rb sends on a
+// package version's pipeline that client-go's PackagePipeline does not carry:
+// the pipeline's iid, its project and its source, three of the eleven keys the
+// entity exposes, and the two keys of the UserBasic who ran it that client-go's
+// BasicUser leaves out.
+type PackagePipelineExtra struct {
+	IID       int64           `json:"iid"`
+	ProjectID int64           `json:"project_id"`
+	Source    string          `json:"source"`
+	User      *UserBasicExtra `json:"user"`
+}
+
+// CapturedPackage reads them off the captured answer to a request for one
+// package, one extra per other version in order, the count held to what the
+// SDK decoded.
+func CapturedPackage(capture *gitlabclient.ResponseCapture, decodedVersions int) (PackageExtra, error) {
+	extra, err := capturedOne[PackageExtra](capture)
+	if err != nil {
+		return PackageExtra{}, err
+	}
+	if len(extra.Versions) != decodedVersions {
+		return PackageExtra{}, fmt.Errorf("the captured answer holds %d package versions and the SDK decoded %d",
+			len(extra.Versions), decodedVersions)
+	}
+	return extra, nil
 }
 
 // AccessRequesterExtra is what lib/api/entities/access_requester.rb sends on a
@@ -1278,8 +1326,9 @@ func CapturedProjects(capture *gitlabclient.ResponseCapture, decoded int) ([]Pro
 }
 
 // UserBasicExtra is what lib/api/entities/user_basic.rb sends that client-go's
-// ProjectUser does not model. Both are unconditional on that entity, so a
-// plain value is the honest shape here.
+// ProjectUser does not model, and neither does its BasicUser, which is what the
+// user who ran a package version's pipeline decodes into. Both are
+// unconditional on that entity, so a plain value is the honest shape here.
 type UserBasicExtra struct {
 	Locked      bool   `json:"locked"`
 	PublicEmail string `json:"public_email"`

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1641,6 +1642,10 @@ func TestPackages_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
 			_, err := FileList(ctx, c, FileListInput{ProjectID: "42", PackageID: "10"})
 			return err
 		}},
+		{"get", http.StatusOK, packageGetJSON, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "42", PackageID: "10"})
+			return err
+		}},
 		{"delete", http.StatusNoContent, "", func(ctx context.Context, c *gitlabclient.Client) error {
 			return Delete(ctx, nil, c, DeleteInput{ProjectID: "42", PackageID: "10"})
 		}},
@@ -1657,5 +1662,218 @@ func TestPackages_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
 				t.Fatalf("error = %v after the context was cancelled mid-flight, want context.Canceled", err)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Get
+// ---------------------------------------------------------------------------.
+
+// pathPackageGet is the one package's own route, which the delete shares.
+const pathPackageGet = pathPackageDelete
+
+// packageGetJSON is one package as the single-package endpoint renders it:
+// packageSentJSON's keys less the owning project, which only a group listing
+// is sent, with every value distinct from its neighbors so a field read from
+// the wrong key is visible, and the user who ran the version's pipeline
+// carrying the two UserBasic keys client-go's BasicUser leaves out.
+const packageGetJSON = `{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"conan",` +
+	`"status":"default","creator_id":57,"conan_package_name":"recipe-name",` +
+	`"versions":[{"id":9,"version":"0.9.0","created_at":"2026-01-02T03:04:05Z",` +
+	`"tags":[{"id":3,"package_id":9,"name":"stable","created_at":"2026-01-05T03:04:05Z",` +
+	`"updated_at":"2026-01-06T03:04:05Z"}],` +
+	`"pipeline":{"id":77,"iid":4,"project_id":42,"sha":"abc123","ref":"main","status":"success",` +
+	`"source":"push","created_at":"2026-01-07T03:04:05Z","updated_at":"2026-01-08T03:04:05Z",` +
+	`"web_url":"https://gitlab.example.com/p/-/pipelines/77",` +
+	`"user":{"id":5,"username":"alice","public_email":"alice@example.com","name":"Alice Liddell",` +
+	`"state":"active","locked":true,"avatar_url":"https://gitlab.example.com/a.png",` +
+	`"web_url":"https://gitlab.example.com/alice"}}}]}`
+
+// wantGotVersions is how Get publishes the one other version packageGetJSON
+// carries, as a caller reads it: the version and its tag from client-go's
+// PackageVersion, eight keys of the pipeline from its PackagePipeline and the
+// other three from the capture, and six keys of the user from BasicUser and
+// the other two from the capture.
+const wantGotVersions = `[{"id":9,"version":"0.9.0","created_at":"2026-01-02T03:04:05Z",` +
+	`"tags":[{"id":3,"package_id":9,"name":"stable","created_at":"2026-01-05T03:04:05Z",` +
+	`"updated_at":"2026-01-06T03:04:05Z"}],` +
+	`"pipeline":{"id":77,"iid":4,"project_id":42,"sha":"abc123","ref":"main","status":"success",` +
+	`"source":"push","created_at":"2026-01-07T03:04:05Z","updated_at":"2026-01-08T03:04:05Z",` +
+	`"web_url":"https://gitlab.example.com/p/-/pipelines/77",` +
+	`"user":{"id":5,"username":"alice","public_email":"alice@example.com","name":"Alice Liddell",` +
+	`"state":"active","locked":true,"avatar_url":"https://gitlab.example.com/a.png",` +
+	`"web_url":"https://gitlab.example.com/alice"}}}]`
+
+// assertVersionsPublishedAs reports versions serializing to anything but want,
+// which is the form a caller reads them in.
+func assertVersionsPublishedAs(t *testing.T, versions []toolutil.PackageVersionOutput, want string) {
+	t.Helper()
+	got, err := json.Marshal(versions)
+	if err != nil {
+		t.Fatalf("marshal versions: %v", err)
+	}
+	if string(got) != want {
+		t.Errorf("versions published as\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestGet_PublishesThePackageWithItsOtherVersions verifies Get asks for the one
+// package at its own route and publishes every field a listing does, and the
+// package's other versions, each version's pipeline completed with the keys
+// client-go does not decode.
+func TestGet_PublishesThePackageWithItsOtherVersions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathPackageGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, packageGetJSON)
+	}))
+	out, err := Get(t.Context(), client, GetInput{ProjectID: "42", PackageID: "10"})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	p := out.Package
+	if p.ID != 10 || p.Name != testPackageName || p.Version != "1.0.0" || p.PackageType != "conan" || p.Status != "default" {
+		t.Errorf("package = %d %q %q %q %q, want 10 my-pkg 1.0.0 conan default", p.ID, p.Name, p.Version, p.PackageType, p.Status)
+	}
+	if p.CreatorID != 57 || p.ConanPackageName != "recipe-name" {
+		t.Errorf("creator and recipe = %d / %q, want 57 / recipe-name", p.CreatorID, p.ConanPackageName)
+	}
+	assertVersionsPublishedAs(t, p.Versions, wantGotVersions)
+}
+
+// TestGet_VersionShapes verifies each shape an other version can arrive in is
+// published as GitLab sent it: no version at all, a version whose tag list is
+// empty rather than absent, one GitLab sent without tags or a pipeline, a
+// pipeline without the user who ran it, and a null entry, whose neighbor keeps
+// the pipeline keys read at its own position rather than the null's.
+func TestGet_VersionShapes(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		versions string
+		want     string
+	}{
+		{name: "no other version", versions: `[]`, want: `[]`},
+		{
+			name:     "an empty tag list and no pipeline",
+			versions: `[{"id":9,"version":"0.9.0","tags":[]}]`,
+			want:     `[{"id":9,"version":"0.9.0","created_at":null,"tags":[],"pipeline":null}]`,
+		},
+		{
+			name:     "no tags sent",
+			versions: `[{"id":9,"version":"0.9.0"}]`,
+			want:     `[{"id":9,"version":"0.9.0","created_at":null,"tags":null,"pipeline":null}]`,
+		},
+		{
+			name: "a pipeline without its user",
+			versions: `[{"id":9,"version":"0.9.0","tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,` +
+				`"sha":"abc123","ref":"main","status":"success","source":"push","web_url":"https://g/p/77","user":null}}]`,
+			want: `[{"id":9,"version":"0.9.0","created_at":null,"tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,` +
+				`"sha":"abc123","ref":"main","status":"success","source":"push","created_at":null,"updated_at":null,` +
+				`"web_url":"https://g/p/77","user":null}}]`,
+		},
+		{
+			name:     "a null version beside one",
+			versions: `[null,{"id":9,"version":"0.9.0","tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,"source":"push"}}]`,
+			want: `[{"id":9,"version":"0.9.0","created_at":null,"tags":[],"pipeline":{"id":77,"iid":4,"project_id":42,` +
+				`"sha":"","ref":"","status":"","source":"push","created_at":null,"updated_at":null,"web_url":"","user":null}}]`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"id":10,"name":"my-pkg","version":"1.0.0","versions":` + tt.versions + `}`
+			out, err := Get(t.Context(), packagesClient(t, body), GetInput{ProjectID: "42", PackageID: "10"})
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			assertVersionsPublishedAs(t, out.Package.Versions, tt.want)
+		})
+	}
+}
+
+// TestGet_InvalidInput_RefusedBeforeAnyRequest verifies Get refuses a
+// cancelled context, a missing project and a package_id that is not a
+// positive integer without sending anything.
+func TestGet_InvalidInput_RefusedBeforeAnyRequest(t *testing.T) {
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, tt := range []struct {
+		name  string
+		ctx   context.Context
+		input GetInput
+		want  string
+	}{
+		{name: "cancelled context", ctx: cancelled, input: GetInput{ProjectID: "42", PackageID: "10"}, want: "context canceled"},
+		{name: "no project", ctx: t.Context(), input: GetInput{PackageID: "10"}, want: "project_id is required"},
+		{name: "no package", ctx: t.Context(), input: GetInput{ProjectID: "42"}, want: "package_id must be a positive integer"},
+		{name: "zero package", ctx: t.Context(), input: GetInput{ProjectID: "42", PackageID: "0"}, want: "package_id must be a positive integer"},
+		{name: "negative package", ctx: t.Context(), input: GetInput{ProjectID: "42", PackageID: "-3"}, want: "package_id must be a positive integer"},
+		{name: "package name", ctx: t.Context(), input: GetInput{ProjectID: "42", PackageID: testPackageName}, want: "package_id must be a positive integer"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Get(tt.ctx, testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Get error = %v, want one mentioning %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestGet_GitLabRefusal_Wrapped verifies a 404 keeps its status for the route
+// to turn into the not-found result and carries the hint naming the listing,
+// and any other refusal is reported with its own status.
+func TestGet_GitLabRefusal_Wrapped(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{name: "not found", status: http.StatusNotFound, wantHint: true},
+		{name: "forbidden", status: http.StatusForbidden},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			_, err := Get(t.Context(), client, GetInput{ProjectID: "42", PackageID: "10"})
+			if !toolutil.IsHTTPStatus(err, tt.status) {
+				t.Fatalf("Get error = %v, want status %d", err, tt.status)
+			}
+			if got := strings.Contains(err.Error(), "verify package_id with package.list"); got != tt.wantHint {
+				t.Errorf("error %q carries the listing hint: %t, want %t", err, got, tt.wantHint)
+			}
+		})
+	}
+}
+
+// TestGet_UnreadablePipelineKey_RefusedByTheCapture verifies Get refuses an
+// answer whose version pipeline carries an iid that is not a number. client-go
+// does not decode iid, so only the read beside it can notice.
+func TestGet_UnreadablePipelineKey_RefusedByTheCapture(t *testing.T) {
+	const poisoned = `{"id":10,"versions":[{"id":9,"pipeline":{"id":77,"iid":"four"}}]}`
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{{Name: "get", Call: func() error {
+		_, err := Get(t.Context(), packagesClient(t, poisoned), GetInput{ProjectID: "42", PackageID: "10"})
+		return err
+	}}})
+}
+
+// TestPackageVersionPipelineToOutput_WithoutTheCapturedKeys verifies a
+// pipeline, and a user, the capture read nothing beside publish what client-go
+// decoded and leave the rest at zero rather than failing. Get always has both
+// halves, since they decode the same bytes; this holds the converters to not
+// depending on it.
+func TestPackageVersionPipelineToOutput_WithoutTheCapturedKeys(t *testing.T) {
+	got := packageVersionPipelineToOutput(&gl.PackagePipeline{
+		ID: 77, SHA: "abc123", User: &gl.BasicUser{ID: 5, Username: "alice"},
+	}, nil)
+	if got.ID != 77 || got.SHA != "abc123" || got.IID != 0 || got.Source != "" {
+		t.Errorf("pipeline = %+v, want the decoded keys and no captured ones", got)
+	}
+	if got.User == nil || got.User.ID != 5 || got.User.Username != "alice" || got.User.Locked || got.User.PublicEmail != "" {
+		t.Errorf("user = %+v, want the decoded keys and no captured ones", got.User)
+	}
+	user := packagePipelineUserToOutput(&gl.BasicUser{ID: 6}, &toolutil.UserBasicExtra{Locked: true, PublicEmail: "bob@example.com"})
+	if user.ID != 6 || !user.Locked || user.PublicEmail != "bob@example.com" {
+		t.Errorf("user = %+v, want 6, locked, bob@example.com", user)
 	}
 }
