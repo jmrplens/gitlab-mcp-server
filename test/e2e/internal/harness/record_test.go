@@ -514,30 +514,47 @@ func TestDispatchLine_CarriesTheRequestsTheTraceMade(t *testing.T) {
 	}
 }
 
-// TestDispatchLinesOf_ATraceWithNoServerSpan_WritesNoLine covers the skip that
-// keeps a record's two readings of one trace agreeing.
+// TestDispatchLinesOf_OnlyATraceWhoseSpanNamedTheCall_WritesALine covers the
+// skip that keeps a record's two readings of one trace agreeing.
 //
-// A trace whose GitLab client spans landed and whose server span did not names
-// no action. Written anyway, it is a dispatch line with an empty action: the
-// coverage command counts it among its dispatch lines and then skips it when it
-// joins, so its diagnostics and its joins disagree and nothing says why. The
-// other trace here is what makes the assertion about the skip rather than about
-// an empty receiver.
-func TestDispatchLinesOf_ATraceWithNoServerSpan_WritesNoLine(t *testing.T) {
+// Two traces name no call. One is a trace whose GitLab client spans landed and
+// whose server span did not; the other is a failed resource read, whose server
+// span arrived carrying error.type and nothing that names the call. Written
+// anyway, each is a dispatch line with an empty tool and action: the coverage
+// command counts it among its dispatch lines and then skips it when it joins,
+// so its diagnostics and its joins disagree and nothing says why. The other two
+// are the lines that must survive the skip: a tool call that ran an action,
+// and a find call, whose span names its tool and no action.
+func TestDispatchLinesOf_OnlyATraceWhoseSpanNamedTheCall_WritesALine(t *testing.T) {
+	const (
+		requestsOnly = "4bf92f3577b34da6a3ce929d0e0e4731"
+		action       = "4bf92f3577b34da6a3ce929d0e0e4732"
+		failedRead   = "4bf92f3577b34da6a3ce929d0e0e4733"
+		find         = "4bf92f3577b34da6a3ce929d0e0e4734"
+	)
 	lines := dispatchLinesOf(map[string]traceSpans{
-		"4bf92f3577b34da6a3ce929d0e0e4731": {requests: 2},
-		"4bf92f3577b34da6a3ce929d0e0e4732": {dispatch: dispatchRecord{action: "issue.list"}, requests: 1},
+		requestsOnly: {requests: 2},
+		action:       {served: true, dispatch: dispatchRecord{action: "issue.list"}, requests: 1},
+		failedRead:   {served: true, dispatch: dispatchRecord{errorType: "-32603", status: "STATUS_CODE_ERROR"}},
+		find:         {served: true, dispatch: dispatchRecord{tool: "gitlab_find_action"}},
 	})
 
-	if len(lines) != 1 {
-		t.Fatalf("dispatchLinesOf() wrote %d line(s), want only the trace the server spoke about", len(lines))
+	written := map[string]*e2ecalls.Dispatch{}
+	for _, line := range lines {
+		dispatch, isDispatch := line.(*e2ecalls.Dispatch)
+		if !isDispatch {
+			t.Fatalf("dispatchLinesOf() wrote a %T, want only dispatch lines", line)
+		}
+		written[dispatch.TraceID] = dispatch
 	}
-	dispatch, isDispatch := lines[0].(*e2ecalls.Dispatch)
-	if !isDispatch {
-		t.Fatalf("dispatchLinesOf() wrote a %T, want a dispatch line", lines[0])
+	if len(written) != 2 {
+		t.Errorf("dispatchLinesOf() wrote lines for %d traces, want the two whose span named the call", len(written))
 	}
-	if dispatch.Action != "issue.list" || dispatch.Requests != 1 {
-		t.Errorf("the line is %+v, want issue.list with its one request", dispatch)
+	if got := written[action]; got == nil || got.Action != "issue.list" || got.Requests != 1 {
+		t.Errorf("the action's line is %+v, want issue.list with its one request", got)
+	}
+	if got := written[find]; got == nil || got.Tool != "gitlab_find_action" {
+		t.Errorf("the find call's line is %+v, want it written naming its tool", got)
 	}
 }
 
@@ -1326,7 +1343,7 @@ func TestAwaitDispatch_NothingToWaitFor_ReturnsAtOnce(t *testing.T) {
 // wait began, so a flush that skipped the wait would return before it.
 func TestAwaitDispatch_ACallToAnExportingSession_WaitsForItsSpan(t *testing.T) {
 	received := useWaitingReceiver(t)
-	received.issue(testTraceID)
+	received.issue(testTraceID, nil)
 	const delay = 200 * time.Millisecond
 	delivered := make(chan struct{})
 	go func() {
@@ -1351,6 +1368,340 @@ func TestAwaitDispatch_ACallToAnExportingSession_WaitsForItsSpan(t *testing.T) {
 	}
 }
 
+// TestAwaitDispatch_ANonToolCall_ReturnsOnceItsServerSpanLands is the wait
+// this change exists for.
+//
+// A resource read's server span carries the method and nothing a tool call's
+// span would, and the receiver used to drop it as saying nothing, so a flush
+// holding one waited the whole budget for a span that had already come. Here
+// that span lands a moment after the wait began, and the flush has to return
+// after it and long before the budget.
+func TestAwaitDispatch_ANonToolCall_ReturnsOnceItsServerSpanLands(t *testing.T) {
+	received := useWaitingReceiver(t)
+	conn := &sessionConn{exportsSpans: true}
+	received.issue(testTraceID, conn)
+	const delay = 200 * time.Millisecond
+	delivered := make(chan struct{})
+	go func() {
+		defer close(delivered)
+		time.Sleep(delay)
+		received.absorbSpan(stubServerSpan(testTraceID, methodReadResource, nil, tracepb.Status_STATUS_CODE_UNSET))
+	}()
+	call := &pendingCall{
+		line: &e2ecalls.Call{Method: methodReadResource, Target: "gitlab://tools", TraceID: testTraceID},
+		conn: conn,
+	}
+	started := time.Now()
+
+	awaitDispatch([]*pendingCall{call})
+
+	waited := time.Since(started)
+	<-delivered
+	if waited < delay {
+		t.Errorf("the flush returned after %s, before the span that lands after %s", waited, delay)
+	}
+	if waited >= dispatchWait {
+		t.Errorf("the flush waited the whole budget of %s for a resource read's span that arrived after %s",
+			dispatchWait, delay)
+	}
+}
+
+// TestRecorder_Finish_WritesADispatchLineOnlyForASpanThatNamedTheCall pins
+// the line rule the flush writes by, on each side of it.
+//
+// A failed resource read's span arrives carrying error.type and nothing that
+// names the call, and used to be written as a dispatch line naming no tool and
+// no action, which both readers of the record skip. A tools/call that named no
+// tool arrives naming nothing too, and is not written either. A find call's
+// span names its tool and no action, and is still written, as the server's own
+// word that the call reached the find tool, although neither reader of the
+// record joins such a line today. Either way the call is flushed and its
+// session is marked, because the span arrived.
+func TestRecorder_Finish_WritesADispatchLineOnlyForASpanThatNamedTheCall(t *testing.T) {
+	cases := []struct {
+		name         string
+		method       string
+		attributes   map[string]string
+		wantDispatch bool
+		wantTool     string
+	}{
+		{
+			name:       "a resource read that failed",
+			method:     methodReadResource,
+			attributes: map[string]string{string(mcpotel.AttrErrorType): "-32603"},
+		},
+		{
+			name:   "a tools/call that named no tool",
+			method: methodCallTool,
+		},
+		{
+			name:         "a find call, which names its tool and no action",
+			method:       methodCallTool,
+			attributes:   map[string]string{string(mcpotel.AttrGenAIToolName): "gitlab_find_action"},
+			wantDispatch: true,
+			wantTool:     "gitlab_find_action",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			received := useWaitingReceiver(t)
+			env := newEnv(t, offlineInstance())
+			conn := &sessionConn{exportsSpans: true}
+			received.issue(testTraceID, conn)
+			received.absorbSpan(stubServerSpan(testTraceID, testCase.method, testCase.attributes, tracepb.Status_STATUS_CODE_ERROR))
+			env.recorder.record(&pendingCall{line: &e2ecalls.Call{
+				Test: env.T.Name(), Purpose: string(PurposeTest), Expectation: ExpectationAny,
+				Method: testCase.method, Outcome: e2ecalls.OutcomeProtocolError, TraceID: testTraceID,
+			}, conn: conn})
+
+			reporter := &capturedReporter{}
+			lines := env.recorder.finish(reporter, e2ecalls.StatusPassed)
+
+			var dispatches []*e2ecalls.Dispatch
+			for _, line := range lines {
+				if dispatch, isDispatch := line.(*e2ecalls.Dispatch); isDispatch {
+					dispatches = append(dispatches, dispatch)
+				}
+			}
+			switch {
+			case !testCase.wantDispatch && len(dispatches) != 0:
+				t.Errorf("the flush wrote %d dispatch line(s) for a span that named no call: %s",
+					len(dispatches), describeLines(lines))
+			case testCase.wantDispatch && (len(dispatches) != 1 || dispatches[0].Tool != testCase.wantTool):
+				t.Errorf("the flush wrote %s, want one dispatch line naming %s", describeLines(lines), testCase.wantTool)
+			}
+			if len(lines) != len(dispatches)+1 {
+				t.Errorf("the flush wrote %s, want the one call line beside its dispatch lines", describeLines(lines))
+			}
+			if !conn.dispatchObserved.Load() {
+				t.Error("the session's call had its server span arrive and the session is not dispatch-observed")
+			}
+			if reporter.count() != 0 {
+				t.Errorf("the flush failed a call that named no action to compare: %s", reporter.reported())
+			}
+		})
+	}
+}
+
+// TestRecordSending_TraceIsIssuedOnlyForARequestThatWillBeSent covers the
+// second cause of the wasted wait: a request whose context had already ended.
+//
+// Neither transport writes such a request, so no server ever spans it, and a
+// trace issued for it was waited for twice, once by CallAsModel and once at
+// the flush, the whole budget each time. A live request is stamped, issued
+// under the session it went to, and marks that session as one that asked
+// something; a dead one is recorded with no trace and marks nothing. So is a
+// request whose params cannot carry the trace at all, which is the other way
+// a call leaves with nothing a span could be joined on. A live request in a
+// process whose receiver never started is still stamped and still marks its
+// session, since it asked something a span could answer; there is only no
+// receiver to issue the trace to.
+func TestRecordSending_TraceIsIssuedOnlyForARequestThatWillBeSent(t *testing.T) {
+	cases := []struct {
+		name       string
+		ended      bool
+		noParams   bool
+		noReceiver bool
+		wantTrace  bool
+		wantIssued bool
+	}{
+		{name: "a live context", wantTrace: true, wantIssued: true},
+		{name: "a context that had already ended", ended: true},
+		{name: "params that cannot carry a trace", noParams: true},
+		{name: "a live context with no receiver running", noReceiver: true, wantTrace: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			received := useWaitingReceiver(t)
+			if testCase.noReceiver {
+				// useWaitingReceiver put the process's receiver back on cleanup,
+				// so clearing it here is undone with the rest.
+				startedSpans.Store(nil)
+			}
+			env := newEnv(t, offlineInstance())
+			conn := &sessionConn{}
+
+			sent := sendReadThrough(t, conn, env.recorder, testCase.ended, testCase.noParams)
+
+			traceID := sent.traceID
+			issuedTo, issued := received.issued[traceID]
+			checks := []struct {
+				name string
+				got  bool
+				want bool
+			}{
+				{name: "the trace handed back to the caller", got: traceID != "", want: testCase.wantTrace},
+				{name: "the traceparent stamped into the request", got: sent.stamped, want: testCase.wantTrace},
+				{
+					name: "the trace issued to the receiver under this session",
+					got:  issued && issuedTo == conn, want: testCase.wantIssued,
+				},
+				{name: "the session marked as having asked something", got: conn.issuedTrace.Load(), want: testCase.wantTrace},
+			}
+			for _, check := range checks {
+				t.Run(check.name, func(t *testing.T) {
+					if check.got != check.want {
+						t.Errorf("%t, want %t", check.got, check.want)
+					}
+				})
+			}
+			lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
+			if len(lines) != 1 {
+				t.Fatalf("the flush wrote %s, want the one call line", describeLines(lines))
+			}
+			if call, isCall := lines[0].(*e2ecalls.Call); !isCall || call.TraceID != traceID {
+				t.Errorf("the call line is %+v, want it recorded with the trace %q", lines[0], traceID)
+			}
+		})
+	}
+}
+
+// sentRead is what one resources/read sent through a session's recording
+// middleware left behind: the trace handed back to the caller, and whether
+// the request itself carried it.
+type sentRead struct {
+	traceID string
+	stamped bool
+}
+
+// sendReadThrough sends one attributed resources/read through a session's
+// recording middleware, to a transport that answers it at once, on a context
+// that had already ended when asked and with no params when asked.
+func sendReadThrough(t *testing.T, conn *sessionConn, rec *envRecorder, ended, noParams bool) sentRead {
+	t.Helper()
+	send := conn.recordSending()(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		return &mcp.ReadResourceResult{}, nil
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if ended {
+		cancel()
+	}
+	var sent sentRead
+	ctx = withAttribution(ctx, callAttribution{
+		rec: rec, conn: conn, purpose: PurposeTest, expectation: ExpectationAny,
+		target: "gitlab://tools", traceOut: &sent.traceID,
+	})
+	request := &mcp.ClientRequest[*mcp.ReadResourceParams]{}
+	if !noParams {
+		request.Params = &mcp.ReadResourceParams{URI: "gitlab://tools"}
+	}
+	if _, err := send(ctx, methodReadResource, request); err != nil {
+		t.Fatalf("the middleware answered %v, want the call passed through", err)
+	}
+	if request.Params != nil {
+		_, sent.stamped = request.Params.GetMeta()[traceParentKey]
+	}
+	return sent
+}
+
+// TestRecorder_NonToolCallsOnTheRealBinary_FlushWithoutTheBudgetAndObserveTheSession
+// is the change held to the server it is about.
+//
+// A hand-built span proves the receiver's rule and cannot prove that the real
+// server's span carries what the rule keys on. So this makes the three kinds of
+// call that used to cost a flush the whole budget, against the real binary: a
+// resource read, a read of a resource that does not exist (a caller fault,
+// which the server spans with no error.type), and a completion. The flush has
+// to come back well inside the budget, write no dispatch line for any of them,
+// and leave the session marked as one whose telemetry arrived and that asked
+// something.
+func TestRecorder_NonToolCallsOnTheRealBinary_FlushWithoutTheBudgetAndObserveTheSession(t *testing.T) {
+	// The give-up flag would shorten the budget to the grace, and a flush then
+	// returns inside it whether or not the spans counted: this test has to see
+	// the full budget in force for its timing to mean anything. It is put back
+	// for the reason TestDispatchOf_NoSpanArrives_ReportsUnobservedWithinTheGrace
+	// puts it back.
+	previousGaveUp := dispatchGaveUp.Load()
+	t.Cleanup(func() { dispatchGaveUp.Store(previousGaveUp) })
+	dispatchGaveUp.Store(false)
+
+	env := newEnv(t, stubInstance(t))
+	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
+	if !session.conn.exportsSpans {
+		t.Fatal("a session of the real binary is not marked as exporting its spans here, so no flush waits for them")
+	}
+
+	session.ReadResource("gitlab://tools")
+	if _, err := session.TryReadResource("gitlab://not-a-resource"); err == nil {
+		t.Fatal("a resource the server does not serve was read without an error")
+	}
+	session.CompleteResource("gitlab://project/{project_id}", "project_id", "")
+
+	started := time.Now()
+	lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
+	flushed := time.Since(started)
+
+	if flushed >= dispatchWait {
+		t.Errorf("the flush took %s, the whole budget: the server spans of the non-tool calls did not count as arriving",
+			flushed)
+	}
+	calls := 0
+	for _, line := range lines {
+		switch typed := line.(type) {
+		case *e2ecalls.Dispatch:
+			t.Errorf("the flush wrote a dispatch line for a call that named no tool: %+v", typed)
+		case *e2ecalls.Call:
+			calls++
+			if typed.TraceID == "" {
+				t.Errorf("the %s call carries no trace, so nothing about its span was tested", typed.Method)
+			}
+		}
+	}
+	if calls != 3 {
+		t.Errorf("the flush wrote %d call lines, want the three this test made: %s", calls, describeLines(lines))
+	}
+	if !session.conn.dispatchObserved.Load() {
+		t.Error("the session is not dispatch-observed although the server spanned every call it made")
+	}
+	if !session.conn.issuedTrace.Load() {
+		t.Error("the session is not marked as having asked anything, so its session line would call it idle")
+	}
+}
+
+// TestSessionLines_Idle_SaysWhetherTheSessionAskedAnything checks the field
+// that keeps a session asked nothing from reading as one whose telemetry never
+// arrived.
+//
+// Both sessions here are unobserved. One of them issued a trace and saw no
+// span of it, which is a finding about its telemetry; the other issued none,
+// and its line has to say so, or the coverage command folds it into its shape
+// as unobserved for want of a question.
+func TestSessionLines_Idle_SaysWhetherTheSessionAskedAnything(t *testing.T) {
+	asked := &sessionConn{label: "test-idle-asked"}
+	asked.issuedTrace.Store(true)
+	never := &sessionConn{label: "test-idle-never"}
+	sessions.Store("test-idle-asked", &sessionEntry{conn: asked})
+	sessions.Store("test-idle-never", &sessionEntry{conn: never})
+	t.Cleanup(func() {
+		sessions.Delete("test-idle-asked")
+		sessions.Delete("test-idle-never")
+	})
+
+	want := map[string]bool{"test-idle-asked": false, "test-idle-never": true}
+	seen := map[string]bool{}
+	for _, line := range sessionLines() {
+		recorded, isSession := line.(*e2ecalls.Session)
+		if !isSession {
+			continue
+		}
+		wantIdle, named := want[recorded.Label]
+		if !named {
+			continue
+		}
+		seen[recorded.Label] = true
+		if recorded.Idle != wantIdle {
+			t.Errorf("the session line of %s says idle = %t, want %t", recorded.Label, recorded.Idle, wantIdle)
+		}
+		if recorded.DispatchObserved {
+			t.Errorf("the session line of %s says dispatch-observed, and no span of it ever arrived", recorded.Label)
+		}
+	}
+	if len(seen) != len(want) {
+		t.Errorf("sessionLines() named %d of the %d sessions stored for this test", len(seen), len(want))
+	}
+}
+
 // useWaitingReceiver installs a receiver of the test's own that has already
 // seen a span, so every wait on it runs on the full budget rather than the
 // grace a run whose telemetry never worked gets, and puts the process's
@@ -1361,7 +1712,7 @@ func useWaitingReceiver(t *testing.T) *spanReceiver {
 	previous := startedSpans.Load()
 	t.Cleanup(func() { startedSpans.Store(previous) })
 
-	received := &spanReceiver{issued: map[string]struct{}{}, seen: map[string]traceSpans{}}
+	received := &spanReceiver{issued: map[string]*sessionConn{}, seen: map[string]traceSpans{}}
 	received.observed.Store(true)
 	startedSpans.Store(received)
 	return received

@@ -119,9 +119,20 @@ type ModelAnswer struct {
 	// Duration is how long the call took.
 	Duration time.Duration
 	// TraceID is the trace the call was stamped with, and the id the server's
-	// span was joined on. Empty when the request could carry no trace.
+	// span was joined on. Empty when the request could carry no trace, and
+	// when its context had ended before it was sent: such a request never
+	// reaches the server, so it is given no trace to wait for.
 	TraceID string
 	// Dispatch is what that span said. Read it only when DispatchObserved.
+	//
+	// It can be empty with DispatchObserved true. A tools/call naming no tool
+	// gives the server's span no tool to record, and the span then says only
+	// that the server saw the call. Its Status is STATUS_CODE_UNSET, the value
+	// a success carries too: the server refuses such a call with -32602, which
+	// the convention counts as the caller's fault rather than the server's
+	// failure, so it sets no status and writes the code on
+	// rpc.response.status_code, which DispatchFacts does not carry. The
+	// refusal itself is in Err.
 	Dispatch DispatchFacts
 	// Requests is how many GitLab requests the handler made under this call,
 	// counted from the client spans of the same trace. It is a floor: the
@@ -133,7 +144,9 @@ type ModelAnswer struct {
 	// It is the difference between a claim about what ran and a claim about
 	// what was asked for, and it is false rather than absent so that a reader
 	// has to answer it: every verdict derived from a call whose span never came
-	// is about the model's request and nothing about the server.
+	// is about the model's request and nothing about the server. It is false
+	// at once, with no wait, for a call that carries no trace and for one made
+	// on a session whose server exports no spans to this process.
 	DispatchObserved bool
 }
 
@@ -170,7 +183,7 @@ func (s *Session) CallAsModel(ctx context.Context, call ModelCall) ModelAnswer {
 	// what an answer was.
 	answer := classify(result, err)
 
-	facts, requests, observed := dispatchOf(traceID)
+	facts, requests, observed := dispatchOf(traceID, s.conn)
 	return ModelAnswer{
 		Result:           answer.result,
 		Err:              answer.err,
@@ -190,9 +203,12 @@ func (s *Session) CallAsModel(ctx context.Context, call ModelCall) ModelAnswer {
 // The wait is awaitTraces, which is the flush's own, so a run whose telemetry
 // never arrives gives up here on the same terms and after the same one full
 // budget rather than paying ten seconds a call for the length of a
-// conversation.
-func dispatchOf(traceID string) (facts DispatchFacts, requests int, observed bool) {
-	if traceID == "" {
+// conversation. Which calls are worth waiting for is the flush's rule too
+// ([spanCanArrive]): a call with no trace, and one to a session whose server
+// exports nothing here, answer unobserved at once, where the second used to
+// wait the whole budget for a span that had nowhere to go.
+func dispatchOf(traceID string, conn *sessionConn) (facts DispatchFacts, requests int, observed bool) {
+	if !spanCanArrive(traceID, conn) {
 		return DispatchFacts{}, 0, false
 	}
 	received := receiverIfStarted()

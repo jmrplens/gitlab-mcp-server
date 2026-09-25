@@ -198,8 +198,6 @@ func fixtureRuntime() *runtimeRecords {
 	raw := fixtureCall(callSpec{test: "TestRaw", purpose: e2ecalls.PurposeRaw, expectation: e2ecalls.ExpectationAny, shape: metaDefault, outcome: e2ecalls.OutcomeProtocolError})
 	raw.Tool = "gitlab_nope"
 	rt.calls = append(rt.calls, raw)
-	// The fixture is one shard, as foldShards would read it.
-	rt.markToolSessions(rt.sessions, rt.calls)
 	return rt
 }
 
@@ -371,54 +369,6 @@ func TestClassify_Mismatches_Listed(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(c.mismatches, want) {
 		t.Errorf("mismatches = %+v, want %+v", c.mismatches, want)
-	}
-}
-
-// TestClassify_UnobservedSession_OnlyAToolCallerCounts verifies that a
-// session which saw no span marks its shape unobserved, and is listed as such,
-// only when it called a tool. The span is the server's record of a tool
-// dispatch, so a session that only read a resource never had one to wait for:
-// counting it marked every default shape of the recorded runs unobserved
-// through its capability and tier-pinned sessions, while each action cell of
-// those shapes was observed.
-func TestClassify_UnobservedSession_OnlyAToolCallerCounts(t *testing.T) {
-	cases := []struct {
-		name         string
-		method       string
-		wantObserved bool
-		wantListed   []string
-	}{
-		{name: "a reader leaves the shape observed", method: methodReadResource, wantObserved: true},
-		{name: "a tool caller marks it unobserved", method: methodCallTool, wantObserved: false, wantListed: []string{"dynamic/default/second"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			first := fixtureSession(dynamicDefault, true)
-			second := fixtureSession(dynamicDefault, false)
-			second.Label += "/second"
-			secondCall := fixtureCall(callSpec{test: "TestSecond", method: tc.method, action: "issue.list", dispatched: "issue.list", target: "gitlab://groups", shape: dynamicDefault})
-			secondCall.Session = second.Label
-			rt, err := foldRecords([]e2ecalls.Record{
-				{Schema: 1, Type: e2ecalls.TypeRun, Run: &e2ecalls.Run{Package: "common", Requirement: "any", Edition: "community", Tier: "free", Status: e2ecalls.RunStarted}},
-				{Schema: 1, Type: e2ecalls.TypeSession, Session: first},
-				{Schema: 1, Type: e2ecalls.TypeSession, Session: second},
-				{Schema: 1, Type: e2ecalls.TypeCall, Call: fixtureCall(callSpec{test: "TestFirst", action: "issue.list", dispatched: "issue.list", shape: dynamicDefault})},
-				{Schema: 1, Type: e2ecalls.TypeCall, Call: secondCall},
-			})
-			if err != nil {
-				t.Fatalf("foldRecords() error = %v", err)
-			}
-
-			c := classify(rt, fixtureCatalog())
-
-			rows := sessionRows(c)
-			if len(rows) != 1 || rows[0].DispatchObserved != tc.wantObserved {
-				t.Errorf("session rows = %+v, want one dynamic/default row with dispatch_observed %t", rows, tc.wantObserved)
-			}
-			if !reflect.DeepEqual(c.diagnostics.UnobservedSessions, tc.wantListed) {
-				t.Errorf("unobserved sessions = %v, want %v", c.diagnostics.UnobservedSessions, tc.wantListed)
-			}
-		})
 	}
 }
 
@@ -610,6 +560,77 @@ func TestClassify_Sessions_RepeatedLinesAndMinimalCapabilities(t *testing.T) {
 	}
 	if subscriptions[full] != len(subscribableKinds(nil)) || subscriptions[minimal] != 0 {
 		t.Errorf("subscription cells per capability surface = %v, want every kind on full and none on minimal", subscriptions)
+	}
+}
+
+// TestClassify_Sessions_IdleSessionIsNamedApartAndHoldsNoShapeUnobserved
+// verifies the fold of a session that asked nothing.
+//
+// Every shape here has one observed session beside a second one. On the
+// default dynamic shape the second is idle, the way a session started only to
+// compare what it lists at a pinned tier is: it made no traced call, so its
+// spans cannot have arrived, and the row must still read observed while the
+// session is named among the idle ones. On the default meta shape the second
+// made traced calls and saw no span of them, which is the finding the flag is
+// for, and holds its row false. An idle line that also says it was observed,
+// which the harness never writes, is neither idle nor unobserved. The label
+// the idle session carries is one the observed session of its shape carries
+// too, the collision two sessions of one process can have, and it is the line
+// and not the label that decides.
+func TestClassify_Sessions_IdleSessionIsNamedApartAndHoldsNoShapeUnobserved(t *testing.T) {
+	idle := fixtureSession(dynamicDefault, false)
+	idle.Idle = true
+	unobserved := fixtureSession(metaDefault, false)
+	unobserved.Label = "meta/default/unobserved"
+	contradictory := fixtureSession(individualDefault, true)
+	contradictory.Label = "individual/default/contradictory"
+	contradictory.Idle = true
+
+	rt := fixtureRuntime()
+	rt.calls = nil
+	rt.sessions = []*e2ecalls.Session{
+		fixtureSession(dynamicDefault, true), idle,
+		fixtureSession(metaDefault, true), unobserved,
+		fixtureSession(individualDefault, true), contradictory,
+	}
+	c := classify(rt, fixtureCatalog())
+
+	wantObserved := map[shapeKey]bool{dynamicDefault: true, metaDefault: false, individualDefault: true}
+	for key, want := range wantObserved {
+		t.Run(key.surface+"/"+key.mode, func(t *testing.T) {
+			shape, known := c.shapes[key]
+			if !known {
+				t.Fatalf("no shape for %s/%s", key.surface, key.mode)
+			}
+			if shape.observed != want {
+				t.Errorf("observed = %t, want %t", shape.observed, want)
+			}
+		})
+	}
+	if want := []string{"dynamic/default"}; !slices.Equal(c.diagnostics.IdleSessions, want) {
+		t.Errorf("idle sessions = %q, want %q", c.diagnostics.IdleSessions, want)
+	}
+	if want := []string{"meta/default/unobserved"}; !slices.Equal(c.diagnostics.UnobservedSessions, want) {
+		t.Errorf("unobserved sessions = %q, want %q", c.diagnostics.UnobservedSessions, want)
+	}
+}
+
+// TestClassify_Sessions_IdleSessionsAreListedInOrder pins the order the idle
+// list is published in, which is the label's and not the shards': two
+// directories read in another order must publish the same report.
+func TestClassify_Sessions_IdleSessionsAreListedInOrder(t *testing.T) {
+	later := fixtureSession(metaDefault, false)
+	later.Idle = true
+	earlier := fixtureSession(dynamicDefault, false)
+	earlier.Idle = true
+
+	rt := fixtureRuntime()
+	rt.calls = nil
+	rt.sessions = []*e2ecalls.Session{later, earlier}
+	c := classify(rt, fixtureCatalog())
+
+	if want := []string{"dynamic/default", "meta/default"}; !slices.Equal(c.diagnostics.IdleSessions, want) {
+		t.Errorf("idle sessions = %q, want them sorted as %q", c.diagnostics.IdleSessions, want)
 	}
 }
 

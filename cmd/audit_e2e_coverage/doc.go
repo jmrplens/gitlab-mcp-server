@@ -6,10 +6,11 @@
 // The suite records what it did while it runs, through
 // internal/testutil/e2ecalls: one run line per test package, one session line
 // per server configuration, one call line per MCP request a test made, one
-// dispatch line per span the server exported, and one skip line per skipped
-// test. This command reads those shards (-calls), joins each dispatch to its
-// call on the trace id, optionally joins the go test -json stream gotestsum
-// wrote (-results), and compares what happened with what the runtime served.
+// dispatch line per server span that named the tool or the action it ran, and
+// one skip line per skipped test. This command reads those shards (-calls),
+// joins each dispatch to its call on the trace id, optionally joins the go
+// test -json stream gotestsum wrote (-results), and compares what happened
+// with what the runtime served.
 //
 // # What a runtime is
 //
@@ -61,6 +62,24 @@
 // empty list and no error on every tool surface, so it is servable there and
 // a call to it is credited like any other; it stays a completion rather than
 // a tool_manifest cell, since nothing in the answer depends on the surface.
+//
+// # What a session row says
+//
+// Each surface x mode row carries dispatch_observed, and it says whether the
+// server's own telemetry reached the harness for every session of the shape
+// that asked it something: a session is observed once the server's span of
+// any one of its traced calls arrived, of whatever method, a resource read,
+// a prompt or a completion as much as a tool call. A session that made no
+// traced call is idle, and is named apart (diagnostics.idle_sessions) rather
+// than holding its row false, since it asked nothing a span could answer; a
+// session started only to compare what it lists at a pinned tier is the usual
+// case. The row counts its idle sessions (idle_sessions), and a row whose
+// sessions were all idle reads false, since nothing about its telemetry was
+// seen; its idle count equal to its session count says why. The flag decides
+// no credit. A resource read, a prompt and a completion are credited on their
+// answer, and a tool call on the action its own span named, joined on the
+// trace id; a tool call whose span never came is unobserved on its own terms,
+// whatever its row says.
 //
 // # The gates
 //

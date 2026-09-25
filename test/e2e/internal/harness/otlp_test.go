@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -83,6 +84,19 @@ func stubOutboundMCPSpan(traceID, method string) *tracepb.Span {
 	return span
 }
 
+// stubServerSpan builds the span the server's own middleware opens for one
+// request of a method other than tools/call: the server kind and the method
+// name, plus whatever the method adds, and none of the dispatch facts a tool
+// call's span carries.
+func stubServerSpan(traceID, method string, attributes map[string]string, code tracepb.Status_StatusCode) *tracepb.Span {
+	withMethod := map[string]string{string(mcpotel.AttrMCPMethodName): method}
+	maps.Copy(withMethod, attributes)
+	span := stubSpan(traceID, withMethod, code)
+	span.Name = method
+	span.Kind = tracepb.Span_SPAN_KIND_SERVER
+	return span
+}
+
 // exportOf wraps spans in the request an exporter sends.
 func exportOf(spans ...*tracepb.Span) *coltracepb.ExportTraceServiceRequest {
 	return &coltracepb.ExportTraceServiceRequest{
@@ -144,7 +158,8 @@ func marshalExport(t *testing.T, export *coltracepb.ExportTraceServiceRequest) [
 // back, and these are the five facts read off it.
 func TestSpanReceiver_IssuedTrace_KeepsWhatTheServerSaid(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	conn := &sessionConn{}
+	received.issue(testTraceID, conn)
 
 	span := stubSpan(testTraceID, map[string]string{
 		string(mcpotel.AttrGenAIToolName): "gitlab_environment",
@@ -185,6 +200,9 @@ func TestSpanReceiver_IssuedTrace_KeepsWhatTheServerSaid(t *testing.T) {
 	if !received.observed.Load() {
 		t.Error("the receiver did not mark itself as having observed a dispatch")
 	}
+	if !conn.dispatchObserved.Load() {
+		t.Error("the server span landed and the session its call went to was not marked dispatch-observed")
+	}
 }
 
 // TestSpanReceiver_TraceItNeverIssued_IsDropped keeps the map to the calls
@@ -216,7 +234,7 @@ func TestSpanReceiver_TraceItNeverIssued_IsDropped(t *testing.T) {
 // package issued something" into "this action issued something".
 func TestSpanReceiver_ChildSpans_DoNotOverwriteTheServerSpan(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	received.issue(testTraceID, nil)
 
 	server := stubSpan(testTraceID, map[string]string{
 		string(mcpotel.AttrActionID): "issue.list",
@@ -247,7 +265,8 @@ func TestSpanReceiver_ChildSpans_DoNotOverwriteTheServerSpan(t *testing.T) {
 // mark the trace dispatch-observed before the server had said anything.
 func TestSpanReceiver_FailedRequestSpan_IsCountedAndNotMerged(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	conn := &sessionConn{}
+	received.issue(testTraceID, conn)
 
 	failed := stubRequestSpan(testTraceID, http.MethodPost)
 	failed.Attributes = append(failed.Attributes, &commonpb.KeyValue{
@@ -271,6 +290,9 @@ func TestSpanReceiver_FailedRequestSpan_IsCountedAndNotMerged(t *testing.T) {
 	if received.observed.Load() {
 		t.Error("a request span alone told the receiver a dispatch had been observed")
 	}
+	if conn.dispatchObserved.Load() {
+		t.Error("a request span alone marked the session dispatch-observed")
+	}
 }
 
 // TestSpanReceiver_FailedOutboundMCPSpan_IsDroppedNotMerged covers the other
@@ -286,7 +308,8 @@ func TestSpanReceiver_FailedRequestSpan_IsCountedAndNotMerged(t *testing.T) {
 // silent — a call line written from an empty record still looks like a line.
 func TestSpanReceiver_FailedOutboundMCPSpan_IsDroppedNotMerged(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	conn := &sessionConn{}
+	received.issue(testTraceID, conn)
 
 	postExport(t, received.url, "/v1/traces",
 		marshalExport(t, exportOf(stubOutboundMCPSpan(testTraceID, "elicitation/create"))), "")
@@ -304,6 +327,106 @@ func TestSpanReceiver_FailedOutboundMCPSpan_IsDroppedNotMerged(t *testing.T) {
 	if received.observed.Load() {
 		t.Error("an outbound MCP span alone told the receiver a dispatch had been observed")
 	}
+	if conn.dispatchObserved.Load() {
+		t.Error("an outbound MCP span alone marked the session dispatch-observed")
+	}
+}
+
+// TestSpanReceiver_OutboundMCPSpanThatSucceeded_DoesNotArrive is the case the
+// arrival rule made worth pinning on its own.
+//
+// The server's own span is recognized by mcp.method.name, and the span
+// internal/mcpotel.SendingMiddleware opens for a server-initiated request
+// carries that attribute too, on the trace of the tools/call that provoked it.
+// A successful elicitation's span carries nothing else, so the kind is all
+// that keeps it from being taken for the tools/call's own span: without it the
+// trace would arrive before the tools/call's span did, the flush would write
+// that call with no dispatched action, and the assertion about what ran would
+// be skipped. The failed case above guards the same condition for a span that
+// also carries error.type; this is the one a working elicitation produces.
+func TestSpanReceiver_OutboundMCPSpanThatSucceeded_DoesNotArrive(t *testing.T) {
+	received := startTestReceiver(t)
+	conn := &sessionConn{}
+	received.issue(testTraceID, conn)
+
+	outbound := stubSpan(testTraceID, map[string]string{
+		string(mcpotel.AttrMCPMethodName):    "elicitation/create",
+		string(mcpotel.AttrNetworkTransport): "pipe",
+	}, tracepb.Status_STATUS_CODE_UNSET)
+	outbound.Kind = tracepb.Span_SPAN_KIND_CLIENT
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(outbound)), "")
+
+	if _, arrived := received.lookup(testTraceID); arrived {
+		t.Error("a successful outbound MCP span marked the trace as arrived before the server's own span")
+	}
+	if received.observed.Load() {
+		t.Error("a successful outbound MCP span told the receiver a server span had been observed")
+	}
+	if conn.dispatchObserved.Load() {
+		t.Error("a successful outbound MCP span marked the session dispatch-observed")
+	}
+}
+
+// TestSpanReceiver_ServerSpanOfANonToolMethod_ArrivesWithoutDispatchFacts is
+// the arrival this receiver used to refuse, and the reason every flush holding
+// a resource read, a prompt or a completion waited ten seconds.
+//
+// The server spans every method it handles, and a resource read's span says
+// which method it was and which resource it read, in attributes none of which
+// is a dispatch fact. It has to arrive all the same, with an empty dispatch
+// record, and mark the session its call went to: the session's telemetry works
+// whatever it was asked.
+func TestSpanReceiver_ServerSpanOfANonToolMethod_ArrivesWithoutDispatchFacts(t *testing.T) {
+	received := startTestReceiver(t)
+	conn := &sessionConn{}
+	received.issue(testTraceID, conn)
+
+	read := stubServerSpan(testTraceID, methodReadResource,
+		map[string]string{string(mcpotel.AttrResourceRef): "digest-of-a-uri"}, tracepb.Status_STATUS_CODE_UNSET)
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(read)), "")
+
+	kept, arrived := received.lookup(testTraceID)
+	if !arrived {
+		t.Fatal("the server span of a resource read did not count as arriving")
+	}
+	if kept.dispatch.carriesFacts() || kept.dispatch.namesCall() {
+		t.Errorf("a resource read's span wrote %+v into the dispatch record, want no dispatch facts", kept.dispatch)
+	}
+	if want := tracepb.Status_STATUS_CODE_UNSET.String(); kept.dispatch.status != want {
+		t.Errorf("the dispatch status is %q, want the span's own %q", kept.dispatch.status, want)
+	}
+	if !received.observed.Load() {
+		t.Error("a server span arrived and the receiver still says it has observed none")
+	}
+	if !conn.dispatchObserved.Load() {
+		t.Error("a server span arrived and the session its call went to was not marked dispatch-observed")
+	}
+}
+
+// TestSpanReceiver_SpanWithNeitherMethodNorFacts_IsDropped pins the lower edge
+// of the server-span rule: a span of an issued trace that is not a client span
+// but carries neither mcp.method.name nor a dispatch fact is somebody's
+// internal span, and says nothing about whether the server reported on the
+// call.
+func TestSpanReceiver_SpanWithNeitherMethodNorFacts_IsDropped(t *testing.T) {
+	received := startTestReceiver(t)
+	conn := &sessionConn{}
+	received.issue(testTraceID, conn)
+
+	internal := stubSpan(testTraceID, map[string]string{"component": "cache"}, tracepb.Status_STATUS_CODE_OK)
+	internal.Kind = tracepb.Span_SPAN_KIND_INTERNAL
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(internal)), "")
+
+	if len(received.all()) != 0 {
+		t.Errorf("the receiver kept %d traces from a span that is neither a server span nor a GitLab request",
+			len(received.all()))
+	}
+	if _, arrived := received.lookup(testTraceID); arrived {
+		t.Error("a span carrying neither the method nor a dispatch fact marked the trace as arrived")
+	}
+	if conn.dispatchObserved.Load() {
+		t.Error("a span carrying neither the method nor a dispatch fact marked the session dispatch-observed")
+	}
 }
 
 // TestSpanReceiver_FailedOutboundMCPSpan_LeavesTheServerSpanIntact is the same
@@ -315,7 +438,7 @@ func TestSpanReceiver_FailedOutboundMCPSpan_IsDroppedNotMerged(t *testing.T) {
 // exactly the place the record exists to be believed.
 func TestSpanReceiver_FailedOutboundMCPSpan_LeavesTheServerSpanIntact(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	received.issue(testTraceID, nil)
 
 	server := stubSpan(testTraceID, map[string]string{
 		string(mcpotel.AttrActionID): "issue.create",
@@ -337,6 +460,35 @@ func TestSpanReceiver_FailedOutboundMCPSpan_LeavesTheServerSpanIntact(t *testing
 	}
 	if kept.dispatch.status != tracepb.Status_STATUS_CODE_OK.String() {
 		t.Errorf("the dispatch status is %q, want %q", kept.dispatch.status, tracepb.Status_STATUS_CODE_OK.String())
+	}
+}
+
+// TestSpanReceiver_EmptyTraceID_IsNeitherIssuedNorKept pins the invariant the
+// flush's lookup leans on: nothing is ever held under the empty trace id, so a
+// call that carries no trace can be looked up like any other and is never
+// reported as arrived. Neither half may break it: an empty id is not issued,
+// and a span with no trace id is dropped however much it looks like the
+// server's own.
+func TestSpanReceiver_EmptyTraceID_IsNeitherIssuedNorKept(t *testing.T) {
+	received := startTestReceiver(t)
+	conn := &sessionConn{}
+
+	received.issue("", conn)
+	untraced := stubServerSpan(testTraceID, methodReadResource, nil, tracepb.Status_STATUS_CODE_UNSET)
+	untraced.TraceId = nil
+	received.absorbSpan(untraced)
+
+	if len(received.issued) != 0 {
+		t.Errorf("the receiver issued %d trace(s) for an empty id", len(received.issued))
+	}
+	if len(received.all()) != 0 {
+		t.Errorf("the receiver kept %d trace(s) from a span carrying no trace id", len(received.all()))
+	}
+	if _, arrived := received.lookup(""); arrived {
+		t.Error("the empty trace id reads as arrived")
+	}
+	if conn.dispatchObserved.Load() || received.observed.Load() {
+		t.Error("a span carrying no trace id marked the session or the receiver as observed")
 	}
 }
 
@@ -368,7 +520,7 @@ func TestSpanReceiver_RequestSpanOnAnUnissuedTrace_IsDropped(t *testing.T) {
 // what keeps it out of the count whatever happens there.
 func TestSpanReceiver_ServerSpanCarryingAMethod_IsNotCountedAsARequest(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	received.issue(testTraceID, nil)
 
 	inbound := stubSpan(testTraceID, map[string]string{
 		string(mcpotel.AttrHTTPRequestMethod): http.MethodPost,
@@ -432,7 +584,7 @@ func TestSpanReceiver_UndecodableTrace_IsRefused(t *testing.T) {
 // changes, and this is what keeps that handling honest.
 func TestSpanReceiver_GzippedExport_IsRead(t *testing.T) {
 	received := startTestReceiver(t)
-	received.issue(testTraceID)
+	received.issue(testTraceID, nil)
 
 	span := stubSpan(testTraceID, map[string]string{string(mcpotel.AttrActionID): "issue.list"},
 		tracepb.Status_STATUS_CODE_OK)
@@ -473,9 +625,15 @@ func TestDispatchRecord_Merge_KeepsTheFirstNonEmptyValue(t *testing.T) {
 	}
 }
 
-// TestDispatchRecord_CarriesFacts_IsWhatDecidesASpanIsWorthKeeping checks the
-// predicate the child-span rule rests on.
-func TestDispatchRecord_CarriesFacts_IsWhatDecidesASpanIsWorthKeeping(t *testing.T) {
+// TestDispatchRecord_CarriesFacts_ReadsEachOfTheFiveAttributes checks the
+// half of the server-span rule a span built by hand relies on.
+//
+// It no longer decides arrival, which is what it was named for: a resource
+// read's span carries none of these and arrives all the same. What it still
+// decides is whether a non-client span with no mcp.method.name is taken for
+// the server's, so each attribute is a case of its own, and the status is the
+// one that must not count, since every span has one.
+func TestDispatchRecord_CarriesFacts_ReadsEachOfTheFiveAttributes(t *testing.T) {
 	cases := []struct {
 		name   string
 		record dispatchRecord
@@ -483,13 +641,46 @@ func TestDispatchRecord_CarriesFacts_IsWhatDecidesASpanIsWorthKeeping(t *testing
 	}{
 		{name: "nothing at all", record: dispatchRecord{}, want: false},
 		{name: "a status and nothing else", record: dispatchRecord{status: "STATUS_CODE_OK"}, want: false},
+		{name: "a tool", record: dispatchRecord{tool: "gitlab_find_action"}, want: true},
 		{name: "an action", record: dispatchRecord{action: "issue.list"}, want: true},
+		{name: "a domain", record: dispatchRecord{domain: "issue"}, want: true},
 		{name: "a refusal", record: dispatchRecord{refusalReason: "safe_mode"}, want: true},
+		{name: "an error type", record: dispatchRecord{errorType: "-32603"}, want: true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := testCase.record.carriesFacts(); got != testCase.want {
 				t.Errorf("carriesFacts() = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestDispatchRecord_NamesCall_IsTheToolOrTheAction checks the predicate a
+// dispatch line is written by.
+//
+// A span naming a tool alone is kept, because that is how a call to the find
+// tool reads and it dispatches no action; a span naming only what went wrong,
+// which is all a failed resource read's span can say, is not.
+func TestDispatchRecord_NamesCall_IsTheToolOrTheAction(t *testing.T) {
+	cases := []struct {
+		name   string
+		record dispatchRecord
+		want   bool
+	}{
+		{name: "nothing at all", record: dispatchRecord{}, want: false},
+		{name: "a tool and no action", record: dispatchRecord{tool: "gitlab_find_action"}, want: true},
+		{name: "an action and no tool", record: dispatchRecord{action: "issue.list"}, want: true},
+		{
+			name:   "a failure of a call that named neither",
+			record: dispatchRecord{domain: "issue", refusalReason: "safe_mode", errorType: "-32603", status: "STATUS_CODE_ERROR"},
+			want:   false,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.record.namesCall(); got != testCase.want {
+				t.Errorf("namesCall() = %t, want %t", got, testCase.want)
 			}
 		})
 	}
