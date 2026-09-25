@@ -298,7 +298,8 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 // register against the real server and internal/, with the real exemption
 // table and pending list. It is what says the tables in declarations.go
 // describe the tree today, and the summary line is held so a rule that stops
-// reading anything is a failure rather than a quiet pass.
+// reading anything is a failure rather than a quiet pass. Every value layer
+// has moved its rows, so the list is empty and no row is deferred.
 //
 // It runs with the environment naming Windows on arm64, which is what a
 // Windows host's toolchain would be told: the verdict must not depend on the
@@ -314,10 +315,9 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 	}
 	out := stdout.String()
 	for name, want := range map[string]string{
-		"pending rows":        "pending (G2, G3 and G6 deferred until the layer that moves their values): " + strings.Join(sortedPending(), ", ") + "\n",
 		"exempted literal":    "cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
 		"exempted name":       "internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
-		"verdict":             "; 0 findings, 5 rows pending, 51 declarations exempted\n",
+		"verdict":             "; 0 findings, 0 rows pending, 51 declarations exempted\n",
 		"what the rules read": "(21 refusal returns, 70 refusals, 10 reasons and 31 settings read)",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -326,6 +326,11 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 			}
 		})
 	}
+	t.Run("no pending rows", func(t *testing.T) {
+		if strings.Contains(out, "pending (") {
+			t.Fatalf("stdout lists pending rows, and every value layer has moved its own:\n%s", out)
+		}
+	})
 }
 
 // sortedPending is the pending list in the order the report prints it.

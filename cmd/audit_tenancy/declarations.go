@@ -274,13 +274,11 @@ var notADecision = map[string]exemption{
 // pending are the rows whose values have not moved into the register yet.
 // G2, G3 and G6 are deferred for them, and every other rule applies in full,
 // so each of their sites must already exist and every pin must already agree.
-// Each value layer of issue 565 deletes the rows it moves, and the last one
-// deletes the list. A row listed here whose deferred checks already pass is a
-// finding: the layer that moved it forgot to say so.
-var pending = []string{
-	"AUT-003",
-	"RTC-001", "RTC-002", "RTC-003", "RTC-006",
-}
+// Each value layer of issue 565 deleted the rows it moved, and the last of
+// them left the list empty; the layer that closes the gate deletes it with the
+// deferral. A row listed here whose deferred checks already pass is a finding:
+// the layer that moved it forgot to say so.
+var pending = []string{}
 
 // checkPending holds the pending list to the register: every entry is a row,
 // and a row stays pending only while a deferred check would still fail.

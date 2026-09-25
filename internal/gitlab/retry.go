@@ -7,6 +7,8 @@ import (
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 const (
@@ -18,7 +20,7 @@ const (
 	// 500. Two retries keep the point of retrying — a single blipping
 	// request recovers — without letting one caller multiply itself sixfold
 	// against an instance that is already struggling.
-	maxRetries = 2
+	maxRetries = tenancy.UpstreamRetries // register row RTC-006
 
 	// maxRetryBackoff caps a single wait between attempts.
 	//
@@ -29,12 +31,12 @@ const (
 	// because the wait is recomputed per attempt, an upstream that keeps
 	// re-sending a fresh reset parks it for longer still. Nothing else
 	// bounds a tool call's upstream time.
-	maxRetryBackoff = 5 * time.Second
+	maxRetryBackoff = tenancy.UpstreamRetryWaitMax // register row RTC-006
 
 	// retryBackoffStep is the per-attempt wait for a non-429 failure. It
 	// matches the 700 ms floor client-go uses for service interruptions, so
 	// a struggling instance gets the same breathing room it did before.
-	retryBackoffStep = 700 * time.Millisecond
+	retryBackoffStep = tenancy.UpstreamRetryStep // register row RTC-006
 
 	// rateLimitResetHeader carries the Unix timestamp at which GitLab says
 	// the caller's rate-limit window reopens.

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // RateLimiter enforces a token-bucket rate limit on the methods that cost a
@@ -99,7 +100,7 @@ const methodToolsList = "tools/list"
 // rateLimitedErrorCode is the JSON-RPC code a refused resource or prompt
 // request carries. It mirrors HTTP 429 the way the transport gates' code
 // does, so a client sees one number for "come back later" on both layers.
-const rateLimitedErrorCode = -42900
+const rateLimitedErrorCode = tenancy.CodeTooManyRequests // register row RTC-001
 
 // RateLimitRefusalPrefix and rateLimitRetrySuffix are how every refusal this
 // limiter writes begins and ends, whichever of the two wire shapes carries it.
@@ -198,7 +199,7 @@ func (r *RateLimiter) allow() bool {
 // completion requests", and under Security, "Implementations MUST ... Implement
 // appropriate rate limiting"), so the answer is a looser bucket rather than the
 // same one or none at all.
-const completionBurstFactor = 10
+const completionBurstFactor = tenancy.CompletionFactor // register row RTC-002
 
 // catalogDivisor sizes the tools/list bucket relative to the tool-call one.
 //
@@ -224,7 +225,7 @@ const completionBurstFactor = 10
 // The figures the divisor is sized against are the individual surface's, the
 // expensive one; on the default dynamic surface a listing is two tools, so
 // there the bucket is conservative rather than tight.
-const catalogDivisor = 10
+const catalogDivisor = tenancy.CatalogDivisor // register row RTC-003
 
 // CatalogListingRPS is the refill rate a listing draws on when the tool-call
 // bucket is configured at rps.

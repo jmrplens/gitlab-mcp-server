@@ -44,12 +44,15 @@ func TestCategories_EachSaysWhatItCovers(t *testing.T) {
 // ceiling, the OAuth admission lifetimes, the credential re-checks, the idle
 // session timeout and the request state's lifetime (L4); the authentication
 // failure budgets, their escalation ladder, table ceiling and sweep, with the
-// gate's own refusal codes (L5).
+// gate's own refusal codes (L5); the tool-call, completion and listing
+// buckets with the in-band retry-later code, the upstream retry policy and the
+// tier probe's namespace paging (L6).
 var movedByValueLayers = []string{
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-007", "RTC-005",
 	"ADM-002", "ADM-005", "ADM-006", "ADM-008", "ADM-009", "ADM-010",
 	"END-005", "IDN-011", "POL-001", "POL-004", "POL-006",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
+	"AUT-003", "RTC-001", "RTC-002", "RTC-003", "RTC-006",
 }
 
 // TestPending_IsTheValuedRowsNotYetMoved: the list holds each of the

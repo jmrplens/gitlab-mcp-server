@@ -73,10 +73,10 @@ const (
 // a single-user local process has no co-tenant to protect, so a limiter there
 // only costs latency. Explicit 0 remains the opt-out in both.
 const (
-	DefaultRateLimitBurst   = 40
-	DefaultHTTPRateLimitRPS = 10
-	MaxRateLimitRPS         = 1000
-	MaxRateLimitBurst       = 10000
+	DefaultRateLimitBurst   = tenancy.ToolCallBurst    // register row RTC-001
+	DefaultHTTPRateLimitRPS = tenancy.ToolCallRateHTTP // register row RTC-001
+	MaxRateLimitRPS         = tenancy.ToolCallRateMax  // register row RTC-001
+	MaxRateLimitBurst       = tenancy.ToolCallBurstMax // register row RTC-001
 )
 
 // The two authentication budgets an HTTP deployment charges before a
@@ -466,7 +466,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	rateLimitRPS, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), 0)
+	rateLimitRPS, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), tenancy.ToolCallRateEnvDefault) // register row RTC-001
 	if err != nil {
 		return nil, fmt.Errorf("invalid RATE_LIMIT_RPS value: %w", err)
 	}

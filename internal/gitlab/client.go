@@ -23,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // Client wraps the official GitLab API client with project-specific configuration.
@@ -153,8 +154,8 @@ const versionAPIPath = "/api/v4/version"
 // past that bound resolves lower than they should, which the warning and the
 // explicit tier both answer.
 const (
-	namespacePlanPageSize = 100
-	namespacePlanMaxPages = 10
+	namespacePlanPageSize = tenancy.TierNamespacePageSize // register row AUT-003
+	namespacePlanMaxPages = tenancy.TierNamespaceMaxPages // register row AUT-003
 )
 
 // GitLabDotComHost is the canonical host for GitLab SaaS-only features.
