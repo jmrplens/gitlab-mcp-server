@@ -684,6 +684,11 @@ func TestSweepMinAge_MakefileDefaults_OutlastEveryPackage(t *testing.T) {
 // rather than read as text, so what is judged is the command make would run,
 // and it runs in a directory of its own, so the .env it sources is the one the
 // case writes and never the repository's.
+//
+// The .env a case writes sets a sweep prefix as well, and every case holds
+// the sweep to none: the prefix is read from the command line or the
+// environment alone, on purpose, since one left in .env would turn every
+// later clean into a sweep by name that reaches live runs.
 func TestCleanOrphansRecipe_SweepMinAge_CommandLineThenEnvironmentThenDotEnv(t *testing.T) {
 	recipe := newCleanOrphansRecipe(t)
 
@@ -710,6 +715,9 @@ func TestCleanOrphansRecipe_SweepMinAge_CommandLineThenEnvironmentThenDotEnv(t *
 
 			if !strings.Contains(out, "floor="+testCase.want+"\n") {
 				t.Errorf("the sweep was handed %q, want the floor %s", out, testCase.want)
+			}
+			if !strings.Contains(out, "prefix=\n") {
+				t.Errorf("the sweep was handed %q, want no prefix: one set in .env is not read", out)
 			}
 			if !strings.Contains(out, "-run ^TestSweepOrphans_Leftovers_OnDemand$ ./test/e2e/internal/fixture/") {
 				t.Errorf("the recipe ran %q, want the on-demand sweep of this package", out)
@@ -747,7 +755,7 @@ func newCleanOrphansRecipe(t *testing.T) cleanOrphansRecipe {
 		t.Fatalf("resolving the repository root: %v", err)
 	}
 	recipe.stubs = t.TempDir()
-	stub := "#!/bin/sh\nprintf 'floor=%s\\n' \"$E2E_SWEEP_MIN_AGE\"\nprintf 'args=%s\\n' \"$*\"\n"
+	stub := "#!/bin/sh\nprintf 'floor=%s\\n' \"$E2E_SWEEP_MIN_AGE\"\nprintf 'prefix=%s\\n' \"$E2E_SWEEP_PREFIX\"\nprintf 'args=%s\\n' \"$*\"\n"
 	//#nosec G306 -- the stand-in go is a script the rendered recipe must execute
 	if err = os.WriteFile(filepath.Join(recipe.stubs, "go"), []byte(stub), 0o700); err != nil {
 		t.Fatalf("writing the stand-in go: %v", err)
@@ -775,13 +783,14 @@ func (r cleanOrphansRecipe) render(t *testing.T, environ []string, commandLine s
 }
 
 // run runs a rendered recipe the way make would, in a directory of its own
-// holding a .env that sets the floor to 5h when dotEnv is true, with the
-// stand-in go first on the PATH, and returns what the stand-in printed.
+// holding a .env that sets the floor to 5h and a sweep prefix when dotEnv is
+// true, with the stand-in go first on the PATH, and returns what the stand-in
+// printed.
 func (r cleanOrphansRecipe) run(t *testing.T, recipe string, environ []string, dotEnv bool) string {
 	t.Helper()
 	work := t.TempDir()
 	if dotEnv {
-		if err := os.WriteFile(filepath.Join(work, ".env"), []byte(sweepMinAgeEnv+"=5h\n"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(work, ".env"), []byte(sweepMinAgeEnv+"=5h\n"+sweepPrefixEnv+"=adm-alert-\n"), 0o600); err != nil {
 			t.Fatalf("writing .env: %v", err)
 		}
 	}

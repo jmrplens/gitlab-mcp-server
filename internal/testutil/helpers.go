@@ -50,10 +50,17 @@ func CancelledCtx(t *testing.T) context.Context {
 // The context returned here is cancelled the moment the first request reaches
 // the mock, and the mock holds every request until the client abandons it or
 // five seconds pass, answering through respond only in the second case. A
-// handler that passed the context therefore returns promptly with an error for
-// which errors.Is(err, context.Canceled) holds; one that did not waits out the
-// hold and returns whatever respond answered, which a test asserting the
-// cancellation reports.
+// handler whose first request carried the context therefore returns promptly
+// with an error for which errors.Is(err, context.Canceled) holds; one whose
+// first request did not waits out the hold and returns whatever respond
+// answered, which a test asserting the cancellation reports.
+//
+// A handler that sends more than one request is not proved by that alone: a
+// later request that carries the context is refused by the transport once the
+// context is cancelled, so a handler whose first call dropped it and whose
+// second passed it would still end in context.Canceled. Every request that
+// sits out the hold is therefore counted, and the test fails at cleanup when
+// any did, naming how many.
 //
 // The cancel is made through a [sync.Once] on the handler's own goroutine
 // rather than by a watcher goroutine, since a CancelFunc may be called from
@@ -67,19 +74,35 @@ func CancelOnArrival(tb testing.TB, respond http.HandlerFunc) (context.Context, 
 	// fails its test in seconds rather than hanging it. It is written here
 	// rather than as a constant so the one statement that states it is one a
 	// test executes.
-	return cancelOnArrival(tb, respond, 5*time.Second)
+	ctx, client, heldOut := cancelOnArrival(tb, respond, 5*time.Second)
+	// Registered after the mock's own cleanup, so it runs before the server
+	// closes; a request counted here was answered, and the call that sent it
+	// returned, before the test body did.
+	tb.Cleanup(func() { reportHeldOut(tb, heldOut.Load()) })
+	return ctx, client
 }
 
-// cancelOnArrival is [CancelOnArrival] with the hold stated, so the helper's
-// own test can reach the answer respond gives without waiting out the full
-// hold. It is a parameter rather than a package variable a test overrides,
-// because such a variable would be shared by every test in the package and a
-// shortened hold would leak into a parallel one.
-func cancelOnArrival(tb testing.TB, respond http.HandlerFunc, hold time.Duration) (context.Context, *gitlabclient.Client) {
+// reportHeldOut fails the test when n requests sat out the [CancelOnArrival]
+// hold, each of which was sent without the caller's context.
+func reportHeldOut(r errorReporter, n int64) {
+	if n != 0 {
+		r.Errorf("CancelOnArrival: %d request(s) sat out the hold, so they did not carry the caller's context", n)
+	}
+}
+
+// cancelOnArrival is [CancelOnArrival] with the hold stated and without the
+// check at cleanup, returning the count of requests that sat out the hold
+// instead, so the helper's own test can reach the answer respond gives without
+// waiting out the full hold and can send the request the check exists to
+// report. The hold is a parameter rather than a package variable a test
+// overrides, because such a variable would be shared by every test in the
+// package and a shortened hold would leak into a parallel one.
+func cancelOnArrival(tb testing.TB, respond http.HandlerFunc, hold time.Duration) (context.Context, *gitlabclient.Client, *atomic.Int64) {
 	tb.Helper()
 	ctx, cancel := context.WithCancel(tb.Context())
 	tb.Cleanup(cancel)
 	var arrived sync.Once
+	heldOut := new(atomic.Int64)
 	client := NewTestClient(tb, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		arrived.Do(cancel)
 		// The body is drained before the wait because the server only watches
@@ -95,10 +118,11 @@ func cancelOnArrival(tb testing.TB, respond http.HandlerFunc, hold time.Duration
 		select {
 		case <-r.Context().Done():
 		case <-timer.C:
+			heldOut.Add(1)
 			respond(w, r)
 		}
 	}))
-	return ctx, client
+	return ctx, client, heldOut
 }
 
 // CaptureSlog redirects [slog] output to an in-memory [bytes.Buffer] for the

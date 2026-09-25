@@ -200,7 +200,7 @@ type sessionShape struct {
 	// observed is whether every session of the shape that made a traced call
 	// had the server's span of at least one of them arrive, of whatever
 	// method. An idle session, which made no traced call, does not hold it
-	// false: it asked nothing a span could answer. It is true of a shape whose
+	// false: it issued no trace a span could answer. It is true of a shape whose
 	// sessions were all idle, for want of anything to hold it false, which is
 	// why the row publishes [sessionShape.dispatchObserved] rather than this.
 	// It decides no credit; the credit is judged per call, and a tool call's on
@@ -217,11 +217,11 @@ type sessionShape struct {
 // did had the server's span of one of them arrive.
 //
 // The first half is what keeps the flag a positive claim. A shape whose
-// sessions were all idle asked nothing a span could answer, so nothing about
+// sessions were all idle issued no trace a span could answer, so nothing about
 // its telemetry was seen either way, and reading it as observed would put it
 // beside a shape whose spans did arrive with nothing to tell the two apart. It
 // reads false instead, and the row's idle count, equal to its session count,
-// says that this false is for want of a question rather than for want of
+// says that this false is for want of a traced call rather than for want of
 // telemetry.
 func (s *sessionShape) dispatchObserved() bool {
 	return s.observed && s.idle < s.sessions

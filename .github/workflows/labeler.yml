@@ -10,12 +10,12 @@ on:
     # one thing about a pull request that is routinely fixed after opening.
     types: [opened, synchronize, reopened, edited]
 
-# Keyed on the pull request number, not github.ref: under pull_request_target
-# that ref is the base branch, so every open pull request would share one group
-# and each new one would cancel the last.
-concurrency:
-  group: labeler-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group, on purpose. With one that cancelled in progress, every
+# pull request renamed seconds after it was opened (every layer of a stack is)
+# had its opened run cancelled by the edited one, and that cancelled run read
+# as a failure in the checks rollup. The job only adds labels (sync-labels is
+# false and the kind step only adds), so two runs of it at once are harmless:
+# each adds what it finds and neither removes anything.
 
 permissions:
   contents: read

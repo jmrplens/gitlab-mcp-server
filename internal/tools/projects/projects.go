@@ -3729,15 +3729,19 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 		}
 		// Only the 401 is about the target: GitLab answers it when the project's
 		// namespace is not one the source may be forked into
-		// (lib/api/projects.rb:925). Its 403s are about the caller's role on
-		// either project (:915, :921), which this hint does not describe.
+		// (lib/api/projects.rb:925). Its 403s are about the caller's
+		// abilities: link_forked_project on project_id (:915), which needs the
+		// Owner role there and the right to create forks in project_id's
+		// top-level namespace (app/policies/project_policy.rb:344-348, granted
+		// on a group to its Maintainers and Owners), and the right to fork
+		// forked_from_id (:921). This hint does not describe them.
 		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) && toolutil.IsPermissionRefusal(err) {
 			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
 				"the namespace project_id lives in is not one you may fork forked_from_id into, which needs the right to create projects there; check both projects' namespaces with project.get")
 		}
 		if toolutil.IsPermissionRefusal(err) {
 			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
-				"linking a fork needs the Owner role on project_id and permission to fork forked_from_id")
+				"linking a fork needs the Owner role on project_id, the right to create forks in project_id's top-level namespace (the Maintainer or Owner role when that namespace is a group), and permission to fork forked_from_id")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
 			"verify both project_id and forked_from_id reference existing projects with project.get")

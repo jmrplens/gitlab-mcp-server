@@ -2328,7 +2328,7 @@ const (
 // The bodies GitLab answers a 401 with, byte for byte, read at b183f4fad4bd.
 // The three invalid_token bodies are rack-oauth2's rendering of what
 // lib/api/api_guard.rb answers an expired, a revoked and an impersonation
-// token with. The refusal body is Grape's unauthorized! (lib/api/helpers.rb),
+// token with. The refusal body is GitLab's API helper unauthorized! (lib/api/helpers.rb),
 // which every permission refusal in entry 55 of docs/development/upstream-bugs.md
 // goes through, and which a token GitLab has no record of gets too. The
 // GraphQL body is what GraphqlController#authorize_access_api! renders for a

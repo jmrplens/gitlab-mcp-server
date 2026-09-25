@@ -539,8 +539,9 @@ const previousRelease = "the previous release, which a failed download must not 
 var packageBody = strings.Repeat("package-file-block-", 512)
 
 // serveHalfThen answers the package GET with a Content-Length for the whole
-// body, sends half of it and flushes, so the download has written bytes by
-// the time then decides how the response ends.
+// body, sends half of it and flushes, so those bytes are on the wire before
+// then decides how the response ends; how many of them the download has
+// written by then is up to the scheduler.
 func serveHalfThen(then func(w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerContentType, testOctetStream)
@@ -649,7 +650,8 @@ func interruptions() []interruption {
 // The download used to create output_path first and stream into it, so every
 // one of these left a file that looked like a download and was not one: empty
 // after an error answer or a cancellation on arrival, truncated after a cut
-// body or a cancellation partway, and a previous file at that path destroyed
+// body, empty or truncated after a cancellation partway, and a previous file
+// at that path destroyed
 // in all four, since it was truncated before a byte was requested. The case
 // that cancels partway is the one the handler context makes routine: an
 // abandoned call or the action deadline now ends a transfer where it stands.

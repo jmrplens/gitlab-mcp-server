@@ -2,6 +2,8 @@ package paths
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -221,6 +223,30 @@ func TestE2EObservation_NoDirectory_AsksNothing(t *testing.T) {
 
 	if observation.Ran || observation.Directory != "" || observation.Error != "" {
 		t.Errorf("observation = %+v, want the zero value", observation)
+	}
+}
+
+// TestE2EObservation_ASchemaOneShard_IsReadForItsDispatchLines holds the
+// default reader to the shards the Makefile's default directory holds: the old
+// suite's permanent baseline, written under version 1 of the record, beside a
+// current run. This folds dispatch lines alone, which version 2 left readable,
+// and the strict reader it used refused the old shard whole and turned the
+// observation into a bare error. The shard is written to disk and read by
+// the reader the check ships with, not through the seam.
+func TestE2EObservation_ASchemaOneShard_IsReadForItsDispatchLines(t *testing.T) {
+	dir := t.TempDir()
+	shard := `{"schema":1,"type":"dispatch","dispatch":{"trace_id":"abc","action":"issue.list","requests":2}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "calls-baseline.jsonl"), []byte(shard), 0o600); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+
+	observation := e2eObservation(dir, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}})
+
+	if observation.Error != "" {
+		t.Fatalf("observation error = %q, want the schema 1 shard read", observation.Error)
+	}
+	if !slices.Equal(observation.Issuing, []string{"issue.list"}) {
+		t.Errorf("issuing = %v, want the action its dispatch line credits", observation.Issuing)
 	}
 }
 

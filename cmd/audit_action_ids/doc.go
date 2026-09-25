@@ -145,12 +145,16 @@
 // is judged here for tool names too, and one assembled at run time is folded
 // as a hint is, a helper that picks it by the action's name followed to every
 // branch it returns from, and a call a Usage format is handed is followed the
-// same way, which is how badges' scope boundary is read. A domain action's
-// individual tool Description is not read: only that tool serves it, and the
-// tool name is right there. A standalone surface tool's is served on every
-// surface, as its tool's description on meta and individual and as its Usage
-// on dynamic, so the guided flows and project discovery write their one text
-// as the Usage too, where it is read. Three spellings are
+// same way, which is how badges' scope boundary is read. An individual tool's
+// Description, where it is a constant, is judged for tool names everywhere
+// but its "See also" clause: gitlab://tools serves a domain action's
+// Description verbatim on the dynamic and meta surfaces as well, rewriting
+// only that clause into each surface's names, so the clause is the one part
+// where an individual tool name is right. A standalone surface tool's is
+// served on every surface, as its tool's description on meta and individual
+// and as its Usage on dynamic, so the guided flows and project discovery
+// write their one text as the Usage too, where it is read whole. Three
+// spellings are
 // reported: a gitlab_* tool name, a registered alias, and a dotted ID that
 // resolves nowhere. A tool the package's own surface registers is declared
 // (declaredSurfaceToolMentions), which is dynamic's two tools in dynamic's own
@@ -218,18 +222,22 @@
 // and naming the ID it means needs the domain the sentence belongs to, which
 // it does not spell, so it is rewritten to toolutil.HintAction by hand; a
 // merge's body adds prose unread, as above; a domain action's individual tool
-// Description assembled at run time is read by no rule; and internal/prompts
-// and internal/resources are outside the load, the review prompt being held to
-// the catalog by a test of its own and the resource manifests projecting only
-// a description's "See also" clause per surface, with no gate over the names
-// the rest of their prose spells.
+// Description assembled at run time is read by no rule, and three such said
+// "Use this instead of" a tool name until they were rewritten by hand, so a
+// test in internal/resources reads every Description the built catalog
+// carries outside the clause actioncatalog.SeeAlsoClause matches, which is
+// the one this rule passes over too; and
+// internal/prompts and internal/resources are outside the load, the review
+// prompt being held to the catalog by a test of its own and the resource
+// manifests' own prose, around the descriptions they serve, by no gate.
 //
 // The dotted-ID half of it was never large: the five unresolvable IDs the
-// first run found were one constant in internal/tools/workitemsavedviews
-// naming "work_item_saved_view.list", where the catalog registers those
-// actions as routes on the issue domain. That one is fixed by spelling the ID
-// through the constant the catalog registers, which is the remedy for the
-// class.
+// hint rule's first run found were one constant in
+// internal/tools/workitemsavedviews naming "work_item_saved_view.list", where
+// the catalog registers those actions as routes on the issue domain. That one
+// is fixed by spelling the ID through the constant the catalog registers,
+// which is the remedy for the class. The five the widened run found were in
+// the parameter guidance of invites and pipelinetriggers.
 //
 // # The suite that quotes it
 //

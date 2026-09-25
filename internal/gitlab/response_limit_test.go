@@ -385,8 +385,8 @@ func TestLimitedBody_UnderTheCeiling_DeliversWithoutError(t *testing.T) {
 	}
 }
 
-// The bodies GitLab answers a 401 with, as its own code writes them: Grape's
-// unauthorized! for a permission refusal and for a token it cannot find, and
+// The bodies GitLab answers a 401 with, as its own code writes them: its API
+// helper unauthorized! for a permission refusal and for a token it cannot find, and
 // rack-oauth2's rendering of the API guard's invalid_token for an expired one.
 const (
 	plainUnauthorizedBody = `{"message":"401 Unauthorized"}`
@@ -733,6 +733,32 @@ func TestResponseLimitTransport_PeekThatFails_HandsTheFailureOn(t *testing.T) {
 	}
 	if !body.closed {
 		t.Error("closing the replayed body did not close the one GitLab sent")
+	}
+}
+
+// TestFailingReader_NeverAnswersNothing verifies both answers of the reader a
+// failed peek is replayed through: the error it recorded, and
+// [io.ErrUnexpectedEOF] when it recorded none. The second is the one no
+// constructor in the package reaches, and it is the one that matters if one
+// ever does: a reader answering no bytes and no error is waited on forever by
+// io.ReadAll and the SDK's decoder alike.
+func TestFailingReader_NeverAnswersNothing(t *testing.T) {
+	recorded := errors.New("connection reset mid-body")
+	tests := []struct {
+		name   string
+		reader failingReader
+		want   error
+	}{
+		{name: "the recorded error", reader: failingReader{err: recorded}, want: recorded},
+		{name: "no error recorded", reader: failingReader{}, want: io.ErrUnexpectedEOF},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n, err := tt.reader.Read(nil)
+			if n != 0 || !errors.Is(err, tt.want) {
+				t.Errorf("Read(nil) = (%d, %v), want (0, %v)", n, err, tt.want)
+			}
+		})
 	}
 }
 

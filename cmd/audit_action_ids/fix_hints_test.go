@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -281,16 +282,128 @@ func TestFixHints_AOneWordHint_AdmitsNoTestLiteral(t *testing.T) {
 	}
 }
 
-// TestPinsAHint_TheHintMustReadAsASentence holds the pinning rule on its own:
-// a literal holding a whole sentence the walk folded pins it, and one holding
-// a one-word value pins nothing, since that value is contained in every
-// literal that spells it.
-func TestPinsAHint_TheHintMustReadAsASentence(t *testing.T) {
-	if pinsAHint("use demo.get", []string{"demo.get"}) {
-		t.Error("a literal holding a one-word value was read as pinning a hint")
+// TestPinnedTokens_TheHintMustReadAsASentence holds the pinning rule on its
+// own: a literal holding a whole sentence the walk folded pins it, and one
+// holding a one-word value pins nothing, since that value is contained in
+// every literal that spells it.
+func TestPinnedTokens_TheHintMustReadAsASentence(t *testing.T) {
+	if got := pinnedTokens("use gitlab_fetch_demo", []string{"demo.get"}, fixerCatalog()); got != nil {
+		t.Errorf("a literal holding a one-word value pins %v, want nothing", got)
 	}
-	if !pinsAHint("- read it with demo.get\n", []string{"read it with demo.get"}) {
-		t.Error("a bullet holding the whole hint was not read as pinning it")
+	if got := pinnedTokens("- read it with gitlab_fetch_demo\n", []string{"read it with demo.get"}, fixerCatalog()); !slices.Equal(got, []bool{true}) {
+		t.Errorf("a bullet holding the whole hint pins %v, want its one name", got)
+	}
+}
+
+// TestPinnedTokens_SaysWhichNamesLieInsideAHint holds the positions the
+// pinning rule answers with, at both edges of a hint, for a hint the literal
+// holds twice, and for a name the catalog does not publish, which the
+// literal is read with unrenamed as the hint is.
+func TestPinnedTokens_SaysWhichNamesLieInsideAHint(t *testing.T) {
+	tests := []struct {
+		name   string
+		text   string
+		values []string
+		want   []bool
+	}{
+		{
+			name:   "a name at either edge of a hint, and one beside both",
+			text:   "- gitlab_fetch_demo reads one\n- list them with gitlab_demo_list\n# gitlab_fetch_demo",
+			values: []string{"demo.get reads one", "list them with demo.list"},
+			want:   []bool{true, true, false},
+		},
+		{
+			name:   "a hint the literal holds twice",
+			text:   "gitlab_fetch_demo reads one; gitlab_fetch_demo reads one",
+			values: []string{"demo.get reads one"},
+			want:   []bool{true, true},
+		},
+		{
+			name:   "a name the catalog does not publish",
+			text:   "- use gitlab_unpublished_x here",
+			values: []string{"use gitlab_unpublished_x here"},
+			want:   []bool{true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pinnedTokens(tt.text, tt.values, fixerCatalog()); !slices.Equal(got, tt.want) {
+				t.Errorf("pinnedTokens() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTextTokenAt_MatchesTheSourceFormToTheText holds how a name of a
+// literal's source form is placed among the names of its text: the next one
+// spelling the same, skipping one the source form lacks, and none when an
+// escape continues the name in the text.
+func TestTextTokenAt_MatchesTheSourceFormToTheText(t *testing.T) {
+	textTokens := []string{"gitlab_demo_list", "gitlab_fetch_demo"}
+	tests := []struct {
+		name         string
+		from         int
+		tool         string
+		wantPosition int
+		wantNext     int
+	}{
+		{name: "the next name", from: 0, tool: "gitlab_demo_list", wantPosition: 0, wantNext: 1},
+		{name: "past a name the source form lacks", from: 0, tool: "gitlab_fetch_demo", wantPosition: 1, wantNext: 2},
+		{name: "a name the text never spells", from: 1, tool: "gitlab_fetch_dem", wantPosition: -1, wantNext: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			position, next := textTokenAt(textTokens, tt.from, tt.tool)
+			if position != tt.wantPosition || next != tt.wantNext {
+				t.Errorf("textTokenAt() = (%d, %d), want (%d, %d)", position, next, tt.wantPosition, tt.wantNext)
+			}
+		})
+	}
+}
+
+// TestTestHintProse_ANameAtNoPosition_IsOutsideThePinnedHint holds the answer
+// the test pass gives a name of the source form that the text spells at no
+// position: it is outside the hint the literal pins, so it is left alone,
+// while the production pass, which admits a literal whole, rewrites every
+// name it has an answer for.
+func TestTestHintProse_ANameAtNoPosition_IsOutsideThePinnedHint(t *testing.T) {
+	inHint := testHintProse([]string{"read it with demo.get"}, fixerCatalog())("- read it with gitlab_fetch_demo\n")
+	if inHint == nil {
+		t.Fatal("a bullet pinning the hint was not admitted")
+	}
+	if inHint(-1) {
+		t.Error("a name at no position of the text was read as inside the hint")
+	}
+	if !inHint(0) {
+		t.Error("the name inside the hint was read as outside it")
+	}
+	if !everyToken(-1) {
+		t.Error("a literal admitted whole left a name out")
+	}
+}
+
+// TestFixHints_ATestPinningAHint_RewritesOnlyTheNamesInsideIt holds the rule
+// the pinning pass rests on: a literal admitted for holding a hint, a card
+// compared whole, is rewritten inside that hint and nowhere else. The heading
+// above the bullet spells the same tool and is part of no sentence the walk
+// folded, and it used to be rewritten with the bullet.
+func TestFixHints_ATestPinningAHint_RewritesOnlyTheNamesInsideIt(t *testing.T) {
+	const hint = "verify demo_id with demo.get first"
+	root := stagePackage(t, "demo", map[string]string{
+		"demo.go":      "package demo\n\nconst notFound = \"" + hint + "\"\n",
+		"demo_test.go": "package demo\n\nconst wantCard = \"## gitlab_fetch_demo\\n\\n---\\n- verify demo_id with gitlab_fetch_demo first\\n\"\n",
+	})
+
+	report, err := fixHints(root, []site{fixerSite(hint)}, fixerCatalog(), true)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+	want := `"## gitlab_fetch_demo\n\n---\n- verify demo_id with demo.get first\n"`
+	if body := readStaged(t, root, "demo", "demo_test.go"); !strings.Contains(body, want) {
+		t.Errorf("the card = %s, want only the hint's name moved:\n%s", body, want)
+	}
+	if len(report.Fixes) != 1 || len(report.Unresolved) != 0 {
+		t.Errorf("report = %+v, want the one name inside the hint and nothing left over", report)
 	}
 }
 

@@ -173,7 +173,7 @@ func applyRegistryDiscovery(options *toolutil.ActionSpecOptions, individualTool 
 	case toolRegistryProtList:
 		options.Aliases = []string{"list registry protection rules", "container image push rules", "repository path protection"}
 		options.RelatedActions = []string{actionRegistryRuleCreate, actionRegistryTagRuleList, actionProjectGet}
-		options.IndividualTool.Description = "List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use gitlab_registry_tag_protection_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list."
+		options.IndividualTool.Description = "List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use package.registry_tag_rule_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list."
 	case toolRegistryProtCreate:
 		options.Aliases = []string{"protect registry repository path", "restrict image push by path", "create registry protection rule"}
 		options.RelatedActions = []string{actionRegistryRuleList, actionRegistryTagRuleCreate}
@@ -190,7 +190,7 @@ func applyRegistryDiscovery(options *toolutil.ActionSpecOptions, individualTool 
 				ExampleBinding: `params.project_id:"my-org/app"`,
 			},
 		}
-		options.IndividualTool.Description = "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use gitlab_registry_protection_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags."
+		options.IndividualTool.Description = "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use package.registry_rule_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags."
 	case toolRegistryTagProtCreate:
 		options.Aliases = []string{"protect image tags", "make tags immutable", "create tag protection rule", "restrict tag push or delete"}
 		options.RelatedActions = []string{actionRegistryTagRuleList, "package.registry_tag_rule_update", actionRegistryRuleCreate}

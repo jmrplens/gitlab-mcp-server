@@ -548,8 +548,8 @@ func (c *sessionConn) recordSending() mcp.Middleware {
 // none or will never be sent.
 //
 // A trace it returns is one this session issued, which is what tells a session
-// that asked something a span could answer from one that asked nothing
-// ([sessionConn.issuedTrace]), and it is registered with the receiver under
+// that issued a trace from one that issued none ([sessionConn.issuedTrace]),
+// and it is registered with the receiver under
 // this session, which the server's span marks when it lands.
 func (c *sessionConn) stampTrace(ctx context.Context, req mcp.Request) string {
 	if ctx.Err() != nil {

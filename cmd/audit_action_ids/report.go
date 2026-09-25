@@ -217,6 +217,9 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 		if at.Kind == kindUsage {
 			report.Hints.judgeUsage(at)
 		}
+		if at.Kind == kindDescription {
+			report.Hints.judgeDescription(at)
+		}
 		for _, candidate := range candidateIDs(at, ids) {
 			report.judge(at, candidate, ids)
 		}

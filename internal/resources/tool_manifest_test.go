@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"maps"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -439,7 +441,8 @@ func TestActionTitle_NeedsBothNamesOrADeclaredOne(t *testing.T) {
 // never asked about. The canonical ID is the other namespace a clause is
 // written in: a standalone surface tool's description reaches every surface
 // verbatim, so its clause names IDs, and an index of tool names alone dropped
-// every one of them from the dynamic and meta manifests.
+// every one of them from the dynamic manifest, the one whose catalog carries
+// the standalone tools and so the one that projects their clauses.
 func TestSeeAlsoIndex_HoldsBothNamespacesAndNeverTheEmptyName(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
@@ -1149,65 +1152,206 @@ func TestToolManifest_SeeAlsoReferencesResolve_OnEverySurface(t *testing.T) {
 
 	// The individual surface has no snapshot projection to check (its
 	// descriptions pass through untouched), but its namespace is where a
-	// domain action's clause is written, so every referenced name must be a
-	// real individual tool or, for a standalone surface tool whose clause is
-	// served on every surface verbatim, a canonical action ID. This is the
-	// leg that catches stale hand-written names at their source.
+	// domain action's clause is written, so every name a domain action's
+	// clause references must be a real individual tool, and only a standalone
+	// surface tool, whose clause is served on every surface, may name a
+	// canonical action ID instead. This is the leg that catches stale
+	// hand-written names at their source.
 	t.Run(toolSurfaceIndividual, func(t *testing.T) {
-		valid := make(map[string]bool)
-		for _, action := range catalog.Actions() {
-			valid[string(action.ID)] = true
-			if action.IndividualTool.Name != "" {
-				valid[action.IndividualTool.Name] = true
-			}
-		}
-		for _, action := range catalog.Actions() {
-			assertSeeAlsoFormat(t, string(action.ID), action.IndividualTool.Description)
-			for _, name := range seeAlsoNames(action.IndividualTool.Description) {
-				if !valid[name] {
-					t.Errorf("action %s references %q in its See-also clause, but no individual tool or action has that name: fix the spec", action.ID, name)
-				}
-			}
-		}
+		assertIndividualSeeAlsoNames(t, catalog)
 	})
 }
 
-// TestToolManifest_StandaloneSeeAlso_IsProjectedOntoEachSurface holds the
-// clause a standalone surface tool writes in canonical IDs to the projection
-// a domain action's clause gets: the dynamic manifest keeps the IDs, which
-// are what gitlab_execute_action takes, and the meta manifest rewrites each
-// to the entry its tool and action are invoked by.
+// assertIndividualSeeAlsoNames holds every action's See-also clause to the
+// namespace it is written in: individual tool names for a domain action, and
+// canonical IDs as well for a standalone surface tool.
+func assertIndividualSeeAlsoNames(t *testing.T, catalog *actioncatalog.Catalog) {
+	t.Helper()
+	toolNames := make(map[string]bool)
+	actionIDs := make(map[string]bool)
+	for _, action := range catalog.Actions() {
+		actionIDs[string(action.ID)] = true
+		if action.IndividualTool.Name != "" {
+			toolNames[action.IndividualTool.Name] = true
+		}
+	}
+	for _, action := range catalog.Actions() {
+		assertSeeAlsoFormat(t, string(action.ID), action.IndividualTool.Description)
+		group, _ := catalog.Group(action.ToolName)
+		standalone := isStandaloneSurfaceTool(group.SurfaceKind)
+		for _, name := range seeAlsoNames(action.IndividualTool.Description) {
+			if toolNames[name] || (standalone && actionIDs[name]) {
+				continue
+			}
+			if actionIDs[name] {
+				t.Errorf("action %s references the canonical ID %q in its See-also clause, which only a standalone surface tool writes: name the individual tool, which the manifests rewrite per surface", action.ID, name)
+				continue
+			}
+			t.Errorf("action %s references %q in its See-also clause, but no individual tool or action has that name: fix the spec", action.ID, name)
+		}
+	}
+}
+
+// isStandaloneSurfaceTool reports whether an action belongs to a standalone
+// surface tool, a guided flow or a runtime utility, whose one description is
+// served verbatim on every surface and so writes its See-also clause in
+// canonical IDs; every other action writes its clause in individual tool
+// names.
+func isStandaloneSurfaceTool(kind actioncatalog.SurfaceKind) bool {
+	return kind == actioncatalog.SurfaceKindRuntimeUtility || kind == actioncatalog.SurfaceKindInteractiveUtility
+}
+
+// descriptionToolName matches a tool-name-shaped token in a description, as
+// cmd/audit_action_ids spells the token its served-prose rule refuses.
+var descriptionToolName = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
+
+// descriptionTokensNamingNoTool are the gitlab_-shaped tokens a description
+// may spell because they name no tool, each with what they name instead. It
+// holds what cmd/audit_action_ids declares in hintToolExemptions, for the same
+// reason: GitLab's own template families are the class.
+var descriptionTokensNamingNoTool = map[string]string{
+	"gitlab_ci_ymls": "a GitLab template family and API path segment (templates/gitlab_ci_ymls)",
+}
+
+// TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause
+// holds every individual tool Description the catalog carries to the rule
+// cmd/audit_action_ids holds a constant one to: outside its "See also" clause
+// it names no gitlab_* tool.
+//
+// gitlab://tools serves a domain action's Description verbatim as its entry's
+// description on the dynamic and meta surfaces and rewrites only that clause,
+// so a tool name anywhere else reaches two surfaces that do not register the
+// tool. The gate reads a Description only where it is a constant, and several
+// are assembled when the catalog is built: a switch over the action name in
+// deploykeys and deploytokens, a map read in pages, the guided flows' text
+// handed in. Putting a tool name back into one of those passed every gate, so
+// this test reads what the catalog carries rather than the source that built
+// it, and so reads those too.
+//
+// The catalog is the one cmd/internal/actionids builds: Ultimate, for a
+// self-managed instance and for GitLab.com, since Orbit's group is contributed
+// only for GitLab.com, with the standalone surface tools added the way the
+// dynamic surface adds them.
+func TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause(t *testing.T) {
+	classes := []struct {
+		name   string
+		dotcom bool
+	}{
+		{name: "self-managed", dotcom: false},
+		{name: "GitLab.com", dotcom: true},
+	}
+	for _, class := range classes {
+		t.Run(class.name, func(t *testing.T) {
+			base, err := gitlabtools.SharedBaseCatalog(class.dotcom, gitlabtools.ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+			if err != nil {
+				t.Fatalf("SharedBaseCatalog(%t): %v", class.dotcom, err)
+			}
+			catalog, err := dynamictools.AddStandaloneCatalog(base, nil, dynamictools.StandaloneOptions{})
+			if err != nil {
+				t.Fatalf("AddStandaloneCatalog: %v", err)
+			}
+			read := 0
+			for _, action := range catalog.Actions() {
+				if action.IndividualTool.Description == "" {
+					continue
+				}
+				read++
+				for _, name := range toolNamesOutsideSeeAlso(action.IndividualTool.Description) {
+					t.Errorf("action %s's Description names %s outside its See also clause, which gitlab://tools serves verbatim on the dynamic and meta surfaces: name the canonical action ID there, or move the reference into the clause", action.ID, name)
+				}
+			}
+			if read == 0 {
+				t.Error("no action in the catalog carried a Description, so nothing was read")
+			}
+		})
+	}
+}
+
+// TestToolNamesOutsideSeeAlso_OneDescription_ReportsAllButTheClause pins the guard's reading
+// of one description, since the tree it runs over is clean and so shows none
+// of it: a name inside the clause is passed, one before or after it is
+// reported, and a token declared to name no tool is passed wherever it is.
+func TestToolNamesOutsideSeeAlso_OneDescription_ReportsAllButTheClause(t *testing.T) {
+	const description = "Reversible via gitlab_unban_user. Lists gitlab_ci_ymls templates. See also: gitlab_get_user, gitlab_ban_user. Then gitlab_list_users."
+	want := []string{"gitlab_unban_user", "gitlab_list_users"}
+	if got := toolNamesOutsideSeeAlso(description); !slices.Equal(got, want) {
+		t.Errorf("toolNamesOutsideSeeAlso() = %v, want %v", got, want)
+	}
+}
+
+// toolNamesOutsideSeeAlso returns the tool names a description spells
+// outside its "See also" clause, less the tokens that name no tool.
+func toolNamesOutsideSeeAlso(description string) []string {
+	var names []string
+	outside := actioncatalog.SeeAlsoClause.ReplaceAllString(description, " ")
+	for _, name := range descriptionToolName.FindAllString(outside, -1) {
+		if _, namesNoTool := descriptionTokensNamingNoTool[name]; !namesNoTool {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// TestToolManifest_StandaloneSeeAlso_IsKeptInCanonicalIDsOnEverySurface
+// holds what each surface's manifest does with the clause a standalone
+// surface tool writes in canonical IDs, with each surface assembled the way
+// cmd/server assembles it.
+//
+// The dynamic surface carries the flows and project discovery in its catalog,
+// so their entries go through the projection a domain action's clause gets,
+// and the canonical IDs map to themselves, which are what
+// gitlab_execute_action takes. The meta and individual surfaces register them
+// as tools beside a catalog that does not carry them, so their entries are
+// direct ones and the description is served verbatim, canonical IDs
+// included, which gitlab://tools/{id} resolves on every surface. An earlier
+// form of this test built its meta snapshot from the dynamic catalog, which
+// carries the flows, and so asserted a meta rewrite the server never makes.
 //
 // The drift guard above cannot see this half. It checks that every name an
 // emitted clause spells resolves, and an index that knew only tool names
 // answered a flow's IDs by dropping its clause whole, which left nothing for
 // that guard to refuse.
-func TestToolManifest_StandaloneSeeAlso_IsProjectedOntoEachSurface(t *testing.T) {
-	catalog := fullSurfaceCatalog(t)
+func TestToolManifest_StandaloneSeeAlso_IsKeptInCanonicalIDsOnEverySurface(t *testing.T) {
+	withStandalone := fullSurfaceCatalog(t)
+	domainCatalog := domainSurfaceCatalog(t)
+	var standaloneTools []*mcp.Tool
+	for _, spec := range surfaces.StandaloneToolSpecs(nil) {
+		standaloneTools = append(standaloneTools, &mcp.Tool{Name: spec.Name, Title: spec.Title, Description: spec.Description})
+	}
 	dynamic := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
 		Surface: toolSurfaceDynamic,
 		Tools: []*mcp.Tool{
 			{Name: "gitlab_execute_action", Title: "Execute"},
 			{Name: "gitlab_find_action", Title: "Find"},
 		},
-		Catalog: catalog,
+		Catalog: withStandalone,
 	})
 	meta := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
 		Surface:    toolSurfaceMeta,
-		Catalog:    catalog,
-		MetaRoutes: catalog.ActionMaps(),
+		Tools:      standaloneTools,
+		Catalog:    domainCatalog,
+		MetaRoutes: domainCatalog.ActionMaps(),
+	})
+	individual := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+		Surface: toolSurfaceIndividual,
+		Tools:   standaloneTools,
+		Catalog: domainCatalog,
 	})
 
+	const flowClause = "See also: issue.create, issue.get."
+	const discoveryClause = "See also: project.get, server.status, search.projects."
 	tests := []struct {
 		name     string
 		snapshot toolSurfaceSnapshot
 		id       string
 		want     string
 	}{
-		{name: "dynamic flow", snapshot: dynamic, id: "interactive.issue_create", want: "See also: issue.create, issue.get."},
-		{name: "meta flow", snapshot: meta, id: "gitlab_interactive.issue_create", want: "See also: gitlab_issue.create, gitlab_issue.get."},
-		{name: "dynamic discovery", snapshot: dynamic, id: "discover_project.resolve", want: "See also: project.get, server.status, search.projects."},
-		{name: "meta discovery", snapshot: meta, id: "gitlab_discover_project.resolve", want: "See also: gitlab_project.get, gitlab_server.status, gitlab_search.projects."},
+		{name: "dynamic flow", snapshot: dynamic, id: "interactive.issue_create", want: flowClause},
+		{name: "meta flow", snapshot: meta, id: "gitlab_interactive_issue_create", want: flowClause},
+		{name: "individual flow", snapshot: individual, id: "gitlab_interactive_issue_create", want: flowClause},
+		{name: "dynamic discovery", snapshot: dynamic, id: "discover_project.resolve", want: discoveryClause},
+		{name: "meta discovery", snapshot: meta, id: "gitlab_discover_project", want: discoveryClause},
+		{name: "individual discovery", snapshot: individual, id: "gitlab_discover_project", want: discoveryClause},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1221,6 +1365,82 @@ func TestToolManifest_StandaloneSeeAlso_IsProjectedOntoEachSurface(t *testing.T)
 				return
 			}
 			t.Errorf("manifest has no entry %s", tt.id)
+		})
+	}
+}
+
+// domainSurfaceCatalog builds the Ultimate-tier catalog the meta and
+// individual surfaces register from: the canonical actions without the
+// standalone surface tools, which those surfaces register beside it.
+func domainSurfaceCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
+		Enterprise: true,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog: %v", err)
+	}
+	return catalog
+}
+
+// toolDetailExamples picks the three entry IDs the tool_detail template's
+// description offers as examples, one per surface.
+var toolDetailExamples = regexp.MustCompile(`such as (\S+) in dynamic mode, (\S+) in meta mode, or (\S+) in individual mode`)
+
+// TestToolDetailTemplate_ExamplesNameAnEntryOfTheirSurface holds the three
+// example IDs the tool_detail template's description gives, as served by a
+// registered server, to the entries each surface's manifest actually carries.
+// The individual example used to be a verb-first spelling no surface
+// registers and no alias resolves, and nothing read the sentence to notice.
+func TestToolDetailTemplate_ExamplesNameAnEntryOfTheirSurface(t *testing.T) {
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: toolSurfaceDynamic,
+		Catalog: widgetCatalog(t),
+	})
+	listed, err := session.ListResourceTemplates(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	var description string
+	for _, template := range listed.ResourceTemplates {
+		if template.Name == "tool_detail" {
+			description = template.Description
+		}
+	}
+	examples := toolDetailExamples.FindStringSubmatch(description)
+	if examples == nil {
+		t.Fatalf("tool_detail description = %q, want one example per surface", description)
+	}
+
+	domainCatalog := domainSurfaceCatalog(t)
+	var individualTools []*mcp.Tool
+	for _, action := range domainCatalog.Actions() {
+		if action.IndividualTool.Name != "" {
+			individualTools = append(individualTools, &mcp.Tool{Name: action.IndividualTool.Name})
+		}
+	}
+	snapshots := []struct {
+		surface  string
+		snapshot toolSurfaceSnapshot
+		example  string
+	}{
+		{toolSurfaceDynamic, newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+			Surface: toolSurfaceDynamic,
+			Tools: []*mcp.Tool{
+				{Name: "gitlab_execute_action", Title: "Execute"},
+				{Name: "gitlab_find_action", Title: "Find"},
+			},
+			Catalog: fullSurfaceCatalog(t),
+		}), examples[1]},
+		{toolSurfaceMeta, newToolSurfaceSnapshot(ToolSurfaceResourceOptions{Surface: toolSurfaceMeta, Catalog: domainCatalog, MetaRoutes: domainCatalog.ActionMaps()}), examples[2]},
+		{toolSurfaceIndividual, newToolSurfaceSnapshot(ToolSurfaceResourceOptions{Surface: toolSurfaceIndividual, Tools: individualTools, Catalog: domainCatalog}), examples[3]},
+	}
+	for _, tt := range snapshots {
+		t.Run(tt.surface, func(t *testing.T) {
+			if _, ok := tt.snapshot.details[tt.example]; !ok {
+				t.Errorf("the %s example %q names no entry of the %s manifest", tt.surface, tt.example, tt.surface)
+			}
 		})
 	}
 }
@@ -1259,7 +1479,7 @@ func assertSeeAlsoResolves(t *testing.T, snapshot toolSurfaceSnapshot, valid map
 // the same pattern the projection rewrites.
 func seeAlsoNames(description string) []string {
 	var names []string
-	for _, match := range seeAlsoClause.FindAllStringSubmatch(description, -1) {
+	for _, match := range actioncatalog.SeeAlsoClause.FindAllStringSubmatch(description, -1) {
 		names = append(names, strings.Split(match[1], ", ")...)
 	}
 	return names
@@ -1284,7 +1504,7 @@ func assertSeeAlsoFormat(t *testing.T, owner, description string) {
 // current catalog's metadata.
 func seeAlsoFormatViolation(description string) (string, bool) {
 	for idx := strings.Index(description, "See also:"); idx >= 0; {
-		loc := seeAlsoClause.FindStringIndex(description[idx:])
+		loc := actioncatalog.SeeAlsoClause.FindStringIndex(description[idx:])
 		if loc == nil || loc[0] != 0 {
 			return description[idx:], false
 		}

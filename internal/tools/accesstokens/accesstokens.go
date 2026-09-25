@@ -23,7 +23,7 @@ const (
 	// reports as not found.
 	hintTokenAlreadyRevoked = "token already revoked or never existed. Nothing to do" //#nosec G101 -- error hint, not a credential
 	// Operation names for the handlers that report under one name from their
-	// hint, their plain refusal and their capture alike.
+	// hint, their other refusal and their capture alike.
 	opRotateGroupToken        = "rotate group access token"         //#nosec G101 -- operation name, not a credential
 	opRotatePersonalToken     = "rotate personal access token"      //#nosec G101 -- operation name, not a credential
 	opListProjectTokens       = "list project access tokens"        //#nosec G101 -- operation name, not a credential
@@ -70,13 +70,38 @@ const (
 	// withdraw read_resource_access_tokens there, and a group grants
 	// manage_resource_access_tokens only beside it.
 	hintGroupTokenRotateRefused = "token_id is not an active access token of this group, or the caller may not rotate it: that needs the Owner role, and GitLab refuses it whatever the role when the calling token is itself a project or group access token, when the top-level group does not allow access token creation, when an administrator has disabled personal access tokens on the instance (which disables project and group access tokens too), or on GitLab.com when the group's plan lacks access tokens. GitLab answers all of these the same unless you are an administrator. Check token_id with access.token_group_list" //#nosec G101 -- error hint, not a credential
-	// hintPersonalTokenNotFoundOrNotYours is the read-by-id and rotate
-	// answer to a personal access token that is missing or belongs to someone
-	// else (lib/api/personal_access_tokens.rb:73 and 107).
+	// hintPersonalTokenNotFoundOrNotYours is the read-by-id answer to a
+	// personal access token that is missing or belongs to someone else
+	// (lib/api/personal_access_tokens.rb:73). Reading another user's token is
+	// read_personal_access_token, which UserPolicy grants the token's owner
+	// and an administrator alone.
 	hintPersonalTokenNotFoundOrNotYours = "token_id is not one of your personal access tokens: either it does not exist or it belongs to another user, which only an administrator may act on, and GitLab answers the two the same unless you are one. Check token_id with access.token_personal_list" //#nosec G101 -- error hint, not a credential
+	// hintPersonalTokenRotateNotFoundOrNotYours is
+	// [hintPersonalTokenNotFoundOrNotYours] for the rotation
+	// (lib/api/personal_access_tokens.rb:95 and 107), whose ability reaches
+	// further: rotate_personal_access_token is also granted to whoever may
+	// administer the service accounts of the group or project that
+	// provisioned the token's owner (app/policies/user_policy.rb:53-66), the
+	// Owner of that group or the Maintainer of that project.
+	hintPersonalTokenRotateNotFoundOrNotYours = "token_id is not a personal access token you may rotate: either it does not exist or it belongs to another user, which only an administrator, or whoever administers the service accounts of the group or project that provisioned that user, may rotate, and GitLab answers the two the same for anyone else. Check token_id with access.token_personal_list" //#nosec G101 -- error hint, not a credential
 	// hintNotAPersonalToken is what the routes about the calling token answer
-	// a credential that is not a personal access token with.
-	hintNotAPersonalToken = "the calling credential is not a personal access token (an OAuth or CI job token, for example), and this action acts on the calling personal access token" //#nosec G101 -- error hint, not a credential
+	// a credential they authenticate and that is not a personal access token
+	// with. That is an OAuth token: a credential GitLab cannot authenticate on
+	// these routes, a CI job token included, never reaches that check,
+	// because none of them allows a job token and authenticate! answers it
+	// with its plain 401 first.
+	hintNotAPersonalToken = "the calling credential is not a personal access token (an OAuth token, for example), and this action acts on the calling personal access token" //#nosec G101 -- error hint, not a credential
+	// hintPersonalTokenRotateSelfUnauthenticated is the personal
+	// self-rotation's answer to its API guard's 401, which is about a
+	// credential GitLab did not authenticate on the route: a token that no
+	// longer works, or one the route does not accept, such as a CI job token.
+	hintPersonalTokenRotateSelfUnauthenticated = "GitLab did not authenticate the calling credential here: the token has already been rotated or revoked (a rotation revokes the token it replaces, so use the token it returned), or it is a credential this route does not accept, a CI job token for example" //#nosec G101 -- error hint, not a credential
+	// hintProjectTokenNotFound is the project read's answer to the 404 GitLab
+	// gives a caller who may read the project's tokens when the token is
+	// missing.
+	hintProjectTokenNotFound = "token_id not found on this project (already revoked or never existed) - use access.token_project_list to discover current token IDs" //#nosec G101 -- error hint, not a credential
+	// hintGroupTokenNotFound is [hintProjectTokenNotFound] for a group.
+	hintGroupTokenNotFound = "token_id not found on this group. Use access.token_group_list to discover current token IDs" //#nosec G101 -- error hint, not a credential
 	// hintResourceTokenRotateSelfWrongKind is the self-rotation's answer to
 	// a credential that is not a project or group bot's access token.
 	hintResourceTokenRotateSelfWrongKind = "only a project or group access token can rotate itself here; a person's personal access token is rotated with access.token_personal_rotate_self, and an OAuth or CI job token cannot be rotated this way" //#nosec G101 -- error hint, not a credential
@@ -292,7 +317,7 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 		tokenID:        input.TokenID,
 		requiredField:  "project_id",
 		operation:      "get project access token",
-		notFoundHint:   "token_id not found on this project (already revoked or never existed) - use access.token_project_list to discover current token IDs",
+		notFoundHint:   hintProjectTokenNotFound,
 		permissionHint: hintProjectTokenRole,
 		get: func(scopeID string, tokenID int64) (Output, error) {
 			capturingCtx, captured := gitlabclient.WithResponseCapture(ctx)
@@ -674,7 +699,7 @@ func GroupGet(ctx context.Context, client *gitlabclient.Client, input GroupGetIn
 		tokenID:        input.TokenID,
 		requiredField:  "group_id",
 		operation:      "get group access token",
-		notFoundHint:   "token_id not found on this group. Use access.token_group_list to discover current token IDs",
+		notFoundHint:   hintGroupTokenNotFound,
 		permissionHint: hintGroupTokenRole,
 		get: func(scopeID string, tokenID int64) (Output, error) {
 			capturingCtx, captured := gitlabclient.WithResponseCapture(ctx)
@@ -1067,8 +1092,11 @@ func PersonalGet(ctx context.Context, client *gitlabclient.Client, input Persona
 	if input.TokenID == 0 {
 		t, _, err := client.GL().PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
 		if err != nil {
-			// GitLab answers a credential that is not a personal access token
-			// with 400 (lib/api/personal_access_tokens/self_information.rb:20-21).
+			// GitLab answers a credential it authenticates here and that is
+			// not a personal access token, an OAuth token, with 400
+			// (lib/api/personal_access_tokens/self_information.rb:20-21). One
+			// it cannot authenticate on this route, a CI job token included,
+			// gets authenticate!'s plain 401 first, which carries no hint.
 			return Output{}, toolutil.WrapErrWithStatusHint("get current personal access token", err, http.StatusBadRequest,
 				hintNotAPersonalToken+"; supply token_id to read a specific personal access token instead")
 		}
@@ -1126,7 +1154,7 @@ func PersonalRotate(ctx context.Context, client *gitlabclient.Client, input Pers
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
 		if tokenNotFoundOrNotYours(err) {
-			return Output{}, toolutil.WrapErrWithHint(opRotatePersonalToken, err, hintPersonalTokenNotFoundOrNotYours)
+			return Output{}, toolutil.WrapErrWithHint(opRotatePersonalToken, err, hintPersonalTokenRotateNotFoundOrNotYours)
 		}
 		return Output{}, toolutil.WrapErrWithMessage(opRotatePersonalToken, err)
 	}
@@ -1183,14 +1211,17 @@ func PersonalRotateSelf(ctx context.Context, client *gitlabclient.Client, input 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().PersonalAccessTokens.RotatePersonalAccessTokenSelf(opts, gl.WithContext(ctx))
 	if err != nil {
-		// GitLab answers a credential that is not a personal access token with
-		// 405 (lib/api/personal_access_tokens/self_rotation.rb:37); its only 401
-		// is its API guard's, for a token that no longer works.
+		// GitLab answers a credential it authenticates here and that is not a
+		// personal access token, an OAuth token, with 405
+		// (lib/api/personal_access_tokens/self_rotation.rb:37). Its only 401
+		// is its API guard's, for a credential it did not authenticate on the
+		// route: a token that no longer works, or one the route does not
+		// accept, a CI job token included.
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) {
 			return Output{}, toolutil.WrapErrWithHint(opSelfRotatePersonalToken, err, hintNotAPersonalToken)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opSelfRotatePersonalToken, err, http.StatusUnauthorized,
-			"the token has already been rotated or revoked; a rotation revokes the token it replaces, so use the token it returned")
+			hintPersonalTokenRotateSelfUnauthenticated)
 	}
 	out, err := capturedPersonalOutput(token, captured)
 	if err != nil {

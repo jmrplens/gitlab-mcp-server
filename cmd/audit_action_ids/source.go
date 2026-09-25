@@ -677,7 +677,7 @@ func (w *walker) visitSchemaMap(lit *ast.CompositeLit) {
 // written: a constant is judged, a name is followed to what it is given, and
 // a read of another struct's field is a value, passed over and counted.
 func (w *walker) recordSchemaMapDescription(value ast.Expr) {
-	if selector, isSelector := ast.Unparen(value).(*ast.SelectorExpr); isSelector && !w.readsARecordedHint(kindSchemaDescription, selector) {
+	if selector, isSelector := ast.Unparen(value).(*ast.SelectorExpr); isSelector && w.readsAField(selector) && !w.readsARecordedHint(kindSchemaDescription, selector) {
 		w.passOver(kindSchemaDescription, value)
 		return
 	}
@@ -918,11 +918,22 @@ func (w *walker) recordMessageField(value ast.Expr) {
 	if star, isDeref := read.(*ast.StarExpr); isDeref {
 		read = ast.Unparen(star.X)
 	}
-	if selector, isSelector := read.(*ast.SelectorExpr); isSelector && !w.readsARecordedHint(kindMessage, selector) {
+	if selector, isSelector := read.(*ast.SelectorExpr); isSelector && w.readsAField(selector) && !w.readsARecordedHint(kindMessage, selector) {
 		w.passOver(kindMessage, value)
 		return
 	}
 	w.recordErrorHint(kindMessage, value)
+}
+
+// readsAField reports whether selector reads a field of a value, which is
+// what the two writes above pass over. A package-qualified name
+// (Message: otherpkg.Msg) is a selector too, and the type checker records it
+// among the uses rather than the selections; read as a field it would be
+// passed over although it is a constant the writer chose, which folds and is
+// judged like one written in place.
+func (w *walker) readsAField(selector *ast.SelectorExpr) bool {
+	selection, ok := w.pkg.TypesInfo.Selections[selector]
+	return ok && selection.Kind() == types.FieldVal
 }
 
 // isHintName reports whether a field or parameter name says it carries hint
@@ -1487,9 +1498,11 @@ func (w *walker) recordID(kind string, expr ast.Expr) {
 // action ID needs the catalog's domains.
 //
 // A Usage line is folded as a sentence ([walker.recordUsage]). An individual
-// tool's Description is read only where it is a constant, and one assembled
-// at run time is neither judged nor listed: only the published-ID rule reads
-// a Description, and doc.go names this as one of its limits.
+// tool's Description is read only where it is a constant, by the published-ID
+// rule for its dotted IDs and by the served-prose rule for its tool names
+// outside the "See also" clause ([HintReport.judgeDescription]); one
+// assembled at run time is neither judged nor listed, and doc.go names this
+// as one of its limits.
 func (w *walker) recordProse(kind string, expr ast.Expr) {
 	if kind == kindUsage {
 		w.recordUsage(expr)

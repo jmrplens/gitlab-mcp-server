@@ -517,8 +517,12 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 # e2e-world- and world-snippet-), never with the run ID, so a prefix picks
 # what some tests named across every run; reaching an E2E_RUN_ID run that way
 # takes one sweep per prefix its tests used, and each also reaches other runs,
-# live ones included. It is a test of the fixture package because that
-# library is importable only from test/e2e. The test skips when neither
+# live ones included. The prefix is read from the make command line or the
+# environment only, never from .env: the recipe hands make's value on even
+# when it is empty, so one left in .env is dropped rather than turning every
+# later clean into a sweep by name that reaches live runs. It is a test of
+# the fixture package because that library is importable only from
+# test/e2e. The test skips when neither
 # variable is set, which guards a bare go test run; this target always passes
 # the age.
 E2E_SWEEP_MIN_AGE ?= 2h
@@ -760,6 +764,9 @@ coverage-conditions:
 # could be killed, unless GREMLINS_FLAGS asks for an integration run with a
 # -coverpkg that names the package, under which the module's other tests cover
 # and kill its mutants; a -coverpkg naming only other packages is refused too.
+# The exception covers only an importable package measured where it is: a
+# package main, or one measured through a staged copy, is linked by no other
+# package's test, so it is refused whatever -i and -coverpkg say.
 #
 # The budget has to cover a compile as well as a run, which is why it is five
 # minutes. gremlins copies the module into a directory per worker, and Go keys

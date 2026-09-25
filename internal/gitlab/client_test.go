@@ -1470,6 +1470,73 @@ func TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart(t *testing.T) {
 	})
 }
 
+// TestCheckCredentialDetail_EachAnswer_KeepsItsCause verifies that the probe
+// keeps what its verdict was read from: the status of every response, and a
+// cause for every answer that is no verdict, which is what the pool's
+// revalidation logs. A verdict carries no cause, so a warning built from one
+// cannot be mistaken for a failure; no verdict always carries one, so a round
+// that keeps an entry can always say why, whether GitLab answered with a
+// status that decides nothing, never answered, or was never asked.
+func TestCheckCredentialDetail_EachAnswer_KeepsItsCause(t *testing.T) {
+	tests := []struct {
+		name        string
+		status      int
+		unreachable bool
+		wantVerdict CredentialVerdict
+		wantStatus  int
+		// wantCause is a substring of the cause, empty when there must be none.
+		wantCause string
+	}{
+		{name: "an acceptance has no cause", status: http.StatusOK, wantVerdict: CredentialAccepted, wantStatus: http.StatusOK},
+		{name: "a refusal has no cause", status: http.StatusUnauthorized, wantVerdict: CredentialRefused, wantStatus: http.StatusUnauthorized},
+		{name: "a 500 names its status", status: http.StatusInternalServerError, wantVerdict: CredentialUnanswered, wantStatus: http.StatusInternalServerError, wantCause: "answered HTTP 500"},
+		{name: "a 429 names its status", status: http.StatusTooManyRequests, wantVerdict: CredentialUnanswered, wantStatus: http.StatusTooManyRequests, wantCause: "answered HTTP 429"},
+		{name: "no response names the transport error", unreachable: true, wantVerdict: CredentialUnanswered, wantCause: "/api/v4/user"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if tt.unreachable {
+				srv.Close()
+			}
+			assertCredentialCheck(t, client.CheckCredentialDetail(t.Context()), tt.wantVerdict, tt.wantStatus, tt.wantCause)
+		})
+	}
+	t.Run("a probe that cannot be built names why", func(t *testing.T) {
+		client, err := NewClientWithTokenRetries("http://gitlab.example.com", testValidToken, false, true)
+		if err != nil {
+			t.Fatalf(fmtNewClientErr, err)
+		}
+		//nolint:staticcheck // SA1012: a nil context is the one input that makes http.NewRequestWithContext fail, which is the branch under test
+		assertCredentialCheck(t, client.CheckCredentialDetail(nil), CredentialUnanswered, 0, "build the credential probe")
+	})
+}
+
+// assertCredentialCheck holds one probe's answer to a verdict, a status and a
+// cause, where an empty wantCause means the answer must carry none.
+func assertCredentialCheck(t *testing.T, got CredentialCheck, wantVerdict CredentialVerdict, wantStatus int, wantCause string) {
+	t.Helper()
+	if got.Verdict != wantVerdict || got.Status != wantStatus {
+		t.Errorf("CheckCredentialDetail() = verdict %v status %d, want verdict %v status %d", got.Verdict, got.Status, wantVerdict, wantStatus)
+	}
+	if wantCause == "" {
+		if got.Err != nil {
+			t.Errorf("CheckCredentialDetail().Err = %v, want none for a verdict", got.Err)
+		}
+		return
+	}
+	if got.Err == nil || !strings.Contains(got.Err.Error(), wantCause) {
+		t.Errorf("CheckCredentialDetail().Err = %v, want one naming %q", got.Err, wantCause)
+	}
+}
+
 // TestCredentialVerdictFor_StatusEdges_AreReadExactly pins the edges of the
 // status reading, where an off-by-one would move a whole class of answers: the
 // first and last 2xx accept, the statuses either side of that range are no
@@ -1699,45 +1766,6 @@ func assertAuthScheme(t *testing.T, path, bearer, private, token string, wantBea
 	}
 	if (private == token) != wantPrivate {
 		t.Errorf("%s: PRIVATE-TOKEN = %q, want private=%v", path, private, wantPrivate)
-	}
-}
-
-// TestIsCredentialRejection_OnlyOn401And403 verifies that only GitLab's own
-// verdict on a credential counts as a rejection, and that every other way a
-// request can fail is reported as "no verdict".
-//
-// The distinction is what keeps a briefly unreachable instance, or one
-// answering 500 for a few seconds, from reading as a mass revocation and
-// evicting every pooled tenant at once.
-func TestIsCredentialRejection_OnlyOn401And403(t *testing.T) {
-	statusErr := func(code int) error {
-		return &gl.ErrorResponse{StatusCode: code, Message: strconv.Itoa(code)}
-	}
-
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil},
-		{name: "plain error", err: errors.New("dial tcp: connection refused")},
-		{name: "unauthorized", err: statusErr(http.StatusUnauthorized), want: true},
-		{name: "forbidden", err: statusErr(http.StatusForbidden), want: true},
-		{name: "wrapped unauthorized", err: fmt.Errorf("gitlab ping failed: %w", statusErr(http.StatusUnauthorized)), want: true},
-		{name: "not found", err: statusErr(http.StatusNotFound)},
-		{name: "sdk not found sentinel", err: gl.ErrNotFound},
-		{name: "server error", err: statusErr(http.StatusInternalServerError)},
-		{name: "bad gateway", err: statusErr(http.StatusBadGateway)},
-		{name: "too many requests", err: statusErr(http.StatusTooManyRequests)},
-		{name: "nil error response", err: (*gl.ErrorResponse)(nil)},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsCredentialRejection(tt.err); got != tt.want {
-				t.Errorf("IsCredentialRejection(%v) = %v, want %v", tt.err, got, tt.want)
-			}
-		})
 	}
 }
 

@@ -37,7 +37,9 @@ var callShards = newShards(Record.validateForCalls)
 // and skip lines alone, such as a comparison of what two runs credited.
 //
 // It accepts a line written under any schema from [OldestCallsSchemaVersion]
-// to [SchemaVersion], since those four lines read the same under each, and
+// to [SchemaVersion], since those four lines read the same under each to a
+// reader that skips a dispatch line naming no action (version 1 wrote some
+// that version 2 no longer writes, and every reader skips them), and
 // drops the session lines of an older schema, which are the lines a later
 // version changed the meaning of: a reader handed one would fold it under a
 // reading it was not written for, which is what [ReadShards] refuses a whole
@@ -64,6 +66,22 @@ func olderSession(r Record) bool {
 // directory tree walks. It is [ReadShards] with the file boundaries dropped,
 // for a reader that wants the lines and not their provenance.
 func Read(dir string) ([]Record, error) { return shards.Read(dir) }
+
+// ReadForCalls is [ReadShardsForCalls] with the file boundaries dropped, as
+// [Read] is [ReadShards]: for a reader of the run, call, dispatch and skip
+// lines that wants the lines and not their provenance, such as R-PATH's
+// per-action observation, which folds dispatch lines alone.
+func ReadForCalls(dir string) ([]Record, error) {
+	read, err := ReadShardsForCalls(dir)
+	if err != nil {
+		return nil, err
+	}
+	var records []Record
+	for _, shard := range read {
+		records = append(records, shard.Records...)
+	}
+	return records, nil
+}
 
 // IsShard reports whether a file name is one of this package's shards.
 //

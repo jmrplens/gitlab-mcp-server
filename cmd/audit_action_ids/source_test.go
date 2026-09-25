@@ -2176,6 +2176,40 @@ func copied(o output) output { return output{Message: o.Message} }
 	}
 }
 
+// TestCollectSites_AQualifiedConstant_IsFoldedNotPassedOver holds what a
+// message field's write and a schema map's description are told apart by: a
+// read of a field is a value and passed over, and a package-qualified
+// constant is a selector too but not a field read, so it folds and is judged
+// like a constant written in place. Both writes used to pass over every
+// selector before trying the fold.
+func TestCollectSites_AQualifiedConstant_IsFoldedNotPassedOver(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+type output struct {
+	Message string
+}
+
+func refused() output { return output{Message: toolutil.ErrMsgContextCanceled} }
+
+var schema = map[string]any{"description": toolutil.ErrMsgContextCanceled}
+`)
+
+	// The value of toolutil.ErrMsgContextCanceled, which is what folding the
+	// qualified name reads.
+	want := []string{"context canceled"}
+	if got := valuesOfKind(sites, kindMessage); !slices.Equal(got, want) {
+		t.Errorf("message values = %v, want %v", got, want)
+	}
+	if got := valuesOfKind(sites, kindSchemaDescription); !slices.Equal(got, want) {
+		t.Errorf("schema descriptions = %v, want %v", got, want)
+	}
+	if got := passedOverExprs(sites); len(got) != 0 {
+		t.Errorf("passed over = %v, want none: a qualified constant is not a field read", got)
+	}
+}
+
 // TestCollectSites_GuidanceAndNextStepFields_AreRead holds the two field rules
 // the served prose added: a parameter's guidance, which every surface serves
 // beside the schema, and the next steps a meta tool's JSON carries.
@@ -2250,7 +2284,7 @@ var anonymous = struct {
 	if got := valuesOfKind(sites, kindSchemaDescription); !slices.Equal(got, want) {
 		t.Errorf("schema descriptions = %v, want %v", got, want)
 	}
-	if got := len(sites); got != len(want) {
+	if len(sites) != len(want) {
 		t.Errorf("sites = %+v, want one per described field", sites)
 	}
 }
@@ -2779,9 +2813,9 @@ func fromAnotherModule(raw string) toolutil.ActionSpecOptions {
 // boundary's sentences named a meta tool that way.
 //
 // Two calls stay values. One into another module has no body to follow, and
-// the same helper handed to a hint's format is passed over, because a hint's
-// calls are what it reports: following them read toolutil's escaping as
-// sentences nothing folds.
+// a helper handed to a hint's format is passed over, because a hint's calls
+// are what it reports: following them read toolutil's escaping as sentences
+// nothing folds.
 func TestCollectSites_AUsageFormatHandedAHelperCall_ReadsEveryBranch(t *testing.T) {
 	sites := collectFixture(t, `package fixture
 

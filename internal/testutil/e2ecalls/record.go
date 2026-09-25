@@ -43,15 +43,20 @@ const (
 	// false DispatchObserved said only that no fact-carrying span arrived, so
 	// folding it under the new reading would mark sessions unobserved that
 	// were only never asked a tool. Such shards are refused, to be re-recorded
-	// rather than re-folded. [ReadShardsForCalls] is the one exception, for a
-	// reader of the lines version 2 left as they were.
+	// rather than re-folded. [ReadShardsForCalls] and its merged form
+	// [ReadForCalls] are the exception, for a reader of the lines version 2
+	// left readable: the coverage audit's -baseline and R-PATH's -e2e-calls.
 	SchemaVersion = 2
 
 	// OldestCallsSchemaVersion is the oldest schema whose run, call, dispatch
 	// and skip lines read the way [SchemaVersion]'s do. Version 2 changed the
-	// session line alone, so a reader that judges nothing by a session line can
-	// still read a version 1 shard, through [ReadShardsForCalls]. A version that
-	// changes one of those four lines moves this to itself.
+	// meaning of the session line, and it also stopped writing a dispatch line
+	// whose span named neither a tool nor an action, so a version 1 shard can
+	// carry such lines; every reader skips a dispatch line with no action, so
+	// its action cells read the same. A reader that judges nothing by a
+	// session line can therefore still read a version 1 shard, through
+	// [ReadShardsForCalls]. A version that changes one of those four lines in a
+	// way such a reader sees moves this to itself.
 	//
 	// It exists for the old suite's baseline: its shards were written under
 	// version 1 by a suite that has since been deleted, so they can never be

@@ -123,7 +123,7 @@ func TestBuildEntry_UnpublishedInstance_IsCallerNamed(t *testing.T) {
 	}
 }
 
-// The bodies GitLab answers a 401 with: Grape's unauthorized!, which a
+// The bodies GitLab answers a 401 with: its API helper unauthorized!, which a
 // permission refusal and a token GitLab no longer finds both get, and the API
 // guard's invalid_token for an expired one.
 const (
@@ -144,6 +144,10 @@ type refusingGitLab struct {
 	// userStatus is what /user answers; zero means 200.
 	userStatus atomic.Int32
 	userCalls  atomic.Int64
+	// otherStatus is what every other path answers; zero means 200 with an
+	// empty object, and anything else is that status with the plain refusal
+	// body, which is how a deleted token is answered everywhere.
+	otherStatus atomic.Int32
 	// hold, when set, keeps every /user request waiting until it is closed,
 	// so a test can have its refusals arrive while a confirmation is in
 	// flight.
@@ -178,6 +182,11 @@ func newRefusingGitLab(t *testing.T, approveBody string) *refusingGitLab {
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if status := int(g.otherStatus.Load()); status != 0 {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(plainUnauthorizedBody))
+			return
+		}
 		_, _ = w.Write([]byte("{}"))
 	})
 	g.Server = httptest.NewServer(mux)
@@ -431,6 +440,42 @@ func TestGetOrCreate_AnUnexplained401InsideTheCooldown_DoesNotProbe(t *testing.T
 	time.Sleep(50 * time.Millisecond)
 	if got := g.userCalls.Load(); got != 1 {
 		t.Errorf("two refusals inside one window made %d confirmations, want one", got)
+	}
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d, want the entry kept", got)
+	}
+}
+
+// TestGetOrCreate_AnUnexplained401AfterTheCooldown_IsConfirmedAgain verifies
+// the other side of the window through the pool rather than through
+// claimConfirmation alone: once the cooldown the pool was built with has
+// passed, the next refusal claims the window again and sends a second probe,
+// and both confirmations are counted as kept. The cooldown is shortened on the
+// pool, which is what the field is for, so the test does not wait out the
+// real one.
+func TestGetOrCreate_AnUnexplained401AfterTheCooldown_IsConfirmedAgain(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, _ := refusedEntry(t, g)
+	const cooldown = 20 * time.Millisecond
+	pool.confirmCooldown = cooldown
+
+	approve(t, entry)
+	awaitCondition(t, "the first refusal being confirmed", func() bool { return pool.Stats().UnauthorizedKept == 1 })
+	first := entry.lastConfirmProbe.Load()
+	if first == nil {
+		t.Fatal("the first refusal claimed no window")
+	}
+	for time.Since(*first) <= cooldown {
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	approve(t, entry)
+	awaitCondition(t, "the second refusal being confirmed", func() bool { return pool.Stats().UnauthorizedKept == 2 })
+	if got := entry.lastConfirmProbe.Load(); got == first {
+		t.Error("a refusal after the window did not claim it again")
+	}
+	if got := g.userCalls.Load(); got != 2 {
+		t.Errorf("two refusals a window apart made %d confirmations, want two", got)
 	}
 	if got := pool.Size(); got != 1 {
 		t.Errorf("pool size = %d, want the entry kept", got)
@@ -1618,7 +1663,7 @@ func TestStats_SnapshotFields(t *testing.T) {
 }
 
 // TestRevalidateAll_EvictsInvalidTokens verifies that revalidateAll evicts
-// entries whose tokens fail validation (Ping returns error) and keeps entries
+// entries whose tokens fail validation (the credential probe is refused) and keeps entries
 // that pass. Exercises the full revalidateAll code path including the
 // RevalidationsFailed and RevalidationsSucceeded metric counters.
 func TestRevalidateAll_EvictsInvalidTokens(t *testing.T) {
@@ -1687,6 +1732,34 @@ func TestRevalidateAll_EvictsInvalidTokens(t *testing.T) {
 	}
 	if s.RevalidationsSucceeded != 1 {
 		t.Errorf("RevalidationsSucceeded = %d, want 1", s.RevalidationsSucceeded)
+	}
+}
+
+// TestRevalidateAll_ADeletedToken_IsNotConfirmedBesideTheSweep verifies that
+// the sweep's own refusal raises no confirmation. A deleted token is answered
+// with a plain 401 that names no cause, and the sweep used to ask through the
+// SDK, whose 401s reach the unauthorized hook: the hook claimed the window and
+// sent a probe of its own about an entry the sweep was already evicting. The
+// sweep now asks with the credential probe, whose answer is never reported,
+// so the only request about the credential is the sweep's.
+func TestRevalidateAll_ADeletedToken_IsNotConfirmedBesideTheSweep(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, _ := refusedEntry(t, g)
+	g.userStatus.Store(http.StatusUnauthorized)
+	g.otherStatus.Store(http.StatusUnauthorized)
+
+	pool.revalidateAll(context.Background())
+
+	if got := entry.lastConfirmProbe.Load(); got != nil {
+		t.Errorf("the sweep's refusal claimed the confirmation window (%v)", got)
+	}
+	if got := pool.Size(); got != 0 {
+		t.Errorf("pool size = %d, want the refused entry evicted", got)
+	}
+	assertRevalidationCounts(t, pool.Stats(), 1, 0, 0)
+	time.Sleep(50 * time.Millisecond)
+	if got := g.userCalls.Load(); got != 1 {
+		t.Errorf("GitLab was asked about the credential %d times, want the sweep's one", got)
 	}
 }
 
@@ -3549,7 +3622,11 @@ func revalidationEntry(t *testing.T, pool *ServerPool, baseURL, token string, va
 // path did not.
 //
 // The retained rows also assert lastValidated did not move, so a transient
-// failure cannot pass for a successful check and postpone the real one.
+// failure cannot pass for a successful check and postpone the real one. And
+// every row that warns is held to what its warning says: the status GitLab
+// answered with, 0 when none arrived, and on the warning that keeps an entry
+// why no verdict was reached, since that one can repeat on every round and is
+// all an operator has to tell a 500 from an instance that never answered.
 func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -3591,6 +3668,7 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 			pool := New(testConfig(stubGitLabBase), testFactory())
 			validatedAt := time.Now().Add(-30 * time.Minute)
 			key := revalidationEntry(t, pool, baseURL, "tok-"+tt.name, validatedAt)
+			captured := captureLogs(t)
 
 			pool.revalidateAll(context.Background())
 
@@ -3604,7 +3682,41 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 					t.Errorf("lastValidated moved = %v, want %v", moved, tt.wantRevalid)
 				}
 			}
+			switch {
+			case tt.wantFailed > 0:
+				assertRevalidationWarning(t, captured, revalidationRefusedMessage, tt.status, false)
+			case tt.wantTransient > 0:
+				assertRevalidationWarning(t, captured, revalidationNoVerdictMessage, tt.status, true)
+			}
 		})
+	}
+}
+
+// The two warnings a revalidation round writes, as revalidateAll spells them.
+const (
+	revalidationRefusedMessage   = "server pool: gitlab rejected a pooled credential, evicting entry"
+	revalidationNoVerdictMessage = "server pool: token revalidation could not reach a verdict, keeping entry"
+)
+
+// assertRevalidationWarning holds one revalidation warning to the status it
+// reports and, where wantCause, to carrying the non-nil error that says why no
+// verdict was reached.
+func assertRevalidationWarning(t *testing.T, captured *capturedRecords, message string, wantStatus int, wantCause bool) {
+	t.Helper()
+	record, found := captured.find(message)
+	if !found {
+		t.Errorf("no %q warning was logged", message)
+		return
+	}
+	if status, ok := logAttr(record, "status"); !ok || status.Int64() != int64(wantStatus) {
+		t.Errorf("warning %q status = %v (present %t), want %d", message, status, ok, wantStatus)
+	}
+	if !wantCause {
+		return
+	}
+	cause, ok := logAttr(record, "error")
+	if err, isErr := cause.Any().(error); !ok || !isErr || err == nil {
+		t.Errorf("warning %q error = %v (present %t), want the cause no verdict was reached", message, cause, ok)
 	}
 }
 

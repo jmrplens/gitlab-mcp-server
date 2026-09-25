@@ -6419,9 +6419,12 @@ func TestCreateForkRelation_APIError(t *testing.T) {
 // that each refusal of a fork link is hinted as what it is about. GitLab
 // answers a target namespace the source may not be forked into with 401 and
 // the reason "Target Namespace" (lib/api/projects.rb:925), which the handler
-// had no hint for, and a missing role on either project with 403 from
-// authorize! (:915, :921), which must not be described as the namespace. A
-// 401 GitLab said was about the token itself gets neither.
+// had no hint for, and a missing ability with 403 from authorize! (:915,
+// :921): the Owner role on project_id together with the right to create
+// forks in its top-level namespace, which a project Owner without the
+// Maintainer role on that group lacks, and the right to fork forked_from_id.
+// Neither may be described as the namespace. A 401 GitLab said was about the
+// token itself gets neither.
 func TestCreateForkRelation_TargetNamespaceRefused_NamesTheNamespace(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -6431,7 +6434,7 @@ func TestCreateForkRelation_TargetNamespaceRefused_NamesTheNamespace(t *testing.
 		wantNot string
 	}{
 		{"the target namespace", http.StatusUnauthorized, `{"message":"401 Unauthorized - Target Namespace"}`, "not one you may fork forked_from_id into", "Owner role"},
-		{"a role on either project", http.StatusForbidden, `{"message":"403 Forbidden"}`, "Owner role on project_id", "not one you may fork"},
+		{"an ability on either project", http.StatusForbidden, `{"message":"403 Forbidden"}`, "right to create forks in project_id's top-level namespace", "not one you may fork"},
 		{"an expired token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`, "authentication failed", "Suggestion"},
 	}
 	for _, tt := range tests {

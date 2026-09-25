@@ -63,7 +63,7 @@ func TestUnauthorizedNamesCredential_InvalidTokenOrGraphQL_NamesTheCredential(t 
 // TestUnauthorizedNamesCredential_PlainOrUnrelatedAnswers_NameNothing is the
 // negative half, which keeps the moved rule from widening.
 //
-// Grape's refusal body is what a permission refusal gets, and what a token
+// unauthorized!'s refusal body is what a permission refusal gets, and what a token
 // GitLab has no record of gets too, so it cannot name the credential. Neither
 // can the guard's default code or another code it writes, a body that is not a
 // JSON object, no body, or a REST path parameter that decodes to api/graphql,
@@ -76,7 +76,7 @@ func TestUnauthorizedNamesCredential_PlainOrUnrelatedAnswers_NameNothing(t *test
 		url  string
 		body string
 	}{
-		{name: "Grape's refusal", url: restURL, body: plainUnauthorizedBody},
+		{name: "unauthorized!'s refusal", url: restURL, body: plainUnauthorizedBody},
 		{name: "no body", url: restURL, body: ""},
 		{name: "a body that is not JSON", url: restURL, body: "<html><body>401 Authorization Required</body></html>"},
 		{name: "a JSON array", url: restURL, body: `["invalid_token"]`},

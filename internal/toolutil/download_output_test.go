@@ -403,10 +403,11 @@ func TestWriteDownloadOutputFile_DirectoryChangedAfterItWasMade_Refused(t *testi
 	canSymlink := os.Symlink(outside, probe) == nil
 
 	tests := []struct {
-		name    string
-		after   func(dir, destination string) error
-		wantMsg string
-		skip    bool
+		name         string
+		after        func(dir, destination string) error
+		wantMsg      string
+		namesItsPath bool
+		skip         bool
 	}{
 		{
 			name: "the new directory swapped for a symlink out of the roots",
@@ -425,9 +426,13 @@ func TestWriteDownloadOutputFile_DirectoryChangedAfterItWasMade_Refused(t *testi
 			wantMsg: "not a regular file",
 		},
 		{
-			name:    "the new directory removed again",
-			after:   func(dir, _ string) error { return os.Remove(dir) },
-			wantMsg: "create output file",
+			// Named after the file the destination resolves to, which is
+			// the destination here, rather than the random temporary name
+			// the caller never saw.
+			name:         "the new directory removed again",
+			after:        func(dir, _ string) error { return os.Remove(dir) },
+			wantMsg:      "create a temporary file beside output path ",
+			namesItsPath: true,
 		},
 	}
 	for _, tt := range tests {
@@ -450,6 +455,11 @@ func TestWriteDownloadOutputFile_DirectoryChangedAfterItWasMade_Refused(t *testi
 			})
 			if err == nil || !strings.Contains(err.Error(), tt.wantMsg) {
 				t.Errorf("WriteDownloadOutputFile(%q) error = %v, want one naming %q", destination, err, tt.wantMsg)
+			}
+			// The tail the caller wrote, since the root above it may resolve
+			// through a link to another spelling.
+			if tail := filepath.Join(filepath.Base(dir), "artifact.bin") + ":"; tt.namesItsPath && (err == nil || !strings.Contains(err.Error(), tail)) {
+				t.Errorf("WriteDownloadOutputFile(%q) error = %v, want it to name the destination %q", destination, err, tail)
 			}
 			if _, statErr := os.Stat(filepath.Join(outside, "artifact.bin")); !errors.Is(statErr, fs.ErrNotExist) {
 				t.Errorf("os.Stat(outside) error = %v, want nothing written outside the roots", statErr)
@@ -530,6 +540,86 @@ func TestWriteDownloadOutputFile_LinkToAFileInTheRoots_ReplacesTheFileAndKeepsTh
 		t.Errorf("os.ReadFile(%q) = %q, %v, want the file the link names replaced", target, got, err)
 	}
 	assertNoPartialDownloads(t, dir)
+}
+
+// TestWriteDownloadOutputFile_ALinkPlantedDuringTheWrite_IsReplacedNotWrittenThrough
+// verifies the property the leaf race rests on: a symlink planted at the
+// destination after the containment check, while the body is still arriving,
+// is replaced by the rename and never written through, wherever it points.
+// A link already there before the check is resolved to the file it names,
+// and one planted after it is not, which is the difference the second row
+// holds: its target is inside the roots and is still left as it was.
+//
+// Nothing else pins this. Every other symlink test puts the link in place
+// before the check, and a commit that resolved the destination again before
+// renaming passed them all while writing the new bytes into whatever the
+// planted link named.
+func TestWriteDownloadOutputFile_ALinkPlantedDuringTheWrite_IsReplacedNotWrittenThrough(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	confineLocalPathRoots(t, allowed)
+	if os.Symlink(outside, filepath.Join(root, "probe")) != nil {
+		t.Skip("symlinks unsupported on this platform")
+	}
+
+	tests := []struct {
+		name      string
+		targetDir string
+	}{
+		{name: "a link to a file outside the roots", targetDir: outside},
+		{name: "a link to a file inside the roots", targetDir: allowed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := strings.ReplaceAll(tt.name, " ", "-")
+			destination := filepath.Join(allowed, base+".bin")
+			target := filepath.Join(tt.targetDir, base+"-target.bin")
+			if err := os.WriteFile(destination, []byte("old"), 0o600); err != nil {
+				t.Fatalf("WriteFile(%q) error = %v", destination, err)
+			}
+			if err := os.WriteFile(target, []byte("target"), 0o600); err != nil {
+				t.Fatalf("WriteFile(%q) error = %v", target, err)
+			}
+
+			if _, err := WriteDownloadOutputFile(destination, plantLinkThenWrite(destination, target, "new")); err != nil {
+				t.Fatalf("WriteDownloadOutputFile(%q) error = %v, want nil", destination, err)
+			}
+
+			assertFileHolds(t, target, "target")
+			if info, lstatErr := os.Lstat(destination); lstatErr != nil || !info.Mode().IsRegular() {
+				t.Errorf("os.Lstat(%q) = %v, %v, want a regular file in the link's place", destination, info, lstatErr)
+			}
+			assertFileHolds(t, destination, "new")
+			assertNoPartialDownloads(t, allowed)
+		})
+	}
+}
+
+// plantLinkThenWrite is a download's write that, before it writes body,
+// replaces the file at destination with a symlink to target: a link planted
+// after the containment check, while the body is still arriving.
+func plantLinkThenWrite(destination, target, body string) func(io.Writer) error {
+	return func(w io.Writer) error {
+		if err := os.Remove(destination); err != nil {
+			return err
+		}
+		if err := os.Symlink(target, destination); err != nil {
+			return err
+		}
+		_, err := w.Write([]byte(body))
+		return err
+	}
+}
+
+// assertFileHolds fails the test when path cannot be read or does not hold
+// want.
+func assertFileHolds(t *testing.T, path, want string) {
+	t.Helper()
+	if got, err := os.ReadFile(path); err != nil || string(got) != want {
+		t.Errorf("os.ReadFile(%q) = %q, %v, want %q", path, got, err, want)
+	}
 }
 
 // TestWriteDownloadOutputFile_Committed_SyncsTheDirectoryAfterTheRename

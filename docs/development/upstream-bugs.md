@@ -198,8 +198,14 @@ nothing any row waits on, so the v3.12.0 pin still carries every client-go merge
 the file records; go-sdk v1.8.0 is still that SDK's newest tag, so every go-sdk
 merge here is still unreleased. Rows 34, 46 and 53 keep their fields, row 39's
 In review cell now records the approval, and the four sections now carry the
-state as of that day, most of which is what was done upstream the same
-morning.
+state as of the end of that day, most of which is what was done upstream the
+same day: the writer's suggestions applied on row 53's merge request, the
+nudge thread and a GitLab Duo finding resolved on
+[gitlab-org/gitlab!254540](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254540),
+the router snapshot merged and the reviewer's suggestion applied on row 46's,
+and the umbrella issue's description rewritten. No open merge request the
+file follows has merged since, and each now waits on its reviewers, or on
+another merge request, rather than on us.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -225,10 +231,13 @@ morning.
   bot's reply also turned the ready into an unresolved thread. The writer
   reviewed it the same day, at 11:03 UTC, with four suggestions that reword the
   `plan` description in the GraphQL type, the GraphQL reference and both
-  introspection files, so the next step is ours: apply them, then resolve the
-  ready's thread, since `DISCUSSIONS_NOT_RESOLVED` fails until all five threads
-  are resolved. At 11:16 UTC the writer requested the backend coach again, so
-  the reviewer field now carries both.
+  introspection files. At 11:16 UTC the writer requested the backend coach
+  again, so the reviewer field now carries both. All four suggestions were
+  applied the same day in one commit, `83c6e83ebe63`, each thread answered
+  "Applied in 83c6e83ebe63.", and the ready's thread was resolved; the four
+  suggestion threads are left for the writer to resolve. As of 2026-09-24 it
+  waits on the reviewers, the writer and the backend coach, and nothing is
+  pending on us.
 - **Merged**: no.
 - **Blocking**: no. The tier can always be pinned with `--tier` or
   `GITLAB_MCP_TIER`, which skips detection entirely.
@@ -1313,9 +1322,13 @@ was on the reviewer field within seconds. The same day it gained one commit,
 `ce04dc8e`, which makes `last_used_at` null in the `POST /deploy_keys`
 example: that call always creates the key it answers with, so the key has
 never been used, and the example had shown a timestamp eleven days after the
-key's own `created_at`. Its fork pipeline on that commit is green. It needs no
-further approval; its one failing check is the unresolved inactivity-nudge
-thread the ready was posted in.
+key's own `created_at`. Its fork pipeline on that commit is green. The
+inactivity-nudge thread the ready was posted in, its one failing check, was
+resolved the same day. The writer then asked GitLab Duo to check the change's
+technical accuracy, and its one finding, an `expires_at` older than the
+`last_used_at` beside it in another deploy key example, was applied in
+`b2b900f7271b` and answered in its thread, and every thread was resolved again.
+As of 2026-09-24 it needs no further approval and waits on the writer.
 
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
@@ -2893,13 +2906,16 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   passed, and the next pipeline runs it against the refreshed snapshot. The
   merge request's description and a correction in the `danger-review` thread
   set out the router's timeline, and it was readied the same day naming
-  @marc_shaw for the re-review it now waits on. Until a new pipeline runs,
-  which takes a new push to the branch or a maintainer starting one in the
-  canonical project, it fails `CI_MUST_PASS`, and it needs a maintainer
-  approval for each of the `/config/`, `/lib/` and `/spec/` code-owner rules.
-  It fails `DISCUSSIONS_NOT_RESOLVED` too: the four threads of his 2026-09-16
-  review are answered and wait on him, and the ready became a fifth, ours to
-  resolve, when the bot answered inside it.
+  @marc_shaw for the re-review. He approved it at 12:57 UTC, with one
+  non-blocking suggestion, that no spec covered the `author == current_user`
+  half of `can_cancel_auto_merge?`, and asked @egrieff for a second review;
+  @uchandran approved it at 13:07 UTC. The suggestion was applied at 18:39 UTC
+  in one commit, `839df5e1572f`, which specs the author path, and every thread
+  was answered and resolved. That push reset @marc_shaw's approval and started
+  a fork pipeline on `839df5e1572f`. As of 2026-09-24 it carries @uchandran's
+  approval, and waits on @egrieff's review and on @marc_shaw approving again;
+  it still needs a maintainer approval for each of the `/config/`, `/lib/` and
+  `/spec/` code-owner rules, and nothing is pending on us.
   `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
   `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
   section then.
@@ -3285,7 +3301,8 @@ for every one but `security_scans.rb:54` (client-go has no wrapper for it),
 `ee/lib/ee/api/helpers.rb:193` (defined, and called from nowhere at that
 commit) and the two MLflow helpers.
 
-**What**: Grape's `unauthorized!` renders 401, and these sites call it to
+**What**: GitLab's API helper `unauthorized!` (`lib/api/helpers.rb`)
+renders 401 through Grape's `error!`, and these sites call it to
 refuse an **authenticated** user who lacks a permission. Eighteen of them
 guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
 calls it on a falsy service result, which is the same thing one layer down.

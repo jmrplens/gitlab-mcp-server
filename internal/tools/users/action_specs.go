@@ -291,7 +291,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user. There is no user_id parameter.",
 		aliases:        []string{"upload my avatar", "set current user avatar", "change my profile picture", "update user avatar"},
 		relatedActions: []string{actionUserCurrent, actionUserModify, actionUserCurrentStatus},
-		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use user.current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_delete_user_identity": {
 		usage:          "Delete a user's external authentication identity by user_id and provider name (admin only). Use when the prompt asks to unlink an SSO/LDAP identity from a user.",
@@ -315,7 +315,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "Block a user from signing in by user_id (admin only). Reversible via unblock. Use when the prompt asks to suspend a user's access.",
 		aliases:        []string{"block user", "suspend user", "disable user sign-in"},
 		relatedActions: []string{actionUserUnblock, "user.ban", actionUserGet},
-		description:    "Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via gitlab_unblock_user. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.",
+		description:    "Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via user.unblock. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.",
 	},
 	"gitlab_unblock_user": {
 		usage:          "Unblock a previously blocked user by user_id (admin only). Use when the prompt asks to restore a blocked user's access.",
@@ -327,7 +327,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "Ban a user by user_id (admin only). Reversible via unban. Use when the prompt asks to ban a user, hiding their content.",
 		aliases:        []string{"ban user", "block and hide user", "ban account"},
 		relatedActions: []string{"user.unban", actionUserBlock, actionUserGet},
-		description:    "Ban a user. Returns: confirmation with the user ID and action. Reversible via gitlab_unban_user. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.",
+		description:    "Ban a user. Returns: confirmation with the user ID and action. Reversible via user.unban. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.",
 	},
 	"gitlab_unban_user": {
 		usage:          "Unban a previously banned user by user_id (admin only). Use when the prompt asks to lift a ban.",
@@ -345,7 +345,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "Deactivate an inactive user account by user_id (admin only). Reversible via activate. Use when the prompt asks to deactivate a dormant user.",
 		aliases:        []string{"deactivate user", "make user dormant", "disable inactive user"},
 		relatedActions: []string{"user.activate", actionUserBlock, actionUserGet},
-		description:    "Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via gitlab_activate_user. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.",
+		description:    "Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via user.activate. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.",
 	},
 	"gitlab_approve_user": {
 		usage:          "Approve a pending user sign-up by user_id (admin only). Use when the prompt asks to approve a user awaiting admin approval.",

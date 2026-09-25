@@ -385,8 +385,10 @@ served on every surface, and a tool name is right on one of three.
 `cmd/audit_action_ids` reads them, and lets `internal/tools/dynamic` alone
 name a tool, its own two, since only the two tools of the dynamic surface
 return its text. A domain action's individual tool `Description` keeps its
-tool names, since only that tool serves it. A standalone surface tool's does
-not: the guided flows and project discovery are registered on meta and
+tool names in its `See also:` clause alone, the one part `gitlab://tools`
+rewrites into each surface's names when it serves that description on the
+dynamic and meta surfaces, and the rest of it is read like a `Usage` line.
+A standalone surface tool's keeps none: the guided flows and project discovery are registered on meta and
 individual alike and served as their `Usage` on dynamic, so each writes its
 one text as its `Usage` and its `Description` both
 (`actioncatalog.SurfaceToolSpec` carries the two apart), and names actions by

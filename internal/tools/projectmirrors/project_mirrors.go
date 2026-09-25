@@ -24,9 +24,16 @@ const hintVerifyMirrorID = "verify mirror_id with project.mirror_list"
 // Premium, which they do not.
 const hintMirrorPermission = "managing push mirrors needs the Maintainer role on the project, and an instance administrator can turn mirroring off for everyone else, which GitLab refuses the same way; push mirrors are available on every tier, Free included"
 
-// hintForcePushDisabled is the hint for the 400 a sync of a disabled mirror
-// gets, which is the one 400 that route answers a caller who passed its check.
-const hintForcePushDisabled = "the mirror must be enabled before it can be synced: turn it on with project.mirror_edit (enabled=true), and read its last_error with project.mirror_get"
+// hintForcePushDisabled is the hint for the one 400 the sync route answers a
+// caller who passed its check: GitLab considers the mirror disabled
+// (RemoteMirrors::SyncService). That is not the enabled flag alone.
+// RemoteMirror#enabled is also false when mirroring is unavailable for the
+// project (turned off on the instance with no override for it), when the
+// project has no repository or is pending deletion, and while the instance is
+// in Silent Mode, and an administrator passes the route's check in the first
+// case as a Maintainer does in the last, so the hint names every cause rather
+// than telling a caller whose flag is already on to turn it on.
+const hintForcePushDisabled = "GitLab considers the mirror disabled: either its enabled flag is off (turn it on with project.mirror_edit, enabled=true), or mirroring is unavailable for this project (turned off on the instance, the instance in Silent Mode, or the project without a repository or pending deletion); read its last_error with project.mirror_get"
 
 var credentialedURLPattern = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^\s/@]+@)`)
 

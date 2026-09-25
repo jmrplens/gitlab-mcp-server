@@ -167,6 +167,42 @@ func TestReadShardsForCalls_SchemaOneShard_KeepsItsCallsAndDropsItsSessions(t *t
 	}
 }
 
+// TestReadForCalls_MergesWhatReadShardsForCallsKeeps verifies the merged form
+// of the older reader: the lines of every shard in walk order, a version 1
+// shard's session line dropped as [ReadShardsForCalls] drops it, and a
+// directory it refuses refused here too.
+func TestReadForCalls_MergesWhatReadShardsForCallsKeeps(t *testing.T) {
+	root := t.TempDir()
+	writeShard(t, filepath.Join(root, "old"), "calls-old.jsonl",
+		`{"schema":1,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","dispatch_observed":false}}`,
+		`{"schema":1,"type":"dispatch","dispatch":{"trace_id":"t1","action":"issue.list","requests":2}}`,
+	)
+	writeShard(t, filepath.Join(root, "new"), "calls-new.jsonl",
+		`{"schema":2,"type":"dispatch","dispatch":{"trace_id":"t2","action":"issue.get","requests":1}}`,
+	)
+
+	records, err := ReadForCalls(root)
+	if err != nil {
+		t.Fatalf("ReadForCalls error = %v, want both schemas read", err)
+	}
+	var actions []string
+	for _, record := range records {
+		if record.Type != TypeDispatch {
+			t.Errorf("record type = %s, want only the dispatch lines", record.Type)
+			continue
+		}
+		actions = append(actions, record.Dispatch.Action)
+	}
+	if got := strings.Join(actions, ","); got != "issue.get,issue.list" {
+		t.Errorf("dispatched actions = %s, want both shards' in walk order", got)
+	}
+
+	empty := t.TempDir()
+	if _, emptyErr := ReadForCalls(empty); emptyErr == nil {
+		t.Error("ReadForCalls of a directory holding no shard succeeded, want the refusal ReadShardsForCalls gives")
+	}
+}
+
 // TestReadShardsForCalls_LineItCannotRead_IsRefused verifies that the older
 // reader widens the schema it accepts and nothing else: a schema outside the
 // range is refused as a stale artifact, and an old line that does not hold

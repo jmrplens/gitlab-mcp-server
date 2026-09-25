@@ -120,10 +120,16 @@ status = 0
 if args[:2] == ["list", "-m"]:
     print(render(args[args.index("-f") + 1], {"{{.Dir}}": env["STUB_ROOT"]}))
 elif args[:1] == ["list"] and args[args.index("-f") + 1] == "{{.ImportPath}}":
-    # The -coverpkg resolution: every pattern after the template.
-    for pattern in args[args.index("-f") + 2:]:
-        for listed in import_paths(pattern):
-            print(listed)
+    # The -coverpkg resolution: every pattern after the template. An empty
+    # one is refused the way go refuses it, with a status and no listing.
+    patterns = args[args.index("-f") + 2:]
+    if "" in patterns:
+        sys.stderr.write('go: invalid package: ""\n')
+        status = 1
+    else:
+        for pattern in patterns:
+            for listed in import_paths(pattern):
+                print(listed)
 elif args[:1] == ["list"]:
     pkgdir = os.path.normpath(os.path.join(os.getcwd(), args[-1]))
     name = env.get("STUB_PKG_NAME") or os.path.basename(pkgdir)
@@ -367,9 +373,12 @@ class CoverageMutantsTest(unittest.TestCase):
         self.assertNotIn("ceiling holds", proc.stdout)
 
     def test_ceiling_past_what_awk_prints_as_an_integer_is_still_compared(self):
-        # awk prints an integer past 2^31 in exponent form, so the ceiling's
-        # multiple has to be clamped before bash compares it: a ceiling of
-        # 1e9 s over a base of about 0.3 s is a multiple of about 3e9.
+        # Older mawk builds (1.3.4 20200120, the awk Debian 12 installs) print
+        # an integer past 2^31 in exponent form, so the ceiling's multiple has
+        # to be clamped before bash compares it: a ceiling of 1e9 s over a
+        # base of about 0.3 s is a multiple of about 3e9. The case tells the
+        # clamp from its absence only where the awk on PATH is such a build;
+        # gawk, BWK awk, busybox awk and current mawk print the integer.
         proc, calls = self.run_script("./internal/pkg", "30", "1", "1000000000",
                                       env={"STUB_TEST_SLEEP": str(SLEEP)})
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -518,6 +527,41 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.assertNotIn("measuring it through the module's other tests", proc.stdout)
                 self.assertIn("GREMLINS_FLAGS='-i --coverpkg <pattern>', a pattern that names it", proc.stderr)
 
+    def test_package_no_other_test_can_link_is_refused_whatever_coverpkg_says(self):
+        # A package main, and a package measured through a staged copy, are
+        # linked by no other package's test, and gremlins matches the staged
+        # copy's files by their own path, so no -coverpkg covers either and
+        # every mutant would be reported NOT COVERED. The run used to say it
+        # was measuring such a package through the module's other tests and
+        # hand gremlins the staged copy.
+        cases = [
+            ("a package main", "./cmd/tool", {"STUB_PKG_NAME": "main"}),
+            ("a package staged for its directory's name", "./internal/pkg", {"STUB_PKG_NAME": "other"}),
+        ]
+        for name, pkg, env in cases:
+            for flags in ("-i --coverpkg " + pkg, "-i --coverpkg ./..."):
+                with self.subTest(name, flags=flags):
+                    proc, calls = self.run_script(pkg, flags=flags, env=dict(env, STUB_TEST_FILES="0 0"))
+                    self.assert_refused_before_gremlins(proc, calls)
+                    self.assertEqual(self.of(calls, "test"), [])
+                    self.assertIn("no other package's test can link", proc.stderr)
+                    self.assertNotIn("measuring it through the module's other tests", proc.stdout)
+                    self.assertNotIn("GREMLINS_FLAGS='-i --coverpkg", proc.stderr)
+                    self.assertIn("GREMLINS_FLAGS='--tags", proc.stderr)
+                    self.assertFalse(os.path.exists(os.path.join(self.root, pkg[2:] + ".mutants-" + env["STUB_PKG_NAME"])))
+
+    def test_coverpkg_go_cannot_resolve_is_refused_as_such(self):
+        # A -coverpkg with an empty entry is one go list refuses outright,
+        # which is not the same answer as a pattern that resolved and missed
+        # the package, and the refusal says which it was.
+        proc, calls = self.run_script("./internal/pkg", flags="-i --coverpkg ./internal/pkg,,./cmd/tool",
+                                      env={"STUB_TEST_FILES": "0 0"})
+        self.assert_refused_before_gremlins(proc, calls)
+        self.assertEqual(self.of(calls, "test"), [])
+        self.assertIn("go list could not resolve -coverpkg ./internal/pkg,,./cmd/tool", proc.stderr)
+        self.assertIn('go: invalid package: ""', proc.stderr)
+        self.assertNotIn("does not name", proc.stderr)
+
     def test_package_with_test_files_of_either_kind_is_measured(self):
         # internal/cachehints is the shape of the second case: its one test
         # file declares package cachehints_test.
@@ -640,6 +684,20 @@ class CoverageMutantsTest(unittest.TestCase):
             for call in tests:
                 self.assertEqual(call["argv"][-1], pkg)
                 self.assertTrue(call["pattern_dir_exists"], call["argv"])
+        # A staged package on Windows: the copy is made beside a directory go
+        # listed with backslashes, and gremlins is handed its module-relative
+        # target rather than the native path the strip used to leave whole.
+        with self.subTest("a staged package directory with backslashes"):
+            proc, calls = self.run_script("./internal/pkg", env={"STUB_DIR_SEPARATOR": "\\",
+                                                                  "STUB_PKG_NAME": "main"})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            tests = self.of(calls, "test")
+            self.assertEqual(len(tests), 2)
+            for call in tests:
+                self.assertEqual(call["argv"][-1], "./internal/pkg.mutants-main/...")
+                self.assertTrue(call["pattern_dir_exists"], call["argv"])
+            self.assertEqual(self.gremlins(proc, calls)["argv"][-1], "./internal/pkg.mutants-main")
+            self.assertFalse(os.path.exists(os.path.join(self.root, "internal", "pkg.mutants-main")))
 
     def test_staged_package_main_baseline_carries_the_tags_and_is_removed(self):
         staged = "./cmd/tool.mutants-main"

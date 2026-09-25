@@ -131,10 +131,10 @@ func TestSessionRows_TwoLinesOneShape_CountsWhatWasFolded(t *testing.T) {
 //
 // The default dynamic shape holds an observed session beside an idle one, and
 // reads observed with one idle session counted. The default meta shape holds
-// one idle session and nothing else: it asked nothing a span could answer, so
-// its row reads false rather than true for want of anything to hold it false,
-// and its idle count equal to its session count is what says the false is for
-// want of a question. The default individual shape has no idle session, and
+// one idle session and nothing else: it issued no trace a span could answer,
+// so its row reads false rather than true for want of anything to hold it
+// false, and its idle count equal to its session count is what says the false
+// is for want of a traced call. The default individual shape has no idle session, and
 // its count is zero, which the record omits: each row is marshaled and
 // held to carrying idle_sessions exactly when the count is not zero, since a
 // zero spelled out on every committed row would say nothing and churn the

@@ -70,7 +70,7 @@ func applyProtectedPackageDiscovery(options *toolutil.ActionSpecOptions, individ
 		options.Usage = "List package protection rules configured for one project. Use when the prompt asks which package name patterns are protected, who may push or delete packages, or to find a rule id before updating or deleting it."
 		options.Aliases = []string{"list package protection rules", "protected package patterns", "package push rules"}
 		options.RelatedActions = []string{actionPackageProtectionRuleCreate, "package.protection_rule_update", "project.get"}
-		options.IndividualTool.Description = "List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use gitlab_registry_protection_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule."
+		options.IndividualTool.Description = "List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use package.registry_rule_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule."
 	case "gitlab_create_package_protection_rule":
 		options.Usage = "Create a package protection rule for a project. Provide project_id, a package_name_pattern, and a package_type, then set the minimum push/delete access levels to restrict who can publish or remove matching packages."
 		options.Aliases = []string{"protect package name pattern", "restrict package push", "create package protection rule"}

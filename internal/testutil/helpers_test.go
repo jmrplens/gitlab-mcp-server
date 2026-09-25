@@ -84,7 +84,7 @@ func TestCancelOnArrival_CancelsTheContextWhenTheFirstRequestArrives(t *testing.
 // gate, and this is the kind of test that needs to be.
 func TestCancelOnArrival_AnswersARequestThatCarriesNoContext(t *testing.T) {
 	seen := make(chan string, 1)
-	ctx, client := cancelOnArrival(t, func(w http.ResponseWriter, r *http.Request) {
+	ctx, client, heldOut := cancelOnArrival(t, func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		seen <- string(body)
 		RespondJSON(w, http.StatusCreated, `{"id":1,"name":"kept"}`)
@@ -103,6 +103,56 @@ func TestCancelOnArrival_AnswersARequestThatCarriesNoContext(t *testing.T) {
 	if !errors.Is(ctx.Err(), context.Canceled) {
 		t.Errorf("ctx.Err() = %v, want context.Canceled: the arrival cancels whether or not the request carried it", ctx.Err())
 	}
+	if n := heldOut.Load(); n != 1 {
+		t.Errorf("requests counted as sitting out the hold = %d, want 1", n)
+	}
+}
+
+// TestCancelOnArrival_AFirstRequestWithoutTheContext_IsCountedWhenALaterOneCarriesIt
+// holds why the fixture counts: a handler whose first request dropped the
+// context and whose second passed it still ends in context.Canceled, because
+// the transport refuses the second once the arrival of the first has
+// cancelled the context. Asserting the cancellation alone would pass it, so
+// the request that sat out the hold is counted, and [CancelOnArrival] fails
+// the test on that count at cleanup.
+func TestCancelOnArrival_AFirstRequestWithoutTheContext_IsCountedWhenALaterOneCarriesIt(t *testing.T) {
+	ctx, client, heldOut := cancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		RespondJSON(w, http.StatusOK, versionJSON)
+	}, time.Millisecond)
+
+	if _, _, err := client.GL().Version.GetVersion(); err != nil {
+		t.Fatalf("first GetVersion() error = %v, want the answer respond gives after the hold", err)
+	}
+	_, _, err := client.GL().Version.GetVersion(gl.WithContext(ctx))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("second GetVersion() error = %v, want context.Canceled", err)
+	}
+	if n := heldOut.Load(); n != 1 {
+		t.Errorf("requests counted as sitting out the hold = %d, want the first one", n)
+	}
+}
+
+// TestReportHeldOut_NonZeroFails verifies the check [CancelOnArrival] runs at
+// cleanup: a request that sat out the hold fails the test, naming the count.
+func TestReportHeldOut_NonZeroFails(t *testing.T) {
+	rec := &errorfRecorder{}
+	reportHeldOut(rec, 2)
+	if len(rec.messages) != 1 {
+		t.Fatalf("Errorf calls = %d, want 1", len(rec.messages))
+	}
+	if !strings.Contains(rec.messages[0], "2 request(s)") {
+		t.Errorf("message = %q, want the count named", rec.messages[0])
+	}
+}
+
+// TestReportHeldOut_ZeroIsQuiet verifies the expected path: a fixture whose
+// every request was abandoned reports nothing.
+func TestReportHeldOut_ZeroIsQuiet(t *testing.T) {
+	rec := &errorfRecorder{}
+	reportHeldOut(rec, 0)
+	if len(rec.messages) != 0 {
+		t.Fatalf("Errorf calls = %d, want 0: %v", len(rec.messages), rec.messages)
+	}
 }
 
 // TestCancelOnArrival_AbandonsARequestWithABodyWithoutWaitingOutTheHold holds
@@ -119,7 +169,7 @@ func TestCancelOnArrival_AbandonsARequestWithABodyWithoutWaitingOutTheHold(t *te
 	const hold = 30 * time.Second
 	start := time.Now()
 	t.Run("upload", func(t *testing.T) {
-		ctx, client := cancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		ctx, client, _ := cancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
 			RespondJSON(w, http.StatusCreated, `{"id":1}`)
 		}, hold)
 		_, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{Name: new("abandoned")}, gl.WithContext(ctx))

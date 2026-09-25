@@ -71,7 +71,7 @@
 // any one of its traced calls arrived, of whatever method, a resource read,
 // a prompt or a completion as much as a tool call. A session that made no
 // traced call is idle, and is named apart (diagnostics.idle_sessions) rather
-// than holding its row false, since it asked nothing a span could answer; a
+// than holding its row false, since it issued no trace a span could answer; a
 // session started only to compare what it lists at a pinned tier is the usual
 // case. The row counts its idle sessions (idle_sessions), and a row whose
 // sessions were all idle reads false, since nothing about its telemetry was
