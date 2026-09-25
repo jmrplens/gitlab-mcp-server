@@ -25,16 +25,18 @@ func (g *gate) checkShareWords() []Finding {
 			continue
 		}
 		hits := g.shareHits(d)
-		excused := d.RecordsDeparture(g.rules.shareInvariant)
-		switch {
-		case len(hits) > 0 && !excused:
+		// A row without the finding answers for each word, and one with it
+		// must still have a word the finding describes.
+		if !d.RecordsDeparture(g.rules.shareInvariant) {
 			for _, hit := range hits {
 				found = append(found, Finding{
 					Rule: "G13", Subject: d.ID, Position: hit.at,
 					Message: fmt.Sprintf("%s describes a number on the %s key, which a caller can mint, as %q (%s)", hit.key, d.Key, hit.word, g.rules.shareInvariant),
 				})
 			}
-		case len(hits) == 0 && excused:
+			continue
+		}
+		if len(hits) == 0 {
 			found = append(found, Finding{
 				Rule: "G13", Subject: d.ID,
 				Message: fmt.Sprintf("carries a finding recorded for %s, and no comment of its sites uses a share word", g.rules.shareInvariant),

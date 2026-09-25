@@ -15,8 +15,8 @@ func orphanRules() *rules {
 	return &r
 }
 
-// orphanLeafRules has an exported rule, an unexported helper and a method, of
-// which only the first is held to a row.
+// orphanLeafRules has an exported rule, an unexported helper and an exported
+// method, of which only the first is held to a row.
 const orphanLeafRules = `package leaf
 
 func Busy() bool { return helper() }
@@ -25,7 +25,7 @@ func helper() bool { return false }
 
 type Holdings struct{}
 
-func (Holdings) Busy() bool { return false }
+func (Holdings) Held() bool { return false }
 
 var _ = 1
 `
@@ -45,10 +45,10 @@ func Load() { _ = Parse(leaf.Ratio) }
 `
 
 // TestCheckOrphans_EveryRegisterValueHasAReader: a constant an Alias reads,
-// one an Arg reads, and a rule function a row names are not orphans.
+// one only an Arg reads, and a rule function a row names are not orphans.
 func TestCheckOrphans_EveryRegisterValueHasAReader(t *testing.T) {
 	d := row("ROW-001", aliasSite("limit", "Limit"), argSite("Load", "Parse", 0, 1, "Ratio"),
-		aliasSite("ratio", "Ratio"), aliasSite("window", "Window"))
+		aliasSite("window", "Window"))
 	d.Functions = []string{"Busy"}
 	report := fixture{
 		files:   map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules},
@@ -84,6 +84,28 @@ func TestCheckOrphans_ARegisterValueNothingReads_IsAFinding(t *testing.T) {
 		leafDir+":Busy: is a register function no row names in Functions",
 		leafDir+":CodeBusy: is a register value no Alias or Arg site reads",
 		leafDir+":Ratio: is a register value no Alias or Arg site reads",
+	)
+	// The pending row's orphan is what keeps it pending: its deferred checks
+	// still fail, so the row is not reported as ready to leave the list.
+	assertFindings(t, report, "G1")
+}
+
+// TestCheckOrphans_APendingRowsArgSiteDefersItsConstant: a constant only a
+// pending row's Arg site claims waits for that row's layer, as one only its
+// Alias claims does.
+func TestCheckOrphans_APendingRowsArgSiteDefersItsConstant(t *testing.T) {
+	report := fixture{
+		files: map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules},
+		rows: []tenancy.Decision{
+			row("ROW-001", aliasSite("limit", "Limit"), aliasSite("ratio", "Ratio"), aliasSite("window", "Window")),
+			row("ROW-002", argSite("Load", "Parse", 0, 1, "CodeBusy")),
+		},
+		rules:   orphanRules(),
+		pending: []string{"ROW-002"},
+	}.run(t)
+	assertFindings(t, report, "G6",
+		leafDir+":Busy: is a register function no row names in Functions",
+		leafDir+":Window: is a register value nothing outside the register reads",
 	)
 }
 

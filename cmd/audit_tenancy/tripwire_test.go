@@ -35,10 +35,14 @@ const undeclared = 20
 
 var declaredLimiter = NewLimiter(declared, 1, false)
 
+var settings config
+
 func Build(cfg config, l limiter) {
 	n := 3
 	_ = NewLimiter(cfg.Rate, n, true)
 	_ = NewLimiter(cfg.Other, l.Size(), false)
+	_ = NewLimiter(settings.Rate, n, true)
+	_ = NewLimiter(settings.Other, n, false)
 	_ = NewLimiter(undeclared, 2, false)
 	_ = make(chan struct{}, undeclared)
 	_ = make(chan struct{}, 5)
@@ -62,20 +66,25 @@ func semaphores(n int) any {
 `
 
 // shadowSource declares a function called make in a package of its own,
-// whose calls are not the builtin's.
+// whose calls are not the builtin's even where they take what a semaphore
+// would.
 const shadowSource = `package other
 
-func make(n int) int { return n }
+func make(ch chan struct{}, n int) chan struct{} { return ch }
 
-func Use() int { return make(1) }
+func Use() chan struct{} {
+	var ch chan struct{}
+	return make(ch, 5)
+}
 `
 
 // TestCheckTripwire_Constructors: a limit built inside a declared site from
-// declared inputs, a configuration field and locals passes; one built outside
-// every site, a literal argument and an undeclared package-level argument
-// fail; a make of a channel of empty structs with a capacity other than 0 or
-// 1 is a semaphore, and a function the program declares called make is not
-// the builtin.
+// declared inputs, a configuration field (of a package variable too) and
+// locals passes; one built outside every site, a literal argument and an
+// undeclared package-level argument, a package variable's undeclared field
+// among them, fail; a make of a channel of empty structs with a capacity
+// other than 0 or 1 is a semaphore, and a function the program declares
+// called make is not the builtin.
 func TestCheckTripwire_Constructors(t *testing.T) {
 	d := row("ROW-001", site("declared", tenancy.Enforce), site("declaredLimiter", tenancy.Enforce), site("Build", tenancy.Enforce))
 	d.Config = []string{"Rate"}
@@ -89,6 +98,7 @@ func TestCheckTripwire_Constructors(t *testing.T) {
 		siteDir+":Build: passes "+siteDir+":undeclared, which no row declares to make",
 		siteDir+":Build: passes the literal 2 to "+sitePath+".NewLimiter",
 		siteDir+":Build: passes the literal 5 to make",
+		siteDir+":Build: passes "+siteDir+":settings, which no row declares to "+sitePath+".NewLimiter",
 		siteDir+":Loose: builds a limit with "+sitePath+".NewLimiter outside every declared site",
 		siteDir+":declaredLimiter: passes the literal 1 to "+sitePath+".NewLimiter",
 		siteDir+":semaphores: builds a limit with make outside every declared site",

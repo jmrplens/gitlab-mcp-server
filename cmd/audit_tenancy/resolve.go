@@ -389,8 +389,11 @@ func visitDecl(dir string, info *types.Info, decl ast.Decl, visit func(key strin
 		if !isValue {
 			continue
 		}
+		// A spec has one value per name, or one value for them all, so the
+		// i'th value always has an i'th name: the first, for the single call
+		// that initializes several.
 		for i, value := range vs.Values {
-			visit(siteKey(dir, vs.Names[min(i, len(vs.Names)-1)].Name), info, value)
+			visit(siteKey(dir, vs.Names[i].Name), info, value)
 		}
 	}
 }

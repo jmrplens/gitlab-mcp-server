@@ -71,7 +71,7 @@ const otherPackage = time.Second
 			aliasSite("literal", "Limit"), aliasSite("readsOther", "Limit"), aliasSite("expression", "Limit"),
 			aliasSite("typed", "Limit"), aliasSite("literal", "Missing"), aliasSite("notAValue", "Limit"),
 			aliasSite("gone", "Limit"), elementSite("ladder", 0, "Limit"), elementSite("ladder", 5, "Limit"),
-			elementSite("ladder", -1, "Limit"), aliasSite("otherPackage", "Window"))},
+			elementSite("ladder", -1, "Limit"), elementSite("ladder", 2, "Limit"), aliasSite("otherPackage", "Window"))},
 	}.run(t)
 	assertFindings(t, report, "G2",
 		"ROW-001: "+siteDir+":expression is the expression leaf.Limit + 1 rather than a reference to Limit",
@@ -79,6 +79,7 @@ const otherPackage = time.Second
 		"ROW-001: "+siteDir+":otherPackage reads time.Second rather than Window",
 		"ROW-001: "+siteDir+":ladder element 1 is not declared as an alias: every element of an aliased literal is one",
 		"ROW-001: "+siteDir+":ladder names element 5 of a literal with 2 elements",
+		"ROW-001: "+siteDir+":ladder names element 2 of a literal with 2 elements",
 		"ROW-001: "+siteDir+":literal aliases Missing, which is not a constant of the register",
 		"ROW-001: "+siteDir+":literal is the literal 64 rather than Limit",
 		"ROW-001: "+siteDir+":notAValue is not a const or var with an initializer of its own, so it cannot alias Limit",

@@ -317,9 +317,11 @@ func (g *gate) messageFrom(lits []refusalLit, info *types.Info, at *declaration)
 		}
 		refers := false
 		ast.Inspect(msg, func(n ast.Node) bool {
-			if id, isIdent := n.(*ast.Ident); isIdent && objectKey(info.Uses[id]) == at.key {
-				refers = true
-			}
+			// A node that is no identifier leaves id nil, under which no
+			// use is recorded, so it refers to nothing without a check of
+			// its own.
+			id, _ := n.(*ast.Ident)
+			refers = refers || objectKey(info.Uses[id]) == at.key
 			return !refers
 		})
 		if refers {
@@ -432,8 +434,10 @@ func assignedTo(decl *declaration, v *types.Var) []ast.Expr {
 	info := decl.info()
 	var out []ast.Expr
 	target := func(lhs ast.Expr) bool {
-		id, isIdent := ast.Unparen(lhs).(*ast.Ident)
-		return isIdent && (info.Defs[id] == v || info.Uses[id] == v)
+		// A left side that is no identifier (a field, an element) leaves id
+		// nil, under which nothing is defined or used.
+		id, _ := ast.Unparen(lhs).(*ast.Ident)
+		return info.Defs[id] == v || info.Uses[id] == v
 	}
 	ast.Inspect(decl.body(), func(n ast.Node) bool {
 		switch s := n.(type) {

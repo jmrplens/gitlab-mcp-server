@@ -139,9 +139,12 @@ func (g *gate) undeclaredInputs(info *types.Info, arg ast.Expr, config map[strin
 		case *ast.BasicLit:
 			out = append(out, "the literal "+e.Value)
 		case *ast.Ident:
+			// objectKey names a const or var only at package level in this
+			// program, so a local, a field, a universe constant and another
+			// module's value all have none.
 			obj := info.Uses[e]
-			if isPackageValue(obj) && objectKey(obj) != "" && !g.covered(objectKey(obj), partConstructors) {
-				out = append(out, objectKey(obj)+", which no row declares")
+			if key := objectKey(obj); isValue(obj) && key != "" && !g.covered(key, partConstructors) {
+				out = append(out, key+", which no row declares")
 			}
 		}
 		return true
@@ -149,11 +152,12 @@ func (g *gate) undeclaredInputs(info *types.Info, arg ast.Expr, config map[strin
 	return out
 }
 
-// isPackageValue reports whether obj is a package-level const or var.
-func isPackageValue(obj types.Object) bool {
+// isValue reports whether obj is a const or a var, rather than a function, a
+// type or a package.
+func isValue(obj types.Object) bool {
 	switch obj.(type) {
 	case *types.Const, *types.Var:
-		return obj.Pkg() != nil && obj.Parent() == obj.Pkg().Scope()
+		return true
 	default:
 		return false
 	}

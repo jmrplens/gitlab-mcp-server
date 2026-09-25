@@ -46,16 +46,18 @@ func (g *gate) checkConfig() []Finding {
 				failing = append(failing, env+" is read directly at "+strings.Join(readDirectly[env], ", "))
 			}
 		}
-		carries := d.Carries(g.rules.configFinding)
-		switch {
-		case len(failing) > 0 && !carries:
+		// A row without the finding answers for each failing variable, and
+		// one with it must still have a variable the finding describes.
+		if !d.Carries(g.rules.configFinding) {
 			for _, why := range failing {
 				found = append(found, Finding{
 					Rule: "G14", Subject: d.ID,
 					Message: fmt.Sprintf("%s, and the row does not carry %s", why, g.rules.configFinding),
 				})
 			}
-		case len(failing) == 0 && carries:
+			continue
+		}
+		if len(failing) == 0 {
 			found = append(found, Finding{
 				Rule: "G14", Subject: d.ID,
 				Message: fmt.Sprintf("carries %s, and every variable it names is read through the configuration package", g.rules.configFinding),

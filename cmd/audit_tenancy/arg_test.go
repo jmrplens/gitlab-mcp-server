@@ -36,15 +36,23 @@ func Literal() {
 	_ = parse("a", 0)
 }
 
+func scale(ratio float64, s string) float64 { return ratio }
+
+func First() {
+	_ = scale(leaf.Ratio, "x")
+}
+
 var notAFunction = 1
 `
 
-// TestCheckArgs_TheConstantAtTheIndexTheRightNumberOfTimes_Passes.
+// TestCheckArgs_TheConstantAtTheIndexTheRightNumberOfTimes_Passes, the first
+// argument and the last alike.
 func TestCheckArgs_TheConstantAtTheIndexTheRightNumberOfTimes_Passes(t *testing.T) {
 	report := fixture{
 		files: map[string]string{"site/site.go": argSource},
 		rows: []tenancy.Decision{row("ROW-001",
-			argSite("Load", "parse", 1, 2, "Ratio"), argSite("Method", "loader.parse", 1, 1, "Ratio"))},
+			argSite("Load", "parse", 1, 2, "Ratio"), argSite("Method", "loader.parse", 1, 1, "Ratio"),
+			argSite("First", "scale", 0, 1, "Ratio"))},
 	}.run(t)
 	assertFindings(t, report, "G3")
 }
@@ -61,6 +69,7 @@ func TestCheckArgs_WhatIsNotTheRegistersArgument_IsAFinding(t *testing.T) {
 			argSite("Load", "parse", 1, 1, "Ratio"),
 			argSite("Method", "loader.parse", 4, 1, "Ratio"),
 			argSite("Method", "loader.parse", -1, 1, "Ratio"),
+			argSite("Method", "loader.parse", 2, 1, "Ratio"),
 			argSite("Load", "parse", 1, 2, "Missing"),
 			argSite("notAFunction", "parse", 1, 1, "Ratio"),
 			argSite("gone", "parse", 1, 1, "Ratio"))},
@@ -71,6 +80,7 @@ func TestCheckArgs_WhatIsNotTheRegistersArgument_IsAFinding(t *testing.T) {
 		"ROW-001: "+siteDir+":Load passes Missing, which is not a constant of the register",
 		"ROW-001: "+siteDir+":Method calls loader.parse with 2 arguments, so it has none at index 4",
 		"ROW-001: "+siteDir+":Method calls loader.parse with 2 arguments, so it has none at index -1",
+		"ROW-001: "+siteDir+":Method calls loader.parse with 2 arguments, so it has none at index 2",
 		"ROW-001: "+siteDir+":notAFunction is not a function, so it has no call to parse",
 	)
 }

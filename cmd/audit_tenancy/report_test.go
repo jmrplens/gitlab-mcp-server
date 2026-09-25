@@ -75,7 +75,7 @@ func TestSortFindings_OrdersByRuleSubjectAndLine(t *testing.T) {
 }
 
 // TestSplitPosition_ReadsTheLineAfterTheLastColon, so a path that holds a
-// colon of its own keeps it.
+// colon of its own keeps it, and a colon at the start leaves an empty file.
 func TestSplitPosition_ReadsTheLineAfterTheLastColon(t *testing.T) {
 	for position, want := range map[string]struct {
 		file string
@@ -83,6 +83,7 @@ func TestSplitPosition_ReadsTheLineAfterTheLastColon(t *testing.T) {
 	}{
 		"f.go:12":       {"f.go", 12},
 		"C:/abs/f.go:3": {"C:/abs/f.go", 3},
+		":7":            {"", 7},
 		"":              {"", 0},
 	} {
 		t.Run(position, func(t *testing.T) {

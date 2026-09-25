@@ -13,8 +13,10 @@ import (
 
 // gateRefusals are the gate literals G8 reads: a Retry-After built from the
 // longest block, one from GitLab's own delay or the fixed one, one from the
-// fixed one alone, a challenge, a text built in one function and written in
-// another, and headers G8 cannot read.
+// fixed one alone (directly, through one of several names a call initializes,
+// and through a package variable, which is not followed), a challenge, a text
+// built in one function and written in another, a header name given no
+// value, and headers G8 cannot read.
 const gateRefusals = `
 const upstreamRetryAfter = 30
 
@@ -59,6 +61,32 @@ func (g *gate) resolveURL(n int) *gateFailure {
 
 func (g *gate) resolveNoMessage() *gateFailure {
 	return &gateFailure{status: 400, code: -32600}
+}
+
+func (g *gate) resolveChallenged(n int) *gateFailure {
+	if n > 0 {
+		return &gateFailure{status: 400, code: -32600, message: describe(n)}
+	}
+	return &gateFailure{status: 400, code: -32600, message: g.missingURLMessage(), header: newHeader("WWW-Authenticate", "Bearer")}
+}
+
+func (g *gate) oddHeader() *gateFailure {
+	return &gateFailure{status: 400, code: -32600, message: "Odd.", header: newHeader("Retry-After")}
+}
+
+func pairOf(n int) (int, int) { return n, n }
+
+func (g *gate) pairedDelay() *gateFailure {
+	var first, second = pairOf(upstreamRetryAfter)
+	_ = first
+	return &gateFailure{status: 503, code: -50300, message: "Paired.", header: newHeader("Retry-After", itoa(second))}
+}
+
+var retryDelay int
+
+func (g *gate) packageDelay() *gateFailure {
+	retryDelay = upstreamRetryAfter
+	return &gateFailure{status: 503, code: -50300, message: "Package delay.", header: newHeader("Retry-After", itoa(retryDelay))}
 }
 
 var sharedHeader map[string]string
@@ -129,6 +157,12 @@ func globalCode() error { return &jsonrpc.Error{Code: packageCode} }
 func callCode() error { return &jsonrpc.Error{Code: pick()} }
 
 func noLiteral() error { return errors.New("plain") }
+
+func otherLiteral() error {
+	codes := []int64{codeBusy}
+	_ = codes
+	return errors.New("plain")
+}
 
 type result struct {
 	IsError bool
@@ -212,11 +246,16 @@ func TestCheckRefusals_GateLiteralsThatCarryTheirRow_Pass(t *testing.T) {
 	// and is still the only candidate its function holds.
 	viaNoMessage := gateAt("gate.missingURLMessage", 400, -32600, "Several")
 	viaNoMessage.Via = site("gate.resolveNoMessage", tenancy.Refuse)
+	// A value read through one of several names one call initializes is
+	// followed to the call.
+	paired := gateAt("gate.pairedDelay", 503, -50300, "Paired.")
+	paired.RetryAfter = tenancy.RetryAfterFixed
 	report := refusalFixture(t, blocked, missing, upstream, fixed, via, viaNoMessage,
-		gateAt("gate.nilHeader", 404, -32600, ""), gateAt("gate.resolveURL", 400, -32600, ""))
+		gateAt("gate.nilHeader", 404, -32600, ""), gateAt("gate.resolveURL", 400, -32600, ""),
+		gateAt("gate.oddHeader", 400, -32600, "Odd."), paired)
 	assertFindings(t, report, "G8")
-	if report.Summary.Refusals != 8 {
-		t.Fatalf("refusals read = %d, want 8", report.Summary.Refusals)
+	if report.Summary.Refusals != 10 {
+		t.Fatalf("refusals read = %d, want 10", report.Summary.Refusals)
 	}
 }
 
@@ -232,6 +271,18 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 	gainedRetry.RetryAfter = tenancy.RetryAfterFixed
 	gainedRetry.Challenge = true
 	lostChallenge := gateAt("gate.missing", 401, -40100, "Authentication required.")
+	// Only the literal whose text the row names is judged: its sibling of the
+	// same status would pass.
+	upstreamOnFixed := gateAt("gate.classify", 503, -50300, "Verify later.")
+	upstreamOnFixed.RetryAfter = tenancy.RetryAfterUpstreamOrFixed
+	// Only the literal the text reaches is judged: its sibling of the same
+	// status carries no challenge and would pass.
+	viaChallenged := gateAt("gate.missingURLMessage", 400, -32600, "Several instances are")
+	viaChallenged.Via = site("gate.resolveChallenged", tenancy.Refuse)
+	// A package variable can be written anywhere, so what one function
+	// assigns it is not what the header reads.
+	packageDelay := gateAt("gate.packageDelay", 503, -50300, "Package delay.")
+	packageDelay.RetryAfter = tenancy.RetryAfterFixed
 	report := refusalFixture(t,
 		gateAt("gate.blocked", 429, -42900, "Too many failed"),
 		gateAt("gate.blocked", 403, -42900, ""),
@@ -246,6 +297,7 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 		// that both drifted the first one's problem is the one reported.
 		gateAt("busy", 400, -32600, ""),
 		gateAt("gate.resolveURL", 400, -40300, ""),
+		upstreamOnFixed, viaChallenged, packageDelay,
 	)
 	key := func(name string) string { return siteDir + ":" + name }
 	assertFindings(t, report, "G8",
@@ -262,6 +314,9 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 		"ROW-001 refusal 12 (http gate): "+key("holder")+" holds no gate refusal with status 400 whose text begins \"\"",
 		"ROW-001 refusal 13 (http gate): "+key("busy")+" holds no gate refusal with status 400 whose text begins \"\"",
 		"ROW-001 refusal 14 (http gate): "+key("gate.resolveURL")+" its code is -32600, and the register says -40300",
+		"ROW-001 refusal 15 (http gate): "+key("gate.classify")+" its Retry-After does not read RetryAfter",
+		"ROW-001 refusal 16 (http gate): "+key("gate.resolveChallenged")+" it carries WWW-Authenticate true, and the register says false",
+		"ROW-001 refusal 17 (http gate): "+key("gate.packageDelay")+" its Retry-After does not read upstreamRetryAfter",
 	)
 }
 
@@ -292,6 +347,7 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		rpc("globalCode", -32000, "", ""),
 		rpc("gate.missing", -40100, "", ""),
 		rpc("callCode", -32000, "", ""),
+		rpc("otherLiteral", -32000, "", ""),
 	)
 	assertFindings(t, report, "G8",
 		"ROW-001 refusal 4 (resources/read rpc): no string "+siteDir+":busy folds begins with \"too many open streams (%s\"",
@@ -301,6 +357,7 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		"ROW-001 refusal 8 (resources/read rpc): "+siteDir+":globalCode builds no JSON-RPC error carrying code -32000 (it carries [])",
 		"ROW-001 refusal 9 (resources/read rpc): "+siteDir+":gate.missing builds no JSON-RPC error",
 		"ROW-001 refusal 10 (resources/read rpc): "+siteDir+":callCode builds no JSON-RPC error carrying code -32000 (it carries [])",
+		"ROW-001 refusal 11 (resources/read rpc): "+siteDir+":otherLiteral builds no JSON-RPC error",
 	)
 }
 

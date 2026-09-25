@@ -143,9 +143,6 @@ func splitPosition(position string) (file string, line int) {
 
 // ruleNumber is the number of a rule name, "G10" is 10, so G10 sorts after G9.
 func ruleNumber(rule string) int {
-	n := 0
-	for _, r := range strings.TrimPrefix(rule, "G") {
-		n = n*10 + int(r-'0')
-	}
+	n, _ := strconv.Atoi(strings.TrimPrefix(rule, "G"))
 	return n
 }
