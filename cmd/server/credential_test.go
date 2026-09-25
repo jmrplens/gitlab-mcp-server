@@ -465,6 +465,84 @@ func TestServerShell_NewCredentialState_TakesWhatTheEntryDecides(t *testing.T) {
 	}
 }
 
+// TestServerShell_TwoCredentialsOfOneUser_HoldTwoOfEverything pins the server
+// half of what one GitLab user holding two tokens gets today: two credential
+// states, each with a rate-limit bucket, a listen counter and a watcher manager
+// of its own.
+//
+// The tenant policy specification defines a tenant as the pair (canonical
+// instance URL, GitLab user id), and many credentials map to one tenant
+// (TEN-001, TEN-003). What a credential holds on a shared server is keyed on
+// its pool entry instead, and an entry is one per token, so one user's two
+// tokens hold two of everything (F-01, issue 955). This is AC-004 of the
+// specification's dated record (plan/issue-565/spec.md) on the server, beside
+// the pool's own half in internal/serverpool, and it pins the behavior as it
+// is, not a target: a change that keys an allowance on the tenant is the change
+// that must break it, and say so.
+func TestServerShell_TwoCredentialsOfOneUser_HoldTwoOfEverything(t *testing.T) {
+	// The stub answers every token as user 42, so the two below are one user's.
+	gitlab := gateStubGitLab(t, false)
+	pool := serverpool.New(&config.Config{
+		GitLabURL:      gitlab,
+		Tier:           edition.Free,
+		TierExplicit:   true,
+		IgnoreScopes:   true,
+		RateLimitRPS:   config.DefaultHTTPRateLimitRPS,
+		RateLimitBurst: config.DefaultRateLimitBurst,
+	}, okFactory)
+	first := gateTestEntry(t, pool, "glpat-first-token-of-user-42", gitlab)
+	second := gateTestEntry(t, pool, "glpat-second-token-of-user-42", gitlab)
+	if first.Identity().UserID != "42" || second.Identity().UserID != "42" {
+		t.Fatalf("identities = %+v and %+v, want one user, 42", first.Identity(), second.Identity())
+	}
+	if first.Config().GitLabURL != second.Config().GitLabURL {
+		t.Fatalf("instances = %q and %q, want one instance", first.Config().GitLabURL, second.Config().GitLabURL)
+	}
+
+	shell, err := newServerShell(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	}, withSubscriptionOptions(fastOptions()))
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	mine := shell.newCredentialState(first)
+	t.Cleanup(func() { mine.close(nil, endOfCredentialEviction) })
+	theirs := shell.newCredentialState(second)
+	t.Cleanup(func() { theirs.close(nil, endOfCredentialEviction) })
+
+	if mine.owner == theirs.owner {
+		t.Errorf("both states carry owner %q; one token's notifications would reach the other's sessions", mine.owner)
+	}
+	if mine.limiter == nil || theirs.limiter == nil {
+		t.Fatal("a state was built with no bucket although the entries resolved a rate")
+	}
+	if mine.limiter == theirs.limiter {
+		t.Error("the two tokens draw on one bucket; the limit would be the user's, which nothing here keys on")
+	}
+	if mine.listen == nil || theirs.listen == nil {
+		t.Fatal("a state was built with no listen counter")
+	}
+	if mine.listen == theirs.listen {
+		t.Error("the two tokens share one listen counter")
+	}
+	if mine.subs == nil || theirs.subs == nil {
+		t.Fatal("a state was built with no watchers on a full capability surface")
+	}
+	if mine.subs.manager == theirs.subs.manager {
+		t.Error("the two tokens share one watcher manager")
+	}
+
+	// Two counters in what they count, and not only in where they live: a
+	// stream one token holds open is not one the other holds.
+	if !mine.listen.acquire(0) {
+		t.Fatal("the listen counter refused a stream with no ceiling configured")
+	}
+	if got := theirs.listen.count(); got != 0 {
+		t.Errorf("the other token's counter reads %d open streams, want 0", got)
+	}
+}
+
 // TestServerShell_NewCredentialState_AnEntryWithNoConfiguration_FallsBackToTheShell
 // covers the guard in front of the entry's configuration.
 //

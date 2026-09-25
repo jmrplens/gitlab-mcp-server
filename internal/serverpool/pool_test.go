@@ -3073,6 +3073,241 @@ func TestIdentityFor_UnresolvableUser_ReportsUnknown(t *testing.T) {
 	}
 }
 
+// userAnswer is how the per-credential GitLab stub answers GET /api/v4/user
+// for one credential: the status, and the body when the status is 200.
+type userAnswer struct {
+	status int
+	body   string
+}
+
+// userStub is a GitLab whose GET /api/v4/user answers each credential with the
+// answer mapped to it, and 401 for a credential it was not given, so a test
+// decides which user every token resolves to.
+//
+// The credential is read the two ways the pool's clients send one: the
+// PRIVATE-TOKEN header in legacy mode, and a Bearer Authorization header in
+// OAuth mode. Both the admission probe and the identity lookup ask this one
+// endpoint, which is why one answer serves both.
+type userStub struct {
+	url string
+	// calls counts the requests /api/v4/user was asked, whichever credential
+	// they carried.
+	calls atomic.Int32
+	// bearer counts the ones that carried their credential as a Bearer
+	// Authorization header rather than as PRIVATE-TOKEN.
+	bearer atomic.Int32
+}
+
+// newUserStub starts a [userStub] answering each credential in answers.
+//
+// The handler reports nothing to t: it runs on the server's goroutine, and a
+// credential the test did not map is answered 401, which the test then meets
+// as a refused build on its own goroutine.
+func newUserStub(t *testing.T, answers map[string]userAnswer) *userStub {
+	t.Helper()
+	stub := &userStub{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		stub.calls.Add(1)
+		credential := r.Header.Get("PRIVATE-TOKEN")
+		if credential == "" {
+			if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+				stub.bearer.Add(1)
+				credential = bearer
+			}
+		}
+		answer, known := answers[credential]
+		if !known {
+			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(answer.status)
+		_, _ = w.Write([]byte(answer.body))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	// The pool is handed the instance the gate resolves, which is the
+	// normalized form of the URL; an httptest URL already is one, and
+	// normalizing it here says so rather than assuming it.
+	instance, err := normalizeGitLabURL(srv.URL)
+	if err != nil {
+		t.Fatalf("normalizeGitLabURL(%q): %v", srv.URL, err)
+	}
+	stub.url = instance
+	return stub
+}
+
+// TestEntry_TwoTokensOfOneUser_AreTwoEntriesOfOneTenant pins what one GitLab
+// user holding two personal access tokens on one instance gets today: two pool
+// entries that resolve to one tenant.
+//
+// The tenant policy specification defines a tenant as the pair (canonical
+// instance URL, GitLab user id) (TEN-001), and many credentials map to one
+// tenant (TEN-003). The pool keys an entry on the credential and the instance,
+// so each token is an entry of its own, with its own owner and, on the server,
+// its own bucket, listen counter and watchers. Nothing is keyed on the tenant
+// (F-01, issue 955). This is AC-004 of the specification's dated record
+// (plan/issue-565/spec.md) at the pool's grain, and it pins the behavior as it
+// is, not a target: a change that keys an allowance on the tenant is the change
+// that must break it, and say so.
+func TestEntry_TwoTokensOfOneUser_AreTwoEntriesOfOneTenant(t *testing.T) {
+	const (
+		firstToken  = "glpat-first-token-of-user-42"
+		secondToken = "glpat-second-token-of-user-42"
+		sameUser    = `{"id":42,"username":"one-user"}`
+	)
+	stub := newUserStub(t, map[string]userAnswer{
+		firstToken:  {status: http.StatusOK, body: sameUser},
+		secondToken: {status: http.StatusOK, body: sameUser},
+	})
+	pool := New(testConfig(stub.url), testFactory())
+
+	first, err := pool.GetOrCreateEntry(firstToken, stub.url, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(first token): %v", err)
+	}
+	second, err := pool.GetOrCreateEntry(secondToken, stub.url, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(second token): %v", err)
+	}
+
+	t.Run("two entries", func(t *testing.T) {
+		if first == second {
+			t.Fatal("both tokens resolved to one entry; the pool keyed them on something other than the credential")
+		}
+		if got := pool.Size(); got != 2 {
+			t.Errorf("pool size = %d, want 2, one entry per token", got)
+		}
+		if first.Owner() == "" || second.Owner() == "" {
+			t.Fatalf("owners = %q and %q; an entry was minted with no owner", first.Owner(), second.Owner())
+		}
+		if first.Owner() == second.Owner() {
+			t.Errorf("both entries carry owner %q; one entry's notifications would reach the other's sessions", first.Owner())
+		}
+		if first.Client() == second.Client() {
+			t.Error("both entries share one client; one token's requests would run with the other's credential")
+		}
+	})
+
+	t.Run("one tenant", func(t *testing.T) {
+		for name, entry := range map[string]*Entry{"first": first, "second": second} {
+			t.Run(name, func(t *testing.T) {
+				if got := entry.Config().GitLabURL; got != stub.url {
+					t.Errorf("instance = %q, want the canonical %q", got, stub.url)
+				}
+				if got := entry.Identity(); got.UserID != "42" || !got.Resolved() {
+					t.Errorf("identity = %+v, want user 42", got)
+				}
+			})
+		}
+	})
+}
+
+// TestEntry_ABotTokenAndItsCreator_AreTwoTenants pins that a project access
+// token and the personal access token of the user who created it resolve to two
+// tenants.
+//
+// GitLab makes a project access token's bearer a bot user of its own, with its
+// own id, and the tenant policy specification makes each bot a tenant of its own
+// rather than folding it into the human who made it (TEN-002): GitLab shows a
+// bot's owning resource only to administrators, and the generated username is
+// not an API contract. The pool resolves the identity GitLab answers and reads
+// nothing else, so the two identities differ however the bot's username reads.
+// This is AC-005 of the specification's dated record (plan/issue-565/spec.md).
+func TestEntry_ABotTokenAndItsCreator_AreTwoTenants(t *testing.T) {
+	const (
+		creatorToken = "glpat-token-of-the-creator"
+		botToken     = "glpat-project-access-token"
+	)
+	stub := newUserStub(t, map[string]userAnswer{
+		creatorToken: {status: http.StatusOK, body: `{"id":42,"username":"creator"}`},
+		botToken:     {status: http.StatusOK, body: `{"id":99,"bot":true,"username":"project_7_bot_5e9f0c1a"}`},
+	})
+	pool := New(testConfig(stub.url), testFactory())
+
+	creator, err := pool.GetOrCreateEntry(creatorToken, stub.url, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(creator): %v", err)
+	}
+	bot, err := pool.GetOrCreateEntry(botToken, stub.url, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(bot): %v", err)
+	}
+
+	if got := creator.Identity(); got.UserID != "42" || got.Username != "creator" {
+		t.Errorf("creator identity = %+v, want user 42", got)
+	}
+	if got := bot.Identity(); got.UserID != "99" || got.Username != "project_7_bot_5e9f0c1a" {
+		t.Errorf("bot identity = %+v, want user 99, the bot's own", got)
+	}
+	if creator.Config().GitLabURL != bot.Config().GitLabURL {
+		t.Fatalf("instances = %q and %q; the two tenants must differ in the user alone",
+			creator.Config().GitLabURL, bot.Config().GitLabURL)
+	}
+	if creator.Identity().UserID == bot.Identity().UserID {
+		t.Error("the bot resolved to its creator's user; a bot must be a tenant of its own")
+	}
+	if creator.Owner() == bot.Owner() {
+		t.Errorf("both entries carry owner %q", creator.Owner())
+	}
+}
+
+// TestEntry_OAuthModeUnresolvedUser_IsAdmittedAsUnknown pins what an OAuth
+// credential whose user lookup fails is admitted as: an entry with an unknown
+// identity, and not a refusal.
+//
+// The tenant policy specification makes an identity GitLab did not answer
+// unknown, never anonymous and never a reason to refuse, because a GitLab
+// outage must not become a lockout (TEN-006, SEC-006); a decision that needs the
+// tenant falls back to the entry, which is why the entry's owner must exist
+// whatever the lookup said. IDN-008 names the code that applies the rule.
+// [TestIdentityFor_UnresolvableUser_ReportsUnknown] covers a lookup answered
+// with no id in legacy mode; this is the OAuth mode, with the scopes the
+// verifier already resolved handed to the pool, and a lookup GitLab failed
+// outright. This is AC-006 of the specification's dated record
+// (plan/issue-565/spec.md).
+//
+// A 500 is no verdict for the admission probe, so the build goes on; the
+// lookup is a GET the client retries, so this test waits out the client's
+// retry policy before the entry is built.
+func TestEntry_OAuthModeUnresolvedUser_IsAdmittedAsUnknown(t *testing.T) {
+	const oauthToken = "gloas-oauth-access-token"
+	stub := newUserStub(t, map[string]userAnswer{
+		oauthToken: {status: http.StatusInternalServerError, body: `{"message":"500 Internal Server Error"}`},
+	})
+	cfg := testConfig(stub.url)
+	cfg.AuthMode = config.AuthModeOAuth
+	// Scope detection is on, as it is in a deployment, and the verifier's
+	// scopes are handed in: the pool must then ask GitLab nothing about them.
+	cfg.IgnoreScopes = false
+	verifiedScopes := []string{"api"}
+	pool := New(cfg, testFactory())
+
+	entry, err := pool.GetOrCreateEntry(oauthToken, stub.url, verifiedScopes)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v; an unknown identity must not refuse the credential", err)
+	}
+
+	if entry.Owner() == "" {
+		t.Error("the entry has no owner; a decision falling back to the entry would have nothing to fall back to")
+	}
+	if got := entry.Identity(); got.Resolved() {
+		t.Errorf("identity = %+v, want unknown: GitLab answered no user", got)
+	}
+	if got := entry.Config().TokenScopes; len(got) != 1 || got[0] != "api" {
+		t.Errorf("token scopes = %v, want the verified %v", got, verifiedScopes)
+	}
+	// The probe and the lookup both asked /api/v4/user, so an unknown identity
+	// here is GitLab's answer and not a lookup that never ran.
+	if got := stub.calls.Load(); got < 2 {
+		t.Errorf("/api/v4/user was asked %d times, want the probe and the identity lookup at least", got)
+	}
+	if got, all := stub.bearer.Load(), stub.calls.Load(); got != all {
+		t.Errorf("%d of %d requests carried a Bearer credential; OAuth mode sends every one that way", got, all)
+	}
+}
+
 // TestAdmitted_AnswersOnlyForAnEntryTheNextRequestWouldReuse verifies the
 // lookup the HTTP front door exempts from its per-address authentication
 // budget.
