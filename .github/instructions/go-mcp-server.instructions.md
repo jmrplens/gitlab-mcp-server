@@ -363,6 +363,14 @@ action deadline nor an abandoned HTTP POST can stop it. `noctx` and
 check-sdk-context` (`cmd/audit_sdk_context`) gates it, and
 `testutil.CancelOnArrival` is the fixture that proves a handler passes it.
 
+A number that bounds what a caller may hold or spend (a rate, a ceiling, a
+window, a lifetime) is a decision of the tenant policy register,
+`internal/tenancy`, and so is a refusal that reads as one: JSON-RPC `-42900`
+or `-32000`, or a 429 or 503 at the HTTP gate. `make check-tenancy`
+(`cmd/audit_tenancy`) fails on such a refusal outside every declared site, on
+a limit constructor fed a literal, and on a package-level name in a policy
+package that reads as a limit and that no row declares.
+
 ## Server Options
 
 Configure server behavior with options:
