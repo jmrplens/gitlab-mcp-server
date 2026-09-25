@@ -3,13 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -201,12 +205,18 @@ func seedDoc(t *testing.T, dir, area, content string) {
 	}
 }
 
+// offlineFetcher builds a fetcher that serves only the docs seeded in dir and
+// never touches the network.
+func offlineFetcher(dir string) *apidocs.Fetcher {
+	return apidocs.New(dir, apidocs.Options{Offline: true, CacheDir: dir})
+}
+
 // newOfflineResolver builds a docResolver whose fetchers serve only the docs
-// seeded in dir, never touching the network.
+// seeded in dir, never touching the network. Both fetchers read the one
+// directory, so a test that has to tell them apart builds its own resolver.
 func newOfflineResolver(t *testing.T, dir string) *docResolver {
 	t.Helper()
-	opts := apidocs.Options{Offline: true, CacheDir: dir}
-	return newDocResolver(apidocs.New(dir, opts), apidocs.New(dir, opts))
+	return newDocResolver(offlineFetcher(dir), offlineFetcher(dir))
 }
 
 const premiumBadgeDoc = `---
@@ -226,10 +236,16 @@ title: Some API
 // all-tiers badge before any heading and no section overrides.
 const freeBadgeDoc = "{{< details >}}\n\n- Tier: Free, Premium, Ultimate\n\n{{< /details >}}\n\n## List\n"
 
+// ultimateBadgeDoc is the page-Ultimate counterpart: one Ultimate-only badge
+// before any heading and no section overrides.
+const ultimateBadgeDoc = "{{< details >}}\n\n- Tier: Ultimate\n\n{{< /details >}}\n\n## List\n"
+
 // TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage verifies
 // that an action governed by a doc-page override is graded against that page's
 // own badge (doc-grounded) instead of the owner domain's page tier, for both an
 // API-reference page (group webhooks) and a user-doc page (MR dependencies).
+// The note is compared whole: it has to name the page read and the tier that
+// page badges, which is Premium here and never the Free owner tier handed in.
 func TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage(t *testing.T) {
 	dir := t.TempDir()
 	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
@@ -241,8 +257,8 @@ func TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage(t *testin
 		wantTier tier
 		wantNote string
 	}{
-		{"group.hook_add", tierPremium, "doc/api/group_webhooks.md"},
-		{"merge_request.dependencies_list", tierPremium, "doc/user/project/merge_requests/dependencies.md"},
+		{"group.hook_add", tierPremium, "documented on doc/api/group_webhooks.md (page tier premium)"},
+		{"merge_request.dependencies_list", tierPremium, "documented on doc/user/project/merge_requests/dependencies.md (page tier premium)"},
 	}
 	for _, c := range cases {
 		t.Run(c.id, func(t *testing.T) {
@@ -250,8 +266,8 @@ func TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage(t *testin
 			if got != c.wantTier {
 				t.Errorf("expectedTierForAction(%q) tier = %v; want %v", c.id, got, c.wantTier)
 			}
-			if !strings.Contains(note, c.wantNote) {
-				t.Errorf("expectedTierForAction(%q) note = %q; want it to cite %q", c.id, note, c.wantNote)
+			if note != c.wantNote {
+				t.Errorf("expectedTierForAction(%q) note = %q; want %q", c.id, note, c.wantNote)
 			}
 		})
 	}
@@ -260,15 +276,25 @@ func TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage(t *testin
 // TestExpectedTierForAction_DocOverrideFetchFailure_KeepsPageTier verifies that
 // when the override page cannot be fetched, the domain page tier is kept and
 // the failure is surfaced in the note instead of silently grading the action.
+// The page tier handed in is Ultimate rather than Free because a failed fetch
+// leaves the zero tier, Free, behind it: only a tier the failure cannot produce
+// shows which of the two was kept. The note is compared whole, page and cause.
 func TestExpectedTierForAction_DocOverrideFetchFailure_KeepsPageTier(t *testing.T) {
 	res := newOfflineResolver(t, t.TempDir()) // nothing seeded: every fetch fails
+	ctx := context.Background()
 
-	got, note := res.expectedTierForAction(context.Background(), "group.hook_add", tierFree)
-	if got != tierFree {
-		t.Errorf("tier on fetch failure = %v; want free (domain page tier)", got)
+	got, note := res.expectedTierForAction(ctx, "group.hook_add", tierUltimate)
+	if got != tierUltimate {
+		t.Errorf("tier on fetch failure = %v; want ultimate (domain page tier)", got)
 	}
-	if !strings.Contains(note, "doc override fetch failed") {
-		t.Errorf("note = %q; want a fetch-failure marker", note)
+	// The resolver memoizes the failure, so asking again returns the very error
+	// the note was built from.
+	_, fetchErr := res.pageTier(ctx, docRef{area: "group_webhooks"})
+	if fetchErr == nil {
+		t.Fatal("pageTier of the unseeded override page returned no error")
+	}
+	if want := "doc override fetch failed (doc/api/group_webhooks.md): " + fetchErr.Error(); note != want {
+		t.Errorf("note = %q; want %q", note, want)
 	}
 }
 
@@ -401,6 +427,8 @@ func TestParseDocTiers_UnknownBadge_Ignored(t *testing.T) {
 //     records the second as an override, rather than letting the last one win.
 //   - A tier badged by two different sections is one distinct override, not
 //     two, because the overrides are a set.
+//   - The overrides are listed lowest tier first whatever order the sections
+//     appear in, so two pages carrying the same badges report the same list.
 func TestParseDocTiers_BadgePlacement_DecidesPageDefaultAndOverrides(t *testing.T) {
 	cases := []struct {
 		name          string
@@ -425,6 +453,12 @@ func TestParseDocTiers_BadgePlacement_DecidesPageDefaultAndOverrides(t *testing.
 			doc:           "- Tier: Free, Premium, Ultimate\n\n## Create\n\n- Tier: Ultimate\n\n## Delete\n\n- Tier: Ultimate\n",
 			wantPage:      tierFree,
 			wantOverrides: []tier{tierUltimate},
+		},
+		{
+			name:          "overrides_are_listed_lowest_tier_first",
+			doc:           "- Tier: Free, Premium, Ultimate\n\n## Scan\n\n- Tier: Ultimate\n\n## Approve\n\n- Tier: Premium, Ultimate\n",
+			wantPage:      tierFree,
+			wantOverrides: []tier{tierPremium, tierUltimate},
 		},
 	}
 	for _, c := range cases {
@@ -568,12 +602,11 @@ func TestBuildDomainReport_OverridePageAgreeingWithTheOwnerPage_RecordsNoOverrid
 func seededResolver(t *testing.T) *docResolver {
 	t.Helper()
 	dir := t.TempDir()
-	const ultimateDoc = "{{< details >}}\n\n- Tier: Ultimate\n\n{{< /details >}}\n\n## List\n"
 	seedDoc(t, dir, "branches", freeBadgeDoc)
 	seedDoc(t, dir, "groups", freeBadgeDoc)
 	seedDoc(t, dir, "epics", premiumBadgeDoc)
 	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
-	seedDoc(t, dir, "tags", ultimateDoc)
+	seedDoc(t, dir, "tags", ultimateBadgeDoc)
 	return newOfflineResolver(t, dir)
 }
 
@@ -596,7 +629,8 @@ func findDomain(t *testing.T, rep *report, name string) domainReport {
 // recorded, an Ultimate page over Free-gated actions mismatches every action,
 // an unseeded page is reported as a fetch failure, and a package the doc map
 // does not know is listed as unmapped. The summary must add up over the
-// domains it aggregates.
+// domains it aggregates, and the server's own maintenance group is graded as
+// the Free action both editions serve.
 func TestBuildReport_SeededDocs_GradesEveryDomain(t *testing.T) {
 	rep, err := buildReport(context.Background(), seededResolver(t))
 	if err != nil {
@@ -617,6 +651,7 @@ func TestBuildReport_SeededDocs_GradesEveryDomain(t *testing.T) {
 		{name: "unseeded_page_is_a_fetch_failure", assert: assertIssuesFetchFailure},
 		{name: "unmapped_packages_are_listed", assert: assertUnmappedListed},
 		{name: "summary_adds_up", assert: assertSummaryAddsUp},
+		{name: "server_group_is_in_both_editions", assert: assertServerGroupGradedFree},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -773,6 +808,27 @@ func assertSummaryAddsUp(t *testing.T, rep *report) {
 	if s.CurrentFree+s.CurrentEnterprise != s.Actions || s.Actions == 0 {
 		t.Errorf("summary gates %d + %d != actions %d", s.CurrentFree, s.CurrentEnterprise, s.Actions)
 	}
+}
+
+// assertServerGroupGradedFree checks the gitlab_server maintenance group is in
+// the report and gated Free. Both catalogs are built with IncludeMCP, which is
+// the only thing that adds the group: leaving it out of the EE build drops
+// server.status from the report, and leaving it out of the CE build reports an
+// action every instance serves as enterprise-only.
+func assertServerGroupGradedFree(t *testing.T, rep *report) {
+	t.Helper()
+	for _, d := range rep.Domains {
+		for _, a := range d.ActionDetails {
+			if a.ID != "server.status" {
+				continue
+			}
+			if a.CurrentGate != "free" {
+				t.Errorf("server.status = %+v, want gate free: the CE catalog serves it too", a)
+			}
+			return
+		}
+	}
+	t.Errorf("server.status missing from the report: the EE catalog was built without the gitlab_server group")
 }
 
 // findAction returns the named action detail of a domain report or fails.
@@ -1103,9 +1159,33 @@ func TestRunMain_ReportFailure_IsReportedAndExitsOne(t *testing.T) {
 	}
 }
 
+// offlineFetchNote is the note a mapped domain carries when its page is not in
+// the cache and the fetcher was told to stay off the network: the apidocs
+// refusal for that area, behind the report's own fetch-failure prefix.
+func offlineFetchNote(area string) string {
+	return "doc fetch failed: apidocs: " + area + " not cached and offline"
+}
+
+// assertUnfetchedDomainsRefusedOffline checks that every mapped domain whose
+// page was not read was refused by the offline fetcher rather than by a
+// download, which is the only trace -offline leaves in the report itself.
+func assertUnfetchedDomainsRefusedOffline(t *testing.T, rep *report) {
+	t.Helper()
+	for _, d := range rep.Domains {
+		area, mapped := docAreaForPackage(d.Domain)
+		if !mapped || d.DocFetched {
+			continue
+		}
+		if want := offlineFetchNote(area); d.Note != want {
+			t.Errorf("%s note = %q, want %q", d.Domain, d.Note, want)
+		}
+	}
+}
+
 // TestRunMain_OfflineToFile_WritesTheReportAndExitsClean verifies the whole
 // wiring of the entry point on the path an operator uses: the flags are read
-// from the arguments, -offline keeps the doc fetchers off the network, and
+// from the arguments, -offline keeps the doc fetchers off the network (every
+// page the cache lacks is refused as offline rather than downloaded), and
 // -output puts the report in the named file while stdout stays empty.
 func TestRunMain_OfflineToFile_WritesTheReportAndExitsClean(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "edition-tier.json")
@@ -1129,6 +1209,7 @@ func TestRunMain_OfflineToFile_WritesTheReportAndExitsClean(t *testing.T) {
 		t.Errorf("report = version %d over %d domains and %d actions, want the real catalog graded",
 			rep.SchemaVersion, len(rep.Domains), rep.Summary.Actions)
 	}
+	assertUnfetchedDomainsRefusedOffline(t, &rep)
 }
 
 // TestMain_HandsTheExitCodeToOsExit verifies main wires runMain's result to the
@@ -1151,4 +1232,433 @@ func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("main() wrote no report: %v", err)
 	}
+}
+
+// TestDocResolver_TwoFetchers_EachPageIsReadFromItsOwnSource verifies the
+// resolver keeps its two fetchers apart: an owner page and an API override
+// page are read through the API fetcher, and a user-doc override page through
+// the user fetcher. Every other resolver here reads one cache through both, so
+// crossing them changed no answer; these two caches badge the same areas
+// differently, and a page read through the wrong one grades a tier nobody
+// seeded for that source.
+func TestDocResolver_TwoFetchers_EachPageIsReadFromItsOwnSource(t *testing.T) {
+	ctx := context.Background()
+	hooks := docRef{area: "group_webhooks"}
+	deps := docRef{area: "user/project/merge_requests/dependencies", userDoc: true}
+	newResolver := func(t *testing.T) *docResolver {
+		t.Helper()
+		apiDir, userDir := t.TempDir(), t.TempDir()
+		seedDoc(t, apiDir, "groups", freeBadgeDoc)
+		seedDoc(t, apiDir, hooks.area, premiumBadgeDoc)
+		seedDoc(t, apiDir, deps.area, freeBadgeDoc)
+		seedDoc(t, userDir, "groups", ultimateBadgeDoc)
+		seedDoc(t, userDir, hooks.area, ultimateBadgeDoc)
+		seedDoc(t, userDir, deps.area, ultimateBadgeDoc)
+		return newDocResolver(offlineFetcher(apiDir), offlineFetcher(userDir))
+	}
+
+	t.Run("api_override_page_is_read_through_the_api_fetcher", func(t *testing.T) {
+		if got, err := newResolver(t).pageTier(ctx, hooks); err != nil || got != tierPremium {
+			t.Errorf("pageTier(%+v) = (%v, %v), want (premium, nil) from the API cache", hooks, got, err)
+		}
+	})
+	t.Run("user_doc_page_is_read_through_the_user_fetcher", func(t *testing.T) {
+		if got, err := newResolver(t).pageTier(ctx, deps); err != nil || got != tierUltimate {
+			t.Errorf("pageTier(%+v) = (%v, %v), want (ultimate, nil) from the user cache", deps, got, err)
+		}
+	})
+	t.Run("owner_page_is_read_through_the_api_fetcher", func(t *testing.T) {
+		actions := []actionDetail{{ID: "group.get", OwnerPkg: "groups", CurrentGate: "free"}}
+		dr := buildDomainReport(ctx, "groups", actions, newResolver(t))
+		if !dr.DocFetched || dr.PageTier != "free" {
+			t.Errorf("groups = fetched %v, page %q; want fetched, page free from the API cache", dr.DocFetched, dr.PageTier)
+		}
+	})
+}
+
+// fixtureDomain is the domain every hand-built action is filed under. It names
+// no real domain, so no audited exception or doc-page override reaches it.
+const fixtureDomain = "tierprobe"
+
+// fixtureAction is one action of a hand-built catalog: its name under
+// fixtureDomain, the package that owns it, its Edition metadata, and whether
+// the Community Edition catalog serves it as well.
+type fixtureAction struct {
+	name    string
+	owner   string
+	edition string
+	inCE    bool
+}
+
+// fixtureCatalogs builds the pair of catalogs a report is taken from: the EE
+// one holds every action and the CE one only those marked inCE, which is how
+// the real pair differs.
+func fixtureCatalogs(t *testing.T, actions []fixtureAction) (ce, ee *actioncatalog.Catalog) {
+	t.Helper()
+	build := func(keep func(fixtureAction) bool) *actioncatalog.Catalog {
+		group := actioncatalog.Group{
+			ToolName:   "gitlab_" + fixtureDomain,
+			BaseDomain: fixtureDomain,
+			Actions:    map[string]actioncatalog.Action{},
+		}
+		for _, a := range actions {
+			if !keep(a) {
+				continue
+			}
+			group.ActionOrder = append(group.ActionOrder, a.name)
+			group.Actions[a.name] = actioncatalog.Action{Name: a.name, Domain: fixtureDomain, OwnerPackage: a.owner, Edition: a.edition}
+		}
+		cat := actioncatalog.NewCatalog()
+		if err := cat.AddGroup(group); err != nil {
+			t.Fatalf("AddGroup: %v", err)
+		}
+		return cat
+	}
+	return build(func(a fixtureAction) bool { return a.inCE }), build(func(fixtureAction) bool { return true })
+}
+
+// fixtureDetail is the action detail the report is expected to carry for one
+// hand-built action.
+func fixtureDetail(name, owner, gate, edition, expected string, mismatch bool) actionDetail {
+	return actionDetail{
+		ID:          fixtureDomain + "." + name,
+		OwnerPkg:    owner,
+		CurrentGate: gate,
+		Edition:     edition,
+		Expected:    expected,
+		Mismatch:    mismatch,
+	}
+}
+
+// TestBuildReport_HandBuiltCatalog_ReportsEveryFieldOfEveryDomain compares the
+// whole report taken from a hand-built pair of catalogs, so every field is held
+// and not only the one a narrower test happens to read. The fixture is built
+// so no two counters agree: 13 actions, 3 domains, 2 needing work, 6
+// Free-gated, 7 enterprise-gated and 4 mismatched overall, and 5, 2, 3 and 4
+// for those four inside accesstokens, whose doc area is spelled differently
+// from its package. A report that adds one counter into another, carries one
+// action's Edition as another's, or files a domain's doc area under its package
+// name differs from the one below. The one field that cannot be compared,
+// generated_at, has to be an RFC 3339 instant in UTC taken during the build.
+func TestBuildReport_HandBuiltCatalog_ReportsEveryFieldOfEveryDomain(t *testing.T) {
+	ce, ee := fixtureCatalogs(t, []fixtureAction{
+		{name: "token_a", owner: "accesstokens", edition: "premium", inCE: true},
+		{name: "token_b", owner: "accesstokens", inCE: true},
+		{name: "token_c", owner: "accesstokens", edition: "ultimate"},
+		{name: "token_d", owner: "accesstokens"},
+		{name: "token_e", owner: "accesstokens", edition: "ultimate"},
+		{name: "badge_a", owner: "badges", inCE: true},
+		{name: "badge_b", owner: "badges", inCE: true},
+		{name: "badge_c", owner: "badges", inCE: true},
+		{name: "badge_d", owner: "badges", inCE: true},
+		{name: "ghost_a", owner: "ghostpkg", edition: "ultimate"},
+		{name: "ghost_b", owner: "ghostpkg", edition: "ultimate"},
+		{name: "ghost_c", owner: "ghostpkg", edition: "ultimate"},
+		{name: "ghost_d", owner: "ghostpkg", edition: "ultimate"},
+	})
+	stubCatalogs(t, ce, ee, nil)
+	dir := t.TempDir()
+	seedDoc(t, dir, "project_access_tokens", premiumBadgeDoc)
+	seedDoc(t, dir, "project_badges", freeBadgeDoc)
+	// The local zone is moved off UTC for the length of the test, so a
+	// timestamp written in local time cannot pass for a UTC one on a machine
+	// whose zone happens to be UTC, which is every CI runner.
+	savedLocal := time.Local
+	time.Local = time.FixedZone("UTC+05:30", 5*3600+30*60)
+	t.Cleanup(func() { time.Local = savedLocal })
+
+	before := time.Now().UTC().Truncate(time.Second)
+	rep, err := buildReport(context.Background(), newOfflineResolver(t, dir))
+	after := time.Now().UTC()
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	generated, parseErr := time.Parse(time.RFC3339, rep.GeneratedAt)
+	if parseErr != nil || !strings.HasSuffix(rep.GeneratedAt, "Z") || generated.Before(before) || generated.After(after) {
+		t.Errorf("generated_at = %q, want an RFC 3339 UTC instant between %s and %s", rep.GeneratedAt,
+			before.Format(time.RFC3339), after.Format(time.RFC3339))
+	}
+	rep.GeneratedAt = ""
+
+	want := &report{
+		SchemaVersion: schemaVersion,
+		Summary: reportSummary{
+			Actions: 13, Domains: 3, DomainsNeedWork: 2, CurrentFree: 6, CurrentEnterprise: 7, TierMismatches: 4,
+			Classification: map[string]int{"green": 1, "uniform-ee": 1, "unmapped": 1},
+		},
+		UnmappedDomains: []string{"ghostpkg"},
+		Domains: []domainReport{
+			{
+				Domain: "accesstokens", DocArea: "project_access_tokens", Classification: "uniform-ee", NeedsWork: true,
+				PageTier: "premium", Actions: 5, CurrentFree: 2, CurrentEnterprise: 3, Mismatches: 4, DocFetched: true,
+				ActionDetails: []actionDetail{
+					fixtureDetail("token_a", "accesstokens", "free", "premium", "premium", false),
+					fixtureDetail("token_b", "accesstokens", "free", "", "premium", true),
+					fixtureDetail("token_c", "accesstokens", "enterprise", "ultimate", "premium", true),
+					fixtureDetail("token_d", "accesstokens", "enterprise", "", "premium", true),
+					fixtureDetail("token_e", "accesstokens", "enterprise", "ultimate", "premium", true),
+				},
+			},
+			{
+				Domain: "badges", DocArea: "project_badges", Classification: "green",
+				PageTier: "free", Actions: 4, CurrentFree: 4, DocFetched: true,
+				ActionDetails: []actionDetail{
+					fixtureDetail("badge_a", "badges", "free", "", "free", false),
+					fixtureDetail("badge_b", "badges", "free", "", "free", false),
+					fixtureDetail("badge_c", "badges", "free", "", "free", false),
+					fixtureDetail("badge_d", "badges", "free", "", "free", false),
+				},
+			},
+			{
+				Domain: "ghostpkg", Classification: "unmapped", NeedsWork: true,
+				PageTier: "free", Actions: 4, CurrentEnterprise: 4, Note: "no doc-area mapping",
+				ActionDetails: []actionDetail{
+					fixtureDetail("ghost_a", "ghostpkg", "enterprise", "ultimate", "", false),
+					fixtureDetail("ghost_b", "ghostpkg", "enterprise", "ultimate", "", false),
+					fixtureDetail("ghost_c", "ghostpkg", "enterprise", "ultimate", "", false),
+					fixtureDetail("ghost_d", "ghostpkg", "enterprise", "ultimate", "", false),
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(rep, want) {
+		t.Errorf("report differs\n got: %+v\nwant: %+v", *rep, *want)
+	}
+}
+
+// TestBuildReport_UnmappedPackages_AreListedInNameOrder verifies the unmapped
+// list is sorted. It is collected from a map, so without the sort its order is
+// whatever that run's iteration gave; twelve packages are more than one map
+// group holds, which makes that order effectively random, so an unsorted list
+// cannot pass by coincidence.
+func TestBuildReport_UnmappedPackages_AreListedInNameOrder(t *testing.T) {
+	var actions []fixtureAction
+	var want []string
+	for i := range 12 {
+		owner := fmt.Sprintf("ghost%02d", i)
+		actions = append(actions, fixtureAction{name: fmt.Sprintf("list_%02d", i), owner: owner})
+		want = append(want, owner)
+	}
+	ce, ee := fixtureCatalogs(t, actions)
+	stubCatalogs(t, ce, ee, nil)
+
+	rep, err := buildReport(context.Background(), newOfflineResolver(t, t.TempDir()))
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	if !slices.Equal(rep.UnmappedDomains, want) {
+		t.Errorf("unmapped domains = %v, want %v", rep.UnmappedDomains, want)
+	}
+}
+
+// TestBuildDomainReport_OverrideTiersFromBothSources_ListedLowestFirst verifies
+// the domain's override tiers are sorted once both sources have contributed.
+// The owner page's Ultimate section badge is parsed first and the Premium
+// webhook page is appended after it, so the parser's own sort cannot put them
+// in order: only the sort over the combined list does.
+func TestBuildDomainReport_OverrideTiersFromBothSources_ListedLowestFirst(t *testing.T) {
+	dir := t.TempDir()
+	seedDoc(t, dir, "groups", freeBadgeDoc+"\n## Scan\n\n- Tier: Ultimate\n")
+	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
+	actions := []actionDetail{{ID: "group.hook_list", OwnerPkg: "groups", CurrentGate: "enterprise", Edition: "premium"}}
+
+	dr := buildDomainReport(context.Background(), "groups", actions, newOfflineResolver(t, dir))
+
+	if want := []string{"premium", "ultimate"}; !slices.Equal(dr.OverrideTiers, want) {
+		t.Errorf("override tiers = %v, want %v", dr.OverrideTiers, want)
+	}
+	if dr.Classification != "mixed" {
+		t.Errorf("classification = %q, want mixed", dr.Classification)
+	}
+}
+
+// TestExpectedTierForAction_ExceptionAndOverrideOnOneAction_ExceptionWins
+// verifies the documented precedence: an audited exception is consulted before
+// a doc-page override. No action carries both today, so the order of the two
+// lookups changed nothing another test could see. The override table is
+// widened here, for this test only, to reach an action the exception table
+// already names, and the override page badges a tier the exception does not.
+func TestExpectedTierForAction_ExceptionAndOverrideOnOneAction_ExceptionWins(t *testing.T) {
+	saved := actionDocOverrides
+	widened := slices.Clone(saved)
+	extra := widened[0]
+	extra.prefix = "project.push_rule_"
+	extra.ref = docRef{area: "group_webhooks"}
+	actionDocOverrides = append(widened, extra)
+	t.Cleanup(func() { actionDocOverrides = saved })
+
+	dir := t.TempDir()
+	seedDoc(t, dir, "group_webhooks", ultimateBadgeDoc)
+	res := newOfflineResolver(t, dir)
+
+	got, note := res.expectedTierForAction(context.Background(), "project.push_rule_get", tierFree)
+	if got != tierPremium || note != docProjPushRulesPremium {
+		t.Errorf("expectedTierForAction = (%v, %q), want the audited (premium, %q) over the Ultimate override page",
+			got, note, docProjPushRulesPremium)
+	}
+}
+
+// TestRunMain_FakeRepositoryRoot_GradesFromItsCacheAndHonoursTheFlags drives
+// the entry point from two directories below the root of a module that is not
+// this one, whose doc cache holds a Free branches page and nothing else. It
+// holds the wiring between the flags and the report: the cache read is the one
+// under the root found above the working directory rather than one beside it,
+// the report goes to stdout when -output is not given, every page the cache
+// lacks is refused as offline, and -gaps-only is what drops the green domain.
+func TestRunMain_FakeRepositoryRoot_GradesFromItsCacheAndHonoursTheFlags(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/fakeroot\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	seedDoc(t, apidocs.CacheDir(root), "branches", freeBadgeDoc)
+	work := filepath.Join(root, "nested", "dir")
+	if err := os.MkdirAll(work, 0o750); err != nil {
+		t.Fatalf("create working directory: %v", err)
+	}
+	t.Chdir(work)
+
+	runReport := func(t *testing.T, args ...string) *report {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		if got := runMain(append([]string{"audit_edition_tier"}, args...), &stdout, &stderr); got != 0 {
+			t.Fatalf("runMain(%v) = %d (stderr %q), want 0", args, got, stderr.String())
+		}
+		var rep report
+		if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+			t.Fatalf("stdout is not the JSON report: %v", err)
+		}
+		return &rep
+	}
+
+	t.Run("default_output_is_stdout_and_keeps_the_green_domain", func(t *testing.T) {
+		rep := runReport(t, "-offline")
+		if d := findDomain(t, rep, "branches"); !d.DocFetched || d.Classification != "green" || d.NeedsWork {
+			t.Errorf("branches = fetched %v, class %q, work %v; want the seeded Free page graded green with no work",
+				d.DocFetched, d.Classification, d.NeedsWork)
+		}
+		if d := findDomain(t, rep, "issues"); d.Note != offlineFetchNote("issues") {
+			t.Errorf("issues note = %q, want %q", d.Note, offlineFetchNote("issues"))
+		}
+		assertUnfetchedDomainsRefusedOffline(t, rep)
+	})
+	t.Run("gaps_only_drops_the_green_domain", func(t *testing.T) {
+		rep := runReport(t, "-offline", "-gaps-only")
+		for _, d := range rep.Domains {
+			if d.Domain == "branches" || !d.NeedsWork {
+				t.Errorf("-gaps-only kept %s (needs work %v)", d.Domain, d.NeedsWork)
+			}
+		}
+		findDomain(t, rep, "issues")
+	})
+}
+
+// realCatalogIndex builds the catalog the report is taken from and returns its
+// action IDs and the keys the report groups them under, which is the owner
+// package or, for an action with none, its domain.
+func realCatalogIndex(t *testing.T) (ids, owners map[string]bool) {
+	t.Helper()
+	cat, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog: %v", err)
+	}
+	ids, owners = map[string]bool{}, map[string]bool{}
+	for _, a := range cat.Actions() {
+		ids[string(a.ID)] = true
+		owner := a.OwnerPackage
+		if owner == "" {
+			owner = a.Domain
+		}
+		owners[owner] = true
+	}
+	return ids, owners
+}
+
+// TestDeclarationTables_EveryEntry_MatchesTheCatalog holds the three tables
+// this command is configured by to the catalog they describe. Each entry is a
+// declaration, and the other half of the rule every declaration table here
+// answers to is that one matching nothing is itself a finding: an exception
+// naming an action that was renamed grades nothing and hides that the new name
+// is graded by its page, an override prefix no action starts with redirects
+// nothing, and a doc area for a package that is gone maps nothing. The command
+// reports none of these, so the test does.
+func TestDeclarationTables_EveryEntry_MatchesTheCatalog(t *testing.T) {
+	ids, owners := realCatalogIndex(t)
+
+	t.Run("every_exception_names_a_catalog_action", func(t *testing.T) {
+		for id := range acceptedTierExceptions {
+			if !ids[id] {
+				t.Errorf("acceptedTierExceptions names %q, which the catalog does not hold", id)
+			}
+		}
+	})
+	t.Run("every_override_prefix_starts_a_catalog_action", func(t *testing.T) {
+		for _, o := range actionDocOverrides {
+			matched := false
+			for id := range ids {
+				if strings.HasPrefix(id, o.prefix) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("actionDocOverrides prefix %q starts no catalog action", o.prefix)
+			}
+		}
+	})
+	t.Run("every_doc_area_names_an_owner_package", func(t *testing.T) {
+		for pkg := range docAreaByPackage {
+			if !owners[pkg] {
+				t.Errorf("docAreaByPackage maps %q, which owns no catalog action", pkg)
+			}
+		}
+	})
+}
+
+// marshalsItself reports whether a value of typ, or a pointer to one, carries
+// a MarshalJSON or MarshalText that encoding/json would call and whose error it
+// would hand back.
+func marshalsItself(typ reflect.Type) bool {
+	jsonMarshaler := reflect.TypeFor[json.Marshaler]()
+	textMarshaler := reflect.TypeFor[encoding.TextMarshaler]()
+	ptr := reflect.PointerTo(typ)
+	return typ.Implements(jsonMarshaler) || ptr.Implements(jsonMarshaler) ||
+		typ.Implements(textMarshaler) || ptr.Implements(textMarshaler)
+}
+
+// TestReport_TypeGraph_HoldsNothingEncodingJSONCanRefuse holds the property
+// that makes run's marshal error unreachable, since no test can reach that
+// branch itself: every type the report is built from is a struct, a string, an
+// int, a bool, a slice or a string-keyed map of those, and none of them
+// marshals itself. A field of another kind (a float that can hold NaN, an
+// interface, a channel) or a MarshalJSON of its own would make the branch
+// reachable, and this is the test that says so when it happens.
+func TestReport_TypeGraph_HoldsNothingEncodingJSONCanRefuse(t *testing.T) {
+	seen := map[reflect.Type]bool{}
+	var walk func(path string, typ reflect.Type)
+	walk = func(path string, typ reflect.Type) {
+		if seen[typ] {
+			return
+		}
+		seen[typ] = true
+		if marshalsItself(typ) {
+			t.Errorf("%s (%s) marshals itself, so encoding/json would return its error", path, typ)
+		}
+		switch typ.Kind() {
+		case reflect.String, reflect.Int, reflect.Bool:
+		case reflect.Slice:
+			walk(path+"[]", typ.Elem())
+		case reflect.Map:
+			if typ.Key().Kind() != reflect.String {
+				t.Errorf("%s is keyed by %s, not a string", path, typ.Key())
+			}
+			walk(path+"[key]", typ.Elem())
+		case reflect.Struct:
+			for f := range typ.Fields() {
+				walk(path+"."+f.Name, f.Type)
+			}
+		default:
+			t.Errorf("%s is a %s, which encoding/json can refuse", path, typ.Kind())
+		}
+	}
+	walk("report", reflect.TypeFor[report]())
 }
