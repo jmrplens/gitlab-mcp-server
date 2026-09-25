@@ -13,6 +13,9 @@
 //     zero meaning, capacity behavior and refusals ([Decisions]);
 //   - the policy values and refusal codes the layers read (values.go,
 //     codes.go);
+//   - the rules promoted here from the layers, so that changing one is an
+//     edit of the register: which bucket each MCP method is charged to
+//     ([MeterFor], meter.go);
 //   - the table of authentication failures and what each is charged
 //     ([Failures]);
 //   - the channels go-sdk v1.8.0 carries for each method ([Carriages]);
@@ -37,6 +40,11 @@
 // constants here compiles to the same instructions and data. The tests in
 // doc_test.go hold all three properties, because the proof that moving a value
 // here changed nothing rests on them.
+//
+// A promoted rule is the one thing here a layer calls, so the proof that
+// promoting it changed nothing is not the binary. It is an oracle test and a
+// fuzz target holding the function to a verbatim copy of the code it replaced,
+// and the function is a pure answer that allocates nothing and takes no lock.
 //
 // # Findings
 //

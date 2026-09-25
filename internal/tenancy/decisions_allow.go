@@ -41,7 +41,9 @@ func allowDecisions() []Decision {
 			Values: []string{
 				"ToolCallRateHTTP", "ToolCallRateEnvDefault", "ToolCallBurst", "ToolCallRateMax", "ToolCallBurstMax",
 			},
-			Source: Configurable, Flags: []string{"--rate-limit-rps", "--rate-limit-burst"},
+			// Which methods draw on the bucket is MeterFor's answer.
+			Functions: []string{"MeterFor"},
+			Source:    Configurable, Flags: []string{"--rate-limit-rps", "--rate-limit-burst"},
 			Envs:   []string{"GITLAB_MCP_RATE_LIMIT_RPS", "GITLAB_MCP_RATE_LIMIT_BURST"},
 			Config: []string{"RateLimitRPS", "RateLimitBurst"}, Malformed: RefuseStartup, Zero: ZeroOff,
 			Findings: []string{"F-01", "F-02", "F-19", "F-20", "F-21", "F-32"},
@@ -79,15 +81,19 @@ func allowDecisions() []Decision {
 			Reason:   "The specification asks for both",
 			ReasonAt: reasonAt(pkgToolutil, "completionBurstFactor"),
 			Values:   []string{"CompletionFactor"}, Source: Derived, Zero: ZeroNotApplicable,
+			Functions: []string{"MeterFor"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"completion/complete"}, Channel: EmptyCompletion, Answer: RetryLater,
 					At: refuse(pkgToolutil, "AttachRateLimitFunc"),
 				},
 			},
+			// The middleware enforces it as well as writing its refusal: it is
+			// where MeterFor sends completion/complete to this bucket.
 			Sites: []Site{
 				alias(pkgToolutil, "completionBurstFactor", "CompletionFactor"),
 				enforce(pkgToolutil, "RateLimiter.scaled"),
+				enforce(pkgToolutil, "AttachRateLimitFunc"),
 				refuse(pkgToolutil, "AttachRateLimitFunc"),
 			},
 		},
@@ -101,26 +107,32 @@ func allowDecisions() []Decision {
 			Reason:   "spends instead the processor every tenant of this process is waiting for",
 			ReasonAt: reasonAt(pkgToolutil, "methodToolsList"),
 			Values:   []string{"CatalogDivisor"}, Source: Derived, Zero: ZeroNotApplicable,
-			Findings: []string{"F-03"},
+			Functions: []string{"MeterFor"},
+			Findings:  []string{"F-03"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/list"}, Channel: RPC, Code: CodeTooManyRequests,
 					Prefix: "rate limit exceeded for ", Answer: RetryLater, At: rateLimitedError,
 				},
 			},
+			// The middleware is where MeterFor sends tools/list to this bucket,
+			// and where the server's own listings are exempted from it.
 			Sites: []Site{
 				alias(pkgToolutil, "catalogDivisor", "CatalogDivisor"),
 				enforce(pkgToolutil, "RateLimiter.slowed"),
+				enforce(pkgToolutil, "AttachRateLimitFunc"),
 				rateLimitedError,
 			},
 		},
 		{
-			// Ruled until the layer that promotes the method meter lands; its
-			// site is the switch that decides it today.
-			ID: "RTC-004", Question: Allow, Kind: Rule, Class: ClassP, Disposition: Ruled,
+			// Promoted: which method is charged to which bucket, and so which
+			// is charged to none, is MeterFor's answer, and the middleware
+			// switches on it.
+			ID: "RTC-004", Question: Allow, Kind: Rule, Class: ClassP, Disposition: Promoted,
 			Resource: "initialize, resources/list, prompts/list and every other unmetered method",
 			Key:      KeyRequest, StdioKey: KeyRequest,
-			Sites: []Site{enforce(pkgToolutil, "AttachRateLimitFunc")},
+			Functions: []string{"MeterFor"},
+			Sites:     []Site{enforce(pkgToolutil, "AttachRateLimitFunc")},
 		},
 		{
 			ID: "RTC-005", Question: Allow, Kind: Rate, Class: ClassD, Disposition: Valued,
