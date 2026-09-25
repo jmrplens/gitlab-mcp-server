@@ -16,6 +16,18 @@ import (
 // hintVerifyMirrorID is the 404 hint shared by project mirror tools.
 const hintVerifyMirrorID = "verify mirror_id with project.mirror_list"
 
+// hintMirrorPermission is the hint every remote mirror route gives a refused
+// caller. GitLab guards all seven with one check, the Maintainer role on the
+// project while an administrator has not turned mirroring off for everyone
+// else, and answers it with 401 rather than 403 (lib/api/remote_mirrors.rb:12).
+// It names the tier because the hints it replaces said push mirrors needed
+// Premium, which they do not.
+const hintMirrorPermission = "managing push mirrors needs the Maintainer role on the project, and an instance administrator can turn mirroring off for everyone else, which GitLab refuses the same way; push mirrors are available on every tier, Free included"
+
+// hintForcePushDisabled is the hint for the 400 a sync of a disabled mirror
+// gets, which is the one 400 that route answers a caller who passed its check.
+const hintForcePushDisabled = "the mirror must be enabled before it can be synced: turn it on with project.mirror_edit (enabled=true), and read its last_error with project.mirror_get"
+
 var credentialedURLPattern = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^\s/@]+@)`)
 
 // ListInput holds parameters for listing project mirrors.
@@ -152,9 +164,8 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	mirrors, resp, err := client.GL().ProjectMirrors.ListProjectMirror(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return ListOutput{}, toolutil.WrapErrWithHint("projectMirrorList", err,
-				"push mirroring requires GitLab Premium/Ultimate. Verify the project tier and that you have Maintainer+ role")
+		if toolutil.IsPermissionRefusal(err) {
+			return ListOutput{}, toolutil.WrapErrWithHint("projectMirrorList", err, hintMirrorPermission)
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectMirrorList", err, http.StatusNotFound,
 			"verify the project exists with project.get")
@@ -179,8 +190,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	}
 	m, _, err := client.GL().ProjectMirrors.GetProjectMirror(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("projectMirrorGet", err, http.StatusNotFound,
-			"verify mirror_id with project.mirror_list. Push mirrors require GitLab Premium/Ultimate")
+		if toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorGet", err, hintMirrorPermission)
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("projectMirrorGet", err, http.StatusNotFound, hintVerifyMirrorID)
 	}
 	return toOutput(m), nil
 }
@@ -198,6 +211,9 @@ func GetPublicKey(ctx context.Context, client *gitlabclient.Client, in GetPublic
 	}
 	pk, _, err := client.GL().ProjectMirrors.GetProjectMirrorPublicKey(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsPermissionRefusal(err) {
+			return PublicKeyOutput{}, toolutil.WrapErrWithHint("projectMirrorGetPublicKey", err, hintMirrorPermission)
+		}
 		return PublicKeyOutput{}, toolutil.WrapErrWithStatusHint("projectMirrorGetPublicKey", err, http.StatusNotFound,
 			"verify mirror_id with project.mirror_list. SSH public keys are only available for mirrors using SSH authentication")
 	}
@@ -232,9 +248,11 @@ func Add(ctx context.Context, client *gitlabclient.Client, in AddInput) (Output,
 	}
 	m, _, err := client.GL().ProjectMirrors.AddProjectMirror(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", redactMirrorError(err),
-				"creating push mirrors requires GitLab Premium/Ultimate and Maintainer+ role")
+		// Read on err, not on its redaction: redactMirrorError rebuilds the
+		// error from its text when it strips a credential, which drops the
+		// response the refusal is read from.
+		if toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", redactMirrorError(err), hintMirrorPermission)
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", redactMirrorError(err),
@@ -272,9 +290,8 @@ func Edit(ctx context.Context, client *gitlabclient.Client, in EditInput) (Outpu
 	}
 	m, _, err := client.GL().ProjectMirrors.EditProjectMirror(string(in.ProjectID), in.MirrorID, opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", redactMirrorError(err),
-				"editing push mirrors requires Maintainer+ role on a Premium/Ultimate project")
+		if toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", redactMirrorError(err), hintMirrorPermission)
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", redactMirrorError(err), hintVerifyMirrorID)
@@ -297,9 +314,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().ProjectMirrors.DeleteProjectMirror(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return toolutil.WrapErrWithHint("projectMirrorDelete", err,
-				"deleting push mirrors requires Maintainer+ role")
+		if toolutil.IsPermissionRefusal(err) {
+			return toolutil.WrapErrWithHint("projectMirrorDelete", err, hintMirrorPermission)
 		}
 		return toolutil.WrapErrWithStatusHint("projectMirrorDelete", err, http.StatusNotFound,
 			hintVerifyMirrorID)
@@ -350,9 +366,11 @@ func ForcePushUpdate(ctx context.Context, client *gitlabclient.Client, in ForceP
 	}
 	_, err := client.GL().ProjectMirrors.ForcePushMirrorUpdate(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return toolutil.WrapErrWithHint("projectMirrorForcePush", err,
-				"force-pushing mirrors requires Maintainer+ role; the mirror must be enabled and not in a failed-auth state")
+		if toolutil.IsPermissionRefusal(err) {
+			return toolutil.WrapErrWithHint("projectMirrorForcePush", err, hintMirrorPermission)
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return toolutil.WrapErrWithHint("projectMirrorForcePush", err, hintForcePushDisabled)
 		}
 		return toolutil.WrapErrWithStatusHint("projectMirrorForcePush", err, http.StatusNotFound,
 			hintVerifyMirrorID)

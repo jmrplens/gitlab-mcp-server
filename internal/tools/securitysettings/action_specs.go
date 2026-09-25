@@ -77,7 +77,7 @@ func projectSecurityUpdateOptions(individualTool string) toolutil.ActionSpecOpti
 			"block secrets on push for a project",
 		},
 		Tags:           []string{"project", "security", "secret_push_protection", "settings", "configuration"},
-		Usage:          "Toggles the project's secret_push_protection_enabled setting so GitLab rejects pushes that contain detected secrets. Set secret_push_protection_enabled to true to block leaked credentials at push time, or false to allow them. Requires Maintainer role and an Ultimate license. Do not use project.update for this. It does not change secret push protection.",
+		Usage:          "Toggles the project's secret_push_protection_enabled setting so GitLab rejects pushes that contain detected secrets. Set secret_push_protection_enabled to true to block leaked credentials at push time, or false to allow them. Requires the Maintainer, Owner or Security Manager role and an Ultimate license. Do not use project.update for this. It does not change secret push protection.",
 		RelatedActions: []string{"project.security_settings_get"},
 		OpenWorld:      true,
 		Edition:        "ultimate",
@@ -104,7 +104,7 @@ func groupSecuritySettingsOptions(individualTool string) toolutil.ActionSpecOpti
 			"block secrets on push across a group",
 		},
 		Tags:           []string{"group", "security", "secret_push_protection", "settings", "configuration"},
-		Usage:          "Toggles a group's secret_push_protection_enabled setting, which is inherited by the group's projects so GitLab rejects pushes containing detected secrets. Set secret_push_protection_enabled to true to enforce protection group-wide, or false to disable it. Use projects_to_exclude to opt specific projects out. Requires Owner role and an Ultimate license. Do not use group.update for this. It does not change secret push protection.",
+		Usage:          "Toggles a group's secret_push_protection_enabled setting, which is inherited by the group's projects so GitLab rejects pushes containing detected secrets. Set secret_push_protection_enabled to true to enforce protection group-wide, or false to disable it. Use projects_to_exclude to opt specific projects out. Requires the Maintainer, Owner or Security Manager role on the group and an Ultimate license (on GitLab.com, the group's plan). Do not use group.update for this. It does not change secret push protection.",
 		RelatedActions: []string{"group.get", "project.security_settings_get"},
 		// Secret push protection is Ultimate at group scope as it is at
 		// project scope, which is what the catalog tags this spec with and

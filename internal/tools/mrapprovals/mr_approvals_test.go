@@ -1127,20 +1127,71 @@ func TestReset_ServerError(t *testing.T) {
 	}
 }
 
-// TestReset_NotFoundMentionsAccessTokenRequirement verifies 404 responses explain the bot-token requirement.
-func TestReset_NotFoundMentionsAccessTokenRequirement(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
-	}))
-
-	err := Reset(context.Background(), client, ResetInput{ProjectID: "42", MRIID: 1})
-	if err == nil {
-		t.Fatal("expected error for 404 response")
+// TestReset_EachRefusal_EarnsItsOwnHint verifies that the bot rule is
+// attached to the refusal GitLab enforces it with and to nothing else.
+//
+// GitLab answers a caller who may not reset, a person's token or a merge
+// request already merged, with 401 and Grape's plain body
+// (lib/api/merge_request_approvals.rb:148), which the handler used to scope to
+// 403 and so never hinted; its 403 hint claimed a Maintainer role the rule
+// does not ask for. The bot rule sat on the 404 instead, which GitLab answers
+// only for a merge request it cannot find. A 401 whose body says the token
+// itself was refused gets no permission hint, since the description in front
+// of it has already said so.
+func TestReset_EachRefusal_EarnsItsOwnHint(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		want    []string
+		wantNot []string
+	}{
+		{
+			name:    "a person's token refused with 401",
+			status:  http.StatusUnauthorized,
+			body:    `{"message":"401 Unauthorized"}`,
+			want:    []string{"bot user", "project or group access token", "service account", "already merged"},
+			wantNot: []string{"Maintainer"},
+		},
+		{
+			name:   "the same refusal answered 403",
+			status: http.StatusForbidden,
+			body:   `{"message":"403 Forbidden"}`,
+			want:   []string{"bot user", "already merged"},
+		},
+		{
+			name:    "a token GitLab rejected",
+			status:  http.StatusUnauthorized,
+			body:    `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`,
+			want:    []string{"authentication failed"},
+			wantNot: []string{"bot user", "Suggestion"},
+		},
+		{
+			name:    "a merge request GitLab cannot find",
+			status:  http.StatusNotFound,
+			body:    `{"message":"404 Not Found"}`,
+			want:    []string{"merge_request.get", "merge_request_iid"},
+			wantNot: []string{"bot user", "access token"},
+		},
 	}
-	for _, want := range []string{"bot user", "project/group access token", "PATs from human users"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(err.Error(), want) {
-				t.Fatalf("error missing %q: %v", want, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			err := Reset(context.Background(), client, ResetInput{ProjectID: "42", MRIID: 1})
+			if err == nil {
+				t.Fatalf("Reset() error = nil, want the %d refusal", tt.status)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("Reset() error = %q, want it to mention %q", err, want)
+				}
+			}
+			for _, unwanted := range tt.wantNot {
+				if strings.Contains(err.Error(), unwanted) {
+					t.Errorf("Reset() error = %q, must not mention %q", err, unwanted)
+				}
 			}
 		})
 	}

@@ -689,7 +689,7 @@ Get the import status of a project.
 
 ## Approvals (Premium/Ultimate)
 
-Merge request approval configuration and rules. Approval rules and external status checks are only available on GitLab Premium/Ultimate.
+Merge request approval configuration and rules. Approval rules are only available on GitLab Premium/Ultimate, and external status checks on Ultimate.
 
 ### `gitlab_project_approval_config_get`
 

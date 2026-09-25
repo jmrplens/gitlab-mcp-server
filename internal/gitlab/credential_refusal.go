@@ -78,6 +78,88 @@ func UnauthorizedNamesCredential(req *http.Request, body []byte) bool {
 	return answeredByGraphQL(req) || carriesInvalidToken(body)
 }
 
+// RefusalMayBePermission reports whether a refusal GitLab answered can be a
+// valid credential refused a permission, which is the one refusal a handler's
+// hint about a role, a license or an owner is written for. status is the
+// answered status, req the request GitLab answered and body the answer's body,
+// either of which may be nil.
+//
+// Only a REST 401 or 403 whose body carries no RFC 6750 error code, and whose
+// message does not refuse the account, qualifies. GitLab's API helpers
+// unauthorized!, forbidden! and render_api_error!, which every permission
+// refusal goes through (the 401 ones are entry 55 of
+// docs/development/upstream-bugs.md), render {"message": ...} and nothing
+// else. GitLab's API guard refuses the credential rather than the call in two
+// ways, and neither qualifies. Its token and scope refusals carry a code:
+// invalid_token, dpop_error and restricted_language_server_client_error on a
+// 401, insufficient_scope and insufficient_granular_scope on a 403
+// (lib/api/api_guard.rb). An account the API will not serve (blocked,
+// deactivated, pending approval, an internal user, the Terms of Service not
+// accepted, the primary email unconfirmed, the password expired) it refuses
+// through those same helpers, with a plain 403 forbidden! whose reason is one
+// of the fixed sentences of lib/gitlab/auth/user_access_denied_reason.rb, so
+// that answer is told apart by its message, [accountRefusalReasons]. A role or
+// license hint after either sends the reader to fix something that is not
+// wrong. The GraphQL endpoint answers 401 and 403 only from its own
+// authentication and access checks, and refuses a field the caller may not
+// see with a 200, so none of its answers qualifies.
+//
+// A request carrying no token at all does qualify, and it is harmless here.
+// The guard maps the error for a missing token to rack-oauth2's default code
+// unauthorized, but nothing in GitLab raises that error: such a request is
+// answered by authenticate!'s plain 401, byte for byte a permission refusal,
+// and this server never sends a request without a token.
+//
+// The answer is "may" and not "is": a token GitLab has no record of is
+// answered through unauthorized! with the same bytes as a permission refusal,
+// which is why the description in front of a hint names both causes. What it
+// guarantees is the other direction. Every 401 [UnauthorizedNamesCredential]
+// says names the credential carries a code or came from GraphQL, so a hint
+// keyed on this never follows the verdict that the token itself was refused.
+func RefusalMayBePermission(status int, req *http.Request, body []byte) bool {
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		return false
+	}
+	return !answeredByGraphQL(req) && errorCode(body) == "" && !refusesAccount(body)
+}
+
+// accountRefusalReasons are the fixed parts of the reasons GitLab's API guard
+// gives when it refuses an account the API will not serve, one per rejection
+// type of lib/gitlab/auth/user_access_denied_reason.rb, which has no EE
+// extension. Each is a part no instance changes: the sentences around some of
+// them carry the username or the instance's own URL. The reason for an
+// unknown rejection is left out because it cannot be given: the rejection
+// type falls back to blocked.
+var accountRefusalReasons = []string{
+	"cannot be performed by internal users",
+	"pending approval from your administrator",
+	"must accept the Terms of Service",
+	"Your account has been deactivated",
+	"primary email address is not confirmed",
+	"Your account has been blocked",
+	"Your password expired",
+}
+
+// refusesAccount reports whether body is a JSON object whose message is one of
+// the API guard's refusals of the account itself, [accountRefusalReasons]. A
+// message that is not a string, as a service's refusal rendered as a list is,
+// is never one: the guard renders its reason into the string forbidden!
+// builds.
+func refusesAccount(body []byte) bool {
+	var answer struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(body, &answer) != nil {
+		return false
+	}
+	for _, reason := range accountRefusalReasons {
+		if strings.Contains(answer.Message, reason) {
+			return true
+		}
+	}
+	return false
+}
+
 // answeredByGraphQL reports whether req was sent to GitLab's GraphQL endpoint.
 //
 // The suffix rather than the whole path is compared because an instance served
@@ -99,8 +181,18 @@ func answeredByGraphQL(req *http.Request) bool {
 // carriesInvalidToken reports whether body is a JSON object whose error code
 // is invalid_token.
 func carriesInvalidToken(body []byte) bool {
+	return errorCode(body) == invalidTokenCode
+}
+
+// errorCode returns the RFC 6750 error code body carries: the string member
+// error of a JSON object, and the empty string for a body that is not one or
+// carries none.
+func errorCode(body []byte) string {
 	var answer struct {
 		Error string `json:"error"`
 	}
-	return json.Unmarshal(body, &answer) == nil && answer.Error == invalidTokenCode
+	if json.Unmarshal(body, &answer) != nil {
+		return ""
+	}
+	return answer.Error
 }

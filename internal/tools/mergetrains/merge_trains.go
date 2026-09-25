@@ -226,6 +226,14 @@ func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	}
 	trains, resp, err := client.GL().MergeTrains.AddMergeRequestToMergeTrain(string(input.ProjectID), input.MergeRequestID, opts, gl.WithContext(ctx))
 	if err != nil {
+		// GitLab answers a caller who may not merge the request with 401
+		// (ee/lib/api/merge_trains.rb:168). Its 403 is the read check every
+		// merge train route runs first (:10-12), which is not the merge right,
+		// so only the 401 earns this hint.
+		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) && toolutil.IsPermissionRefusal(err) {
+			return ListOutput{}, toolutil.WrapErrWithHint("gitlab_add_merge_request_to_merge_train", err,
+				"adding a merge request to a merge train needs the right to merge it into its target branch; read the branch's protection with branch.get_protected")
+		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_add_merge_request_to_merge_train", err, http.StatusBadRequest, "verify the MR is approved and pipeline passed. Merge trains require Premium license")
 	}
 	return toListOutput(trains, resp), nil

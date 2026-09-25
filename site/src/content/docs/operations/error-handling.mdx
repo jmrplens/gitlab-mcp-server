@@ -184,6 +184,8 @@ GitLab answers some permission refusals with 401 rather than 403: approving a me
 ❌ mrApprove: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal. Suggestion: you may be the MR author (self-approval not allowed) or lack sufficient permissions
 ```
 
+Every action whose GitLab route refuses a permission this way carries a suggestion naming it: merging and cancelling auto-merge, approving and resetting approvals, adding to a merge train, push mirrors, access token reads, lists and rotation, external status checks, security settings, removing an award emoji, updating a group and linking a fork. The suggestion is left out when GitLab says the token itself was refused, or that it will not serve the account at all (blocked, deactivated, pending approval, the Terms of Service not accepted and the like), since the message has already said so and a missing permission cannot be the reason.
+
 ### Permission denied
 
 ```text

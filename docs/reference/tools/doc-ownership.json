@@ -89,7 +89,7 @@
     ]
   },
   "dependency-firewall.md": {
-    "note": "Owns the single Dependency Firewall evaluate tool, which lives inside gitlab_project (per buildProjectActionSpecs). The README's 'gitlab_project (enterprise routes)' annotation is the source, the same shape mirrors.md uses.",
+    "note": "Owns the single Dependency Firewall evaluate tool, which lives inside gitlab_project (per buildProjectActionSpecs). The README's 'gitlab_project (enterprise routes)' annotation is the source.",
     "prefixes": [
       "gitlab_project_dependency_firewall_evaluate"
     ]
@@ -203,7 +203,7 @@
     ]
   },
   "mirrors.md": {
-    "note": "Owns a small set of project mirror tools that live inside gitlab_project (per buildProjectActionSpecs). The README's 'gitlab_project (enterprise routes)' annotation is the source.",
+    "note": "Owns a small set of project mirror tools that live inside gitlab_project (per buildProjectActionSpecs). The README's 'gitlab_project (every tier)' annotation is the source.",
     "prefixes": [
       "gitlab_add_project_mirror",
       "gitlab_delete_project_mirror",

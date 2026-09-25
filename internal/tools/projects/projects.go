@@ -3727,6 +3727,18 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
 				"a fork relation already exists for this project. Use project.get to inspect forked_from_project, or call project.delete_fork_relation first")
 		}
+		// Only the 401 is about the target: GitLab answers it when the project's
+		// namespace is not one the source may be forked into
+		// (lib/api/projects.rb:925). Its 403s are about the caller's role on
+		// either project (:915, :921), which this hint does not describe.
+		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) && toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
+				"the namespace project_id lives in is not one you may fork forked_from_id into, which needs the right to create projects there; check both projects' namespaces with project.get")
+		}
+		if toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
+				"linking a fork needs the Owner role on project_id and permission to fork forked_from_id")
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
 			"verify both project_id and forked_from_id reference existing projects with project.get")
 	}

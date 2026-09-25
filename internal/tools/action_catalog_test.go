@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+	"maps"
+	"net/http"
 	"os"
 	"regexp"
 	"slices"
@@ -15,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1345,6 +1348,145 @@ func TestBuildActionCatalog_ExclusionByIndividualToolNameHoldsOnTheRealCatalog(t
 			}
 			if got, want := filtered.CountActions(), catalog.CountActions()-1; got != want {
 				t.Errorf("filtered CountActions() = %d, want %d (exactly one action removed)", got, want)
+			}
+		})
+	}
+}
+
+// entry55Route is one served action whose GitLab route refuses a valid
+// credential a permission with 401 rather than 403, the site of GitLab's
+// source that does it, and the arguments that reach that route.
+type entry55Route struct {
+	action actioncatalog.ActionID
+	site   string // GitLab's file:line at b183f4fad4bd
+	params map[string]any
+	// hintIsAboutTheToken marks a route whose 401 hint is about the calling
+	// token rather than a permission, or is appended whatever the status, so
+	// it stays after GitLab has said the token itself was refused.
+	hintIsAboutTheToken bool
+}
+
+// entry55Routes is entry 55 of docs/development/upstream-bugs.md as the
+// served surface reaches it: every action whose route GitLab answers a
+// permission refusal with 401 on, and the site that answers it. The sites
+// entry 55 lists that this server serves no action for (security_scans.rb:54,
+// ee/lib/ee/api/helpers.rb:193 and the MLflow helpers) are deliberately
+// absent, since a row whose action the catalog does not serve fails.
+//
+// It is a list kept by hand against GitLab's source, not a discovery gate:
+// nothing records which status a GitLab route refuses with, so a new 401 site
+// is found by reading GitLab and added here, and the handler behind it gets
+// its hint from toolutil.IsPermissionRefusal.
+func entry55Routes() []entry55Route {
+	project := map[string]any{"project_id": "42"}
+	with := func(base, more map[string]any) map[string]any {
+		out := make(map[string]any, len(base)+len(more))
+		maps.Copy(out, base)
+		maps.Copy(out, more)
+		return out
+	}
+	mergeRequest := with(project, map[string]any{"merge_request_iid": 1})
+	mirror := with(project, map[string]any{"mirror_id": 7})
+	checkOnMR := with(mergeRequest, map[string]any{"check_id": 3})
+	samlLink := map[string]any{"group_id": "10", "saml_group_name": "devs"}
+	return []entry55Route{
+		{action: "merge_request.approve", site: "lib/api/merge_request_approvals.rb:105", params: mergeRequest},
+		{action: "merge_request.approval_reset", site: "lib/api/merge_request_approvals.rb:148", params: mergeRequest},
+		{action: "merge_request.merge", site: "lib/api/merge_requests.rb:896", params: mergeRequest},
+		{action: "merge_request.cancel_auto_merge", site: "lib/api/merge_requests.rb:945", params: mergeRequest},
+		{action: "project.mirror_list", site: "lib/api/remote_mirrors.rb:12", params: project},
+		{action: "project.mirror_get", site: "lib/api/remote_mirrors.rb:12", params: mirror},
+		{action: "project.mirror_get_public_key", site: "lib/api/remote_mirrors.rb:12", params: mirror},
+		{action: "project.mirror_add", site: "lib/api/remote_mirrors.rb:12", params: with(project, map[string]any{"url": "https://example.com/repo.git"})},
+		{action: "project.mirror_edit", site: "lib/api/remote_mirrors.rb:12", params: mirror},
+		{action: "project.mirror_delete", site: "lib/api/remote_mirrors.rb:12", params: mirror},
+		{action: "project.mirror_force_push", site: "lib/api/remote_mirrors.rb:12", params: mirror},
+		{action: "access.token_project_list", site: "lib/api/resource_access_tokens.rb:32", params: project},
+		{action: "access.token_group_list", site: "lib/api/resource_access_tokens.rb:32", params: map[string]any{"group_id": "10"}},
+		{action: "access.token_project_get", site: "lib/api/resource_access_tokens.rb:63", params: with(project, map[string]any{"token_id": 3})},
+		{action: "access.token_group_get", site: "lib/api/resource_access_tokens.rb:63", params: map[string]any{"group_id": "10", "token_id": 3}},
+		{action: "access.token_project_rotate", site: "lib/api/resource_access_tokens.rb:200", params: with(project, map[string]any{"token_id": 3})},
+		{action: "access.token_group_rotate", site: "lib/api/resource_access_tokens.rb:200", params: map[string]any{"group_id": "10", "token_id": 3}},
+		{action: "access.token_project_rotate_self", site: "lib/api/resource_access_tokens/self_rotation.rb:46", params: project, hintIsAboutTheToken: true},
+		{action: "access.token_group_rotate_self", site: "lib/api/resource_access_tokens/self_rotation.rb:46", params: map[string]any{"group_id": "10"}, hintIsAboutTheToken: true},
+		{action: "access.token_personal_list", site: "lib/api/helpers/personal_access_tokens_helpers.rb:80", params: map[string]any{"user_id": 5}},
+		{action: "access.token_personal_get", site: "lib/api/personal_access_tokens.rb:73", params: map[string]any{"token_id": 3}},
+		{action: "access.token_personal_rotate", site: "lib/api/personal_access_tokens.rb:107", params: map[string]any{"token_id": 3}},
+		{action: "external_status_check.list_project_checks", site: "ee/lib/api/status_checks.rb:16 and 67", params: project},
+		{action: "external_status_check.list_project", site: "ee/lib/api/status_checks.rb:16 and 67", params: project},
+		{action: "external_status_check.create_project", site: "ee/lib/api/status_checks.rb:16", params: with(project, map[string]any{"name": "QA", "external_url": "https://qa.example.com"})},
+		{action: "external_status_check.update_project", site: "ee/lib/api/status_checks.rb:16, ee/app/services/external_status_checks/update_service.rb:40", params: with(project, map[string]any{"check_id": 3})},
+		{action: "external_status_check.delete_project", site: "ee/lib/api/status_checks.rb:16", params: with(project, map[string]any{"check_id": 3})},
+		{action: "external_status_check.list_project_mr_checks", site: "ee/lib/api/status_checks.rb:16", params: mergeRequest},
+		{action: "external_status_check.retry_project", site: "ee/lib/api/status_checks.rb:16", params: checkOnMR},
+		{action: "external_status_check.set_project_mr_status", site: "ee/lib/api/status_checks.rb:16", params: with(mergeRequest, map[string]any{"sha": "abc", "external_status_check_id": 3, "status": "passed"})},
+		{action: "project.security_settings_get", site: "ee/lib/api/project_security_settings.rb:30", params: project},
+		{action: "project.security_settings_update", site: "ee/lib/api/project_security_settings.rb:53", params: with(project, map[string]any{"secret_push_protection_enabled": true})},
+		{action: "group.security_settings_update", site: "ee/lib/api/group_security_settings.rb:36", params: map[string]any{"group_id": "10", "secret_push_protection_enabled": true}},
+		{action: "group.saml_link_list", site: "ee/lib/api/saml_group_links.rb:44", params: map[string]any{"group_id": "10"}, hintIsAboutTheToken: true},
+		{action: "group.saml_link_get", site: "ee/lib/api/saml_group_links.rb:112", params: samlLink, hintIsAboutTheToken: true},
+		{action: "group.saml_link_add", site: "ee/lib/api/saml_group_links.rb:75", params: with(samlLink, map[string]any{"access_level": 30}), hintIsAboutTheToken: true},
+		{action: "group.saml_link_delete", site: "ee/lib/api/saml_group_links.rb:139", params: samlLink, hintIsAboutTheToken: true},
+		{action: "issue.emoji_issue_delete", site: "lib/api/award_emoji.rb:124", params: with(project, map[string]any{"issue_iid": 1, "award_id": 2})},
+		{action: "issue.emoji_issue_note_delete", site: "lib/api/award_emoji.rb:124", params: with(project, map[string]any{"issue_iid": 1, "note_id": 4, "award_id": 2})},
+		{action: "merge_request.emoji_mr_delete", site: "lib/api/award_emoji.rb:124", params: with(mergeRequest, map[string]any{"award_id": 2})},
+		{action: "merge_request.emoji_mr_note_delete", site: "lib/api/award_emoji.rb:124", params: with(mergeRequest, map[string]any{"note_id": 4, "award_id": 2})},
+		{action: "snippet.emoji_snippet_delete", site: "lib/api/award_emoji.rb:124", params: with(project, map[string]any{"snippet_id": 1, "award_id": 2})},
+		{action: "snippet.emoji_snippet_note_delete", site: "lib/api/award_emoji.rb:124", params: with(project, map[string]any{"snippet_id": 1, "note_id": 4, "award_id": 2})},
+		{action: "group.update", site: "lib/api/groups.rb:90", params: map[string]any{"group_id": "10", "name": "renamed"}},
+		{action: "project.create_fork_relation", site: "lib/api/projects.rb:925", params: with(project, map[string]any{"forked_from_id": 99})},
+		{action: "merge_train.add", site: "ee/lib/api/merge_trains.rb:168", params: mergeRequest},
+	}
+}
+
+// entry55Answer runs route's action in catalog against a GitLab that answers
+// every request with status and body, and returns the text of the error the
+// action hands a model.
+func entry55Answer(t *testing.T, route entry55Route, status int, body string) string {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, body)
+	}))
+	catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate})
+	action, ok := catalog.Action(route.action)
+	if !ok {
+		t.Fatalf("the Ultimate catalog serves no %s, which %s refuses with 401: drop the row or restore the action", route.action, route.site)
+	}
+	_, err := action.Route.Handler(context.Background(), route.params)
+	if err == nil {
+		t.Fatalf("%s answered %d with no error", route.action, status)
+	}
+	return err.Error()
+}
+
+// TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint
+// ties entry 55 to the served surface. Every action whose GitLab route
+// refuses a valid credential a permission with 401 is driven through its
+// catalog handler against Grape's own refusal body, and must hand the model a
+// suggestion: before issue 908, 39 of these 46 carried none, because their
+// hints were scoped to the 403 GitLab never sends there.
+//
+// Driven again with a body GitLab's API guard writes for a revoked token, the
+// same actions must carry no suggestion, since the description in front of it
+// says the token itself was refused and a permission hint would contradict it.
+// Two kinds of row are exempt from that half, on purpose: the self-rotations,
+// whose 401 hint is about the calling token and so agrees with that verdict,
+// and the group SAML links, which append their hint to every error whatever
+// the status and whose wording the licensed end-to-end suite quotes.
+func TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint(t *testing.T) {
+	const revokedToken = `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}` //#nosec G101 -- test fixture, not a credential
+	for _, route := range entry55Routes() {
+		t.Run(string(route.action), func(t *testing.T) {
+			refused := entry55Answer(t, route, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+			if !strings.Contains(refused, "Suggestion:") {
+				t.Errorf("%s (%s) refused with 401 = %q, want a suggestion naming the permission", route.action, route.site, refused)
+			}
+			if route.hintIsAboutTheToken {
+				return
+			}
+			rejected := entry55Answer(t, route, http.StatusUnauthorized, revokedToken)
+			if strings.Contains(rejected, "Suggestion:") {
+				t.Errorf("%s (%s) after a revoked token = %q, want no permission suggestion", route.action, route.site, rejected)
 			}
 		})
 	}

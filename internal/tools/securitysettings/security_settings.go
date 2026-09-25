@@ -92,9 +92,57 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, in GetProjectI
 	}
 	settings, _, err := client.GL().ProjectSecuritySettings.ListProjectSecuritySettings(in.ProjectID.String())
 	if err != nil {
-		return ProjectOutput{}, toolutil.WrapErrWithStatusHint("get project security settings", err, http.StatusNotFound, "verify project_id with project.get. Requires Ultimate license")
+		return ProjectOutput{}, wrapSecuritySettingsErr("get project security settings", err, securitySettingsHints{
+			forbiddenHint: hintSecuritySettingsLicense,
+			refusedHint: "reading a project's security settings needs the Developer, Maintainer, Owner or Security Manager role, " +
+				"and the project's Security and compliance feature must be enabled",
+			notFoundHint: hintVerifyProject,
+		})
 	}
 	return toProjectOutput(settings), nil
+}
+
+// hintVerifyProject is the one thing a 404 from a project's security settings
+// can mean: GitLab answers the license and the role with 403 and 401, so what
+// is left is a project it cannot find.
+const hintVerifyProject = "verify project_id with project.get"
+
+// hintSecuritySettingsLicense is the 403 every security settings route
+// answers first: the instance license lacks the feature
+// (ee/lib/api/project_security_settings.rb:10, group_security_settings.rb:14).
+const hintSecuritySettingsLicense = "the GitLab instance's license does not include this security feature (secret push protection needs Ultimate)"
+
+// securitySettingsHints is what one security settings route says for each of
+// the three ways GitLab refuses it.
+type securitySettingsHints struct {
+	// forbiddenHint is for the 403 GitLab answers without an error code: the
+	// license, and on an update an archived project or an instance-enforced
+	// setting.
+	forbiddenHint string
+	// refusedHint is for the role refusal, which GitLab answers with 401
+	// (entry 55 of docs/development/upstream-bugs.md).
+	refusedHint string
+	// notFoundHint is for a project or group GitLab cannot find.
+	notFoundHint string
+}
+
+// wrapSecuritySettingsErr reports a refused security settings call with the
+// hint its status earns. The 403 is read first because on these routes it is
+// never a role: the role is the 401 (project_security_settings.rb:30 and 53,
+// group_security_settings.rb:36), and a 403 is the license or a state of the
+// project, which a role hint would send the caller to fix in the wrong place.
+// A 403 carrying an error code is the API guard's scope refusal, and a plain
+// one naming a blocked, deactivated or otherwise refused account is the guard
+// refusing the account itself; neither gets a hint, since no license or role
+// is why.
+func wrapSecuritySettingsErr(operation string, err error, hints securitySettingsHints) error {
+	if toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint(operation, err, hints.forbiddenHint)
+	}
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint(operation, err, hints.refusedHint)
+	}
+	return toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hints.notFoundHint)
 }
 
 // UpdateProject updates the secret push protection setting for a project.
@@ -111,7 +159,13 @@ func UpdateProject(ctx context.Context, client *gitlabclient.Client, in UpdatePr
 	}
 	settings, _, err := client.GL().ProjectSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.ProjectID.String(), opts)
 	if err != nil {
-		return ProjectOutput{}, toolutil.WrapErrWithStatusHint("update project security settings", err, http.StatusNotFound, "verify project_id with project.get. Requires Maintainer role and Ultimate license")
+		return ProjectOutput{}, wrapSecuritySettingsErr("update project security settings", err, securitySettingsHints{
+			forbiddenHint: hintSecuritySettingsLicense + ", or the project or one of its parent groups is archived, " +
+				"or the instance enforces secret push protection so it cannot be turned off",
+			refusedHint: "changing a project's security settings needs the Maintainer, Owner or Security Manager role, " +
+				"and the project's Security and compliance feature must be enabled",
+			notFoundHint: hintVerifyProject,
+		})
 	}
 	return toProjectOutput(settings), nil
 }
@@ -133,7 +187,12 @@ func UpdateGroup(ctx context.Context, client *gitlabclient.Client, in UpdateGrou
 	}
 	settings, _, err := client.GL().GroupSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.GroupID.String(), opts)
 	if err != nil {
-		return GroupOutput{}, toolutil.WrapErrWithStatusHint("update group security settings", err, http.StatusNotFound, "verify group_id with group.get. Requires Owner role and Ultimate license")
+		return GroupOutput{}, wrapSecuritySettingsErr("update group security settings", err, securitySettingsHints{
+			forbiddenHint: hintSecuritySettingsLicense,
+			refusedHint: "changing a group's security settings needs the Maintainer, Owner or Security Manager role on the group, " +
+				"and on GitLab.com the group's plan must include Ultimate",
+			notFoundHint: "verify group_id with group.get",
+		})
 	}
 	return toGroupOutput(settings), nil
 }

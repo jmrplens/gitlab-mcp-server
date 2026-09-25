@@ -554,6 +554,38 @@ func IsHTTPStatus(err error, code int) bool {
 	return ok && answeredStatus(glErr) == code
 }
 
+// IsPermissionRefusal reports whether GitLab answered err with a refusal that
+// can be a valid credential lacking a permission: a REST 401 or 403 whose body
+// carries no RFC 6750 error code and does not refuse the account itself, which
+// [gitlabclient.RefusalMayBePermission] decides. It is what a handler keys a
+// hint naming a role, a license or an owner on, where [IsHTTPStatus] with 403
+// used to be.
+//
+// The 401 is the reason it exists. At the routes entry 55 of
+// docs/development/upstream-bugs.md lists, GitLab refuses a missing permission
+// with 401, so a hint scoped to 403 was never shown there. A hint scoped to 401
+// alone is wrong the other way: [ClassifyError] describes a 401 that GitLab
+// said was about the credential as the token itself being refused, and a role
+// suggestion after that verdict contradicts it. This predicate is false for
+// exactly those answers, for the API guard's 403 about a missing token scope,
+// and for its 403 refusing an account the API will not serve (blocked,
+// deactivated, the Terms of Service not accepted and the like), so the hint
+// follows only a description that leaves a permission refusal open.
+//
+// A handler whose route answers a 403 that means something else, a license or
+// an archived project rather than a role, pairs it with IsHTTPStatus to tell
+// the two apart. The 403 is kept here because it is what these routes would
+// answer if GitLab retired entry 55, and then a handler that keys one hint on
+// this predicate alone needs no change. The handlers that pair it with a
+// status do, since each reads the status as the cause: the security settings
+// routes, the three external status check merge request routes, the fork link
+// and the merge train add. Those are the ones to revisit when entry 55 is
+// retired.
+func IsPermissionRefusal(err error) bool {
+	glErr, ok := gitLabResponseOf(err)
+	return ok && gitlabclient.RefusalMayBePermission(answeredStatus(glErr), answeredRequest(glErr), glErr.Body)
+}
+
 // IsNotFound reports whether err represents a 404 Not Found, either via a
 // structured GitLab ErrorResponse status code or via a plain-text error
 // message from client-go (which may contain "404 Not Found" as text).

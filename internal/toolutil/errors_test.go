@@ -2708,6 +2708,75 @@ func TestIsHTTPStatus_GraphQLRefusal_ReadsTheAnsweredStatus(t *testing.T) {
 	}
 }
 
+// TestIsPermissionRefusal_ReadsWhatGitLabAnswered verifies the predicate a
+// handler keys its permission hint on, over the error client-go really hands
+// it for each answer.
+//
+// A plain REST 401 and 403 may be a permission refusal, a 401 with a reason
+// and one wrapped by a handler included. The rows it must refuse are the ones
+// IsHTTPStatus(401) || IsHTTPStatus(403) gets wrong, which is what
+// mergerequests.Approve keyed on: the three invalid_token bodies, the API
+// guard's other codes on either status, its plain 403 refusing an account
+// the API will not serve, and every GraphQL refusal, after which a role hint
+// would contradict the verdict that the token itself was refused or would
+// name a role for a missing scope or a blocked account. The rest are answers
+// that are not refusals of a permission at all.
+func TestIsPermissionRefusal_ReadsWhatGitLabAnswered(t *testing.T) {
+	rest := func(status int, body string) func(*testing.T) error {
+		return func(t *testing.T) error {
+			t.Helper()
+			_, err := restAnswer(t, http.MethodPut, "projects/1/merge_requests/1/merge", status, body)
+			return err
+		}
+	}
+	graphQL := func(status int, body string) func(*testing.T) error {
+		return func(t *testing.T) error {
+			t.Helper()
+			return graphQLAnswer(t, "", status, body)
+		}
+	}
+	wrapped := func(answer func(*testing.T) error) func(*testing.T) error {
+		return func(t *testing.T) error {
+			t.Helper()
+			return fmt.Errorf("merge merge request: %w", answer(t))
+		}
+	}
+	built := func(err error) func(*testing.T) error {
+		return func(*testing.T) error { return err }
+	}
+	tests := []struct {
+		name   string
+		answer func(*testing.T) error
+		want   bool
+	}{
+		{name: "REST 401 from unauthorized!", answer: rest(http.StatusUnauthorized, permissionRefusalBody), want: true},
+		{name: "REST 401 with a reason", answer: rest(http.StatusUnauthorized, `{"message":"401 Unauthorized - Target Namespace"}`), want: true},
+		{name: "REST 403 from forbidden!", answer: rest(http.StatusForbidden, `{"message":"403 Forbidden"}`), want: true},
+		{name: "REST 401 wrapped by a handler", answer: wrapped(rest(http.StatusUnauthorized, permissionRefusalBody)), want: true},
+		{name: "REST 401, an expired token", answer: rest(http.StatusUnauthorized, expiredTokenBody), want: false},
+		{name: "REST 401, a revoked token", answer: rest(http.StatusUnauthorized, revokedTokenBody), want: false},
+		{name: "REST 401, an impersonation token", answer: rest(http.StatusUnauthorized, impersonationDisabledBody), want: false},
+		{name: "REST 401, a DPoP refusal", answer: rest(http.StatusUnauthorized, `{"error":"dpop_error","error_description":"DPoP validation error"}`), want: false},
+		{name: "REST 403, a missing scope", answer: rest(http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`), want: false},
+		{name: "REST 403, a blocked account", answer: rest(http.StatusForbidden, `{"message":"403 Forbidden - Your account has been blocked."}`), want: false},
+		{name: "GraphQL 401", answer: graphQL(http.StatusUnauthorized, graphQLInvalidTokenBody), want: false},
+		{name: "GraphQL 403", answer: graphQL(http.StatusForbidden, graphQLForbiddenBody), want: false},
+		{name: "REST 404, client-go's sentinel", answer: rest(http.StatusNotFound, `{"message":"404 Project Not Found"}`), want: false},
+		{name: "REST 400", answer: rest(http.StatusBadRequest, `{"message":"400 Bad request"}`), want: false},
+		{name: "REST 500", answer: rest(http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`), want: false},
+		{name: "a transport error", answer: built(&url.Error{Op: "Put", URL: "https://gitlab.example.com", Err: syscall.ECONNREFUSED}), want: false},
+		{name: "a canceled request", answer: built(context.Canceled), want: false},
+		{name: "no error", answer: built(nil), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPermissionRefusal(tt.answer(t)); got != tt.want {
+				t.Errorf("IsPermissionRefusal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestWrapErrWithStatusHint_GraphQLRefusal_AttachesTheHint verifies the
 // composition a GraphQL-backed handler hands a model for the status its hint
 // was written for: the classification, then the hint. Every WrapErrWithStatusHint

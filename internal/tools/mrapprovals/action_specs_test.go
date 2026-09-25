@@ -180,6 +180,27 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_ResetUsage_AgreesWithTheRefusalHint verifies the reset's
+// served usage says what its refusal hint says, which is what GitLab checks:
+// any bot user that may approve the merge request, a service account among
+// them, and no merge request that is already merged
+// (lib/api/merge_request_approvals.rb:148-149). It used to say personal access
+// tokens are rejected, which sent a service account, whose token is one, away
+// from a call GitLab serves it.
+func TestActionSpecs_ResetUsage_AgreesWithTheRefusalHint(t *testing.T) {
+	usage := approvalSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, approvalActionHandler())))["gitlab_mr_approval_reset"].Usage
+	for _, want := range []string{"service account", "already merged"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(usage, want) {
+				t.Errorf("Usage = %q, want it to mention %q as the refusal hint does", usage, want)
+			}
+		})
+	}
+	if strings.Contains(usage, "Personal access tokens are rejected") {
+		t.Errorf("Usage = %q still refuses every personal access token", usage)
+	}
+}
+
 // TestActionSpecs_RuleSchemas_RequireOnlyWhatTheAPIDemands pins the
 // required list of the rule create and update schemas to the fields GitLab
 // itself demands, and holds every optional field out of it.

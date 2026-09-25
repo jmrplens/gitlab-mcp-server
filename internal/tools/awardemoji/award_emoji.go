@@ -10,8 +10,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// hintEmojiOwnerOnly is the hint shared by all emoji delete handlers.
-const hintEmojiOwnerOnly = "only the user who awarded the emoji can remove it"
+// hintEmojiOwnerOnly is the hint shared by all emoji delete handlers. GitLab
+// refuses anyone but the awarder or an administrator with 401 rather than 403
+// (lib/api/award_emoji.rb:124), so the handlers key it on
+// toolutil.IsPermissionRefusal.
+const hintEmojiOwnerOnly = "only the user who awarded the emoji, or an administrator, can remove it"
 
 // emojiListQuery captures the shared list-query parameters (offset/keyset
 // pagination plus order_by/sort) mirrored from gl.ListAwardEmojiOptions so each
@@ -319,7 +322,7 @@ func deleteNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, listActionH
 	}
 	_, err := remove(string(req.ProjectID), req.IID, req.NoteID, req.AwardID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 403) {
+		if toolutil.IsPermissionRefusal(err) {
 			return toolutil.WrapErrWithHint(req.Operation, err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
@@ -408,7 +411,7 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	_, err := client.GL().AwardEmoji.DeleteIssueAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 403) {
+		if toolutil.IsPermissionRefusal(err) {
 			return toolutil.WrapErrWithHint("issue_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
@@ -561,7 +564,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	_, err := client.GL().AwardEmoji.DeleteMergeRequestAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 403) {
+		if toolutil.IsPermissionRefusal(err) {
 			return toolutil.WrapErrWithHint("mr_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
@@ -682,7 +685,7 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	}
 	_, err := client.GL().AwardEmoji.DeleteSnippetAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 403) {
+		if toolutil.IsPermissionRefusal(err) {
 			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {

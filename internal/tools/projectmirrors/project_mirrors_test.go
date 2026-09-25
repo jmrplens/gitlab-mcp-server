@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -768,6 +770,153 @@ func TestForcePushUpdate_NotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), hintVerifyMirrorID) {
 		t.Fatalf("error missing mirror hint: %v", err)
+	}
+}
+
+// mirrorCalls drives each of the seven remote mirror handlers once, so a
+// test can hold every route to the one check GitLab guards them all with.
+var mirrorCalls = []struct {
+	name string
+	call func(context.Context, *gitlabclient.Client) error
+}{
+	{"list", func(ctx context.Context, c *gitlabclient.Client) error {
+		_, err := List(ctx, c, ListInput{ProjectID: testProjectID})
+		return err
+	}},
+	{"get", func(ctx context.Context, c *gitlabclient.Client) error {
+		_, err := Get(ctx, c, GetInput{ProjectID: testProjectID, MirrorID: 42})
+		return err
+	}},
+	{"get public key", func(ctx context.Context, c *gitlabclient.Client) error {
+		_, err := GetPublicKey(ctx, c, GetPublicKeyInput{ProjectID: testProjectID, MirrorID: 42})
+		return err
+	}},
+	{"add", func(ctx context.Context, c *gitlabclient.Client) error {
+		_, err := Add(ctx, c, AddInput{ProjectID: testProjectID, URL: "https://example.com/repo.git"})
+		return err
+	}},
+	{"edit", func(ctx context.Context, c *gitlabclient.Client) error {
+		_, err := Edit(ctx, c, EditInput{ProjectID: testProjectID, MirrorID: 42})
+		return err
+	}},
+	{"delete", func(ctx context.Context, c *gitlabclient.Client) error {
+		return Delete(ctx, c, DeleteInput{ProjectID: testProjectID, MirrorID: 42})
+	}},
+	{"force push", func(ctx context.Context, c *gitlabclient.Client) error {
+		return ForcePushUpdate(ctx, c, ForcePushInput{ProjectID: testProjectID, MirrorID: 42})
+	}},
+}
+
+// TestMirrors_PermissionRefusedWith401_NameTheMaintainerRole verifies that
+// every remote mirror route hints the one check GitLab guards them all with,
+// on the 401 it answers that check with (lib/api/remote_mirrors.rb:12) and on
+// a plain 403 alike.
+//
+// Five of the seven handlers scoped their hint to 403, which GitLab never
+// sends for this check, and Get and GetPublicKey had none, so a refused caller
+// saw no suggestion at all. Four of the hints also claimed push mirrors need
+// Premium, which they do not; the rows hold every error to leaving that out.
+func TestMirrors_PermissionRefusedWith401_NameTheMaintainerRole(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		for _, tt := range mirrorCalls {
+			t.Run(fmt.Sprintf("%s %d", tt.name, status), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, status, fmt.Sprintf(`{"message":"%d %s"}`, status, http.StatusText(status)))
+				}))
+				err := tt.call(context.Background(), client)
+				if err == nil {
+					t.Fatalf("%s error = nil, want the %d refusal", tt.name, status)
+				}
+				if !strings.Contains(err.Error(), hintMirrorPermission) {
+					t.Errorf("%s error = %q, want the permission hint", tt.name, err)
+				}
+				if strings.Contains(err.Error(), "Premium") {
+					t.Errorf("%s error = %q, must not claim push mirrors need Premium", tt.name, err)
+				}
+			})
+		}
+	}
+}
+
+// TestMirrors_CredentialRefused_CarryNoPermissionHint verifies that a 401
+// GitLab said was about the token itself, and the API guard's 403 about a
+// token scope, get no role hint on any route: the description in front of the
+// hint has already said what is wrong, and it is not the role.
+func TestMirrors_CredentialRefused_CarryNoPermissionHint(t *testing.T) {
+	bodies := map[int]string{
+		http.StatusUnauthorized: `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`,
+		http.StatusForbidden:    `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`,
+	}
+	for status, body := range bodies {
+		for _, tt := range mirrorCalls {
+			t.Run(fmt.Sprintf("%s %d", tt.name, status), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, status, body)
+				}))
+				err := tt.call(context.Background(), client)
+				if err == nil {
+					t.Fatalf("%s error = nil, want the %d refusal", tt.name, status)
+				}
+				if strings.Contains(err.Error(), hintMirrorPermission) {
+					t.Errorf("%s error = %q, must not carry the permission hint", tt.name, err)
+				}
+			})
+		}
+	}
+}
+
+// TestAddEdit_PermissionRefusal_ReadBeforeTheRedaction verifies that Add and
+// Edit read the refusal off the error GitLab answered and not off its
+// redaction. redactMirrorError rebuilds an error from its text whenever it
+// strips a credential, and the rebuilt error carries no response, so reading
+// the refusal after it would have dropped the hint for exactly the answers
+// that quote the mirror URL. The credentials must still not leak.
+func TestAddEdit_PermissionRefusal_ReadBeforeTheRedaction(t *testing.T) {
+	calls := map[string]func(context.Context, *gitlabclient.Client) error{
+		"add": func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Add(ctx, c, AddInput{ProjectID: testProjectID, URL: "https://user:secret@example.com/repo.git"})
+			return err
+		},
+		"edit": func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Edit(ctx, c, EditInput{ProjectID: testProjectID, MirrorID: 42})
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized https://user:secret@example.com/repo.git"}`)
+			}))
+			err := call(context.Background(), client)
+			if err == nil {
+				t.Fatalf("%s error = nil, want the refusal", name)
+			}
+			if !strings.Contains(err.Error(), hintMirrorPermission) {
+				t.Errorf("%s error = %q, want the permission hint", name, err)
+			}
+			if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "user:") {
+				t.Errorf("%s error leaked credentials: %v", name, err)
+			}
+		})
+	}
+}
+
+// TestForcePushUpdate_DisabledMirror_NamesTheEnabledFlag verifies the hint
+// the 400 GitLab answers a sync of a disabled mirror with, which used to sit
+// on the 403 beside a role claim.
+func TestForcePushUpdate_DisabledMirror_NamesTheEnabledFlag(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Cannot proceed with the push mirroring. Please verify your mirror configuration."}`)
+	}))
+	err := ForcePushUpdate(context.Background(), client, ForcePushInput{ProjectID: testProjectID, MirrorID: 42})
+	if err == nil {
+		t.Fatal("ForcePushUpdate() error = nil, want the 400")
+	}
+	if !strings.Contains(err.Error(), hintForcePushDisabled) {
+		t.Errorf("ForcePushUpdate() error = %q, want the enabled-flag hint", err)
+	}
+	if strings.Contains(err.Error(), hintMirrorPermission) {
+		t.Errorf("ForcePushUpdate() error = %q, must not name the role for a disabled mirror", err)
 	}
 }
 

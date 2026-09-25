@@ -21,6 +21,17 @@ import (
 // hintVerifyMR is the 404 hint shared by MR tools.
 const hintVerifyMR = "verify project_id and merge_request_iid with merge_request.get"
 
+// hintMergeRefused is what a refused merge needs. GitLab refuses a caller who
+// may not push to the target branch with 401 rather than 403
+// (lib/api/merge_requests.rb:896), so the hint names the right the refusal is
+// about and where the branch's rules are read.
+const hintMergeRefused = "merging needs the right to push to the merge request's target branch: at least the Developer role, and whatever the branch's protection allows (read it with branch.get_protected)"
+
+// hintCancelAutoMergeRefused is what a refused auto-merge cancel needs:
+// GitLab lets the merge request's author or anyone who may merge it cancel,
+// and refuses everyone else with 401 (lib/api/merge_requests.rb:945).
+const hintCancelAutoMergeRefused = "only the merge request's author or a user who may merge it into its target branch can cancel auto-merge; check the author and the branch's protection with merge_request.get and branch.get_protected"
+
 // CreateInput defines parameters for creating a merge request.
 type CreateInput struct {
 	// Basic metadata
@@ -815,6 +826,9 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 		if resp != nil && resp.StatusCode == http.StatusMethodNotAllowed && fetchErr == nil {
 			return Output{}, diagnoseMergeBlocker(input.MRIID, prefetched, err)
 		}
+		if toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("mrMerge", err, hintMergeRefused)
+		}
 		return Output{}, toolutil.WrapErrWithMessage("mrMerge", err)
 	}
 	return mergeRequestOutput("mrMerge", mr, captured)
@@ -839,7 +853,7 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 	}
 	approvals, _, err := client.GL().MergeRequestApprovals.ApproveMergeRequest(string(input.ProjectID), input.MRIID, approveOpts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+		if toolutil.IsPermissionRefusal(err) {
 			return ApproveOutput{}, toolutil.WrapErrWithHint("mrApprove", err,
 				"you may be the MR author (self-approval not allowed) or lack sufficient permissions")
 		}
@@ -1647,6 +1661,9 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) || toolutil.IsHTTPStatus(err, http.StatusNotAcceptable) {
 			return Output{}, toolutil.WrapErrWithHint("mrCancelAutoMerge", err,
 				"the MR may already be merged/closed, or auto-merge was not enabled. Use merge_request.get to check state and auto_merge_enabled")
+		}
+		if toolutil.IsPermissionRefusal(err) {
+			return Output{}, toolutil.WrapErrWithHint("mrCancelAutoMerge", err, hintCancelAutoMergeRefused)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mrCancelAutoMerge", err, http.StatusNotFound,
 			hintVerifyMR)

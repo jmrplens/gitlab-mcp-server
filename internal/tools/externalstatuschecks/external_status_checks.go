@@ -3,6 +3,7 @@ package externalstatuschecks
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -95,10 +96,57 @@ type ListProjectStatusChecksInput struct {
 	toolutil.KeysetPaginationInput
 }
 
+// The hints a refused caller is given. Every status check route answers a
+// project whose namespace lacks the Ultimate feature with 401 from one
+// before-block (ee/lib/api/status_checks.rb:16), and the project list and the
+// update answer a missing role with 401 too (:67, and
+// ee/app/services/external_status_checks/update_service.rb:40), so these are
+// keyed on toolutil.IsPermissionRefusal rather than on a status. The create
+// and the delete lose the role refusal on the way out, answering it with 500
+// and with 204 (entries 57 and 56 of docs/development/upstream-bugs.md).
+const (
+	// hintStatusCheckLicense is the license every route checks first.
+	hintStatusCheckLicense = "external status checks need an Ultimate license on the project's namespace (on GitLab.com, the plan of its top-level group), and GitLab answers a project without it with 401 on every status check route"
+	// hintStatusCheckMaintainer is the license together with the role the
+	// project list and the update check next.
+	hintStatusCheckMaintainer = "reading or changing a project's external status checks needs the Maintainer role, and an Ultimate license on the project's namespace; GitLab answers the lack of either with 401. Verify project_id with project.get"
+)
+
+// refusedForLicense reports whether err is the 401 a merge request's status
+// check route answers when the project's namespace lacks Ultimate. On those
+// routes a missing role is a 403 of its own (the route's authorize! call), so
+// the two are told apart by status, not read as one refusal.
+func refusedForLicense(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusUnauthorized) && toolutil.IsPermissionRefusal(err)
+}
+
+// hintStatusCheckCreateRole is what a create refused for the role needs. The
+// role is not refused with 401 there, nor with 403: the create service builds
+// its refusal without a status, so GitLab answers it with 500 and the body
+// {"message":["Not allowed"]} (entry 57 of docs/development/upstream-bugs.md),
+// which reads as a fault of the instance unless the hint says otherwise.
+const hintStatusCheckCreateRole = "creating an external status check needs the Maintainer role on the project, and GitLab answers a caller without it with a server error saying \"Not allowed\" rather than a refusal. Verify project_id with project.get"
+
+// createRefusedForRole reports whether err is the answer a create gets from
+// GitLab for a caller without the Maintainer role: a 500 carrying the create
+// service's "Not allowed" (ee/app/services/external_status_checks/create_service.rb:32-38,
+// rendered by ee/lib/api/status_checks.rb:53 with no status). The message
+// is what tells it apart from a 500 the instance answers for any other fault.
+func createRefusedForRole(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusInternalServerError) &&
+		strings.Contains(toolutil.ExtractGitLabMessage(err), "Not allowed")
+}
+
+// refusedForRole reports whether err is the 403 a merge request's status
+// check route answers a caller whose role on the merge request falls short.
+func refusedForRole(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.IsPermissionRefusal(err)
+}
+
 // ListProjectStatusChecks lists project-level external status checks.
 func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectStatusChecksInput) (ListProjectStatusCheckOutput, error) {
 	return listProjectStatusChecks(ctx, input.ProjectID, "listProjectStatusChecks",
-		"deprecated endpoint - prefer external_status_check.list_project; requires Maintainer role and Premium/Ultimate license",
+		"deprecated endpoint - prefer external_status_check.list_project; "+hintStatusCheckMaintainer,
 		func(projectID string, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
 			listOptions := &gl.ListOptions{}
 			toolutil.ApplyListOptions(listOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -108,7 +156,7 @@ func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, i
 		})
 }
 
-func listProjectStatusChecks(ctx context.Context, projectID toolutil.StringOrInt, operation, forbiddenHint string, list func(string, ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error)) (ListProjectStatusCheckOutput, error) {
+func listProjectStatusChecks(ctx context.Context, projectID toolutil.StringOrInt, operation, permissionHint string, list func(string, ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error)) (ListProjectStatusCheckOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListProjectStatusCheckOutput{}, err
 	}
@@ -117,7 +165,10 @@ func listProjectStatusChecks(ctx context.Context, projectID toolutil.StringOrInt
 	}
 	checks, resp, err := list(string(projectID), gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusForbidden, forbiddenHint)
+		if toolutil.IsPermissionRefusal(err) {
+			return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithHint(operation, err, permissionHint)
+		}
+		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithMessage(operation, err)
 	}
 	items := make([]ProjectStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -153,8 +204,15 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 	opts.Sort = input.Sort
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectMergeRequestExternalStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if refusedForLicense(err) {
+			return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithHint("listProjectMRExternalStatusChecks", err, hintStatusCheckLicense)
+		}
+		if refusedForRole(err) {
+			return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithHint("listProjectMRExternalStatusChecks", err,
+				"reading a merge request's status checks needs at least the Reporter role on the project")
+		}
 		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectMRExternalStatusChecks", err, http.StatusNotFound,
-			"verify merge_request_iid (project-scoped, not the global ID) with merge_request.list; requires Maintainer role + Premium/Ultimate")
+			"verify merge_request_iid (project-scoped, not the global ID) with merge_request.list")
 	}
 	items := make([]MergeStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -174,8 +232,7 @@ type ListProjectInput struct {
 
 // ListProjectExternalStatusChecks lists external status checks for a project.
 func ListProjectExternalStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListProjectStatusCheckOutput, error) {
-	return listProjectStatusChecks(ctx, input.ProjectID, "listProjectExternalStatusChecks",
-		"requires Maintainer role and Premium/Ultimate license; verify project_id with project.get",
+	return listProjectStatusChecks(ctx, input.ProjectID, "listProjectExternalStatusChecks", hintStatusCheckMaintainer,
 		func(projectID string, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
 			listOptions := &gl.ListProjectExternalStatusChecksOptions{}
 			toolutil.ApplyListOptions(&listOptions.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -220,6 +277,12 @@ func CreateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	check, _, err := client.GL().ExternalStatusChecks.CreateProjectExternalStatusCheck(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsPermissionRefusal(err) {
+			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckLicense)
+		}
+		if createRefusedForRole(err) {
+			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckCreateRole)
+		}
 		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("createProjectExternalStatusCheck", err, http.StatusBadRequest,
 			"name must be unique within the project; external_url must be a valid HTTPS URL reachable from GitLab; protected_branch_ids must be IDs (not names) from branch.list_protected")
 	}
@@ -245,8 +308,15 @@ func DeleteProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	_, err := client.GL().ExternalStatusChecks.DeleteProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, &gl.DeleteProjectExternalStatusCheckOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("deleteProjectExternalStatusCheck", err, http.StatusForbidden,
-			"requires Maintainer role; verify check_id with external_status_check.list_project; deletion is irreversible")
+		// The license is the one refusal this route answers. A caller without
+		// the Maintainer role is answered 204 and nothing is deleted, because
+		// the route discards the refusal its service returns
+		// (docs/development/upstream-bugs.md), so no hint here names the role.
+		if toolutil.IsPermissionRefusal(err) {
+			return toolutil.WrapErrWithHint("deleteProjectExternalStatusCheck", err, hintStatusCheckLicense)
+		}
+		return toolutil.WrapErrWithStatusHint("deleteProjectExternalStatusCheck", err, http.StatusNotFound,
+			"verify check_id with external_status_check.list_project")
 	}
 	return nil
 }
@@ -287,6 +357,9 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	check, _, err := client.GL().ExternalStatusChecks.UpdateProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsPermissionRefusal(err) {
+			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("updateProjectExternalStatusCheck", err, hintStatusCheckMaintainer)
+		}
 		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("updateProjectExternalStatusCheck", err, http.StatusNotFound,
 			"verify check_id with external_status_check.list_project; name must remain unique; external_url must be valid HTTPS")
 	}
@@ -316,6 +389,13 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 	}
 	_, err := client.GL().ExternalStatusChecks.RetryFailedExternalStatusCheckForProjectMergeRequest(string(input.ProjectID), input.MRIID, input.CheckID, &gl.RetryFailedExternalStatusCheckForProjectMergeRequestOptions{}, gl.WithContext(ctx))
 	if err != nil {
+		if refusedForLicense(err) {
+			return toolutil.WrapErrWithHint("retryFailedExternalStatusCheckForProjectMR", err, hintStatusCheckLicense)
+		}
+		if refusedForRole(err) {
+			return toolutil.WrapErrWithHint("retryFailedExternalStatusCheckForProjectMR", err,
+				"retrying a status check needs at least the Developer role on the project")
+		}
 		return toolutil.WrapErrWithStatusHint("retryFailedExternalStatusCheckForProjectMR", err, http.StatusUnprocessableEntity,
 			"check must currently be in 'failed' state to retry; verify status with external_status_check.list_project_mr_checks; rate-limited per project")
 	}
@@ -358,6 +438,13 @@ func SetProjectMRExternalStatusCheckStatus(ctx context.Context, client *gitlabcl
 	}
 	_, err := client.GL().ExternalStatusChecks.SetProjectMergeRequestExternalStatusCheckStatus(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if refusedForLicense(err) {
+			return toolutil.WrapErrWithHint("setProjectMRExternalStatusCheckStatus", err, hintStatusCheckLicense)
+		}
+		if refusedForRole(err) {
+			return toolutil.WrapErrWithHint("setProjectMRExternalStatusCheckStatus", err,
+				"setting a status check's status needs permission to approve the merge request")
+		}
 		return toolutil.WrapErrWithStatusHint("setProjectMRExternalStatusCheckStatus", err, http.StatusBadRequest,
 			"sha must match the current MR head (use merge_request.get to confirm); status must be 'passed' or 'failed'; only the external service that created the check (HMAC-authenticated) can set its status")
 	}

@@ -6415,6 +6415,44 @@ func TestCreateForkRelation_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateForkRelation_TargetNamespaceRefused_NamesTheNamespace verifies
+// that each refusal of a fork link is hinted as what it is about. GitLab
+// answers a target namespace the source may not be forked into with 401 and
+// the reason "Target Namespace" (lib/api/projects.rb:925), which the handler
+// had no hint for, and a missing role on either project with 403 from
+// authorize! (:915, :921), which must not be described as the namespace. A
+// 401 GitLab said was about the token itself gets neither.
+func TestCreateForkRelation_TargetNamespaceRefused_NamesTheNamespace(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		want    string
+		wantNot string
+	}{
+		{"the target namespace", http.StatusUnauthorized, `{"message":"401 Unauthorized - Target Namespace"}`, "not one you may fork forked_from_id into", "Owner role"},
+		{"a role on either project", http.StatusForbidden, `{"message":"403 Forbidden"}`, "Owner role on project_id", "not one you may fork"},
+		{"an expired token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`, "authentication failed", "Suggestion"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := CreateForkRelation(context.Background(), client, CreateForkRelationInput{ProjectID: "42", ForkedFromID: 99})
+			if err == nil {
+				t.Fatalf("CreateForkRelation() error = nil, want the %d", tt.status)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("CreateForkRelation() error = %q, want it to carry %q", err, tt.want)
+			}
+			if strings.Contains(err.Error(), tt.wantNot) {
+				t.Errorf("CreateForkRelation() error = %q, must not carry %q", err, tt.wantNot)
+			}
+		})
+	}
+}
+
 // TestDeleteForkRelation_Success verifies DeleteForkRelation succeeds when the GitLab API confirms removal of the fork relationship.
 func TestDeleteForkRelation_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

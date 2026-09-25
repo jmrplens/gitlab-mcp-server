@@ -175,6 +175,32 @@ func TestActionSpecs_Edition_EveryActionIsUltimate(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_UpdateUsage_NamesTheRolesGitLabChecks verifies both updates
+// tell a model before the call the roles GitLab lets change secret push
+// protection: the Maintainer, Owner and Security Manager roles, whom GitLab
+// grants enable_secret_push_protection on a group
+// (ee/lib/api/group_security_settings.rb:36) and update_security_setting on a
+// project (project_security_settings.rb:53).
+// The group update used to say Owner, which sent a Maintainer who read it away
+// from a call GitLab would have served.
+func TestActionSpecs_UpdateUsage_NamesTheRolesGitLabChecks(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specByTool := securitySettingsSpecsByTool(append(ProjectActionSpecs(client), GroupActionSpecs(client)...))
+	for _, tool := range []string{"gitlab_update_project_secret_push_protection", "gitlab_update_group_secret_push_protection"} {
+		t.Run(tool, func(t *testing.T) {
+			usage := specByTool[tool].Usage
+			if !strings.Contains(usage, "Requires the Maintainer, Owner or Security Manager role") {
+				t.Errorf("Usage = %q, want it to name the Maintainer, Owner and Security Manager roles", usage)
+			}
+			if strings.Contains(usage, "Requires Owner role") {
+				t.Errorf("Usage = %q still says Owner alone", usage)
+			}
+		})
+	}
+}
+
 // securitySettingsSpecsByTool indexes the package's specs by the individual
 // tool name each projects.
 func securitySettingsSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
