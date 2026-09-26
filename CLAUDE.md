@@ -41,7 +41,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 775 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 373 test files under `internal/tools/`                                                                       |
-| Go packages               | 281 in the module (`go list ./...`); the README's 296 counts directories holding tracked `.go` files, so it adds the fifteen `go list` leaves out: fourteen `testdata` fixture packages (the two stand-in programs and the coverage audit's planted trees) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 180 under `internal/tools/...` (the root package plus 179 sub-packages) |
+| Go packages               | 283 in the module (`go list ./...`); the README's 299 counts directories holding tracked `.go` files, so it adds the sixteen `go list` leaves out: fourteen `testdata` fixture packages (the two stand-in programs and the coverage audit's planted trees), `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag, and `plan/issue-565/sdk-probe`, a module of its own that observed which refusal channels go-sdk carries, the evidence behind the tenant policy specification. 180 under `internal/tools/...` (the root package plus 179 sub-packages) |
 
 ### Orbit live tests
 
