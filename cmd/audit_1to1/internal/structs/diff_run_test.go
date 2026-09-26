@@ -137,6 +137,77 @@ func TestDiffRun_EveryTable_ReportsAKeyNothingAnswers(t *testing.T) {
 	}
 }
 
+// TestDiffRun_AWholeTypeKey_ShadowsAPerFieldKeyForTheSameType verifies the
+// rule the two tables taking both key forms state: the whole-type key is tried
+// first, so a per-field key beside it for the same type is never reached and
+// is reported stale, while the whole-type key that answered is not.
+//
+// The order is the whole of it. Tried the other way round, the per-field key
+// would be consumed by the field it names and the report would stay silent
+// about a second copy of a decision the whole-type key already made, which is
+// the state the staleness rule exists to surface.
+func TestDiffRun_AWholeTypeKey_ShadowsAPerFieldKeyForTheSameType(t *testing.T) {
+	cases := []struct {
+		name  string
+		table *declarationTable
+		whole string
+		field string
+		diff  func(run *diffRun)
+	}{
+		{
+			name:  "acceptedExtraOutputs",
+			table: acceptedExtraOutputs,
+			whole: "fixturepkg.ShadowOutput",
+			field: "fixturepkg.ShadowOutput.composed",
+			diff: func(run *diffRun) {
+				output := makeStruct(structField{"ID", "id", tInt}, structField{"Composed", "composed", tString})
+				result := makeStruct(structField{"ID", "id", tInt})
+				run.diffOutputGroup("fixturepkg", outputGroup{
+					mcpName: "ShadowOutput", mcpType: output,
+					pairs: []structPair{{mcpName: "ShadowOutput", mcpType: output, sdkName: "v2.Fixture", sdkType: result}},
+				})
+			},
+		},
+		{
+			name:  "acceptedMissingInputs",
+			table: acceptedMissingInputs,
+			whole: "fixturepkg.ShadowInput",
+			field: "fixturepkg.ShadowInput.skipped",
+			diff: func(run *diffRun) {
+				input := makeStruct(structField{"ID", "id", tInt})
+				options := makeStructWithTags(
+					taggedField{name: "ID", tag: `url:"id"`, goType: tInt},
+					taggedField{name: "Skipped", tag: `url:"skipped"`, goType: tString},
+				)
+				run.diffPair("fixturepkg", "input", structPair{
+					mcpName: "ShadowInput", mcpType: input,
+					sdkName: "v2.FixtureOptions", sdkType: options, sdkURLTags: true,
+				})
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			declare(t, tc.table, tc.whole, "whole-type fixture")
+			declare(t, tc.table, tc.field, "per-field fixture")
+
+			run := newDiffRun()
+			tc.diff(run)
+
+			stale := map[string]bool{}
+			for _, entry := range run.staleDeclarations([]*declarationTable{tc.table}) {
+				stale[entry.Key] = true
+			}
+			if stale[tc.whole] {
+				t.Errorf("the whole-type key %s answered the finding and was reported stale", tc.whole)
+			}
+			if !stale[tc.field] {
+				t.Errorf("the per-field key %s sits behind the whole-type key and was not reported stale", tc.field)
+			}
+		})
+	}
+}
+
 // TestBuildReport_Repository_NoDeclarationIsStale is the rule applied to the
 // tree: every key of the six tables answers a candidate of a run over the
 // whole of internal/tools. It is the test that fails the day a type a
