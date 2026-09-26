@@ -77,11 +77,11 @@ func writeMarkdownTableSeparator(b *strings.Builder, alignments []Alignment, wid
 	b.WriteByte('\n')
 }
 
+// padMarkdownTableCell pads cell to width runes. RenderMarkdownTable sizes
+// every column from the cells it then pads, so width is never less than the
+// cell and the padding is never negative.
 func padMarkdownTableCell(cell string, alignment Alignment, width int) string {
 	padding := width - utf8.RuneCountInString(cell)
-	if padding <= 0 {
-		return cell
-	}
 	spaces := strings.Repeat(" ", padding)
 	if alignment == AlignRight {
 		return spaces + cell
