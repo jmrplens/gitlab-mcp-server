@@ -75,11 +75,10 @@ func TestUserEmails_OwnAccount_AddListDelete(t *testing.T) {
 			e.T.Errorf("the run user's emails do not hold the added address %d: %+v", added.ID, listed.Emails)
 		}
 
-		// A second address makes the listing two pages long at one address
-		// per page. GitLab leaves the primary address out of this listing, so
-		// the added one alone would not. No other scenario adds to or removes
-		// from the run user's addresses, which is what lets the two pages be
-		// held to holding different ones.
+		// A second added address makes the listing at least two pages long
+		// at one address per page, whatever else the account holds. No other
+		// scenario adds to or removes from the run user's addresses, which is
+		// what lets the two pages be held to holding different ones.
 		addOwnEmail(e, uniqueAddress("page"))
 		assertPagesOneAtATime(e, s, actionUserEmails, nil, func(out users.EmailListOutput) ([]string, toolutil.PaginationOutput) {
 			return idKeys(ownEmailIDs(out.Emails)), out.Pagination
