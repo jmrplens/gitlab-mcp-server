@@ -14,8 +14,11 @@ package main
 
 // Where the findings answered here are filed.
 const (
-	branchRulesPackage = toolsDir + "/branchrules"
-	ciCatalogPackage   = toolsDir + "/cicatalog"
+	branchRulesPackage        = toolsDir + "/branchrules"
+	ciCatalogPackage          = toolsDir + "/cicatalog"
+	customEmojiPackage        = toolsDir + "/customemoji"
+	securityAttributesPackage = toolsDir + "/securityattributes"
+	securityCategoriesPackage = toolsDir + "/securitycategories"
 )
 
 // userReferenceReason is why a user named by something other than a note is
@@ -39,7 +42,78 @@ func branchRuleExperimentReason(field, introduced, meaning string) string {
 
 // domainSentDeclarations answers the sent findings of the five domains.
 func domainSentDeclarations() []sentDeclaration {
-	return append(branchRuleDeclarations(), ciCatalogDeclarations()...)
+	declarations := append(branchRuleDeclarations(), ciCatalogDeclarations()...)
+	return append(declarations, securityAndEmojiDeclarations()...)
+}
+
+// securityAndEmojiDeclarations answers what the security attribute and
+// category mutations and the custom emoji listing leave out: the ids a payload
+// hands back that the caller sent, the objects reached again by walking back
+// to their parent, and the viewer's permissions on an emoji.
+func securityAndEmojiDeclarations() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package:    securityAttributesPackage,
+			SchemaType: "SecurityAttributeDestroyPayload",
+			Field:      "deletedAttributeGid",
+			Category:   categoryRestated,
+			Reason: "The global id of the deleted attribute, which is the id the caller sent: " +
+				"Mutations::Security::Attributes::Destroy finds the attribute by that argument and hands its id back " +
+				"on success, and nil only beside the errors the decoder reads. The confirmation already names the " +
+				"attribute by that id.",
+		},
+		{
+			Package:    securityAttributesPackage,
+			SchemaType: "SecurityAttributeProjectUpdatePayload",
+			Field:      "project",
+			Category:   categoryRestated,
+			Reason: "The whole Project the caller named by project_id, handed back by " +
+				"Mutations::Security::Attributes::ProjectUpdate on success. What the call answers is how many " +
+				"attributes it added and removed, which is published; the project's own fields are the project " +
+				"domain's surface, published by gitlab_project.",
+		},
+		{
+			Package:    securityAttributesPackage,
+			SchemaType: "SecurityCategory",
+			Field:      "securityAttributes",
+			Category:   categoryNotThisResponse,
+			Reason: "The category is selected so the caller knows which category the created or updated attribute " +
+				"belongs to, and its attribute list is the category's own content: securitycategories publishes it " +
+				"as security_attributes when a category is created or updated. Every attribute this call created " +
+				"or updated is already in the response, and selecting the list would walk back from the category " +
+				"to the attributes the response carries.",
+		},
+		{
+			Package:    securityCategoriesPackage,
+			SchemaType: "SecurityAttribute",
+			Field:      "securityCategory",
+			Category:   categoryRestated,
+			Reason: "Each attribute in a category's security_attributes belongs to that category, which is the " +
+				"object the response is: SecurityAttribute.securityCategory walks from the child back to the parent " +
+				"the same payload carries, so selecting it would publish the category a second time under each of " +
+				"its attributes.",
+		},
+		{
+			Package:    securityCategoriesPackage,
+			SchemaType: "SecurityCategoryDestroyPayload",
+			Field:      "deletedCategoryGid",
+			Category:   categoryRestated,
+			Reason: "The global id of the deleted category, which is the id the caller sent: " +
+				"Mutations::Security::Categories::Destroy finds the category by that argument and hands its id back " +
+				"on success. The confirmation already names the category by that id, and the attributes deleted with " +
+				"it, which the caller could not know, are selected and published as deleted_attribute_ids.",
+		},
+		{
+			Package:    customEmojiPackage,
+			SchemaType: "CustomEmoji",
+			Field:      "userPermissions",
+			Category:   categoryViewer,
+			Reason: "CustomEmojiPermissions says whether the token's own user may create, delete or read the emoji, " +
+				"which is a property of the caller and not of the emoji, and GitLab's REST entities carry no " +
+				"equivalent. This server answers that question by attempting the action and reporting GitLab's " +
+				"refusal, which is authoritative where a permissions snapshot taken at listing time can be stale.",
+		},
+	}
 }
 
 // ciCatalogDeclarations answers what the two catalog documents leave out: the

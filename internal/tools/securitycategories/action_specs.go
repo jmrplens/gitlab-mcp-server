@@ -8,7 +8,7 @@ import (
 const (
 	descriptionCreateSecurityCategory = "Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate"
 	descriptionUpdateSecurityCategory = "Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate"
-	descriptionDeleteSecurityCategory = "Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy"
+	descriptionDeleteSecurityCategory = "Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation and the IDs of the security attributes deleted with the category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy"
 )
 
 // ActionSpecs returns canonical specs for security category actions.
@@ -54,7 +54,7 @@ func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individ
 // securityCategoryDeleteSpec builds the canonical destructive delete spec for a security category tool.
 func securityCategoryDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
-	options.Usage = "Delete a custom security category and all security attributes associated with it. Provide the category_id. This is destructive and cannot be undone."
+	options.Usage = "Delete a custom security category and all security attributes associated with it. Provide the category_id. This is destructive and cannot be undone. The answer lists the IDs of the attributes deleted with the category."
 	options.Aliases = []string{"delete security category", "remove security category", "destroy security category", "drop security classification category"}
 	options.RelatedActions = []string{actionCategoryCreate, actionCategoryUpdate, actionAttributeDelete, actionGroupGet}
 	return toolutil.NewDeleteActionSpec(name, route, options)

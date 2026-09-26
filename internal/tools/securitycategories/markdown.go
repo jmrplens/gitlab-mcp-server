@@ -61,6 +61,22 @@ func FormatOutputMarkdown(out Output) string {
 	return b.String()
 }
 
+// FormatDeleteOutputMarkdown renders a deleted security category: the
+// confirmation, and the attributes GitLab deleted with it, which a caller
+// holding one of their IDs needs to know no longer exist.
+func FormatDeleteOutputMarkdown(out DeleteOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Security Category Deleted")
+	c.Field("Result", out.Message)
+	ids := make([]string, 0, len(out.DeletedAttributeIDs))
+	for _, id := range out.DeletedAttributeIDs {
+		ids = append(ids, strconv.FormatInt(id, 10))
+	}
+	c.FieldOr("Attributes deleted with it", strings.Join(ids, ", "), "none")
+	c.End(toolutil.HintAction(actionCategoryCreate, "define a replacement category"))
+	return b.String()
+}
+
 // categoryHeading names the category in the card's heading, or opens the
 // generic one when GitLab sent no name.
 func categoryHeading(name string) string {
@@ -93,4 +109,5 @@ func categoryHints(state string) []string {
 
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
+	toolutil.RegisterMarkdown(FormatDeleteOutputMarkdown)
 }
