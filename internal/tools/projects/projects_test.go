@@ -1284,7 +1284,7 @@ func TestProjectList_EnrichedFilterOpts(t *testing.T) {
 }
 
 // TestProjectGet_EnrichedOutputFields verifies that Get maps the enriched
-// output fields: ContainerRegistryEnabled, SharedRunnersEnabled, PublicBuilds,
+// output fields: ContainerRegistryEnabled, SharedRunnersEnabled,
 // SnippetsEnabled, PackagesEnabled, BuildTimeout, SuggestionCommitMessage,
 // ComplianceFrameworks, ImportURL.
 func TestProjectGet_EnrichedOutputFields(t *testing.T) {
@@ -1296,7 +1296,6 @@ func TestProjectGet_EnrichedOutputFields(t *testing.T) {
 		"container_registry_enabled":true,
 		"container_registry_access_level":"enabled",
 		"shared_runners_enabled":true,
-		"public_builds":false,
 		"snippets_enabled":true,
 		"snippets_access_level":"enabled",
 		"packages_enabled":true,
@@ -1324,9 +1323,6 @@ func TestProjectGet_EnrichedOutputFields(t *testing.T) {
 	}
 	if !out.SharedRunnersEnabled {
 		t.Error("out.SharedRunnersEnabled = false, want true")
-	}
-	if out.PublicBuilds {
-		t.Error("out.PublicBuilds = true, want false")
 	}
 	if !out.SnippetsEnabled {
 		t.Error("out.SnippetsEnabled = false, want true")
@@ -9888,15 +9884,14 @@ func TestProjectGet_EachScalarIsPublishedUnderItsOwnKey(t *testing.T) {
 // TestProjectGet_EachFlagIsPublishedUnderItsOwnKey drives every flag of the
 // project entity one at a time through the get handler, and the six access
 // levels whose enabled value the older flags derive from. The outcomes it
-// declares are the entity's own: public_builds is the older spelling of
-// public_jobs, the six enabled flags follow their access level rather than
-// the copy client-go keeps of the deprecated key, and one flag client-go
-// models is not published because no GitLab entity sends it.
+// declares are the entity's own: public_jobs is published under its own key
+// and nothing else, the six enabled flags follow their access level rather
+// than the copy client-go keeps of the deprecated key, and two flags client-go
+// models are not published because no GitLab entity sends them.
 func TestProjectGet_EachFlagIsPublishedUnderItsOwnKey(t *testing.T) {
 	derivedFromLevel := "the entity computes it from the access level; the deprecated copy client-go decodes is not read"
 	derived := map[string]flagOutcome{
-		"public_jobs":                     {publishes: []string{"public_builds", "public_jobs"}, why: "public_builds is the older spelling GitLab sends with the same value"},
-		"public_builds":                   {why: "read from public_jobs, the current spelling"},
+		"public_builds":                   {why: "client-go models the name GitLab renamed to public_jobs in 9.0, and no entity sends it (upstream-bugs.md)"},
 		"issues_enabled":                  {why: derivedFromLevel},
 		"merge_requests_enabled":          {why: derivedFromLevel},
 		"jobs_enabled":                    {why: derivedFromLevel},

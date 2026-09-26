@@ -382,7 +382,6 @@ type Output struct {
 	SnippetsEnabled              bool   `json:"snippets_enabled,omitempty"`
 	ContainerRegistryEnabled     bool   `json:"container_registry_enabled,omitempty"`
 	PackagesEnabled              bool   `json:"packages_enabled,omitempty"`
-	PublicBuilds                 bool   `json:"public_builds,omitempty"`
 	ApprovalsBeforeMerge         int64  `json:"approvals_before_merge,omitempty" tier:"premium"`
 	MarkedForDeletionAt          string `json:"marked_for_deletion_at,omitempty"`
 	RestrictUserDefinedVariables bool   `json:"restrict_user_defined_variables"`
@@ -847,7 +846,6 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		WikiEnabled:                  accessLevelEnabled(p.WikiAccessLevel),
 		JobsEnabled:                  accessLevelEnabled(p.BuildsAccessLevel),
 		ContainerRegistryEnabled:     accessLevelEnabled(p.ContainerRegistryAccessLevel),
-		PublicBuilds:                 p.PublicJobs,
 		SnippetsEnabled:              accessLevelEnabled(p.SnippetsAccessLevel),
 		PackagesEnabled:              p.PackagesEnabled,              //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity; prefer package_registry_access_level.
 		ApprovalsBeforeMerge:         p.ApprovalsBeforeMerge,         //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity; the replacement is the Merge Request Approvals API, not a field.
