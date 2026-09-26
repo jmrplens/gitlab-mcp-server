@@ -293,7 +293,7 @@ func TestUpdate_AllFields(t *testing.T) {
 // GitLab spells it and with the value they gave, and names no field they left
 // alone.
 //
-// Why it matters: the copy into the SDK options is eighteen independent
+// Why it matters: the copy into the SDK options is nineteen independent
 // guards, and until this test nothing here ever looked at the request. Every
 // other assertion reads the response, which is GitLab's echo of its own state
 // and says nothing about what we asked for. One guard inverted is silent in
@@ -312,6 +312,7 @@ func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
 		{
 			name: "every field set",
 			input: UpdateInput{
+				SiteName:                    "Production",
 				Title:                       "New Title",
 				Description:                 "New Desc",
 				PWAName:                     "MyApp",
@@ -332,6 +333,7 @@ func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
 				ProfileImageGuidelines:      "Use a face",
 			},
 			want: map[string]any{
+				"site_name":                       "Production",
 				"title":                           "New Title",
 				"description":                     "New Desc",
 				"pwa_name":                        "MyApp",
@@ -355,7 +357,7 @@ func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
 		{
 			// An appearance field GitLab is not told about keeps its current
 			// value, so "the caller set nothing" has to reach GitLab as an
-			// empty object rather than as eighteen empty strings.
+			// empty object rather than as nineteen empty strings.
 			name:  "nothing set",
 			input: UpdateInput{},
 			want:  map[string]any{},

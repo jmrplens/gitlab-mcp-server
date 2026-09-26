@@ -148,6 +148,7 @@ type CreateInput struct {
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
 	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
+	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favour of theme and still accepts it"`
 }
 
 // CreateOutput contains the created broadcast message.
@@ -197,11 +198,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Theme != "" {
 		opts.Theme = new(input.Theme)
 	}
+	if input.Color != "" {
+		opts.Color = new(input.Color)
+	}
 
 	m, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_create", err, http.StatusBadRequest,
-			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner)")
+			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; color and font must be hex color codes such as #E75E40; starts_at < ends_at; access levels: 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner)")
 	}
 	return CreateOutput{Message: toItem(m)}, nil
 }
@@ -220,6 +224,7 @@ type UpdateInput struct {
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
 	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
+	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favour of theme and still accepts it"`
 }
 
 // UpdateOutput contains the updated broadcast message.
@@ -287,6 +292,9 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, erro
 	}
 	if input.Theme != "" {
 		opts.Theme = new(input.Theme)
+	}
+	if input.Color != "" {
+		opts.Color = new(input.Color)
 	}
 	return opts, nil
 }

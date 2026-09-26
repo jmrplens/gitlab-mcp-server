@@ -40,6 +40,8 @@ const (
 	testMessage = "Test"
 	// fmtExpErrMentionID identifies the fmt exp err mention ID constant used by this package.
 	fmtExpErrMentionID = "expected error to mention 'id', got: %v"
+	// testColor is a background color in the hex form GitLab validates.
+	testColor = "#E75E40"
 )
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
@@ -912,6 +914,7 @@ func TestUpdate_OptionalFields_ReachTheRequestBody(t *testing.T) {
 		BroadcastType:      testBannerType,
 		Dismissable:        &dismiss,
 		Theme:              "red",
+		Color:              testColor,
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -937,6 +940,7 @@ func TestUpdate_OptionalFields_ReachTheRequestBody(t *testing.T) {
 		// it is set fails as loudly as one never sending it.
 		{field: "dismissable", want: false},
 		{field: "theme", want: "red"},
+		{field: "color", want: testColor},
 	}
 	for _, tt := range tests {
 		t.Run(tt.field, func(t *testing.T) {
@@ -1000,6 +1004,76 @@ func TestBroadcastMessages_NoTargetAccessLevels_SendNoSuchField(t *testing.T) {
 			}
 			if got, ok := sent["target_access_levels"]; ok {
 				t.Errorf("request body %s carries target_access_levels = %#v, want the field to be absent", body, got)
+			}
+		})
+	}
+}
+
+// TestBroadcastMessages_Color_SentOnlyWhenGiven verifies that a create and an
+// update carry `color` in the body with the value the caller gave, and leave it
+// out when the caller gave none. GitLab still declares the parameter on both
+// routes although it deprecates it in favour of theme, and an absent color keeps
+// the message's current one where an empty string would ask GitLab to clear it.
+func TestBroadcastMessages_Color_SentOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		color  string
+		call   func(*gitlabclient.Client, string) error
+	}{
+		{name: "create with color", method: http.MethodPost, path: pathBroadcastMessages, color: testColor, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Create(context.Background(), c, CreateInput{Message: testMessage, Color: color})
+			return err
+		}},
+		{name: "create without color", method: http.MethodPost, path: pathBroadcastMessages, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Create(context.Background(), c, CreateInput{Message: testMessage, Color: color})
+			return err
+		}},
+		{name: "update with color", method: http.MethodPut, path: pathBroadcastMessage1, color: testColor, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Color: color})
+			return err
+		}},
+		{name: "update without color", method: http.MethodPut, path: pathBroadcastMessage1, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Message: testMessage, Color: color})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path || r.Method != tt.method {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				read, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read request body: %v", err)
+					http.Error(w, "read request body", http.StatusInternalServerError)
+					return
+				}
+				body = read
+				testutil.RespondJSON(w, http.StatusOK, messageJSON)
+			}))
+
+			if err := tt.call(client, tt.color); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			var sent map[string]any
+			if err := json.Unmarshal(body, &sent); err != nil {
+				t.Fatalf("decode request body %q: %v", body, err)
+			}
+			got, ok := sent["color"]
+			if tt.color == "" {
+				if ok {
+					t.Errorf("request body %s carries color = %#v, want the field to be absent", body, got)
+				}
+				return
+			}
+			if got != tt.color {
+				t.Errorf("request body %s carries color = %#v, want %q", body, got, tt.color)
 			}
 		})
 	}

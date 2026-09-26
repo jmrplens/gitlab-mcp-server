@@ -80,6 +80,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutpu
 
 // UpdateInput is the input for changing appearance.
 type UpdateInput struct {
+	SiteName                    string `json:"site_name,omitempty" jsonschema:"Site name GitLab appends after the page title in the browser tab"`
 	Title                       string `json:"title,omitempty" jsonschema:"Application title displayed in the header"`
 	Description                 string `json:"description,omitempty" jsonschema:"Instance description on sign-in page"`
 	PWAName                     string `json:"pwa_name,omitempty" jsonschema:"Progressive Web App name"`
@@ -111,9 +112,12 @@ type UpdateOutput struct {
 //
 // It is a function of its own because the copy is one branch per field, and
 // with them inline the request and its two failure modes sat at the bottom of
-// eighteen of them.
+// nineteen of them.
 func changeAppearanceOptions(input UpdateInput) *gl.ChangeAppearanceOptions {
 	opts := &gl.ChangeAppearanceOptions{}
+	if input.SiteName != "" {
+		opts.SiteName = new(input.SiteName)
+	}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
