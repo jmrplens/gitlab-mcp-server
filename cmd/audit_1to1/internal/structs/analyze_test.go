@@ -1150,10 +1150,9 @@ func embedChain(st *types.Struct, levels int) *types.Struct {
 // tested well past it is satisfied by any smaller one: six levels of embedding
 // is the deepest a field is still read from, and seven is the first it is not.
 func TestFlattenInto_Nesting_StopsAtNilAndDepth(t *testing.T) {
-	out := map[string]string{}
-	flattenInto(nil, []string{tagKeyJSON}, out, 0)
-	if len(out) != 0 {
-		t.Errorf("flattenInto(nil) wrote %v, want nothing", out)
+	var met []fieldCandidate
+	if tagged := flattenInto(nil, []string{tagKeyJSON}, &met, 0); tagged || len(met) != 0 {
+		t.Errorf("flattenInto(nil) = %v and met %v, want nothing", tagged, met)
 	}
 
 	// The tag is deliberately not the snake_case of the field name. A walk that
@@ -1265,10 +1264,10 @@ func TestFlattenFields_NeitherKeying_EmitsTheSentinelOrTheUnnamedTag(t *testing.
 // walk beside it rather than one inherited from it.
 func TestFlattenNamesInto_UntaggedStructs_AreWalkedUnderTheSameRules(t *testing.T) {
 	t.Run("a nil struct contributes nothing", func(t *testing.T) {
-		out := map[string]string{}
-		flattenNamesInto(nil, out, 0)
-		if len(out) != 0 {
-			t.Errorf("flattenNamesInto(nil) wrote %v, want nothing", out)
+		var met []fieldCandidate
+		flattenNamesInto(nil, &met, 0)
+		if len(met) != 0 {
+			t.Errorf("flattenNamesInto(nil) met %v, want nothing", met)
 		}
 	})
 
@@ -1302,22 +1301,184 @@ func TestFlattenNamesInto_UntaggedStructs_AreWalkedUnderTheSameRules(t *testing.
 
 	t.Run("the shallower field wins a repeated name", func(t *testing.T) {
 		// encoding/json promotes the outer field over the embedded one of the
-		// same name, so the type recorded must be the outer field's. The
-		// fixture declares the outer field first, and that order is the only
-		// one this holds in: both walks keep the first field they meet, so an
-		// embed declared above the outer field wins with the deeper type.
-		promoted := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "ID", tString, false)}, []string{""})
-		st := types.NewStruct([]*types.Var{
-			types.NewField(token.NoPos, nil, "ID", tInt, false),
-			types.NewField(token.NoPos, nil, "Embedded", promoted, true),
-		}, []string{"", ""})
-
-		got := flattenFields(st, []string{tagKeyJSON})
-
-		if len(got) != 1 || got["id"] != "int" {
-			t.Errorf("flattenFields = %v, want the outer int field to keep the id key", got)
+		// same name, so the type recorded must be the outer field's in either
+		// declaration order. Both walks used to keep the first field they met,
+		// which held only while the outer field was declared first. A tie at
+		// one depth is ambiguous to encoding/json, which writes neither, while
+		// go-querystring writes both and the first declared labels the name.
+		embed := func(name string, typ types.Type) *types.Var {
+			inner := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "ID", typ, false)}, []string{""})
+			return types.NewField(token.NoPos, nil, name, inner, true)
+		}
+		outer := types.NewField(token.NoPos, nil, "ID", tInt, false)
+		cases := []struct {
+			name   string
+			fields []*types.Var
+			keys   []string
+			want   map[string]string
+		}{
+			{name: "outer field declared first", fields: []*types.Var{outer, embed("Embedded", tString)}, keys: []string{tagKeyJSON}, want: map[string]string{"id": "int"}},
+			{name: "embed declared first", fields: []*types.Var{embed("Embedded", tString), outer}, keys: []string{tagKeyJSON}, want: map[string]string{"id": "int"}},
+			{name: "a tie at one depth under json", fields: []*types.Var{embed("First", tString), embed("Second", tInt)}, keys: []string{tagKeyJSON}, want: map[string]string{}},
+			{name: "a tie at one depth under a query", fields: []*types.Var{embed("First", tString), embed("Second", tInt)}, keys: []string{tagKeyURL, tagKeyJSON}, want: map[string]string{"id": typNameString}},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				st := types.NewStruct(tc.fields, make([]string, len(tc.fields)))
+				if got := flattenFields(st, tc.keys); !reflect.DeepEqual(got, tc.want) {
+					t.Errorf("flattenFields = %v, want %v", got, tc.want)
+				}
+			})
 		}
 	})
+}
+
+// TestFlattenFields_ARepeatedName_IsLabeledWithTheFieldTheEncoderWrites holds
+// the tag-keyed walk to the field each encoder writes where several fields
+// meet under one name, which is the type the diff compares.
+//
+// The first case is the shape issue 976 found in 69 client-go Options
+// structs: ListOptions, whose sort is a plain string, embedded ahead of the
+// struct's own sort. Keeping the first field met labeled the key with the
+// embedded string, which hid the one comparison typesCompatible does not
+// accept, a string input against the named AccessTokenSort a handler sets.
+//
+// The rest are encoding/json's rules one at a time, each in the declaration
+// order that a walk keeping its first field would get wrong, since the other
+// order agrees with the rule by accident. Under a query the rules are
+// go-querystring's, which writes every field and lets none hide another.
+func TestFlattenFields_ARepeatedName_IsLabeledWithTheFieldTheEncoderWrites(t *testing.T) {
+	sdkPkg := types.NewPackage("example.com/api/client-go/v3", "v3")
+	sortType := types.NewPointer(types.NewNamed(types.NewTypeName(token.NoPos, sdkPkg, "AccessTokenSort", nil), tString, nil))
+	listOptions := makeStructWithTags(taggedField{name: "Sort", tag: `url:"sort,omitempty" json:"sort,omitempty"`, goType: tString})
+	jsonID := makeStructWithTags(taggedField{name: "Name", tag: `json:"ID"`, goType: tString})
+	untaggedID := makeStructWithTags(taggedField{name: "ID", tag: "", goType: tInt})
+	jsonIDInt := makeStructWithTags(taggedField{name: "Other", tag: `json:"ID"`, goType: tInt})
+	field := func(name string, typ types.Type, embedded bool) *types.Var {
+		return types.NewField(token.NoPos, nil, name, typ, embedded)
+	}
+	query := []string{tagKeyURL, tagKeyJSON}
+	cases := []struct {
+		name   string
+		fields []*types.Var
+		tags   []string
+		keys   []string
+		want   map[string]string
+	}{
+		{
+			name:   "an embed declared ahead of the struct's own field loses to it",
+			fields: []*types.Var{field("ListOptions", listOptions, true), field("Sort", sortType, false)},
+			tags:   []string{"", `url:"sort,omitempty" json:"sort,omitempty"`},
+			keys:   query,
+			want:   map[string]string{"sort": "*v3.AccessTokenSort"},
+		},
+		{
+			name:   "the same shape read by json tags",
+			fields: []*types.Var{field("ListOptions", listOptions, true), field("Sort", sortType, false)},
+			tags:   []string{"", `url:"sort,omitempty" json:"sort,omitempty"`},
+			keys:   []string{tagKeyJSON},
+			want:   map[string]string{"sort": "*v3.AccessTokenSort"},
+		},
+		{
+			name:   "a tagged field beats an untagged one at one depth, declared after it",
+			fields: []*types.Var{field("Untagged", untaggedID, true), field("Tagged", jsonID, true)},
+			tags:   []string{"", ""},
+			keys:   []string{tagKeyJSON},
+			want:   map[string]string{"ID": typNameString},
+		},
+		{
+			name:   "a tagged field beats an untagged one at one depth, declared before it",
+			fields: []*types.Var{field("Tagged", jsonID, true), field("Untagged", untaggedID, true)},
+			tags:   []string{"", ""},
+			keys:   []string{tagKeyJSON},
+			want:   map[string]string{"ID": typNameString},
+		},
+		{
+			name:   "two tagged fields at one depth write neither",
+			fields: []*types.Var{field("First", jsonID, true), field("Second", jsonIDInt, true)},
+			tags:   []string{"", ""},
+			keys:   []string{tagKeyJSON},
+			want:   map[string]string{},
+		},
+		{
+			name:   "a shallower untagged field hides a deeper tagged one",
+			fields: []*types.Var{field("Tagged", jsonID, true), field("ID", tInt, false), field("Kept", tString, false)},
+			tags:   []string{"", "", `json:"kept"`},
+			keys:   []string{tagKeyJSON},
+			want:   map[string]string{"kept": typNameString},
+		},
+		{
+			name:   "an untagged field hides nothing from a query",
+			fields: []*types.Var{field("Tagged", jsonID, true), field("ID", tInt, false)},
+			tags:   []string{"", ""},
+			keys:   query,
+			want:   map[string]string{"ID": typNameString},
+		},
+		{
+			name: "an unexported tagged field is written by no encoder",
+			fields: []*types.Var{
+				types.NewField(token.NoPos, sdkPkg, "hidden", tInt, false),
+				field("Kept", tString, false),
+			},
+			tags: []string{`json:"hidden"`, `json:"kept"`},
+			keys: []string{tagKeyJSON},
+			want: map[string]string{"kept": typNameString},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := flattenFields(types.NewStruct(tc.fields, tc.tags), tc.keys); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("flattenFields = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFlattenNamesInto_AnUnexportedEmbed_IsDescendedInto verifies the
+// name-keyed walk reads the exported fields of an embedded struct whose own
+// field is unexported, which encoding/json promotes, and nothing else of it.
+// It used to skip every unexported field before asking whether it was an
+// embed, so such a struct's promoted fields went missing from the comparison.
+func TestFlattenNamesInto_AnUnexportedEmbed_IsDescendedInto(t *testing.T) {
+	local := types.NewPackage("example.com/api/client-go/v3", "v3")
+	inner := types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, local, "WebURL", tString, false),
+		types.NewField(token.NoPos, local, "cursor", tString, false),
+	}, []string{"", ""})
+	st := types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, local, "base", inner, true),
+		types.NewField(token.NoPos, local, "Weight", tInt, false),
+	}, []string{"", ""})
+
+	got := flattenFields(st, []string{tagKeyJSON})
+
+	if want := map[string]string{"web_url": typNameString, "weight": "int"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("flattenFields = %v, want %v", got, want)
+	}
+}
+
+// TestEncoderFor_TagPreferences_NameTheEncoder verifies which encoder a tag
+// preference stands for: url first is an Options struct read the way its query
+// is built, and every other preference, the empty one included, is json.
+func TestEncoderFor_TagPreferences_NameTheEncoder(t *testing.T) {
+	cases := []struct {
+		name string
+		keys []string
+		want encoder
+	}{
+		{name: "url first", keys: []string{tagKeyURL, tagKeyJSON}, want: encodingQuery},
+		{name: "url alone", keys: []string{tagKeyURL}, want: encodingQuery},
+		{name: "json alone", keys: []string{tagKeyJSON}, want: encodingJSON},
+		{name: "json first", keys: []string{tagKeyJSON, tagKeyURL}, want: encodingJSON},
+		{name: "no preference", keys: nil, want: encodingJSON},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := encoderFor(tc.keys); got != tc.want {
+				t.Errorf("encoderFor(%v) = %v, want %v", tc.keys, got, tc.want)
+			}
+		})
+	}
 }
 
 // TestFlattenFields_AStructThatTagsNothing_IsKeyedByFieldName verifies the

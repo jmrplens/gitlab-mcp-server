@@ -1,11 +1,13 @@
 package structs
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/types"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -173,7 +175,10 @@ const (
 		"merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic " +
 		"with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option " +
 		"into a presenter option; exposed on the merge request list inputs, where it takes effect"
-	tagKeyJSON    = "json"
+	tagKeyJSON = "json"
+	// tagKeyURL is the tag go-querystring names a query parameter by, which
+	// client-go's Options structs carry beside their json tags.
+	tagKeyURL     = "url"
 	typNameString = "string"
 	typNameInt64  = "int64"
 )
@@ -1470,7 +1475,7 @@ func (r *diffRun) diffPair(pkg, kind string, pair structPair) gap {
 	mcpFields := flattenFields(pair.mcpType, []string{tagKeyJSON})
 	sdkTagKeys := []string{tagKeyJSON}
 	if pair.sdkURLTags {
-		sdkTagKeys = []string{"url", tagKeyJSON}
+		sdkTagKeys = []string{tagKeyURL, tagKeyJSON}
 	}
 	sdkFields := flattenFields(pair.sdkType, sdkTagKeys)
 
@@ -1525,7 +1530,7 @@ func inputPairTags(pair structPair) (mcp, sdk map[string]struct{}) {
 	sdk = map[string]struct{}{}
 	sdkKeys := []string{tagKeyJSON}
 	if pair.sdkURLTags {
-		sdkKeys = []string{"url", tagKeyJSON}
+		sdkKeys = []string{tagKeyURL, tagKeyJSON}
 	}
 	for tag := range flattenFields(pair.sdkType, sdkKeys) {
 		sdk[shared.NormalizeSDKTag(tag)] = struct{}{}
@@ -1630,13 +1635,73 @@ func (r *diffRun) extraOutputFields(pkg, mcpType string, mcpFields, sdkFields ma
 	return extras
 }
 
+// maxEmbedDepth bounds the embedded-struct recursion of both walks: six levels
+// of embedding is the deepest a field is still read from.
+const maxEmbedDepth = 6
+
+// encoder is the serializer whose output a flattened struct describes.
+//
+// Where several fields of one struct meet under one name, the two a client-go
+// struct passes through resolve it differently, and a flattened name is
+// labeled with the type of the field that is written, which is what the diff
+// compares and what decides a type mismatch. Keeping the first field a walk
+// met instead labeled an Options struct's sort and order_by with the plain
+// string of the embedded ListOptions, declared ahead of the struct's own
+// field, rather than with the field a handler sets.
+type encoder int
+
+const (
+	// encodingJSON is encoding/json: of the fields sharing a name the
+	// shallowest is written, a tagged one beats an untagged one at the same
+	// depth, and any other tie at that depth writes none of them.
+	encodingJSON encoder = iota
+	// encodingQuery is go-querystring, which client-go builds a request's
+	// query from an Options struct with. It writes every field it meets, a
+	// struct's own fields before an embedded struct's, so the shallowest is the
+	// one a handler sets and labels the name, and a tie at that depth keeps the
+	// first declared rather than dropping a parameter the query still carries.
+	encodingQuery
+)
+
+// encoderFor is the encoder a tag preference describes: url first is an
+// Options struct read the way its query is built, anything else is json.
+//
+// An Options struct a request sends as a JSON body is written by encoding/json
+// instead. The two differ only on a tie at the shallowest depth, where this
+// keeps a key the JSON body would leave out, which reports a candidate for a
+// person to adjudicate rather than hiding one.
+func encoderFor(tagKeys []string) encoder {
+	if len(tagKeys) > 0 && tagKeys[0] == tagKeyURL {
+		return encodingQuery
+	}
+	return encodingJSON
+}
+
+// fieldCandidate is one field a walk met that an encoder could write under
+// name: the type the diff labels it with, how deep in the embedding it sits,
+// whether a tag named it, and whether the walk keys it at all.
+//
+// A field that is met without being keyed is an untagged field of a struct
+// that tags others. The tag walk keys none of those, by design (see
+// flattenFields), but encoding/json still writes one under its Go name, so it
+// can still be the field that is written under a name some deeper tagged field
+// spells alike, and then that deeper field is not written at all.
+type fieldCandidate struct {
+	name   string
+	typ    string
+	depth  int
+	tagged bool
+	keyed  bool
+}
+
 // flattenFields walks a struct (recursing into embedded structs) and returns a
-// map of tag-name → type string for every field carrying one of the tag keys.
+// map of tag-name → type string for every field carrying one of the tag keys,
+// each name labeled with the field the encoder the keys describe would write.
 func flattenFields(st *types.Struct, tagKeys []string) map[string]string {
-	out := map[string]string{}
-	flattenInto(st, tagKeys, out, 0)
-	if len(out) > 0 {
-		return out
+	enc := encoderFor(tagKeys)
+	var met []fieldCandidate
+	if flattenInto(st, tagKeys, &met, 0) {
+		return promote(met, enc)
 	}
 	// A struct that carries no tag of the kind we index by cannot be compared
 	// by tag at all: every field on our side is then reported as one the SDK
@@ -1650,53 +1715,133 @@ func flattenFields(st *types.Struct, tagKeys []string) map[string]string {
 	// field in a struct that tags the rest is also serialized by its name, but
 	// changing that case would re-open every gap somebody has already
 	// adjudicated, for a shape nothing has yet been found in.
-	flattenNamesInto(st, out, 0)
-	return out
+	met = met[:0]
+	flattenNamesInto(st, &met, 0)
+	return promote(met, enc)
 }
 
 // flattenNamesInto is flattenInto keyed by the Go field name, for a struct that
-// tags nothing.
-func flattenNamesInto(st *types.Struct, out map[string]string, depth int) {
-	if st == nil || depth > 6 {
+// tags nothing: every exported field is met, keyed and untagged, and an
+// embedded struct is descended into whether or not its type is exported,
+// since encoding/json promotes an unexported embed's exported fields.
+func flattenNamesInto(st *types.Struct, met *[]fieldCandidate, depth int) {
+	if st == nil || depth > maxEmbedDepth {
 		return
 	}
 	for field := range st.Fields() {
+		if field.Embedded() {
+			if embedded, ok := structUnder(field.Type()); ok {
+				flattenNamesInto(embedded, met, depth+1)
+				continue
+			}
+		}
 		if !field.Exported() {
 			continue
 		}
-		if field.Embedded() {
-			if embedded, ok := structUnder(field.Type()); ok {
-				flattenNamesInto(embedded, out, depth+1)
-				continue
-			}
-		}
-		name := shared.FieldNameTag(field.Name())
-		if _, exists := out[name]; !exists {
-			out[name] = types.TypeString(field.Type(), shortQualifier)
-		}
+		*met = append(*met, fieldCandidate{
+			name:  shared.FieldNameTag(field.Name()),
+			typ:   types.TypeString(field.Type(), shortQualifier),
+			depth: depth,
+			keyed: true,
+		})
 	}
 }
 
-func flattenInto(st *types.Struct, tagKeys []string, out map[string]string, depth int) {
-	if st == nil || depth > 6 {
-		return
+// flattenInto collects every field of st and of the untagged embeds under it
+// that an encoder could write, and reports whether any of them carries one of
+// the tag keys, which is what decides whether the struct is compared by tag at
+// all.
+//
+// A tagged field is met under its tag and keyed. An exported untagged field is
+// met under its Go name without being keyed, since encoding/json writes it and
+// it can hide a deeper field of that name. An unexported field that is not an
+// embed, and one tagged "-", are written by no encoder and not met at all.
+func flattenInto(st *types.Struct, tagKeys []string, met *[]fieldCandidate, depth int) bool {
+	if st == nil || depth > maxEmbedDepth {
+		return false
 	}
+	tagged := false
 	for i := range st.NumFields() {
 		field := st.Field(i)
-		raw := reflect.StructTag(st.Tag(i))
-		tagName := shared.TagName(raw, tagKeys)
+		tagName := shared.TagName(reflect.StructTag(st.Tag(i)), tagKeys)
 		if field.Embedded() && tagName == "" {
 			if embedded, ok := structUnder(field.Type()); ok {
-				flattenInto(embedded, tagKeys, out, depth+1)
+				tagged = flattenInto(embedded, tagKeys, met, depth+1) || tagged
 				continue
 			}
 		}
-		if tagName == "" || tagName == "-" {
+		if tagName == "-" || !field.Exported() {
 			continue
 		}
-		if _, exists := out[tagName]; !exists {
-			out[tagName] = types.TypeString(field.Type(), shortQualifier)
+		name := tagName
+		if name == "" {
+			name = field.Name()
 		}
+		*met = append(*met, fieldCandidate{
+			name:   name,
+			typ:    types.TypeString(field.Type(), shortQualifier),
+			depth:  depth,
+			tagged: tagName != "",
+			keyed:  tagName != "",
+		})
+		tagged = tagged || tagName != ""
+	}
+	return tagged
+}
+
+// promote keeps, for every name the walk met, the field enc writes under it,
+// and returns the keyed ones labeled with their types.
+//
+// go-querystring lets no field hide another, so an unkeyed field does not take
+// part under encodingQuery; under encodingJSON it does, and a name it wins is
+// left out, since the field written there is one the walk keys nothing for.
+func promote(met []fieldCandidate, enc encoder) map[string]string {
+	byName := map[string][]fieldCandidate{}
+	for _, candidate := range met {
+		if enc == encodingQuery && !candidate.keyed {
+			continue
+		}
+		byName[candidate.name] = append(byName[candidate.name], candidate)
+	}
+	out := make(map[string]string, len(byName))
+	for name, group := range byName {
+		if written, ok := dominant(group, enc); ok && written.keyed {
+			out[name] = written.typ
+		}
+	}
+	return out
+}
+
+// dominant is the field enc writes of a group sharing one name, in the order
+// the walk met them, and false when it writes none.
+//
+// The group is ordered shallowest first and, at one depth, tagged first, with
+// the walk's order kept otherwise; that is encoding/json's own ordering, and
+// under go-querystring, where every field is tagged, it is the order the query
+// is written in. encoding/json then writes the first unless the second sits at
+// the same depth with the same tagging, which it drops as ambiguous.
+func dominant(group []fieldCandidate, enc encoder) (fieldCandidate, bool) {
+	slices.SortStableFunc(group, byDepthThenTag)
+	first := group[0]
+	if enc == encodingJSON && len(group) > 1 && group[1].depth == first.depth && group[1].tagged == first.tagged {
+		return fieldCandidate{}, false
+	}
+	return first, true
+}
+
+// byDepthThenTag orders two candidates shallowest first and, at one depth, a
+// tagged one before an untagged one.
+func byDepthThenTag(a, b fieldCandidate) int {
+	if byDepth := cmp.Compare(a.depth, b.depth); byDepth != 0 {
+		return byDepth
+	}
+	switch {
+	case a.tagged == b.tagged:
+		return 0
+	case a.tagged:
+		return -1
+	default:
+		return 1
 	}
 }
 
