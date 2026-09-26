@@ -59,6 +59,15 @@ func TestLooksLikeDocument_TellsGraphQLFromEverythingElse(t *testing.T) {
 		// document is written without spaces.
 		{name: "a spaceless selection set on an introspection field", value: "{__typename}", want: true},
 
+		// The parts of each rule no row above leans on. An operation name may
+		// open with an underscore and carry digits and more underscores, and
+		// may be followed by a directive; a fragment may sit under a header
+		// line or a template hole like an operation may, indented or not.
+		{name: "an operation name with underscores and digits", value: "query _list_v2 { things { id } }", want: true},
+		{name: "a named operation followed by a directive", value: "query Things @cached { things { id } }", want: true},
+		{name: "a fragment under a header line", value: "Sent to GitLab:\nfragment Bits on Thing { id }", want: true},
+		{name: "an indented fragment under a template hole", value: "{{/* shared */}}\n\tfragment Bits on Thing {\n\t\tid\n\t}", want: true},
+
 		{name: "an empty string", value: "", want: false},
 		{name: "prose with no braces", value: "mutation errors are reported by the caller", want: false},
 		{name: "a format string mentioning a mutation", value: "mutation %s failed", want: false},
@@ -81,6 +90,13 @@ func TestLooksLikeDocument_TellsGraphQLFromEverythingElse(t *testing.T) {
 		{name: "a spaceless selection set on an ordinary field", value: "{id}", want: false},
 		{name: "prose mentioning a mutation above a JSON object", value: "mutation errors: %s\n{\"a\": 1}", want: false},
 		{name: "prose beginning with the word fragment", value: "fragment of the response body: { id }", want: false},
+		// "on" has to be a word of its own, or the name of any prose word that
+		// happens to start with it completes a fragment definition.
+		{name: "prose whose word after the name merely starts with on", value: "fragment Bits onward: { id }", want: false},
+		// A map literal written with a space on every side of its colon is
+		// still a map literal, and reads as a bare selection set if the rule
+		// only knows the tight spelling.
+		{name: "an example binding written with spaces", value: `{ state : "closed" }`, want: false},
 
 		// A "#" comment is legal at the top of a document and gqlparser accepts
 		// one, so a maintainer who writes an ordinary explanatory line above an
@@ -131,6 +147,8 @@ func TestDefinesMutation_SeparatesWritesFromReads(t *testing.T) {
 		{name: "a mutation with a comment before its selection set", value: "mutation # sends the thing\n{ thing { errors } }", want: true},
 		{name: "a mutation with a comment after its name", value: "mutation Touch # sends the thing\n($id: ID!) { thing(id: $id) { errors } }", want: true},
 		{name: "a mutation with a comment between two of its lines", value: "mutation Touch\n# sends the thing\n($id: ID!) { thing(id: $id) { errors } }", want: true},
+		{name: "a named mutation followed by a directive", value: "mutation Touch @skip(if: false) { thing { errors } }", want: true},
+		{name: "a mutation whose name carries underscores and digits", value: "mutation _touch_v2($id: ID!) { touch(id: $id) { errors } }", want: true},
 
 		{name: "a query", value: "query($id: ID!) {\n  node(id: $id) { id }\n}", want: false},
 		{name: "a subscription", value: "subscription {\n  tick\n}", want: false},
