@@ -413,5 +413,6 @@ go run ./cmd/audit_doc_coverage/
 - [ ] Added to ActionSpec/catalog aggregation and covered by `make audit-catalog-first`
 - [ ] Tests cover success, validation, API error, and markdown
 - [ ] An e2e scenario names the action through a typed `harness.ActionID` constant, or an exemption declares why none can, and `make check-e2e-static` passes
+- [ ] No limit on a caller (a rate, a ceiling, a refusal with `-42900` or `-32000`) is added outside the tenant policy register, and `make check-tenancy` passes
 - [ ] `go test` + `golangci-lint` pass
 - [ ] Documentation updated

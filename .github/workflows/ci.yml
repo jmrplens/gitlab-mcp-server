@@ -181,6 +181,14 @@ jobs:
       # and the class had shipped in five packages before this gate.
       - name: Check every client-go call carries the caller's context
         run: make check-sdk-context
+      # The tenant policy register (internal/tenancy, ADR-0023) declares every
+      # decision about who a caller is and what it may hold, and a declaration
+      # nothing checks drifts the day the code moves. The gate holds each row's
+      # sites to the code, each refusal's text, status, code and headers to its
+      # literal, each authentication charge to the return it precedes, and
+      # anything shaped like a limit to a row or a reasoned exemption.
+      - name: Check tenant policy is declared once
+        run: make check-tenancy
       - name: Check the pinned GraphQL schema parses
         run: make check-graphql-schema
       # The REST twin of the schema pin, and the oracle that is evaluated

@@ -19,6 +19,7 @@
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
+	audit-tenancy check-tenancy tenancy-code-identity \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
@@ -936,28 +937,29 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/22] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/22] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/22] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/22] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/22] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/22] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/22] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/22] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/22] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/22] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/22] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/22] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/22] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/22] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/22] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/22] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/22] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[18/22] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/22] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/22] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/22] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/22] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[1/23] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/23] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/23] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/23] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/23] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/23] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/23] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/23] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/23] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/23] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/23] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/23] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/23] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/23] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/23] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/23] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/23] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/23] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/23] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/23] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/23] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/23] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/23] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1906,6 +1908,40 @@ audit-sdk-context:
 ## packages included, are its stated blind spot. CI gate.
 check-sdk-context:
 	go run ./cmd/audit_sdk_context/ -check
+
+## audit-tenancy: report where the tenant policy register (internal/tenancy)
+## and the code disagree: a site that matches nothing, a value its layer does
+## not alias, a refusal or a charge that moved, a reason that changed, and
+## anything shaped like a limit outside a declared site. -v also lists what
+## the exemption table answered.
+audit-tenancy:
+	go run ./cmd/audit_tenancy/ -v
+
+## check-tenancy: the same rules as a gate. Step 23 of make analyze and a CI
+## gate.
+check-tenancy:
+	go run ./cmd/audit_tenancy/ -check
+
+## tenancy-code-identity: prove that a change moved no code. It exports BASE
+## with git archive (no worktree), builds ./cmd/server there and in the working
+## tree with -trimpath -buildvcs=false and no build id, and compares the two
+## with audit_tenancy -compare-binaries: every allocated ELF section but the
+## line table must be byte-identical. BASE_TREE names a tree exported already,
+## for a build host that holds no history. Linux only, since the comparison
+## reads ELF.
+tenancy-code-identity:
+	@test -n "$(BASE)$(BASE_TREE)" || { echo "usage: make tenancy-code-identity BASE=<ref> (or BASE_TREE=<dir>)"; exit 2; }
+	@tmp=$$(mktemp -d) && \
+	base="$(BASE_TREE)"; \
+	if [ -z "$$base" ]; then \
+		base="$$tmp/base"; mkdir -p "$$base" && \
+		git archive -o "$$tmp/base.tar" "$(BASE)" && tar -xf "$$tmp/base.tar" -C "$$base" || { rm -rf "$$tmp"; exit 1; }; \
+	fi; \
+	echo "building ./cmd/server at $(or $(BASE),$(BASE_TREE)) and in the working tree"; \
+	( cd "$$base" && go build -trimpath -buildvcs=false -ldflags='-buildid= -s -w' -o "$$tmp/base.bin" ./cmd/server ) && \
+	go build -trimpath -buildvcs=false -ldflags='-buildid= -s -w' -o "$$tmp/head.bin" ./cmd/server && \
+	go run ./cmd/audit_tenancy/ -compare-binaries "$$tmp/base.bin" "$$tmp/head.bin"; \
+	status=$$?; rm -rf "$$tmp"; exit $$status
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every
