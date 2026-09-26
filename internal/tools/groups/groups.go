@@ -64,12 +64,11 @@ type Output struct {
 	LFSEnabled            bool   `json:"lfs_enabled"`
 	SharedRunnersSetting  string `json:"shared_runners_setting,omitempty"`
 	// Fields added in client-go v2.41.0.
-	Archived                       bool   `json:"archived"`
-	MathRenderingLimitsEnabled     bool   `json:"math_rendering_limits_enabled"`
-	LockMathRenderingLimitsEnabled bool   `json:"lock_math_rendering_limits_enabled"`
-	DuoAvailability                string `json:"duo_availability,omitempty" tier:"premium"`
-	DuoFeaturesEnabled             bool   `json:"duo_features_enabled" tier:"premium"`
-	LockDuoFeaturesEnabled         bool   `json:"lock_duo_features_enabled" tier:"premium"`
+	Archived                       bool `json:"archived"`
+	MathRenderingLimitsEnabled     bool `json:"math_rendering_limits_enabled"`
+	LockMathRenderingLimitsEnabled bool `json:"lock_math_rendering_limits_enabled"`
+	DuoFeaturesEnabled             bool `json:"duo_features_enabled" tier:"premium"`
+	LockDuoFeaturesEnabled         bool `json:"lock_duo_features_enabled" tier:"premium"`
 	// Remaining gl.Group fields (1:1 audit).
 	MaxArtifactsSize                int64                        `json:"max_artifacts_size,omitempty"`
 	DefaultBranchProtectionDefaults *BranchProtectionDefaults    `json:"default_branch_protection_defaults,omitempty"`
@@ -379,7 +378,6 @@ func ToOutput(g *gl.Group, extra toolutil.GroupExtra) Output {
 	out.Archived = g.Archived
 	out.MathRenderingLimitsEnabled = g.MathRenderingLimitsEnabled
 	out.LockMathRenderingLimitsEnabled = g.LockMathRenderingLimitsEnabled
-	out.DuoAvailability = string(g.DuoAvailability)
 	out.DuoFeaturesEnabled = g.DuoFeaturesEnabled
 	out.LockDuoFeaturesEnabled = g.LockDuoFeaturesEnabled
 	out.MaxArtifactsSize = g.MaxArtifactsSize
