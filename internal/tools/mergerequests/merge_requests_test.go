@@ -2517,6 +2517,31 @@ func TestFormatDependenciesMarkdown_Populated(t *testing.T) {
 	}
 }
 
+// TestFormatDependenciesMarkdown_APageOfALongerList verifies that a page
+// which is not the whole list says so: the total in the heading, the page
+// between the heading and the table, and the pagination line before the next
+// steps.
+func TestFormatDependenciesMarkdown_APageOfALongerList(t *testing.T) {
+	got := FormatDependenciesMarkdown(DependenciesOutput{
+		Dependencies: []DependencyOutput{
+			{ID: 1, BlockingMergeRequest: &BlockingMergeRequestOutput{IID: 10, Title: testDepTitleA, State: testStateOpened}},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	})
+	want := "## MR Dependencies (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| ID | Blocking MR | Title | State |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | !10 | Dep A | 🟢 opened |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.get' to view a blocking merge request\n" +
+		"- Use action 'merge_request.merge' to merge a blocker to clear the dependency\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
 // TestFormatDependenciesMarkdown_Empty verifies the empty message.
 func TestFormatDependenciesMarkdown_Empty(t *testing.T) {
 	want := "No dependencies found.\n"
@@ -2876,6 +2901,51 @@ func TestGetDependencies_Success(t *testing.T) {
 	dep1 := out.Dependencies[1].BlockingMergeRequest
 	if dep1 == nil || dep1.State != testStateMerged {
 		t.Errorf("dep[1].BlockingMergeRequest = %+v, want state %q", dep1, testStateMerged)
+	}
+}
+
+// TestGetDependencies_PageAndPerPage_ReachTheRequest holds that the page a
+// caller asks for is the page GitLab is asked for. client-go's
+// GetMergeRequestDependencies takes no options struct, so until the input
+// carried page and per_page this action could only ever read GitLab's first
+// page of blockers.
+func TestGetDependencies_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathMR1+pathSuffixBlocks)
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"project_id":42,"blocking_merge_request":{"id":200,"iid":20,"title":"Dep B","state":"merged"}}]`)
+	}))
+
+	out, err := GetDependencies(context.Background(), client, GetDependenciesInput{
+		ProjectID: testProjectID, MRIID: 1,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+	})
+	if err != nil {
+		t.Fatalf("GetDependencies() unexpected error: %v", err)
+	}
+	if len(out.Dependencies) != 1 || out.Dependencies[0].ID != 2 {
+		t.Errorf("dependencies = %+v, want the one of page 2", out.Dependencies)
+	}
+}
+
+// TestGetDependencies_NextPageHeader_PublishesThePaginationBlock holds that
+// the page GitLab answers is published as a page, so a caller holding the
+// first page of blockers can tell a second exists and which to ask for.
+func TestGetDependencies_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathMR1+pathSuffixBlocks)
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"project_id":42,"blocking_merge_request":{"id":100,"iid":10,"title":"Dep A","state":"opened"}}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := GetDependencies(context.Background(), client, GetDependenciesInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("GetDependencies() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 

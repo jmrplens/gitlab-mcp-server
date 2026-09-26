@@ -135,7 +135,7 @@ func FormatRulesMarkdown(out RulesOutput) string {
 		return toolutil.EmptyMessage("approval rules")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "MR Approval Rules", len(out.Rules), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "MR Approval Rules", len(out.Rules), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Type", "Required", "Eligible"))
 	for _, r := range out.Rules {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -146,7 +146,7 @@ func FormatRulesMarkdown(out RulesOutput) string {
 			userList(r.EligibleApprovers),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, anyProfileLink(out.Rules),
+	toolutil.WriteListFooter(&b, out.Pagination, anyProfileLink(out.Rules),
 		toolutil.HintAction(actionApprovalRuleCreate, "add a rule"),
 		toolutil.HintAction(actionApprovalRuleUpdate, "change an existing rule"),
 		toolutil.HintAction(actionApprovalRuleDelete, "remove a rule"),

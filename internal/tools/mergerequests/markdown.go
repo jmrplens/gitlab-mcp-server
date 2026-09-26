@@ -524,7 +524,7 @@ func FormatDependenciesMarkdown(out DependenciesOutput) string {
 		return toolutil.EmptyMessage("dependencies")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "MR Dependencies", len(out.Dependencies), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "MR Dependencies", len(out.Dependencies), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Blocking MR", "Title", "State"))
 	for _, d := range out.Dependencies {
 		reference, title, state := "", "", ""
@@ -534,7 +534,7 @@ func FormatDependenciesMarkdown(out DependenciesOutput) string {
 		}
 		b.WriteString(toolutil.MarkdownTableRow(strconv.FormatInt(d.ID, 10), reference, title, state))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionMRGet, "view a blocking merge request"),
 		toolutil.HintAction(actionMRMerge, "merge a blocker to clear the dependency"),
 	)
