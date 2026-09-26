@@ -3,6 +3,7 @@ package graphqlintrospect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -505,15 +506,26 @@ func TestTruncatedAnswer_CountsAroundTheFloor_AreJudgedTheSameWay(t *testing.T) 
 	}
 }
 
+// refusingTransport fails every round trip the way a port nobody listens on
+// does, without depending on a port staying free.
+type refusingTransport struct{}
+
+// RoundTrip refuses the request before anything is sent.
+func (refusingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("connect: connection refused")
+}
+
 // TestPost_TransportAndProtocolFailures_AreNamed verifies that each way one
 // GraphQL round trip can fail says what happened and which endpoint it was
 // asking, since the operator running this command chose that endpoint. A
 // status that is not 200 also carries the start of the body beside it, which
 // is the only part of the answer that tells a gateway page from a refusal.
+//
+// Nothing listening is a transport that refuses every round trip rather than a
+// closed httptest server: the port a closed listener frees can be handed to
+// the next server this test opens, or to a parallel mutation run's, and the
+// case then reads that server's answer instead of a refused connection.
 func TestPost_TransportAndProtocolFailures_AreNamed(t *testing.T) {
-	unreachable := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	unreachable.Close()
-
 	truncating := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// A body shorter than the length announced makes the client's read
 		// fail after the status line has already been accepted.
@@ -534,7 +546,7 @@ func TestPost_TransportAndProtocolFailures_AreNamed(t *testing.T) {
 		},
 		{
 			name:   "nothing listening",
-			target: Target{Endpoint: unreachable.URL, Client: unreachable.Client()},
+			target: Target{Endpoint: "http://gitlab.invalid/api/graphql", Client: &http.Client{Transport: refusingTransport{}}},
 			want:   "ask ",
 		},
 		{
