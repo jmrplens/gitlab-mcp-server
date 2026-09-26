@@ -346,19 +346,34 @@ const containerName = "gitlab-mcp-api-live"
 //
 // It is an interface, and the constructor below a variable, for the same reason
 // cmd/server seams the system calls on its socket path: a write that stops
-// short and a close that reports a write the kernel had deferred are what a
-// full or dying filesystem does, no filesystem a test can build here produces
-// either, and the two branches that exist to report them would otherwise never
-// be exercised at all. The default is the real call, so the failure a test
-// *can* build — no temp directory to create in — still goes through it.
+// short, a mode change refused and a close that reports a write the kernel had
+// deferred are what a full or dying filesystem does, no filesystem a test can
+// build here produces any of them, and the branches that exist to report them
+// would otherwise never be exercised at all. The default is the real call, so
+// the failure a test *can* build, no temp directory to create in, still goes
+// through it.
 type scriptFile interface {
 	Name() string
 	WriteString(string) (int, error)
+	Chmod(os.FileMode) error
 	Close() error
 }
 
 // createScriptFile stages the temp file the script is written to.
 var createScriptFile = func() (scriptFile, error) { return os.CreateTemp("", "introspect-*.rb") }
+
+// stagedScriptMode is the mode the staged script is copied in with, which is
+// what makes it loadable at all.
+//
+// docker cp keeps the mode of the file it is handed, and os.CreateTemp makes
+// that 0600 and owned by whoever runs this command. gitlab-rails, run as root
+// through docker exec, drops to the git user before Rails starts
+// (/opt/gitlab/bin/gitlab-rails, chpst -u git:git), so a 0600 copy owned by
+// root is one the runner cannot open, and the introspection ends in a
+// LoadError naming /tmp/introspect.rb. The script is the one embedded in this
+// binary and holds nothing secret, so readable by everyone is the right mode
+// rather than a concession.
+const stagedScriptMode os.FileMode = 0o644
 
 // dockerRun boots the image, waits for Rails, runs the script inside and
 // returns its output.
@@ -407,6 +422,9 @@ func dockerRun(image string, keep bool) ([]byte, origin, error) {
 	defer func() { _ = os.Remove(script.Name()) }()
 	if _, writeErr := script.WriteString(introspectScript); writeErr != nil {
 		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", writeErr)
+	}
+	if chmodErr := script.Chmod(stagedScriptMode); chmodErr != nil {
+		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", chmodErr)
 	}
 	if closeErr := script.Close(); closeErr != nil {
 		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", closeErr)
