@@ -57,6 +57,15 @@ const (
 	// sends rather than a key any route of the type sends, so no entity can
 	// carry it. The evidence is the code here that fills it.
 	categoryServerDerived = "this-server-derives-the-value-from-what-gitlab-sends"
+	// categorySharedTypeFilledElsewhere is a field of a type this package
+	// shares with another package whose routes fill it, while no route of this
+	// package ever sends the key. The type is shared because both packages
+	// decode one client-go struct, and the field is tagged omitempty, so it is
+	// absent from every response this package serves rather than published
+	// empty. The evidence is the alias that shares the type, the route that
+	// never sends the key, and the input that no longer offers a way to ask
+	// for it; a package whose input still offered one would be a finding.
+	categorySharedTypeFilledElsewhere = "shared-type-field-only-another-package-fills"
 )
 
 // reasonBillableMemberPresented answers the five seat keys held against the
@@ -112,6 +121,15 @@ const reasonPipelineNamePresented = "lib/api/ci/pipelines.rb describes GET /proj
 	"is filled from send no name: GET /projects/:id/merge_requests/:merge_request_iid/pipelines presents PipelineBasic " +
 	"and the POST at the same path presents Pipeline (lib/api/merge_requests.rb), so the field is tagged omitempty and " +
 	"is absent from every row those routes filled rather than published empty."
+
+// reasonDeploymentLabelDetails answers label_details on the deployment merge
+// request type.
+const reasonDeploymentLabelDetails = "deploymentmergerequests.Output is toolutil.MergeRequestOutput, the type the merge " +
+	"request lists fill too. lib/api/deployments.rb presents GET /projects/:id/deployments/:deployment_id/merge_requests " +
+	"`with: Entities::MergeRequestBasic, current_user: current_user` and never passes with_labels_details, so " +
+	"lib/api/entities/merge_request_basic.rb renders labels as titles, client-go's MergeRequest.UnmarshalJSON has no " +
+	"label objects to move into label_details, and the omitempty field is absent from every row. The input no longer " +
+	"offers with_labels_details, which the route declares and never reads."
 
 // declaredShapeFields holds every published field the type-grain join reports
 // that GitLab does send, each with the reason the record does not say so.
@@ -174,12 +192,11 @@ var declaredShapeFields = []shapeDeclaration{
 	{Package: toolsDir + "/integrations", Type: "GroupDatadogItem", Field: "properties", Category: categoryAnnotationNotPresented, Reason: reasonGroupDatadogProperties},
 
 	// label_details on the two types whose lists pass with_labels_details to
-	// the presenter. The deployment merge request list shares the merge
-	// request type and is deliberately not declared: lib/api/deployments.rb
-	// declares the parameter and presents MergeRequestBasic without passing
-	// it, so on that package the key never arrives and the finding is real.
+	// the presenter, and on the deployment merge request list, which shares
+	// the merge request type and never sends the key.
 	{Package: issuesPkg, Type: "Output", Field: "label_details", Category: categoryServerShape, Reason: reasonLabelDetailsRekeyed},
 	{Package: mergeRequestsPkg, Type: "Output", Field: "label_details", Category: categoryServerShape, Reason: reasonLabelDetailsRekeyed},
+	{Package: toolsDir + "/deploymentmergerequests", Type: "Output", Field: "label_details", Category: categorySharedTypeFilledElsewhere, Reason: reasonDeploymentLabelDetails},
 
 	// The link this server builds to what an event names.
 	{Package: toolsDir + "/events", Type: "ContributionEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonEventTargetURL},

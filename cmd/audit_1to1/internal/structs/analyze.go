@@ -158,6 +158,12 @@ const (
 		"and epic.list pins types to EPIC at group scope, so the filter would select epics by an association " +
 		"only a project's work items can have. Exposed on internal/tools/workitems, where the type is the " +
 		"caller's to choose"
+	// deploymentMergeRequestsInert is the reason three merge request list
+	// options are absent from the deployment merge request input.
+	deploymentMergeRequestsInert = "declared by GET /projects/:id/deployments/:deployment_id/merge_requests through " +
+		"merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic " +
+		"with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option " +
+		"into a presenter option; exposed on the merge request list inputs, where it takes effect"
 	tagKeyJSON    = "json"
 	typNameString = "string"
 	typNameInt64  = "int64"
@@ -1034,6 +1040,18 @@ var acceptedMissingInputs = map[string]string{
 	// SDK options fields the endpoint does not accept (generic ListOptions plumbing).
 	"groupsshcerts.ListInput.order_by": "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
 	"groupsshcerts.ListInput.sort":     "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
+
+	// SDK options fields the route declares and never reads. The deployment
+	// merge request list takes merge_requests_base_params and presents
+	// `Entities::MergeRequestBasic, current_user: current_user` whatever the
+	// request said (lib/api/deployments.rb): the three are turned into
+	// presenter options only by serializer_options_for in
+	// lib/api/merge_requests.rb, which this route does not call, and
+	// MergeRequestsFinder reads none of them. Offering them would promise a
+	// model label objects, a simple view or a skipped recheck it cannot get.
+	"deploymentmergerequests.ListInput.view":                      deploymentMergeRequestsInert,
+	"deploymentmergerequests.ListInput.with_labels_details":       deploymentMergeRequestsInert,
+	"deploymentmergerequests.ListInput.with_merge_status_recheck": deploymentMergeRequestsInert,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

@@ -20,10 +20,11 @@ import (
 func TestDeclaredShapeFields_NamesWhatTheTreeHolds(t *testing.T) {
 	root := repoRoot(t)
 	known := map[string]bool{
-		categoryRecordSilent:           true,
-		categoryServerShape:            true,
-		categoryAnnotationNotPresented: true,
-		categoryServerDerived:          true,
+		categoryRecordSilent:              true,
+		categoryServerShape:               true,
+		categoryAnnotationNotPresented:    true,
+		categoryServerDerived:             true,
+		categorySharedTypeFilledElsewhere: true,
 	}
 	declared := map[string]map[string]bool{}
 	for _, declaration := range declaredShapeFields {
