@@ -1765,12 +1765,30 @@ func TestFormatMarkdownString(t *testing.T) {
 		},
 		{
 			// A thread GitLab named no discussion for keeps its card; only a
-			// status beside the empty id means no thread was opened.
+			// status with no note means no thread was opened.
 			name:  "renders a thread with no id and no quick actions as a thread",
 			input: Output{Notes: []NoteOutput{{ID: 200, Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}}},
 			want: "## Discussion \n\n" +
 				"- **@carol** (3 Jan 2026 00:00 UTC, note 200):\n" +
 				"  > new thread\n" +
+				threadHintsBlock,
+		},
+		{
+			// The shape Create answers when GitLab kept the note and named no
+			// discussion for it, and the body also carried a command: the note
+			// exists, so the card shows it with the commands beside it rather
+			// than saying GitLab kept none.
+			name: "renders a kept note GitLab named no thread for beside what its quick actions did",
+			input: Output{
+				Notes:              []NoteOutput{{ID: 200, Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}},
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, Messages: []string{"Added ~bug label."}},
+			},
+			want: "## Discussion \n\n" +
+				"- **@carol** (3 Jan 2026 00:00 UTC, note 200):\n" +
+				"  > new thread\n" +
+				"\n### Quick Actions\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Applied**: Added ~bug label.\n" +
 				threadHintsBlock,
 		},
 		{
@@ -1872,6 +1890,23 @@ func TestFormatNoteMarkdownString_QuickActionsAndResolution(t *testing.T) {
 				t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestFormatNoteMarkdownString_InternalNote pins the card of an internal note:
+// the marker is written, where the flag used to reach the view model and stop
+// there, so a note only the epic's members can read carried nothing saying so.
+func TestFormatNoteMarkdownString_InternalNote(t *testing.T) {
+	got := FormatNoteMarkdownString(NoteOutput{ID: 3, Body: "members only", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z", Internal: true})
+
+	want := "## Discussion Note #3\n\n" +
+		"- **Author**: @carol\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Internal note**\n" +
+		"- **Body**: members only\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
