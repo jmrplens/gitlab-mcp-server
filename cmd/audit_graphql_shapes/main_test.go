@@ -1134,6 +1134,186 @@ func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWould
 	}
 }
 
+// receiverFixture is a decoder typed by the type parameter of a generic type
+// its wrapper is a method of: called on an instance straight away, and through
+// a sibling method whose receiver names the parameter differently and hands
+// the document on. The type of the one field the document selects is written
+// in place of STARS, and anything written in place of MORE is appended.
+const receiverFixture = `package receiver
+
+import "fixture/gql"
+
+const getProject = @@
+query { project(fullPath: "x") { stars } }
+@@
+
+type projectNode struct {
+	Stars STARS @@json:"stars"@@
+}
+
+type client[T any] struct {
+	service gql.Service
+}
+
+func (c *client[T]) fetch(query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = c.service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+
+func (c *client[U]) relay(query string) {
+	c.fetch(query)
+}
+
+func get(service gql.Service) {
+	(&client[projectNode]{service: service}).fetch(getProject)
+	(&client[projectNode]{service: service}).relay(getProject)
+}
+MORE`
+
+// unboundParameterSources leave a decoder's type parameter bound by no caller
+// in the two ways a method can and the one way a generic function shares with
+// it: a sibling method naming the document itself, so the parameter is bound
+// to the sibling's own and the walk ends there, and a method or a function
+// that retries with a document of its own, on its own receiver or under its
+// own type parameter, which binds the parameter to itself.
+const unboundParameterSources = `
+func (c *client[U]) refresh() {
+	c.fetch(getProject)
+}
+
+type retrier[T any] struct {
+	service gql.Service
+}
+
+func (r *retrier[T]) fetch(query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = r.service.Do(gql.GraphQLQuery{Query: query}, &resp)
+	if resp.Data.Project == nil {
+		r.fetch(getProject)
+	}
+}
+
+func fetchAs[T any](service gql.Service, query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: query}, &resp)
+	if resp.Data.Project == nil {
+		fetchAs[T](service, getProject)
+	}
+}
+`
+
+// receiverSource writes receiverFixture with the field type and the appended
+// methods given.
+func receiverSource(stars, more string) map[string]string {
+	return map[string]string{"receiver": strings.NewReplacer("STARS", stars, "MORE", more).Replace(receiverFixture)}
+}
+
+// TestRun_FixtureWhoseDecoderIsTypedByAGenericReceiver_JudgesTheTypeTheReceiverNames
+// verifies that a wrapper that is a method of a generic type has its decoder
+// judged as the type the receiver it is called on names.
+//
+// A method has no type parameters of its own and go/types records no instance
+// for a method selector, so a binding read only from the call's instance left
+// every such decoder typed by a parameter nothing binds: the run passed a
+// string field for an Int, counting the position as a selection nothing reads.
+// The binding is read off the receiver instead, both where the call is made on
+// an instance and where a sibling method, whose receiver names the parameter
+// U, hands the document on to be named by its own caller. Once the field is an
+// int both pairings agree, and nothing is left for the summary to count as
+// unread.
+func TestRun_FixtureWhoseDecoderIsTypedByAGenericReceiver_JudgesTheTypeTheReceiverNames(t *testing.T) {
+	t.Run("a field that cannot hold what GitLab sends fails the run", func(t *testing.T) {
+		status, out, errOut := runFixture(t, receiverSource("string", ""), true)
+
+		if status != 1 {
+			t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		for _, want := range []string{
+			"fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:31)\n" +
+				"    - data.project.stars: Int! is sent as a JSON integer and is decoded into string\n",
+			"fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:32)\n" +
+				"    - data.project.stars: Int! is sent as a JSON integer and is decoded into string\n",
+			"\naudit_graphql_shapes: 2 disagreement(s) in 2 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(errOut, want) {
+					t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+				}
+			})
+		}
+	})
+	t.Run("a field that holds it passes with nothing counted as unread", func(t *testing.T) {
+		status, out, errOut := runFixture(t, receiverSource("int", ""), true)
+
+		if status != 0 {
+			t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		for _, want := range []string{
+			"    ok  fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:31)\n",
+			"    ok  fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:32)\n",
+			"\naudit_graphql_shapes: 2 pairing(s) agree with their documents, 0 selection(s) nothing reads (",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(out, want) {
+					t.Errorf("run() stdout lacks %q:\n%s", want, out)
+				}
+			})
+		}
+		if strings.Contains(out, "unjudged") {
+			t.Errorf("run() reports a position left unjudged although the receiver binds it:\n%s", out)
+		}
+	})
+}
+
+// TestRun_FixtureWhoseTypeParameterNothingBinds_CountsItApartAndPasses
+// verifies what becomes of a position typed by a parameter no caller binds:
+// it is noted under -v, it does not fail the run, and the summary counts it on
+// its own rather than among the selections nothing reads.
+//
+// Those are two different statements. A selection nothing reads was judged
+// and found unread; a position typed by an unbound parameter was never judged,
+// and a summary that adds the two tells a reader the run looked at a decoder
+// it did not. The retriers are the second reason the positions are held here:
+// a method that retries on its own receiver, and a generic function that
+// retries under its own type parameter, bind the parameter to itself, which a
+// walk following bindings followed forever (the function's did before the
+// method's was bound at all), so the run is also held to ending there with a
+// note.
+func TestRun_FixtureWhoseTypeParameterNothingBinds_CountsItApartAndPasses(t *testing.T) {
+	status, out, errOut := runFixture(t, receiverSource("int", unboundParameterSources), true)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	const unjudged = "    ~ data.project: typed by a parameter no caller binds, so it is left unjudged\n"
+	for _, want := range []string{
+		"fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:36)\n" + unjudged,
+		"fixture/receiver getProject (receiver/receiver.go:49, handed over at receiver/receiver.go:51)\n" + unjudged,
+		"fixture/receiver getProject (receiver/receiver.go:61, handed over at receiver/receiver.go:63)\n" + unjudged,
+		"    ok  fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:31)\n",
+		"\naudit_graphql_shapes: 5 pairing(s) agree with their documents, 0 selection(s) nothing reads, " +
+			"3 position(s) left unjudged, typed by a parameter no caller binds (",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("run() stdout lacks %q:\n%s", want, out)
+			}
+		})
+	}
+}
+
 // tracedFixture traces a document back to a local the function declares before
 // assigning, and holds four calls the audit must not read as sends: one named
 // Do with a single argument, one named Do whose first argument is some other

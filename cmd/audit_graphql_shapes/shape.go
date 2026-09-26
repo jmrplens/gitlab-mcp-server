@@ -119,8 +119,8 @@ func (c scalarClass) String() string {
 // schema declares as a field.
 var typenameType = &ast.Type{NamedType: "String", NonNull: true}
 
-// finding is one disagreement between a document and its decoder, or one
-// selection nothing reads.
+// finding is one disagreement between a document and its decoder, one
+// selection nothing reads, or one position left unjudged.
 type finding struct {
 	pairing *pairing
 	// Path is the response key the finding is about, from data down.
@@ -130,6 +130,11 @@ type finding struct {
 	// Fails says whether the finding fails the gate. A selection no Go field
 	// reads is reported and does not: it is transfer, not truth.
 	Fails bool
+	// Unjudged marks a position typed by a type parameter no caller binds,
+	// which does not fail either and is counted apart from the selections
+	// nothing reads: those were judged and found unread, while this one was
+	// never judged at all, and a summary adding the two says neither.
+	Unjudged bool
 }
 
 // goField is one field encoding/json would fill, with the name it answers to.
@@ -237,7 +242,7 @@ func (j *judge) rootType(operation *ast.OperationDefinition) *ast.Definition {
 func (j *judge) judgeType(goType types.Type, gqlType *ast.Type, selections ast.SelectionSet, path string, asString bool) {
 	goType, bound := j.concrete(goType)
 	if !bound {
-		j.note(path, "typed by a parameter no caller binds, so it is left unjudged")
+		j.leaveUnjudged(path, "typed by a parameter no caller binds, so it is left unjudged")
 		return
 	}
 	if unmarshalsItself(goType) {
@@ -276,7 +281,14 @@ func (j *judge) judgeType(goType types.Type, gqlType *ast.Type, selections ast.S
 // concrete reads through pointers, aliases and bound type parameters to the
 // type a value will actually have, reporting false for a parameter nothing
 // binds.
+//
+// A parameter met a second time is bound to nothing either. A wrapper that
+// calls itself with a document of its own binds its parameter to itself (a
+// method of a generic type retrying on its own receiver, or fetch[T] calling
+// fetch[T]), and two that call each other bind each one's to the other's, so
+// following the bindings would never reach a type.
 func (j *judge) concrete(goType types.Type) (types.Type, bool) {
+	followed := map[*types.TypeParam]bool{}
 	for {
 		switch t := goType.(type) {
 		case *types.Pointer:
@@ -285,9 +297,10 @@ func (j *judge) concrete(goType types.Type) (types.Type, bool) {
 			goType = types.Unalias(t)
 		case *types.TypeParam:
 			bound, ok := j.pairing.TypeArgs[t]
-			if !ok {
+			if !ok || followed[t] {
 				return nil, false
 			}
+			followed[t] = true
 			goType = bound
 		default:
 			return goType, true
@@ -466,6 +479,12 @@ func (j *judge) fail(path, message string) {
 // note records something worth reading that does not fail the gate.
 func (j *judge) note(path, message string) {
 	j.findings = append(j.findings, finding{pairing: j.pairing, Path: path, Message: message})
+}
+
+// leaveUnjudged records a position the walk could not judge, which does not
+// fail the gate either and is counted apart from what note records.
+func (j *judge) leaveUnjudged(path, message string) {
+	j.findings = append(j.findings, finding{pairing: j.pairing, Path: path, Message: message, Unjudged: true})
 }
 
 // responseKey is the key a field answers under. The parser fills Alias for

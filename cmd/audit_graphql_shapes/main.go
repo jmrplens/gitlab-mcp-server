@@ -57,7 +57,7 @@ type auditRun struct {
 
 func main() {
 	dir := flag.String("dir", ".", "repository root to audit")
-	verbose := flag.Bool("v", false, "list every pairing judged and every selection nothing reads, not only the disagreements")
+	verbose := flag.Bool("v", false, "list every pairing judged, every selection nothing reads and every position left unjudged, not only the disagreements")
 	schemaPath := flag.String("schema", "", "SDL file to judge the documents against, instead of the pinned schema")
 	reportPath := flag.String("report", "", "write the fields the schema offers that no document of their package selects, as JSON, to this path")
 	flag.Parse()
@@ -274,16 +274,19 @@ func report(cfg auditRun, out, errOut io.Writer, result auditResult) int {
 		byPairing[f.pairing] = append(byPairing[f.pairing], f)
 	}
 
-	disagreements, unread := 0, 0
+	disagreements, unread, unjudged := 0, 0, 0
 	for i := range result.pairings {
 		p := &result.pairings[i]
 		group := byPairing[p]
 		fails := false
 		for _, f := range group {
-			if f.Fails {
+			switch {
+			case f.Fails:
 				fails = true
 				disagreements++
-			} else {
+			case f.Unjudged:
+				unjudged++
+			default:
 				unread++
 			}
 		}
@@ -312,10 +315,25 @@ func report(cfg auditRun, out, errOut io.Writer, result auditResult) int {
 			prefix, disagreements, len(result.pairings), len(result.problems), len(result.stale), result.provenance)
 		return 1
 	default:
-		fmt.Fprintf(out, "%s %d pairing(s) agree with their documents, %d selection(s) nothing reads (%s)\n",
-			prefix, len(result.pairings), unread, result.provenance)
+		fmt.Fprintf(out, "%s %d pairing(s) agree with their documents, %d selection(s) nothing reads%s (%s)\n",
+			prefix, len(result.pairings), unread, unjudgedClause(unjudged), result.provenance)
 		return 0
 	}
+}
+
+// unjudgedClause names the positions a type parameter no caller binds left
+// unjudged, for the passing summary.
+//
+// It is said only when there is one. A pairing that agrees except where it
+// was never asked is not a pairing that agrees, so a run that has one must say
+// so on the line a reader reads without -v; a run that has none says exactly
+// what it said before the count existed, which keeps the summary of a tree
+// with no such decoder unchanged byte for byte.
+func unjudgedClause(unjudged int) string {
+	if unjudged == 0 {
+		return ""
+	}
+	return fmt.Sprintf(", %d position(s) left unjudged, typed by a parameter no caller binds", unjudged)
 }
 
 // block renders one pairing with its findings under it.

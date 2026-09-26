@@ -18,14 +18,19 @@
 // own rules: a field is matched by its json tag or, failing that, its name
 // case-insensitively, embedded structs are flattened, a type that unmarshals
 // itself is trusted, and a type parameter is read as whatever the caller bound
-// it to.
+// it to: a generic function's by the type arguments of the call, and a
+// method's of a generic type by the type arguments of the receiver it is
+// called on.
 //
 // Three disagreements fail the gate: a field whose Go kind cannot hold what
 // the schema says GitLab sends (a String decoded into an int, an object into a
 // string, a list into a struct), a Go field the document never selects and so
 // is always empty, and a scalar this audit has no serialization for. A field
 // the document selects and no Go field reads is reported and does not fail:
-// it is transfer, not truth. A document that reaches its call through a
+// it is transfer, not truth. A position typed by a type parameter no caller
+// binds does not fail either, and is counted apart on the summary line rather
+// than with the selections nothing reads, since it was never judged at all;
+// -v names each. A document that reaches its call through a
 // wrapper's parameter is paired at every call of that wrapper, where the
 // document is named; a document built at run time, or one the sibling audit
 // finds that no call this audit can see sends, is a failure rather than a

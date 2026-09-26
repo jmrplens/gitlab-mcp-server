@@ -541,7 +541,14 @@ func sameFunc(obj types.Object, fn *types.Func) bool {
 // included: go/types promises that instantiating the callee with them
 // reproduces the instance, and the callee is the wrapper itself, which is why
 // the loop is bounded by the wrapper's parameters alone.
+//
+// A method has no type parameters of its own, and a method of a generic type
+// is bound by its receiver instead, which the instances record says nothing
+// about: see [receiverInstantiation].
 func instantiation(pkg *packages.Package, callee *ast.Ident, fn *types.Func) map[*types.TypeParam]types.Type {
+	if fn.Signature().RecvTypeParams().Len() > 0 {
+		return receiverInstantiation(pkg, callee, fn)
+	}
 	instance, instantiated := pkg.TypesInfo.Instances[callee]
 	if !instantiated {
 		return nil
@@ -550,6 +557,34 @@ func instantiation(pkg *packages.Package, callee *ast.Ident, fn *types.Func) map
 	bound := make(map[*types.TypeParam]types.Type, params.Len())
 	for i := range params.Len() {
 		bound[params.At(i)] = instance.TypeArgs.At(i)
+	}
+	return bound
+}
+
+// receiverInstantiation binds the receiver type parameters of a wrapper that
+// is a method of a generic type to the type arguments of the receiver a call
+// is made on.
+//
+// go/types records no instance for a method selector, so the binding is read
+// off the method the call resolves to: called on an instance, that is the
+// instance's own copy of the method, whose receiver spells the type arguments
+// (client[project]) where the declaration spells its parameters (client[T]).
+// The receiver declares one parameter per argument of its type, in the order
+// the type declares them, so the two lists pair by position. A call from a
+// sibling method binds the parameters to the sibling's own, which its callers
+// would bind in turn, and a decoder typed by one of those is left unjudged the
+// way a generic function's is when the document is named in between.
+//
+// The call has already been matched to the wrapper, so what it resolves to is
+// a method, and the receiver of a method of a generic type is that type or a
+// pointer to it: neither assertion can fail here.
+func receiverInstantiation(pkg *packages.Package, callee *ast.Ident, fn *types.Func) map[*types.TypeParam]types.Type {
+	method, _ := pkg.TypesInfo.ObjectOf(callee).(*types.Func)
+	receiver, _ := pointee(method.Signature().Recv().Type()).(*types.Named)
+	params, args := fn.Signature().RecvTypeParams(), receiver.TypeArgs()
+	bound := make(map[*types.TypeParam]types.Type, params.Len())
+	for i := range params.Len() {
+		bound[params.At(i)] = args.At(i)
 	}
 	return bound
 }
