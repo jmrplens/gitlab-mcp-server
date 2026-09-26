@@ -2733,14 +2733,15 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 const artifactsHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'job.download_single_artifact' to fetch one file out of the archive instead\n"
 
-// TestFormatArtifactsMarkdown_WithoutJobID checks the heading of the by-ref
+// TestFormatArtifactsMarkdown_WithoutJobID checks the card of the by-ref
 // download, which answers for a ref rather than for a job ID and must not
-// print "Job #0".
+// print "Job #0", and whose note names no file_type: that route declares
+// none, so the content is always the zip archive.
 func TestFormatArtifactsMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{Size: 512})
 	want := "## Artifacts\n\n" +
 		"- **Size (bytes)**: 512\n" +
-		"\nThe content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading.\n" +
+		"\nThe zip archive is base64-encoded. Decode it to extract the files.\n" +
 		artifactsHints
 	if md != want {
 		t.Errorf("FormatArtifactsMarkdown(no job)\n got %q\nwant %q", md, want)

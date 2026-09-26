@@ -202,7 +202,7 @@ func FormatArtifactsMarkdown(out ArtifactsOutput) string {
 	c := toolutil.NewCard(&b, artifactsHeading(out))
 	c.Int("Size (bytes)", int64(out.Size))
 	c.Warn("Truncated at 1 MB", out.Truncated)
-	c.Note("The content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading.")
+	c.Note(artifactsNote(out))
 	c.End(toolutil.HintAction(actionJobDownloadSingle, "fetch one file out of the archive instead"))
 	return b.String()
 }
@@ -214,6 +214,18 @@ func artifactsHeading(out ArtifactsOutput) string {
 		return fmt.Sprintf("Job #%d Artifacts", out.JobID)
 	}
 	return "Artifacts"
+}
+
+// artifactsNote says what the content is for the action that produced it.
+// Only the download by job ID takes file_type (GitLab 19.4 declares it on
+// that route alone), so the by-ref download, which carries no job ID, is
+// always the zip archive and must not point a model at a parameter its
+// action does not have.
+func artifactsNote(out ArtifactsOutput) string {
+	if out.JobID > 0 {
+		return "The content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading."
+	}
+	return "The zip archive is base64-encoded. Decode it to extract the files."
 }
 
 // FormatSingleArtifactMarkdown renders one artifact file as the card of that
