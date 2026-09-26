@@ -93,9 +93,9 @@ func TestCheckOrphans_ARegisterValueNothingReads_IsAFinding(t *testing.T) {
 }
 
 // chainSource aliases two register values twice over. Limit's pair is read
-// only by each other's initializer, which is what a layer leaves when the
-// enforcing code goes back to a literal; Window's second alias is read by the
-// function that enforces it, which reads the first through it.
+// only by each other's initializer, which is what a layer leaves when every
+// reader of the alias goes back to a literal; Window's second alias is read by
+// the function that enforces it, which reads the first through it.
 const chainSource = siteHeader + `
 const limit = leaf.Limit
 
@@ -124,6 +124,40 @@ func TestCheckOrphans_AnAliasOnlyAliasesRead_IsAFinding(t *testing.T) {
 		"ROW-001: "+siteDir+":limit aliases Limit"+unread,
 		"ROW-001: "+siteDir+":limitCopy aliases Limit"+unread,
 	)
+}
+
+// twoReadersSource aliases one register value and reads the alias in two
+// functions. Flag still reads it, while Load has gone back to the literal the
+// alias replaced: the shape of a default one reader stopped taking from the
+// register while another kept it.
+const twoReadersSource = siteHeader + `
+const limit = leaf.Limit
+
+func Flag() int { return limit }
+
+func Load() int { return 64 }
+`
+
+// TestCheckOrphans_AReaderGoneBackToALiteral_FailsOnlyWhereItIsDeclared: G6
+// asks whether anything but an alias initializer still reads an alias, so a
+// reader that goes back to a literal passes it while another reader keeps the
+// alias read. What catches that reader is a declaration of what it reads: as
+// an Enforce site naming the constant, G5 fails it.
+func TestCheckOrphans_AReaderGoneBackToALiteral_FailsOnlyWhereItIsDeclared(t *testing.T) {
+	undeclared := fixture{
+		files: map[string]string{"site/site.go": twoReadersSource},
+		rows:  []tenancy.Decision{row("ROW-001", aliasSite("limit", "Limit"))},
+	}.run(t)
+	assertFindings(t, undeclared, "G6")
+	assertFindings(t, undeclared, "G5")
+	declared := fixture{
+		files: map[string]string{"site/site.go": twoReadersSource},
+		rows: []tenancy.Decision{row("ROW-001",
+			aliasSite("limit", "Limit"), readingSite("Flag", "Limit"), readingSite("Load", "Limit"),
+		)},
+	}.run(t)
+	assertFindings(t, declared, "G6")
+	assertFindings(t, declared, "G5", "ROW-001: "+siteDir+":Load does not refer to Limit, or to a declared alias of it")
 }
 
 // TestCheckOrphans_NoRegisterLoaded_JudgesNothing: a run whose register is not

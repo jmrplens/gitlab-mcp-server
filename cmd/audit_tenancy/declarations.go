@@ -198,7 +198,7 @@ var categories = map[string]string{
 		"protocol code its callers choose, where every caller passes a protocol code",
 	categoryUninventoried: "a decision the gate surfaced that the specification's inventory does not list, " +
 		"held here until the specification decides whether it is a row",
-	categoryTestSupport: "a name the server's package declares for its own tests, which read a row's value through it; the running server reads that value through a site the row declares",
+	categoryTestSupport: "a name a package the server links declares for its own tests, which read a row's value or build its limit through it; the running server reads that value, or builds that limit, through a site a row declares",
 }
 
 // exemption is one declaration shaped like a limit that decides nothing about
@@ -284,8 +284,9 @@ var notADecision = map[string]exemption{
 	"cmd/server:writeCardUnavailable":    {categoryServerState, "answers 503 while the server card is still being built, a fact about the process"},
 	"cmd/server:healthHandler":           {categoryServerState, "answers /health with 503 while the process drains, which is what a balancer is asked to read"},
 
-	// Names only the server package's tests read.
-	"cmd/server:authFailureLimit": {categoryTestSupport, "the tests build guards directly rather than through a Config and read AUB-001's limit here; the server reads it through config.DefaultAuthFailureLimit, the row's alias, as the --auth-failure-limit default"},
+	// Names only their own package's tests reach.
+	"cmd/server:authFailureLimit":      {categoryTestSupport, "the tests build guards directly rather than through a Config and read AUB-001's limit here; the server reads it through config.DefaultAuthFailureLimit, the row's alias, as the --auth-failure-limit default"},
+	"internal/oauth:NewGitLabVerifier": {categoryTestSupport, "a wrapper of NewGitLabVerifierFor for one fixed instance that only the package's tests call, with a cache TTL of their own; the server builds its verifier with NewGitLabVerifierFor in registerOAuthMCPHandlers, from the configured TTL, and both are Enforce sites (ADM-002 and ADM-006)"},
 
 	// Protocol vocabulary.
 	"internal/elicitation:minMRTRProtocolVersion": {categoryProtocol, "the first MCP revision that requires the multi-round-trip flow, a date the specification names"},

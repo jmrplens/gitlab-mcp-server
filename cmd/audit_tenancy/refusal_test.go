@@ -421,6 +421,59 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 	)
 }
 
+// twiceSource names one sentinel in two cases of a switch that assign
+// different codes, beside a second switch that names it once.
+const twiceSource = `package site
+
+import (
+	"errors"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+var errTwice = errors.New("twice")
+
+func wireTwice(err error, inner bool) error {
+	var code int64
+	switch {
+	case errors.Is(err, errPicked), errors.Is(err, errTwice):
+		code = codeBusy
+	case errors.Is(err, errTwice):
+		code = jsonrpc.CodeInvalidParams
+	}
+	if inner {
+		switch {
+		case errors.Is(err, ErrTooMany):
+			code = jsonrpc.CodeInternalError
+		}
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+`
+
+// TestCheckRefusals_ASentinelNamedInTwoCases_IsJudgedByTheFirst: a switch
+// takes the first case that matches, so a sentinel named again in a later case
+// never reaches it. The code that later case assigns does not carry a row that
+// declares it, while the first case's does; a sentinel named in a second
+// switch of the same holder is judged by that switch's case.
+func TestCheckRefusals_ASentinelNamedInTwoCases_IsJudgedByTheFirst(t *testing.T) {
+	rpc := func(at string, code int) tenancy.Refusal {
+		return tenancy.Refusal{
+			Methods: []string{"resources/read"}, Channel: tenancy.RPC, Code: code,
+			At: site(at, tenancy.Refuse), Via: site("wireTwice", tenancy.Refuse),
+		}
+	}
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{rpc("errTwice", -32602), rpc("errTwice", -32000), rpc("ErrTooMany", -32603)}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource, "site/twice.go": twiceSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G8",
+		"ROW-001 refusal 1 (resources/read rpc): "+siteDir+":wireTwice builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
+	)
+}
+
 // TestCheckRefusals_ToolErrorRefusals: a result flagged as an error, directly
 // or through the function it returns, passes, and so does a holder that
 // returns no tool result; one that returns a result it does not flag, flags

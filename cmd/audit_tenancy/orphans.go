@@ -18,9 +18,12 @@ import (
 // alias initializer, directly or through a chain of aliases; every exported
 // function of its rule files is named in some row's Functions. A register
 // value nothing reads is a policy that decides nothing, and it reads as though
-// it did, and so is an alias the enforcing code stopped reading: its own
-// initializer still reads the register, so nothing else would notice that
-// changing the value no longer changes the server.
+// it did, and so is an alias every reader stopped reading: its own initializer
+// still reads the register, so nothing else would notice that changing the
+// value no longer changes the server. One reader going back to a literal while
+// another still reads the alias is not this rule's to see; G3 and G5 fail it
+// where that reader is declared as an Arg, or as an Enforce site naming what
+// it reads.
 func (g *gate) checkOrphans() []Finding {
 	leaf := g.p.byDir[g.reg.leaf]
 	if leaf == nil {

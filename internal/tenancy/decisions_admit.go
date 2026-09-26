@@ -80,7 +80,6 @@ func admitDecisions() []Decision {
 			Sites: []Site{
 				alias(pkgServer, "upstreamRetryAfter", "UpstreamRetryAfter"),
 				enforce(pkgOAuth, "NewGitLabVerifierFor"),
-				enforce(pkgOAuth, "NewGitLabVerifier"),
 				classify, invalidToken, check,
 			},
 		},
@@ -290,7 +289,9 @@ func admitDecisions() []Decision {
 			// source and the primary key, both of which a caller mints. A
 			// source stops adding pairs once it is blocked, but a source that
 			// arrives after the limiter's table is full is never blocked, so
-			// nothing but the sweep bounds the map (F-29, issue 950).
+			// nothing but the sweep bounds the map. F-29 carries it until it is
+			// filed as a finding of its own: issue 950 is about OAuth
+			// verification, and this map is kept in both authentication modes.
 			Table:  true,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
 			// Whether the budget exists is TransportSourceBudgetOn's answer.

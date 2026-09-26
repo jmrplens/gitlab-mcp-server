@@ -534,8 +534,9 @@ func assignedIn(info *types.Info, node ast.Node, v *types.Var) []ast.Expr {
 // returns empty when one does. A code held in a variable counts as every
 // constant the function assigns to it, except where the holder switches on
 // at, as a Via that maps sentinels to codes does: then it counts as the
-// constants the case naming at assigns, so a sentinel moved to another case is
-// judged by its own case's code and not by a sibling's.
+// constants the first case naming at assigns, so a sentinel moved to another
+// case, or named again in an earlier one, is judged by the case a switch
+// would take and not by a sibling's.
 func (g *gate) rpcProblem(r tenancy.Refusal, at, holder *declaration) string {
 	info := holder.info()
 	lits := slices.DeleteFunc(g.refusalLiterals(holder, ""), func(rl refusalLit) bool { return rl.typ.name == g.rules.gateType })
@@ -570,20 +571,32 @@ func (g *gate) rpcProblem(r tenancy.Refusal, at, holder *declaration) string {
 	return fmt.Sprintf("builds no JSON-RPC error carrying code %d (it carries %v)", r.Code, seen)
 }
 
-// assignedInCase are the expressions the switch cases of holder that name at
-// assign to the local variable v, and whether any case names at at all.
+// assignedInCase are the expressions that the first case naming at, in each
+// expression switch of holder, assigns to the local variable v, and whether
+// any case names at at all. Only the first counts because a switch takes the
+// first case that matches, in source order: a later case naming the same
+// sentinel is never reached for it.
 func assignedInCase(holder, at *declaration, v *types.Var) ([]ast.Expr, bool) {
 	info := holder.info()
 	var out []ast.Expr
 	named := false
 	ast.Inspect(holder.body(), func(n ast.Node) bool {
-		cc, isCase := n.(*ast.CaseClause)
-		if !isCase || !slices.ContainsFunc(cc.List, func(e ast.Expr) bool { return refersToKey(info, e, at.key) }) {
+		sw, isSwitch := n.(*ast.SwitchStmt)
+		if !isSwitch {
 			return true
 		}
-		named = true
-		for _, st := range cc.Body {
-			out = append(out, assignedIn(info, st, v)...)
+		for _, clause := range sw.Body.List {
+			// An expression switch's body holds case clauses and nothing
+			// else, which the parser guarantees.
+			cc, _ := clause.(*ast.CaseClause)
+			if !slices.ContainsFunc(cc.List, func(e ast.Expr) bool { return refersToKey(info, e, at.key) }) {
+				continue
+			}
+			named = true
+			for _, st := range cc.Body {
+				out = append(out, assignedIn(info, st, v)...)
+			}
+			break
 		}
 		return true
 	})

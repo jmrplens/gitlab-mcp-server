@@ -35,9 +35,12 @@
 //   - G6 orphans. Every exported constant of the register's value and code
 //     files is read by a declared Alias or Arg site and by something outside
 //     the register; every declared Alias is read by code other than an alias
-//     initializer, directly or through a chain of aliases, so an enforcing
-//     site that goes back to a literal leaves its alias unread and fails;
-//     every exported function of its rule files is named by a row.
+//     initializer, directly or through a chain of aliases, so an alias whose
+//     every reader has gone back to a literal fails; every exported function
+//     of its rule files is named by a row. A reader that goes back to a
+//     literal while another still reads the alias passes G6, and fails only
+//     where it is declared: as an Arg under G3, or as an Enforce site that
+//     names what it reads under G5.
 //   - G7 charges. Every refusal the authentication failure table's functions
 //     return is matched to one row by its status and text, and is charged
 //     exactly when a call of the charge helper precedes it in its own block or
@@ -48,7 +51,7 @@
 //   - G8 refusal. Every refusal's stable text begins a string its code folds
 //     (a format read up to its first verb), and the literal that carries it
 //     has the row's status, code, Retry-After source and challenge; a JSON-RPC
-//     refusal carries the row's code, read from the case that names its
+//     refusal carries the row's code, read from the first case that names its
 //     sentinel where its holder switches on one, and a tool-error refusal's
 //     result is flagged as an error. Every gate literal of a function that
 //     holds a declared gate refusal is carried exactly by one of them, so a
@@ -88,9 +91,12 @@
 // reason. A declaration that answers nothing is a finding on the terms every
 // declaration table here is held to: an exemption nothing needed, and one
 // naming a category nobody defined. Every rule applies to every row; the
-// deferral the migration of issue 565 needed while the values moved into the
-// register is gone, so a row whose value its layer reads as a literal is a
-// finding the day it is written.
+// deferral of G2, G3 and G6 that the migration of issue 565 needed while the
+// values moved into the register is gone, so from the day a row is written an
+// alias that is not a reference to its constant, an Arg call that does not
+// pass it and an alias nothing but alias initializers read are findings. A
+// layer that reads the row's value as a literal somewhere else is a finding
+// only where that place is a declared site.
 //
 // # What it reads, and what it cannot see
 //
@@ -102,15 +108,27 @@
 // platform is not read.
 //
 // It is a gate, not a proof. A new limit escapes G10, and only review sees it,
-// when it uses none of the listed constructors or options types, refuses
-// through none of the three literal types and no 429 or 503 status write (or
-// not at all), and is named in a way part (c) does not read: with no lexicon
-// word, in a package no row names, or as a value local to a function, which
-// part (c) never reads (revalidateAll's ten seconds a probe is one, stated in
-// ADM-009 and bound by no row value). G14 cannot trace a variable read through
-// a name that does not fold. G7 binds a charge to a return by position, so a
-// charge moved into a helper the table does not name fails rather than
-// passing, and the finding names the position rather than the policy. A rule
+// when it uses none of the listed constructors or options types; makes no
+// refusal part (b) holds to a row, because it refuses not at all, or through
+// none of the three literal types and no 429 or 503 status write, or through
+// such a literal or write in a function that already holds a declared refusal
+// of its code or status, or by calling a function whose refusal a row already
+// declares, from anywhere (a new counter inside the rate-limit middleware that
+// returns the -42900 the declared rateLimitedError builds is one: part (b)
+// reads the literals a function writes, never the refusals it obtains from a
+// call); and is named in a way part (c) does not read: with no lexicon word,
+// in a package no row names, or as a value local to a function, which part (c)
+// never reads (revalidateAll's ten seconds a probe is one, stated in ADM-009
+// and bound by no row value). A layer that stops reading a register value in
+// one place while another place still reads its alias passes G6, and fails
+// only where the place that stopped is declared as an Arg or as an Enforce
+// site naming what it reads, which no Enforce site does today. G8 reads a code
+// held in a variable from the first case naming the refusal's sentinel, so a
+// case whose condition adds more than the sentinel is still taken as the one
+// that matches it. G14 cannot trace a variable read through a name that does
+// not fold. G7 binds a charge to a return by position, so a charge moved into
+// a helper the table does not name fails rather than passing, and the finding
+// names the position rather than the policy. A rule
 // row's logic is declared by symbol, so G1 fails when the symbol disappears
 // and nothing fails when its logic changes; that is what promoting a rule
 // into the register exists for.
