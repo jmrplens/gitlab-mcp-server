@@ -5,7 +5,9 @@
 // token is minted for it, listed, rotated and revoked, and the account is
 // deleted. The actions are Free in the catalog and the endpoints answer on
 // every edition, so the scenario runs on both runtimes; the old suite kept
-// all but the rotation in its Enterprise half.
+// all but the rotation in its Enterprise half. Reading one account back by
+// its ID is a scenario of its own, since GitLab mounts that route only from
+// 19.4.
 
 package common
 
@@ -97,5 +99,34 @@ func TestGroupServiceAccounts_Lifecycle_AccountAndToken(t *testing.T) {
 		}
 
 		harness.DoVoid(s, actionGroupServiceAccountDelete, withParams(account, map[string]any{"hard_delete": true}))
+	})
+}
+
+// TestGroupServiceAccounts_Get_ReadsTheAccountBackByID creates one service
+// account per surface and reads it back by its ID, which must answer with the
+// account the listing would have shown. It is apart from the lifecycle above
+// because GitLab mounts GET /groups/:id/service_accounts/:user_id only from
+// 19.4, and the lifecycle's other actions answer on older instances too.
+func TestGroupServiceAccounts_Get_ReadsTheAccountBackByID(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.GitLabAtLeast(19, 4)))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("grpsaget"))
+		params := map[string]any{"group_id": group.IDParam()}
+
+		name := e.Name("sa")
+		created := harness.Do[groupserviceaccounts.Output](s, actionGroupServiceAccountCreate, withParams(params, map[string]any{"name": name, "username": name}))
+		if created.ID == 0 {
+			e.T.Fatalf("service_account_create answered %+v, want an account with an ID", created)
+		}
+		e.Defer("service account "+name, func(ctx context.Context) error {
+			return fixture.DeleteUser(ctx, e.Client(), created.ID)
+		})
+
+		got := harness.Do[groupserviceaccounts.Output](s, actionGroupServiceAccountGet, withParams(params, map[string]any{"service_account_id": created.ID}))
+		if got.ID != created.ID || got.Username != name || got.Name != name || got.Email != created.Email {
+			e.T.Errorf("service_account_get answered %+v, want the created account %+v", got, created)
+		}
 	})
 }

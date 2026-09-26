@@ -3,6 +3,7 @@ package groupserviceaccounts
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -144,6 +145,33 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Accounts:   out,
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}, nil
+}
+
+// GetInput holds parameters for retrieving one group service account.
+type GetInput struct {
+	GroupID          string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	ServiceAccountID int64  `json:"service_account_id" jsonschema:"Service account user ID,required"`
+}
+
+// Get retrieves one service account of a group through
+// GET /groups/:id/service_accounts/:user_id, which GitLab mounts from 19.4.
+//
+// A 404 is left to the route's not-found answer, which says what it can mean:
+// no such account in the group, or an instance older than the route. A 400 is
+// GitLab saying the user exists in the group and is not a service account.
+func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	if input.GroupID == "" {
+		return Output{}, toolutil.ErrFieldRequired("group_id")
+	}
+	if input.ServiceAccountID == 0 {
+		return Output{}, toolutil.ErrFieldRequired("service_account_id")
+	}
+	sa, _, err := client.GL().Groups.GetServiceAccount(input.GroupID, input.ServiceAccountID, gl.WithContext(ctx))
+	if err != nil {
+		return Output{}, toolutil.WrapErrWithStatusHint("get group service account", err, http.StatusBadRequest,
+			"service_account_id names a user of this group who is not a service account; take the ID from group.service_account_list")
+	}
+	return toOutput(sa), nil
 }
 
 // CreateInput holds parameters for creating a group service account.

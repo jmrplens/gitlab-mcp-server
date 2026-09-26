@@ -1299,8 +1299,11 @@ written; the record has been re-pinned to 19.4.1-ee since.
   `ProjectsService.GetProjectServiceAccount` wrap
   `GET /…/service_accounts/:user_id` as of **v3.12.0**
   ([!3056](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3056),
-  somebody else's), which this server does not yet publish an action for. That
-  is new surface for the 1:1 review (R-ACTION) rather than a workaround.
+  somebody else's), which this server publishes as `group.service_account_get`
+  and `project.service_account_get`. GitLab mounts that route from 19.4
+  ([gitlab-org/gitlab!250360](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/250360),
+  first tagged in `v19.4.0-ee`), so both actions say so, and on an older
+  instance every ID answers 404.
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose

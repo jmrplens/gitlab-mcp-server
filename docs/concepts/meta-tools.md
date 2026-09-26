@@ -1,6 +1,6 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1086 (self-managed Ultimate) individual tools, or 1092 on GitLab.com Ultimate, **34 base meta-tools** (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 868 (Free/CE) to 1088 (self-managed Ultimate) individual tools, or 1094 on GitLab.com Ultimate, **34 base meta-tools** (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
@@ -57,26 +57,26 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | ----------------- | -------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
 | Dynamic (default) |                                2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
 | Meta-tools        |                   34 Free/CE / 40 Premium / 51 Ultimate / 52 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
-| Individual tools  | 866 Free/CE / 1020 Premium / 1086 Ultimate / 1092 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
+| Individual tools  | 868 Free/CE / 1022 Premium / 1088 Ultimate / 1094 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
 
 ## Meta-Tool Inventory
 
-Action counts are the Free/CE catalog as served by the binary (read them from the `gitlab://tools` manifest). Premium and Ultimate add actions to several groups: on Ultimate `gitlab_project` has 143, `gitlab_group` 157, `gitlab_issue` 71, `gitlab_merge_request` 58, `gitlab_environment` 23, `gitlab_runner` 34 and `gitlab_storage_move` 18.
+Action counts are the Free/CE catalog as served by the binary (read them from the `gitlab://tools` manifest). Premium and Ultimate add actions to several groups: on Ultimate `gitlab_project` has 144, `gitlab_group` 158, `gitlab_issue` 71, `gitlab_merge_request` 58, `gitlab_environment` 23, `gitlab_runner` 34 and `gitlab_storage_move` 18.
 
 ### Core Inline Meta-Tools (17)
 
 | #   | Tool Name              | Actions | Domain                                                                                                                                                                                   |
 | --- | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `gitlab_project`       | 123     | Projects, uploads, hooks, badges, boards, import/export, statistics, pages                                                                                                               |
+| 1   | `gitlab_project`       | 124     | Projects, uploads, hooks, badges, boards, import/export, statistics, pages                                                                                                               |
 | 2   | `gitlab_branch`        | 11      | Branches, protected branches, branch rules                                                                                                                                               |
 | 3   | `gitlab_tag`           | 9       | Tags, protected tags                                                                                                                                                                     |
 | 4   | `gitlab_release`       | 12      | Releases, release links                                                                                                                                                                  |
 | 5   | `gitlab_merge_request` | 46      | MR CRUD, approvals, context-commits, MR emoji, MR resource events                                                                                                                        |
 | 6   | `gitlab_mr_review`     | 23      | MR notes, discussions, drafts, changes                                                                                                                                                   |
 | 7   | `gitlab_repository`    | 41      | Repository tree/compare, commit discussions, files, submodules, markdown                                                                                                                 |
-| 8   | `gitlab_group`         | 75      | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions                                                                                                    |
+| 8   | `gitlab_group`         | 76      | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions                                                                                                    |
 | 9   | `gitlab_issue`         | 66      | Issues, notes, discussions, links, statistics, issue emoji, issue resource events                                                                                                        |
 | 10  | `gitlab_pipeline`      | 33      | Pipelines, pipeline triggers, pipeline schedules, wait                                                                                                                                   |
 | 11  | `gitlab_job`           | 25      | Jobs, job token scope, wait                                                                                                                                                              |

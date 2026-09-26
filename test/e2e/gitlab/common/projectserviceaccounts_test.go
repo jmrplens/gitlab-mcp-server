@@ -4,11 +4,14 @@
 // their tokens: create, update, list, mint a token, list the tokens, rotate
 // it, revoke it, delete the account. The actions are Free in the catalog
 // and the endpoints answer on every edition, so the scenario runs on both
-// runtimes; the old suite kept it in its Enterprise half.
+// runtimes; the old suite kept it in its Enterprise half. Reading one account
+// back by its ID is a scenario of its own, since GitLab mounts that route only
+// from 19.4.
 
 package common
 
 import (
+	"context"
 	"maps"
 	"testing"
 	"time"
@@ -85,6 +88,39 @@ func TestProjectServiceAccounts_Lifecycle_AccountAndTokens(t *testing.T) {
 		harness.DoVoid(s, actionProjectServiceAccountPATRevoke, withParams(account, map[string]any{"token_id": rotated.ID}))
 
 		harness.DoVoid(s, actionProjectServiceAccountDelete, withParams(account, map[string]any{"hard_delete": true}))
+	})
+}
+
+// TestProjectServiceAccounts_Get_ReadsTheAccountBackByID creates one service
+// account per surface and reads it back by its ID, which must answer with the
+// account the create returned. It is apart from the lifecycle above because
+// GitLab mounts GET /projects/:id/service_accounts/:user_id only from 19.4,
+// and the lifecycle's other actions answer on older instances too.
+func TestProjectServiceAccounts_Get_ReadsTheAccountBackByID(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.GitLabAtLeast(19, 4)))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		project := fixture.NewProject(e, fixture.WithNamePrefix("projsaget"))
+		id := project.IDParam()
+
+		name := e.Name("sa")
+		created := harness.Do[projectserviceaccounts.Output](s, actionProjectServiceAccountCreate, map[string]any{
+			"project_id": id, "name": name, "username": name,
+		})
+		if created.ID == 0 {
+			e.T.Fatalf("service_account_create answered %+v, want an account with an ID", created)
+		}
+		e.Defer("service account "+name, func(ctx context.Context) error {
+			return fixture.DeleteUser(ctx, e.Client(), created.ID)
+		})
+
+		got := harness.Do[projectserviceaccounts.Output](s, actionProjectServiceAccountGet, map[string]any{
+			"project_id": id, "service_account_id": created.ID,
+		})
+		if got.ID != created.ID || got.Username != created.Username || got.Name != created.Name || got.Email != created.Email {
+			e.T.Errorf("service_account_get answered %+v, want the created account %+v", got, created)
+		}
 	})
 }
 

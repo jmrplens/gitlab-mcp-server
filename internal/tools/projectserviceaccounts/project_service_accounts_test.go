@@ -6,9 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -140,6 +143,118 @@ func TestList(t *testing.T) {
 			}
 			if len(out.Accounts) != tt.wantCount {
 				t.Fatalf("len(Accounts) = %d, want %d", len(out.Accounts), tt.wantCount)
+			}
+		})
+	}
+}
+
+// TestGet verifies the Get handler: it asks GET
+// /projects/:id/service_accounts/:user_id for the account the caller named and
+// publishes every field the service account entity sends, public_email read
+// from the captured response because client-go's struct does not carry it. A
+// call missing either identifier is refused before it reaches GitLab, and a
+// refusal is reported under the operation's name.
+func TestGet(t *testing.T) {
+	t.Run("returns every field GitLab sent", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			testutil.AssertRequestMethod(t, r, http.MethodGet)
+			testutil.AssertRequestPath(t, r, pathProjectServiceAccount7)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"svc","username":"svc-user","email":"svc@example.com",`+
+				`"public_email":"public@example.com","unconfirmed_email":"pending@example.com"}`)
+		}))
+		out, err := Get(context.Background(), client, GetInput{ProjectID: "42", ServiceAccountID: 7})
+		if err != nil {
+			t.Fatalf("Get() unexpected error: %v", err)
+		}
+		want := Output{
+			ID: 7, Name: "svc", Username: "svc-user", Email: "svc@example.com",
+			PublicEmail: "public@example.com", UnconfirmedEmail: "pending@example.com",
+		}
+		if !reflect.DeepEqual(out, want) {
+			t.Errorf("Get() = %+v, want %+v", out, want)
+		}
+	})
+	for _, tt := range []struct {
+		name  string
+		input GetInput
+		want  string
+	}{
+		{name: "refuses an empty project_id", input: GetInput{ServiceAccountID: 7}, want: "project_id"},
+		{name: "refuses a zero service_account_id", input: GetInput{ProjectID: "42"}, want: "service_account_id"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Get(context.Background(), client, tt.input)
+			assertErrorContains(t, err, tt.want)
+		})
+	}
+	t.Run("reports a refusal under the operation's name", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		}))
+		_, err := Get(context.Background(), client, GetInput{ProjectID: "42", ServiceAccountID: 7})
+		assertErrorContains(t, err, "get project service account")
+	})
+}
+
+// TestActionSpecs_GetRoute_AnswersA404WithANotFoundResult verifies the get
+// route answers GitLab's 404 with the not-found output naming the account and
+// the project the caller asked about, and passes every other refusal through
+// as an error. A 404 is the one answer an instance older than GitLab 19.4
+// gives for every ID, so the not-found card is where that is said.
+func TestActionSpecs_GetRoute_AnswersA404WithANotFoundResult(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		status     int
+		wantResult any
+		wantErr    bool
+	}{
+		{name: "404", status: http.StatusNotFound, wantResult: serviceAccountNotFoundOutput{Identifier: "ID 31234567 in project 12345678"}},
+		{name: "403 stays an error", status: http.StatusForbidden, wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			byTool := specsByTool(t, ActionSpecs(client))
+			// JSON numbers of eight digits, which reach the route as float64s
+			// and would print in exponent form without ParamText.
+			result, err := byTool["gitlab_project_service_account_get"].Route.Handler(t.Context(), map[string]any{
+				"project_id": float64(12345678), "service_account_id": float64(31234567),
+			})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Route.Handler error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && result != tt.wantResult {
+				t.Errorf("Route.Handler result = %#v, want %#v", result, tt.wantResult)
+			}
+		})
+	}
+}
+
+// TestFormatServiceAccountNotFound verifies the not-found answer the get
+// route gives for a 404, read back through the Markdown registry so the
+// registration is held too: an error result naming the account and the
+// project, pointing at the listing, and saying that an instance older than
+// GitLab 19.4 answers 404 for every ID because it does not mount the route.
+func TestFormatServiceAccountNotFound(t *testing.T) {
+	result := toolutil.MarkdownForResult(serviceAccountNotFoundOutput{Identifier: "ID 7 in project 42"})
+	if result == nil || !result.IsError || len(result.Content) != 1 {
+		t.Fatalf("MarkdownForResult(not found) = %#v, want one error content block", result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content = %T, want *mcp.TextContent", result.Content[0])
+	}
+	for _, want := range []string{
+		"Project Service Account Not Found",
+		"ID 7 in project 42",
+		"Use project.service_account_list with project_id to find the account's ID",
+		"GitLab mounts this route from 19.4",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text.Text, want) {
+				t.Errorf("not-found card does not contain %q:\n%s", want, text.Text)
 			}
 		})
 	}
@@ -631,12 +746,16 @@ func TestPATTokenIDHint(t *testing.T) {
 func TestActionSpecs(t *testing.T) {
 	client := newProjectServiceAccountCatalogClient(t)
 	specs := ActionSpecs(client)
-	if len(specs) != 8 {
-		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
+	if len(specs) != 9 {
+		t.Fatalf("len(ActionSpecs) = %d, want 9", len(specs))
 	}
 	byTool := specsByTool(t, specs)
-	if !byTool["gitlab_project_service_account_list"].ReadOnly {
-		t.Fatal("gitlab_project_service_account_list should be read-only")
+	for _, toolName := range []string{"gitlab_project_service_account_list", "gitlab_project_service_account_get"} {
+		t.Run(toolName, func(t *testing.T) {
+			if !byTool[toolName].ReadOnly {
+				t.Fatalf("%s should be read-only", toolName)
+			}
+		})
 	}
 	for _, toolName := range []string{"gitlab_project_service_account_delete", "gitlab_project_service_account_pat_revoke"} {
 		t.Run(toolName, func(t *testing.T) {
@@ -661,6 +780,7 @@ func TestActionSpecs(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_project_service_account_list", map[string]any{"project_id": "42"}},
+		{"gitlab_project_service_account_get", map[string]any{"project_id": "42", "service_account_id": 7}},
 		{"gitlab_project_service_account_create", map[string]any{"project_id": "42", "name": "svc"}},
 		{"gitlab_project_service_account_update", map[string]any{"project_id": "42", "service_account_id": 7, "name": "svc"}},
 		{"gitlab_project_service_account_delete", map[string]any{"project_id": "42", "service_account_id": 7}},
@@ -794,6 +914,10 @@ func TestContextCancellation(t *testing.T) {
 		call func() error
 	}{
 		{name: "list", call: func() error { _, err := List(ctx, client, ListInput{ProjectID: "42"}); return err }},
+		{name: "get", call: func() error {
+			_, err := Get(ctx, client, GetInput{ProjectID: "42", ServiceAccountID: 7})
+			return err
+		}},
 		{name: "create", call: func() error { _, err := Create(ctx, client, CreateInput{ProjectID: "42"}); return err }},
 		{name: "update", call: func() error {
 			_, err := Update(ctx, client, UpdateInput{ProjectID: "42", ServiceAccountID: 7})
@@ -843,6 +967,8 @@ func newProjectServiceAccountCatalogClient(t *testing.T) *gitlabclient.Client {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/service_accounts"):
 			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountsJSON)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/service_accounts/7"):
+			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountJSON)
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/personal_access_tokens"):
 			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountPATsJSON)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/rotate"):
@@ -874,6 +1000,10 @@ func TestProjectServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
 	}{
 		{"list", `[{"id":1,"username":"svc","name":"Service","public_email":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
 			_, err := List(ctx, c, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{"get", `{"id":1,"username":"svc","name":"Service","public_email":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "42", ServiceAccountID: 1})
 			return err
 		}},
 		{"create", `{"id":1,"username":"svc","name":"Service","public_email":42}`, func(ctx context.Context, c *gitlabclient.Client) error {

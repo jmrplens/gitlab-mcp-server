@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -151,6 +152,48 @@ func Tier(want edition.Tier) Need {
 			return false, "this instance is " + inst.facts.Tier.String() + ", and the test needs " + want.String()
 		},
 	}
+}
+
+// GitLabAtLeast requires an instance of at least the given GitLab release, for
+// a scenario whose route GitLab mounts only from that release. It is a
+// constructor for the reason Tier is: the release is the argument.
+//
+// A version the probe could not read is judged too old rather than new
+// enough: the route either answers or does not, and a scenario run against an
+// instance that lacks it fails for a reason that has nothing to do with this
+// server.
+func GitLabAtLeast(major, minor int) Need {
+	want := fmt.Sprintf("GitLab %d.%d", major, minor)
+	return Need{
+		name: want + " or later",
+		available: func(inst *instance) (bool, string) {
+			gotMajor, gotMinor, ok := gitLabRelease(inst.facts.Version)
+			if !ok {
+				return false, fmt.Sprintf("the instance reported version %q, which does not read as a GitLab release to compare with %s", inst.facts.Version, want)
+			}
+			if gotMajor > major || (gotMajor == major && gotMinor >= minor) {
+				return true, ""
+			}
+			return false, fmt.Sprintf("this instance is GitLab %s, and the test needs %s or later", inst.facts.Version, want)
+		},
+	}
+}
+
+// gitLabRelease reads the major and minor release out of the version GET
+// /api/v4/version reports, such as 19.4.0-ee or 19.5.0-pre. The patch and any
+// suffix are ignored, since a route is mounted by a release rather than by a
+// patch of one.
+func gitLabRelease(version string) (major, minor int, ok bool) {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) < 2 {
+		return 0, 0, false
+	}
+	major, majorErr := strconv.Atoi(parts[0])
+	minor, minorErr := strconv.Atoi(parts[1])
+	if majorErr != nil || minorErr != nil {
+		return 0, 0, false
+	}
+	return major, minor, true
 }
 
 // requiredSetting builds the Need satisfied by a configuration key carrying a
@@ -313,10 +356,12 @@ func (g *serialGate) enter(test string, alone bool) func() {
 	}
 }
 
-// othersHolding reports whether any test but this one holds a slot.
+// othersHolding reports whether any test but this one holds a slot. Every
+// entry in shared holds at least one, since a release deletes the entry whose
+// count reaches zero, so being listed is holding.
 func (g *serialGate) othersHolding(test string) bool {
-	for held, count := range g.shared {
-		if held != test && count > 0 {
+	for held := range g.shared {
+		if held != test {
 			return true
 		}
 	}

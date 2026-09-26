@@ -1,6 +1,8 @@
 package groupserviceaccounts
 
 import (
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -9,6 +11,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupServiceAccountReadSpec("service_account_list", toolutil.RouteAction(client, List), "gitlab_group_service_account_list"),
+		groupServiceAccountReadSpec("service_account_get", groupServiceAccountGetRoute(client), "gitlab_group_service_account_get"),
 		groupServiceAccountCreateSpec("service_account_create", toolutil.RouteAction(client, Create), "gitlab_group_service_account_create"),
 		groupServiceAccountUpdateSpec("service_account_update", toolutil.RouteAction(client, Update), "gitlab_group_service_account_update"),
 		groupServiceAccountDeleteSpec("service_account_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_service_account_delete"),
@@ -17,6 +20,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupServiceAccountDeleteSpec("service_account_pat_revoke", toolutil.DestructiveVoidAction(client, RevokePAT), "gitlab_group_service_account_pat_revoke"),
 		groupServiceAccountUpdateSpec("service_account_pat_rotate", toolutil.RouteAction(client, RotatePAT), "gitlab_group_service_account_pat_rotate"),
 	}
+}
+
+// groupServiceAccountGetRoute answers GitLab's 404 with a not-found result
+// naming the account and the group, rather than with an error.
+func groupServiceAccountGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return serviceAccountNotFoundOutput{Identifier: fmt.Sprintf("ID %s in group %s",
+			toolutil.ParamText(params["service_account_id"]), toolutil.ParamText(params["group_id"]))}
+	})
 }
 
 func groupServiceAccountReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -41,6 +53,7 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 	// several actions gives a model no signal to choose between them.
 	leads := map[string]string{
 		"service_account_list":       "List a group's service account users.",
+		"service_account_get":        "Get one group service account by its user ID. Needs GitLab 19.4 or later, which is where GitLab mounts the route. On an older instance, read the account from group.service_account_list.",
 		"service_account_create":     "Create a service account user in a group.",
 		"service_account_update":     "Update a group service account's name or username.",
 		"service_account_delete":     "Delete a group service account user, optionally hard-deleting owned resources.",
@@ -60,6 +73,13 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 	}
 	if individualTool == "gitlab_group_service_account_pat_rotate" {
 		options.IndividualTool.Description = "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list."
+	}
+	if individualTool == "gitlab_group_service_account_get" {
+		// The other actions' descriptions are the curated ones the golden
+		// snapshot carries. A new action has none there until the snapshot is
+		// regenerated, and the fallback would say neither what it returns nor
+		// which GitLab release it needs.
+		options.IndividualTool.Description = "Get one service account of a GitLab group by its user ID (GitLab 19.4 or later).\n\nReturns: the service account with ID, name, username, email, public email, and the unconfirmed email when a change is pending. See also: gitlab_group_service_account_list, gitlab_group_service_account_update, gitlab_group_service_account_pat_list."
 	}
 	if individualTool == "gitlab_group_service_account_create" || individualTool == "gitlab_group_service_account_update" {
 		options.Usage += " Omit email unless the task gives an explicit valid email address."
@@ -101,6 +121,8 @@ func groupServiceAccountAliases(actionName string) []string {
 	switch actionName {
 	case "service_account_list":
 		aliases = append(aliases, "group service account list", "list group service accounts", "show group service accounts", "browse group service accounts")
+	case "service_account_get":
+		aliases = append(aliases, "group service account get", "get group service account", "show group service account", "retrieve group service account")
 	case "service_account_create":
 		aliases = append(aliases, "group service account create", "create group service account", "new group service account", "provision group service account")
 	case "service_account_update":
