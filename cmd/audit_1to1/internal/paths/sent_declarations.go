@@ -104,6 +104,15 @@ const (
 	// hierarchy rather than a route's parameters, and because no route
 	// declaring something can ever retire it.
 	categorySubclassCannotSatisfy = "entity-condition-the-presented-class-cannot-satisfy"
+	// categoryAbilityNoRoleGrants is a condition asking the policy for an
+	// ability that no role grants on the kind of source these routes present,
+	// so no caller, request, parameter or license makes it true on them. Kept
+	// apart from [categorySubclassCannotSatisfy] because the evidence is the
+	// authorization model (config/authz/roles and the policy that enables a
+	// role's permissions per scope) rather than the model hierarchy, and
+	// because a GitLab release that grants the ability in the other scope
+	// retires it.
+	categoryAbilityNoRoleGrants = "entity-condition-an-ability-no-role-grants-on-the-source"
 	// categoryConstantEmpty is a field the entity renders through a block that
 	// returns the same empty value whatever the object: the key can arrive, and
 	// never with anything in it, so publishing it would offer a key no answer
@@ -203,6 +212,26 @@ const (
 	reasonApprovedMemberNotARequester = "accessrequests.MemberOutput is filled by the two approve routes (lib/api/access_requests.rb), " +
 		"which present Entities::Member and not Entities::AccessRequester. requested_at belongs to the pending request the " +
 		"approval ended, and accessrequests.Output, which the lists and the requests to join fill, publishes it."
+)
+
+// The two-factor key Member exposes since 19.4, on the two member types whose
+// routes can never send it. lib/api/entities/member.rb gates it on
+// `Ability.allowed?(opts[:current_user], :read_two_factor_member, opts[:source]
+// || member.source)`, and config/authz/roles/owner.yml lists that ability in
+// its group section alone (line 166 at 19.4.1-ee), which the admin role
+// inherits; ProjectPolicy enables each role's project permissions through
+// app/policies/concerns/authz/role_permissions.rb and has no rule of its own
+// for it. internal/tools/groupmembers publishes the key, since its routes ask
+// the ability of a group.
+const (
+	reasonMemberTwoFactorOnProject = "every route internal/tools/members is filled from is a project member route in " +
+		"lib/api/members.rb, which presents Entities::Member with the project as source, or with no source on the PUT, " +
+		"where member.source is the same project. read_two_factor_member is granted by no role in a project scope, so " +
+		"the ability is refused to every caller and the key is never on these responses."
+	reasonApprovedMemberTwoFactor = "the two approve routes present `result[:member], with: Entities::Member` " +
+		"(lib/api/access_requests.rb) and pass no current_user, so the ability is asked of no user and refused, and the " +
+		"key is never sent. On the project route it would be refused to any caller as well, since no role grants " +
+		"read_two_factor_member in a project scope."
 )
 
 // The three presenter options behind [categoryOptionNeverPassed] in the member
@@ -691,6 +720,13 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// entry names requested_at, the one key AccessRequester adds.
 	{Package: accessRequestsPkg, Type: "Output", Entity: memberEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonAccessRequesterNotAMember},
 	{Package: accessRequestsPkg, Type: "MemberOutput", Entity: accessRequesterEntity, Field: "requested_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonApprovedMemberNotARequester},
+
+	// two_factor_enabled on the approved member and on a project member,
+	// neither of which any caller can be sent. The access-request entry names
+	// the package rather than MemberOutput, because the package grain holds the
+	// same key against the same approve routes.
+	{Package: accessRequestsPkg, Entity: memberEntity, Field: "two_factor_enabled", Category: categoryOptionNeverPassed, Reason: reasonApprovedMemberTwoFactor},
+	{Package: toolsDir + "/members", Entity: memberEntity, Field: "two_factor_enabled", Category: categoryAbilityNoRoleGrants, Reason: reasonMemberTwoFactorOnProject},
 
 	{
 		Package:  toolsDir + "/geo",
