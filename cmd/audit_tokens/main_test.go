@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tiktoken-go/tokenizer"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
@@ -71,9 +73,18 @@ func useSharedAuditClient(t *testing.T) {
 // measuredFootprintRows returns the full tier x surface x mode measurement,
 // taken once per process: it registers every surface three times over, so
 // tests share the result and treat it as read-only.
+//
+// The one measurement is also the one chance to read the progress lines it
+// writes, so they are recorded in footprintProgress as it runs rather than
+// paid for by a second measurement taken only to watch them.
 func measuredFootprintRows(t *testing.T) []tokenFootprintRow {
 	t.Helper()
 	footprintOnce.Do(func() {
+		original := progressf
+		progressf = func(message string, args ...any) {
+			footprintProgress = append(footprintProgress, fmt.Sprintf(message, args...))
+		}
+		defer func() { progressf = original }()
 		footprintShared = measureTokenFootprintRows(newAuditTokensClient(t))
 	})
 	return footprintShared
@@ -90,12 +101,13 @@ func measuredTokenAudit(t *testing.T) tokenAudit {
 }
 
 var (
-	sharedClientOnce sync.Once
-	sharedClient     *gitlabclient.Client
-	footprintOnce    sync.Once
-	footprintShared  []tokenFootprintRow
-	tokenAuditOnce   sync.Once
-	tokenAuditShared tokenAudit
+	sharedClientOnce  sync.Once
+	sharedClient      *gitlabclient.Client
+	footprintOnce     sync.Once
+	footprintShared   []tokenFootprintRow
+	footprintProgress []string
+	tokenAuditOnce    sync.Once
+	tokenAuditShared  tokenAudit
 )
 
 // auditDynamicSurface returns the base action routes, the catalog built over
@@ -352,6 +364,57 @@ func TestMeasureTools_EmptyInputReturnsEmpty(t *testing.T) {
 	}
 }
 
+// thirdCodec counts one token for every three bytes, so a measurement's token
+// and byte figures never agree and two definitions of one length cost the same.
+type thirdCodec struct{}
+
+func (thirdCodec) GetName() string { return "third" }
+
+func (thirdCodec) Count(s string) (int, error) { return len(s) / 3, nil }
+
+func (thirdCodec) Encode(s string) ([]uint, []string, error) { return make([]uint, len(s)/3), nil, nil }
+
+func (thirdCodec) Decode([]uint) (string, error) { return "", nil }
+
+// TestMeasureTools_EqualCost_RanksByName verifies each record carries the
+// tool's own name, domain, token count and byte length, that the costliest
+// tool comes first, and that tools of equal cost follow in name order rather
+// than in the order they were listed. The real individual surface has
+// hundreds of such ties, some inside the report's top thirty.
+func TestMeasureTools_EqualCost_RanksByName(t *testing.T) {
+	original := activeCodec
+	activeCodec = func() tokenizer.Codec { return thirdCodec{} }
+	t.Cleanup(func() { activeCodec = original })
+
+	// The tag and env tools serialize to the same length and so tie; the job
+	// tool's longer description makes it the costliest.
+	toolList := []*mcp.Tool{
+		{Name: "gitlab_tag_get", Description: "Get."},
+		{Name: "gitlab_job_get", Description: "Get one CI job with its trace."},
+		{Name: "gitlab_env_get", Description: "Get."},
+	}
+	size := func(tool *mcp.Tool) int {
+		raw, err := json.Marshal(tool)
+		if err != nil {
+			t.Fatalf("marshal %s: %v", tool.Name, err)
+		}
+		return len(raw)
+	}
+	job, tag, env := size(toolList[1]), size(toolList[0]), size(toolList[2])
+	if tag != env || job <= tag {
+		t.Fatalf("fixture sizes job=%d tag=%d env=%d, want tag and env equal and job larger", job, tag, env)
+	}
+
+	want := []toolTokenInfo{
+		{Name: "gitlab_job_get", Domain: "job", Tokens: job / 3, Bytes: job},
+		{Name: "gitlab_env_get", Domain: "env", Tokens: env / 3, Bytes: env},
+		{Name: "gitlab_tag_get", Domain: "tag", Tokens: tag / 3, Bytes: tag},
+	}
+	if got := measureTools(toolList); !slices.Equal(got, want) {
+		t.Fatalf("measureTools() =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
 // TestMeasurePrompts_ReturnsTokenEstimateForRegisteredPrompts verifies the
 // prompt token estimator produces a positive count for a real client.
 func TestMeasurePrompts_ReturnsTokenEstimateForRegisteredPrompts(t *testing.T) {
@@ -395,49 +458,97 @@ func TestPrintTopTools_NLargerThanLength(t *testing.T) {
 	}
 }
 
-// TestPrintDomainTotals_AggregatesAndSortsByTokenCost verifies the printer
-// groups tools by domain, sums tokens, sorts descending, and limits rows.
-func TestPrintDomainTotals_AggregatesAndSortsByTokenCost(t *testing.T) {
+// TestPrintTopTools_Rows_CarryRankCostSizeAndName verifies each ranking row
+// holds its rank, the tool's token count, its byte size and its name, in that
+// column order. Every figure differs from every other, so a row that printed
+// the bytes under the tokens heading, or a rank off by one, reads wrong here.
+func TestPrintTopTools_Rows_CarryRankCostSizeAndName(t *testing.T) {
 	infos := []toolTokenInfo{
-		{Name: "gitlab_project_get", Domain: "project", Tokens: 100, Bytes: 400},
-		{Name: "gitlab_project_list", Domain: "project", Tokens: 50, Bytes: 200},
-		{Name: "gitlab_issue_get", Domain: "issue", Tokens: 30, Bytes: 120},
+		{Name: "gitlab_project_get", Tokens: 1300, Bytes: 5207},
+		{Name: "gitlab_issue_list", Tokens: 700, Bytes: 2803},
+		{Name: "gitlab_branch_get", Tokens: 90, Bytes: 361},
 	}
 
 	output := captureStdoutAudit(t, func() {
-		printDomainTotals(infos, 10)
+		printTopTools(infos, 3)
 	})
 
-	if !strings.Contains(output, "project") || !strings.Contains(output, "issue") {
-		t.Fatalf("printDomainTotals() missing domain rows:\n%s", output)
+	want := [][]string{
+		{"1", "1,300", "5,207", "gitlab_project_get"},
+		{"2", "700", "2,803", "gitlab_issue_list"},
+		{"3", "90", "361", "gitlab_branch_get"},
 	}
-	// project should appear before issue because total tokens (150) > 30.
-	assertBefore(t, output, "project", "issue")
-	// Count column should be 2 for project (two tools) and 1 for issue.
-	if !strings.Contains(output, "2") {
-		t.Fatalf("printDomainTotals() output missing count column:\n%s", output)
+	if got := tableRows(output); !slices.EqualFunc(got, want, slices.Equal[[]string]) {
+		t.Fatalf("printTopTools() rows = %v, want %v", got, want)
+	}
+}
+
+// domainFixture is a measured individual surface whose domain totals include
+// a three-way tie at 40 tokens, reached by one tool in two domains and by two
+// tools in the third, so the tie cannot be broken by a count either.
+func domainFixture() []toolTokenInfo {
+	return []toolTokenInfo{
+		{Name: "gitlab_project_get", Domain: "project", Tokens: 100, Bytes: 400},
+		{Name: "gitlab_wiki_get", Domain: "wiki", Tokens: 40, Bytes: 161},
+		{Name: "gitlab_project_list", Domain: "project", Tokens: 50, Bytes: 200},
+		{Name: "gitlab_job_get", Domain: "job", Tokens: 40, Bytes: 163},
+		{Name: "gitlab_env_get", Domain: "env", Tokens: 25, Bytes: 101},
+		{Name: "gitlab_issue_get", Domain: "issue", Tokens: 30, Bytes: 120},
+		{Name: "gitlab_env_list", Domain: "env", Tokens: 15, Bytes: 61},
+	}
+}
+
+// TestPrintDomainTotals_AggregatesAndSortsByTokenCost verifies the printer
+// groups tools by domain, counts them and sums their tokens, and ranks the
+// domains by descending total with equal totals in name order. The totals are
+// gathered in a map, so without the name the three tied domains came out in
+// its iteration order, which changes from run to run.
+func TestPrintDomainTotals_AggregatesAndSortsByTokenCost(t *testing.T) {
+	output := captureStdoutAudit(t, func() {
+		printDomainTotals(domainFixture(), 10)
+	})
+
+	want := [][]string{
+		{"1", "project", "2", "150"},
+		{"2", "env", "2", "40"},
+		{"3", "job", "1", "40"},
+		{"4", "wiki", "1", "40"},
+		{"5", "issue", "1", "30"},
+	}
+	if got := tableRows(output); !slices.EqualFunc(got, want, slices.Equal[[]string]) {
+		t.Fatalf("printDomainTotals() rows = %v, want %v", got, want)
 	}
 }
 
 // TestPrintDomainTotals_RespectsLimit verifies the printer caps the row count
-// at the requested n parameter.
+// at the requested n parameter, keeping the highest-ranked domains.
 func TestPrintDomainTotals_RespectsLimit(t *testing.T) {
-	infos := []toolTokenInfo{
-		{Name: "gitlab_a", Domain: "a", Tokens: 100},
-		{Name: "gitlab_b", Domain: "b", Tokens: 80},
-		{Name: "gitlab_c", Domain: "c", Tokens: 60},
-	}
-
 	output := captureStdoutAudit(t, func() {
-		printDomainTotals(infos, 1)
+		printDomainTotals(domainFixture(), 2)
 	})
 
-	if !strings.Contains(output, "a") {
-		t.Fatalf("printDomainTotals() missing first row:\n%s", output)
+	want := [][]string{
+		{"1", "project", "2", "150"},
+		{"2", "env", "2", "40"},
 	}
-	if strings.Contains(output, "| b ") || strings.Contains(output, "| c ") {
-		t.Fatalf("printDomainTotals() included rows beyond n=1:\n%s", output)
+	if got := tableRows(output); !slices.EqualFunc(got, want, slices.Equal[[]string]) {
+		t.Fatalf("printDomainTotals(n=2) rows = %v, want %v", got, want)
 	}
+}
+
+// tableRows returns the whitespace-separated fields of every data row of a
+// ranking table: each non-blank line except the header and the dashes under
+// it, which both start with a one-character marker cell.
+func tableRows(s string) [][]string {
+	var rows [][]string
+	for line := range strings.SplitSeq(s, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || fields[0] == "#" || fields[0] == "-" {
+			continue
+		}
+		rows = append(rows, fields)
+	}
+	return rows
 }
 
 // TestPrintDomainTotals_EmptyInput verifies the printer renders the table
@@ -776,6 +887,175 @@ func TestPrintTokenAuditReport_ZeroMeasurements_OmitsRatios(t *testing.T) {
 	}
 }
 
+// distinctTokenAudit is a measurement in which no two figures agree, which the
+// real one cannot be: its three shared resource costs are one figure and its
+// two dynamic surfaces cost the same, so a report printing one in another's
+// place read right. Hence three enterprise dynamic tools. The dynamic resource
+// cost sits below the prompt cost because the shared-overhead ratio is guarded
+// on their sum, and only a negative difference tells a sum from a difference.
+func distinctTokenAudit() tokenAudit {
+	return tokenAudit{
+		individualInfo: []toolTokenInfo{
+			{Name: "gitlab_project_get", Domain: "project", Tokens: 700, Bytes: 2801},
+			{Name: "gitlab_issue_list", Domain: "issue", Tokens: 500, Bytes: 2003},
+			{Name: "gitlab_project_list", Domain: "project", Tokens: 300, Bytes: 1207},
+			{Name: "gitlab_branch_get", Domain: "branch", Tokens: 210, Bytes: 811},
+			{Name: "gitlab_project_star", Domain: "project", Tokens: 100, Bytes: 409},
+		},
+		metaBaseInfo: []toolTokenInfo{
+			{Name: "gitlab_project", Domain: "project", Tokens: 90, Bytes: 361},
+			{Name: "gitlab_issue", Domain: "issue", Tokens: 60, Bytes: 243},
+			{Name: "gitlab_branch", Domain: "branch", Tokens: 30, Bytes: 127},
+			{Name: "gitlab_server", Domain: "server", Tokens: 23, Bytes: 83},
+		},
+		metaEnterpriseInfo: []toolTokenInfo{
+			{Name: "gitlab_project", Tokens: 95, Bytes: 383},
+			{Name: "gitlab_issue", Tokens: 64, Bytes: 259},
+			{Name: "gitlab_group", Tokens: 41, Bytes: 167},
+			{Name: "gitlab_branch", Tokens: 33, Bytes: 131},
+			{Name: "gitlab_geo", Tokens: 21, Bytes: 89},
+			{Name: "gitlab_server", Tokens: 11, Bytes: 47},
+		},
+		dynamicBaseInfo: []toolTokenInfo{
+			{Name: "gitlab_find_action", Tokens: 23, Bytes: 97},
+			{Name: "gitlab_execute_action", Tokens: 17, Bytes: 71},
+		},
+		dynamicEnterpriseInfo: []toolTokenInfo{
+			{Name: "gitlab_find_action", Tokens: 29, Bytes: 113},
+			{Name: "gitlab_execute_action", Tokens: 13, Bytes: 57},
+			{Name: "gitlab_third_action", Tokens: 7, Bytes: 31},
+		},
+		individualResourceTokens:     1301,
+		metaBaseResourceTokens:       1409,
+		dynamicBaseResourceTokens:    1511,
+		dynamicMinimalResourceTokens: 211,
+		promptTokens:                 1613,
+		metaBaseCatalogActions:       31,
+		metaEnterpriseCatalogActions: 47,
+		baseReachableActions:         37,
+		enterpriseReachableActions:   53,
+	}
+}
+
+// TestPrintTokenAuditReport_DistinctMeasurements_PlacesEveryFigure verifies
+// the text report puts each figure where its label says: the mode rows, every
+// shared-overhead line and sum, the three ratios, the capped rankings and the
+// grand totals. The expected figures are worked out by hand from a fixture in
+// which no two agree, rather than recomputed from the audit.
+func TestPrintTokenAuditReport_DistinctMeasurements_PlacesEveryFigure(t *testing.T) {
+	output := captureStdoutAudit(t, func() {
+		printTokenAuditReport(distinctTokenAudit(), 4, 2)
+	})
+
+	modeRows := []struct {
+		prefix string
+		want   []string
+	}{
+		{prefix: "  Individual (all)", want: []string{"Individual", "(all)", "5", "5", "1,810", "7,231"}},
+		{prefix: "  Meta-tools (base)", want: []string{"Meta-tools", "(base)", "4", "37", "203", "814"}},
+		{prefix: "  Meta-tools (enterprise)", want: []string{"Meta-tools", "(enterprise)", "6", "53", "265", "1,076"}},
+		{prefix: "  Dynamic (base)", want: []string{"Dynamic", "(base)", "2", "37", "40", "168"}},
+		{prefix: "  Dynamic (enterprise)", want: []string{"Dynamic", "(enterprise)", "3", "53", "49", "201"}},
+	}
+	for _, row := range modeRows {
+		t.Run(strings.TrimSpace(row.prefix), func(t *testing.T) {
+			if got := lineFields(t, output, row.prefix); !slices.Equal(got, row.want) {
+				t.Fatalf("row fields = %v, want %v", got, row.want)
+			}
+		})
+	}
+
+	lines := []string{
+		"  Reachable action counts include 6 standalone utility actions (project discovery + interactive flows) that are visible tools in meta mode and folded into the dynamic catalog.\n",
+		"  Catalog-only meta route counts: base 31 / enterprise 47.\n",
+		"  Meta-tools reduce token overhead by 88.8% vs individual mode\n",
+		"  Dynamic mode reduces visible tool token overhead by 97.8% vs individual mode\n",
+		"  Resources (individual): ~1,301 tokens\n",
+		"  Resources (meta-tools): ~1,409 tokens\n",
+		"  Resources (dynamic): ~1,511 tokens\n",
+		"  Resources (dynamic-minimal): ~211 tokens\n",
+		"  Prompts (full): ~1,613 tokens\n",
+		"  Individual total: ~2,914 tokens\n",
+		"  Meta-tool total:  ~3,022 tokens\n",
+		"  Dynamic total:    ~3,124 tokens\n",
+		"  Dynamic-minimal total: ~211 tokens\n",
+		"  Shared-overhead reduction: 93.2% vs full dynamic resources+prompts\n",
+		"  Individual mode: ~1,810 tokens (tools) + ~2,914 tokens (resources+prompts) = ~4,724 tokens\n",
+		"  Meta-tool mode:  ~203 tokens (tools) + ~3,022 tokens (resources+prompts) = ~3,225 tokens\n",
+		"  Dynamic mode:    ~40 tokens (tools) + ~3,124 tokens (resources+prompts) = ~3,164 tokens\n",
+		"  Dynamic minimal: ~40 tokens (tools) + ~211 tokens (resources+prompts) = ~251 tokens\n",
+	}
+	for _, line := range lines {
+		t.Run(strings.TrimSpace(strings.SplitN(line, ":", 2)[0]), func(t *testing.T) {
+			if !strings.Contains(output, line) {
+				t.Fatalf("report lacks %q in:\n%s", line, output)
+			}
+		})
+	}
+
+	rankings := []struct {
+		name, start, end string
+		want             [][]string
+	}{
+		{
+			name: "individual tools capped at four", start: "## Top 30 Individual Tools by Token Cost\n", end: "## Meta-Tools by Token Cost (base)\n",
+			want: [][]string{{"1", "700", "2,801", "gitlab_project_get"}, {"2", "500", "2,003", "gitlab_issue_list"}, {"3", "300", "1,207", "gitlab_project_list"}, {"4", "210", "811", "gitlab_branch_get"}},
+		},
+		{
+			name: "every base meta-tool", start: "## Meta-Tools by Token Cost (base)\n", end: "## Dynamic Tools by Token Cost (base)\n",
+			want: [][]string{{"1", "90", "361", "gitlab_project"}, {"2", "60", "243", "gitlab_issue"}, {"3", "30", "127", "gitlab_branch"}, {"4", "23", "83", "gitlab_server"}},
+		},
+		{
+			name: "every base dynamic tool", start: "## Dynamic Tools by Token Cost (base)\n", end: "## Domain Totals (Individual Mode, Top 20)\n",
+			want: [][]string{{"1", "23", "97", "gitlab_find_action"}, {"2", "17", "71", "gitlab_execute_action"}},
+		},
+		{
+			name: "domains capped at two", start: "## Domain Totals (Individual Mode, Top 20)\n", end: "## Grand Total (what an LLM sees)\n",
+			want: [][]string{{"1", "project", "3", "1,100"}, {"2", "issue", "1", "500"}},
+		},
+	}
+	for _, ranking := range rankings {
+		t.Run(ranking.name, func(t *testing.T) {
+			got := tableRows(sectionBetween(t, output, ranking.start, ranking.end))
+			if !slices.EqualFunc(got, ranking.want, slices.Equal[[]string]) {
+				t.Fatalf("rows = %v, want %v", got, ranking.want)
+			}
+		})
+	}
+}
+
+// TestWriteTokenAuditJSON_DistinctMeasurements_KeysEveryFigure verifies each
+// key of the -json summary holds the figure it names, against a measurement in
+// which no two figures agree. The real measurement cannot show it for the two
+// dynamic keys, whose surfaces cost the same on every tier.
+func TestWriteTokenAuditJSON_DistinctMeasurements_KeysEveryFigure(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeTokenAuditJSON(&out, distinctTokenAudit()); err != nil {
+		t.Fatalf("writeTokenAuditJSON() error: %v", err)
+	}
+
+	var got map[string]int
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal summary: %v", err)
+	}
+	want := map[string]int{
+		"individual_tools":          5,
+		"meta_base_tools":           4,
+		"dynamic_base_tools":        2,
+		"individual_tokens":         1810,
+		"meta_base_tokens":          203,
+		"meta_enterprise_tokens":    265,
+		"dynamic_base_tokens":       40,
+		"dynamic_enterprise_tokens": 49,
+		"base_reachable_actions":    37,
+		"resource_tokens":           1301,
+		"prompt_tokens":             1613,
+	}
+	if !maps.Equal(got, want) {
+		t.Fatalf("summary = %v, want %v", got, want)
+	}
+}
+
 // TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier verifies the README footprint
 // table keeps only the dynamic surface (default configuration) across all
 // tiers and links to the detailed reference, without the meta/individual rows.
@@ -803,6 +1083,35 @@ func TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier(t *testing.T) 
 	}
 	if strings.Contains(got, "`individual`") {
 		t.Fatal("renderReadmeFootprint() should not include individual rows")
+	}
+}
+
+// TestRenderReadmeFootprint_FullMatrix_RendersEachDynamicRowWhole verifies
+// every dynamic row of a full matrix appears whole, each figure under its own
+// column, and that nothing else does. The fixture's visible tools, reachable
+// actions, schema tokens, shared tokens and totals all differ, so two columns
+// printed in each other's place fail here rather than only against the
+// committed README, whose comparison a stacked layer defers.
+func TestRenderReadmeFootprint_FullMatrix_RendersEachDynamicRowWhole(t *testing.T) {
+	got := renderReadmeFootprint(fullMatrixFootprintRows())
+
+	want := map[string][]string{
+		"Free/CE default":  {dynamicDefaultConfiguration, "Free/CE", "2", "851", "n/a", "1,501", "8,832", "10,333"},
+		"Free/CE minimal":  {dynamicMinimalConfiguration, "Free/CE", "2", "851", "n/a", "1,501", "170", "1,671"},
+		"Premium default":  {dynamicDefaultConfiguration, "Premium", "2", "1,003", "n/a", "1,501", "8,832", "10,333"},
+		"Premium minimal":  {dynamicMinimalConfiguration, "Premium", "2", "1,003", "n/a", "1,501", "170", "1,671"},
+		"Ultimate default": {dynamicDefaultConfiguration, ultimateTierLabel, "2", "1,069", "n/a", "1,501", "8,832", "10,333"},
+		"Ultimate minimal": {dynamicMinimalConfiguration, ultimateTierLabel, "2", "1,069", "n/a", "1,501", "170", "1,671"},
+	}
+	for name, cells := range want {
+		t.Run(name, func(t *testing.T) {
+			if !containsTableRow(got, cells) {
+				t.Fatalf("renderReadmeFootprint() lacks the row %v:\n%s", cells, got)
+			}
+		})
+	}
+	if rows := strings.Count(got, "\n| `"); rows != len(want) {
+		t.Fatalf("renderReadmeFootprint() rendered %d configuration rows, want %d", rows, len(want))
 	}
 }
 
@@ -1167,6 +1476,19 @@ func TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor(t *testin
 	if !strings.HasSuffix(string(raw), "\n") {
 		t.Error("site footprint JSON must end with a trailing newline for prettier")
 	}
+
+	// Each tier's entry whole: its own tool count, its own schema tokens and
+	// the factor drawn from them. The fixture's tiers differ in every figure,
+	// so an entry filed under another tier's key, or a count published as the
+	// tokens, fails here rather than only against the committed site data.
+	wantIndividual := map[string]siteFootprintIndividual{
+		"free":     {VisibleTools: 847, ToolSchemaTokens: 767793, ReductionFactor: 352},  // 767793 / 2180 = 352.2
+		"premium":  {VisibleTools: 999, ToolSchemaTokens: 917625, ReductionFactor: 421},  // 917625 / 2180 = 420.9
+		"ultimate": {VisibleTools: 1065, ToolSchemaTokens: 966698, ReductionFactor: 443}, // 966698 / 2180 = 443.4
+	}
+	if !maps.Equal(got.Individual, wantIndividual) {
+		t.Errorf("Individual = %+v, want %+v", got.Individual, wantIndividual)
+	}
 }
 
 // TestRenderSiteFootprintJSON_UnknownTierRow_IsIgnored verifies the site
@@ -1263,16 +1585,28 @@ func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
 // site data refuses to quote one dynamic figure for every tier once any tier's
 // dynamic row diverges from the Ultimate one: the landing page says in words
 // that the default cost holds on every tier, and that sentence must fail to
-// generate before it can become false.
+// generate before it can become false. The message is compared whole, since
+// it is the one place that says which figure diverged and in which direction.
 func TestRenderSiteFootprintJSON_TierDependentDynamic_ReturnsError(t *testing.T) {
+	const tail = "; the site data quotes one dynamic figure for every tier"
 	tests := []struct {
 		name          string
 		configuration string
 		field         string
+		want          string
 	}{
-		{name: "default shared tokens differ", configuration: dynamicDefaultConfiguration, field: "shared"},
-		{name: "minimal shared tokens differ", configuration: dynamicMinimalConfiguration, field: "shared"},
-		{name: "tool schema tokens differ", configuration: dynamicDefaultConfiguration, field: "schema"},
+		{
+			name: "default shared tokens differ", configuration: dynamicDefaultConfiguration, field: "shared",
+			want: "Premium tier `dynamic` / `full` (default) differs from Ultimate (tool schema 2180 vs 2180, shared 31759 vs 31758)" + tail,
+		},
+		{
+			name: "minimal shared tokens differ", configuration: dynamicMinimalConfiguration, field: "shared",
+			want: "Premium tier `dynamic` / `minimal` differs from Ultimate (tool schema 2180 vs 2180, shared 1089 vs 1088)" + tail,
+		},
+		{
+			name: "tool schema tokens differ", configuration: dynamicDefaultConfiguration, field: "schema",
+			want: "Premium tier `dynamic` / `full` (default) differs from Ultimate (tool schema 2181 vs 2180, shared 31758 vs 31758)" + tail,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1292,8 +1626,8 @@ func TestRenderSiteFootprintJSON_TierDependentDynamic_ReturnsError(t *testing.T)
 			if err == nil {
 				t.Fatal("renderSiteFootprintJSON() error = nil, want error")
 			}
-			if !strings.Contains(err.Error(), "Premium") {
-				t.Fatalf("renderSiteFootprintJSON() error = %q, want it to name the diverging tier", err)
+			if err.Error() != tt.want {
+				t.Fatalf("renderSiteFootprintJSON() error =\n%s\nwant\n%s", err, tt.want)
 			}
 		})
 	}
@@ -1337,6 +1671,110 @@ func TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination(t *te
 	ultIndiv := rows[26].VisibleTools
 	if freeIndiv >= premIndiv || premIndiv >= ultIndiv {
 		t.Fatalf("individual tool count not increasing by tier: Free(%d) < Premium(%d) < Ultimate(%d)", freeIndiv, premIndiv, ultIndiv)
+	}
+}
+
+// TestMeasureTokenFootprintRows_EachTier_RowsCarryTheirOwnSurface verifies
+// every tier's nine rows carry their own surface's figures, the meta rows the
+// meta-tool count the default report lists for Free and Ultimate, without
+// reading the committed tables a stacked layer defers comparing. A row showing
+// the reachable actions as visible tools used to fail only against those.
+func TestMeasureTokenFootprintRows_EachTier_RowsCarryTheirOwnSurface(t *testing.T) {
+	rows := measuredFootprintRows(t)
+	audit := measuredTokenAudit(t)
+	metaTools := map[string]int{"Free/CE": len(audit.metaBaseInfo), ultimateTierLabel: len(audit.metaEnterpriseInfo)}
+
+	for ti, tier := range []string{"Free/CE", "Premium", ultimateTierLabel} {
+		t.Run(tier, func(t *testing.T) {
+			tierRows := rows[ti*9 : ti*9+9]
+			if want, known := metaTools[tier]; known && tierRows[2].VisibleTools != want {
+				t.Errorf("meta rows list %d tools, want the %d the meta surface lists", tierRows[2].VisibleTools, want)
+			}
+			assertTierFootprintShape(t, tierRows)
+		})
+	}
+}
+
+// assertTierFootprintShape verifies one tier's nine footprint rows against
+// the shape every tier shares: the configurations and schema modes in table
+// order, the visible tools and reachable actions each surface carries, the
+// surfaces growing from dynamic to meta to individual, and each minimal row
+// cheaper than the full row beside it on the same tool schemas.
+func assertTierFootprintShape(t *testing.T, tierRows []tokenFootprintRow) {
+	t.Helper()
+	configurations := []string{
+		dynamicDefaultConfiguration, dynamicMinimalConfiguration,
+		"`meta` / `full` (opaque)", "`meta` / `minimal` (opaque)",
+		"`meta` / `full` (compact)", "`meta` / `minimal` (compact)",
+		"`meta` / `full` (full)", "`meta` / `minimal` (full)",
+		individualConfiguration,
+	}
+	schemas := []string{"", "", "opaque", "opaque", "compact", "compact", "full", "full", ""}
+	reachable, meta, individual := tierRows[0].ReachableActions, tierRows[2].VisibleTools, tierRows[8].VisibleTools
+	if meta <= 2 || meta >= reachable || individual <= meta {
+		t.Errorf("visible tools dynamic 2, meta %d, individual %d, reachable %d: want each surface above the one before it and meta below the actions it reaches", meta, individual, reachable)
+	}
+
+	for i, row := range tierRows {
+		visible, wantReachable := meta, reachable
+		switch {
+		case i < 2:
+			visible = 2
+		case i == 8:
+			visible, wantReachable = individual, individual
+		}
+		want := tokenFootprintRow{
+			Tier: row.Tier, Configuration: configurations[i], MetaParamSchema: schemas[i],
+			VisibleTools: visible, ReachableActions: wantReachable,
+			ToolSchemaTokens: row.ToolSchemaTokens, SharedTokens: row.SharedTokens,
+		}
+		if row != want {
+			t.Errorf("row %d = %+v, want %+v", i, row, want)
+		}
+	}
+	for pair := 0; pair < 8; pair += 2 {
+		full, minimal := tierRows[pair], tierRows[pair+1]
+		if minimal.ToolSchemaTokens != full.ToolSchemaTokens || minimal.SharedTokens >= full.SharedTokens {
+			t.Errorf("%s (%d tool, %d shared) and %s (%d tool, %d shared): want one tool schema cost and a cheaper minimal surface",
+				full.Configuration, full.ToolSchemaTokens, full.SharedTokens, minimal.Configuration, minimal.ToolSchemaTokens, minimal.SharedTokens)
+		}
+	}
+}
+
+// TestMeasureTokenFootprintRows_ProgressLines_NumberEachTierFromOne verifies
+// the three progress lines the footprint writes while it measures, one per
+// tier in measuring order, counted from one out of three.
+func TestMeasureTokenFootprintRows_ProgressLines_NumberEachTierFromOne(t *testing.T) {
+	measuredFootprintRows(t)
+
+	want := []string{
+		"audit_tokens: measuring footprint [1/3] Free/CE tier (all surfaces x schema modes)...",
+		"audit_tokens: measuring footprint [2/3] Premium tier (all surfaces x schema modes)...",
+		"audit_tokens: measuring footprint [3/3] Ultimate tier (all surfaces x schema modes)...",
+	}
+	if !slices.Equal(footprintProgress, want) {
+		t.Fatalf("progress lines =\n%q\nwant\n%q", footprintProgress, want)
+	}
+}
+
+// TestMeasureTierFootprintWithPrompts_ZeroPromptTokens_AreTakenAsGiven
+// verifies a prompt figure of zero is a measurement like any other: the rows
+// of the full capability surface add nothing for prompts and every other
+// figure is the batch's. Only a negative figure asks for the prompts to be
+// measured here.
+func TestMeasureTierFootprintWithPrompts_ZeroPromptTokens_AreTakenAsGiven(t *testing.T) {
+	client := newAuditTokensClient(t)
+	prompts := measurePrompts(client)
+	want := slices.Clone(measuredFootprintRows(t)[:9])
+	for i := range want {
+		if !strings.Contains(want[i].Configuration, "`minimal`") {
+			want[i].SharedTokens -= prompts
+		}
+	}
+
+	got := measureTierFootprintWithPrompts(client, edition.Free, "Free/CE", 0)
+	if !slices.Equal(got, want) {
+		t.Fatalf("Free tier rows with no prompt tokens =\n%+v\nwant the batch's less the %d prompt tokens on each full row\n%+v", got, prompts, want)
 	}
 }
 
@@ -1449,6 +1887,65 @@ func TestRun_CompareSchemasMode_PrintsSortedSizingTable(t *testing.T) {
 			ratio, convErr := strconv.ParseFloat(strings.TrimSuffix(fields[len(fields)-1], "x"), 64)
 			if convErr != nil || ratio <= 1 {
 				t.Fatalf("%q ratio = %v (%v), want a factor above 1", ratioLine, fields[len(fields)-1], convErr)
+			}
+		})
+	}
+
+	assertSizingFigures(t, output)
+}
+
+// assertSizingFigures verifies every figure of the sizing table against the
+// sizes each mode serves, memoized per client so nothing is listed twice: one
+// row per enterprise meta-tool with its action count, its opaque, full and
+// compact sizes and the full-over-opaque delta, then the totals and ratios.
+// The totals are also held to opaque below compact below full, which is what
+// ties each column to its mode: a table built from the modes in the wrong
+// columns would otherwise agree with itself.
+func assertSizingFigures(t *testing.T, output string) {
+	t.Helper()
+	client := newAuditTokensClient(t)
+	routes := buildMetaActionMaps(client, true)
+	opaque := servedMetaSchemaSizes(client, config.MetaParamSchemaOpaque)
+	full := servedMetaSchemaSizes(client, config.MetaParamSchemaFull)
+	compact := servedMetaSchemaSizes(client, config.MetaParamSchemaCompact)
+
+	rows := map[string][]string{}
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.HasPrefix(line, "gitlab_") {
+			fields := strings.Fields(line)
+			rows[fields[0]] = fields
+		}
+	}
+	if len(rows) != len(routes) {
+		t.Fatalf("sizing table has %d rows, want one per meta-tool of the catalog (%d)", len(rows), len(routes))
+	}
+	sumOpaque, sumFull, sumCompact := 0, 0, 0
+	for name, actions := range routes {
+		sumOpaque += opaque[name]
+		sumFull += full[name]
+		sumCompact += compact[name]
+		want := strings.Fields(fmt.Sprintf("%s %d %s %s %s %s", name, len(actions),
+			humanBytes(opaque[name]), humanBytes(full[name]), humanBytes(compact[name]), humanBytes(full[name]-opaque[name])))
+		if got := rows[name]; !slices.Equal(got, want) {
+			t.Errorf("row %s = %v, want %v", name, got, want)
+		}
+	}
+	if sumOpaque >= sumCompact || sumCompact >= sumFull {
+		t.Fatalf("served schema totals opaque=%d compact=%d full=%d, want opaque < compact < full", sumOpaque, sumCompact, sumFull)
+	}
+
+	wantTotal := strings.Fields("TOTAL " + humanBytes(sumOpaque) + " " + humanBytes(sumFull) + " " + humanBytes(sumCompact))
+	if got := lineFields(t, output, "TOTAL"); !slices.Equal(got, wantTotal) {
+		t.Errorf("TOTAL row = %v, want %v", got, wantTotal)
+	}
+	ratios := []struct{ name, line string }{
+		{name: "full over opaque", line: fmt.Sprintf("Full / opaque   ratio: %.1fx\n", float64(sumFull)/float64(sumOpaque))},
+		{name: "compact over opaque", line: fmt.Sprintf("Compact / opaque ratio: %.1fx\n", float64(sumCompact)/float64(sumOpaque))},
+	}
+	for _, ratio := range ratios {
+		t.Run(ratio.name, func(t *testing.T) {
+			if !strings.Contains(output, ratio.line) {
+				t.Errorf("sizing output lacks %q", ratio.line)
 			}
 		})
 	}

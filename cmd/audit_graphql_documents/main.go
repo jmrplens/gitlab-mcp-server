@@ -57,9 +57,6 @@ type auditRun struct {
 	// instance that would not answer, or a credential this run declined to
 	// hand it.
 	tokenWithheld string
-	// overlay supplies source that is not on disk, which is how a test hands
-	// the audit a fixture package instead of the repository.
-	overlay map[string][]byte
 	// now supplies the day the pin's age is measured from, as a parameter so a
 	// test can assert on the drift report it produced.
 	now func() time.Time
@@ -99,7 +96,6 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		Patterns:   cfg.patterns,
 		Schema:     probed,
 		Provenance: judgedBy,
-		Overlay:    cfg.overlay,
 	})
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)

@@ -1,7 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -101,15 +106,18 @@ func Live() string { return usedConst }
 // type-check folds nothing, so a report over it would be a clean answer about
 // source nobody understood. [goprogram.Load] refuses it and this says so.
 func TestRun_SourceThatDoesNotTypeCheck_FailsOnStderr(t *testing.T) {
-	code, _, stderr := runFixture(t, `package fixture
+	code, stdout, stderr := runFixture(t, `package fixture
 
 func Live() string { return undefinedSymbol }
 `, false, false)
 	if code != 1 {
 		t.Fatalf("exit = %d, want 1", code)
 	}
-	if !strings.Contains(stderr, toolName) {
-		t.Fatalf("stderr does not name the tool:\n%s", stderr)
+	if !strings.HasPrefix(stderr, toolName+": ") || !strings.Contains(stderr, "undefinedSymbol") {
+		t.Fatalf("stderr = %q, want the tool naming the type error it stopped on", stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want nothing: a run that could not be made reports nothing", stdout)
 	}
 }
 
@@ -163,6 +171,12 @@ func TestAudit_RootThatCannotBeResolved_FailsRatherThanLoading(t *testing.T) {
 	if err == nil {
 		t.Fatalf("audit error = nil, want the unresolved root; report = %+v", report)
 	}
+	// The load would fail here too, in a go command that cannot find its own
+	// working directory, but it says so in text; only the resolution of the
+	// root hands back the operating system's error itself.
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("audit error = %v, want the working directory's own not-exist error from resolving the root", err)
+	}
 }
 
 // TestReadOtherPlatforms_VerboseWithNoProgressStream_StillReads keeps a
@@ -186,7 +200,11 @@ func TestReadOtherPlatforms_VerboseWithNoProgressStream_StillReads(t *testing.T)
 }
 
 // TestRun_PatternMatchingNothing_FailsRatherThanPassing guards the silence a
-// gate must not have: auditing no package is not a clean run.
+// gate must not have: auditing no package is not a clean run. The pattern
+// names a directory that is not there, which the go command refuses itself;
+// a directory that is there and holds no package is the other way to match
+// nothing, and [TestMain_PatternMatchingNothing_FailsOnStandardError] drives
+// that one.
 func TestRun_PatternMatchingNothing_FailsRatherThanPassing(t *testing.T) {
 	var stdout, stderr strings.Builder
 	code := run(auditConfig{
@@ -197,8 +215,11 @@ func TestRun_PatternMatchingNothing_FailsRatherThanPassing(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit = %d, want 1", code)
 	}
-	if stderr.String() == "" {
-		t.Fatal("stderr is empty, want the refusal")
+	if !strings.Contains(stderr.String(), "pattern ./cmd/audit_dead_consts/nothing-is-here/...: ") {
+		t.Fatalf("stderr = %q, want the refusal of the pattern naming a directory that is not there", stderr.String())
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want no report over no package", stdout.String())
 	}
 }
 
@@ -327,5 +348,183 @@ func TestBuildTargets_AreTheOnesThisProjectShips(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// mainArgsEnv carries, as JSON, the arguments a child copy of this test binary
+// hands main; its presence is what makes the copy a child.
+const mainArgsEnv = "AUDIT_DEAD_CONSTS_MAIN_ARGS"
+
+// TestMain_InAChildProcess_RunsTheCommand is where [runMain] starts a copy of
+// this binary: there main can end the process with os.Exit, as it does when
+// CI runs the gate, without ending the suite. Run by the suite it does nothing.
+func TestMain_InAChildProcess_RunsTheCommand(t *testing.T) {
+	encoded, isChild := os.LookupEnv(mainArgsEnv)
+	if !isChild {
+		return
+	}
+	var args []string
+	if err := json.Unmarshal([]byte(encoded), &args); err != nil {
+		t.Fatalf("decode %s: %v", mainArgsEnv, err)
+	}
+	os.Args = append([]string{toolName}, args...)
+	flag.CommandLine = flag.NewFlagSet(toolName, flag.ExitOnError)
+	main()
+}
+
+// runMain runs main in a child copy of this test binary, since main ends in
+// os.Exit, and returns the code the child exited with and what it wrote to
+// each stream.
+//
+// The child is given a GOCOVERDIR of its own. A binary built for a coverage
+// run writes its counters when it exits and warns on stderr when it has
+// nowhere to write them, which would read as main having written there.
+func runMain(t *testing.T, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	encoded, err := json.Marshal(args)
+	if err != nil {
+		t.Fatalf("encode the arguments: %v", err)
+	}
+	// #nosec G204 G702 -- the program is this test binary itself and the one
+	// argument a literal naming the test it is started at.
+	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestMain_InAChildProcess_RunsTheCommand$")
+	child.Env = append(os.Environ(), mainArgsEnv+"="+string(encoded), "GOCOVERDIR="+t.TempDir(), "GOWORK=off")
+	var out, errOut strings.Builder
+	child.Stdout, child.Stderr = &out, &errOut
+	if runErr := child.Run(); runErr != nil {
+		exitErr, exited := errors.AsType[*exec.ExitError](runErr)
+		if !exited {
+			t.Fatalf("run main in a child: %v", runErr)
+		}
+		code = exitErr.ExitCode()
+	}
+	return code, out.String(), errOut.String()
+}
+
+// mainModule writes a module for main to audit, since main takes no overlay
+// and a test must not plant Go source in this repository. Its packages sit
+// where the default patterns look and where they do not: one under internal
+// declaring an unread constant in a group beside one read only by a file for
+// another platform, one under cmd whose one constant is read, and one under
+// neither with an unread constant of its own.
+//
+// The directory is resolved through its links first, since the go command
+// reports the files it loads under their real path and a finding is named
+// relative to the root as the command resolved it.
+func mainModule(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve the module directory: %v", err)
+	}
+	platformFile := "fixture_" + otherPlatform + ".go"
+	files := map[string]string{
+		"go.mod": "module example.com/deadconsts\n\ngo 1.22\n",
+		"internal/fixture/fixture.go": `package fixture
+
+const (
+	usedConst     = "used"
+	deadConst     = "dead"
+	platformConst = "read only where the constraint holds"
+)
+
+func Live() string { return usedConst }
+`,
+		"internal/fixture/" + platformFile: constrainedFixture(otherPlatform)[platformFile],
+		"cmd/tool/main.go": `package main
+
+const greeting = "read"
+
+func main() { println(greeting) }
+`,
+		"other/other.go": `package other
+
+const otherDead = "outside the default patterns"
+`,
+	}
+	var written []error
+	for name, source := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		written = append(written, os.MkdirAll(filepath.Dir(path), 0o750), os.WriteFile(path, []byte(source), 0o600))
+	}
+	if err = errors.Join(written...); err != nil {
+		t.Fatalf("write the module: %v", err)
+	}
+	return dir
+}
+
+// TestMain_VerboseWithoutCheck_ReportsEveryPlatformAndSucceeds is main as a
+// reader runs it with -v. It holds what main hands the run, since no test of
+// run can: the default patterns when none is named, the project's own build
+// targets, the verbose flag and not the gate flag, and standard output for
+// both the progress and the report. The module holds one package with a file
+// for another platform, so the progress names one package under each target
+// but the host, which is a different number from the targets it is read under;
+// its one unread constant is reported and the run still exits 0; and neither
+// the constant read only by the other platform's file nor the one outside the
+// default patterns is reported.
+func TestMain_VerboseWithoutCheck_ReportsEveryPlatformAndSucceeds(t *testing.T) {
+	code, stdout, stderr := runMain(t, "-v", "-dir", mainModule(t))
+	var want strings.Builder
+	host := target{goos: runtime.GOOS, goarch: runtime.GOARCH}
+	for _, tgt := range buildTargets {
+		if tgt != host {
+			want.WriteString(toolName + ": re-reading 1 package(s) as " + tgt.String() + "\n")
+		}
+	}
+	want.WriteString("internal/fixture/fixture.go:5: deadConst is never read (1 of 3 in its const declaration)\n" +
+		"\n" +
+		toolName + ": 4 unexported constants in 2 packages, 1 never read (1 of those in a group the linter cannot see)\n")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0 without -check; stdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	if stdout != want.String() {
+		t.Fatalf("stdout = %q, want %q", stdout, want.String())
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty: progress and findings are the report's", stderr)
+	}
+}
+
+// TestMain_CheckOverANamedPackage_FailsOnItsFinding is the gate as CI runs
+// it: -check, not verbose, over the patterns named on the command line
+// rather than the defaults. The finding is on standard output and the exit
+// code is 1; with no progress line, the report starts at the finding.
+func TestMain_CheckOverANamedPackage_FailsOnItsFinding(t *testing.T) {
+	code, stdout, stderr := runMain(t, "-check", "-dir", mainModule(t), "./other")
+	want := "other/other.go:3: otherDead is never read (declared on its own)\n" +
+		"\n" +
+		toolName + ": 1 unexported constants in 1 packages, 1 never read (0 of those in a group the linter cannot see)\n"
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 under -check; stdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty: a finding is not a broken run", stderr)
+	}
+}
+
+// TestMain_PatternMatchingNothing_FailsOnStandardError holds the other
+// stream: a run that could not be made says why on standard error, prints
+// no report, and exits 1. The pattern names a directory that is there and
+// holds no package, which the go command answers with an empty list rather
+// than an error, so the refusal is the one that keeps a gate over nothing
+// from passing.
+func TestMain_PatternMatchingNothing_FailsOnStandardError(t *testing.T) {
+	dir := mainModule(t)
+	if err := os.Mkdir(filepath.Join(dir, "empty"), 0o750); err != nil {
+		t.Fatalf("create the empty directory: %v", err)
+	}
+	code, stdout, stderr := runMain(t, "-check", "-dir", dir, "./empty/...")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1; stderr:\n%s", code, stderr)
+	}
+	if !strings.HasPrefix(stderr, toolName+": ") || !strings.Contains(stderr, "no packages matched ./empty/...") {
+		t.Fatalf("stderr = %q, want the tool naming the pattern that matched nothing", stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want no report over no package", stdout)
 	}
 }

@@ -9,6 +9,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,7 +18,11 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a
@@ -211,6 +216,86 @@ func TestWriteOrCheckSiteStats_Failures_ReturnActionableErrors(t *testing.T) {
 				t.Fatalf("writeOrCheckSiteStats() error = %v, want it to contain %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// TestGenerateSiteStats_RealSurfaces_MeasuresEveryFieldFromItsOwnSource
+// verifies the whole payload against each count read straight from the
+// listing, catalog or constant it names. The builders fill three and four
+// fields of one type side by side, so measuring Premium at Ultimate, or
+// writing the capabilities count where the completions one belongs, is a
+// legal literal; the committed stats.json is the only other thing that would
+// notice, and that comparison is deferred on every stacked layer.
+func TestGenerateSiteStats_RealSurfaces_MeasuresEveryFieldFromItsOwnSource(t *testing.T) {
+	client := newAuditMetricsClient(t)
+	gitLabCom := newGitLabComClient(t)
+	groups := func(tier edition.Tier) int {
+		catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(%v): %v", tier, err)
+		}
+		return catalog.CountGroups()
+	}
+	routes := func(c *gitlabclient.Client, enterprise bool) int {
+		return countActionRoutes(dynamicActionCatalog(c, enterprise).ActionMaps())
+	}
+	version, err := readVersionFileAt(repositoryRoot())
+	if err != nil {
+		t.Fatalf("readVersionFileAt(): %v", err)
+	}
+	resources, templates := mcpsurface.Resources(client)
+
+	want := siteStats{
+		Version: version,
+		Tools: siteToolCounts{
+			Free:                len(mcpsurface.IndividualTools(client, edition.Free)),
+			Premium:             len(mcpsurface.IndividualTools(client, edition.Premium)),
+			UltimateSelfManaged: len(mcpsurface.IndividualTools(client, edition.Ultimate)),
+			GitLabCom:           len(mcpsurface.IndividualTools(gitLabCom, edition.Ultimate)),
+		},
+		Meta: siteMetaCounts{
+			Base:                  len(mcpsurface.MetaTools(client, edition.Free)),
+			SelfManagedEnterprise: len(mcpsurface.MetaTools(client, edition.Ultimate)),
+			GitLabCom:             len(mcpsurface.MetaTools(gitLabCom, edition.Ultimate)),
+		},
+		Dynamic:        2,
+		CatalogActions: siteCatalogActions{Free: routes(client, false), SelfManagedEnterprise: routes(client, true), GitLabCom: routes(gitLabCom, true)},
+		CatalogGroups:  siteCatalogGroups{Free: groups(edition.Free), Premium: groups(edition.Premium), Ultimate: groups(edition.Ultimate)},
+		Resources:      len(resources) + len(templates),
+		Prompts:        len(mcpsurface.Prompts(client)),
+		Completions:    siteCompletionArgNames,
+		Capabilities:   siteCapabilities,
+		ToolPackages:   countToolPackageDirsAt(filepath.Join(repositoryRoot(), "internal", "tools")),
+	}
+	if got := newSiteStats(t); got != want {
+		t.Fatalf("generateSiteStats() =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// failVersionRead makes the VERSION read fail with err for the rest of the
+// test, and puts the real read back when it ends.
+func failVersionRead(t *testing.T, err error) {
+	t.Helper()
+	original := readVersionFile
+	readVersionFile = func() (string, error) { return "", err }
+	t.Cleanup(func() { readVersionFile = original })
+}
+
+// TestGenerateSiteStats_VersionUnreadable_ReturnsTheReadFailure verifies an
+// unreadable VERSION file ends the payload: the read failure itself comes
+// back, and nothing measured before it travels with it, since half a stats
+// file is not worth publishing.
+func TestGenerateSiteStats_VersionUnreadable_ReturnsTheReadFailure(t *testing.T) {
+	planted := errors.New("read VERSION: planted failure")
+	failVersionRead(t, planted)
+
+	stats, err := generateSiteStats(newAuditMetricsClient(t), newGitLabComClient(t))
+
+	if !errors.Is(err, planted) {
+		t.Fatalf("generateSiteStats() error = %v, want the planted VERSION failure", err)
+	}
+	if stats != (siteStats{}) {
+		t.Fatalf("generateSiteStats() = %+v, want no payload", stats)
 	}
 }
 

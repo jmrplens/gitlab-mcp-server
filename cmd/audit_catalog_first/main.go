@@ -383,10 +383,9 @@ func catalogActionsMissingIndividualProjectionPolicy(catalog *actioncatalog.Cata
 	for _, group := range catalog.Groups() {
 		for _, action := range group.ActionsInOrder() {
 			if strings.TrimSpace(action.IndividualTool.Name) == "" {
+				// Never empty: the catalog derives an ID for every action it
+				// stores that declares none, and Groups hands back only those.
 				actionID := string(action.ID)
-				if actionID == "" {
-					actionID = group.ToolName + "." + action.Name
-				}
 				if _, ok := metaOnlyProjectionActions[actionID]; ok {
 					continue
 				}
@@ -547,8 +546,9 @@ func staleAIContextLine(line string) bool {
 	if normalized == "" || strings.Contains(normalized, "do not") || strings.Contains(normalized, "cannot regress") {
 		return false
 	}
+	// Every needle is lowercase, because the line it is compared against is:
+	// one carrying a capital can never match anything.
 	staleNeedles := []string{
-		"registerall(). Delegates to sub-package registertools",
 		"delegates to sub-package registertools",
 		"create `register.go` with `registertools",
 		"existing package-local `registertools` files may remain",

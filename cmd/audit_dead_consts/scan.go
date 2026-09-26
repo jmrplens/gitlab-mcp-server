@@ -17,12 +17,19 @@ type Constant struct {
 	Package string `json:"package"`
 	File    string `json:"file"`
 	Line    int    `json:"line"`
-	Name    string `json:"name"`
+	// Column is where the name starts on its line. A finding is printed as
+	// file:line, so the column is not shown; it is what orders two constants
+	// declared on one line, `const a, b = ...`, the way the line declares
+	// them, where the order used to come from the map the scan collects into
+	// and two runs over one tree printed the report two ways.
+	Column int    `json:"column"`
+	Name   string `json:"name"`
 	// Func is the function a constant is declared inside, as the file spells
-	// it (`Type.Method` for a method), and empty for one at package scope. It
-	// is part of the constant's identity in the declaration table: a local
-	// constant and a package-level one may share a name, and a declaration
-	// excusing the one must not excuse the other.
+	// it (`Type.Method` for a method), `func` for one inside a function
+	// literal no function declaration encloses, and empty for one at package
+	// scope. It is part of the constant's identity in the declaration table:
+	// a local constant and a package-level one may share a name, and a
+	// declaration excusing the one must not excuse the other.
 	Func string `json:"func,omitempty"`
 	// GroupSize is how many constants the declaration it sits in declares.
 	// Anything above one is the shape staticcheck's unused cannot see, and the
@@ -118,15 +125,19 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 	var funcs []string
 	ast.Inspect(file, func(node ast.Node) bool {
 		if node == nil {
-			if _, wasFunc := open[len(open)-1].(*ast.FuncDecl); wasFunc {
+			switch open[len(open)-1].(type) {
+			case *ast.FuncDecl, *ast.FuncLit:
 				funcs = funcs[:len(funcs)-1]
 			}
 			open = open[:len(open)-1]
 			return true
 		}
 		open = append(open, node)
-		if fn, isFunc := node.(*ast.FuncDecl); isFunc {
+		switch fn := node.(type) {
+		case *ast.FuncDecl:
 			funcs = append(funcs, funcDeclName(fn))
+		case *ast.FuncLit:
+			funcs = append(funcs, funcLitName(funcs))
 		}
 		decl, isDecl := node.(*ast.GenDecl)
 		if !isDecl || decl.Tok != token.CONST {
@@ -147,6 +158,7 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 				Package:   trimModulePath(variantName(pkg.PkgPath)),
 				File:      relativePath(at.file, s.root),
 				Line:      at.line,
+				Column:    at.col,
 				Name:      constant.Name(),
 				Func:      enclosing,
 				GroupSize: len(names),
@@ -181,6 +193,19 @@ func funcDeclName(fn *ast.FuncDecl) string {
 		return ident.Name + "." + fn.Name.Name
 	}
 	return fn.Name.Name
+}
+
+// funcLitName is what a function literal's constants are keyed under: the
+// function around the literal when there is one, since a closure's constants
+// are that function's locals, and `func` when the literal sits in a
+// package-level declaration. `func` is a keyword, so it is no function's name
+// and no constant's, and a constant in such a literal can share its key with
+// neither.
+func funcLitName(enclosing []string) string {
+	if len(enclosing) > 0 {
+		return enclosing[len(enclosing)-1]
+	}
+	return "func"
 }
 
 // dead is every declared constant no load recorded a use of, in source order.

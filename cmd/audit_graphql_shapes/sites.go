@@ -362,8 +362,8 @@ func documentSources(pkg *packages.Package, fn *ast.FuncDecl, expr ast.Expr) []s
 
 // foldDocument reads the constant value of an expression, when it has one.
 func foldDocument(pkg *packages.Package, expr ast.Expr) (source, bool) {
-	value, typed := pkg.TypesInfo.Types[expr]
-	if !typed || value.Value == nil || value.Value.Kind() != constant.String {
+	value := pkg.TypesInfo.Types[expr]
+	if value.Value == nil || value.Value.Kind() != constant.String {
 		return source{}, false
 	}
 	folded := source{text: constant.StringVal(value.Value)}
@@ -518,17 +518,29 @@ func calleeIdent(fun ast.Expr) *ast.Ident {
 
 // sameFunc reports whether obj is the wrapper's function.
 //
-// Compared by package path and name rather than by identity: a package loaded
-// from export data and the same package type-checked from source are two
-// objects for one function, and which one a use resolves to depends on load
-// order this audit should not have to know.
+// Compared by full name rather than by identity: a package loaded from export
+// data and the same package type-checked from source are two objects for one
+// function, and which one a use resolves to depends on load order this audit
+// should not have to know. The full name carries the package path and, for a
+// method, the receiver, so a method that shares the wrapper's name in the
+// wrapper's package is not read as a call of the wrapper.
+//
+// A method of a generic type called on an instance resolves to the instance's
+// own copy of the method, whose receiver spells the instance's type arguments
+// where the declaration spells its type parameters, so the callee is compared
+// by the method it was instantiated from.
 func sameFunc(obj types.Object, fn *types.Func) bool {
 	callee, isFunc := obj.(*types.Func)
-	return isFunc && callee.Pkg() != nil && callee.Pkg().Path() == fn.Pkg().Path() && callee.Name() == fn.Name()
+	return isFunc && callee.Origin().FullName() == fn.FullName()
 }
 
 // instantiation binds the wrapper's type parameters to the arguments a call
 // instantiated it with, or returns nil for a wrapper that has none.
+//
+// An instance carries one type argument per type parameter, inferred ones
+// included: go/types promises that instantiating the callee with them
+// reproduces the instance, and the callee is the wrapper itself, which is why
+// the loop is bounded by the wrapper's parameters alone.
 func instantiation(pkg *packages.Package, callee *ast.Ident, fn *types.Func) map[*types.TypeParam]types.Type {
 	instance, instantiated := pkg.TypesInfo.Instances[callee]
 	if !instantiated {
@@ -536,7 +548,7 @@ func instantiation(pkg *packages.Package, callee *ast.Ident, fn *types.Func) map
 	}
 	params := fn.Signature().TypeParams()
 	bound := make(map[*types.TypeParam]types.Type, params.Len())
-	for i := 0; i < params.Len() && i < instance.TypeArgs.Len(); i++ {
+	for i := range params.Len() {
 		bound[params.At(i)] = instance.TypeArgs.At(i)
 	}
 	return bound

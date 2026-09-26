@@ -250,7 +250,9 @@ func (j *judge) judgeType(goType types.Type, gqlType *ast.Type, selections ast.S
 			j.fail(path, fmt.Sprintf("%s is a list and is decoded into %s, which is not a slice", gqlType, typeString(goType)))
 			return
 		}
-		j.judgeType(element, gqlType.Elem, selections, path+"[]", asString)
+		// encoding/json honors ",string" on the field alone and ignores it on
+		// a slice, so the elements are read as the bare values they are.
+		j.judgeType(element, gqlType.Elem, selections, path+"[]", false)
 		return
 	}
 	definition := j.schema.Types[gqlType.NamedType]
@@ -258,14 +260,16 @@ func (j *judge) judgeType(goType types.Type, gqlType *ast.Type, selections ast.S
 	case ast.Object, ast.Interface, ast.Union:
 		j.judgeObject(goType, gqlType, selections, path)
 	case ast.Enum:
-		j.expectClass(goType, gqlType, path, classString, asString)
+		// An enum value is a name, so its text is never the number or the
+		// boolean a ",string" option reads.
+		j.expectClass(goType, gqlType, path, classString, asString, false)
 	default:
 		class, ok := scalarClassOf(definition.Name)
 		if !ok {
 			j.fail(path, definition.Name+" is a scalar this audit has no serialization for; add it to scalarClasses with how GitLab sends it")
 			return
 		}
-		j.expectClass(goType, gqlType, path, class, asString)
+		j.expectClass(goType, gqlType, path, class, asString, class == classString)
 	}
 }
 
@@ -409,21 +413,46 @@ func (j *judge) expand(selections ast.SelectionSet) []*ast.Field {
 	return fields
 }
 
-// expectClass checks that a Go type can hold a scalar of the class.
-func (j *judge) expectClass(goType types.Type, gqlType *ast.Type, path string, class scalarClass, asString bool) {
+// stringOptionKinds are the kinds encoding/json honors a ",string" option on;
+// on any other kind the option is ignored.
+const stringOptionKinds = types.IsBoolean | types.IsInteger | types.IsFloat | types.IsString
+
+// jsonNumber is encoding/json's Number spelled with its package path, which is
+// how [types.TypeString] writes it with no qualifier.
+const jsonNumber = "encoding/json.Number"
+
+// expectClass checks that a Go type can hold a scalar of the class. literal
+// says whether the JSON string GitLab sends may carry a number or a boolean as
+// its text: a string scalar may, since a BigInt is one, and an enum value never
+// does.
+//
+// A ",string" option the field's kind honors makes encoding/json read the
+// field's own literal out of a JSON string, which is how a BigInt lands in an
+// int64 on purpose, and is a constraint as much as a permission: a bare number
+// or boolean is refused for not being quoted, and a string field under it
+// would need GitLab to quote its text twice. json.Number is the one string
+// kind the option treats as a number, since it decodes one: it takes a
+// number's text out of the JSON string and refuses a bare number, exactly as
+// an integer kind does. A type defined from it keeps the string kind and none
+// of its methods, so it is an ordinary string field there.
+func (j *judge) expectClass(goType types.Type, gqlType *ast.Type, path string, class scalarClass, asString, literal bool) {
 	if class == classAny {
+		return
+	}
+	basic, isBasic := goType.Underlying().(*types.Basic)
+	if asString && isBasic && basic.Info()&stringOptionKinds != 0 {
+		readsLiteral := basic.Info()&(types.IsBoolean|types.IsInteger|types.IsFloat) != 0 || types.TypeString(goType, nil) == jsonNumber
+		if literal && readsLiteral {
+			return
+		}
+		j.fail(path, fmt.Sprintf(`%s is %s and is decoded into %s under a ",string" option, which reads only a number or a boolean written as a JSON string's text`,
+			gqlType, class, typeString(goType)))
 		return
 	}
 	if class == classString && unmarshalsText(goType) {
 		return
 	}
-	basic, ok := goType.Underlying().(*types.Basic)
-	if ok && asString && class == classString && basic.Info()&(types.IsNumeric|types.IsBoolean) != 0 {
-		// The ",string" option reads a number or a boolean out of a JSON
-		// string, which is how a BigInt lands in an int64 on purpose.
-		return
-	}
-	if ok && class.holds(basic) {
+	if isBasic && class.holds(basic) {
 		return
 	}
 	j.fail(path, fmt.Sprintf("%s is %s and is decoded into %s", gqlType, class, typeString(goType)))

@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -102,14 +103,15 @@ func TestActionSpecsAggregation_ReadsEveryPackageThatDeclaresSpecs(t *testing.T)
 //
 // The last is the half that rots quietly: a package that is later aggregated
 // or deleted leaves its declaration behind, and the next package to take that
-// name inherits an excuse nobody wrote for it.
+// name inherits an excuse nobody wrote for it. The two declarations carry
+// different categories so the stale finding is held to its own.
 func TestOrphanActionSpecGaps_ReportsBothDirections(t *testing.T) {
 	declaredOrphanActionSpecs["excused_example"] = orphanActionSpecsDeclaration{
-		Category: "test-fixture",
+		Category: "excused-fixture",
 		Reason:   "declared by this test only.",
 	}
 	declaredOrphanActionSpecs["stale_example"] = orphanActionSpecsDeclaration{
-		Category: "test-fixture",
+		Category: "stale-fixture",
 		Reason:   "declared by this test only, and matching nothing.",
 	}
 	t.Cleanup(func() {
@@ -119,17 +121,12 @@ func TestOrphanActionSpecGaps_ReportsBothDirections(t *testing.T) {
 
 	gaps := orphanActionSpecGaps([]string{"excused_example", "reported_example"})
 
-	if !slices.IsSorted(gaps) {
-		t.Errorf("gaps = %v, want them sorted so a run reports the same order twice", gaps)
+	want := []string{
+		"declaration for stale_example (stale-fixture) matches nothing: its ActionSpecs is aggregated or gone",
+		"reported_example declares an exported ActionSpecs that no production file calls; aggregate it into the catalog or delete it",
 	}
-	if !hasGapNaming(gaps, "reported_example") {
-		t.Errorf("gaps = %v, want the undeclared orphan reported", gaps)
-	}
-	if hasGapNaming(gaps, "excused_example") {
-		t.Errorf("gaps = %v, want the declared orphan excused", gaps)
-	}
-	if !hasGapNaming(gaps, "stale_example") {
-		t.Errorf("gaps = %v, want the declaration that matches nothing reported", gaps)
+	if !slices.Equal(gaps, want) {
+		t.Errorf("gaps = %q, want %q", gaps, want)
 	}
 }
 
@@ -177,6 +174,9 @@ func orphanFixtureModule() map[string]string {
 // the last matters because the recorded uses include every ActionSpecs in the
 // loaded program, and counting one declared outside internal/tools would make
 // a genuine orphan read as aggregated.
+//
+// The whole map is compared: a package outside the prefix is keyed by its full
+// import path, so looking it up by its short name found nothing either way.
 func TestActionSpecsAggregation_FixtureModule_SeparatesTheThreeStates(t *testing.T) {
 	root := writeCatalogFirstFixture(t, orphanFixtureModule())
 
@@ -185,16 +185,12 @@ func TestActionSpecsAggregation_FixtureModule_SeparatesTheThreeStates(t *testing
 		t.Fatalf("actionSpecsAggregation() error = %v", err)
 	}
 
-	called, declared := aggregated["beta"]
-	if !declared || !called {
-		t.Errorf("beta declared = %t, called = %t; want a package a production file calls", declared, called)
+	want := map[string]bool{
+		"alpha": false, // an orphan only a test file names
+		"beta":  true,  // a package a production file calls
 	}
-	called, declared = aggregated["alpha"]
-	if !declared || called {
-		t.Errorf("alpha declared = %t, called = %t; want an orphan a test file names", declared, called)
-	}
-	if _, judged := aggregated["helper"]; judged {
-		t.Errorf("aggregation judges %v; internal/helper is outside internal/tools", aggregated)
+	if !maps.Equal(aggregated, want) {
+		t.Errorf("aggregation = %v, want %v: internal/helper is outside internal/tools", aggregated, want)
 	}
 }
 
@@ -245,14 +241,4 @@ func TestAssertActionSpecsAreAggregated_UnloadableTree_IsRefused(t *testing.T) {
 	if err := assertActionSpecsAreAggregated(t.TempDir()); err == nil {
 		t.Fatal("assertActionSpecsAreAggregated() = nil over a directory that is not a module, want a refusal")
 	}
-}
-
-// hasGapNaming reports whether any finding names the package.
-func hasGapNaming(gaps []string, packageName string) bool {
-	for _, gap := range gaps {
-		if strings.Contains(gap, packageName) {
-			return true
-		}
-	}
-	return false
 }

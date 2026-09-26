@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -79,6 +80,31 @@ func TestStaleDeclarations_KeyWithoutAPackage_IsPassedOver(t *testing.T) {
 	unreadOnPurpose = map[string]string{"noColonHere": "malformed"}
 	if stale := staleDeclarations(map[string]struct{}{}, scannedSet("internal/tools/dynamic")); len(stale) != 0 {
 		t.Fatalf("stale = %v, want none: a key naming no package cannot be judged", stale)
+	}
+}
+
+// TestStaleDeclarations_SeveralStale_AreReportedInOneOrder keeps the stale
+// lines of a report in one order from run to run. The table is a map, walked
+// in a different order each time, so the entries are written here out of
+// order and an answer that kept the map's order would not come out sorted.
+func TestStaleDeclarations_SeveralStale_AreReportedInOneOrder(t *testing.T) {
+	original := unreadOnPurpose
+	t.Cleanup(func() { unreadOnPurpose = original })
+	unreadOnPurpose = map[string]string{
+		"internal/tools/issues:delta":   "the fourth constant, deleted since",
+		"internal/tools/issues:alpha":   "the first constant, deleted since",
+		"internal/tools/issues:charlie": "the third constant, deleted since",
+		"internal/tools/issues:bravo":   "the second constant, deleted since",
+	}
+	stale := staleDeclarations(map[string]struct{}{}, scannedSet("internal/tools/issues"))
+	want := []string{
+		"internal/tools/issues:alpha",
+		"internal/tools/issues:bravo",
+		"internal/tools/issues:charlie",
+		"internal/tools/issues:delta",
+	}
+	if !slices.Equal(stale, want) {
+		t.Fatalf("stale = %v, want %v", stale, want)
 	}
 }
 

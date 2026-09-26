@@ -468,6 +468,71 @@ func TestRun_Static_OverTheFixtureModule(t *testing.T) {
 	}
 }
 
+// TestPrintStatic_SummaryLine_EachCountItsOwn verifies the static summary
+// line on a result whose five lists all differ in length. The fixture module
+// reads seven packages and seven unused exports, so the two counts could have
+// traded places in the line with the run above still green.
+func TestPrintStatic_SummaryLine_EachCountItsOwn(t *testing.T) {
+	result := &staticResult{
+		Sites:       make([]idSite, 5),
+		Packages:    []string{"common", "ee"},
+		NonConstant: []staticNote{{Pos: "a.go:1", Text: "one"}, {Pos: "a.go:2", Text: "two"}, {Pos: "a.go:3", Text: "three"}},
+		DeadExports: []string{"A", "B", "C", "D"},
+		Findings:    []staticFinding{{Kind: findingUnknownID, Pos: "b.go:9", Message: "ghost.action is not a catalog action"}},
+	}
+	var stdout, stderr bytes.Buffer
+
+	printStatic(options{ratchet: true}, result, &stdout, &stderr)
+
+	wantOut := strings.Join([]string{
+		"static: note: a.go:1: one",
+		"static: note: a.go:2: two",
+		"static: note: a.go:3: three",
+		"static: 5 id sites in 2 packages, 3 non-constant sites, 4 unused harness exports, 1 findings",
+		"",
+	}, "\n")
+	if stdout.String() != wantOut {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), wantOut)
+	}
+	if want := "static: b.go:9: unknown-id: ghost.action is not a catalog action\n"; stderr.String() != want {
+		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	}
+}
+
+// TestRun_FindingsBesideARefusal_ExitsWithTheRefusal verifies how the exit
+// statuses rank when one run holds both: the static gate finds the planted
+// defects while the port map cannot run at all, and the run exits with the
+// refusal, since a gate that never ran is not one whose findings tell the
+// whole story. The refusal is also the status the flag package exits with on
+// a command line it cannot parse, before run is reached, so one number means
+// "could not run" whichever layer refused. Every other test compares a status
+// with the constants themselves, so the constants were free to trade values.
+func TestRun_FindingsBesideARefusal_ExitsWithTheRefusal(t *testing.T) {
+	if exitOK != 0 || exitUsage != 2 || exitFindings == exitOK || exitFindings == exitUsage {
+		t.Errorf("exit statuses are ok %d, findings %d, usage %d; want 0 for success, the flag package's 2 for a refusal, and findings apart from both",
+			exitOK, exitFindings, exitUsage)
+	}
+	opts := fixtureOptions(t)
+	opts.calls = ""
+	opts.static = true
+	opts.dir = fakeModuleDir(t)
+	opts.staticCatalog = fakeCatalog
+	opts.portMap = true
+
+	code, _, stderr := runFixture(t, opts)
+
+	if code != exitUsage {
+		t.Errorf("run() = %d, want %d: the port map refused beside the static findings", code, exitUsage)
+	}
+	for _, want := range []string{"nope.action is not a catalog action", "-old-suite is required"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("stderr lacks %q: both gates must still have spoken:\n%s", want, stderr)
+			}
+		})
+	}
+}
+
 // TestRun_Static_NoSuite_Passes verifies the answer on the tree before the
 // new suite exists: the gate passes and says why.
 func TestRun_Static_NoSuite_Passes(t *testing.T) {

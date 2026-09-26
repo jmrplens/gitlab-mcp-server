@@ -136,11 +136,59 @@ func Live() string { return usedConst + otherConst }
 		Package:   fixtureDir,
 		File:      fixtureDir + "/fixture.go",
 		Line:      5,
+		Column:    2,
 		Name:      "deadConst",
 		GroupSize: 3,
 	}}
 	if !slices.Equal(found, want) {
-		t.Fatalf("findings = %+v, want %+v: the package, the file below the repository root, the line, the name and the size of the group the linter could not see", found, want)
+		t.Fatalf("findings = %+v, want %+v: the package, the file below the repository root, the line, the column, the name and the size of the group the linter could not see", found, want)
+	}
+}
+
+// TestScan_ConstantsSharingALine_AreJudgedApartAndReportedInSourceOrder holds
+// the two things a line declaring three constants asks of the scan, as
+// `const a, b, c = ...` makes one. The column is part of a constant's
+// identity, so the one the package reads does not make its neighbors read.
+// And the report comes in one order, the line's: the names are chosen to sort
+// the other way round from the columns, so an order taken from the names, or
+// from the map the scan collects into, cannot pass for the source's.
+func TestScan_ConstantsSharingALine_AreJudgedApartAndReportedInSourceOrder(t *testing.T) {
+	found := scanFixture(t, map[string]string{"fixture.go": `package fixture
+
+// The line below declares three constants and reads one.
+const zeta, usedConst, alpha = "z", "used", "a"
+
+func Live() string { return usedConst }
+`})
+	want := []Constant{
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 4, Column: 7, Name: "zeta", GroupSize: 3},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 4, Column: 24, Name: "alpha", GroupSize: 3},
+	}
+	if !slices.Equal(found, want) {
+		t.Fatalf("findings = %+v, want %+v: the two unread constants of the line, as the line declares them", found, want)
+	}
+}
+
+// TestScan_ConstantsAtOnePlaceInTwoFiles_AreJudgedApart keeps the file in a
+// constant's identity. The two files of this package declare a constant at
+// the same line and column, and only the first is read, so a key made of the
+// line and the column alone would lend the second the first one's read.
+func TestScan_ConstantsAtOnePlaceInTwoFiles_AreJudgedApart(t *testing.T) {
+	found := scanFixture(t, map[string]string{
+		"fixture.go": `package fixture
+
+const usedConst = "used"
+
+func Live() string { return usedConst }
+`,
+		"other.go": `package fixture
+
+const deadConst = "declared where fixture.go declares usedConst"
+`,
+	})
+	want := []Constant{{Package: fixtureDir, File: fixtureDir + "/other.go", Line: 3, Column: 7, Name: "deadConst", GroupSize: 1}}
+	if !slices.Equal(found, want) {
+		t.Fatalf("findings = %+v, want %+v: a read in one file is no read of the other", found, want)
 	}
 }
 
@@ -246,7 +294,7 @@ func TestExternal(t *testing.T) {
 		if report.Summary.Packages != 2 {
 			t.Fatalf("Summary.Packages = %d, want 2: the external test package is a package of its own", report.Summary.Packages)
 		}
-		want := []Constant{{Package: fixtureDir + "_test", File: fixtureDir + "/fixture_ext_test.go", Line: 7, Name: "externalDead", GroupSize: 2}}
+		want := []Constant{{Package: fixtureDir + "_test", File: fixtureDir + "/fixture_ext_test.go", Line: 7, Column: 2, Name: "externalDead", GroupSize: 2}}
 		if !slices.Equal(report.Findings, want) {
 			t.Fatalf("findings = %+v, want %+v: the finding is filed under the external test package's own name", report.Findings, want)
 		}
@@ -367,7 +415,7 @@ const (
 
 func Live() level { return levelFirst }
 `})
-	want := []Constant{{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 8, Name: "levelSecond", GroupSize: 2}}
+	want := []Constant{{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 8, Column: 2, Name: "levelSecond", GroupSize: 2}}
 	if !slices.Equal(found, want) {
 		t.Fatalf("findings = %+v, want %+v", found, want)
 	}
@@ -496,17 +544,22 @@ func TestElsewhere(t *testing.T) {
 	assertDead(t, scanFixtureAs(t, files, []target{{otherPlatform, runtime.GOARCH}}))
 }
 
-// TestScan_PackageReadTwice_DeclaresEachConstantOnce checks that the second
-// load is a union with the first rather than a second count: a constant is
-// keyed by where it sits in the tree, which both loads agree on, so the
-// summary says two constants were declared and not four.
-func TestScan_PackageReadTwice_DeclaresEachConstantOnce(t *testing.T) {
-	report, progress := auditFixture(t, platformFixture, []target{{otherPlatform, runtime.GOARCH}})
-	if want := "re-reading 1 package(s) as " + otherPlatform + "/" + runtime.GOARCH; !strings.Contains(progress, want) {
+// TestScan_PackageReadThreeTimes_DeclaresEachConstantOnce checks that the
+// later loads are a union with the first rather than more counts: a constant
+// is keyed by where it sits in the tree, which every load agrees on, so the
+// summary says two constants were declared and not six. The package is read
+// again under two targets, so the progress names a package count and a
+// target count that differ, and holds each line whole.
+func TestScan_PackageReadThreeTimes_DeclaresEachConstantOnce(t *testing.T) {
+	targets := []target{{otherPlatform, runtime.GOARCH}, {otherPlatform, otherArch}}
+	report, progress := auditFixture(t, platformFixture, targets)
+	want := toolName + ": re-reading 1 package(s) as " + targets[0].String() + "\n" +
+		toolName + ": re-reading 1 package(s) as " + targets[1].String() + "\n"
+	if progress != want {
 		t.Fatalf("progress = %q, want %q: the fixture holds a file this platform left out", progress, want)
 	}
 	if report.Summary.Declared != 2 {
-		t.Fatalf("Summary.Declared = %d, want 2: the two loads saw the same two constants", report.Summary.Declared)
+		t.Fatalf("Summary.Declared = %d, want 2: the three loads saw the same two constants", report.Summary.Declared)
 	}
 	if report.Summary.Packages != 1 {
 		t.Fatalf("Summary.Packages = %d, want 1", report.Summary.Packages)
@@ -571,6 +624,50 @@ func Live() {}
 	}
 }
 
+// TestScan_LocalConstantInAFunctionLiteral_IsKeyedApartFromThePackageLevelOne
+// holds the same identity for a constant declared inside a function literal.
+// One that no function declaration encloses is keyed under `func`, a keyword
+// and so no function's name, where it used to carry no function at all and
+// be excused by the declaration written for the package-level constant it
+// shares a name with. One inside a closure is a local of the function around
+// the closure. The package-level constant after the literal closes carries no
+// function, which holds the walk to leaving the literal when it ends.
+func TestScan_LocalConstantInAFunctionLiteral_IsKeyedApartFromThePackageLevelOne(t *testing.T) {
+	original := unreadOnPurpose
+	t.Cleanup(func() { unreadOnPurpose = original })
+	unreadOnPurpose = map[string]string{fixtureDir + ":shared": "the package-level one is kept on purpose in this test"}
+
+	found := scanFixtureAs(t, map[string]string{"fixture.go": `package fixture
+
+const shared = "package level, declared unread on purpose"
+
+var walk = func() {
+	const shared = "local to a function literal no declaration encloses"
+}
+
+const after = "package level again, after the literal has closed"
+
+func Live() {
+	run := func() {
+		const inner = "local to a closure inside Live"
+	}
+	run()
+	walk()
+}
+`}, nil)
+	want := []Constant{
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Column: 8, Name: "shared", Func: "func", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 9, Column: 7, Name: "after", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 13, Column: 9, Name: "inner", Func: "Live", GroupSize: 1},
+	}
+	if !slices.Equal(found, want) {
+		t.Fatalf("findings = %+v, want %+v", found, want)
+	}
+	if got := declarationKey(found[0]); got != fixtureDir+":func.shared" {
+		t.Fatalf("declarationKey = %q, want the literal's constant keyed apart from the package-level one", got)
+	}
+}
+
 // TestScan_LocalConstantInAGenericMethod_IsKeyedByTheReceiversTypeName
 // spells a generic receiver the way the declaration table does: the type
 // parameters are the receiver's and not part of its name, whether there is
@@ -593,8 +690,8 @@ func (p *pair[K, V]) Two() {
 func Live() {}
 `})
 	want := []Constant{
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Name: "oneLocal", Func: "box.One", GroupSize: 1},
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 12, Name: "twoLocal", Func: "pair.Two", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Column: 8, Name: "oneLocal", Func: "box.One", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 12, Column: 8, Name: "twoLocal", Func: "pair.Two", GroupSize: 1},
 	}
 	if !slices.Equal(found, want) {
 		t.Fatalf("findings = %+v, want %+v", found, want)
@@ -626,9 +723,9 @@ func (w (*walker)) PtrParen() {
 func Live() {}
 `})
 	want := []Constant{
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Name: "walkLocal", Func: "walker.Walk", GroupSize: 1},
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 10, Name: "ptrLocal", Func: "walker.Ptr", GroupSize: 1},
-		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 14, Name: "ptrParenLocal", Func: "walker.PtrParen", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 6, Column: 8, Name: "walkLocal", Func: "walker.Walk", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 10, Column: 8, Name: "ptrLocal", Func: "walker.Ptr", GroupSize: 1},
+		{Package: fixtureDir, File: fixtureDir + "/fixture.go", Line: 14, Column: 8, Name: "ptrParenLocal", Func: "walker.PtrParen", GroupSize: 1},
 	}
 	if !slices.Equal(found, want) {
 		t.Fatalf("findings = %+v, want %+v", found, want)
@@ -784,6 +881,9 @@ func TestAudit_PlatformLoadThatFails_StopsTheRun(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("audit error = nil, want the platform load failure")
+	}
+	if want := "load as notanoperatingsystem/" + runtime.GOARCH + ": "; !strings.HasPrefix(err.Error(), want) {
+		t.Fatalf("audit error = %v, want it to start %q: the failure is the second load's, not the first's", err, want)
 	}
 }
 

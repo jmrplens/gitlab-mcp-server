@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,8 +38,9 @@ func introspectionAnswer(types ...string) string {
 func answeringInstance(t *testing.T, body string) string {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end: one Read may stop short of "metadata" and send
+		// the version query the introspection answer.
+		payload, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(payload), "metadata") {
 			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
 			return
@@ -53,6 +55,11 @@ func answeringInstance(t *testing.T, body string) string {
 // the fetch this whole mode exists for, including that the provenance line says
 // the pin was not consulted and names the version the instance reported, which
 // is unknown for the anonymous call an unlicensed instance is asked with.
+//
+// The line is compared whole because it carries three values, two of them
+// strings: how many types arrived, the endpoint that sent them and the version
+// it named. A line that printed the endpoint where the version goes would still
+// contain every word a looser check looks for.
 func TestLiveSchema_AnInstanceThatAnswersInFull_IsWhatJudgesTheDocuments(t *testing.T) {
 	endpoint := answeringInstance(t, introspectionAnswer(queryOnly))
 
@@ -64,16 +71,32 @@ func TestLiveSchema_AnInstanceThatAnswersInFull_IsWhatJudgesTheDocuments(t *test
 	if schema.Query == nil || schema.Query.Fields.ForName("ok") == nil {
 		t.Errorf("the schema does not carry the instance's query root: %+v", schema.Query)
 	}
-	for _, want := range []string{"fetched now", "not the pinned schema", "GitLab unknown"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(judgedBy, want) {
-				t.Errorf("the provenance line %q does not contain %q", judgedBy, want)
-			}
-		})
+	want := fmt.Sprintf("%d types from %s (GitLab unknown), fetched now, not the pinned schema",
+		graphqlintrospect.MinimumTypes, endpoint)
+	if judgedBy != want {
+		t.Errorf("the provenance line = %q, want %q", judgedBy, want)
 	}
 }
 
-// TestLiveSchema_AnInstanceThatCannotBeJudgedBy_IsRefused verifies the two ways
+// TestLiveSchema_ATruncatedAnswer_NamesWhatArrivedAgainstTheFloor verifies the
+// whole refusal of an answer too short to be a GitLab schema. It carries two
+// counts and a reader needs them the right way round: one type arrived, and a
+// GitLab schema carries more than the floor. The same words with the numbers
+// exchanged would say thousands arrived from an instance that sent one.
+func TestLiveSchema_ATruncatedAnswer_NamesWhatArrivedAgainstTheFloor(t *testing.T) {
+	endpoint := answeringInstance(t, `{"data":{"__schema":{"queryType":{"name":"Query"},"types":[`+queryOnly+`]}}}`)
+
+	_, _, err := liveSchema(context.Background(), endpoint, "", "")
+
+	want := fmt.Sprintf("%s answered with 1 types and a GitLab schema carries more than %d: "+
+		"the introspection was truncated, or that instance is not the GitLab this server targets",
+		endpoint, graphqlintrospect.MinimumTypes)
+	if err == nil || err.Error() != want {
+		t.Errorf("liveSchema() error = %v, want %q", err, want)
+	}
+}
+
+// TestLiveSchema_AnInstanceThatCannotBeJudgedBy_IsRefused verifies the ways
 // a reachable instance still cannot answer the question.
 //
 // The truncated answer is the one that matters. An instance that boots and
@@ -127,8 +150,9 @@ func TestLiveSchema_ATokenIsOffered_ReachesTheInstance(t *testing.T) {
 	var seen string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = r.Header.Get("Authorization")
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end: one Read may stop short of "metadata" and send
+		// the version query the introspection answer.
+		payload, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(payload), "metadata") {
 			_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.4.0-ee","revision":"abc1234"}}}`))
 			return
@@ -163,8 +187,9 @@ func TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained(t *testing.T) {
 		if r.Header.Get("Authorization") != "" {
 			authorized = true
 		}
-		payload := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(payload)
+		// Read to the end: one Read may stop short of "metadata" and send
+		// the version query the introspection answer.
+		payload, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(payload), "metadata") {
 			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
 			return
@@ -182,10 +207,9 @@ func TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained(t *testing.T) {
 	if authorized {
 		t.Error("the instance received an Authorization header for a run that withheld the token")
 	}
-	if !strings.Contains(judgedBy, "GitLab unknown") {
-		t.Errorf("the provenance line %q does not report the version as unknown", judgedBy)
-	}
-	if !strings.Contains(judgedBy, reason) {
-		t.Errorf("the provenance line %q does not say why the token was withheld", judgedBy)
+	want := fmt.Sprintf("%d types from %s (GitLab unknown), fetched now, not the pinned schema; %s",
+		graphqlintrospect.MinimumTypes, server.URL, reason)
+	if judgedBy != want {
+		t.Errorf("the provenance line = %q, want the version unknown and the reason after it: %q", judgedBy, want)
 	}
 }

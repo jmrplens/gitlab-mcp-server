@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -241,9 +240,9 @@ func TestCheckFileNamesInDir_SymlinkedRoot_IsStillJudged(t *testing.T) {
 	}
 }
 
-// TestCheckFileNamesInDir_UnreadableDirectoryIsAViolation verifies a
-// directory the gate cannot read is reported as a violation rather than
-// certified clean.
+// TestCheckFileNamesInDir_UnreadableDirectoryIsAViolation verifies a root
+// the gate cannot walk as a directory is reported as a violation rather than
+// certified clean, and that the reason says why.
 func TestCheckFileNamesInDir_UnreadableDirectoryIsAViolation(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "plain.txt")
 	if err := os.WriteFile(file, []byte("not a directory"), 0o600); err != nil {
@@ -251,11 +250,9 @@ func TestCheckFileNamesInDir_UnreadableDirectoryIsAViolation(t *testing.T) {
 	}
 
 	got := checkFileNamesInDir(file)
-	if len(got) != 1 {
-		t.Fatalf("violations = %+v, want exactly one", got)
-	}
-	if got[0].path != filepath.ToSlash(file) || !strings.HasPrefix(got[0].reason, "unreadable: ") {
-		t.Fatalf("violation = %+v, want unreadable %s", got[0], file)
+	want := []fileViolation{{path: filepath.ToSlash(file), reason: "unreadable: not a directory"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("violations = %+v, want %+v", got, want)
 	}
 }
 
@@ -325,7 +322,10 @@ func TestRunFileCheck_ReportsVerdict(t *testing.T) {
 
 // TestHasBuildConstraint_FileShapes verifies the constraint is only honored
 // when it precedes the package clause, and that an unreadable or
-// comment-only file earns no exemption.
+// comment-only file earns no exemption. Go lets blank lines and line comments
+// stand before the constraint, a license header among them, so neither may
+// end the search: a file carrying one would be refused the qualifier it
+// earned.
 func TestHasBuildConstraint_FileShapes(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -334,6 +334,8 @@ func TestHasBuildConstraint_FileShapes(t *testing.T) {
 		want    bool
 	}{
 		{name: "constraint before the package clause", content: "//go:build unix\n\npackage kind\n", want: true},
+		{name: "a line comment before the constraint", content: "// Copyright the authors.\n//go:build unix\n\npackage kind\n", want: true},
+		{name: "a blank line before the constraint", content: "\n//go:build unix\n\npackage kind\n", want: true},
 		{name: "constraint after the package clause", content: "package kind\n\n//go:build unix\n", want: false},
 		{name: "comments only", content: "// a header comment\n\n// another\n", want: false},
 		{name: "missing file", missing: true, want: false},

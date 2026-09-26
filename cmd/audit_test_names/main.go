@@ -126,11 +126,12 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 }
 
 // run executes the audit workflow against the supplied directories. It writes
-// CSV rows to stdout and a human-readable summary to stderr.
+// CSV rows to stdout, and to stderr a line for each tree or file it could not
+// read followed by a human-readable summary.
 func run(args []string, stdout, stderr io.Writer) error {
-	entries := make([]testEntry, 0, len(args)*10)
+	var entries []testEntry
 	for _, dir := range args {
-		entries = append(entries, scanDir(dir)...)
+		entries = append(entries, scanDir(dir, stderr)...)
 	}
 
 	// The header is the first row rather than a write of its own: it is far
@@ -172,25 +173,28 @@ func run(args []string, stdout, stderr io.Writer) error {
 // A read error is reported on stderr and ends that root's walk, leaving the
 // rows already collected and the remaining roots to be scanned: the report is
 // still printed, and the line on stderr says which tree it stops short of.
-func scanDir(dir string) []testEntry {
+// stderr is the writer run was handed, as it is for -apply's own walk, so the
+// line reaches whoever the caller pointed the report's stderr at.
+func scanDir(dir string, stderr io.Writer) []testEntry {
 	var results []testEntry
 	err := testsource.WalkFiles([]string{filepath.Clean(dir)}, testsource.TestFiles, func(path string) error {
-		results = append(results, scanFile(path)...)
+		results = append(results, scanFile(path, stderr)...)
 		return nil
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "walk %s: %v\n", filepath.Clean(dir), err)
+		fmt.Fprintf(stderr, "walk %s: %v\n", filepath.Clean(dir), err)
 	}
 	return results
 }
 
-// scanFile parses a single test file and classifies each Test* function.
-func scanFile(path string) []testEntry {
+// scanFile parses a single test file and classifies each Test* function. A
+// file that does not parse contributes no rows and one line on stderr.
+func scanFile(path string, stderr io.Writer) []testEntry {
 	cleanPath := filepath.Clean(path)
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, cleanPath, nil, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "parse %s: %v\n", cleanPath, err)
+		fmt.Fprintf(stderr, "parse %s: %v\n", cleanPath, err)
 		return nil
 	}
 
@@ -278,17 +282,17 @@ func splitCamelCase(name string) string {
 	// a WriteRune, so there is no empty tail to guard against.
 	parts = append(parts, current.String())
 
-	if len(parts) <= 1 {
-		return name
-	}
-
 	// Merge parts into segments separated by underscores.
-	// Try to create meaningful 2-3 segments from the words.
+	// Try to create meaningful 2-3 segments from the words. A single word
+	// needs no case of its own: mergeIntoSegments joins it to nothing, which
+	// gives back rest, so the answer is the name unchanged.
 	return "Test" + mergeIntoSegments(parts)
 }
 
 // mergeIntoSegments takes CamelCase words and groups them into 2-3 underscore-separated
-// segments for the TestFunc_Scenario_Expected pattern.
+// segments for the TestFunc_Scenario_Expected pattern. One or two words are
+// joined as they are, whatever the last one is: there is no scenario between
+// them to separate from a result word.
 func mergeIntoSegments(words []string) string {
 	if len(words) <= 2 {
 		return strings.Join(words, "_")

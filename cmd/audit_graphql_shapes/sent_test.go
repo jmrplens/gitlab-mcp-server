@@ -642,6 +642,11 @@ func TestRun_SentDeclarations_AnswerAFindingAndAreReportedWhenTheyAnswerNothing(
 // this dimension does not have are stated once on the check, so that a reader
 // used to the tier annotation of the REST list knows it is absent by fact
 // rather than by omission.
+//
+// Each explanation is compared with the one written for its key rather than
+// checked for being there: the three are prose of the same length and shape,
+// so the tier's reason printed under the deprecation key reads as an answer to
+// the wrong question and passes any test that asks only whether one is there.
 func TestRun_SentReport_SaysWhatItCouldNotConsult(t *testing.T) {
 	report, status, out, errOut := runSent(t, map[string]string{"sent": sentFixture}, nil)
 
@@ -656,6 +661,9 @@ func TestRun_SentReport_SaysWhatItCouldNotConsult(t *testing.T) {
 		{name: "the grain a finding is read at", got: report.Check.Grain, want: sentGrain},
 		{name: "no tier oracle", got: report.Check.TierOracle, want: oracleNone},
 		{name: "no deprecation oracle", got: report.Check.DeprecationOracle, want: oracleNone},
+		{name: "the tier oracle is explained", got: report.Check.TierOracleReason, want: tierOracleReason},
+		{name: "the deprecation oracle is explained", got: report.Check.DeprecationOracleReason, want: deprecationOracleReason},
+		{name: "the gating rule is stated", got: report.Check.Gating, want: gatingReason},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if testCase.got != testCase.want {
@@ -663,20 +671,14 @@ func TestRun_SentReport_SaysWhatItCouldNotConsult(t *testing.T) {
 			}
 		})
 	}
-	for _, testCase := range []struct {
-		name   string
-		reason string
-	}{
-		{name: "the tier oracle is explained", reason: report.Check.TierOracleReason},
-		{name: "the deprecation oracle is explained", reason: report.Check.DeprecationOracleReason},
-		{name: "the gating rule is stated", reason: report.Check.Gating},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			if testCase.reason == "" {
-				t.Errorf("the report leaves %q empty, which reads as a condition nobody thought about", testCase.name)
-			}
-		})
-	}
+	t.Run("the check names the schema it judged by and how many pairings it walked", func(t *testing.T) {
+		if !strings.HasSuffix(report.Check.Schema, ", not the pinned schema") {
+			t.Errorf("report check schema = %q, want the SDL file the run was given", report.Check.Schema)
+		}
+		if report.Check.Pairings != 2 {
+			t.Errorf("report check pairings = %d, want the fixture's 2 sends", report.Check.Pairings)
+		}
+	})
 	t.Run("the run names the report it wrote", func(t *testing.T) {
 		if !strings.Contains(out, "the schema offers that no document of their package selects") {
 			t.Errorf("run() stdout does not name the report:\n%s", out)
@@ -732,13 +734,19 @@ func TestNormalizeFieldName_TwoSpellingsOfOneValue_Compare(t *testing.T) {
 // document alone reports the sibling's selections as gaps, which made
 // nineteen percent of the two largest packages false. So a field is a gap only
 // where no document of the package selects it.
+//
+// The occurrences count the positions the field was offered at, and a
+// position whose document selects the field is not one of them even when
+// nothing decodes it: that document named the field, and what it lost is the
+// other leg's finding.
 func TestRun_SentDimension_AFieldASiblingDocumentSelects_IsNotAGapInThePackage(t *testing.T) {
 	for _, testCase := range []struct {
-		name     string
-		fixture  string
-		reported bool
+		name        string
+		fixture     string
+		reported    bool
+		occurrences int
 	}{
-		{name: "no document of the package selects it", fixture: twiceFixture, reported: true},
+		{name: "no document of the package selects it", fixture: twiceFixture, reported: true, occurrences: 2},
 		{name: "a sibling document selects it", fixture: siblingFixture, reported: false},
 		// The cancellation is evidence that the package surfaces the value,
 		// so a sibling that asks GitLab for the field and decodes none of it
@@ -746,7 +754,7 @@ func TestRun_SentDimension_AFieldASiblingDocumentSelects_IsNotAGapInThePackage(t
 		// never asked. Letting a dead selection speak here would repeat, one
 		// level down, the union-standing-for-an-intersection error this whole
 		// subtraction exists to fix.
-		{name: "a sibling document selects it and decodes nothing", fixture: siblingDropsItFixture, reported: true},
+		{name: "a sibling document selects it and decodes nothing", fixture: siblingDropsItFixture, reported: true, occurrences: 1},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			report, status, out, errOut := runSent(t, map[string]string{"sent": testCase.fixture}, nil)
@@ -755,8 +763,12 @@ func TestRun_SentDimension_AFieldASiblingDocumentSelects_IsNotAGapInThePackage(t
 				t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
 			}
 			fields := offered(report, "Pipeline")
-			if _, ok := fields["startedAt"]; ok != testCase.reported {
-				t.Errorf("Pipeline.startedAt reported = %t, want %t: %v", ok, testCase.reported, keys(fields))
+			field, ok := fields["startedAt"]
+			if ok != testCase.reported {
+				t.Fatalf("Pipeline.startedAt reported = %t, want %t: %v", ok, testCase.reported, keys(fields))
+			}
+			if ok && field.Occurrences != testCase.occurrences {
+				t.Errorf("Pipeline.startedAt occurrences = %d, want %d", field.Occurrences, testCase.occurrences)
 			}
 		})
 	}
@@ -892,6 +904,33 @@ func TestRun_SentDimension_ADocumentSentThroughAWrapper_IsFiledAgainstTheDecoder
 		}
 		if !strings.HasPrefix(field.HandedOverAt, "domain/domain.go:") {
 			t.Errorf("Pipeline.startedAt handed_over_at = %q, want the call that named the document", field.HandedOverAt)
+		}
+	})
+	// Every annotation of a finding is a straight assignment no branch
+	// decides, and several of them are strings a reader would take one for
+	// another: the Go type and the schema type, the field and its schema type,
+	// the document and the operation. The whole record is compared, and no two
+	// of its values agree, so one written into its neighbour's place fails.
+	t.Run("the finding carries every annotation in its own place", func(t *testing.T) {
+		want := sentField{
+			Grain:             sentGrain,
+			Package:           "fixture/domain",
+			Document:          "getProject",
+			Position:          "wrap/wrap.go:12",
+			HandedOverAt:      "domain/domain.go:27",
+			Operation:         "query",
+			Path:              "data.project.pipeline",
+			SchemaType:        "Pipeline",
+			Type:              "domain.pipeline",
+			Field:             "startedAt",
+			FieldType:         "Time",
+			Class:             sentLeaf,
+			Sent:              sentNullable,
+			SameNameInPackage: "started_at",
+			Occurrences:       1,
+		}
+		if field != want {
+			t.Errorf("Pipeline.startedAt =\n%+v\nwant\n%+v", field, want)
 		}
 	})
 }
@@ -1277,10 +1316,15 @@ func TestRun_SentDimension_AUnionOrInterfaceIsAskedAboutTheMembersTheDocumentNam
 // positionsFixture stops the walk in each of the three ways it can be stopped
 // and selects, without decoding, an interface, a union, a list and the cursor
 // object, so that the rule deciding which of those the question could have
-// been put at is exercised on every kind of type.
+// been put at is exercised on every kind of type. A second document decodes
+// its whole answer into a map, which stops the walk at the operation root.
 const positionsFixture = `package sent
 
 import "fixture/gql"
+
+const getFlat = @@
+query { twin { id } }
+@@
 
 const getPositions = @@
 query {
@@ -1321,7 +1365,13 @@ func send(service gql.Service) {
 			} @@json:"project"@@
 		} @@json:"data"@@
 	}
+	var flat struct {
+		Data map[string]*struct {
+			ID string @@json:"id"@@
+		} @@json:"data"@@
+	}
 	_, _ = service.Do(gql.GraphQLQuery{Query: getPositions}, &resp)
+	_, _ = service.Do(gql.GraphQLQuery{Query: getFlat}, &flat)
 }
 `
 
@@ -1332,9 +1382,10 @@ func send(service gql.Service) {
 // Each counter stands for a place the walk stopped without asking the schema
 // anything, and a figure that counted every stop would overstate what was
 // declined: the cursor object is not part of any response, so a selection of
-// it that nothing decodes is not a question that went unasked. An interface, a
-// union and a list all are, which is what makes the rule worth a test of its
-// own rather than a scalar-shaped assumption.
+// it that nothing decodes is not a question that went unasked, and neither is
+// the operation root a map decodes, whose fields are other requests. An
+// interface, a union and a list all are, which is what makes the rule worth a
+// test of its own rather than a scalar-shaped assumption.
 func TestRun_SentCoverage_CountsOnlyThePositionsTheQuestionCouldHaveBeenPutAt(t *testing.T) {
 	report, status, out, errOut := runSent(t, map[string]string{"sent": positionsFixture}, nil)
 
@@ -1351,7 +1402,7 @@ func TestRun_SentCoverage_CountsOnlyThePositionsTheQuestionCouldHaveBeenPutAt(t 
 		// under each, a walk that counted one stop as another would read
 		// exactly like this one.
 		{name: "a type that unmarshals itself is trusted with its own decoding", got: coverage.SelfDecoding, want: 1},
-		{name: "an object decoded into a map has no fields to judge", got: coverage.Map, want: 2},
+		{name: "an object decoded into a map has no fields to judge, and the root a map decodes is none", got: coverage.Map, want: 2},
 		{name: "an interface, a union and a list nothing decodes are three questions unasked", got: coverage.Undecoded, want: 3},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -1516,7 +1567,9 @@ func send(service gql.Service) {
 // secondFixture reads two more objects in another package, so the findings the
 // report holds span two packages and three schema types: the order the report
 // puts them in is observable, and the two counts the summary carries cannot be
-// read for one another.
+// read for one another. Beside them it declares two structs that spell the
+// names of two of its findings and are no response: one exported under a name
+// that is not an output type's, one named like an output type and unexported.
 const secondFixture = `package second
 
 import "fixture/gql"
@@ -1524,6 +1577,14 @@ import "fixture/gql"
 const getPipeline = @@
 query { project(fullPath: "x") { pipeline { id status } labels { nodes { title } } } }
 @@
+
+type Helper struct {
+	StartedAt string @@json:"started_at"@@
+}
+
+type pipelineOutput struct {
+	Color string @@json:"color"@@
+}
 
 func send(service gql.Service) {
 	var resp struct {
@@ -1616,18 +1677,57 @@ func TestRun_SentDimension_AValuePublishedAnywhereInAnOutputTypeIsFound(t *testi
 	// The line the run prints is what a reader sees without opening the
 	// report, and its four figures are the only place they appear together;
 	// asserted as one string so none of them can be printed in another's
-	// place.
+	// place. The two counts are read off the findings themselves rather than
+	// off the summary, so a summary that miscounts both places at once is not
+	// compared with itself.
 	t.Run("the run's own line carries the four figures in their own places", func(t *testing.T) {
+		undeclared := countUndeclared(report.Sent)
+		if undeclared == 0 || undeclared == len(report.Sent) {
+			t.Fatalf("%d of %d finding(s) are undeclared, and the declaration answers some but not all", undeclared, len(report.Sent))
+		}
+		if report.Summary.Findings != len(report.Sent) || report.Summary.Undeclared != undeclared {
+			t.Errorf("summary counts %d undeclared of %d finding(s), want %d of %d",
+				report.Summary.Undeclared, report.Summary.Findings, undeclared, len(report.Sent))
+		}
 		want := fmt.Sprintf("%d field(s) the schema offers that no document of their package selects, %d undeclared, across 2 package(s) and 3 schema type(s) ->",
-			report.Summary.Findings, report.Summary.Undeclared)
+			len(report.Sent), undeclared)
 		if !strings.Contains(out, want) {
 			t.Errorf("run() stdout lacks %q:\n%s", want, out)
 		}
-		if report.Summary.Undeclared >= report.Summary.Findings || report.Summary.Undeclared == 0 {
-			t.Errorf("summary counts %d undeclared of %d finding(s), and the declaration answers some but not all",
-				report.Summary.Undeclared, report.Summary.Findings)
-		}
 	})
+}
+
+// TestRun_SentDimension_ATypeNoCallerIsHandedPublishesNothing verifies the
+// other edge of the same annotation.
+//
+// What a package publishes is what it can hand a caller, which is an exported
+// type named as an output. A helper struct and an unexported one spell the
+// same names without publishing anything, and reading them would tell a
+// triager a value gets out that never does.
+func TestRun_SentDimension_ATypeNoCallerIsHandedPublishesNothing(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"second": secondFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	for _, testCase := range []struct {
+		name       string
+		schemaType string
+		field      string
+	}{
+		{name: "an exported type that is not an output type publishes nothing", schemaType: "Pipeline", field: "startedAt"},
+		{name: "an unexported type publishes nothing whatever its name", schemaType: "Label", field: "color"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			field, ok := offered(report, testCase.schemaType)[testCase.field]
+			if !ok {
+				t.Fatalf("%s.%s is not in the report: %v", testCase.schemaType, testCase.field, keys(offered(report, testCase.schemaType)))
+			}
+			if field.SameNameInPackage != "" {
+				t.Errorf("%s.%s same_name_in_package = %q, want none", testCase.schemaType, testCase.field, field.SameNameInPackage)
+			}
+		})
+	}
 }
 
 // TestRun_WhenTheInventoryIsRead_NamesEveryGraphQLPackageTheWalkNeverSaw
@@ -1712,6 +1812,9 @@ func TestRepoRelative_APathOutsideInternal_IsLeftAlone(t *testing.T) {
 			path: "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branchrules",
 			want: "internal/tools/branchrules",
 		},
+		// The segment is found wherever it sits, the very start included, so
+		// the trim is decided by the segment and not by what precedes it.
+		{name: "a path that opens with its internal segment is trimmed to it", path: "/internal/tools/epics", want: "internal/tools/epics"},
 		{name: "a package outside internal is left as it is", path: "fixture/sent", want: "fixture/sent"},
 		{name: "a third-party path is left as it is", path: "gitlab.com/gitlab-org/api/client-go/v3", want: "gitlab.com/gitlab-org/api/client-go/v3"},
 	} {
@@ -1721,6 +1824,18 @@ func TestRepoRelative_APathOutsideInternal_IsLeftAlone(t *testing.T) {
 			}
 		})
 	}
+}
+
+// countUndeclared counts the findings no declaration answers, read off the
+// findings themselves rather than off the summary that claims to count them.
+func countUndeclared(found []sentField) int {
+	undeclared := 0
+	for _, field := range found {
+		if field.Category == "" {
+			undeclared++
+		}
+	}
+	return undeclared
 }
 
 // keys names the fields a report holds for one type, for a failure message.

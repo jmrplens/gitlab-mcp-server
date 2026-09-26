@@ -22,12 +22,17 @@ func sampleFinding(file string, line int, fn string) Finding {
 // TestReport_Write_RendersEverySection holds the whole rendering of a report
 // that has something in every section, verbose, in the order a reader meets
 // them: the findings, the excused calls, the stale and the unknown
-// declarations, the unjudged files, a blank line, the summary.
+// declarations, the unjudged files, a blank line, the summary. Every figure on
+// the summary is one no other figure shares, so one printed in another's
+// place shows.
 func TestReport_Write_RendersEverySection(t *testing.T) {
 	report := Report{
-		Summary:  Summary{Packages: 7, Calls: 42, Forwarded: 3, Rebound: 2, Findings: 1, Excused: 1},
+		Summary:  Summary{Packages: 7, Calls: 42, Forwarded: 3, Rebound: 5, Findings: 1, Excused: 2},
 		Findings: []Finding{sampleFinding("internal/tools/x/a.go", 12, "Get")},
-		Excused:  []Finding{sampleFinding("internal/tools/x/b.go", 30, "Keep")},
+		Excused: []Finding{
+			sampleFinding("internal/tools/x/b.go", 30, "Keep"),
+			sampleFinding("internal/tools/x/c.go", 8, "Hold"),
+		},
 		Stale:    []string{"internal/tools/x:Gone"},
 		Unknown:  []string{"internal/tools/x:Keep"},
 		Unjudged: []string{"internal/tools/x/hidden.go"},
@@ -36,13 +41,14 @@ func TestReport_Write_RendersEverySection(t *testing.T) {
 	report.write(&out, true)
 	want := "internal/tools/x/a.go:12: client.GL().Version.GetVersion " + reasonMissing + " (in Get)\n" +
 		"internal/tools/x/b.go:30: client.GL().Version.GetVersion " + reasonMissing + " (in Keep), excused by its declaration\n" +
+		"internal/tools/x/c.go:8: client.GL().Version.GetVersion " + reasonMissing + " (in Hold), excused by its declaration\n" +
 		"internal/tools/x:Gone: declared to reach client-go without the caller's context, and this run found no such call there\n" +
 		"internal/tools/x:Keep: declared with a category that is not one of the defined ones\n" +
 		"internal/tools/x/hidden.go: left out of this load by its build constraints and imports client-go, so no call in it was judged\n" +
 		"\n" +
 		"audit_sdk_context: 42 calls building or sending a request in 7 packages " +
-		"(3 clean by forwarding to their own caller, 2 by rebinding after they were built); " +
-		"1 without the caller's context, 1 excused by a declaration\n"
+		"(3 clean by forwarding to their own caller, 5 by rebinding after they were built); " +
+		"1 without the caller's context, 2 excused by a declaration\n"
 	if out.String() != want {
 		t.Fatalf("write =\n%s\nwant\n%s", out.String(), want)
 	}
@@ -52,11 +58,17 @@ func TestReport_Write_RendersEverySection(t *testing.T) {
 // printed, because it is not something to act on, and a clean run is the
 // summary line alone.
 func TestReport_Write_QuietRunHidesTheExcused(t *testing.T) {
-	report := Report{Excused: []Finding{sampleFinding("internal/tools/x/b.go", 30, "Keep")}}
+	report := Report{
+		Summary: Summary{Packages: 4, Calls: 6, Excused: 1},
+		Excused: []Finding{sampleFinding("internal/tools/x/b.go", 30, "Keep")},
+	}
 	var out strings.Builder
 	report.write(&out, false)
-	if strings.Contains(out.String(), "excused by its declaration") || strings.HasPrefix(out.String(), "\n") {
-		t.Fatalf("write = %q, want the summary line alone", out.String())
+	want := "audit_sdk_context: 6 calls building or sending a request in 4 packages " +
+		"(0 clean by forwarding to their own caller, 0 by rebinding after they were built); " +
+		"0 without the caller's context, 1 excused by a declaration\n"
+	if out.String() != want {
+		t.Fatalf("write = %q, want the summary line alone, %q", out.String(), want)
 	}
 }
 
@@ -87,11 +99,16 @@ func TestReport_Ok_FailsOnEachKindOfFinding(t *testing.T) {
 // TestBuildReport_HoldsTheScanAgainstTheTable: a finding in a declared
 // function is excused and counted apart, the rest are findings in file and
 // line order, the counters are carried over, and a declaration naming a
-// package the run did not load is out of view rather than stale.
+// package the run did not load is out of view rather than stale, although a
+// category nobody defined is reported wherever its declaration points. Every
+// counter on the summary comes out at a figure no other one shares, so one
+// counted in another's place shows.
 func TestBuildReport_HoldsTheScanAgainstTheTable(t *testing.T) {
 	found := newScanner("/repo", nil)
-	found.packages["internal/tools/x"] = struct{}{}
-	found.calls, found.forwarded, found.rebound = 9, 2, 1
+	for _, pkg := range []string{"internal/tools/x", "internal/tools/p1", "internal/tools/p2", "internal/tools/p3", "internal/tools/p4", "internal/tools/p5"} {
+		found.packages[pkg] = struct{}{}
+	}
+	found.calls, found.forwarded, found.rebound = 20, 8, 7
 	found.findings = []Finding{
 		sampleFinding("internal/tools/x/b.go", 3, "Later"),
 		sampleFinding("internal/tools/x/a.go", 20, "Second"),
@@ -99,12 +116,15 @@ func TestBuildReport_HoldsTheScanAgainstTheTable(t *testing.T) {
 		sampleFinding("internal/tools/x/a.go", 5, "SameLine"),
 		sampleFinding("internal/tools/x/c.go", 1, "Keep"),
 	}
-	found.unjudged = []string{"z.go", "a.go"}
+	found.unjudged = []string{"z.go", "a.go", "m.go", "b.go", "y.go"}
 	report := buildReport(found, map[string]declaration{
 		"internal/tools/x:Keep":   {category: categoryOutlivesTheCall, reason: "r"},
 		"internal/tools/x:Gone":   {category: categoryOutlivesTheCall, reason: "r"},
 		"internal/tools/y:Absent": {category: categoryOutlivesTheCall, reason: "r"},
 		"internal/tools/x:Later":  {category: "made-up", reason: "r"},
+		"internal/tools/q:A":      {category: "invented", reason: "r"},
+		"internal/tools/q:B":      {category: "", reason: "r"},
+		"internal/tools/q:C":      {category: "also-invented", reason: "r"},
 	})
 	var order []string
 	for _, finding := range report.Findings {
@@ -119,13 +139,13 @@ func TestBuildReport_HoldsTheScanAgainstTheTable(t *testing.T) {
 	if !slices.Equal(report.Stale, []string{"internal/tools/x:Gone"}) {
 		t.Fatalf("stale = %v, want only the declaration of a loaded package that excused nothing", report.Stale)
 	}
-	if !slices.Equal(report.Unknown, []string{"internal/tools/x:Later"}) {
-		t.Fatalf("unknown = %v, want the made-up category", report.Unknown)
+	if want := []string{"internal/tools/q:A", "internal/tools/q:B", "internal/tools/q:C", "internal/tools/x:Later"}; !slices.Equal(report.Unknown, want) {
+		t.Fatalf("unknown = %v, want %v", report.Unknown, want)
 	}
-	if !slices.Equal(report.Unjudged, []string{"a.go", "z.go"}) {
-		t.Fatalf("unjudged = %v, want them sorted", report.Unjudged)
+	if want := []string{"a.go", "b.go", "m.go", "y.go", "z.go"}; !slices.Equal(report.Unjudged, want) {
+		t.Fatalf("unjudged = %v, want them sorted, %v", report.Unjudged, want)
 	}
-	want := Summary{Packages: 1, Calls: 9, Forwarded: 2, Rebound: 1, Findings: 3, Excused: 2, Stale: 1, Unknown: 1, Unjudged: 2}
+	want := Summary{Packages: 6, Calls: 20, Forwarded: 8, Rebound: 7, Findings: 3, Excused: 2, Stale: 1, Unknown: 4, Unjudged: 5}
 	if report.Summary != want {
 		t.Fatalf("summary = %+v, want %+v", report.Summary, want)
 	}
