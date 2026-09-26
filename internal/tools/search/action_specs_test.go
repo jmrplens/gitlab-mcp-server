@@ -44,7 +44,7 @@ func crossLinkableIDs(t *testing.T) map[string]bool {
 		"issue.":         {issues.ActionSpecs(client), issuenotes.ActionSpecs(client)},
 		"repository.":    {repository.ActionSpecs(client), commits.ActionSpecs(client), files.ActionSpecs(client)},
 		"merge_request.": {mergerequests.ActionSpecs(client)},
-		"user.":          {users.ActionSpecs(client, true)},
+		"user.":          {users.ActionSpecs(client)},
 		"wiki.":          {wikis.ActionSpecs(client)},
 	}
 

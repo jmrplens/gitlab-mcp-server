@@ -17,7 +17,7 @@ import (
 
 // TestActionSpecs_CallRoutes exercises user actions through their canonical routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {
-	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t), true))
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))
 
 	tests := []struct {
 		name string
@@ -77,7 +77,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 
 // TestActionSpecs_PrimaryMetadata verifies richer metadata for core user actions.
 func TestActionSpecs_PrimaryMetadata(t *testing.T) {
-	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t), true))
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))
 
 	currentSpec := byTool["gitlab_user_current"]
 	if !slices.Contains(currentSpec.Aliases, "who am i") {
@@ -117,7 +117,7 @@ func TestActionSpecs_GetUserNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 User Not Found"}`)
 	}))
-	byTool := userSpecsByTool(t, ActionSpecs(client, false))
+	byTool := userSpecsByTool(t, ActionSpecs(client))
 
 	// A JSON number of eight digits, which reaches the route as a float64: %v
 	// named it 3.1234567e+07.
@@ -143,7 +143,7 @@ func TestActionSpecs_GetUserForbiddenIsReturnedAsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
-	byTool := userSpecsByTool(t, ActionSpecs(client, false))
+	byTool := userSpecsByTool(t, ActionSpecs(client))
 
 	result, err := byTool["gitlab_get_user"].Route.Handler(t.Context(), map[string]any{"user_id": 42})
 	if err == nil {
@@ -160,7 +160,7 @@ func TestActionSpecs_GetUserForbiddenIsReturnedAsAnError(t *testing.T) {
 // built in one branch and handed to the catalog, so a spec that silently lost
 // them would publish a free-text field where a closed set was meant.
 func TestActionSpecs_InputSchemaOverridesReachTheSpec(t *testing.T) {
-	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t), true))
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))
 
 	listOverrides := byTool["gitlab_list_users"].InputSchemaOverrides
 	if len(listOverrides) != 2 {
@@ -179,7 +179,7 @@ func TestActionSpecs_InputSchemaOverridesReachTheSpec(t *testing.T) {
 func TestActionSpecs_EveryToolHasDiscoveryMetadata(t *testing.T) {
 	const placeholder = "Use to execute users domain action."
 
-	for _, spec := range ActionSpecs(newUserActionSpecClient(t), true) {
+	for _, spec := range ActionSpecs(newUserActionSpecClient(t)) {
 		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
 			if spec.Usage == placeholder {
 				t.Errorf("%s Usage is the placeholder; add an entry to userToolMetadata", spec.IndividualTool.Name)
@@ -188,6 +188,26 @@ func TestActionSpecs_EveryToolHasDiscoveryMetadata(t *testing.T) {
 				t.Errorf("%s has no individual-tool description", spec.IndividualTool.Name)
 			}
 		})
+	}
+}
+
+// TestUserOptionsForAction_UnlistedTool_KeepsThePlaceholder pins the miss
+// branch the previous test proves no registered tool reaches: a tool named
+// neither in the switch nor in userToolMetadata keeps the placeholder usage
+// and its own name as its only alias, rather than inheriting some other
+// tool's metadata.
+func TestUserOptionsForAction_UnlistedTool_KeepsThePlaceholder(t *testing.T) {
+	const tool = "gitlab_not_a_user_tool"
+
+	options := userOptionsForAction("mystery", tool)
+	if options.Usage != "Use to execute users domain action." {
+		t.Errorf("Usage = %q, want the placeholder", options.Usage)
+	}
+	if !slices.Equal(options.Aliases, []string{tool}) {
+		t.Errorf("Aliases = %v, want only %q", options.Aliases, tool)
+	}
+	if len(options.RelatedActions) != 0 || options.IndividualTool.Description != "" {
+		t.Errorf("RelatedActions = %v, Description = %q, want neither", options.RelatedActions, options.IndividualTool.Description)
 	}
 }
 
@@ -209,7 +229,7 @@ func TestFormatUserNotFound(t *testing.T) {
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	byTool := userSpecsByTool(t, ActionSpecs(client, false))
+	byTool := userSpecsByTool(t, ActionSpecs(client))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_user"], toolutil.SurfaceToolRegisterOptions{

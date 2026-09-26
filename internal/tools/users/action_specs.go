@@ -28,11 +28,10 @@ const (
 )
 
 // ActionSpecs returns canonical specs for user account, status, SSH key, and
-// misc actions, including the Free-tier instance service-account specs. The
-// bool parameter is retained for signature compatibility but ignored: tier
-// gating is handled centrally by the catalog tier filter via each spec's
-// Edition.
-func ActionSpecs(client *gitlabclient.Client, _ bool) []toolutil.ActionSpec {
+// misc actions, including the Free-tier instance service-account specs. It
+// returns every spec whatever the instance's tier: the catalog tier filter
+// gates them by each spec's Edition.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	specs := []toolutil.ActionSpec{
 		// gitlab_user_current — return the authenticated user profile for the current token.
 		userReadSpec("current", toolutil.RouteAction(client, Current), toolUserCurrent),
@@ -381,10 +380,9 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 		OpenWorld:      true,
 		OwnerPackage:   "users",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	}
-
-	if overrides := userInputSchemaOverrides(individualTool); len(overrides) > 0 {
-		options.InputSchemaOverrides = overrides
+		// nil for a tool declaring no enum constraints, which is the field's
+		// zero value, so no guard is needed around it.
+		InputSchemaOverrides: userInputSchemaOverrides(individualTool),
 	}
 
 	switch individualTool {
