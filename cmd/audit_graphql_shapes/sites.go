@@ -301,7 +301,9 @@ func fieldValue(literal *ast.CompositeLit, name string) ast.Expr {
 		if !isPair {
 			continue
 		}
-		if key, isIdent := pair.Key.(*ast.Ident); isIdent && key.Name == name {
+		// Both callers hand over a struct literal, whose keys are field names,
+		// so a key is spelled exactly as the field it sets.
+		if types.ExprString(pair.Key) == name {
 			return pair.Value
 		}
 	}
@@ -361,9 +363,13 @@ func documentSources(pkg *packages.Package, fn *ast.FuncDecl, expr ast.Expr) []s
 }
 
 // foldDocument reads the constant value of an expression, when it has one.
+//
+// Every expression it is handed is one a GraphQLQuery's Query field is given,
+// directly, through a local, or through a wrapper's parameter feeding it, so
+// its type is a string and a constant of it is a string constant.
 func foldDocument(pkg *packages.Package, expr ast.Expr) (source, bool) {
 	value := pkg.TypesInfo.Types[expr]
-	if value.Value == nil || value.Value.Kind() != constant.String {
+	if value.Value == nil {
 		return source{}, false
 	}
 	folded := source{text: constant.StringVal(value.Value)}

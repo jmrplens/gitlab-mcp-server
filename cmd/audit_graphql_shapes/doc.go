@@ -17,10 +17,11 @@
 // walks the validated selection set against that type through encoding/json's
 // own rules: a field is matched by its json tag or, failing that, its name
 // case-insensitively, embedded structs are flattened, a type that unmarshals
-// itself is trusted, json.Number holds a number as it is written, and a type
-// parameter is read as whatever the caller bound it to: a generic function's
-// by the type arguments of the call, and a method's of a generic type by the
-// type arguments of the receiver it is called on.
+// itself is trusted, json.Number holds a number as it is written and a string
+// only when its text may be one, and a type parameter is read as whatever the
+// caller bound it to: a generic function's by the type arguments of the call,
+// and a method's of a generic type by the type arguments of the receiver it is
+// called on.
 //
 // Three disagreements fail the gate: a field whose Go kind cannot hold what
 // the schema says GitLab sends (a String decoded into an int, an object into a
@@ -28,14 +29,15 @@
 // is always empty, and a scalar this audit has no serialization for. A field
 // the document selects and no Go field reads is reported and does not fail:
 // it is transfer, not truth. A position typed by a type parameter no caller
-// binds does not fail either, and is counted apart on the summary line rather
-// than with the selections nothing reads, since it was never judged at all;
-// -v names each. A document that reaches its call through a
-// wrapper's parameter is paired at every call of that wrapper, where the
-// document is named; a document built at run time, or one the sibling audit
-// finds that no call this audit can see sends, is a failure rather than a
-// silence, because a document nobody judges is the shape this gate exists to
-// refuse.
+// binds does not fail either, and is counted apart on the summary line of a
+// passing and a failing run alike rather than with the selections nothing
+// reads, since it was never judged at all; the pairing holding it is not
+// counted among those that agree, and -v names each position. A document that
+// reaches its call through a wrapper's parameter is paired at every call of
+// that wrapper, where the document is named; a document built at run time, or
+// one the sibling audit finds that no call this audit can see sends, is a
+// failure rather than a silence, because a document nobody judges is the
+// shape this gate exists to refuse.
 //
 // # What the schema offers and nobody asks for
 //

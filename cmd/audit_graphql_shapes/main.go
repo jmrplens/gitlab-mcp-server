@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"go/token"
@@ -55,21 +56,41 @@ type auditRun struct {
 	declarations []sentDeclaration
 }
 
-func main() {
-	dir := flag.String("dir", ".", "repository root to audit")
-	verbose := flag.Bool("v", false, "list every pairing judged, every selection nothing reads and every position left unjudged, not only the disagreements")
-	schemaPath := flag.String("schema", "", "SDL file to judge the documents against, instead of the pinned schema")
-	reportPath := flag.String("report", "", "write the fields the schema offers that no document of their package selects, as JSON, to this path")
-	flag.Parse()
+// exitProcess ends the process with the status main decided. A seam, so a
+// test can run main itself and read the status it would have exited with.
+var exitProcess = os.Exit
 
-	os.Exit(run(auditRun{
+func main() {
+	exitProcess(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// runMain reads the command line and runs the audit it describes, returning
+// the exit status: 0 for -h, 2 for a command line it cannot read, as the flag
+// package's own exit would, and otherwise what [run] decides. It is main with
+// the process handed to it, so every flag's way into the run is reachable
+// from a test.
+func runMain(args []string, out, errOut io.Writer) int {
+	flags := flag.NewFlagSet("audit_graphql_shapes", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	dir := flags.String("dir", ".", "repository root to audit")
+	verbose := flags.Bool("v", false, "list every pairing judged, every selection nothing reads and every position left unjudged, not only the disagreements")
+	schemaPath := flags.String("schema", "", "SDL file to judge the documents against, instead of the pinned schema")
+	reportPath := flags.String("report", "", "write the fields the schema offers that no document of their package selects, as JSON, to this path")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	return run(auditRun{
 		dir:          *dir,
 		verbose:      *verbose,
 		patterns:     auditPatterns,
 		schemaPath:   *schemaPath,
 		reportPath:   *reportPath,
 		declarations: declaredSent,
-	}, os.Stdout, os.Stderr))
+	}, out, errOut)
 }
 
 // run is main with its streams and its exit status handed to it, so the ways
@@ -274,30 +295,36 @@ func report(cfg auditRun, out, errOut io.Writer, result auditResult) int {
 		byPairing[f.pairing] = append(byPairing[f.pairing], f)
 	}
 
-	disagreements, unread, unjudged := 0, 0, 0
+	disagreements, unread := 0, 0
+	var unjudged unjudgedCount
 	for i := range result.pairings {
 		p := &result.pairings[i]
 		group := byPairing[p]
-		fails := false
+		fails, positions := false, 0
 		for _, f := range group {
 			switch {
 			case f.Fails:
 				fails = true
 				disagreements++
 			case f.Unjudged:
-				unjudged++
+				positions++
 			default:
 				unread++
 			}
 		}
-		switch {
-		case fails:
+		unjudged.add(positions)
+		if fails {
 			fmt.Fprint(errOut, block(root, p, group, cfg.verbose))
-		case cfg.verbose && len(group) > 0:
-			fmt.Fprint(out, block(root, p, group, true))
-		case cfg.verbose:
-			fmt.Fprintf(out, "    ok  %s\n", heading(root, p))
+			continue
 		}
+		if !cfg.verbose {
+			continue
+		}
+		if len(group) > 0 {
+			fmt.Fprint(out, block(root, p, group, true))
+			continue
+		}
+		fmt.Fprintf(out, "    ok  %s\n", heading(root, p))
 	}
 	for _, trouble := range result.problems {
 		fmt.Fprintf(errOut, "%s (%s): %s\n", trouble.Package, relative(trouble.Position, root), trouble.Message)
@@ -306,34 +333,51 @@ func report(cfg auditRun, out, errOut io.Writer, result auditResult) int {
 		fmt.Fprintf(errOut, "sent_declarations.go: %s\n", message)
 	}
 
-	switch {
-	case len(result.pairings) == 0:
+	if len(result.pairings) == 0 {
 		fmt.Fprintf(errOut, "\n%s found no send to judge under %s\n", prefix, strings.Join(cfg.patterns, " "))
 		return 1
-	case disagreements > 0 || len(result.problems) > 0 || len(result.stale) > 0:
-		fmt.Fprintf(errOut, "\n%s %d disagreement(s) in %d pairing(s), %d unpaired or unjudged, %d stale declaration(s) (%s)\n",
-			prefix, disagreements, len(result.pairings), len(result.problems), len(result.stale), result.provenance)
-		return 1
-	default:
-		fmt.Fprintf(out, "%s %d pairing(s) agree with their documents, %d selection(s) nothing reads%s (%s)\n",
-			prefix, len(result.pairings), unread, unjudgedClause(unjudged), result.provenance)
-		return 0
 	}
+	if disagreements > 0 || len(result.problems) > 0 || len(result.stale) > 0 {
+		fmt.Fprintf(errOut, "\n%s %d disagreement(s) in %d pairing(s), %d unpaired or unreadable, %d stale declaration(s)%s (%s)\n",
+			prefix, disagreements, len(result.pairings), len(result.problems), len(result.stale), unjudged.clause(), result.provenance)
+		return 1
+	}
+	fmt.Fprintf(out, "%s %d pairing(s) agree with their documents, %d selection(s) nothing reads%s (%s)\n",
+		prefix, len(result.pairings)-unjudged.pairings, unread, unjudged.clause(), result.provenance)
+	return 0
 }
 
-// unjudgedClause names the positions a type parameter no caller binds left
-// unjudged, for the passing summary.
+// unjudgedCount is how many positions a type parameter no caller binds left
+// unjudged, and in how many pairings.
 //
-// It is said only when there is one. A pairing that agrees except where it
-// was never asked is not a pairing that agrees, so a run that has one must say
-// so on the line a reader reads without -v; a run that has none says exactly
-// what it said before the count existed, which keeps the summary of a tree
-// with no such decoder unchanged byte for byte.
-func unjudgedClause(unjudged int) string {
-	if unjudged == 0 {
+// Both summaries carry it, since a failing run that leaves a decoder unjudged
+// has left it unjudged all the same, and a reader who sees only the summary
+// line is owed that on either. The pairings holding one are not counted among
+// those that agree: a pairing that agrees except where it was never asked has
+// not been shown to agree.
+type unjudgedCount struct {
+	positions int
+	pairings  int
+}
+
+// add counts one pairing's unjudged positions.
+func (u *unjudgedCount) add(positions int) {
+	if positions == 0 {
+		return
+	}
+	u.positions += positions
+	u.pairings++
+}
+
+// clause names the count for a summary line, and is empty when there is
+// none, so a run with no such decoder says exactly what it said before the
+// count existed and the summary of a tree without one stays the same byte for
+// byte.
+func (u *unjudgedCount) clause() string {
+	if u.positions == 0 {
 		return ""
 	}
-	return fmt.Sprintf(", %d position(s) left unjudged, typed by a parameter no caller binds", unjudged)
+	return fmt.Sprintf(", %d position(s) in %d pairing(s) left unjudged, typed by a parameter no caller binds", u.positions, u.pairings)
 }
 
 // block renders one pairing with its findings under it.

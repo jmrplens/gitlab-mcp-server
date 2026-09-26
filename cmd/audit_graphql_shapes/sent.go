@@ -448,22 +448,23 @@ func (j *judge) isRoot(definition *ast.Definition) bool {
 }
 
 // classOf says what acting on a field would cost.
+//
+// The field is one the schema declares on an object it sends, and such a
+// field's type is a scalar, an enum, an object, an interface or a union: an
+// input object is never one, so whatever is not a leaf is an object, and a
+// connection is the object that is a collection.
 func (j *judge) classOf(fieldType *ast.Type) string {
 	if fieldType.Elem != nil {
 		return sentCollection
 	}
 	definition := j.schema.Types[fieldType.NamedType]
-	switch definition.Kind {
-	case ast.Scalar, ast.Enum:
+	if definition.Kind == ast.Scalar || definition.Kind == ast.Enum {
 		return sentLeaf
-	case ast.Object, ast.Interface, ast.Union:
-		if isConnection(definition) {
-			return sentCollection
-		}
-		return sentObject
-	default:
-		return sentObject
 	}
+	if isConnection(definition) {
+		return sentCollection
+	}
+	return sentObject
 }
 
 // isLeafType reports whether a type bottoms out in a scalar or an enum, which
@@ -565,9 +566,10 @@ func collectPublished(pkgs []*packages.Package) publishedIndex {
 				collectPublishedFields(body, names, map[string]bool{})
 			}
 		}
-		if len(names) > 0 {
-			index[pkg.PkgPath] = names
-		}
+		// A package that publishes nothing is kept with an empty set: it is
+		// read only by a lookup, which a missing package and an empty one
+		// answer alike.
+		index[pkg.PkgPath] = names
 	}
 	return index
 }
@@ -628,10 +630,11 @@ func structOf(goType types.Type) (*types.Struct, bool) {
 func normalizeFieldName(name string) string {
 	var normalized strings.Builder
 	for _, r := range name {
-		switch {
-		case r >= 'A' && r <= 'Z':
+		if r >= 'A' && r <= 'Z' {
 			normalized.WriteRune(r + ('a' - 'A'))
-		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			continue
+		}
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			normalized.WriteRune(r)
 		}
 	}

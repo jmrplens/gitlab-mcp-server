@@ -9,10 +9,11 @@ import (
 )
 
 // TestWriteSentReport_EveryFieldReadsBackAsWritten verifies the property that
-// makes the render error in writeSentReport unreachable, since that arm is
-// kept rather than tested: a report holds strings, integers, slices and structs
-// of them and nothing encoding/json can refuse, so it always renders, and what
-// it renders is the report.
+// makes a render error in writeSentReport a defect rather than an outcome,
+// which is why the render is a Must there rather than a returned error: a
+// report holds strings, integers, slices and structs of them and nothing
+// encoding/json can refuse, so it always renders, and what it renders is the
+// report.
 //
 // Every field is filled with a value no other field shares, so a field that
 // stopped being written, or came back under another's key, fails the

@@ -81,6 +81,37 @@ func scalarClassOf(name string) (scalarClass, bool) {
 	return 0, false
 }
 
+// textScalars are the string scalars GitLab writes in a form that is never a
+// number or a boolean: a date or a time in ISO 8601 ("2026-09-26",
+// "2026-09-26T10:00:00Z"), and a color as a hex code or a name ("#fefefe").
+var textScalars = map[string]bool{
+	"Color":           true,
+	"Date":            true,
+	"ISO8601Date":     true,
+	"ISO8601DateTime": true,
+	"Time":            true,
+}
+
+// carriesLiteral reports whether the text of a string scalar may be a number or
+// a boolean, which is all json.Number and a ",string" option read out of a JSON
+// string: encoding/json refuses any other text there as an invalid literal.
+//
+// A date, a time and a color never are, and neither is a global ID, which is a
+// URI ("gid://gitlab/Project/1") and is recognized by its name the way
+// scalarClassOf recognizes it. The built-in ID is not one of those, since
+// GraphQL serializes it as a string whose form it leaves to the server.
+// Every other string scalar may be one: String is whatever it was given,
+// BigInt is a number written as a string, JsonString is JSON text, and the rest
+// name things (a regular expression, a Google Cloud resource, a pinned
+// version) whose form the scalar does not fix, so refusing them would be a
+// guess rather than a reading.
+func carriesLiteral(name string) bool {
+	if textScalars[name] {
+		return false
+	}
+	return name == idSuffix || !strings.HasSuffix(name, idSuffix)
+}
+
 // classKinds are the Go basic kinds each class decodes into.
 //
 // An integer scalar may land in a float, since every integer is a JSON number
@@ -274,7 +305,7 @@ func (j *judge) judgeType(goType types.Type, gqlType *ast.Type, selections ast.S
 			j.fail(path, definition.Name+" is a scalar this audit has no serialization for; add it to scalarClasses with how GitLab sends it")
 			return
 		}
-		j.expectClass(goType, gqlType, path, class, asString, class == classString)
+		j.expectClass(goType, gqlType, path, class, asString, class == classString && carriesLiteral(definition.Name))
 	}
 }
 
@@ -419,8 +450,12 @@ func (j *judge) expand(selections ast.SelectionSet) []*ast.Field {
 			fields = append(fields, s)
 		case *ast.InlineFragment:
 			fields = append(fields, j.expand(s.SelectionSet)...)
-		case *ast.FragmentSpread:
-			fields = append(fields, j.expand(s.Definition.SelectionSet)...)
+		default:
+			// A selection is sealed to three kinds, so one that is neither a
+			// field nor an inline fragment is a fragment spread and the
+			// assertion cannot fail.
+			spread, _ := s.(*ast.FragmentSpread)
+			fields = append(fields, j.expand(spread.Definition.SelectionSet)...)
 		}
 	}
 	return fields
@@ -444,8 +479,8 @@ func isJSONNumber(goType types.Type) bool {
 
 // expectClass checks that a Go type can hold a scalar of the class. literal
 // says whether the JSON string GitLab sends may carry a number or a boolean as
-// its text: a string scalar may, since a BigInt is one, and an enum value never
-// does.
+// its text: a string scalar may unless its form rules that out (see
+// [carriesLiteral]), since a BigInt is one, and an enum value never does.
 //
 // A ",string" option the field's kind honors makes encoding/json read the
 // field's own literal out of a JSON string, which is how a BigInt lands in an
@@ -461,8 +496,9 @@ func isJSONNumber(goType types.Type) bool {
 // is what it exists for: it takes a JSON integer or a JSON number with a
 // fraction as the text it was written in, so it holds an Int and a Float as a
 // float kind does. It takes a JSON string only when the string's text is a
-// number, which a string scalar may carry and an enum value never does, and it
-// refuses a boolean as any string kind does. Measured on Go 1.27.1 with the
+// number, which a string scalar may carry unless it is a date, a time, a color
+// or a global ID, and an enum value never does, and it refuses a boolean as
+// any string kind does. Measured on Go 1.27.1 with the
 // default jsonv2 engine and with GOEXPERIMENT=nojsonv2 alike. It is matched by
 // its full name, as under the option, so a type defined from it is judged as
 // the plain string it is.
