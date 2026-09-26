@@ -405,9 +405,8 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	// Field-level (Check B): walk input schema, flag empty/boilerplate descriptions.
 	//
 	// Note on the output schema walk: `empty_output_description` is intentionally
-	// classified at info severity (not warning/error). Per the team's 1:1 audit
-	// policy (see plan/discovery-metadata-completeness.md §9 "Output godoc"),
-	// Output struct fields intentionally lack jsonschema tags because:
+	// classified at info severity (not warning/error). Per the 1:1 audit
+	// policy, Output struct fields intentionally lack jsonschema tags because:
 	//   1. The MCP protocol uses ActionSpec.Description (not OutputSchema
 	//      property descriptions) for model-facing tool selection.
 	//   2. Output structs mirror client-go SDK types 1:1; adding jsonschema

@@ -1094,9 +1094,10 @@ gen-model-results:
 
 ## model-results-record: fold a model evaluation run's shards into the committed
 ## record and redraw the pages from it (usage: make model-results-record
-## MODELEVAL_SHARDS=dist/modeleval/ce). Every row the refusals of the plan's
-## section 4.7 name is reported and dropped, the fake provider's included, so a
-## run of the fake publishes nothing and says why row by row.
+## MODELEVAL_SHARDS=dist/modeleval/ce). Every row the fold refuses
+## (cmd/gen_model_results/refusals.go) is reported and dropped, the fake
+## provider's included, so a run of the fake publishes nothing and says why row
+## by row.
 model-results-record:
 	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
 	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -render
@@ -1810,7 +1811,7 @@ audit-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -json plan/test-goroutines-backlog.json
 
 ## check-test-goroutines: fail when any testing.T abort remains off the test
-## goroutine. Wired into CI once the sweep lands (phase 4 of the plan).
+## goroutine. CI runs it on every pull request and every push to main.
 check-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -check
 

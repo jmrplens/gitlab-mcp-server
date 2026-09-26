@@ -1,7 +1,7 @@
 # The card: one Markdown shape for one GitLab object
 
-Formal definition of `toolutil.Card`, the writer the markdown audit (issue 697,
-`plan/2026-09-11-markdown-audit.json`, work items L1-01 to L1-03) settled on.
+Formal definition of `toolutil.Card`, the writer the markdown audit of
+[issue 697](https://github.com/jmrplens/gitlab-mcp-server/issues/697) settled on.
 This document is the contract; `internal/toolutil/card.go` is the
 implementation and `internal/toolutil/card_test.go` pins every byte below.
 

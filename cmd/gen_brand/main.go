@@ -14,10 +14,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 )
 
-// Palette: the "circuit violet" identity on the GitHub neutral ramp (see
-// plan/2026-08-brand-redesign.md §2). The favicon embeds the dark values —
-// the art brings its own ground — while the canonical mark carries no color
-// at all and is painted by the site's CSS tokens.
+// Palette: the "circuit violet" identity on the GitHub neutral ramp, chosen
+// in the brand redesign of pull request 299. The favicon embeds the dark
+// values (the art brings its own ground), while the canonical mark carries
+// no color at all and is painted by the site's CSS tokens.
 const (
 	darkGround = "#0d1117" // GitHub dark black: the mark's own ground
 	darkNode   = "#d6c9ff" // accent-ink: the source node
@@ -150,7 +150,7 @@ const svgBrand = `+"`%s`"+`
 // The card backgrounds are commissioned artwork in the brand's own
 // vocabulary: quiet circuit traces and git-graph branches with node dots,
 // generated once with gpt-image-2 from this project's monochrome banner and
-// palette (see plan/2026-08-brand-redesign.md), then frozen here. They are
+// palette, then frozen here. They are
 // embedded so every emitted SVG stays self-contained and `--check` stays a
 // pure byte comparison; the vector layer on top — frame, mark, wordmark —
 // remains fully parametric, so the text and the mark never rasterize.

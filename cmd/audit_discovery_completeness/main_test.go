@@ -489,8 +489,8 @@ func cachedFullReport(t *testing.T) report {
 
 // TestBuildReport_LinkCreateBatchGoldStandard exercises the auditor against
 // the canonical link_create / link_create_batch cluster using synthetic
-// specs that mirror the BEFORE/AFTER signature from the discovery eval
-// (plan/discovery-metadata-completeness.md §1). This pins the auditor
+// specs that mirror the BEFORE/AFTER signature from the discovery eval.
+// This pins the auditor
 // without coupling to the live releaselinks package, whose current source
 // has a subsequent override that clobbers the original gold-standard fix.
 //
@@ -624,8 +624,7 @@ func TestBuildReport_NonEmptyActions(t *testing.T) {
 // logs the current snapshot so future Phase 1 waves have a reference and
 // regressions are visible. The "errors" count is expected to be non-zero
 // initially — Phase 1 (dimensioning + FP triage + multi-agent burn-down) is
-// the work that drives it down to zero. See plan/post-pr190-cleanup.md
-// META-001 §5 (Phases).
+// the work that drives it down to zero.
 func TestBuildReport_LiveBaseline(t *testing.T) {
 	rep := cachedFullReport(t)
 	t.Logf("discovery baseline: actions=%d errors=%d warnings=%d packages=%d clusters=%d",

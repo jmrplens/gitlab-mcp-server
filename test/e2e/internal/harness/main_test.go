@@ -191,7 +191,7 @@ func TestMismatchSkips_Setting_TurnsARefusalIntoSkips(t *testing.T) {
 // TestRunStateFinish_FatalRefusal_AlwaysFails checks the exit code a package
 // that never ran a test returns.
 //
-// Two is the code the plan gives a refusal, so a CI step can tell it from an
+// Two is the exit code a refusal takes, so a CI step can tell it from an
 // ordinary test failure. A fatal refusal returns it even with the skip setting
 // on, which is what stops the gate passing empty.
 func TestRunStateFinish_FatalRefusal_AlwaysFails(t *testing.T) {

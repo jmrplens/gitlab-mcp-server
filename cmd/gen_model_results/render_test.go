@@ -171,9 +171,9 @@ func TestRenderBlock_SelectsBySurfaceAndLicence(t *testing.T) {
 	}
 }
 
-// TestRenderBlock_AnOpaqueMetaRow_CarriesWhatItIsNotComparableWith is the
-// sentence section 4.5 of the rebuild plan requires beside such a row, printed
-// where the comparison would be made rather than in a footnote.
+// TestRenderBlock_AnOpaqueMetaRow_CarriesWhatItIsNotComparableWith pins the
+// sentence such a row must carry beside it, printed where the comparison would
+// be made rather than in a footnote.
 func TestRenderBlock_AnOpaqueMetaRow_CarriesWhatItIsNotComparableWith(t *testing.T) {
 	meta := twoModels()[0]
 	meta.Key.Surface = "meta"

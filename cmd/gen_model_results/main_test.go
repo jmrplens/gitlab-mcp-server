@@ -182,8 +182,8 @@ func TestRun_ARowNoBlockPublishes_IsAFinding(t *testing.T) {
 	}
 }
 
-// TestRun_FoldingAFakeRun_PublishesNothingAndSaysWhy is the verification the
-// rebuild plan asks for by name: the fake proves the pipe and its every row is
+// TestRun_FoldingAFakeRun_PublishesNothingAndSaysWhy verifies that folding a
+// fake run publishes nothing: the fake proves the pipe and its every row is
 // refused, row by row, naming the fake.
 func TestRun_FoldingAFakeRun_PublishesNothingAndSaysWhy(t *testing.T) {
 	root := newRoot(t)
