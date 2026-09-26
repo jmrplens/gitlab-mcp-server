@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
@@ -97,6 +98,13 @@ func main() {
 var newAuditClient = func() (client *gitlabclient.Client, cleanup func()) {
 	return auditshared.NewStubGitLabClient(auditshared.StubToken)
 }
+
+// progressf writes the progress lines this command emits. It is indirected
+// because [cmdutil.Progressf] writes to a writer private to internal/cmdutil,
+// so which of the three tiers a footprint line says it is measuring would
+// otherwise be readable by no test here; cmd/internal/apidocs indirects its
+// own for the same reason.
+var progressf = cmdutil.Progressf
 
 // measureAudit is the measurement the report and JSON modes render. It is a
 // variable for the same reason [measureFootprintRows] is: the test whose
@@ -210,7 +218,7 @@ func buildAuditSurfaces(client *gitlabclient.Client) auditSurfaces {
 	s.dynamicBaseRoutes = s.dynamicBaseCatalog.ActionMaps()
 	s.dynamicEnterpriseRoutes = s.dynamicEnterpriseCatalog.ActionMaps()
 
-	cmdutil.Progressf("audit_tokens: enumerating tools across individual/meta/dynamic surfaces...")
+	progressf("audit_tokens: enumerating tools across individual/meta/dynamic surfaces...")
 	s.individualTools = listTools(client, config.ToolSurfaceIndividual, true)
 	s.metaBaseTools = listTools(client, config.ToolSurfaceMeta, false)
 	s.metaEnterpriseTools = listTools(client, config.ToolSurfaceMeta, true)
@@ -224,7 +232,7 @@ func buildAuditSurfaces(client *gitlabclient.Client) auditSurfaces {
 func measureTokenAudit(client *gitlabclient.Client) tokenAudit {
 	s := buildAuditSurfaces(client)
 
-	cmdutil.Progressf("audit_tokens: measuring token cost (tools, resources, prompts)...")
+	progressf("audit_tokens: measuring token cost (tools, resources, prompts)...")
 	audit := tokenAudit{
 		metaBaseCatalogActions:       countActions(s.metaBaseRoutes),
 		metaEnterpriseCatalogActions: countActions(s.metaEnterpriseRoutes),
@@ -415,6 +423,11 @@ func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[strin
 
 // measureTools serializes each tool definition to JSON and estimates its token
 // cost using the audit's byte-based heuristic.
+//
+// The result is ranked by descending cost and then by name. The individual
+// surface holds hundreds of tools that cost exactly the same, some of them
+// inside the report's top thirty, and with cost alone which of them made the
+// cut was whatever order an unstable sort left them in.
 func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	infos := make([]toolTokenInfo, 0, len(toolList))
 	for _, t := range toolList {
@@ -426,8 +439,8 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 			Bytes:  len(b),
 		})
 	}
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].Tokens > infos[j].Tokens
+	slices.SortFunc(infos, func(a, b toolTokenInfo) int {
+		return cmp.Or(cmp.Compare(b.Tokens, a.Tokens), strings.Compare(a.Name, b.Name))
 	})
 	return infos
 }
@@ -576,7 +589,9 @@ func printTopTools(infos []toolTokenInfo, n int) {
 }
 
 // printDomainTotals aggregates token estimates by tool domain and prints the
-// highest-cost domains first.
+// highest-cost domains first, and domains of equal cost by name. The totals
+// are gathered in a map, so without the name two domains of equal cost came
+// out in the map's iteration order, which changes from one run to the next.
 func printDomainTotals(infos []toolTokenInfo, n int) {
 	domainTotals := map[string]int{}
 	domainCounts := map[string]int{}
@@ -594,8 +609,8 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 	for d, t := range domainTotals {
 		entries = append(entries, domainEntry{Domain: d, Tokens: t, Count: domainCounts[d]})
 	}
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Tokens > entries[j].Tokens
+	slices.SortFunc(entries, func(a, b domainEntry) int {
+		return cmp.Or(cmp.Compare(b.Tokens, a.Tokens), strings.Compare(a.Domain, b.Domain))
 	})
 
 	if n > len(entries) {
@@ -1061,7 +1076,7 @@ func measureTokenFootprintRows(client *gitlabclient.Client) []tokenFootprintRow 
 
 	promptTokens := measurePrompts(client)
 	for i, t := range tiers {
-		cmdutil.Progressf("audit_tokens: measuring footprint [%d/%d] %s tier (all surfaces x schema modes)...", i+1, len(tiers), t.label)
+		progressf("audit_tokens: measuring footprint [%d/%d] %s tier (all surfaces x schema modes)...", i+1, len(tiers), t.label)
 		allRows = append(allRows, measureTierFootprintWithPrompts(client, t.tier, t.label, promptTokens)...)
 	}
 	return allRows
