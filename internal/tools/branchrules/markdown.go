@@ -98,23 +98,14 @@ func rendersLink(r BranchRuleItem) bool {
 	return false
 }
 
-// setting is one row of a rule's settings table: a label and its rendered
-// value.
-type setting struct {
-	label string
-	value string
-}
-
-// ruleSettings lists the security-policy flags of one rule that are on. A
-// flag that is off is the default every rule starts from, so a row for it
-// would only repeat the absence of a restriction.
-func ruleSettings(r BranchRuleItem) []setting {
-	p := r.BranchProtection
+// policyFlags lists the labels of the security-policy flags of one protection
+// that are on. A flag that is off is the default every rule starts from, so a
+// line for it would only repeat the absence of a restriction.
+func policyFlags(p *BranchProtection) []string {
 	if p == nil {
 		return nil
 	}
-	var settings []setting
-	on := toolutil.BoolEmoji(true)
+	var labels []string
 	for _, flag := range []struct {
 		label string
 		value *bool
@@ -125,10 +116,10 @@ func ruleSettings(r BranchRuleItem) []setting {
 		{"Push would be blocked by a warn-mode policy", p.WarnProtectedFromPushBySecurityPolicy},
 	} {
 		if flag.value != nil && *flag.value {
-			settings = append(settings, setting{flag.label, on})
+			labels = append(labels, flag.label)
 		}
 	}
-	return settings
+	return labels
 }
 
 // grant is one row of a rule's grants table: what it allows and the grant.
@@ -157,35 +148,30 @@ func ruleGrants(p *BranchProtection) []grant {
 	return grants
 }
 
-// writeProtectionSection writes who may push, merge and unprotect under one
-// rule, and the settings of it that are on, and nothing when the rule has
-// neither.
+// writeProtectionSection writes, under one rule, the security-policy flags of
+// its protection that are on, marked as the restrictions they are, then who may
+// push, merge and unprotect, and nothing when the rule has neither.
 func writeProtectionSection(b *strings.Builder, r BranchRuleItem) {
-	settings := ruleSettings(r)
+	flags := policyFlags(r.BranchProtection)
 	grants := ruleGrants(r.BranchProtection)
-	if len(settings) == 0 && len(grants) == 0 {
+	if len(flags) == 0 && len(grants) == 0 {
 		return
 	}
 	fmt.Fprintf(b, "\n### Protection for %s\n\n", toolutil.EscapeMdHeading(r.Name))
-	if len(settings) > 0 {
-		b.WriteString(toolutil.MarkdownTableHeader("Setting", "Value"))
-		for _, s := range settings {
-			b.WriteString(toolutil.MarkdownTableRow(s.label, s.value))
-		}
+	c := toolutil.NewCard(b, "")
+	for _, label := range flags {
+		c.Warn(label, true)
 	}
 	if len(grants) == 0 {
 		return
 	}
-	if len(settings) > 0 {
-		b.WriteString("\n")
-	}
-	b.WriteString(toolutil.MarkdownTableHeader("Grant", "Allowed", "Detail"))
+	table := c.Table("", "Grant", "Allowed", "Detail")
 	for _, g := range grants {
-		b.WriteString(toolutil.MarkdownTableRow(
-			g.action,
+		table.Row(
+			toolutil.EscapeMdTableCell(g.action),
 			toolutil.EscapeMdTableCell(g.access.AccessLevelDescription),
 			grantDetail(g),
-		))
+		)
 	}
 }
 

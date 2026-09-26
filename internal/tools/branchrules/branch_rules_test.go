@@ -831,8 +831,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 }
 
 // TestFormatListMarkdown_WithRules pins the whole response of an Enterprise
-// listing: the grant summaries in the table, then per rule the settings that
-// are on and every grant with who it names, the approval rules with their
+// listing: the grant summaries in the table, then per rule the policy flags
+// that are on and every grant with who it names, the approval rules with their
 // approvers, and the status checks with their HMAC flag.
 func TestFormatListMarkdown_WithRules(t *testing.T) {
 	out := ListOutput{
@@ -847,10 +847,8 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		"| main | ✅ | ✅ | 1 | Maintainers, Jane Doe, Deploy key | Developers + Maintainers, Platform | ❌ | ✅ | 2 (Security Review, Coverage-Check) | 1 (SonarQube) |\n" +
 		"| feature/* | ❌ | ❌ | 5 | - | - | - | - | None | None |\n" +
 		"\n### Protection for main\n\n" +
-		"| Setting | Value |\n" +
-		"| --- | --- |\n" +
-		"| Modification blocked by a security policy | ✅ |\n" +
-		"| Modification would be blocked by a warn-mode policy | ✅ |\n" +
+		"- ⚠️ **Modification blocked by a security policy**\n" +
+		"- ⚠️ **Modification would be blocked by a warn-mode policy**\n" +
 		"\n| Grant | Allowed | Detail |\n" +
 		"| --- | --- | --- |\n" +
 		"| Push | Maintainers | - |\n" +
@@ -909,10 +907,11 @@ func TestFormatListMarkdown_CommunityRule(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SettingsWithoutGrants pins a rule whose only content
-// below the table is its settings: the grants table is not opened for nothing,
-// and a push-blocking policy and its warn-mode twin both read as on.
-func TestFormatListMarkdown_SettingsWithoutGrants(t *testing.T) {
+// TestFormatListMarkdown_PolicyFlagsWithoutGrants pins a rule whose only
+// content below the table is its policy flags: the grants table is not opened
+// for nothing, and a push-blocking policy and its warn-mode twin are both
+// marked as the restrictions they are.
+func TestFormatListMarkdown_PolicyFlagsWithoutGrants(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{Rules: []BranchRuleItem{{
 		Name: "main",
 		BranchProtection: &BranchProtection{
@@ -926,10 +925,8 @@ func TestFormatListMarkdown_SettingsWithoutGrants(t *testing.T) {
 		branchRuleTableHeader +
 		"| main | ❌ | ❌ | 0 | - | - | ❌ | ❌ | None | None |\n" +
 		"\n### Protection for main\n\n" +
-		"| Setting | Value |\n" +
-		"| --- | --- |\n" +
-		"| Push blocked by a security policy | ✅ |\n" +
-		"| Push would be blocked by a warn-mode policy | ✅ |\n" +
+		"- ⚠️ **Push blocked by a security policy**\n" +
+		"- ⚠️ **Push would be blocked by a warn-mode policy**\n" +
 		"\nShowing 1 items | no more pages\n" +
 		branchRuleListHints
 
@@ -938,10 +935,10 @@ func TestFormatListMarkdown_SettingsWithoutGrants(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_GrantsWithoutSettings pins a rule with grants and no
-// setting on: the grants table opens the section directly, with no blank
-// settings table and no stray line above it.
-func TestFormatListMarkdown_GrantsWithoutSettings(t *testing.T) {
+// TestFormatListMarkdown_GrantsWithoutPolicyFlags pins a rule with grants and
+// no policy flag on: the grants table opens the section directly, with no
+// empty list and no stray line above it.
+func TestFormatListMarkdown_GrantsWithoutPolicyFlags(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{Rules: []BranchRuleItem{{
 		Name: "main",
 		BranchProtection: &BranchProtection{
