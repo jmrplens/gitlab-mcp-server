@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -451,6 +452,36 @@ func TestCommitDiff_Success(t *testing.T) {
 	}
 	if !out.Diffs[0].NewFile {
 		t.Error("Diffs[0].NewFile = false, want true")
+	}
+}
+
+// TestCommitDiff_TheFlagsClientGoDrops_AreReadOffTheAnswer verifies the three
+// flags Entities::Diff sends that client-go's Diff does not model, each on a
+// diff of its own so that one read onto another diff fails, and that an answer
+// whose flags cannot be read is an error rather than a list of diffs claiming
+// GitLab sent their whole text.
+func TestCommitDiff_TheFlagsClientGoDrops_AreReadOffTheAnswer(t *testing.T) {
+	body := `[{"new_path":"a.go","collapsed":true},{"new_path":"b.go","too_large":true},{"new_path":"c.pb.go","generated_file":true}]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+
+	out, err := Diff(t.Context(), client, DiffInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("Diff() unexpected error: %v", err)
+	}
+	want := []toolutil.DiffOutput{
+		{NewPath: "a.go", Collapsed: true},
+		{NewPath: "b.go", TooLarge: true},
+		{NewPath: "c.pb.go", GeneratedFile: true},
+	}
+	if !reflect.DeepEqual(out.Diffs, want) {
+		t.Errorf("Diffs = %+v, want %+v", out.Diffs, want)
+	}
+
+	body = `[{"new_path":"a.go","collapsed":"yes"}]`
+	if _, err = Diff(t.Context(), client, DiffInput{ProjectID: "42", SHA: testSHA}); err == nil {
+		t.Error("Diff() = nil error on flags that do not decode, want one")
 	}
 }
 

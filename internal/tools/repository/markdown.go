@@ -105,7 +105,7 @@ func FormatCompareMarkdown(out CompareOutput) string {
 	if len(out.Diffs) > 0 {
 		t := c.Table("Changed Files", "Status", "Path")
 		for _, d := range out.Diffs {
-			t.Row(diffStatus(d), toolutil.MdCodeSpanCell(d.NewPath))
+			t.Row(d.Status(), toolutil.MdCodeSpanCell(d.NewPath))
 		}
 	}
 	c.End(
@@ -113,20 +113,6 @@ func FormatCompareMarkdown(out CompareOutput) string {
 		toolutil.HintAction(actionFileGet, "read a changed file"),
 	)
 	return b.String()
-}
-
-// diffStatus names what happened to a file in a diff.
-func diffStatus(d DiffOutput) string {
-	switch {
-	case d.NewFile:
-		return "added"
-	case d.DeletedFile:
-		return "deleted"
-	case d.RenamedFile:
-		return "renamed"
-	default:
-		return "modified"
-	}
 }
 
 // FormatContributorsMarkdown renders a page of repository contributors as a

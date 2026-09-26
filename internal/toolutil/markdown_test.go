@@ -39,8 +39,11 @@ func TestDiffToOutput(t *testing.T) {
 		DeletedFile: false,
 	}
 
-	out := DiffToOutput(d)
+	out := DiffToOutput(d, DiffExtra{Collapsed: true, GeneratedFile: true})
 
+	if !out.Collapsed || out.TooLarge || !out.GeneratedFile {
+		t.Errorf("flags = collapsed %t, too large %t, generated %t; want the extra's own", out.Collapsed, out.TooLarge, out.GeneratedFile)
+	}
 	if out.OldPath != "old.go" {
 		t.Errorf("OldPath = %q, want %q", out.OldPath, "old.go")
 	}

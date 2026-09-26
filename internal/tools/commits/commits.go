@@ -469,15 +469,20 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 		opts.Unidiff = new(true)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	diffs, resp, err := client.GL().Commits.GetCommitDiff(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return DiffOutput{}, toolutil.WrapErrWithStatusHint("commitDiff", err, http.StatusNotFound,
 			"verify SHA with repository.commit_get; large diffs may be truncated by GitLab. Use unidiff=true for git-compatible format")
 	}
+	extras, err := toolutil.CapturedDiffs(captured, len(diffs))
+	if err != nil {
+		return DiffOutput{}, toolutil.WrapErr("commitDiff", err)
+	}
 
 	out := make([]toolutil.DiffOutput, len(diffs))
 	for i, d := range diffs {
-		out[i] = toolutil.DiffToOutput(d)
+		out[i] = toolutil.DiffToOutput(d, extras[i])
 	}
 	return DiffOutput{Diffs: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

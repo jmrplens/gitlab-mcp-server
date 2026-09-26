@@ -138,10 +138,15 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 		opts.FromProjectID = &input.FromProjectID
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	cmp, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return CompareOutput{}, toolutil.WrapErrWithStatusHint("repositoryCompare", err, http.StatusNotFound,
 			"verify both 'from' and 'to' refs exist (branch name, tag name, or commit SHA) using branch.list or tag.list")
+	}
+	extras, err := toolutil.CapturedCompareDiffs(captured, len(cmp.Diffs))
+	if err != nil {
+		return CompareOutput{}, toolutil.WrapErr("repositoryCompare", err)
 	}
 
 	commitList := make([]commits.Output, len(cmp.Commits))
@@ -151,7 +156,7 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 
 	diffs := make([]toolutil.DiffOutput, len(cmp.Diffs))
 	for i, d := range cmp.Diffs {
-		diffs[i] = toolutil.DiffToOutput(d)
+		diffs[i] = toolutil.DiffToOutput(d, extras[i])
 	}
 
 	var baseCommit *commits.Output

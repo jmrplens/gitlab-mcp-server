@@ -177,17 +177,8 @@ func FormatDiffMarkdown(out DiffOutput) string {
 	toolutil.WriteListHeading(&b, "Commit Diffs", len(out.Diffs), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("Status", "Old Path", "New Path"))
 	for _, d := range out.Diffs {
-		status := "modified"
-		switch {
-		case d.NewFile:
-			status = "added"
-		case d.DeletedFile:
-			status = "deleted"
-		case d.RenamedFile:
-			status = "renamed"
-		}
 		b.WriteString(toolutil.MarkdownTableRow(
-			status,
+			d.Status(),
 			toolutil.MdCodeSpanCell(d.OldPath),
 			toolutil.MdCodeSpanCell(d.NewPath),
 		))

@@ -147,6 +147,36 @@ func TestRepositoryTree_APIError(t *testing.T) {
 	}
 }
 
+// TestRepositoryCompare_TheFlagsClientGoDrops_AreReadOffTheAnswer verifies
+// the three flags Entities::Diff sends on each file of a comparison that
+// client-go's Diff does not model, each on a diff of its own, and that a
+// comparison whose flags cannot be read is an error rather than diffs claiming
+// GitLab sent their whole text.
+func TestRepositoryCompare_TheFlagsClientGoDrops_AreReadOffTheAnswer(t *testing.T) {
+	diffs := `[{"new_path":"a.go","collapsed":true},{"new_path":"b.go","too_large":true},{"new_path":"c.pb.go","generated_file":true}]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"commits":[],"diffs":`+diffs+`}`)
+	}))
+
+	out, err := Compare(t.Context(), client, CompareInput{ProjectID: "42", From: "main", To: "develop"})
+	if err != nil {
+		t.Fatalf("Compare() unexpected error: %v", err)
+	}
+	want := []DiffOutput{
+		{NewPath: "a.go", Collapsed: true},
+		{NewPath: "b.go", TooLarge: true},
+		{NewPath: "c.pb.go", GeneratedFile: true},
+	}
+	if !slices.Equal(out.Diffs, want) {
+		t.Errorf("Diffs = %+v, want %+v", out.Diffs, want)
+	}
+
+	diffs = `[{"new_path":"a.go","too_large":"yes"}]`
+	if _, err = Compare(t.Context(), client, CompareInput{ProjectID: "42", From: "main", To: "develop"}); err == nil {
+		t.Error("Compare() = nil error on flags that do not decode, want one")
+	}
+}
+
 // TestRepositoryCompare_Success verifies RepositoryCompare when success.
 func TestRepositoryCompare_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
