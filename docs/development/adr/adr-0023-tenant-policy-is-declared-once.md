@@ -73,14 +73,18 @@ the code; the layers keep enforcing.**
   a channel its method cannot carry, a second in-band code for one class of next action,
   a zero that does not mean off, a reason whose unit differs from its key, a structure
   keyed on a mintable value with no capacity, a configurable value that bypasses the
-  configuration package, and a charged failure the caller did not cause. A row that breaks
-  an invariant today passes only through a finding recorded for that invariant.
+  configuration package, and a charged failure the caller did not cause. Some of these
+  refuse with no exception (a share on a mintable key, a charge to what is not a budget
+  before admission, a channel its method cannot carry); a holding taken across keys passes
+  with a recorded decision; the rest pass only through a finding recorded for the
+  invariant, which the specification lists rule by rule.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its
 row says; each refusal's text, status, code and headers are still where the row says; each
-charge sits on the refusal the failure table says it does; and nothing limit-shaped exists
-outside a declared site. It runs in `make analyze` and in CI.
+charge sits on the refusal the failure table says it does; and nothing limit-shaped in a
+shape it reads exists outside a declared site or a reasoned exemption. It runs in
+`make analyze` and in CI.
 
 **Enforcement stays in the layers.** A stream ceiling is applied where streams are
 counted, a token bucket where the method is dispatched. A value moves into the register as
@@ -101,10 +105,14 @@ twice), and the gate holds the pinned literal equal to the register's.
   caller can mint, the tenant included, fails `Validate` with that key's evidence in the
   message.
 - **POS-002**: A deliberate change of value is two lines in one package: the constant, and
-  its frozen pin in `TestValues_AtCB6379F53`. A change of value that rides in on a refactor
+  its pin in `TestValues_HoldTheirPins`. A change of value that rides in on a refactor
   fails that test.
-- **POS-003**: A new limit is refused by the gate until the row that declares it exists,
-  so the specification's validation checklist is answered in one place, the row.
+- **POS-003**: A new limit the gate can read is refused until the row that declares it
+  exists: one built with a listed constructor or options type, one refused with a policy
+  code or a 429 or 503, or one named with a limit word at package level in a package the
+  register names. The row then answers the specification's validation checklist, all of it
+  but VAL-010 and VAL-012, which stay in the pull request because a declaration cannot hold
+  them.
 - **POS-004**: Moving a value into the register changes no code. The binary a value layer
   builds is byte-identical to the one its parent builds once the parent imports the
   register where the layer does, which the gate's code-identity mode checks for any change
@@ -133,9 +141,11 @@ twice), and the gate holds the pinned literal equal to the register's.
   about 0.9 ns more for a method no bucket meters; `Busy` does not inline, since it reads
   two interface methods, about 1 to 1.3 ns more for each pool entry an eviction scan
   passes; the budget switches inline, and the two startup functions that call them are
-  laid out differently. None of them allocates or takes a lock, which is what the
-  promotion rule protects, and each is proved by its oracle and fuzz target rather than by
-  the binary.
+  laid out differently. None of them allocates, and each leaves its site's lock profile as
+  it was, which is what the promotion rule protects: `Busy` reads the watcher count
+  through an interface that takes the subscription manager's lock, exactly when the code
+  it replaced did, only when no stream is open. Each is proved by its oracle and fuzz
+  target rather than by the binary.
 
 ### Neutral
 
@@ -171,10 +181,11 @@ obstacle: a resolver would be built from `Decisions()` and `Key.MintCost()`.
   requirements, one row each.
 - `TestDecisions_ValidateIsNil` and `TestFailures_ValidateFailuresIsNil` hold the rows to
   the invariants.
-- `TestValues_AtCB6379F53` freezes every policy value and its type.
+- `TestValues_HoldTheirPins` pins every policy value and its type.
 - `TestPackage_ImportsTheStandardLibraryOnly`, `TestPackage_DependsOnTheStandardLibraryOnly`,
   `TestPackage_LinksNothingTheServerDoesNot` and `TestPackage_DeclaresNoPackageLevelVariable`
-  hold the leaf to the conditions an unchanged binary rests on.
+  (which refuses an init function too) hold the leaf to the conditions an unchanged binary
+  rests on.
 - `make tenancy-code-identity` proves that a change which claims to move policy without
   changing it changed no code: against its parent (`BASE=<ref>`) when it inserts no line
   and gives the register no new importer, and otherwise against its parent with the same

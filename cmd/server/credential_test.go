@@ -307,9 +307,9 @@ func busyStates(tb testing.TB) []busyStateCase {
 // entry the sweep passes, so whatever it costs is paid while every other
 // request waits for that lock. It reads one counter and, only when no stream is
 // open, the watcher count behind the manager's mutex, and neither allocates.
-// This is the baseline the layer that moves the predicate into the register
-// (POL-003) is held to: reading the state through the interface that layer
-// declares must not allocate either.
+// It holds busy() to that now that it asks tenancy.Busy (POL-003): reading
+// the state through the register's Holdings interface must not allocate
+// either.
 //
 // It does not run in parallel: the count a measurement reads is the whole
 // process's, so a test allocating beside it would be counted against busy().
@@ -327,8 +327,9 @@ func TestCredentialState_Busy_AllocatesNothing(t *testing.T) {
 }
 
 // BenchmarkCredentialState_Busy measures busy() in the same three states as
-// [TestCredentialState_Busy_AllocatesNothing], which is the baseline benchstat
-// compares the layer that moves the predicate into the register against.
+// [TestCredentialState_Busy_AllocatesNothing], which is what benchstat compared
+// before and after the predicate became tenancy.Busy, and what it compares any
+// later change to it.
 func BenchmarkCredentialState_Busy(b *testing.B) {
 	for _, tc := range busyStates(b) {
 		b.Run(tc.name, func(b *testing.B) {
