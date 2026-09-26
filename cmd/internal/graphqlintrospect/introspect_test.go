@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vektah/gqlparser/v2/ast"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
@@ -74,6 +78,213 @@ func TestIntrospect_WellFormedAnswer_ReturnsTheSchema(t *testing.T) {
 	}
 	if !strings.Contains(seenQuery, "__schema") {
 		t.Errorf("the query sent does not ask for __schema:\n%s", seenQuery)
+	}
+}
+
+// TestIntrospect_NoToken_SendsNoAuthorizationHeader verifies that a run with no
+// credential sends no Authorization header at all rather than an empty one.
+// RFC 6750 requires a token after "Bearer", so "Bearer " alone is a malformed
+// credential that an instance, or a proxy in front of it, may refuse, turning
+// an introspection GitLab answers to anyone into a 401.
+func TestIntrospect_NoToken_SendsNoAuthorizationHeader(t *testing.T) {
+	var authorizations []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorizations = r.Header.Values("Authorization")
+		_, _ = w.Write([]byte(tinySchema))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := Introspect(context.Background(), Target{Endpoint: server.URL, Client: server.Client()}); err != nil {
+		t.Fatalf("Introspect() error = %v, want nil", err)
+	}
+
+	if len(authorizations) != 0 {
+		t.Errorf("an anonymous request carried Authorization %q, want no such header", authorizations)
+	}
+}
+
+// gitLabShapedServer answers the two documents this package sends the way the
+// package documentation says a GitLab instance does: any document asking for
+// __schema gets the whole schema whatever else it selects, and the metadata
+// query names a version to the bearer of token and null to anybody else.
+func gitLabShapedServer(t *testing.T, token string) Target {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("the request body is not a JSON document: %v", err)
+			http.Error(w, "not a JSON body", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(body.Query, "__schema"):
+			_, _ = w.Write([]byte(tinySchema))
+		case r.Header.Get("Authorization") == "Bearer "+token:
+			_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.4.0-pre","revision":"e53e1e5c151"}}}`))
+		default:
+			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	return Target{Endpoint: server.URL, Client: server.Client()}
+}
+
+// TestInstanceVersion_AskedOfAGitLabShapedServer_SendsTheMetadataQuery verifies
+// that each entry point sends its own document. Every other test here answers
+// the same body whatever is asked, so the two constants could trade places
+// between [Introspect] and [InstanceVersion] and nothing would notice; against
+// a real instance the version would then come back as a schema, which decodes
+// to no metadata and is recorded as unknown on every run, token or not.
+func TestInstanceVersion_AskedOfAGitLabShapedServer_SendsTheMetadataQuery(t *testing.T) {
+	const token = "glpat-secret"
+	target := gitLabShapedServer(t, token)
+	target.Token = token
+
+	schema, err := Introspect(context.Background(), target)
+	if err != nil {
+		t.Fatalf("Introspect() error = %v, want the schema", err)
+	}
+	version, revision := InstanceVersion(context.Background(), target)
+
+	if len(schema.Types) != 1 || schema.Types[0].Name != "Query" {
+		t.Errorf("Introspect() returned %+v, want the one-type fixture", schema)
+	}
+	if version != "19.4.0-pre" || revision != "e53e1e5c151" {
+		t.Errorf("InstanceVersion() = (%q, %q), want (\"19.4.0-pre\", \"e53e1e5c151\")", version, revision)
+	}
+}
+
+// selections walks a validated document and returns, for every field it
+// selects, the arguments written on each occurrence of that field, rendered as
+// "name: value" and joined. Operations and fragments are walked each on their
+// own and spreads are not followed, so a field inside a fragment is counted
+// once however many spreads reach it.
+func selections(document *ast.QueryDocument) map[string][]string {
+	found := map[string][]string{}
+	var walk func(ast.SelectionSet)
+	walk = func(set ast.SelectionSet) {
+		for _, selection := range set {
+			switch node := selection.(type) {
+			case *ast.Field:
+				arguments := make([]string, 0, len(node.Arguments))
+				for _, argument := range node.Arguments {
+					arguments = append(arguments, argument.Name+": "+argument.Value.String())
+				}
+				found[node.Name] = append(found[node.Name], strings.Join(arguments, ", "))
+				walk(node.SelectionSet)
+			case *ast.InlineFragment:
+				walk(node.SelectionSet)
+			}
+		}
+	}
+	for _, operation := range document.Operations {
+		walk(operation.SelectionSet)
+	}
+	for _, fragment := range document.Fragments {
+		walk(fragment.SelectionSet)
+	}
+	return found
+}
+
+// decodedMembers returns every JSON member name the decoder rooted at decoded
+// reads, following pointers, slices and nested structs down to the scalars.
+func decodedMembers(decoded reflect.Type) []string {
+	var members []string
+	seen := map[reflect.Type]bool{}
+	var walk func(reflect.Type)
+	walk = func(current reflect.Type) {
+		for current.Kind() == reflect.Pointer || current.Kind() == reflect.Slice {
+			current = current.Elem()
+		}
+		if current.Kind() != reflect.Struct || seen[current] {
+			return
+		}
+		seen[current] = true
+		for field := range current.Fields() {
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			members = append(members, name)
+			walk(field.Type)
+		}
+	}
+	walk(decoded)
+	return members
+}
+
+// TestQueries_EachDocument_IsAcceptedAndSelectsWhatItsDecoderReads holds the
+// two documents this package sends to the only schema anything here can judge
+// them by. They live under cmd/, which `make check-graphql-documents` does not
+// read, and every mock in this file answers whatever it is asked, so a
+// misspelled member or a dropped selection would otherwise reach GitLab first.
+//
+// Accepted is half of it. A member the decoder reads that the document never
+// selects is empty on every answer from an instance that honors the selection
+// set; GitLab does not today, which is exactly why no run would notice.
+func TestQueries_EachDocument_IsAcceptedAndSelectsWhatItsDecoderReads(t *testing.T) {
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("load the pinned schema: %v", err)
+	}
+	cases := []struct {
+		name     string
+		document string
+		decoder  reflect.Type
+	}{
+		{name: "the introspection query", document: introspectionQuery, decoder: reflect.TypeFor[introspectData]()},
+		{name: "the metadata query", document: metadataQuery, decoder: reflect.TypeFor[metadataData]()},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			parsed, parseErr := graphqlschema.ParseAgainst(schema, testCase.document)
+			if parseErr != nil {
+				t.Fatalf("the pinned schema refuses %s: %v", testCase.name, parseErr)
+			}
+			selected := selections(parsed)
+			for _, member := range decodedMembers(testCase.decoder) {
+				if _, ok := selected[member]; !ok {
+					t.Errorf("the decoder reads %q and %s never selects it", member, testCase.name)
+				}
+			}
+		})
+	}
+}
+
+// TestIntrospectionQuery_DeprecatedMembers_AreAskedForWhereEveryInstanceAccepts
+// holds both halves of the trade the query's comment describes. Fields and
+// enum values ask for their deprecated members, because a deprecated field is
+// one GitLab still serves and our documents select; arguments and input fields
+// do not, because an older self-managed instance refuses the argument there and
+// with it the whole introspection. Either half reversed still validates, so
+// only the arguments themselves can say which way it was written.
+func TestIntrospectionQuery_DeprecatedMembers_AreAskedForWhereEveryInstanceAccepts(t *testing.T) {
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("load the pinned schema: %v", err)
+	}
+	parsed, err := graphqlschema.ParseAgainst(schema, introspectionQuery)
+	if err != nil {
+		t.Fatalf("the pinned schema refuses the introspection query: %v", err)
+	}
+	selected := selections(parsed)
+
+	cases := []struct {
+		name  string
+		field string
+		want  []string
+	}{
+		{name: "fields include the deprecated ones", field: "fields", want: []string{"includeDeprecated: true"}},
+		{name: "enum values include the deprecated ones", field: "enumValues", want: []string{"includeDeprecated: true"}},
+		{name: "arguments ask for nothing an old instance refuses", field: "args", want: []string{""}},
+		{name: "input fields ask for nothing an old instance refuses", field: "inputFields", want: []string{""}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := selected[testCase.field]; !slices.Equal(got, testCase.want) {
+				t.Errorf("%s is selected with arguments %q, want %q", testCase.field, got, testCase.want)
+			}
+		})
 	}
 }
 
@@ -226,21 +437,27 @@ func TestFetchTimeout_BoundsAWholeFetchWithRoomToSpare(t *testing.T) {
 // which decodes but says nothing is reported rather than written out. An empty
 // artifact would parse, load, and then accept every broken document silently,
 // which is the one failure this whole gate must not have.
+//
+// A refusal that says the instance answered also names which instance, and
+// what it answered when that was not a GraphQL reply, because the operator
+// chose the endpoint and has to tell a deploy page from a wrong URL.
 func TestIntrospect_AnswersThatCarryNoSchema_AreRefused(t *testing.T) {
 	cases := []struct {
-		name   string
-		status int
-		body   string
-		want   string
+		name         string
+		status       int
+		body         string
+		want         string
+		wantEndpoint bool
 	}{
-		{name: "no __schema member", status: http.StatusOK, body: `{"data":{}}`, want: "answered introspection with no types"},
-		{name: "a schema with no types", status: http.StatusOK, body: `{"data":{"__schema":{"types":[]}}}`, want: "answered introspection with no types"},
+		{name: "no __schema member", status: http.StatusOK, body: `{"data":{}}`, want: "answered introspection with no types", wantEndpoint: true},
+		{name: "a schema with no types", status: http.StatusOK, body: `{"data":{"__schema":{"types":[]}}}`, want: "answered introspection with no types", wantEndpoint: true},
 		{name: "a data member that is not an object", status: http.StatusOK, body: `{"data":[1,2,3]}`, want: "decode the introspection payload"},
-		{name: "an instance that refuses the round trip", status: http.StatusServiceUnavailable, body: "deploying", want: "503"},
+		{name: "an instance that refuses the round trip", status: http.StatusServiceUnavailable, body: "deploying", want: "answered 503 Service Unavailable: deploying", wantEndpoint: true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			schema, err := Introspect(context.Background(), answering(t, testCase.status, testCase.body))
+			target := answering(t, testCase.status, testCase.body)
+			schema, err := Introspect(context.Background(), target)
 
 			if err == nil {
 				t.Fatalf("Introspect() error = nil, want one naming %q", testCase.want)
@@ -251,6 +468,9 @@ func TestIntrospect_AnswersThatCarryNoSchema_AreRefused(t *testing.T) {
 			if !strings.Contains(err.Error(), testCase.want) {
 				t.Errorf("Introspect() error = %q, want it to name %q", err, testCase.want)
 			}
+			if testCase.wantEndpoint && !strings.Contains(err.Error(), target.Endpoint) {
+				t.Errorf("Introspect() error = %q, want it to name the endpoint %s", err, target.Endpoint)
+			}
 		})
 	}
 }
@@ -260,6 +480,10 @@ func TestIntrospect_AnswersThatCarryNoSchema_AreRefused(t *testing.T) {
 // an answer too short to be a GitLab schema, and they must refuse at the same
 // count: a floor either of them could lower on its own would let that side keep
 // promising something the other had already stopped promising.
+//
+// The half-size case holds the floor to its purpose rather than to itself: a
+// floor moved towards zero keeps every case relative to [MinimumTypes] green
+// while accepting an answer that lost half of GitLab.
 func TestTruncatedAnswer_CountsAroundTheFloor_AreJudgedTheSameWay(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -267,6 +491,7 @@ func TestTruncatedAnswer_CountsAroundTheFloor_AreJudgedTheSameWay(t *testing.T) 
 		want  bool
 	}{
 		{name: "an empty answer", types: 0, want: true},
+		{name: "half of the smallest GitLab schema seen", types: 4233 / 2, want: true},
 		{name: "a Community Edition-sized answer", types: MinimumTypes - 1, want: true},
 		{name: "exactly the floor", types: MinimumTypes, want: false},
 		{name: "an unlicensed Enterprise Edition instance", types: 4233, want: false},
@@ -282,7 +507,9 @@ func TestTruncatedAnswer_CountsAroundTheFloor_AreJudgedTheSameWay(t *testing.T) 
 
 // TestPost_TransportAndProtocolFailures_AreNamed verifies that each way one
 // GraphQL round trip can fail says what happened and which endpoint it was
-// asking, since the operator running this command chose that endpoint.
+// asking, since the operator running this command chose that endpoint. A
+// status that is not 200 also carries the start of the body beside it, which
+// is the only part of the answer that tells a gateway page from a refusal.
 func TestPost_TransportAndProtocolFailures_AreNamed(t *testing.T) {
 	unreachable := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	unreachable.Close()
@@ -318,7 +545,7 @@ func TestPost_TransportAndProtocolFailures_AreNamed(t *testing.T) {
 		{
 			name:   "a status that is not 200",
 			target: answering(t, http.StatusBadGateway, "<html>gateway</html>"),
-			want:   "502",
+			want:   "answered 502 Bad Gateway: <html>gateway</html>",
 		},
 		{
 			name:   "a body that is not JSON",
@@ -343,6 +570,9 @@ func TestPost_TransportAndProtocolFailures_AreNamed(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), testCase.want) {
 				t.Errorf("post() error = %q, want it to name %q", err, testCase.want)
+			}
+			if !strings.Contains(err.Error(), testCase.target.Endpoint) {
+				t.Errorf("post() error = %q, want it to name the endpoint %s", err, testCase.target.Endpoint)
 			}
 		})
 	}
