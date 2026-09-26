@@ -72,7 +72,7 @@ func agreesWithLegacy(t *testing.T, streams int64, watchers int) {
 // replaced over no, one and several open listen streams crossed with no, one
 // and several watchers: the same answer, from the same reads in the same
 // number. The answer and the reads being identical is the whole of why
-// promoting it changed nothing (issue 565, plan L9).
+// promoting it changed nothing (issue 565).
 func TestBusy_AgreesWithTheReplacedPredicate(t *testing.T) {
 	for _, streams := range []int64{0, 1, 5} {
 		for _, watchers := range []int{0, 1, 10} {

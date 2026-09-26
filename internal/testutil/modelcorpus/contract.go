@@ -53,7 +53,7 @@ package modelcorpus
 //     do not answer with explanatory text", whose drop is the paragraph above,
 //     and its second clause states the ending that drop exists to leave
 //     reachable. Whether a contract should name that ending at all, rather
-//     than merely stop forbidding it, is a question for the plan and not for
+//     than merely stop forbidding it, is a design question and not one for
 //     this file.
 
 // contracts is the text each surface is introduced with.

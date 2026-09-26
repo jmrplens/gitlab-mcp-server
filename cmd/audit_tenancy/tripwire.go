@@ -19,12 +19,16 @@ const (
 	partNames        = "names"
 )
 
-// checkTripwire is G10: nothing limit-shaped exists outside a declared site.
+// checkTripwire is G10: nothing shaped like a limit, in the three shapes
+// below, exists outside a declared site.
 //
-//   - (a) A call of a limit constructor sits inside a declared site, and none
-//     of its arguments is a literal or a package-level value no row declares.
+//   - (a) A call of a limit constructor, or a literal of a limit's options
+//     type, sits inside a declared Enforce site, and none of its arguments or
+//     fields is a literal or a package-level value no row declares.
 //   - (b) A refusal literal whose code is a policy code, or is not constant,
-//     or whose status is 429 or 503, sits inside a declared site.
+//     or whose status is 429 or 503, is one a row declares: it sits in the
+//     function holding a declared refusal of its code or its status. So does
+//     a 429 or 503 written with http.Error or WriteHeader.
 //   - (c) In every package that holds a value or enforcing site of a row that
 //     is not a request bound, a package-level const or var whose name reads
 //     as a limit is a declared site.
@@ -45,9 +49,28 @@ func (g *gate) covered(key, part string) bool {
 	if g.declared[key] {
 		return true
 	}
+	return g.exempted(key, part)
+}
+
+// exempted reports whether the exemption table answers a declaration,
+// recording which part of G10 it answered.
+func (g *gate) exempted(key, part string) bool {
 	if _, exempt := g.exempt[key]; exempt {
 		g.used[key] = part
 		return true
+	}
+	return false
+}
+
+// enforces reports whether a declaration is an Enforce site of some row, the
+// one role a limit may be built in.
+func (g *gate) enforces(key string) bool {
+	for _, d := range g.reg.decisions {
+		for _, s := range d.Sites {
+			if s.Role == tenancy.Enforce && keyOf(s) == key {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -61,20 +84,12 @@ func (g *gate) constructorFindings() []Finding {
 		}
 	}
 	var found []Finding
-	g.p.forEachCall(func(key string, info *types.Info, call *ast.CallExpr) {
-		name, isLimit := g.limitConstructor(info, call)
-		if !isLimit {
-			return
-		}
-		if !g.covered(key, partConstructors) {
+	built := func(key string, info *types.Info, at ast.Node, name string, args []ast.Expr) {
+		if !g.enforces(key) && !g.exempted(key, partConstructors) {
 			found = append(found, Finding{
-				Rule: "G10", Subject: key, Position: g.p.position(call.Pos()),
-				Message: fmt.Sprintf("builds a limit with %s outside every declared site", name),
+				Rule: "G10", Subject: key, Position: g.p.position(at.Pos()),
+				Message: fmt.Sprintf("builds a limit with %s outside every declared Enforce site", name),
 			})
-		}
-		args := call.Args
-		if name == "make" {
-			args = args[1:]
 		}
 		for _, arg := range args {
 			for _, why := range g.undeclaredInputs(info, arg, config) {
@@ -84,8 +99,51 @@ func (g *gate) constructorFindings() []Finding {
 				})
 			}
 		}
+	}
+	g.p.forEachTopLevel(func(key string, info *types.Info, node ast.Node) {
+		ast.Inspect(node, func(n ast.Node) bool {
+			if name, args, isLimit := g.limitBuild(info, n); isLimit {
+				built(key, info, n, name, args)
+			}
+			return true
+		})
 	})
 	return found
+}
+
+// limitBuild reports whether a node builds a limit, what builds it and the
+// inputs it is built from: a constructor call and its arguments (a
+// semaphore's capacity alone), or a literal of an options type and its field
+// values.
+func (g *gate) limitBuild(info *types.Info, n ast.Node) (string, []ast.Expr, bool) {
+	switch e := n.(type) {
+	case *ast.CallExpr:
+		name, isLimit := g.limitConstructor(info, e)
+		if !isLimit {
+			return "", nil, false
+		}
+		if name == "make" {
+			return name, e.Args[1:], true
+		}
+		return name, e.Args, true
+	case *ast.CompositeLit:
+		name := typeName(info.TypeOf(e))
+		return name, fieldValues(e), slices.Contains(g.rules.limitTypes, name)
+	default:
+		return "", nil, false
+	}
+}
+
+// fieldValues are the values a composite literal sets, keyed or not.
+func fieldValues(lit *ast.CompositeLit) []ast.Expr {
+	values := make([]ast.Expr, 0, len(lit.Elts))
+	for _, elt := range lit.Elts {
+		if kv, isKV := elt.(*ast.KeyValueExpr); isKV {
+			elt = kv.Value
+		}
+		values = append(values, elt)
+	}
+	return values
 }
 
 // limitConstructor reports whether a call builds a limit: one of the listed
@@ -165,27 +223,74 @@ func isValue(obj types.Object) bool {
 
 // literalFindings is G10(b).
 func (g *gate) literalFindings() []Finding {
+	held := map[string][]tenancy.Refusal{}
+	for _, d := range g.reg.decisions {
+		for _, r := range d.Refusals {
+			holder := r.At
+			if r.Via != (tenancy.Site{}) {
+				holder = r.Via
+			}
+			held[keyOf(holder)] = append(held[keyOf(holder)], r)
+		}
+	}
 	var found []Finding
 	g.p.forEachTopLevel(func(key string, info *types.Info, node ast.Node) {
 		ast.Inspect(node, func(n ast.Node) bool {
-			lit, isLit := n.(*ast.CompositeLit)
-			if !isLit {
-				return true
-			}
-			rl, ok := g.refusalLiteral(info, lit)
-			if !ok || !g.refusalShaped(info, rl) {
-				return true
-			}
-			if !g.covered(key, partLiterals) {
-				found = append(found, Finding{
-					Rule: "G10", Subject: key, Position: g.p.position(lit.Pos()),
-					Message: "builds a refusal that reads as a limit's (a policy code, a code that is not constant, or a 429 or 503) outside every declared site",
-				})
+			switch e := n.(type) {
+			case *ast.CompositeLit:
+				rl, ok := g.refusalLiteral(info, e)
+				if ok && g.refusalShaped(info, rl) && !g.declaresLiteral(held[key], info, rl) && !g.exempted(key, partLiterals) {
+					found = append(found, Finding{
+						Rule: "G10", Subject: key, Position: g.p.position(e.Pos()),
+						Message: "builds a refusal that reads as a limit's (a policy code, a code that is not constant, or a 429 or 503) that no refusal a row declares there carries",
+					})
+				}
+			case *ast.CallExpr:
+				status, writes := g.writesLimitStatus(info, e)
+				declared := slices.ContainsFunc(held[key], func(r tenancy.Refusal) bool { return r.Channel == tenancy.Gate && r.Status == status })
+				if writes && !declared && !g.exempted(key, partLiterals) {
+					found = append(found, Finding{
+						Rule: "G10", Subject: key, Position: g.p.position(e.Pos()),
+						Message: fmt.Sprintf("writes a %d response that no refusal a row declares there carries", status),
+					})
+				}
 			}
 			return true
 		})
 	})
 	return found
+}
+
+// declaresLiteral reports whether one of the refusals held in a declaration
+// is the refusal a literal there builds: a gate refusal of its status, or a
+// refusal of its code. A code that is not constant is read as whatever the
+// function assigns it, which G8 holds to the row, so any JSON-RPC refusal held
+// there declares it.
+func (g *gate) declaresLiteral(refusals []tenancy.Refusal, info *types.Info, rl refusalLit) bool {
+	return slices.ContainsFunc(refusals, func(r tenancy.Refusal) bool {
+		if rl.typ.name == g.rules.gateType {
+			status, _ := rl.intField(info, rl.typ.status)
+			return r.Channel == tenancy.Gate && r.Status == status
+		}
+		code, folds := rl.intField(info, rl.typ.code)
+		if !folds {
+			return r.Channel == tenancy.RPC
+		}
+		return r.Channel != tenancy.Gate && r.Code == code
+	})
+}
+
+// writesLimitStatus reports whether a call writes a response whose status is
+// 429 or 503 through one of the status writers, and which.
+func (g *gate) writesLimitStatus(info *types.Info, call *ast.CallExpr) (int, bool) {
+	// Each writer is called with its status argument, since the type checker
+	// admits no call that leaves one out.
+	index, isWriter := g.rules.statusWriters[calleeName(calleeOf(info, call))]
+	if !isWriter {
+		return 0, false
+	}
+	status, folds := foldInt(info, call.Args[index])
+	return status, folds && slices.Contains(g.rules.limitStatuses, status)
 }
 
 // refusalShaped reports whether a refusal literal reads as a limit's: its

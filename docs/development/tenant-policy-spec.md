@@ -67,9 +67,11 @@ life of its build, and one address to many tenants.
 
 ### Two axes, and why the tenant does not license a share
 
-Every decision bounds either the **requester** (a tenant, a credential or something one
-credential holds) or the **process**. The process is the only unit no caller can
-multiply.
+Before admission a decision is keyed on the address, the socket or a refused
+credential's digest, since no tenant exists yet, and a bound on one request is keyed on
+the request; the key table below gives both axes. Every allowance after admission bounds
+either the **requester** (a tenant, a credential or something one credential holds) or
+the **process**. The process is the only unit no caller can multiply.
 
 **Every key a request yields is mintable, the tenant included.** On a self-managed
 instance any user who may create a personal project may create project access tokens on
@@ -92,22 +94,22 @@ key the vocabulary lacks adds it there, with its mint cost and the evidence for 
 is how the mintable-key question gets answered once. `Key.Evidence()` holds the sentence
 below with its sources, and a refusal of a share quotes it.
 
-| Key           | What it is                                            | Axis             | Mint cost to the caller                                                                                                         |
-| ------------- | ----------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `request`     | One request, argument set or watched URI              | request          | Nothing                                                                                                                         |
-| `credential`  | The raw token a request presents                      | requester        | Another credential of the same user: a personal access token through the UI, no administrator, no cap, no creation rate limit   |
-| `entry`       | One credential on one instance, the pool entry        | requester        | As a credential; several published instances do not multiply keys                                                               |
-| `owner`       | The random name of one entry build                    | requester        | As an entry                                                                                                                     |
-| `tenant`      | (canonical instance URL, GitLab user id)              | requester        | Another GitLab user: a project bot on self-managed, a paid namespace or a service account on GitLab.com                         |
-| `verified`    | (instance, token) as the OAuth identity cache keys it | requester        | As a credential                                                                                                                 |
-| `application` | The OAuth application a token was issued to           | requester        | Nothing: dynamic registration needs no authentication                                                                           |
-| `session`     | An SDK session id, recorded to an owner               | requester        | Nothing: any `initialize` opens one                                                                                             |
-| `address`     | The charged client address                            | before admission | Address rotation; behind a trusted proxy that copies a caller's header, the header value; one for every caller on a unix socket |
-| `source`      | The socket peer, every header ignored                 | before admission | Address rotation only                                                                                                           |
-| `refused`     | A credential GitLab refused, held as a digest         | before admission | Nothing: an invented string                                                                                                     |
-| `unbound`     | Every request no credential was bound to              | process          | Not mintable                                                                                                                    |
-| `process`     | The running binary                                    | process          | Not mintable                                                                                                                    |
-| `deployment`  | The operator's configuration                          | process          | Not mintable by a caller                                                                                                        |
+| Key           | What it is                                            | Axis             | Mint cost to the caller                                                                                                                                                                                  |
+| ------------- | ----------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request`     | One request, argument set or watched URI              | request          | Nothing                                                                                                                                                                                                  |
+| `credential`  | The raw token a request presents                      | requester        | Another credential of the same user: a personal access token through the UI, no administrator, no cap, no creation rate limit                                                                            |
+| `entry`       | One credential on one instance, the pool entry        | requester        | As a credential; several published instances do not multiply keys, but under `--allow-any-gitlab-url` (`DST-002`, loopback only) the caller names the instance and mints one entry per instance it names |
+| `owner`       | The random name of one entry build                    | requester        | As an entry                                                                                                                                                                                              |
+| `tenant`      | (canonical instance URL, GitLab user id)              | requester        | Another GitLab user: a project bot on self-managed, a paid namespace or a service account on GitLab.com                                                                                                  |
+| `verified`    | (instance, token) as the OAuth identity cache keys it | requester        | As a credential                                                                                                                                                                                          |
+| `application` | The OAuth application a token was issued to           | requester        | Nothing: dynamic registration needs no authentication                                                                                                                                                    |
+| `session`     | An SDK session id, recorded to an owner               | requester        | Nothing: any `initialize` opens one                                                                                                                                                                      |
+| `address`     | The charged client address                            | before admission | Address rotation; behind a trusted proxy that copies a caller's header, the header value; one for every caller on a unix socket                                                                          |
+| `source`      | The socket peer, every header ignored                 | before admission | Address rotation only                                                                                                                                                                                    |
+| `refused`     | A credential GitLab refused, held as a digest         | before admission | Nothing: an invented string                                                                                                                                                                              |
+| `unbound`     | Every request no credential was bound to              | process          | Not mintable                                                                                                                                                                                             |
+| `process`     | The running binary                                    | process          | Not mintable                                                                                                                                                                                             |
+| `deployment`  | The operator's configuration                          | process          | Not mintable by a caller                                                                                                                                                                                 |
 
 The per-request carrier and the configuration shape are deliberately not keys: nothing
 is counted against the first, and the second keys a catalog cache that `INV-010`
@@ -152,9 +154,24 @@ which `HLD-001` breaks.
 
 A new limit, or a change to an existing one, meets every invariant below. Existing code
 that does not is a finding, filed as an issue; nothing here requires it to change.
-`Validate` refuses a row that breaks `INV-003`, `INV-004`, `INV-005`, `INV-007`, `INV-010`,
-`INV-011`, `INV-012`, `INV-015`, `INV-016`, `INV-017` or `INV-018` unless the row carries
-a finding recorded for that invariant.
+`Validate` holds a row to eleven of them, in three ways:
+
+- **With no exception**: a share on any mintable key (`INV-003`); a charge to anything but
+  a budget before admission (`INV-007`); a refusal on a channel its method cannot carry,
+  or with a status, a code, a `Retry-After` or a challenge the channel forbids
+  (`INV-011`); a process partner that is configurable or not keyed on the process, and a
+  reason about the process on a row that does not say it protects one (`INV-004`); a
+  valued row that does not say what zero means (`INV-015`); and a variable without the
+  `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
+  policy (`INV-017`).
+- **With a recorded decision**: a holding taken across keys (`INV-005`).
+- **With a finding recorded for the invariant**: a per-key ceiling on a process resource
+  with no partner (`INV-004`); a table keyed on a mintable value with no capacity
+  (`INV-010`); a code in the legacy `-32000` range (`INV-011`); a second in-band code for
+  one class of next action (`INV-012`); a zero that does not mean off (`INV-015`); a reason
+  whose unit differs from its key or misstates its own (`INV-016`); a value only an
+  environment variable or a Go option reaches (`INV-017`); and a ceiling nothing bounds
+  (`INV-018`).
 
 - **INV-001 Identity from the credential.** A limit derives who a caller is from the
   credential on the request, never from the connection, a session id, `clientInfo`, a
@@ -226,7 +243,11 @@ a finding recorded for that invariant.
 A limit whose refusal no client can see is not the limit its author meant, so the channel
 is part of the decision. `tenancy.Carriages()` is the matrix below as data, and it
 describes go-sdk as this server builds against it: an SDK upgrade that changes what is
-carried edits it in the same change.
+carried edits it in the same change. The wording is part of a refusal too: a client may
+recognize one only by its stable leading text (a refused `tools/call` by
+`toolutil.RateLimitRefusalPrefix`, which `cmd/bench_resources` reads as well), so that
+text, a row's `Prefix`, belongs to the wire shape with the code, the status and the
+headers.
 
 | Channel (`tenancy.Channel`) | What reaches the caller                                                                        | Carried for                                          |
 | --------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -268,17 +289,19 @@ What the protocol and the SDK leave a server:
 
 ### Where a refused caller learns what to do
 
-Every refusal names one class of next action (`tenancy.Answer`):
+Every refusal names one class of next action (`tenancy.Answer`). The table gives, for each,
+every channel a row of the register declares with it; `tenancy.Decisions()` is the list
+itself, and a row that adds a channel adds it here.
 
-| Answer           | Channels today                                                                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Retry later      | A gate 429 or 503 with `Retry-After`; in-band `-42900` or `-32000`; a tool error saying to back off; an empty completion                             |
-| Reauthorize      | A gate 401 with `invalid_token`; a listen ended with `credential_revoked`                                                                            |
-| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                   |
-| Ask the operator | A surface narrowed by the operator; a gate 400 naming a flag; a gate 403 for an untrusted origin or host; a tool error naming an allow-list variable |
-| Fix the request  | In-band `-32602` or `-32600`; a gate 400                                                                                                             |
-| Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted` or `credential_reset`                                   |
-| None given       | A tier narrowing, answered as an unknown action                                                                                                      |
+| Answer           | Channels the rows declare                                                                                                                                                                                                                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown` |
+| Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                           |
+| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                                                                                                                                                                                   |
+| Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                           |
+| Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                               |
+| Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                            |
+| None given       | A tier narrowing, answered as an unknown action; a failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                  |
 
 ## The five questions
 
@@ -302,8 +325,11 @@ credential.
 ## Validation checklist
 
 A new limit, or a change to an existing one, answers each item in its pull request and in
-its register row. `Validate` checks the row; the last two items stay pull-request items,
-because a declaration cannot hold them.
+its register row. `Validate` checks the row; VAL-010 and VAL-012 stay pull-request items,
+because a declaration cannot hold them. It also holds the register as a whole: one row per
+requirement, none declared twice and none missing (its rules `unique` and `complete`), and
+every row answering VAL-001 to VAL-009 with a value and naming only rows and findings that
+exist (`well-formed`).
 
 | Item    | The question                                                                                           | Answered by                                                              |
 | ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
@@ -341,3 +367,17 @@ is fixed by the register. They are filed, grouped where one change would answer 
 | [959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) | Where the server stands on rate limiting tool invocations, and on behavior chosen from `clientInfo`                              |
 | [960](https://github.com/jmrplens/gitlab-mcp-server/issues/960) | Stale statements about the tenant policy in comments, ADRs, the development guide and the site                                   |
 | [961](https://github.com/jmrplens/gitlab-mcp-server/issues/961) | The refusal and ending behaviors of go-sdk that decide what a refused caller sees                                                |
+| [982](https://github.com/jmrplens/gitlab-mcp-server/issues/982) | The transport-source budget remembers every (source, key) pair it charges, and only its sweep bounds that record                 |
+
+One finding grew after it was filed, and one was added, when the register was read
+against the code as a whole. F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958))
+also records the idle session timeout's variable, which refuses a zero its flag accepts
+(`END-005`), and the tool-call bucket's burst, whose zero beside a positive rate refuses
+startup rather than meaning off (`RTC-001`); both are departures from `INV-015` of the
+kind the issue is about. F-35
+([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) records the
+transport-source budget's map of charged (source, key) pairs, which only the sweep bounds,
+since a source the full failure table never tracks is never blocked (`AUB-002`), a
+departure from `INV-010`. The map was first recorded under F-29, whose issue (950) is
+about OAuth verification while the map is kept in both authentication modes, and it was
+given a finding of its own once it was filed.

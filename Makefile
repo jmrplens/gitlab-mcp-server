@@ -15,7 +15,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
-	check-em-dash check-pr-description \
+	check-em-dash check-pr-description check-plan-untracked \
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
@@ -1094,9 +1094,10 @@ gen-model-results:
 
 ## model-results-record: fold a model evaluation run's shards into the committed
 ## record and redraw the pages from it (usage: make model-results-record
-## MODELEVAL_SHARDS=dist/modeleval/ce). Every row the refusals of the plan's
-## section 4.7 name is reported and dropped, the fake provider's included, so a
-## run of the fake publishes nothing and says why row by row.
+## MODELEVAL_SHARDS=dist/modeleval/ce). Every row the fold refuses
+## (cmd/gen_model_results/refusals.go) is reported and dropped, the fake
+## provider's included, so a run of the fake publishes nothing and says why row
+## by row.
 model-results-record:
 	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
 	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -render
@@ -1810,7 +1811,7 @@ audit-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -json plan/test-goroutines-backlog.json
 
 ## check-test-goroutines: fail when any testing.T abort remains off the test
-## goroutine. Wired into CI once the sweep lands (phase 4 of the plan).
+## goroutine. CI runs it on every pull request and every push to main.
 check-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -check
 
@@ -1910,10 +1911,11 @@ check-sdk-context:
 	go run ./cmd/audit_sdk_context/ -check
 
 ## audit-tenancy: report where the tenant policy register (internal/tenancy)
-## and the code disagree: a site that matches nothing, a value its layer does
-## not alias, a refusal or a charge that moved, a reason that changed, and
-## anything shaped like a limit outside a declared site. -v also lists what
-## the exemption table answered.
+## and the code disagree: a site that matches nothing, a declared alias or Arg
+## that stopped carrying its register constant, a refusal or a charge that
+## moved, a reason that changed, and anything shaped like a limit, in a shape
+## the tripwire reads, outside a declared site or an exemption. -v also lists
+## what the exemption table answered.
 audit-tenancy:
 	go run ./cmd/audit_tenancy/ -v
 
@@ -2173,6 +2175,19 @@ check-em-dash:
 ## disk instead, which needs no gh and is how the gate is rehearsed.
 check-pr-description:
 	scripts/check-em-dash.sh description
+
+## check-plan-untracked: fail when git tracks a file under plan/, a working area
+## .gitignore excludes, so a file there is tracked only if it was force-added.
+## It reads the index, so a file untracked with git rm --cached passes before
+## the commit that removes it. No network, no Go build.
+check-plan-untracked:
+	@tracked="$$(git ls-files -- plan)"; \
+	if [ -n "$$tracked" ]; then \
+		echo "plan/ is an untracked working area; untrack these with git rm --cached:"; \
+		echo "$$tracked" | sed 's/^/  /'; \
+		exit 1; \
+	fi; \
+	echo "OK: nothing under plan/ is tracked."
 
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:

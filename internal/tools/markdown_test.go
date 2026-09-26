@@ -2239,7 +2239,7 @@ var mdGateExceptions = map[string]string{}
 var mdGateStates = []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage, testutil.FixtureSinglePage}
 
 // mdGateCases lists everything the gate renders: every registered type, and
-// the renderers outside the registry the plan names.
+// the renderers outside the registry that mdGateExplicitCases lists.
 func mdGateCases(t *testing.T) []mdGateCase {
 	t.Helper()
 	var cases []mdGateCase

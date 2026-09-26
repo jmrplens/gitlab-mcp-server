@@ -21,8 +21,13 @@ type rules struct {
 	lexicon []string
 	// constructors are the functions that build a limit, by full name
 	// (G10(a)). A make of a chan struct{} with a capacity that is not the
-	// literal 0 or 1 is one too, without being listed.
+	// literal 0 or 1 is one too, without being listed. limitTypes are the
+	// options types a literal of which sets a limit the same way.
 	constructors []string
+	limitTypes   []string
+	// statusWriters are the calls that write an HTTP status outside a gate
+	// literal, each with the index of its status argument (G10(b)).
+	statusWriters map[string]int
 	// refusalTypes are the literal types a refusal is built from, and
 	// gateType the one the gate writes before the SDK sees a request.
 	refusalTypes []refusalType
@@ -52,13 +57,15 @@ type rules struct {
 	// shareInvariant the invariant whose finding excuses one (G13).
 	shareWords     []string
 	shareInvariant string
-	// envPrefix, envNames, envReaders and configFinding are G14's: the
-	// prefix every setting carries, the list of names the configuration
-	// package reads, the calls that read a variable directly, and the finding
-	// a row reading one that way carries.
+	// envPrefix, envNames, envReaders, envExpanders and configFinding are
+	// G14's: the prefix every setting carries, the list of names the
+	// configuration package reads, the calls that read a variable directly,
+	// those that read every variable a template names, and the finding a row
+	// reading one that way carries.
 	envPrefix     string
 	envNames      tenancy.Site
 	envReaders    []string
+	envExpanders  []string
 	configFinding string
 	// leafImports are the only packages the register may import, and server
 	// the package that must already import each of them (G12).
@@ -79,6 +86,8 @@ const (
 
 // productionRules are the rules `make check-tenancy` applies.
 func productionRules() rules {
+	subscriptionsPath := goprogram.ModulePath + "/internal/subscriptions"
+	oauthPath := goprogram.ModulePath + "/internal/oauth"
 	return rules{
 		// The packages the server never links, which
 		// TestDependencies_TestSupport_NeverReachesTheServerBinary holds out
@@ -87,18 +96,27 @@ func productionRules() rules {
 		lexicon: []string{
 			"max", "min", "limit", "ceiling", "cap", "capacity", "budget", "burst", "window", "timeout", "ttl",
 			"interval", "backoff", "divisor", "factor", "cooldown", "lease", "lifetime", "age", "size", "probes",
+			"retry", "retries", "jitter", "fraction", "ladder",
 		},
 		constructors: []string{
 			"golang.org/x/time/rate.NewLimiter",
 			goprogram.ToolutilPath + ".NewRateLimiter",
-			goprogram.ModulePath + "/internal/subscriptions.NewWatcherGate",
+			subscriptionsPath + ".NewWatcherGate",
 			serverpoolPath + ".NewAuthRateLimiter",
 			serverpoolPath + ".NewDistinctTokenBudget",
-			goprogram.ModulePath + "/internal/oauth.NewRejectedTokens",
+			oauthPath + ".NewRejectedTokens",
 			serverpoolPath + ".WithMaxSize",
 			serverpoolPath + ".WithIdleTimeout",
 			serverpoolPath + ".WithRevalidateInterval",
 			serverpoolPath + ".WithMaxCredentialAge",
+			subscriptionsPath + ".New",
+			oauthPath + ".NewGitLabVerifier",
+			oauthPath + ".NewGitLabVerifierFor",
+		},
+		limitTypes: []string{subscriptionsPath + ".Options"},
+		statusWriters: map[string]int{
+			"net/http.Error":                      2,
+			"net/http.ResponseWriter.WriteHeader": 0,
 		},
 		refusalTypes: []refusalType{
 			// jsonrpc.Error is an alias of this type, which is what a
@@ -138,7 +156,8 @@ func productionRules() rules {
 
 		envPrefix:     "GITLAB_MCP_",
 		envNames:      tenancy.Site{Pkg: "internal/config", Name: "prefixedNames"},
-		envReaders:    []string{"os.Getenv", "os.LookupEnv"},
+		envReaders:    []string{"os.Getenv", "os.LookupEnv", "syscall.Getenv", "syscall.LookupEnv"},
+		envExpanders:  []string{"os.ExpandEnv"},
 		configFinding: "F-13",
 
 		leafImports: []string{"errors", "fmt", "strings", "time"},
@@ -160,6 +179,7 @@ const (
 	categoryServerState   = "server-state"
 	categoryProtocol      = "protocol"
 	categoryUninventoried = "uninventoried"
+	categoryTestSupport   = "test-support"
 )
 
 // categories are the reasons an exemption may give. An exemption naming any
@@ -176,8 +196,9 @@ var categories = map[string]string{
 	categoryServerState:  "refusals about the process, not a caller",
 	categoryProtocol: "protocol vocabulary: a revision the MCP specification names, or a helper carrying a " +
 		"protocol code its callers choose, where every caller passes a protocol code",
-	categoryUninventoried: "a decision the gate surfaced that the specification's inventory does not list, " +
+	categoryUninventoried: "a decision the gate surfaced that no row of the register declares, " +
 		"held here until the specification decides whether it is a row",
+	categoryTestSupport: "a name a package the server links declares for its own tests, which read a row's value or build its limit through it; the running server reads that value, or builds that limit, through a site a row declares",
 }
 
 // exemption is one declaration shaped like a limit that decides nothing about
@@ -220,6 +241,7 @@ var notADecision = map[string]exemption{
 
 	// Names that read as a limit and are words.
 	"cmd/server:endLifetimeReached":              {categoryVocabulary, "the watch-end reason a listen is given, whose rows are END-002 and HLD-007"},
+	"cmd/server:headerRetryAfter":                {categoryVocabulary, "the name of the header a refusal's retry delay travels in"},
 	"internal/gitlab:rateLimitResetHeader":       {categoryVocabulary, "the name of a header GitLab sends"},
 	"internal/serverpool:CauseSizePressure":      {categoryVocabulary, "the name telemetry gives an eviction under size pressure"},
 	"internal/subscriptions:ErrLifetimeExceeded": {categoryVocabulary, "the sentinel a watch ends with at its lifetime, whose row is HLD-007"},
@@ -259,15 +281,21 @@ var notADecision = map[string]exemption{
 
 	// Refusals about the process rather than a caller.
 	"cmd/server:readinessGate.abandoned": {categoryServerState, "answers -32000 to a request that ended while the tool catalog was still building, a fact about the process"},
+	"cmd/server:writeCardUnavailable":    {categoryServerState, "answers 503 while the server card is still being built, a fact about the process"},
+	"cmd/server:healthHandler":           {categoryServerState, "answers /health with 503 while the process drains, which is what a balancer is asked to read"},
+
+	// Names only their own package's tests reach.
+	"cmd/server:authFailureLimit":      {categoryTestSupport, "the tests build guards directly rather than through a Config and read AUB-001's limit here; the server reads it through config.DefaultAuthFailureLimit, the row's alias, as the --auth-failure-limit default"},
+	"internal/oauth:NewGitLabVerifier": {categoryTestSupport, "a wrapper of NewGitLabVerifierFor for one fixed instance that only the package's tests call, with a cache TTL of their own; the server builds its verifier with NewGitLabVerifierFor in registerOAuthMCPHandlers, from the configured TTL, and both are Enforce sites (ADM-002 and ADM-006)"},
 
 	// Protocol vocabulary.
 	"internal/elicitation:minMRTRProtocolVersion": {categoryProtocol, "the first MCP revision that requires the multi-round-trip flow, a date the specification names"},
 	"internal/toolutil:CodedError.Unwrap":         {categoryProtocol, "exposes the code a CodedError carries, which only InvalidParams and InternalError set, to -32602 and -32603"},
 	"internal/toolutil:coded":                     {categoryProtocol, "builds the CodedError InvalidParams and InternalError return, with -32602 and -32603"},
 
-	// A decision the inventory does not list.
+	// A decision no row declares.
 	"internal/subscriptions:settledFactor": {categoryUninventoried, "how much slower a settled resource is polled than the base cadence; " +
-		"it belongs with the cadence HLD-007 holds, and the answer to question Q7 moved only the base and minimum intervals there"},
+		"it belongs with the cadence HLD-007 holds, and when the register landed only the base and minimum intervals were made that row's values"},
 }
 
 // checkExemptions holds the exemption table to what it answered: an entry

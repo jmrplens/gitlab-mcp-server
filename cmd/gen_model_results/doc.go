@@ -2,7 +2,7 @@
 // what this repository publishes: the committed record, the reference page and
 // the README tables.
 //
-// It is the second half of the split section 3.2 of the rebuild plan makes. A
+// It is the second half of a split between observing and scoring. A
 // run writes observation and no verdict, so every number here is computed on
 // this side, from the shards and from the corpus at HEAD, at the moment a run
 // is folded in.

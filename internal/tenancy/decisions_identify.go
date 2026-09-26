@@ -1,14 +1,14 @@
 package tenancy
 
-// identifyDecisions are the rows that answer "who is this request?" (spec 4.4):
-// how the credential is read, what the entry, the owner, the address and the
-// source are, how a request is bound to its credential, and how the tenant
-// itself is resolved.
+// identifyDecisions are the rows that answer "who is this request?" (spec:
+// The five questions): how the credential is read, what the entry, the owner,
+// the address and the source are, how a request is bound to its credential,
+// and how the tenant itself is resolved.
 //
 // The tenant is resolved and read for attribution only: no allowance is keyed
 // on it (F-01, issue 955), and no Tenant type exists, because nothing would
-// consume one. IDN-008 names the code home of TEN-006's unknown rule, a zero or
-// missing user id is unknown, so that it cannot move unnoticed.
+// consume one. IDN-008 names the code home of the rule that a zero or missing
+// user id is unknown (spec: The tenant), so that it cannot move unnoticed.
 func identifyDecisions() []Decision {
 	return []Decision{
 		{
@@ -103,6 +103,12 @@ func identifyDecisions() []Decision {
 					Prefix: "this subscription could not be attributed to a credential", Answer: RetryLater,
 					At: refuse(pkgServer, "errUnboundSubscribe"),
 				},
+				// Autocomplete is never blocked, so the unattributed completion
+				// is answered empty and said only in the log.
+				{
+					Methods: []string{"completion/complete"}, Channel: EmptyCompletion, Answer: RetryLater,
+					At: refuse(pkgCompletions, "Handler.Complete"),
+				},
 			},
 			Sites: []Site{
 				enforce(pkgServer, "serverShell.defaultCredentialState"),
@@ -110,6 +116,7 @@ func identifyDecisions() []Decision {
 				refuse(pkgToolutil, "UnattributedRequestMessage"),
 				refuse(pkgToolutil, "UnattributedRequestError"),
 				refuse(pkgServer, "errUnboundSubscribe"),
+				refuse(pkgCompletions, "Handler.Complete"),
 			},
 		},
 		{

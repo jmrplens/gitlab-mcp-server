@@ -6,7 +6,7 @@ import (
 )
 
 // TestKey_EveryKeyIsDescribed pins each key's name, axis, mint cost and unit
-// to spec section 4.1, and holds it to evidence a refusal can quote.
+// to the key table (spec: Keys), and holds it to evidence a refusal can quote.
 func TestKey_EveryKeyIsDescribed(t *testing.T) {
 	for _, tc := range []struct {
 		key  Key
@@ -51,15 +51,15 @@ func TestKey_EveryKeyIsDescribed(t *testing.T) {
 	}
 }
 
-// TestKey_MintableIsFalseExactlyForTheKeysNoCallerControls is TEN-008 as a
-// test: every key a request yields is mintable, the tenant included, and only
-// the absence of a key, the unbound state, the process and the deployment are
-// not.
+// TestKey_MintableIsFalseExactlyForTheKeysNoCallerControls is the mintable-key
+// rule as a test (spec: Two axes): every key a request yields is mintable, the
+// tenant included, and only the absence of a key, the unbound state, the
+// process and the deployment are not.
 func TestKey_MintableIsFalseExactlyForTheKeysNoCallerControls(t *testing.T) {
 	notMintable := map[Key]bool{KeyNone: true, KeyUnbound: true, KeyProcess: true, KeyDeployment: true}
 	keys := Keys()
 	if len(keys) != 15 {
-		t.Fatalf("Keys() returned %d keys, want the fifteen of spec 4.1", len(keys))
+		t.Fatalf("Keys() returned %d keys, want fifteen: KeyNone and the fourteen of the spec's key table", len(keys))
 	}
 	for _, k := range keys {
 		t.Run(k.String(), func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestKey_MintableIsFalseExactlyForTheKeysNoCallerControls(t *testing.T) {
 		})
 	}
 	if !KeyTenant.Mintable() || KeyTenant.MintCost() != MintPrincipal {
-		t.Error("the tenant must be mintable, at the cost of another GitLab user (TEN-008)")
+		t.Error("the tenant must be mintable, at the cost of another GitLab user (spec: Two axes)")
 	}
 }
 

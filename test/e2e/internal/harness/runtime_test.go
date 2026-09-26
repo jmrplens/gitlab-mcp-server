@@ -66,7 +66,7 @@ func TestGuardMessage_EveryRuntime_RefusesOnlyTheWrongOnes(t *testing.T) {
 // A refusal that only said "wrong runtime" would be no better than the wall of
 // 404s it replaces. It names the instance, its version and edition, the tier
 // it found, what the package needs, the target that provides it and the escape
-// hatch, so the reader can act without opening the plan.
+// hatch, so the reader can act on the message alone.
 func TestGuardMessage_Refusal_NamesWhatToDoAboutIt(t *testing.T) {
 	facts := runtimeFacts{URL: "http://gitlab.test:8929", Version: "18.0.0", Tier: edition.Free}
 

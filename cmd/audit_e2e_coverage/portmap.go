@@ -96,7 +96,7 @@ var declaredDrops = map[string]dropDeclaration{
 			"is the scenario test/e2e/gitlab/ee/protectedenvs_test.go drives on every surface of a licensed runtime",
 	},
 	// S17 B6: the old suite's own infrastructure tests and the MCP-level cases
-	// the plan resolves rather than ports. The suite's own helper tests are
+	// the rebuild resolves rather than ports. The suite's own helper tests are
 	// superseded by the harness and fixture that replaced those helpers; the
 	// HTTP-transport cases are covered on the wire by test/e2e/http, which the
 	// stdio harness cannot reach; the in-process capability tests are replaced

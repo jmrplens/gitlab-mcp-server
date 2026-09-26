@@ -739,9 +739,9 @@ type transportBudget struct {
 	mu sync.Mutex
 	// charged records when a (source, key) pair last opened a window, so a
 	// key already counted against a source is not counted again until its
-	// window lapses. It cannot grow without bound: a source stops charging
-	// once it is blocked, and blocked sources are refused before a failure is
-	// recorded.
+	// window lapses. A blocked source adds no pairs, but a source the full
+	// limiter table never tracks is never blocked, so only the sweep bounds
+	// the map (register row AUB-002, F-35, issue 982).
 	charged map[string]time.Time
 }
 

@@ -9751,7 +9751,7 @@ func TestProjectGet_EachFlagIsPublishedUnderItsOwnKey(t *testing.T) {
 		"snippets_enabled":                {why: derivedFromLevel},
 		"container_registry_enabled":      {why: derivedFromLevel},
 		"ci_opt_in_jwt":                   {why: "client-go models it and no GitLab entity sends it (upstream-bugs.md)"},
-		"automatic_rebase_enabled":        {why: "not published yet: plan/clientgo-v3-12-surface.md"},
+		"automatic_rebase_enabled":        {why: "not published yet: client-go 3.12 added it, and no entity or route of the live GitLab record declares it (gitlab-api-live.json)"},
 		"issues_access_level":             {publishes: []string{"issues_enabled"}, why: "an enabled level is what the older flag reports"},
 		"merge_requests_access_level":     {publishes: []string{"merge_requests_enabled"}, why: "an enabled level is what the older flag reports"},
 		"builds_access_level":             {publishes: []string{"jobs_enabled"}, why: "an enabled level is what the older flag reports"},

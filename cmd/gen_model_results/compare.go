@@ -3,9 +3,9 @@
 //
 // Two rules and not one. A cross-vendor table compares models and holds the
 // surface fixed; a cross-surface table compares surfaces and holds the model
-// fixed. The first draft of the rebuild plan had a single rule requiring
-// agreement on the surface, which would have forbidden the cross-surface
-// comparison the same draft promised, and that is exactly the class of mistake
+// fixed. The first design had a single rule requiring agreement on the
+// surface, which would have forbidden the cross-surface comparison the same
+// design promised, and that is exactly the class of mistake
 // a key written once in code and read by every renderer prevents.
 //
 // What is in a key is what changes the measurement. What is left out of the

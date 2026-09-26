@@ -1,6 +1,6 @@
 package tenancy
 
-// requestDecisions are the per-request bounds of spec section 3.2.10. They
+// requestDecisions are the per-request bounds, the RQB rows. They
 // answer the allow question for one request rather than for a caller, so they
 // are class P on the request key and are declared rather than owned: they carry
 // no values here, and nothing about them moves.

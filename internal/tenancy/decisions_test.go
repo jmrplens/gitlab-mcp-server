@@ -5,11 +5,13 @@ import (
 	"testing"
 )
 
-// specRequirementIDs is every requirement of the specification's section 3.2,
-// written out rather than generated, so that a requirement added to the
-// specification and forgotten in the register, or the reverse, fails here by
-// name. END-005 is the specification amendment that answered the plan's
-// question Q7.
+// specRequirementIDs is every requirement the register answers, written out
+// rather than generated, so that a requirement added and forgotten in the
+// register, or the reverse, fails here by name. The list taken when the
+// register landed is one ID per decision and per-request bound the code held
+// at cb6379f53, END-005 among them, which the register's gate surfaced as it
+// landed; a limit added later adds its ID here in the change that adds its
+// row.
 var specRequirementIDs = []string{
 	"IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006", "IDN-007",
 	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013",
@@ -209,10 +211,11 @@ func pinNarrowed(answer Answer) []refusalPin {
 	}
 }
 
-// rowPins is every row as the specification states it: its question (spec
-// 4.4), kind, class (spec 2.3 and 3.2.11), disposition, key and stdio key
-// (spec 3.2 and 4.1), the unit its reason names and the unit of what it
-// cites (spec 2.3), and every refusal (spec 3.2 and 4.3).
+// rowPins is every row's frozen declaration: its question (spec: The
+// five questions), kind, class (spec: Alignment classes), disposition, key
+// and stdio key (spec: Keys), the unit its reason names and the unit of what
+// it cites (spec: Alignment classes), and every refusal with its channel and
+// answer (spec: Refusal channels).
 //
 //nolint:maintidx // one table of literals, one entry per requirement; splitting it would scatter the pins it exists to hold in one place.
 func rowPins() map[string]rowPin {
@@ -242,6 +245,7 @@ func rowPins() map[string]rowPin {
 				methods: pinSubMeths, channel: RPC, code: -32603,
 				prefix: "this subscription could not be attributed to a credential", answer: RetryLater,
 			},
+			{methods: "completion/complete", channel: EmptyCompletion, answer: RetryLater},
 		}},
 		"IDN-008": {Identify, Rule, ClassT, Ruled, KeyTenant, KeyProcess, KeyNone, KeyNone, nil},
 		"IDN-010": {Identify, Rule, ClassC, Mechanism, KeySession, KeyNone, KeyNone, KeyNone, nil},
@@ -308,7 +312,9 @@ func rowPins() map[string]rowPin {
 				prefix: "This session does not belong to the presented credential.", answer: StartOver,
 			},
 		}},
-		"ADM-008": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, nil},
+		"ADM-008": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
+			pinListenEnd("credential_reset", StartOver),
+		}},
 		"ADM-009": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_revoked", Reauthorize),
 		}},
@@ -331,6 +337,7 @@ func rowPins() map[string]rowPin {
 		"AUB-002": {Admit, Budget, ClassA, Valued, KeySource, KeyNone, KeyNone, KeyNone, pinBlockedAt()},
 		"AUB-003": {Admit, Budget, ClassA, Valued, KeyAddress, KeyNone, KeyNone, KeyNone, pinBlockedAt()},
 		"AUB-004": {Admit, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyProcess, []refusalPin{
+			{methods: "http", channel: Silent, answer: NoAnswer},
 			{methods: "http", channel: Silent, answer: NoAnswer},
 		}},
 		"AUB-005": {Admit, Lifetime, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyNone, nil},
@@ -418,6 +425,7 @@ func rowPins() map[string]rowPin {
 		}},
 		"HLD-003": {Allow, Ceiling, ClassD, Valued, KeyEntry, KeyProcess, KeyTenant, KeyTenant, []refusalPin{
 			{methods: pinSubMeths, channel: RPC, code: -32000, prefix: pinWatchers, answer: RetryLater},
+			pinListenEnd("watcher_evicted", StartOver),
 		}},
 		"HLD-004": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
 			{methods: pinSubMeths, channel: RPC, code: -32000, prefix: pinWatchers, answer: RetryLater},

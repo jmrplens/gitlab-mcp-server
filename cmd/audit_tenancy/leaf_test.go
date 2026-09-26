@@ -14,7 +14,8 @@ func TestCheckLeaf_ARegisterTheServerImportsForFree_Passes(t *testing.T) {
 
 // TestCheckLeaf_ARegisterThatCostsTheServerSomething_IsAFinding: an import
 // the rules do not allow, an allowed import the server does not already
-// import, and a package-level variable each fail.
+// import, a package-level variable and an init function each fail. Methods
+// that happen to be called init are no initialization work, and pass.
 func TestCheckLeaf_ARegisterThatCostsTheServerSomething_IsAFinding(t *testing.T) {
 	leafExtra := `package leaf
 
@@ -24,10 +25,21 @@ import (
 )
 
 var Loaded = fmt.Sprint(os.Args)
+
+func init() { _ = fmt.Sprint("initialization work") }
+
+type Table struct{}
+
+func (Table) init() {}
+
+type Row struct{}
+
+func (Row) init() {}
 `
 	report := fixture{files: map[string]string{"site/site.go": siteHeader, "leaf/extra.go": leafExtra}}.run(t)
 	assertFindings(t, report, "G12",
 		leafDir+": declares a package-level variable, which is initialization work in every binary that imports the register",
+		leafDir+": declares an init function, which is initialization work in every binary that imports the register",
 		leafDir+": imports fmt, which "+siteDir+" does not import itself",
 		leafDir+": imports os, and the register may import only [errors fmt strings time]",
 	)

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"slices"
 
@@ -12,15 +14,26 @@ import (
 
 // checkOrphans is G6: every exported constant of the register's value and
 // code files is what some Alias or Arg site reads, and something outside the
-// register does read it; every exported function of its rule files is named
-// in some row's Functions. A register value nothing reads is a policy that
-// decides nothing, and it reads as though it did.
+// register does read it; every declared Alias is read by code other than an
+// alias initializer, directly or through a chain of aliases; every exported
+// function of its rule files is named in some row's Functions. A register
+// value nothing reads is a policy that decides nothing, and it reads as though
+// it did, and so is an alias every reader stopped reading: its own initializer
+// still reads the register, so nothing else would notice that changing the
+// value no longer changes the server. One reader going back to a literal while
+// another still reads the alias is not this rule's to see. Another rule fails
+// it only where it writes the literal straight into a listed limit
+// constructor's arguments or options literal (G10), is itself a declared
+// Alias (G2), changed a call a declared Arg names at the index it names (G3),
+// or is an Enforce site declared to read that constant with no other
+// reference to it or a declared alias of it left in its body (G5); anywhere
+// else it passes.
 func (g *gate) checkOrphans() []Finding {
 	leaf := g.p.byDir[g.reg.leaf]
 	if leaf == nil {
 		return nil
 	}
-	var found []Finding
+	found := g.unreadAliasFindings()
 	for _, c := range exportedConsts(g.p, g.leafFiles(g.rules.valueFiles)) {
 		if msg := g.orphanProblem(c.name); msg != "" {
 			found = append(found, Finding{Rule: "G6", Subject: siteKey(g.reg.leaf, c.name), Position: c.at, Message: msg})
@@ -59,6 +72,69 @@ func (g *gate) orphanProblem(name string) string {
 		return "is a register value nothing outside the register reads"
 	}
 	return ""
+}
+
+// unreadAliasFindings reports every declared Alias that no code reads but
+// another alias's initializer, following a chain of aliases to the end: an
+// alias read only by an alias nothing else reads is as unread as the last.
+func (g *gate) unreadAliasFindings() []Finding {
+	read := g.readAliases(g.aliasReaders())
+	var found []Finding
+	for _, d := range g.reg.decisions {
+		for _, s := range d.Sites {
+			if s.Role != tenancy.Alias || read[keyOf(s)] {
+				continue
+			}
+			decl, err := g.p.lookup(s)
+			if err != nil {
+				continue
+			}
+			found = append(found, Finding{
+				Rule: "G6", Subject: d.ID, Position: decl.where(g.p),
+				Message: fmt.Sprintf("%s aliases %s, and nothing but an alias initializer reads it, so the code that enforces the decision no longer takes its value from the register", keyOf(s), s.Reads),
+			})
+		}
+	}
+	return found
+}
+
+// aliasReaders maps each declared Alias to the declarations whose code refers
+// to it.
+func (g *gate) aliasReaders() map[string]map[string]bool {
+	readers := map[string]map[string]bool{}
+	g.p.forEachTopLevel(func(key string, info *types.Info, node ast.Node) {
+		ast.Inspect(node, func(n ast.Node) bool {
+			// A node that is no identifier leaves id nil, under which no use is
+			// recorded, so it names no alias without a check of its own.
+			id, _ := n.(*ast.Ident)
+			if used := objectKey(info.Uses[id]); g.aliases[used] != nil {
+				if readers[used] == nil {
+					readers[used] = map[string]bool{}
+				}
+				readers[used][key] = true
+			}
+			return true
+		})
+	})
+	return readers
+}
+
+// readAliases is the set of declared aliases that code other than an alias
+// initializer reads, directly or through a chain of aliases: an alias is read
+// when a reader of it is not an alias, or is an alias already read. A pass
+// over the aliases settles at least one more link of every chain, and no chain
+// is longer than the number of aliases, so that many passes reach the answer
+// whatever order the map hands them out in.
+func (g *gate) readAliases(readers map[string]map[string]bool) map[string]bool {
+	read := map[string]bool{}
+	for range len(g.aliases) {
+		for alias := range g.aliases {
+			if !read[alias] && slices.ContainsFunc(sortedKeys(readers[alias]), func(r string) bool { return g.aliases[r] == nil || read[r] }) {
+				read[alias] = true
+			}
+		}
+	}
+	return read
 }
 
 // readOutsideLeaf reports whether a package other than the register refers to

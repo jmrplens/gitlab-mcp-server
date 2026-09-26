@@ -217,23 +217,106 @@ func beginsSome(texts []string, prefix string) bool {
 // checkRefusals is G8: every refusal's stable text still begins a string the
 // code it names folds, and the literal that carries it still has the status,
 // the code and the headers the row declares. It is what makes a reworded
-// refusal, or a changed status, code or header (CON-003), fail until the row
-// changes with it.
+// refusal, or a changed status, code or header, all of which the
+// specification's Refusal channels section counts as its wire shape, fail
+// until the row changes with it.
+//
+// It reads the gate's literals in the other direction too: every gate literal
+// in a function that holds a declared gate refusal is carried exactly by one
+// of that function's refusals. Without it a refusal with no stable text,
+// written in a function that returns several of its status, would be
+// satisfied by whichever sibling still carries the row, and the literal that
+// drifted would pass unnoticed.
 func (g *gate) checkRefusals() []Finding {
 	var found []Finding
+	held := map[string][]heldRefusal{}
+	var holders []string
+	drifted := map[string]bool{}
 	for _, d := range g.reg.decisions {
 		for i, r := range d.Refusals {
 			subject := fmt.Sprintf("%s refusal %d (%s %s)", d.ID, i+1, strings.Join(r.Methods, ","), r.Channel)
-			found = append(found, g.refusalFindings(subject, r)...)
+			problems := g.refusalFindings(subject, r)
+			found = append(found, problems...)
+			at, holder := g.refusalHolder(r)
+			if r.Channel != tenancy.Gate || holder == nil {
+				continue
+			}
+			if _, seen := held[holder.key]; !seen {
+				holders = append(holders, holder.key)
+			}
+			held[holder.key] = append(held[holder.key], heldRefusal{r: r, at: at})
+			drifted[holder.key] = drifted[holder.key] || len(problems) > 0
+		}
+	}
+	for _, key := range holders {
+		if !drifted[key] {
+			found = append(found, g.unaccountedFindings(g.p.decls[key], held[key])...)
 		}
 	}
 	return found
 }
 
-// refusalFindings judges one refusal.
-func (g *gate) refusalFindings(subject string, r tenancy.Refusal) []Finding {
+// heldRefusal is a gate refusal with the declaration that holds its text.
+type heldRefusal struct {
+	r  tenancy.Refusal
+	at *declaration
+}
+
+// refusalHolder returns the declarations holding a refusal's text and its
+// literal: both nil when the text's does not resolve, and the literal's nil
+// when only it does not.
+func (g *gate) refusalHolder(r tenancy.Refusal) (at, holder *declaration) {
 	at, err := g.p.lookup(r.At)
 	if err != nil {
+		return nil, nil
+	}
+	holder = at
+	if r.Via != (tenancy.Site{}) {
+		if holder, err = g.p.lookup(r.Via); err != nil {
+			return at, nil
+		}
+	}
+	return at, holder
+}
+
+// unaccountedFindings reports each gate literal of holder that none of its
+// declared refusals carries exactly. It runs only where every one of those
+// refusals found its literal, since until then the refusal's own finding
+// already names what drifted.
+func (g *gate) unaccountedFindings(holder *declaration, refusals []heldRefusal) []Finding {
+	info := holder.info()
+	var found []Finding
+	for _, rl := range g.refusalLiterals(holder, g.rules.gateType) {
+		carried := slices.ContainsFunc(refusals, func(h heldRefusal) bool { return g.carries(h, holder, rl) })
+		if !carried {
+			status, _ := rl.intField(info, rl.typ.status)
+			found = append(found, Finding{
+				Rule: "G8", Subject: holder.key, Position: g.p.position(rl.lit.Pos()),
+				Message: fmt.Sprintf("builds a %d gate refusal that no refusal declared at this function carries exactly: its status, text, code or headers differ from every row's", status),
+			})
+		}
+	}
+	return found
+}
+
+// carries reports whether a declared refusal carries one gate literal of its
+// holder exactly: the status, the text where the literal holds it itself, the
+// code and the headers.
+func (g *gate) carries(h heldRefusal, holder *declaration, rl refusalLit) bool {
+	info := holder.info()
+	if status, _ := rl.intField(info, rl.typ.status); status != h.r.Status {
+		return false
+	}
+	if holder == h.at && h.r.Prefix != "" && !strings.HasPrefix(g.leadingText(info, rl.fields[rl.typ.message]), h.r.Prefix) {
+		return false
+	}
+	return len(g.gateLiteralProblems(h.r, rl, holder)) == 0
+}
+
+// refusalFindings judges one refusal.
+func (g *gate) refusalFindings(subject string, r tenancy.Refusal) []Finding {
+	at, holder := g.refusalHolder(r)
+	if at == nil {
 		return nil
 	}
 	g.read.refusals++
@@ -243,18 +326,15 @@ func (g *gate) refusalFindings(subject string, r tenancy.Refusal) []Finding {
 	if r.Prefix != "" && !beginsSome(g.foldedTexts(at), r.Prefix) {
 		return fail(at.where(g.p), "no string %s folds begins with %q", keyOf(r.At), r.Prefix)
 	}
-	holder := at
-	if r.Via != (tenancy.Site{}) {
-		if holder, err = g.p.lookup(r.Via); err != nil {
-			return nil
-		}
+	if holder == nil {
+		return nil
 	}
 	var msg string
 	switch r.Channel {
 	case tenancy.Gate:
 		msg = g.gateProblem(r, at, holder)
 	case tenancy.RPC:
-		msg = g.rpcProblem(r, holder)
+		msg = g.rpcProblem(r, at, holder)
 	case tenancy.ToolError:
 		msg = g.toolErrorProblem(holder, map[string]bool{})
 	}
@@ -269,8 +349,9 @@ func (g *gate) refusalFindings(subject string, r tenancy.Refusal) []Finding {
 //
 // The literal is looked for in holder: the status must match, and the text
 // must begin with the prefix where the literal holds the text itself. Where
-// several literals qualify, one that carries the refusal exactly is enough;
-// which return each of them is, is G7's question.
+// several literals qualify, one that carries the refusal exactly is enough
+// here; that each of the others is carried by some refusal too is
+// unaccountedFindings' question, and which return each of them is, G7's.
 func (g *gate) gateProblem(r tenancy.Refusal, at, holder *declaration) string {
 	info := holder.info()
 	var candidates []refusalLit
@@ -311,20 +392,7 @@ func (g *gate) gateProblem(r tenancy.Refusal, at, holder *declaration) string {
 func (g *gate) messageFrom(lits []refusalLit, info *types.Info, at *declaration) []refusalLit {
 	var out []refusalLit
 	for _, rl := range lits {
-		msg, ok := rl.fields[rl.typ.message]
-		if !ok {
-			continue
-		}
-		refers := false
-		ast.Inspect(msg, func(n ast.Node) bool {
-			// A node that is no identifier leaves id nil, under which no
-			// use is recorded, so it refers to nothing without a check of
-			// its own.
-			id, _ := n.(*ast.Ident)
-			refers = refers || objectKey(info.Uses[id]) == at.key
-			return !refers
-		})
-		if refers {
+		if msg, ok := rl.fields[rl.typ.message]; ok && refersToKey(info, msg, at.key) {
 			out = append(out, rl)
 		}
 	}
@@ -431,7 +499,11 @@ func isLocal(v *types.Var) bool {
 // assignedTo are the expressions a local variable is given inside the
 // declaration: its initializer and every plain assignment to it.
 func assignedTo(decl *declaration, v *types.Var) []ast.Expr {
-	info := decl.info()
+	return assignedIn(decl.info(), decl.body(), v)
+}
+
+// assignedIn are the expressions a local variable is given inside node.
+func assignedIn(info *types.Info, node ast.Node, v *types.Var) []ast.Expr {
 	var out []ast.Expr
 	target := func(lhs ast.Expr) bool {
 		// A left side that is no identifier (a field, an element) leaves id
@@ -439,7 +511,7 @@ func assignedTo(decl *declaration, v *types.Var) []ast.Expr {
 		id, _ := ast.Unparen(lhs).(*ast.Ident)
 		return info.Defs[id] == v || info.Uses[id] == v
 	}
-	ast.Inspect(decl.body(), func(n ast.Node) bool {
+	ast.Inspect(node, func(n ast.Node) bool {
 		switch s := n.(type) {
 		case *ast.AssignStmt:
 			for i, lhs := range s.Lhs {
@@ -460,9 +532,14 @@ func assignedTo(decl *declaration, v *types.Var) []ast.Expr {
 }
 
 // rpcProblem says why no JSON-RPC literal in holder carries r's code, or
-// returns empty when one does. A code held in a variable counts as every
-// constant the function assigns to it.
-func (g *gate) rpcProblem(r tenancy.Refusal, holder *declaration) string {
+// returns empty when one does. A code held in a local variable counts as a
+// set of constants: every one the holder assigns to the variable anywhere,
+// except where an expression switch of the holder names at in a case, as a
+// Via that maps sentinels to codes does, and then only the ones assignedInCase
+// returns from a single case body. It is read with no control flow, so no
+// assignment in the set replaces another; assignedInCase says which case body
+// the set comes from and which assignments that leaves unread.
+func (g *gate) rpcProblem(r tenancy.Refusal, at, holder *declaration) string {
 	info := holder.info()
 	lits := slices.DeleteFunc(g.refusalLiterals(holder, ""), func(rl refusalLit) bool { return rl.typ.name == g.rules.gateType })
 	if len(lits) == 0 {
@@ -479,7 +556,11 @@ func (g *gate) rpcProblem(r tenancy.Refusal, holder *declaration) string {
 			continue
 		}
 		if v, isVar := referenced(info, expr).(*types.Var); isVar && isLocal(v) {
-			for _, rhs := range assignedTo(holder, v) {
+			assigned := assignedTo(holder, v)
+			if inCase, named := assignedInCase(holder, at, v); named {
+				assigned = inCase
+			}
+			for _, rhs := range assigned {
 				if code, folds := foldInt(info, rhs); folds {
 					seen = append(seen, code)
 				}
@@ -490,6 +571,65 @@ func (g *gate) rpcProblem(r tenancy.Refusal, holder *declaration) string {
 		return ""
 	}
 	return fmt.Sprintf("builds no JSON-RPC error carrying code %d (it carries %v)", r.Code, seen)
+}
+
+// assignedInCase are the expressions the local variable v is given inside
+// one case body of the holder's expression switches on at, and whether any
+// case of such a switch names at at all. In each switch only the first case
+// naming at is read, since a switch takes the first case that matches and a
+// later one naming the same sentinel is never reached for it. Of the switches,
+// taken in the order they begin, the last whose first such case assigns v is
+// the one whose case is returned, and a switch whose such case assigns v
+// nothing is passed over. Every assignment to v in that case body is
+// returned, a second one beside the first, and no assignment outside it is:
+// one after the switch, plain or under an if naming at, is not read. With no
+// control flow, a case whose condition adds more than at is still taken as
+// the one that matches it, an earlier case that matches at's error without
+// naming at is not seen, and neither is a return, a branch or a loop that
+// keeps a later switch from running.
+func assignedInCase(holder, at *declaration, v *types.Var) ([]ast.Expr, bool) {
+	info := holder.info()
+	var out []ast.Expr
+	named := false
+	ast.Inspect(holder.body(), func(n ast.Node) bool {
+		sw, isSwitch := n.(*ast.SwitchStmt)
+		if !isSwitch {
+			return true
+		}
+		for _, clause := range sw.Body.List {
+			// An expression switch's body holds case clauses and nothing
+			// else, which the parser guarantees.
+			cc, _ := clause.(*ast.CaseClause)
+			if !slices.ContainsFunc(cc.List, func(e ast.Expr) bool { return refersToKey(info, e, at.key) }) {
+				continue
+			}
+			named = true
+			var assigned []ast.Expr
+			for _, st := range cc.Body {
+				assigned = append(assigned, assignedIn(info, st, v)...)
+			}
+			if len(assigned) > 0 {
+				out = assigned
+			}
+			break
+		}
+		return true
+	})
+	return out, named
+}
+
+// refersToKey reports whether an expression refers anywhere inside it to the
+// declaration with the register key key.
+func refersToKey(info *types.Info, expr ast.Expr, key string) bool {
+	refers := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		// A node that is no identifier leaves id nil, under which no use is
+		// recorded, so it refers to nothing without a check of its own.
+		id, _ := n.(*ast.Ident)
+		refers = refers || objectKey(info.Uses[id]) == key
+		return !refers
+	})
+	return refers
 }
 
 // toolErrorProblem says why a tool-error refusal's result is not flagged as

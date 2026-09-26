@@ -17,12 +17,12 @@ const (
 // Carriage is one row of the carried-channel matrix: the channels a refusal
 // can reach a caller through, for a set of methods in one era.
 //
-// The matrix is spec section 4.2.1 as data, and it is what go-sdk v1.8.0 does
-// rather than what the protocol would permit: a tools/call can be refused as a
-// result with isError because only that result has the flag, a listing only as
-// a JSON-RPC error, and a status other than the SDK's own 400 and 404 only by
-// the gate in front of it. An SDK upgrade that changes what is carried edits
-// this table in the same pull request (spec 4.2.5).
+// The matrix is the refusal channel table as data (spec: Refusal channels),
+// and it is what go-sdk v1.8.0 does rather than what the protocol would permit:
+// a tools/call can be refused as a result with isError because only that
+// result has the flag, a listing only as a JSON-RPC error, and a status other
+// than the SDK's own 400 and 404 only by the gate in front of it. An SDK
+// upgrade that changes what is carried edits this table in the same change.
 type Carriage struct {
 	// Methods are the MCP methods, or the pseudo-methods [MethodGate],
 	// [MethodStartup], [MethodEviction] and [MethodExpiry].
@@ -35,7 +35,8 @@ type Carriage struct {
 
 // Carriages returns the carried-channel matrix.
 //
-// Three rows record narrowing rather than refusal: a listing may leave out
+// Three channels record narrowing rather than refusal, on the tools/list and
+// tools/call rows: a listing may leave out
 // what the authorization on the request does not reach (Absent), and a call
 // for such an action is answered with its cause (Withheld) or, for the tier,
 // as unknown (Unknown). The listing may vary with the authorization and never

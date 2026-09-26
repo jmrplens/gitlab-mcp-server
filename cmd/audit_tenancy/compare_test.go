@@ -104,8 +104,9 @@ func TestCompareBinaries_AByteOfCode_Differs(t *testing.T) {
 }
 
 // TestCompareBinaries_ALineTableByte_IsNotADifference: .gopclntab is the one
-// allocated section a moved constant changes, and the comparison passes over
-// it.
+// allocated section the comparison sets aside, because a moved line changes
+// it; it is not the only section a move can change, and every other one is
+// compared.
 func TestCompareBinaries_ALineTableByte_IsNotADifference(t *testing.T) {
 	path, data, f := testBinary(t)
 	table, _ := section(t, f, ".gopclntab")

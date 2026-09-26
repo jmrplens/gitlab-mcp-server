@@ -63,7 +63,8 @@ type Summary struct {
 type Excuse struct {
 	// Key is the exempted declaration, "cmd/server:corsMaxAge".
 	Key string `json:"key"`
-	// Part is which part of G10 it answered: "names" or "literals".
+	// Part is which part of G10 it answered: "constructors", "literals" or
+	// "names".
 	Part string `json:"part"`
 	// Category and Reason are the exemption's own.
 	Category string `json:"category"`

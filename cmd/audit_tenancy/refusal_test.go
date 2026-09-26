@@ -107,6 +107,23 @@ func (g *gate) codeNotConstant(code int) *gateFailure {
 	return &gateFailure{status: 404, code: code, message: "Gone."}
 }
 
+func (g *gate) resolveMany(n int) *gateFailure {
+	switch n {
+	case 1:
+		return &gateFailure{status: 400, code: -32600, message: describe(n)}
+	case 2:
+		return &gateFailure{status: 400, code: -32600, message: describe(n)}
+	}
+	return &gateFailure{status: 400, code: -40300, message: describe(n), header: newHeader("Retry-After", itoa(upstreamRetryAfter))}
+}
+
+func (g *gate) resolveTexts(n int) *gateFailure {
+	if n > 0 {
+		return &gateFailure{status: 400, code: -32600, message: "Alpha."}
+	}
+	return &gateFailure{status: 400, code: -32600, message: "Beta."}
+}
+
 type holder struct{}
 `
 
@@ -320,6 +337,41 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 	)
 }
 
+// TestCheckRefusals_AGateLiteralNoRefusalCarries_IsAFinding: a function that
+// returns three refusals of one status with no stable text satisfies a row
+// with any one of them, so the literals are also read the other way. The one
+// whose code and headers no refusal declared there carries is a finding; once
+// a refusal carries it there is none; a sibling whose own text the row's
+// prefix does not begin is not carried by that row; and a function one of
+// whose refusals already drifted is left to that refusal's finding.
+func TestCheckRefusals_AGateLiteralNoRefusalCarries_IsAFinding(t *testing.T) {
+	plain := gateAt("gate.resolveMany", 400, -32600, "")
+	retried := gateAt("gate.resolveMany", 400, -40300, "")
+	retried.RetryAfter = tenancy.RetryAfterFixed
+	drifted := gateAt("gate.resolveMany", 400, -32000, "")
+	key := siteDir + ":gate.resolveMany"
+	unaccounted := func(key string) string {
+		return key + ": builds a 400 gate refusal that no refusal declared at this function carries exactly: its status, text, code or headers differ from every row's"
+	}
+	cases := []struct {
+		name     string
+		refusals []tenancy.Refusal
+		want     []string
+	}{
+		{"the sibling no row carries", []tenancy.Refusal{plain}, []string{unaccounted(key)}},
+		{"a sibling of other text", []tenancy.Refusal{gateAt("gate.resolveTexts", 400, -32600, "Alpha.")}, []string{unaccounted(siteDir + ":gate.resolveTexts")}},
+		{"every literal carried", []tenancy.Refusal{plain, retried}, nil},
+		{"a refusal that drifted", []tenancy.Refusal{plain, drifted}, []string{
+			"ROW-001 refusal 2 (http gate): " + key + " its code is -32600, and the register says -32000",
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertFindings(t, refusalFixture(t, tc.refusals...), "G8", tc.want...)
+		})
+	}
+}
+
 // TestCheckRefusals_RPCRefusals: a code that folds, a code held in a variable
 // and counted as every constant the function assigns it, and a holder that
 // is a variable, pass; a holder with no JSON-RPC literal, one whose literals
@@ -348,8 +400,16 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		rpc("gate.missing", -40100, "", ""),
 		rpc("callCode", -32000, "", ""),
 		rpc("otherLiteral", -32000, "", ""),
+		// A holder that switches on the sentinel is judged by the case that
+		// names it: a sibling case's code does not carry it, and a sentinel
+		// no case names falls back to every code the holder assigns.
+		rpc("ErrTooMany", -32603, "", "wire"),
+		rpc("errPicked", -32000, "", "wire"),
+		rpc("errUnbound", -32603, "", "wire"),
 	)
 	assertFindings(t, report, "G8",
+		"ROW-001 refusal 12 (resources/read rpc): "+siteDir+":wire builds no JSON-RPC error carrying code -32603 (it carries [-32000])",
+		"ROW-001 refusal 13 (resources/read rpc): "+siteDir+":wire builds no JSON-RPC error carrying code -32000 (it carries [])",
 		"ROW-001 refusal 4 (resources/read rpc): no string "+siteDir+":busy folds begins with \"too many open streams (%s\"",
 		"ROW-001 refusal 5 (resources/read rpc): "+siteDir+":noLiteral builds no JSON-RPC error",
 		"ROW-001 refusal 6 (resources/read rpc): "+siteDir+":busy builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
@@ -358,6 +418,195 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		"ROW-001 refusal 9 (resources/read rpc): "+siteDir+":gate.missing builds no JSON-RPC error",
 		"ROW-001 refusal 10 (resources/read rpc): "+siteDir+":callCode builds no JSON-RPC error carrying code -32000 (it carries [])",
 		"ROW-001 refusal 11 (resources/read rpc): "+siteDir+":otherLiteral builds no JSON-RPC error",
+	)
+}
+
+// twiceSource names one sentinel in two cases of a switch that assign
+// different codes, beside a second switch that names it once.
+const twiceSource = `package site
+
+import (
+	"errors"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+var errTwice = errors.New("twice")
+
+func wireTwice(err error, inner bool) error {
+	var code int64
+	switch {
+	case errors.Is(err, errPicked), errors.Is(err, errTwice):
+		code = codeBusy
+	case errors.Is(err, errTwice):
+		code = jsonrpc.CodeInvalidParams
+	}
+	if inner {
+		switch {
+		case errors.Is(err, ErrTooMany):
+			code = jsonrpc.CodeInternalError
+		}
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+`
+
+// TestCheckRefusals_ASentinelNamedInTwoCases_IsJudgedByTheFirst: a switch
+// takes the first case that matches, so a sentinel named again in a later case
+// never reaches it. The code that later case assigns does not carry a row that
+// declares it, while the first case's does; a sentinel named in a second
+// switch of the same holder is judged by that switch's case.
+func TestCheckRefusals_ASentinelNamedInTwoCases_IsJudgedByTheFirst(t *testing.T) {
+	rpc := func(at string, code int) tenancy.Refusal {
+		return tenancy.Refusal{
+			Methods: []string{"resources/read"}, Channel: tenancy.RPC, Code: code,
+			At: site(at, tenancy.Refuse), Via: site("wireTwice", tenancy.Refuse),
+		}
+	}
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{rpc("errTwice", -32602), rpc("errTwice", -32000), rpc("ErrTooMany", -32603)}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource, "site/twice.go": twiceSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G8",
+		"ROW-001 refusal 1 (resources/read rpc): "+siteDir+":wireTwice builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
+	)
+}
+
+// againSource names one sentinel in two switches in turn, the second
+// assigning another code over the first's, and a second sentinel in both,
+// whose case in the second switch assigns the code nothing.
+const againSource = `package site
+
+import (
+	"errors"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+var (
+	errAgain = errors.New("again")
+	errKept  = errors.New("kept")
+)
+
+func wireAgain(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errAgain), errors.Is(err, errKept):
+		code = codeBusy
+	}
+	switch {
+	case errors.Is(err, errAgain):
+		code = jsonrpc.CodeInvalidParams
+	case errors.Is(err, errKept):
+		err = errors.Join(errKept, err)
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+`
+
+// TestCheckRefusals_ASentinelNamedInTwoSwitches_IsJudgedByTheLast: a later
+// switch whose case naming the sentinel assigns the code overwrites what an
+// earlier switch assigned, so the earlier code no longer carries a row that
+// declares it, and the later one does; a later case that names the sentinel
+// and assigns the code nothing leaves the earlier assignment standing.
+func TestCheckRefusals_ASentinelNamedInTwoSwitches_IsJudgedByTheLast(t *testing.T) {
+	rpc := func(at string, code int) tenancy.Refusal {
+		return tenancy.Refusal{
+			Methods: []string{"resources/read"}, Channel: tenancy.RPC, Code: code,
+			At: site(at, tenancy.Refuse), Via: site("wireAgain", tenancy.Refuse),
+		}
+	}
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{rpc("errAgain", -32000), rpc("errAgain", -32602), rpc("errKept", -32000)}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource, "site/again.go": againSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G8",
+		"ROW-001 refusal 1 (resources/read rpc): "+siteDir+":wireAgain builds no JSON-RPC error carrying code -32000 (it carries [-32602])",
+	)
+}
+
+// outsideSource changes the code a sentinel's error is sent with in the three
+// ways G8 does not read: a second assignment in the case naming the
+// sentinel, an if naming the sentinel after the switch, and a plain
+// assignment after the switch. Each function sends -32602 for its sentinel.
+const outsideSource = `package site
+
+import (
+	"errors"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+var (
+	errSecond = errors.New("second")
+	errIf     = errors.New("if")
+	errPlain  = errors.New("plain")
+)
+
+func wireSecond(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errSecond):
+		code = codeBusy
+		code = jsonrpc.CodeInvalidParams
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+
+func wireIf(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errIf):
+		code = codeBusy
+	}
+	if errors.Is(err, errIf) {
+		code = jsonrpc.CodeInvalidParams
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+
+func wirePlain(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errPlain):
+		code = codeBusy
+	}
+	code = jsonrpc.CodeInvalidParams
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+`
+
+// TestCheckRefusals_ACodeReassignedInOrAfterTheCase_IsNotSeen pins what G8's
+// documentation states it does not read. Each function sends -32602 for its
+// sentinel, and a row declaring -32000, the code the switch's case assigns
+// first, passes all three: a second assignment in that case joins the set
+// rather than replacing the first, and an assignment after the switch is not
+// read at all, so a row declaring the -32602 actually sent fails there. A
+// rule that reads those assignments changes this test with its documentation.
+func TestCheckRefusals_ACodeReassignedInOrAfterTheCase_IsNotSeen(t *testing.T) {
+	rpc := func(at, via string, code int) tenancy.Refusal {
+		return tenancy.Refusal{
+			Methods: []string{"resources/read"}, Channel: tenancy.RPC, Code: code,
+			At: site(at, tenancy.Refuse), Via: site(via, tenancy.Refuse),
+		}
+	}
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{
+		rpc("errSecond", "wireSecond", -32000), rpc("errSecond", "wireSecond", -32602),
+		rpc("errIf", "wireIf", -32000), rpc("errIf", "wireIf", -32602),
+		rpc("errPlain", "wirePlain", -32000), rpc("errPlain", "wirePlain", -32602),
+	}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource, "site/outside.go": outsideSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G8",
+		"ROW-001 refusal 4 (resources/read rpc): "+siteDir+":wireIf builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
+		"ROW-001 refusal 6 (resources/read rpc): "+siteDir+":wirePlain builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
 	)
 }
 

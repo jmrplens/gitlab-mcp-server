@@ -86,7 +86,7 @@ var requiredProvenance = []struct {
 	},
 }
 
-// rules are the refusals of section 4.7 of the rebuild plan, in the order a
+// rules are the refusals a fold applies to a row, in the order a
 // reader meets them: what the run was, what the session saw, who answered, what
 // the row says about itself, what it was scored against, and what the record
 // already holds.

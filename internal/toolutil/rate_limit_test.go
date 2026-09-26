@@ -1607,10 +1607,10 @@ func meteredSession(tb testing.TB, limiter *RateLimiter) *mcp.ClientSession {
 //
 // The middleware runs in front of every request a client sends, so an
 // allocation added to it is paid by every request of every tenant. The pins are
-// the counts measured on this tree, and they are the baseline the layer that
-// moves the method switch into the register (RTC-001 to RTC-004) is held to:
-// asking the register which bucket a method belongs to must not allocate where
-// the switch did not.
+// the counts measured before the register decided which bucket a method is
+// charged to, and they hold the middleware to them now that it asks
+// tenancy.MeterFor (RTC-001 to RTC-004): asking the register must not allocate
+// where the switch it replaced did not.
 //
 // The middleware is measured on its own, called directly with a handler behind
 // it that answers at once (see [rateLimitMiddlewareUnderTest]), so the count is
@@ -1651,8 +1651,8 @@ func TestAttachRateLimitFunc_AllocationsPerMethod(t *testing.T) {
 // middleware called on its own, where a change to how it charges a method
 // shows, and a whole round trip over an in-memory session, the way the tests
 // above drive it, where that change is weighed against what a request costs
-// anyway. It is the baseline benchstat compares the layer that moves the method
-// switch into the register against.
+// anyway. It is what benchstat compared before and after the method switch
+// became tenancy.MeterFor, and what it compares any later change to it.
 func BenchmarkAttachRateLimitFunc(b *testing.B) {
 	limiter := neverDryLimiter()
 	handler, _ := rateLimitMiddlewareUnderTest(b, limiter)

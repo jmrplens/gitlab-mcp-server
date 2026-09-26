@@ -1,10 +1,10 @@
 package tenancy
 
-// authorizeDecisions are the rows that answer "what may it do?" (spec 4.4):
-// the surface a credential's scopes, the instance's tier and the operator's
-// configuration leave, the local files a stdio process may reach, the
-// destinations a client may dial, the response profile and cache hints a
-// session is given, and which subscriptions may be made at all.
+// authorizeDecisions are the rows that answer "what may it do?" (spec:
+// The five questions): the surface a credential's scopes, the instance's tier
+// and the operator's configuration leave, the local files a stdio process may
+// reach, the destinations a client may dial, the response profile and cache
+// hints a session is given, and which subscriptions may be made at all.
 //
 // Authority is the credential's own, which is why most of these are class C:
 // two credentials of one tenant may carry different scopes and so be served
@@ -90,6 +90,12 @@ func authorizeDecisions() []Decision {
 			},
 		},
 		{
+			// AUTOPILOT sets it too, as the alias IsYOLOMode consults only when
+			// GITLAB_MCP_YOLO_MODE is unset. It is left out of Envs on purpose:
+			// it is a convention other agent tooling sets, one of the three
+			// groups deliberately kept bare, and Envs holds the variables this
+			// project defines, which carry the prefix and are read through
+			// internal/config (INV-017, G14).
 			ID: "AUT-005", Question: Authorize, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "whether a destructive action asks for confirmation",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -123,8 +129,8 @@ func authorizeDecisions() []Decision {
 		},
 		{
 			ID: "POL-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
-			// The scope half is class C, the tier half class E (spec 3.2.11);
-			// the row carries the stricter of the two.
+			// The scope half is class C, the tier half class E (spec:
+			// Alignment classes); the row carries the stricter of the two.
 			Resource: "tier and scopes, detected per entry with its own credential",
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Sites: []Site{enforce(pkgPool, "ServerPool.entryConfig")},

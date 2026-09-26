@@ -115,12 +115,16 @@ func TestPackage_LinksNothingTheServerDoesNot(t *testing.T) {
 // TestPackage_DeclaresNoPackageLevelVariable holds the leaf to constants,
 // types and functions: a package-level variable is initialization work that a
 // binary importing the leaf would carry, and a table held in one is kept alive
-// whether anything reads it or not.
+// whether anything reads it or not. An init function is initialization work
+// too, and the linker keeps every one.
 func TestPackage_DeclaresNoPackageLevelVariable(t *testing.T) {
 	for name, f := range productionFiles(t) {
 		for _, decl := range f.Decls {
 			if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.VAR {
 				t.Errorf("%s declares a package-level variable", name)
+			}
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.Name == "init" {
+				t.Errorf("%s declares an init function", name)
 			}
 		}
 	}

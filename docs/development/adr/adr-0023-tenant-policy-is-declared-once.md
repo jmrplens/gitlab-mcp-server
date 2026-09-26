@@ -16,13 +16,13 @@ token and rejected four designs on it;
 [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561) found it again about
 the pool. It had never been written down anywhere a seventh layer would find it.
 
-The specification (`docs/development/tenant-policy-spec.md`, and the dated record it was
-built from, `plan/issue-565/spec.md`) answered the question the issue put first. A tenant
-is the GitLab principal a request runs as, identified by the pair (canonical instance URL,
-GitLab user id), because GitLab authorizes, attributes and throttles per user. That pair
-is mintable too: on a self-managed instance any user with a personal project can create
-project bots, each a user of its own, with no administrator and no count cap. So the
-tenant is the unit of identity, attribution and authority, and never of a share.
+The specification (`docs/development/tenant-policy-spec.md`) answered the question the
+issue put first. A tenant is the GitLab principal a request runs as, identified by the
+pair (canonical instance URL, GitLab user id), because GitLab authorizes, attributes and
+throttles per user. That pair is mintable too: on a self-managed instance any user with a
+personal project can create project bots, each a user of its own, with no administrator
+and no count cap. So the tenant is the unit of identity, attribution and authority, and
+never of a share.
 
 Measured at `cb6379f53`, seventy caller-keyed decisions and ten per-request bounds answer
 who a caller is and what it may hold, spread over `cmd/server`, `internal/serverpool`,
@@ -30,7 +30,7 @@ who a caller is and what it may hold, spread over `cmd/server`, `internal/server
 `internal/gitlab`, `internal/elicitation`, `internal/cachehints`,
 `internal/clientcompat` and `internal/tools`. The six families the issue names alone are
 named on 147 non-test lines in 15 files. Four of the decisions are keyed finer than the
-tenant while their own reason is per user or per process, and thirty-four findings record
+tenant while their own reason is per user or per process, and thirty-five findings record
 where today's answers disagree with the definition, with each other or with the protocol.
 
 The issue asked for a module that decides and does not enforce, where the next limit is
@@ -73,14 +73,29 @@ the code; the layers keep enforcing.**
   a channel its method cannot carry, a second in-band code for one class of next action,
   a zero that does not mean off, a reason whose unit differs from its key, a structure
   keyed on a mintable value with no capacity, a configurable value that bypasses the
-  configuration package, and a charged failure the caller did not cause. A row that breaks
-  an invariant today passes only through a finding recorded for that invariant.
+  configuration package, and a charged failure the caller did not cause. They refuse in
+  three ways, which the specification lists rule by rule. With no exception: a share on a
+  mintable key (`INV-003`); a charge to what is not a budget before admission, and a
+  charged failure the caller did not cause (`INV-007`, the second through
+  `ValidateFailures`); a refusal on a channel its method cannot carry, or with a status, a
+  code, a `Retry-After` or a challenge the channel forbids (`INV-011`); a process partner
+  that is configurable or not keyed on the process, and a reason about the process on a
+  row that does not say it protects one (`INV-004`); a valued row that does not say what
+  zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
+  configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
+  recorded decision: a holding taken across keys (`INV-005`). Only through a finding
+  recorded for the invariant: a per-caller number protecting a process resource with no
+  partner, a structure keyed on a mintable value with no capacity, a code in the legacy
+  `-32000` range, a second in-band code for one class of next action, a zero that does not
+  mean off, a reason whose unit differs from its key or misstates its own, a value only an
+  environment variable or a Go option reaches, and a ceiling nothing bounds.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its
 row says; each refusal's text, status, code and headers are still where the row says; each
-charge sits on the refusal the failure table says it does; and nothing limit-shaped exists
-outside a declared site. It runs in `make analyze` and in CI.
+charge sits on the refusal the failure table says it does; and nothing limit-shaped in a
+shape it reads exists outside a declared site or a reasoned exemption. It runs in
+`make analyze` and in CI.
 
 **Enforcement stays in the layers.** A stream ceiling is applied where streams are
 counted, a token bucket where the method is dispatched. A value moves into the register as
@@ -101,10 +116,22 @@ twice), and the gate holds the pinned literal equal to the register's.
   caller can mint, the tenant included, fails `Validate` with that key's evidence in the
   message.
 - **POS-002**: A deliberate change of value is two lines in one package: the constant, and
-  its frozen pin in `TestValues_AtCB6379F53`. A change of value that rides in on a refactor
+  its pin in `TestValues_HoldTheirPins`. A change of value that rides in on a refactor
   fails that test.
-- **POS-003**: A new limit is refused by the gate until the row that declares it exists,
-  so the specification's validation checklist is answered in one place, the row.
+- **POS-003**: A new limit the gate can read is refused until the row that declares it
+  exists: one built with a listed constructor or options type outside every declared
+  Enforce site, or from a literal or a package value no row declares; one whose refusal
+  is a literal with a policy code or a 429 or 503, or such a status written with
+  `http.Error` or `WriteHeader`, in a function that declares no refusal of that code or
+  status; or one named with a limit word at package level in a package that holds an
+  Alias, Arg, Pin or Enforce site of a row that is not a request bound. A limit built with
+  none of the listed constructors, such as a counter guarded by a mutex, is not among them
+  when it refuses by calling a function that already builds a declared refusal, or through
+  a literal in a function that already declares one of that code or status, unless it is
+  such a package-level name in such a package: the gate's documentation states that
+  escape, and review is what sees it. The row then answers the specification's
+  validation checklist, all of it but VAL-010 and VAL-012, which stay in the pull request
+  because a declaration cannot hold them.
 - **POS-004**: Moving a value into the register changes no code. The binary a value layer
   builds is byte-identical to the one its parent builds once the parent imports the
   register where the layer does, which the gate's code-identity mode checks for any change
@@ -133,9 +160,11 @@ twice), and the gate holds the pinned literal equal to the register's.
   about 0.9 ns more for a method no bucket meters; `Busy` does not inline, since it reads
   two interface methods, about 1 to 1.3 ns more for each pool entry an eviction scan
   passes; the budget switches inline, and the two startup functions that call them are
-  laid out differently. None of them allocates or takes a lock, which is what the
-  promotion rule protects, and each is proved by its oracle and fuzz target rather than by
-  the binary.
+  laid out differently. None of them allocates, and each leaves its site's lock profile as
+  it was, which is what the promotion rule protects: `Busy` reads the watcher count
+  through an interface that takes the subscription manager's lock, exactly when the code
+  it replaced did, only when no stream is open. Each is proved by its oracle and fuzz
+  target rather than by the binary.
 
 ### Neutral
 
@@ -171,10 +200,11 @@ obstacle: a resolver would be built from `Decisions()` and `Key.MintCost()`.
   requirements, one row each.
 - `TestDecisions_ValidateIsNil` and `TestFailures_ValidateFailuresIsNil` hold the rows to
   the invariants.
-- `TestValues_AtCB6379F53` freezes every policy value and its type.
+- `TestValues_HoldTheirPins` pins every policy value and its type.
 - `TestPackage_ImportsTheStandardLibraryOnly`, `TestPackage_DependsOnTheStandardLibraryOnly`,
   `TestPackage_LinksNothingTheServerDoesNot` and `TestPackage_DeclaresNoPackageLevelVariable`
-  hold the leaf to the conditions an unchanged binary rests on.
+  (which refuses an init function too) hold the leaf to the conditions an unchanged binary
+  rests on.
 - `make tenancy-code-identity` proves that a change which claims to move policy without
   changing it changed no code: against its parent (`BASE=<ref>`) when it inserts no line
   and gives the register no new importer, and otherwise against its parent with the same
@@ -188,8 +218,7 @@ obstacle: a resolver would be built from `Decisions()` and `Key.MintCost()`.
 - ADR-0015 (polled resource subscriptions), ADR-0018 (admission at the minimum scope),
   ADR-0019 (audience binding), ADR-0020 (one server per configuration shape) and ADR-0022
   (operator-named destinations).
-- The specification, `docs/development/tenant-policy-spec.md`, and its dated record,
-  `plan/issue-565/spec.md`.
+- The specification, `docs/development/tenant-policy-spec.md`.
 - Issues [540](https://github.com/jmrplens/gitlab-mcp-server/issues/540),
   [561](https://github.com/jmrplens/gitlab-mcp-server/issues/561) and
   [565](https://github.com/jmrplens/gitlab-mcp-server/issues/565).

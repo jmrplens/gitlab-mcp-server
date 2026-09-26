@@ -139,7 +139,7 @@ func TestAccess_OnlyTheSanctionedPackagesReadTheKey(t *testing.T) {
 				continue
 			}
 			t.Errorf("%s reads the answer key through %s at %s: only %s may, and adding one is a "+
-				"decision to be made in the plan rather than in an import",
+				"design decision to be made in review rather than in an import",
 				packagePath(pkg), read.accessor, read.position, sanctionedList(read.accessor))
 		}
 	}

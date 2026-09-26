@@ -38,15 +38,18 @@ type setRule struct {
 	check     func(ds []Decision) []*ViolationError
 }
 
-// Validate checks the rows against the invariants of spec section 3.3 and
+// Validate checks the rows against the invariants (spec: Invariants) and
 // returns every violation joined, or nil.
 //
 // It is what answers, before review, the questions issues 540 and 561 each
 // answered by hand: a share on a key a caller can mint is refused with the
 // key's evidence in the message, a per-caller ceiling on a process resource
 // with no process partner is refused, and so is a refusal on a channel the
-// method cannot carry. A row that breaks an invariant today passes only
-// through a finding recorded for that invariant (see [Finding.Invariants]).
+// method cannot carry. A rule that can be excused passes a row breaking its
+// invariant only through a finding recorded for it (see
+// [Finding.Invariants]); some rules cannot be excused at all, and
+// checkAcrossKeys is excused by a recorded decision instead. The
+// specification's section on invariants says which is which.
 func Validate(ds []Decision) error {
 	rows := make(map[string]Decision, len(ds))
 	for _, d := range ds {
@@ -96,13 +99,13 @@ func rowRules() []rowRule {
 		{"zero-stated", "INV-015", checkZeroStated},
 		{"units-agree", invUnitsAgree, checkUnitsAgree},
 		{"stated-unit", invUnitsAgree, checkStatedUnit},
-		{"class-consistent", "spec 2.3", checkClassConsistent},
+		{"class-consistent", "VAL-003", checkClassConsistent},
 		{"through-config", "INV-017", checkThroughConfig},
 		{"capacity-stated", "VAL-006", checkCapacityStated},
 		{"bounded-table", "INV-010", checkBoundedTable},
 		{"charged-exists", invNotJudgedNotCharged, checkChargedExists},
 		{"stdio", "VAL-011", checkStdio},
-		{"well-formed", "spec 3.2", checkWellFormed},
+		{"well-formed", "VAL-001 to VAL-009", checkWellFormed},
 	}
 }
 
@@ -110,8 +113,8 @@ func rowRules() []rowRule {
 func setRules() []setRule {
 	return []setRule{
 		{"one-code-per-answer", "INV-012", checkOneCodePerAnswer},
-		{"unique", "spec 3.2", checkUnique},
-		{"complete", "AC-002", checkComplete},
+		{"unique", "one row per requirement", checkUnique},
+		{"complete", "one row per requirement", checkComplete},
 	}
 }
 
@@ -344,7 +347,7 @@ func checkChargedExists(d Decision, rows map[string]Decision) []string {
 }
 
 // checkStdio holds the stdio key to one no caller can multiply: on stdio every
-// per-caller key collapses onto the process (TEN-005).
+// per-caller key collapses onto the process (spec: Per mode).
 func checkStdio(d Decision, _ map[string]Decision) []string {
 	if axis := d.StdioKey.Axis(); axis != AxisRequester && axis != AxisPreAdmission {
 		return nil
