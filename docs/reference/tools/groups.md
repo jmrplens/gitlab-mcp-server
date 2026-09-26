@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Groups
-> **Individual tools**: 104
+> **Individual tools**: 105
 > **Meta-tool**: `gitlab_group` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog) — one tool for the whole domain, including members, labels, milestones, boards, push rules, protected branches and environments, releases, service accounts, wikis, relations export and markdown uploads
 > **Dynamic IDs**: `group.*`, `issue.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
@@ -16,7 +16,7 @@ The groups domain covers the full lifecycle of GitLab groups: creation, retrieva
 
 On the default dynamic surface, these operations are the `group.*`, `issue.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the 104 individual tools below collapse into the single `gitlab_group` meta-tool, which dispatches by `action` parameter. Labels, milestones, boards, members, wikis and the rest have no meta-tool of their own — each is a set of actions on `gitlab_group`, such as `group_label_list`, `group_milestone_create`, `group_board_get` and `group_member_add`. Group SCIM is the one exception — it ships as its own `gitlab_group_scim` meta-tool and is documented in [identity-security.md](identity-security.md).
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the 105 individual tools below collapse into the single `gitlab_group` meta-tool, which dispatches by `action` parameter. Labels, milestones, boards, members, wikis and the rest have no meta-tool of their own: each is a set of actions on `gitlab_group`, such as `group_label_list`, `group_milestone_create`, `group_board_get` and `group_member_add`. Group SCIM is the one exception, since it ships as its own `gitlab_group_scim` meta-tool and is documented in [identity-security.md](identity-security.md).
 
 ### Common Questions
 

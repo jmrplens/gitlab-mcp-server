@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Projects
-> **Individual tools**: 91
+> **Individual tools**: 92
 > **Meta-tool**: `gitlab_project` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Projects API](https://docs.gitlab.com/ee/api/projects.html)
