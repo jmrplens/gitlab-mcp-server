@@ -10,7 +10,9 @@
 // drifts from the code the day the code moves, and the register's own
 // validator cannot see the code at all, since the register imports nothing.
 // This command is what binds the two: each row's sites still exist and do
-// what the row says, and nothing limit-shaped exists outside a row.
+// what the row says, and nothing shaped like a limit, in a shape the tripwire
+// reads, exists outside a row or a reasoned exemption (What it cannot see,
+// below, lists the shapes it does not read).
 //
 // # The rules
 //
@@ -38,9 +40,14 @@
 //     initializer, directly or through a chain of aliases, so an alias whose
 //     every reader has gone back to a literal fails; every exported function
 //     of its rule files is named by a row. A reader that goes back to a
-//     literal while another still reads the alias passes G6, and fails only
-//     where it is declared: as an Arg under G3, or as an Enforce site that
-//     names what it reads under G5.
+//     literal while another still reads the alias passes G6. Another rule
+//     fails it only where it writes the literal straight into a listed limit
+//     constructor's arguments or a listed options literal (G10, declared site
+//     or not), is itself a declared Alias (G2), changed a call a declared Arg
+//     names at the index it names (G3), or is an Enforce site declared to read
+//     that constant (G5, which none is today). Anywhere else it passes, as
+//     config.Load going back to a literal burst does, although Load is a
+//     declared Arg for the rate.
 //   - G7 charges. Every refusal the authentication failure table's functions
 //     return is matched to one row by its status and text, and is charged
 //     exactly when a call of the charge helper precedes it in its own block or
@@ -51,8 +58,9 @@
 //   - G8 refusal. Every refusal's stable text begins a string its code folds
 //     (a format read up to its first verb), and the literal that carries it
 //     has the row's status, code, Retry-After source and challenge; a JSON-RPC
-//     refusal carries the row's code, read from the first case that names its
-//     sentinel where its holder switches on one, and a tool-error refusal's
+//     refusal carries the row's code, read, where its holder switches on its
+//     sentinel, from the first case naming the sentinel in the last switch
+//     whose such case assigns the code, and a tool-error refusal's
 //     result is flagged as an error. Every gate literal of a function that
 //     holds a declared gate refusal is carried exactly by one of them, so a
 //     sibling of the same status cannot stand in for a literal that drifted.
@@ -95,8 +103,11 @@
 // values moved into the register is gone, so from the day a row is written an
 // alias that is not a reference to its constant, an Arg call that does not
 // pass it and an alias nothing but alias initializers read are findings. A
-// layer that reads the row's value as a literal somewhere else is a finding
-// only where that place is a declared site.
+// layer that reads the row's value as a literal somewhere else, while its
+// alias is still read, is a finding only where a rule reads that place: a
+// literal written straight into a listed limit constructor or options literal
+// (G10), a declared Alias (G2), the call a declared Arg names for that
+// constant (G3), or an Enforce site declared to read it (G5).
 //
 // # What it reads, and what it cannot see
 //
@@ -121,11 +132,18 @@
 // never reads (revalidateAll's ten seconds a probe is one, stated in ADM-009
 // and bound by no row value). A layer that stops reading a register value in
 // one place while another place still reads its alias passes G6, and fails
-// only where the place that stopped is declared as an Arg or as an Enforce
-// site naming what it reads, which no Enforce site does today. G8 reads a code
-// held in a variable from the first case naming the refusal's sentinel, so a
-// case whose condition adds more than the sentinel is still taken as the one
-// that matches it. G14 cannot trace a variable read through a name that does
+// only where G10, G2, G3 or G5 reads that place, as the G6 rule above lists;
+// config.Load going back to a literal burst while the --rate-limit-burst
+// default and the HTTP overlay still read config.DefaultRateLimitBurst passes,
+// although Load is a declared Arg for the rate. G8 reads a code held in a
+// variable by names and source order, with no control flow: it takes the
+// first case naming the refusal's sentinel in each switch, so a case whose
+// condition adds more than the sentinel is still taken as the one that
+// matches it, and an earlier case that matches the sentinel's error without
+// naming it (by its text or its type) is not seen; and it takes the last
+// switch whose such case assigns the code, so a return, a branch or a loop
+// that keeps a later switch from running for the sentinel is not seen
+// either. G14 cannot trace a variable read through a name that does
 // not fold. G7 binds a charge to a return by position, so a charge moved into
 // a helper the table does not name fails rather than passing, and the finding
 // names the position rather than the policy. A rule

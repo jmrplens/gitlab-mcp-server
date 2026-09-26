@@ -21,9 +21,12 @@ import (
 // it did, and so is an alias every reader stopped reading: its own initializer
 // still reads the register, so nothing else would notice that changing the
 // value no longer changes the server. One reader going back to a literal while
-// another still reads the alias is not this rule's to see; G3 and G5 fail it
-// where that reader is declared as an Arg, or as an Enforce site naming what
-// it reads.
+// another still reads the alias is not this rule's to see. Another rule fails
+// it only where it writes the literal straight into a listed limit
+// constructor's arguments or options literal (G10), is itself a declared
+// Alias (G2), changed a call a declared Arg names at the index it names (G3),
+// or is an Enforce site declared to read that constant (G5); anywhere else it
+// passes.
 func (g *gate) checkOrphans() []Finding {
 	leaf := g.p.byDir[g.reg.leaf]
 	if leaf == nil {

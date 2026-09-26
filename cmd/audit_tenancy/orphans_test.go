@@ -138,12 +138,14 @@ func Flag() int { return limit }
 func Load() int { return 64 }
 `
 
-// TestCheckOrphans_AReaderGoneBackToALiteral_FailsOnlyWhereItIsDeclared: G6
-// asks whether anything but an alias initializer still reads an alias, so a
-// reader that goes back to a literal passes it while another reader keeps the
-// alias read. What catches that reader is a declaration of what it reads: as
-// an Enforce site naming the constant, G5 fails it.
-func TestCheckOrphans_AReaderGoneBackToALiteral_FailsOnlyWhereItIsDeclared(t *testing.T) {
+// TestCheckOrphans_AReaderGoneBackToALiteral_PassesG6AndFailsG5OnceDeclared:
+// G6 asks whether anything but an alias initializer still reads an alias, so
+// a reader that goes back to a literal passes it while another reader keeps
+// the alias read. Declared as an Enforce site naming the constant, the reader
+// fails G5; the other places a rule reads such a reader (a literal written
+// into a listed constructor, a declared Alias, a declared Arg's call) are
+// G10's, G2's and G3's fixtures.
+func TestCheckOrphans_AReaderGoneBackToALiteral_PassesG6AndFailsG5OnceDeclared(t *testing.T) {
 	undeclared := fixture{
 		files: map[string]string{"site/site.go": twoReadersSource},
 		rows:  []tenancy.Decision{row("ROW-001", aliasSite("limit", "Limit"))},

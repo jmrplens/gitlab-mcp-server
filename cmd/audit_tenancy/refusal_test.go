@@ -474,6 +474,61 @@ func TestCheckRefusals_ASentinelNamedInTwoCases_IsJudgedByTheFirst(t *testing.T)
 	)
 }
 
+// againSource names one sentinel in two switches in turn, the second
+// assigning another code over the first's, and a second sentinel in both,
+// whose case in the second switch assigns the code nothing.
+const againSource = `package site
+
+import (
+	"errors"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+var (
+	errAgain = errors.New("again")
+	errKept  = errors.New("kept")
+)
+
+func wireAgain(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errAgain), errors.Is(err, errKept):
+		code = codeBusy
+	}
+	switch {
+	case errors.Is(err, errAgain):
+		code = jsonrpc.CodeInvalidParams
+	case errors.Is(err, errKept):
+		err = errors.Join(errKept, err)
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+`
+
+// TestCheckRefusals_ASentinelNamedInTwoSwitches_IsJudgedByTheLast: a later
+// switch whose case naming the sentinel assigns the code overwrites what an
+// earlier switch assigned, so the earlier code no longer carries a row that
+// declares it, and the later one does; a later case that names the sentinel
+// and assigns the code nothing leaves the earlier assignment standing.
+func TestCheckRefusals_ASentinelNamedInTwoSwitches_IsJudgedByTheLast(t *testing.T) {
+	rpc := func(at string, code int) tenancy.Refusal {
+		return tenancy.Refusal{
+			Methods: []string{"resources/read"}, Channel: tenancy.RPC, Code: code,
+			At: site(at, tenancy.Refuse), Via: site("wireAgain", tenancy.Refuse),
+		}
+	}
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{rpc("errAgain", -32000), rpc("errAgain", -32602), rpc("errKept", -32000)}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource, "site/again.go": againSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G8",
+		"ROW-001 refusal 1 (resources/read rpc): "+siteDir+":wireAgain builds no JSON-RPC error carrying code -32000 (it carries [-32602])",
+	)
+}
+
 // TestCheckRefusals_ToolErrorRefusals: a result flagged as an error, directly
 // or through the function it returns, passes, and so does a holder that
 // returns no tool result; one that returns a result it does not flag, flags

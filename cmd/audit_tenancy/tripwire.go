@@ -19,7 +19,8 @@ const (
 	partNames        = "names"
 )
 
-// checkTripwire is G10: nothing limit-shaped exists outside a declared site.
+// checkTripwire is G10: nothing shaped like a limit, in the three shapes
+// below, exists outside a declared site.
 //
 //   - (a) A call of a limit constructor, or a literal of a limit's options
 //     type, sits inside a declared Enforce site, and none of its arguments or
