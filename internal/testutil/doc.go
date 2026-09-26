@@ -20,7 +20,9 @@
 //   - Embedded resources: [AssertEmbeddedResource] toggles the embedded
 //     resource global flag and checks MCP call results.
 //   - GraphQL helpers: [GraphQLHandler] and [ParseGraphQLVariables] simplify
-//     mocking [POST /api/graphql] requests.
+//     mocking [POST /api/graphql] requests, and [GitLabQueryComplexity]
+//     estimates what GitLab charges for a document, which a test holds to a
+//     figure GitLab measured and under [GitLabAuthenticatedMaxComplexity].
 //
 // # Typical usage
 //
