@@ -176,8 +176,12 @@ func BenchmarkCreateIssue(b *testing.B) {}
 		{File: file, CurrentName: "TestMain_Flags_Parse", Pattern: Pattern3Part, SuggestedName: "TestMain_Flags_Parse"},
 	}
 	var stderr bytes.Buffer
-	if got := scanDir(root, &stderr); !reflect.DeepEqual(got, want) {
+	got, complete := scanDir(root, &stderr)
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("scanDir() = %+v\nwant %+v", got, want)
+	}
+	if !complete {
+		t.Error("scanDir() complete = false, want true for a walk that read every file")
 	}
 	if stderr.Len() != 0 {
 		t.Errorf("stderr = %q, want nothing from a walk that read every file", stderr.String())
@@ -185,14 +189,16 @@ func BenchmarkCreateIssue(b *testing.B) {}
 }
 
 // TestScanDir_InvalidPathsReturnNoEntries verifies scanner failures return no
-// rows and are reported, each on one line naming the tree or the file, on the
-// writer the scanner was handed.
+// rows, say they read less than they were pointed at, and are reported, each
+// on one line naming the tree or the file, on the writer the scanner was
+// handed.
 func TestScanDir_InvalidPathsReturnNoEntries(t *testing.T) {
 	root := t.TempDir()
 	missingDir := filepath.Join(root, "missing")
 	var stderr bytes.Buffer
-	if entries := scanDir(missingDir, &stderr); entries != nil {
-		t.Fatalf("scanDir(missing) = %+v, want nil", entries)
+	entries, complete := scanDir(missingDir, &stderr)
+	if entries != nil || complete {
+		t.Fatalf("scanDir(missing) = %+v, complete %v; want nil and false", entries, complete)
 	}
 	if got, prefix := stderr.String(), "walk "+missingDir+": "; !strings.HasPrefix(got, prefix) || strings.Count(got, "\n") != 1 {
 		t.Errorf("scanDir stderr = %q, want one line starting %q", got, prefix)
@@ -200,11 +206,40 @@ func TestScanDir_InvalidPathsReturnNoEntries(t *testing.T) {
 
 	missingFile := filepath.Join(root, "missing_test.go")
 	stderr.Reset()
-	if entries := scanFile(missingFile, &stderr); entries != nil {
-		t.Fatalf("scanFile(missing) = %+v, want nil", entries)
+	fileEntries, parsed := scanFile(missingFile, &stderr)
+	if fileEntries != nil || parsed {
+		t.Fatalf("scanFile(missing) = %+v, parsed %v; want nil and false", fileEntries, parsed)
 	}
 	if got, prefix := stderr.String(), "parse "+missingFile+": "; !strings.HasPrefix(got, prefix) || strings.Count(got, "\n") != 1 {
 		t.Errorf("scanFile stderr = %q, want one line starting %q", got, prefix)
+	}
+}
+
+// TestScanDir_FileThatDoesNotParse_KeepsTheRestAndSaysSo verifies a walk that
+// reached every file but met one it could not parse keeps the rows of the file
+// beside it and still reports that it read less than it was pointed at.
+//
+// The walk itself succeeds here, so this is the one case where incompleteness
+// can only come from the file, which is what tells the parse result apart from
+// the walk's in scanDir's answer.
+func TestScanDir_FileThatDoesNotParse_KeepsTheRestAndSaysSo(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureDir(t, root, nil, []fileSpec{
+		{"a_broken_test.go", "package sample\n\nfunc (\n"},
+		{"b_good_test.go", "package sample\n\nimport \"testing\"\n\nfunc TestOne_Two(t *testing.T) {}\n"},
+	})
+
+	var stderr bytes.Buffer
+	entries, complete := scanDir(root, &stderr)
+	want := []testEntry{{File: filepath.ToSlash(filepath.Join(root, "b_good_test.go")), CurrentName: "TestOne_Two", Pattern: Pattern2Part, SuggestedName: "TestOne_Two"}}
+	if !reflect.DeepEqual(entries, want) {
+		t.Errorf("scanDir() = %+v\nwant %+v", entries, want)
+	}
+	if complete {
+		t.Error("scanDir() complete = true, want false with a file that does not parse")
+	}
+	if prefix := "parse " + filepath.Join(root, "a_broken_test.go") + ": "; !strings.HasPrefix(stderr.String(), prefix) {
+		t.Errorf("stderr = %q, want a line starting %q", stderr.String(), prefix)
 	}
 }
 
@@ -300,7 +335,8 @@ const summaryHeading = "\n=== Test Naming Audit Summary ===\n"
 // report mode does with input it cannot read: a root that is not there and a
 // file that does not parse each cost one line on the stderr run was handed,
 // naming the tree or the file, and neither stops the rest of the report. The
-// file that parses beside the broken one is still in the CSV and the counts.
+// file that parses beside the broken one is still in the CSV and the counts,
+// and once all of it is printed run says the report is incomplete.
 func TestRun_UnreadableTreeAndFile_ReportedBeforeTheSummary(t *testing.T) {
 	root := t.TempDir()
 	missing := filepath.Join(root, "absent")
@@ -312,8 +348,8 @@ func TestRun_UnreadableTreeAndFile_ReportedBeforeTheSummary(t *testing.T) {
 	})
 
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{missing, root}, &stdout, &stderr); err != nil {
-		t.Fatalf("run() error = %v", err)
+	if err := run([]string{missing, root}, &stdout, &stderr); !errors.Is(err, errIncompleteReport) {
+		t.Fatalf("run() error = %v, want %v", err, errIncompleteReport)
 	}
 
 	wantRecords := [][]string{
@@ -413,6 +449,24 @@ func TestRunMain_Flags_SelectTheModeAndTheExitCode(t *testing.T) {
 			failStdout: true,
 			wantCode:   1,
 			wantStderr: []string{"flush csv: boom"},
+		},
+		{
+			name:       "a report over a root that is not there",
+			files:      []fileSpec{{"sample_test.go", legacyNamesFixture}},
+			args:       func(root string) []string { return []string{filepath.Join(root, "absent"), root} },
+			wantCode:   1,
+			wantStdout: []string{"current_name", "TestCovBuildCatalogError"},
+			wantStderr: []string{"walk ", "Test Naming Audit Summary", errIncompleteReport.Error()},
+			wantFile:   legacyNamesFixture,
+		},
+		{
+			name:       "a report over a file that does not parse",
+			files:      []fileSpec{{"broken_test.go", "package sample\n\nfunc (\n"}, {"sample_test.go", legacyNamesFixture}},
+			args:       func(root string) []string { return []string{root} },
+			wantCode:   1,
+			wantStdout: []string{"current_name", "TestCovBuildCatalogError"},
+			wantStderr: []string{"parse ", "Test Naming Audit Summary", errIncompleteReport.Error()},
+			wantFile:   legacyNamesFixture,
 		},
 		{
 			name:       "check-files on a clean tree",
