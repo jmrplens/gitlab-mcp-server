@@ -3612,7 +3612,7 @@ func safeTokenSuffix(token string) string {
 // Without one, [clientIP] already returns RemoteAddr and a second limiter over
 // the same string would just halve the budget.
 func transportFailureBudget(cfg *config.Config) *transportBudget {
-	if strings.TrimSpace(cfg.TrustedProxyHeader) == "" {
+	if !tenancy.TransportSourceBudgetOn(cfg.TrustedProxyHeader) { // register row AUB-002
 		return nil
 	}
 	window := cfg.AuthFailureWindow

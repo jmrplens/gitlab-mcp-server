@@ -9,6 +9,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // authBlockCounters counts the requests each authentication budget refused,
@@ -103,7 +104,7 @@ func validateAuthBudgetBounds(cfg *config.Config) error {
 // site already tolerates a nil limiter, so refusing to build one is both the
 // smallest change and the only one that cannot be read two ways.
 func authFailureLimiter(cfg *config.Config) *serverpool.AuthRateLimiter {
-	if cfg.AuthFailureLimit <= 0 || cfg.AuthFailureWindow <= 0 {
+	if !tenancy.BudgetOn(cfg.AuthFailureLimit, cfg.AuthFailureWindow) { // register row AUB-001
 		return nil
 	}
 	return serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
