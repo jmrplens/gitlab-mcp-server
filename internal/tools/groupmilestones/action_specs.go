@@ -165,13 +165,13 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 		usage:       "List issues assigned to a group milestone, with ordering and pagination. Use to inspect the issue scope of a group milestone.",
 		aliases:     []string{"group milestone issues", "issues in group milestone", "list group milestone issues"},
 		related:     []string{actionGet, actionMergeRequests, "issue.list_group"},
-		description: "List issues assigned to a group milestone. Returns: assigned issues with state, web URL, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.",
+		description: "List issues assigned to a group milestone. Returns: assigned issues with IID, project, title, state, labels, author, assignees, confidentiality, weight, due date, web URL, timestamps, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.",
 	},
 	"gitlab_group_milestone_merge_requests": {
 		usage:       "List merge requests assigned to a group milestone, with ordering and pagination. Use to inspect the MR scope of a group milestone.",
 		aliases:     []string{"group milestone merge requests", "merge requests in group milestone", "list group milestone MRs"},
 		related:     []string{actionGet, actionIssues, actionBurndown},
-		description: "List merge requests assigned to a group milestone. Returns: assigned merge requests with state, source and target branches, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.",
+		description: "List merge requests assigned to a group milestone. Returns: assigned merge requests with IID, project, title, state, draft flag, merge status, source and target branches, labels, author, assignees, reviewers, web URL, timestamps, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.",
 	},
 	"gitlab_group_milestone_burndown_events": {
 		usage:       "List burndown chart events for a group milestone, with ordering and pagination. Requires GitLab Premium or higher.",

@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -769,6 +771,118 @@ func TestMilestoneGetMergeRequests_Success(t *testing.T) {
 	}
 }
 
+// milestoneIssueRowJSON is one issue as GitLab's milestone issue list sends it
+// (IssueBasic), carrying every key the compact row keeps and several it
+// leaves to issue.get.
+const milestoneIssueRowJSON = `[{
+	"id":10,"iid":1,"project_id":42,"title":"Bug fix","state":"closed",
+	"description":"left to issue.get","labels":["bug","backend"],
+	"author":{"id":3,"username":"alice","name":"Alice","state":"active","avatar_url":"https://a/3.png","web_url":"https://gitlab.example.com/alice"},
+	"assignees":[{"id":4,"username":"bob","name":"Bob","state":"active","avatar_url":"https://a/4.png","web_url":"https://gitlab.example.com/bob"}],
+	"confidential":true,"weight":3,"due_date":"2026-02-01","user_notes_count":9,
+	"web_url":"https://gitlab.example.com/-/issues/1",
+	"created_at":"2026-01-05T00:00:00Z","updated_at":"2026-01-06T00:00:00Z","closed_at":"2026-01-07T00:00:00Z"
+}]`
+
+// TestGetIssues_ARow_CarriesWhatTheCompactRowKeeps pins the whole row a
+// milestone's issue list publishes: the identifiers and the project, the
+// people and labels, confidentiality and weight, the due date as a date and
+// the three instants as RFC 3339. The keys GitLab sends beside them, the
+// description and the counters, are issue.get's and do not reach the row.
+func TestGetIssues_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathProjectMilestones {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, milestoneIssueRowJSON)
+	}))
+
+	out, err := GetIssues(context.Background(), client, GetIssuesInput{ProjectID: "42", MilestoneIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := []IssueItem{{
+		ID: 10, IID: 1, ProjectID: 42, Title: "Bug fix", State: "closed",
+		Labels:       []string{"bug", "backend"},
+		Author:       &toolutil.IssueUserOutput{ID: 3, Username: "alice", Name: "Alice", State: "active", AvatarURL: "https://a/3.png", WebURL: "https://gitlab.example.com/alice"},
+		Assignees:    []*toolutil.IssueUserOutput{{ID: 4, Username: "bob", Name: "Bob", State: "active", AvatarURL: "https://a/4.png", WebURL: "https://gitlab.example.com/bob"}},
+		Confidential: true, Weight: 3, DueDate: "2026-02-01",
+		WebURL:    "https://gitlab.example.com/-/issues/1",
+		CreatedAt: "2026-01-05T00:00:00Z", UpdatedAt: "2026-01-06T00:00:00Z", ClosedAt: "2026-01-07T00:00:00Z",
+	}}
+	if !reflect.DeepEqual(out.Issues, want) {
+		t.Errorf("Issues = %s, want %s", toJSON(t, out.Issues), toJSON(t, want))
+	}
+}
+
+// milestoneMergeRequestRowJSON is one merge request as GitLab's milestone
+// merge request list sends it (MergeRequestBasic), carrying every key the
+// compact row keeps and several it leaves to merge_request.get.
+const milestoneMergeRequestRowJSON = `[{
+	"id":20,"iid":1,"project_id":42,"title":"Add feature X","state":"merged",
+	"description":"left to merge_request.get","sha":"abc123",
+	"draft":true,"detailed_merge_status":"mergeable",
+	"source_branch":"feature-x","target_branch":"main","labels":["feature"],
+	"author":{"id":3,"username":"alice","name":"Alice","state":"active","avatar_url":"https://a/3.png","web_url":"https://gitlab.example.com/alice"},
+	"assignees":[{"id":4,"username":"bob","name":"Bob","state":"active","avatar_url":"https://a/4.png","web_url":"https://gitlab.example.com/bob"}],
+	"reviewers":[{"id":5,"username":"carol","name":"Carol","state":"active","avatar_url":"https://a/5.png","web_url":"https://gitlab.example.com/carol"}],
+	"web_url":"https://gitlab.example.com/-/merge_requests/1",
+	"created_at":"2026-02-01T00:00:00Z","updated_at":"2026-02-02T00:00:00Z","merged_at":"2026-02-03T00:00:00Z","closed_at":"2026-02-04T00:00:00Z"
+}]`
+
+// TestGetMergeRequests_ARow_CarriesWhatTheCompactRowKeeps pins the whole row
+// a milestone's merge request list publishes: the identifiers and the
+// project, whether it can merge, the branches, the people and labels, and the
+// four instants. The description and the SHAs GitLab sends beside them are
+// merge_request.get's.
+func TestGetMergeRequests_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathProjectMilestones {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, milestoneMergeRequestRowJSON)
+	}))
+
+	out, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{ProjectID: "42", MilestoneIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	user := func(id int64, name string) *toolutil.BasicUserOutput {
+		return &toolutil.BasicUserOutput{
+			ID: id, Username: strings.ToLower(name), Name: name, State: "active",
+			AvatarURL: "https://a/" + strconv.FormatInt(id, 10) + ".png", WebURL: "https://gitlab.example.com/" + strings.ToLower(name),
+		}
+	}
+	want := []MergeRequestItem{{
+		ID: 20, IID: 1, ProjectID: 42, Title: "Add feature X", State: "merged",
+		Draft: true, DetailedMergeStatus: "mergeable",
+		SourceBranch: "feature-x", TargetBranch: "main", Labels: []string{"feature"},
+		Author:    user(3, "Alice"),
+		Assignees: []*toolutil.BasicUserOutput{user(4, "Bob")},
+		Reviewers: []*toolutil.BasicUserOutput{user(5, "Carol")},
+		WebURL:    "https://gitlab.example.com/-/merge_requests/1",
+		CreatedAt: "2026-02-01T00:00:00Z", UpdatedAt: "2026-02-02T00:00:00Z", MergedAt: "2026-02-03T00:00:00Z", ClosedAt: "2026-02-04T00:00:00Z",
+	}}
+	if !reflect.DeepEqual(out.MergeRequests, want) {
+		t.Errorf("MergeRequests = %s, want %s", toJSON(t, out.MergeRequests), toJSON(t, want))
+	}
+}
+
+// toJSON renders a value for a failure message, where %+v would print the
+// addresses of the nested users rather than who they are.
+func toJSON(t *testing.T, value any) string {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", value, err)
+	}
+	return string(encoded)
+}
+
 // TestMilestoneGetMergeRequests_MissingParams verifies MilestoneGetMergeRequests when missing params.
 func TestMilestoneGetMergeRequests_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -865,6 +979,22 @@ func TestList_WithIIDs(t *testing.T) {
 	}))
 	_, err := List(context.Background(), client, ListInput{ProjectID: "42", IIDs: []int64{1, 2}})
 	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_NoIIDs_SendsNoIIDsParameter verifies that a list the caller did
+// not narrow by IID sends no iids[] key at all. The handler hands the SDK its
+// IID slice unguarded, which is correct only because the query encoder leaves
+// an empty slice out; this is what holds that reading to the wire.
+func TestList_NoIIDs_SendsNoIIDsParameter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if values, sent := r.URL.Query()["iids[]"]; sent {
+			t.Errorf("iids[] = %v, want the key absent", values)
+		}
+		testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
+	}))
+	if _, err := List(context.Background(), client, ListInput{ProjectID: "42"}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
@@ -1266,12 +1396,18 @@ func TestFormatIssuesMarkdownString_Empty(t *testing.T) {
 
 // TestFormatIssuesMarkdownString_WithIssues pins the whole issue table: the
 // counted heading, the IID linked to the issue, the state with the glyph its
-// domain gives it, and the creation instant in the display form rather than as
-// the RFC 3339 string GitLab sent.
+// domain gives it, the assignees as handles, the labels and the due date
+// escaped for a cell, and the creation instant in the display form rather than
+// as the RFC 3339 string GitLab sent. An assignee whose username is empty adds
+// no stray "@".
 func TestFormatIssuesMarkdownString_WithIssues(t *testing.T) {
 	out := MilestoneIssuesOutput{
 		Issues: []IssueItem{
-			{IID: 1, Title: "Bug fix", State: "opened", CreatedAt: "2026-01-05T00:00:00Z", WebURL: "https://gitlab.example.com/-/issues/1"},
+			{
+				IID: 1, Title: "Bug fix", State: "opened", CreatedAt: "2026-01-05T00:00:00Z", WebURL: "https://gitlab.example.com/-/issues/1",
+				Assignees: []*toolutil.IssueUserOutput{{Username: "alice"}, {Username: ""}, {Username: "b|ob"}},
+				Labels:    []string{"bug", "p|1"}, DueDate: "2026-02-01",
+			},
 			{IID: 2, Title: "Feature", State: "closed"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
@@ -1280,10 +1416,10 @@ func TestFormatIssuesMarkdownString_WithIssues(t *testing.T) {
 	md := FormatIssuesMarkdownString(out)
 
 	want := "## Milestone Issues (2)\n\n" +
-		"| IID | Title | State | Created |\n" +
-		"| --- | --- | --- | --- |\n" +
-		"| [#1](https://gitlab.example.com/-/issues/1) | Bug fix | " + toolutil.EmojiGreen + " opened | 5 Jan 2026 00:00 UTC |\n" +
-		"| #2 | Feature | " + toolutil.EmojiRed + " closed |  |\n\n" +
+		"| IID | Title | State | Assignees | Labels | Due | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| [#1](https://gitlab.example.com/-/issues/1) | Bug fix | " + toolutil.EmojiGreen + " opened | @alice, @b&#124;ob | bug, p&#124;1 | 1 Feb 2026 | 5 Jan 2026 00:00 UTC |\n" +
+		"| #2 | Feature | " + toolutil.EmojiRed + " closed |  |  |  |  |\n\n" +
 		"2 items total\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
@@ -1316,12 +1452,16 @@ func TestFormatMergeRequestsMarkdownString_Empty(t *testing.T) {
 
 // TestFormatMergeRequestsMarkdownString_WithMRs pins the whole merge request
 // table: the counted heading, the reference linked to the merge request, the
-// state with its glyph, both branches escaped, and the creation instant in the
-// display form.
+// state with its glyph, the author as a handle, both branches escaped, and the
+// creation instant in the display form. A row whose author GitLab did not send
+// leaves the cell empty.
 func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 	out := MilestoneMergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{
-			{IID: 1, Title: "Feature X", State: "merged", SourceBranch: "feat-x", TargetBranch: "main", CreatedAt: "2026-02-01T00:00:00Z", WebURL: "https://gitlab.example.com/-/merge_requests/1"},
+			{
+				IID: 1, Title: "Feature X", State: "merged", SourceBranch: "feat-x", TargetBranch: "main", CreatedAt: "2026-02-01T00:00:00Z",
+				WebURL: "https://gitlab.example.com/-/merge_requests/1", Author: &toolutil.BasicUserOutput{Username: "carol"},
+			},
 			{IID: 2, Title: "Fix Y", State: "opened", SourceBranch: "fix-y", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
@@ -1330,10 +1470,10 @@ func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 	md := FormatMergeRequestsMarkdownString(out)
 
 	want := "## Milestone Merge Requests (2)\n\n" +
-		"| IID | Title | State | Source | Target | Created |\n" +
-		"| --- | --- | --- | --- | --- | --- |\n" +
-		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature X | " + toolutil.EmojiPurple + " merged | feat-x | main | 1 Feb 2026 00:00 UTC |\n" +
-		"| !2 | Fix Y | " + toolutil.EmojiGreen + " opened | fix-y | main |  |\n\n" +
+		"| IID | Title | State | Author | Source | Target | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature X | " + toolutil.EmojiPurple + " merged | @carol | feat-x | main | 1 Feb 2026 00:00 UTC |\n" +
+		"| !2 | Fix Y | " + toolutil.EmojiGreen + " opened |  | fix-y | main |  |\n\n" +
 		"2 items total\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
@@ -1354,7 +1494,7 @@ func TestFormatMarkdownStrings_MissingState_LeaveTheStateCellEmpty(t *testing.T)
 		md := FormatIssuesMarkdownString(MilestoneIssuesOutput{
 			Issues: []IssueItem{{IID: 7, Title: "Stateless"}},
 		})
-		if !strings.Contains(md, "| #7 | Stateless |  |  |\n") {
+		if !strings.Contains(md, "| #7 | Stateless |  |  |  |  |  |\n") {
 			t.Errorf("issue row did not leave the state cell empty:\n%s", md)
 		}
 		if strings.Contains(md, toolutil.EmojiQuestion) {
@@ -1366,7 +1506,7 @@ func TestFormatMarkdownStrings_MissingState_LeaveTheStateCellEmpty(t *testing.T)
 		md := FormatMergeRequestsMarkdownString(MilestoneMergeRequestsOutput{
 			MergeRequests: []MergeRequestItem{{IID: 7, Title: "Stateless", SourceBranch: "a", TargetBranch: "b"}},
 		})
-		if !strings.Contains(md, "| !7 | Stateless |  | a | b |  |\n") {
+		if !strings.Contains(md, "| !7 | Stateless |  |  | a | b |  |\n") {
 			t.Errorf("merge request row did not leave the state cell empty:\n%s", md)
 		}
 		if strings.Contains(md, toolutil.EmojiQuestion) {

@@ -85,6 +85,27 @@ func stateCell(emoji, state string) string {
 	return emoji + " " + toolutil.EscapeMdTableCell(state)
 }
 
+// assigneeHandles renders an issue row's assignees as the handles GitLab
+// shows, for a table cell.
+func assigneeHandles(assignees []*toolutil.IssueUserOutput) string {
+	handles := make([]string, 0, len(assignees))
+	for _, assignee := range assignees {
+		if handle := toolutil.MdUserHandle(assignee.Username); handle != "" {
+			handles = append(handles, handle)
+		}
+	}
+	return strings.Join(handles, ", ")
+}
+
+// authorHandle renders a merge request row's author as a handle, or nothing
+// when GitLab named none.
+func authorHandle(author *toolutil.BasicUserOutput) string {
+	if author == nil {
+		return ""
+	}
+	return toolutil.MdUserHandle(author.Username)
+}
+
 // FormatListMarkdown renders a paginated list of group milestones as an MCP Markdown result.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
@@ -98,12 +119,15 @@ func FormatIssuesMarkdownString(out IssuesOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Milestone Issues", len(out.Issues), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Created"))
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Assignees", "Labels", "Due", "Created"))
 	for _, issue := range out.Issues {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
 			toolutil.EscapeMdTableCell(issue.Title),
 			stateCell(toolutil.IssueStateEmoji(issue.State), issue.State),
+			assigneeHandles(issue.Assignees),
+			toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")),
+			toolutil.FormatTime(issue.DueDate),
 			toolutil.FormatTime(issue.CreatedAt),
 		))
 	}
@@ -127,12 +151,13 @@ func FormatMergeRequestsMarkdownString(out MergeRequestsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Milestone Merge Requests", len(out.MergeRequests), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source", "Target", "Created"))
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Source", "Target", "Created"))
 	for _, mr := range out.MergeRequests {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
 			toolutil.EscapeMdTableCell(mr.Title),
 			stateCell(toolutil.MRStateEmoji(mr.State), mr.State),
+			authorHandle(mr.Author),
 			// A branch name is not an identifier: git check-ref-format permits
 			// '|', '<' and '>'.
 			toolutil.EscapeMdTableCell(mr.SourceBranch),
