@@ -127,8 +127,8 @@ twice), and the gate holds the pinned literal equal to the register's.
   names. A limit built with none of the listed constructors, such as a counter guarded by
   a mutex, is not among them when it refuses by calling a function that already builds a
   declared refusal, or through a literal in a function that already declares one of that
-  code or status: the gate's documentation states that escape, and review is what sees
-  it. The row then answers the specification's validation checklist, all of it but
+  code or status, unless its name is the package-level limit word above: the gate's
+  documentation states that escape, and review is what sees it. The row then answers the specification's validation checklist, all of it but
   VAL-010 and VAL-012, which stay in the pull request because a declaration cannot hold
   them.
 - **POS-004**: Moving a value into the register changes no code. The binary a value layer

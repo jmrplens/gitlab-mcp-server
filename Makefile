@@ -1910,10 +1910,11 @@ check-sdk-context:
 	go run ./cmd/audit_sdk_context/ -check
 
 ## audit-tenancy: report where the tenant policy register (internal/tenancy)
-## and the code disagree: a site that matches nothing, a value its layer does
-## not alias, a refusal or a charge that moved, a reason that changed, and
-## anything shaped like a limit outside a declared site. -v also lists what
-## the exemption table answered.
+## and the code disagree: a site that matches nothing, a declared alias or Arg
+## that stopped carrying its register constant, a refusal or a charge that
+## moved, a reason that changed, and anything shaped like a limit, in a shape
+## the tripwire reads, outside a declared site or an exemption. -v also lists
+## what the exemption table answered.
 audit-tenancy:
 	go run ./cmd/audit_tenancy/ -v
 

@@ -34,7 +34,7 @@ gitlab-mcp-server/
 │   ├── audit_metrics/      # MCP tool/resource/prompt metrics
 │   ├── audit_readonly_graphql/ # No ReadOnly action may reach a GraphQL mutation (make check-readonly-graphql)
 │   ├── audit_sdk_context/  # Every client-go call in internal/ and cmd/ passes gl.WithContext(ctx); test files are its blind spot (make check-sdk-context)
-│   ├── audit_tenancy/      # Holds the tenant policy register (internal/tenancy) to the code: sites, values, refusals, charges, reasons, and nothing limit-shaped outside a row or an exemption; -compare-binaries proves a move changed no code (make check-tenancy)
+│   ├── audit_tenancy/      # Holds the tenant policy register (internal/tenancy) to the code: sites, values, refusals, charges, reasons, and nothing shaped like a limit, in a shape its tripwire reads, outside a row or an exemption (docs/development/cmd-utilities.md lists what it cannot see); -compare-binaries proves a move changed no code (make check-tenancy)
 │   ├── audit_graphql_documents/ # Every raw GraphQL document under ./internal/... is one the pinned GitLab schema accepts (make check-graphql-documents); the documents client-go builds are judged by the test transport alone
 │   ├── gen_graphql_schema/ # Pins the GitLab GraphQL schema from a live introspection (make gen-graphql-schema; --check gates it)
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
