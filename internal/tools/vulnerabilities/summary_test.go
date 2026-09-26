@@ -5,6 +5,7 @@ package vulnerabilities
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -170,12 +171,19 @@ func TestPipelineSecuritySummary_Success(t *testing.T) {
 							"sast": {
 								"vulnerabilitiesCount": 10,
 								"scannedResourcesCount": 150,
-								"scannedResourcesCsvPath": "/downloads/sast.csv"
+								"scannedResourcesCsvPath": "/downloads/sast.csv",
+								"scans": {"nodes": [
+									{"name": "semgrep-sast", "status": "SUCCEEDED", "errors": [], "warnings": ["2 files skipped"]},
+									{"name": "kics-sast", "status": "REPORT_ERROR", "errors": ["report schema version 13.0 is unsupported"], "warnings": []}
+								]},
+								"scannedResources": {"nodes": []}
 							},
 							"dast": {
 								"vulnerabilitiesCount": 3,
 								"scannedResourcesCount": 50,
-								"scannedResourcesCsvPath": ""
+								"scannedResourcesCsvPath": "",
+								"scans": {"nodes": [{"name": "dast", "status": "SUCCEEDED", "errors": [], "warnings": []}]},
+								"scannedResources": {"nodes": [{"requestMethod": "GET", "url": "https://app.example/login"}]}
 							},
 							"dependencyScanning": {
 								"vulnerabilitiesCount": 7,
@@ -210,12 +218,18 @@ func TestPipelineSecuritySummary_Success(t *testing.T) {
 	if out.Sast == nil {
 		t.Fatal("expected SAST summary, got nil")
 	}
+	// Every scan reaches the output in GitLab's order with its own messages,
+	// and a connection with no nodes is published as no list at all.
 	wantSast := ScannerSummaryItem{
 		VulnerabilitiesCount:    10,
 		ScannedResourcesCount:   150,
 		ScannedResourcesCsvPath: "/downloads/sast.csv",
+		Scans: []ScanItem{
+			{Name: "semgrep-sast", Status: "SUCCEEDED", Errors: []string{}, Warnings: []string{"2 files skipped"}},
+			{Name: "kics-sast", Status: "REPORT_ERROR", Errors: []string{"report schema version 13.0 is unsupported"}, Warnings: []string{}},
+		},
 	}
-	if *out.Sast != wantSast {
+	if !reflect.DeepEqual(*out.Sast, wantSast) {
 		t.Errorf("SAST = %+v, want %+v", *out.Sast, wantSast)
 	}
 
@@ -224,6 +238,10 @@ func TestPipelineSecuritySummary_Success(t *testing.T) {
 	}
 	if out.Dast.VulnerabilitiesCount != 3 {
 		t.Errorf("DAST vulnerabilities = %d, want 3", out.Dast.VulnerabilitiesCount)
+	}
+	wantResources := []ScannedResourceItem{{RequestMethod: "GET", URL: "https://app.example/login"}}
+	if !reflect.DeepEqual(out.Dast.ScannedResources, wantResources) {
+		t.Errorf("DAST scanned resources = %+v, want %+v", out.Dast.ScannedResources, wantResources)
 	}
 
 	if out.DependencyScanning == nil {
@@ -306,7 +324,7 @@ func TestPipelineSecuritySummary_AllScanners(t *testing.T) {
 			if s.got == nil {
 				t.Fatalf("%s summary = nil, want %+v", s.name, s.want)
 			}
-			if *s.got != s.want {
+			if !reflect.DeepEqual(*s.got, s.want) {
 				t.Errorf("%s summary = %+v, want %+v", s.name, *s.got, s.want)
 			}
 		})
@@ -357,7 +375,7 @@ func TestPipelineSecuritySummary_OnlyOneScannerRan(t *testing.T) {
 		ClusterImageScanning: &ScannerSummaryItem{VulnerabilitiesCount: 6, ScannedResourcesCount: 2},
 		TotalVulnerabilities: 6,
 	}
-	if out.ClusterImageScanning == nil || *out.ClusterImageScanning != *want.ClusterImageScanning {
+	if !reflect.DeepEqual(out.ClusterImageScanning, want.ClusterImageScanning) {
 		t.Errorf("ClusterImageScanning = %+v, want %+v", out.ClusterImageScanning, want.ClusterImageScanning)
 	}
 	if out.TotalVulnerabilities != want.TotalVulnerabilities {
@@ -561,10 +579,10 @@ func TestFormatPipelineSecuritySummaryMarkdown_WithScanners(t *testing.T) {
 	}
 
 	want := "## Pipeline Security Report Summary\n\n" +
-		"| Scanner | Vulnerabilities | Scanned Resources |\n" +
-		"| --- | --- | --- |\n" +
-		"| SAST | 10 | 150 |\n" +
-		"| DAST | 3 | 50 |\n\n" +
+		"| Scanner | Vulnerabilities | Scanned Resources | Scans |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| SAST | 10 | 150 |  |\n" +
+		"| DAST | 3 | 50 |  |\n\n" +
 		"**Total Vulnerabilities: 13**\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'security_finding.list' to read the findings these scanners reported\n" +
@@ -600,10 +618,66 @@ func TestFormatPipelineSecuritySummaryMarkdown_CleanScanIsNotNoScan(t *testing.T
 	}
 
 	want := "## Pipeline Security Report Summary\n\n" +
-		"| Scanner | Vulnerabilities | Scanned Resources |\n" +
-		"| --- | --- | --- |\n" +
-		"| SAST | 0 | 150 |\n\n" +
+		"| Scanner | Vulnerabilities | Scanned Resources | Scans |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| SAST | 0 | 150 |  |\n\n" +
 		"**Total Vulnerabilities: 0**\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_finding.list' to read the findings these scanners reported\n" +
+		"- Use action 'vulnerability.severity_count' to see the project's counts by severity\n"
+
+	if got := FormatPipelineSecuritySummaryMarkdown(out); got != want {
+		t.Errorf("FormatPipelineSecuritySummaryMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatPipelineSecuritySummaryMarkdown_ScansTheirMessagesAndResources
+// verifies the whole summary a pipeline with failing and requesting scans
+// renders: each scan named with how it ended in its scanner's row, every error
+// and warning an analyzer wrote as a row of its own under its scanner and scan,
+// and the resources a DAST scan requested, with GitLab's text escaped wherever
+// it lands in a cell.
+//
+// It is the half of the summary that tells a clean result from a scan that
+// failed: a scanner reporting no vulnerabilities because its report was
+// refused reads, without it, exactly like one that found nothing.
+func TestFormatPipelineSecuritySummaryMarkdown_ScansTheirMessagesAndResources(t *testing.T) {
+	out := PipelineSecuritySummaryOutput{
+		Sast: &ScannerSummaryItem{
+			VulnerabilitiesCount: 0,
+			Scans: []ScanItem{
+				{Name: "semgrep-sast", Status: "SUCCEEDED", Warnings: []string{"2 files | skipped"}},
+				{Name: "kics-sast", Status: "REPORT_ERROR", Errors: []string{"schema 13.0 unsupported"}},
+			},
+		},
+		Dast: &ScannerSummaryItem{
+			VulnerabilitiesCount:  1,
+			ScannedResourcesCount: 2,
+			Scans:                 []ScanItem{{Name: "dast", Status: "SUCCEEDED"}},
+			ScannedResources: []ScannedResourceItem{
+				{RequestMethod: "GET", URL: "https://app.example/login"},
+				{RequestMethod: "POST", URL: "https://app.example/session"},
+			},
+		},
+		TotalVulnerabilities: 1,
+	}
+
+	want := "## Pipeline Security Report Summary\n\n" +
+		"| Scanner | Vulnerabilities | Scanned Resources | Scans |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| SAST | 0 | 0 | semgrep-sast (SUCCEEDED), kics-sast (REPORT_ERROR) |\n" +
+		"| DAST | 1 | 2 | dast (SUCCEEDED) |\n\n" +
+		"**Total Vulnerabilities: 1**\n\n" +
+		"### Scan Errors and Warnings\n\n" +
+		"| Scanner | Scan | Kind | Message |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| SAST | semgrep-sast | warning | 2 files &#124; skipped |\n" +
+		"| SAST | kics-sast | error | schema 13.0 unsupported |\n\n" +
+		"### Scanned Resources\n\n" +
+		"| Scanner | Method | URL |\n" +
+		"| --- | --- | --- |\n" +
+		"| DAST | GET | https://app.example/login |\n" +
+		"| DAST | POST | https://app.example/session |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'security_finding.list' to read the findings these scanners reported\n" +
 		"- Use action 'vulnerability.severity_count' to see the project's counts by severity\n"

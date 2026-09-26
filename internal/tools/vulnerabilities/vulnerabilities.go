@@ -3,8 +3,6 @@ package vulnerabilities
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -29,13 +27,10 @@ type ScannerItem struct {
 	ScannerID string `json:"scanner_id,omitempty"`
 }
 
-// LocationItem represents the location where the vulnerability was found.
-type LocationItem struct {
-	File      string `json:"file,omitempty"`
-	StartLine int    `json:"start_line,omitempty"`
-	EndLine   int    `json:"end_line,omitempty"`
-	BlobPath  string `json:"blob_path,omitempty"`
-}
+// LocationItem is where the scanner found the vulnerability. It is the shape
+// the security findings share, so a finding and the vulnerability it becomes
+// name their location in the same words.
+type LocationItem = toolutil.VulnerabilityLocationOutput
 
 // ProjectItem represents a minimal project reference on a vulnerability.
 type ProjectItem struct {
@@ -44,32 +39,105 @@ type ProjectItem struct {
 	FullPath string `json:"full_path"`
 }
 
+// CVSSItem is one CVSS assessment of the vulnerability, as the vendor that
+// scored it published it. A vulnerability can carry several, one per vendor
+// and CVSS version.
+type CVSSItem struct {
+	Vendor       string  `json:"vendor"`
+	Version      float64 `json:"version"`
+	Vector       string  `json:"vector"`
+	BaseScore    float64 `json:"base_score"`
+	OverallScore float64 `json:"overall_score"`
+	Severity     string  `json:"severity"`
+}
+
+// CVEEnrichmentItem is what GitLab knows about the CVE beyond the scanner's
+// report: the EPSS probability of exploitation in the next thirty days, and
+// whether CISA lists it as exploited in the wild.
+type CVEEnrichmentItem struct {
+	CVE            string  `json:"cve"`
+	EPSSScore      float64 `json:"epss_score"`
+	IsKnownExploit bool    `json:"is_known_exploit"`
+}
+
+// ReferenceItem names an issue or a merge request GitLab links to a
+// vulnerability: enough to recognize it and to open it. Its own fields are the
+// issue and merge request actions' to publish.
+type ReferenceItem struct {
+	IID    int64  `json:"iid"`
+	Title  string `json:"title,omitempty"`
+	State  string `json:"state,omitempty"`
+	WebURL string `json:"web_url,omitempty"`
+}
+
+// IssueLinkItem is one issue linked to the vulnerability, and whether the issue
+// was created from it (CREATED) or linked to it afterwards (RELATED).
+type IssueLinkItem struct {
+	LinkType string         `json:"link_type"`
+	Issue    *ReferenceItem `json:"issue,omitempty"`
+}
+
 // Item is a summary of a vulnerability.
+//
+// The three people GitLab records against a state change are published beside
+// the time of it, and the triage signals it computes (present on the default
+// branch, resolved there, removed from the code, detected without an
+// identified source) beside the state. present_on_default_branch is written at
+// false as well as true, since GitLab always sends it and false is the answer
+// that matters: the vulnerability was found only on another branch.
 type Item struct {
-	ID              string           `json:"id"`
-	Title           string           `json:"title"`
-	Severity        string           `json:"severity"`
-	State           string           `json:"state"`
-	Description     string           `json:"description,omitempty"`
-	ReportType      string           `json:"report_type,omitempty"`
-	Scanner         *ScannerItem     `json:"scanner,omitempty"`
-	Location        *LocationItem    `json:"location,omitempty"`
-	Identifiers     []IdentifierItem `json:"identifiers,omitempty"`
-	DetectedAt      string           `json:"detected_at,omitempty"`
-	DismissedAt     string           `json:"dismissed_at,omitempty"`
-	ResolvedAt      string           `json:"resolved_at,omitempty"`
-	ConfirmedAt     string           `json:"confirmed_at,omitempty"`
-	Project         *ProjectItem     `json:"project,omitempty"`
-	WebURL          string           `json:"web_url,omitempty"`
-	PrimaryID       *IdentifierItem  `json:"primary_identifier,omitempty"`
-	Solution        string           `json:"solution,omitempty"`
-	HasRemediations bool             `json:"has_remediations,omitempty"`
-	HasIssues       bool             `json:"has_issues,omitempty"`
-	HasMR           bool             `json:"has_merge_request,omitempty"`
-	DismissalReason string           `json:"dismissal_reason,omitempty"`
+	ID                      string                                   `json:"id"`
+	UUID                    string                                   `json:"uuid,omitempty"`
+	Title                   string                                   `json:"title"`
+	Severity                string                                   `json:"severity"`
+	State                   string                                   `json:"state"`
+	StateComment            string                                   `json:"state_comment,omitempty"`
+	Description             string                                   `json:"description,omitempty"`
+	ReportType              string                                   `json:"report_type,omitempty"`
+	Scanner                 *ScannerItem                             `json:"scanner,omitempty"`
+	Location                *LocationItem                            `json:"location,omitempty"`
+	Identifiers             []IdentifierItem                         `json:"identifiers,omitempty"`
+	CVSS                    []CVSSItem                               `json:"cvss,omitempty"`
+	CVEEnrichment           *CVEEnrichmentItem                       `json:"cve_enrichment,omitempty"`
+	Links                   []toolutil.VulnerabilityLinkOutput       `json:"links,omitempty"`
+	TokenStatus             *toolutil.VulnerabilityTokenStatusOutput `json:"token_status,omitempty"`
+	DetectedAt              string                                   `json:"detected_at,omitempty"`
+	UpdatedAt               string                                   `json:"updated_at,omitempty"`
+	DismissedAt             string                                   `json:"dismissed_at,omitempty"`
+	DismissedBy             *toolutil.UserCoreRefOutput              `json:"dismissed_by,omitempty"`
+	ResolvedAt              string                                   `json:"resolved_at,omitempty"`
+	ResolvedBy              *toolutil.UserCoreRefOutput              `json:"resolved_by,omitempty"`
+	ConfirmedAt             string                                   `json:"confirmed_at,omitempty"`
+	ConfirmedBy             *toolutil.UserCoreRefOutput              `json:"confirmed_by,omitempty"`
+	DueDate                 string                                   `json:"due_date,omitempty"`
+	Project                 *ProjectItem                             `json:"project,omitempty"`
+	WebURL                  string                                   `json:"web_url,omitempty"`
+	PrimaryID               *IdentifierItem                          `json:"primary_identifier,omitempty"`
+	Solution                string                                   `json:"solution,omitempty"`
+	HasRemediations         bool                                     `json:"has_remediations,omitempty"`
+	FalsePositive           *bool                                    `json:"false_positive,omitempty"`
+	Unverified              bool                                     `json:"unverified,omitempty"`
+	PresentOnDefaultBranch  bool                                     `json:"present_on_default_branch"`
+	ResolvedOnDefaultBranch bool                                     `json:"resolved_on_default_branch,omitempty"`
+	RemovedFromCode         bool                                     `json:"removed_from_code,omitempty"`
+	UserNotesCount          int                                      `json:"user_notes_count,omitempty"`
+	HasIssues               bool                                     `json:"has_issues,omitempty"`
+	IssueLinks              []IssueLinkItem                          `json:"issue_links,omitempty"`
+	HasMR                   bool                                     `json:"has_merge_request,omitempty"`
+	MergeRequest            *ReferenceItem                           `json:"merge_request,omitempty"`
+	DismissalReason         string                                   `json:"dismissal_reason,omitempty"`
 }
 
 // GraphQL queries.
+
+// referenceSelection is what an issue or a merge request linked to a
+// vulnerability is read with, decoded into [gqlReference].
+const referenceSelection = `
+        iid
+        title
+        state
+        webUrl
+      `
 
 // vulnFields is the selection every vulnerability document shares. The list,
 // the get and the four state mutations all answer with a vulnerability node
@@ -77,21 +145,41 @@ type Item struct {
 // a document selecting less left the struct's other fields empty, and the
 // output claimed an empty description and no identifiers for a vulnerability
 // that has both. make check-graphql-shapes refuses that shape.
+//
+// Every field here is one GitLab's GraphQL reference lists as generally
+// available. The Vulnerability fields it marks Status: Experiment are left
+// out on purpose, and cmd/audit_graphql_shapes/sent_declarations_security.go
+// names each: GitLab may change or remove an experiment without notice, and a
+// document naming a field GitLab no longer has is refused whole, so one of
+// them here would put every one of these six actions at the experiment's mercy.
 const vulnFields = `
     id
+    uuid
     title
     severity
     state
+    stateComment
     webUrl
     description
     reportType
     detectedAt
+    updatedAt
     dismissedAt
+    dismissedBy {` + toolutil.UserCoreRefSelection + `}
     resolvedAt
+    resolvedBy {` + toolutil.UserCoreRefSelection + `}
     confirmedAt
+    confirmedBy {` + toolutil.UserCoreRefSelection + `}
+    dueDate
     solution
     hasRemediations
     dismissalReason
+    falsePositive
+    unverified
+    presentOnDefaultBranch
+    resolvedOnDefaultBranch
+    removedFromCode
+    userNotesCount
     primaryIdentifier {
       name
       externalType
@@ -104,35 +192,27 @@ const vulnFields = `
       externalId
       url
     }
+    cvss {
+      vendor
+      version
+      vector
+      baseScore
+      overallScore
+      severity
+    }
+    cveEnrichment {
+      cve
+      epssScore
+      isKnownExploit
+    }
+    links {` + toolutil.VulnerabilityLinkSelection + `}
+    findingTokenStatus {` + toolutil.VulnerabilityTokenStatusSelection + `}
     scanner {
       name
       vendor
       externalId
     }
-    location {
-      ... on VulnerabilityLocationSast {
-        file
-        startLine
-        endLine
-        blobPath
-      }
-      ... on VulnerabilityLocationDast {
-        path
-      }
-      ... on VulnerabilityLocationDependencyScanning {
-        file
-        blobPath
-      }
-      ... on VulnerabilityLocationContainerScanning {
-        image
-      }
-      ... on VulnerabilityLocationSecretDetection {
-        file
-        startLine
-        endLine
-        blobPath
-      }
-    }
+    location {` + toolutil.VulnerabilityLocationSelection + `}
     project {
       id
       name
@@ -140,12 +220,11 @@ const vulnFields = `
     }
     issueLinks {
       nodes {
-        id
+        linkType
+        issue {` + referenceSelection + `}
       }
     }
-    mergeRequest {
-      iid
-    }
+    mergeRequest {` + referenceSelection + `}
 `
 
 const queryListVulnerabilities = `
@@ -190,39 +269,44 @@ type gqlScanner struct {
 	ExternalID string `json:"externalId"`
 }
 
-// gqlLocation is the location a finding reports. GitLab types startLine and
-// endLine as String on every location type (VulnerabilityLocationSast and its
-// siblings in the pinned schema), and a live instance sends them quoted; an
-// int here made the whole response fail to decode.
-type gqlLocation struct {
-	File      string `json:"file"`
-	Path      string `json:"path"`
-	Image     string `json:"image"`
-	StartLine string `json:"startLine"`
-	EndLine   string `json:"endLine"`
-	BlobPath  string `json:"blobPath"`
-}
-
-// lineNumber reads the line GitLab spells as a string. A value that is not a
-// number, which the schema allows, reads as no line rather than an error, since
-// a finding is worth reporting whether or not its line parsed.
-func lineNumber(s string) int {
-	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil {
-		return 0
-	}
-	return n
-}
-
 type gqlProject struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	FullPath string `json:"fullPath"`
 }
 
-// gqlIssueLinkNode holds a single issue link ID.
+// gqlCVSS reads one CvssType. GitLab types the scores and the version as
+// Float, which a CVSS version of 3.1 and a score of 9.8 need.
+type gqlCVSS struct {
+	Vendor       string  `json:"vendor"`
+	Version      float64 `json:"version"`
+	Vector       string  `json:"vector"`
+	BaseScore    float64 `json:"baseScore"`
+	OverallScore float64 `json:"overallScore"`
+	Severity     string  `json:"severity"`
+}
+
+// gqlCVEEnrichment reads the CveEnrichmentType GitLab attaches to a
+// vulnerability identified by a CVE, and sends null for any other.
+type gqlCVEEnrichment struct {
+	CVE            string  `json:"cve"`
+	EPSSScore      float64 `json:"epssScore"`
+	IsKnownExploit bool    `json:"isKnownExploit"`
+}
+
+// gqlReference reads an issue or a merge request [referenceSelection] names.
+// GitLab types iid as String on both.
+type gqlReference struct {
+	IID    string `json:"iid"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	WebURL string `json:"webUrl"`
+}
+
+// gqlIssueLinkNode holds one link between the vulnerability and an issue.
 type gqlIssueLinkNode struct {
-	ID string `json:"id"`
+	LinkType string        `json:"linkType"`
+	Issue    *gqlReference `json:"issue"`
 }
 
 // gqlIssueLinksConnection holds a list of issue link nodes.
@@ -230,33 +314,45 @@ type gqlIssueLinksConnection struct {
 	Nodes []gqlIssueLinkNode `json:"nodes"`
 }
 
-// gqlMergeRequestRef holds a merge request reference.
-type gqlMergeRequestRef struct {
-	IID string `json:"iid"`
-}
-
 type gqlVulnerabilityNode struct {
-	ID                string                   `json:"id"`
-	Title             string                   `json:"title"`
-	Severity          string                   `json:"severity"`
-	State             string                   `json:"state"`
-	Description       string                   `json:"description"`
-	ReportType        string                   `json:"reportType"`
-	WebURL            string                   `json:"webUrl"`
-	DetectedAt        string                   `json:"detectedAt"`
-	DismissedAt       string                   `json:"dismissedAt"`
-	ResolvedAt        string                   `json:"resolvedAt"`
-	ConfirmedAt       string                   `json:"confirmedAt"`
-	Solution          string                   `json:"solution"`
-	HasRemediations   bool                     `json:"hasRemediations"`
-	DismissalReason   string                   `json:"dismissalReason"`
-	PrimaryIdentifier *gqlIdentifier           `json:"primaryIdentifier"`
-	Identifiers       []gqlIdentifier          `json:"identifiers"`
-	Scanner           *gqlScanner              `json:"scanner"`
-	Location          *gqlLocation             `json:"location"`
-	Project           *gqlProject              `json:"project"`
-	IssueLinks        *gqlIssueLinksConnection `json:"issueLinks"`
-	MergeRequest      *gqlMergeRequestRef      `json:"mergeRequest"`
+	ID                      string                                    `json:"id"`
+	UUID                    string                                    `json:"uuid"`
+	Title                   string                                    `json:"title"`
+	Severity                string                                    `json:"severity"`
+	State                   string                                    `json:"state"`
+	StateComment            string                                    `json:"stateComment"`
+	Description             string                                    `json:"description"`
+	ReportType              string                                    `json:"reportType"`
+	WebURL                  string                                    `json:"webUrl"`
+	DetectedAt              string                                    `json:"detectedAt"`
+	UpdatedAt               string                                    `json:"updatedAt"`
+	DismissedAt             string                                    `json:"dismissedAt"`
+	DismissedBy             *toolutil.GraphQLUserCoreRef              `json:"dismissedBy"`
+	ResolvedAt              string                                    `json:"resolvedAt"`
+	ResolvedBy              *toolutil.GraphQLUserCoreRef              `json:"resolvedBy"`
+	ConfirmedAt             string                                    `json:"confirmedAt"`
+	ConfirmedBy             *toolutil.GraphQLUserCoreRef              `json:"confirmedBy"`
+	DueDate                 string                                    `json:"dueDate"`
+	Solution                string                                    `json:"solution"`
+	HasRemediations         bool                                      `json:"hasRemediations"`
+	DismissalReason         string                                    `json:"dismissalReason"`
+	FalsePositive           *bool                                     `json:"falsePositive"`
+	Unverified              bool                                      `json:"unverified"`
+	PresentOnDefaultBranch  bool                                      `json:"presentOnDefaultBranch"`
+	ResolvedOnDefaultBranch bool                                      `json:"resolvedOnDefaultBranch"`
+	RemovedFromCode         bool                                      `json:"removedFromCode"`
+	UserNotesCount          int                                       `json:"userNotesCount"`
+	PrimaryIdentifier       *gqlIdentifier                            `json:"primaryIdentifier"`
+	Identifiers             []gqlIdentifier                           `json:"identifiers"`
+	CVSS                    []gqlCVSS                                 `json:"cvss"`
+	CVEEnrichment           *gqlCVEEnrichment                         `json:"cveEnrichment"`
+	Links                   []toolutil.GraphQLVulnerabilityLink       `json:"links"`
+	FindingTokenStatus      *toolutil.GraphQLVulnerabilityTokenStatus `json:"findingTokenStatus"`
+	Scanner                 *gqlScanner                               `json:"scanner"`
+	Location                *toolutil.GraphQLVulnerabilityLocation    `json:"location"`
+	Project                 *gqlProject                               `json:"project"`
+	IssueLinks              *gqlIssueLinksConnection                  `json:"issueLinks"`
+	MergeRequest            *gqlReference                             `json:"mergeRequest"`
 }
 
 // gqlVulnerabilitiesConnection holds the paginated list of vulnerability nodes.
@@ -274,20 +370,40 @@ type gqlProjectVulnerabilities struct {
 // struct, mapping identifiers, scanner, location, project, issues, and MR fields.
 func nodeToItem(n gqlVulnerabilityNode) Item {
 	item := Item{
-		ID:              n.ID,
-		Title:           n.Title,
-		Severity:        n.Severity,
-		State:           n.State,
-		Description:     n.Description,
-		ReportType:      n.ReportType,
-		WebURL:          n.WebURL,
-		DetectedAt:      n.DetectedAt,
-		DismissedAt:     n.DismissedAt,
-		ResolvedAt:      n.ResolvedAt,
-		ConfirmedAt:     n.ConfirmedAt,
-		Solution:        n.Solution,
-		HasRemediations: n.HasRemediations,
-		DismissalReason: n.DismissalReason,
+		ID:                      n.ID,
+		UUID:                    n.UUID,
+		Title:                   n.Title,
+		Severity:                n.Severity,
+		State:                   n.State,
+		StateComment:            n.StateComment,
+		Description:             n.Description,
+		ReportType:              n.ReportType,
+		WebURL:                  n.WebURL,
+		DetectedAt:              n.DetectedAt,
+		UpdatedAt:               n.UpdatedAt,
+		DismissedAt:             n.DismissedAt,
+		DismissedBy:             n.DismissedBy.Output(),
+		ResolvedAt:              n.ResolvedAt,
+		ResolvedBy:              n.ResolvedBy.Output(),
+		ConfirmedAt:             n.ConfirmedAt,
+		ConfirmedBy:             n.ConfirmedBy.Output(),
+		DueDate:                 n.DueDate,
+		Solution:                n.Solution,
+		HasRemediations:         n.HasRemediations,
+		DismissalReason:         n.DismissalReason,
+		FalsePositive:           n.FalsePositive,
+		Unverified:              n.Unverified,
+		PresentOnDefaultBranch:  n.PresentOnDefaultBranch,
+		ResolvedOnDefaultBranch: n.ResolvedOnDefaultBranch,
+		RemovedFromCode:         n.RemovedFromCode,
+		UserNotesCount:          n.UserNotesCount,
+		CVSS:                    cvssToItems(n.CVSS),
+		CVEEnrichment:           cveEnrichmentToItem(n.CVEEnrichment),
+		Links:                   toolutil.VulnerabilityLinkOutputs(n.Links),
+		TokenStatus:             n.FindingTokenStatus.Output(),
+		Location:                n.Location.Output(),
+		MergeRequest:            referenceToItem(n.MergeRequest),
+		HasMR:                   n.MergeRequest != nil,
 	}
 	if n.PrimaryIdentifier != nil {
 		item.PrimaryID = identifierToItem(n.PrimaryIdentifier)
@@ -298,29 +414,12 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 	if n.Scanner != nil {
 		item.Scanner = &ScannerItem{Name: n.Scanner.Name, Vendor: n.Scanner.Vendor, ScannerID: n.Scanner.ExternalID}
 	}
-	if n.Location != nil {
-		loc := &LocationItem{
-			File:      n.Location.File,
-			StartLine: lineNumber(n.Location.StartLine),
-			EndLine:   lineNumber(n.Location.EndLine),
-			BlobPath:  n.Location.BlobPath,
-		}
-		if loc.File == "" && n.Location.Path != "" {
-			loc.File = n.Location.Path
-		}
-		if loc.File == "" && n.Location.Image != "" {
-			loc.File = n.Location.Image
-		}
-		item.Location = loc
-	}
 	if n.Project != nil {
 		item.Project = &ProjectItem{ID: n.Project.ID, Name: n.Project.Name, FullPath: n.Project.FullPath}
 	}
 	if n.IssueLinks != nil && len(n.IssueLinks.Nodes) > 0 {
 		item.HasIssues = true
-	}
-	if n.MergeRequest != nil {
-		item.HasMR = true
+		item.IssueLinks = issueLinksToItems(n.IssueLinks.Nodes)
 	}
 	return item
 }
@@ -337,6 +436,54 @@ func identifierToItem(id *gqlIdentifier) *IdentifierItem {
 		ExternalID:   id.ExternalID,
 		URL:          id.URL,
 	}
+}
+
+// cvssToItems converts the CVSS assessments, and answers nil for none so the
+// field is left out rather than written as an empty list.
+func cvssToItems(assessments []gqlCVSS) []CVSSItem {
+	if len(assessments) == 0 {
+		return nil
+	}
+	out := make([]CVSSItem, 0, len(assessments))
+	for _, a := range assessments {
+		out = append(out, CVSSItem(a))
+	}
+	return out
+}
+
+// cveEnrichmentToItem converts the CVE enrichment, and answers nil for a
+// vulnerability GitLab has none for.
+func cveEnrichmentToItem(e *gqlCVEEnrichment) *CVEEnrichmentItem {
+	if e == nil {
+		return nil
+	}
+	item := CVEEnrichmentItem(*e)
+	return &item
+}
+
+// referenceToItem converts a linked issue or merge request, and answers nil
+// for none.
+func referenceToItem(r *gqlReference) *ReferenceItem {
+	if r == nil {
+		return nil
+	}
+	return &ReferenceItem{
+		IID:    toolutil.GraphQLNumber(r.IID),
+		Title:  r.Title,
+		State:  r.State,
+		WebURL: r.WebURL,
+	}
+}
+
+// issueLinksToItems converts the issue links GitLab sent, one item per link
+// whether or not the issue behind it is one the caller may read: GitLab sends
+// such a link with a null issue, and the link still exists.
+func issueLinksToItems(nodes []gqlIssueLinkNode) []IssueLinkItem {
+	out := make([]IssueLinkItem, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, IssueLinkItem{LinkType: node.LinkType, Issue: referenceToItem(node.Issue)})
+	}
+	return out
 }
 
 // List.

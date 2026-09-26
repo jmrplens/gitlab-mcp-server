@@ -2,6 +2,7 @@ package vulnerabilities
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -93,6 +94,7 @@ func FormatGetMarkdown(out GetOutput) string {
 	c := toolutil.NewCard(&b, vulnerabilityHeading(v.Title))
 	writeVulnerabilityRows(c, v)
 	writeVulnerabilityIdentifiers(c, v.Identifiers)
+	writeVulnerabilityCollections(c, v)
 	c.End(append(
 		stateTransitionHints(v.State),
 		toolutil.HintAction(actionVulnList, "see the project's other vulnerabilities"),
@@ -104,6 +106,7 @@ func FormatGetMarkdown(out GetOutput) string {
 // the detail view and the mutation confirmation cannot drift apart.
 func writeVulnerabilityRows(c *toolutil.Card, v Item) {
 	c.Code("ID", v.ID)
+	c.Code("UUID", v.UUID)
 	c.Field("Title", v.Title)
 	c.Field("Severity", toolutil.SeverityBadge(v.Severity))
 	c.Field("State", v.State)
@@ -114,17 +117,32 @@ func writeVulnerabilityRows(c *toolutil.Card, v Item) {
 		// can close the label and the URL can close the destination.
 		c.Link("Primary Identifier", v.PrimaryID.Name, v.PrimaryID.URL)
 	}
-	if v.Location != nil {
-		c.Code("Location", formatVulnerabilityLocation(v.Location))
-	}
+	writeLocationRows(c, v.Location)
 	c.Time("Detected", v.DetectedAt)
+	c.Time("Updated", v.UpdatedAt)
 	c.Time("Confirmed", v.ConfirmedAt)
+	writeUser(c, "Confirmed By", v.ConfirmedBy)
 	c.Time("Dismissed", v.DismissedAt)
+	writeUser(c, "Dismissed By", v.DismissedBy)
 	c.Time("Resolved", v.ResolvedAt)
+	writeUser(c, "Resolved By", v.ResolvedBy)
 	c.Field("Dismissal Reason", v.DismissalReason)
+	c.Time("Due Date", v.DueDate)
+	c.Bool("Present On Default Branch", v.PresentOnDefaultBranch)
+	// The two signals that the code no longer carries the vulnerability are
+	// stated only when they hold, the way GitLab's report badges them.
+	c.Flag("", "No longer detected on the default branch", v.ResolvedOnDefaultBranch)
+	c.Flag("", "Removed from the code", v.RemovedFromCode)
+	c.BoolPtr("False Positive", v.FalsePositive)
+	c.Warn("Unverified: detected without an identified source", v.Unverified)
 	c.Bool("Has Issues", v.HasIssues)
 	c.Bool("Has Merge Request", v.HasMR)
+	if mr := v.MergeRequest; mr != nil {
+		c.Link("Merge Request", referenceLabel("!", mr), mr.WebURL)
+	}
 	c.Bool("Has Remediations", v.HasRemediations)
+	c.Count("User Notes", int64(v.UserNotesCount))
+	writeRiskRows(c, v)
 	// The nested label is opened only when something goes under it: a Sub
 	// writes its row whatever its card writes, and a label with nothing after
 	// it is what the card rule exists to prevent.
@@ -135,11 +153,147 @@ func writeVulnerabilityRows(c *toolutil.Card, v Item) {
 		project.Field("Full Path", p.FullPath)
 	}
 	c.URL(v.WebURL)
-	// The solution and the description are the scanner's own prose, which a
-	// repository's CI job produced: quoted under their labels, they can open no
-	// heading, no list item and no guidance section of the response.
+	// The state comment is what a person typed when they changed the state,
+	// and the solution and the description are the scanner's own prose, which
+	// a repository's CI job produced: quoted under their labels, none of them
+	// can open a heading, a list item or a guidance section of the response.
+	c.Text("State Comment", v.StateComment)
 	c.Text("Solution", v.Solution)
 	c.Text("Description", v.Description)
+	if v.Location != nil {
+		c.Text("Location Description", v.Location.Description)
+	}
+}
+
+// writeLocationRows writes where the scanner found the vulnerability: the file
+// and line range every scan type that names a file has, then whatever the
+// scan type adds, which for DAST is the request and for dependency and
+// container scanning the package.
+func writeLocationRows(c *toolutil.Card, location *LocationItem) {
+	if location == nil {
+		return
+	}
+	c.Code("Location", formatVulnerabilityLocation(location))
+	c.Code("Vulnerable Class", location.VulnerableClass)
+	c.Code("Vulnerable Method", location.VulnerableMethod)
+	c.Field("Request Method", location.RequestMethod)
+	c.Field("Hostname", location.Hostname)
+	c.Code("Parameter", location.Param)
+	if d := location.Dependency; d != nil {
+		c.Code("Dependency", dependencyLabel(d))
+		c.Code("Dependency Path", d.PackagePath)
+	}
+	c.Field("Operating System", location.OperatingSystem)
+	c.Code("Container Repository", location.ContainerRepositoryURL)
+	if k := location.KubernetesResource; k != nil {
+		workload := c.Sub("Kubernetes Resource")
+		workload.Field("Kind", k.Kind)
+		workload.Field("Namespace", k.Namespace)
+		workload.Field("Name", k.Name)
+		workload.Field("Container", k.ContainerName)
+		workload.Field("Agent", k.AgentName)
+		workload.Code("Cluster ID", k.ClusterID)
+	}
+	c.Field("Crash Type", location.CrashType)
+	c.Code("Crash Address", location.CrashAddress)
+}
+
+// writeRiskRows writes what GitLab knows about how dangerous the vulnerability
+// is beyond its severity: the CVE's exploitation data, and whether a leaked
+// secret still works.
+func writeRiskRows(c *toolutil.Card, v Item) {
+	if e := v.CVEEnrichment; e != nil {
+		enrichment := c.Sub("CVE Enrichment")
+		enrichment.Code("CVE", e.CVE)
+		enrichment.Field("EPSS Score", strconv.FormatFloat(e.EPSSScore, 'f', -1, 64))
+		enrichment.Warn("Known exploited (CISA KEV)", e.IsKnownExploit)
+	}
+	if s := v.TokenStatus; s != nil {
+		token := c.Sub("Token Status")
+		token.Field("Status", s.Status)
+		token.Time("Last Verified", s.LastVerifiedAt)
+	}
+}
+
+// writeUser writes a person GitLab recorded against a state change, linked to
+// their profile, and nothing when GitLab recorded nobody.
+func writeUser(c *toolutil.Card, label string, user *toolutil.UserCoreRefOutput) {
+	if user == nil {
+		return
+	}
+	text := "@" + user.Username
+	if user.Name != "" {
+		text = user.Name + " (@" + user.Username + ")"
+	}
+	c.Link(label, text, user.WebURL)
+}
+
+// dependencyLabel names a vulnerable package the way a lockfile does, with the
+// version after an at sign when the report named one.
+func dependencyLabel(d *toolutil.VulnerableDependencyOutput) string {
+	if d.Version == "" {
+		return d.PackageName
+	}
+	return d.PackageName + "@" + d.Version
+}
+
+// referenceLabel names a linked issue or merge request by its reference and
+// title, the way GitLab writes one in prose.
+func referenceLabel(sigil string, r *ReferenceItem) string {
+	label := sigil + strconv.FormatInt(r.IID, 10)
+	if r.Title != "" {
+		label += " " + r.Title
+	}
+	return label
+}
+
+// writeVulnerabilityCollections writes the nested collections of the detail
+// view after its rows and its identifiers: the CVSS assessments, the report's
+// links, the linked issues, and the fuzzer's stack trace.
+func writeVulnerabilityCollections(c *toolutil.Card, v Item) {
+	if len(v.CVSS) > 0 {
+		table := c.Table("CVSS", "Vendor", "Version", "Base Score", "Overall Score", "Severity", "Vector")
+		for _, cvss := range v.CVSS {
+			// CVSS writes its versions and scores with one decimal, 4.0 and 9.8,
+			// and a version printed as 4 names no version CVSS has.
+			table.Row(
+				toolutil.EscapeMdTableCell(cvss.Vendor),
+				strconv.FormatFloat(cvss.Version, 'f', 1, 64),
+				strconv.FormatFloat(cvss.BaseScore, 'f', 1, 64),
+				strconv.FormatFloat(cvss.OverallScore, 'f', 1, 64),
+				toolutil.EscapeMdTableCell(cvss.Severity),
+				toolutil.MdCodeSpanCell(cvss.Vector),
+			)
+		}
+	}
+	if len(v.Links) > 0 {
+		table := c.Table("Links", "Name", "URL")
+		for _, link := range v.Links {
+			table.Row(toolutil.MdTitleLink(linkName(link), link.URL), toolutil.EscapeMdTableCell(link.URL))
+		}
+	}
+	if len(v.IssueLinks) > 0 {
+		table := c.Table("Linked Issues", "Issue", "State", "Link Type")
+		for _, link := range v.IssueLinks {
+			issue, state, url := "", "", ""
+			if link.Issue != nil {
+				issue, state, url = referenceLabel("#", link.Issue), link.Issue.State, link.Issue.WebURL
+			}
+			table.Row(toolutil.MdTitleLink(issue, url), toolutil.EscapeMdTableCell(state), toolutil.EscapeMdTableCell(link.LinkType))
+		}
+	}
+	if v.Location != nil {
+		c.Fence("Stack Trace", "", v.Location.StacktraceSnippet)
+	}
+}
+
+// linkName is what a report link is shown as: its name, or its address when
+// the report gave it none.
+func linkName(link toolutil.VulnerabilityLinkOutput) string {
+	if link.Name == "" {
+		return link.URL
+	}
+	return link.Name
 }
 
 // scannerLabel names the scanner and, when GitLab sent one, its vendor.
@@ -260,44 +414,42 @@ func FormatPipelineSecuritySummaryMarkdown(out PipelineSecuritySummaryOutput) st
 	var b strings.Builder
 	b.WriteString("## Pipeline Security Report Summary\n\n")
 
-	scanners := []struct {
-		name    string
-		summary *ScannerSummaryItem
-	}{
-		{"SAST", out.Sast},
-		{"DAST", out.Dast},
-		{"Dependency Scanning", out.DependencyScanning},
-		{"Container Scanning", out.ContainerScanning},
-		{"Secret Detection", out.SecretDetection},
-		{"Coverage Fuzzing", out.CoverageFuzzing},
-		{"API Fuzzing", out.APIFuzzing},
-		{"Cluster Image Scanning", out.ClusterImageScanning},
+	// The names are this server's own, and are still escaped where they land
+	// in a cell: the escaping gate cannot follow one through a range over this
+	// table, and the escaper leaves every one of them as it is.
+	scanners := []scannerSection{
+		{name: "SAST", summary: out.Sast},
+		{name: "DAST", summary: out.Dast},
+		{name: "Dependency Scanning", summary: out.DependencyScanning},
+		{name: "Container Scanning", summary: out.ContainerScanning},
+		{name: "Secret Detection", summary: out.SecretDetection},
+		{name: "Coverage Fuzzing", summary: out.CoverageFuzzing},
+		{name: "API Fuzzing", summary: out.APIFuzzing},
+		{name: "Cluster Image Scanning", summary: out.ClusterImageScanning},
 	}
 
-	ran := 0
-	for _, s := range scanners {
-		if s.summary != nil {
-			ran++
-		}
-	}
-	if ran == 0 && out.TotalVulnerabilities == 0 {
+	ran := slices.ContainsFunc(scanners, func(s scannerSection) bool { return s.summary != nil })
+	if !ran && out.TotalVulnerabilities == 0 {
 		b.WriteString("No security scans ran in this pipeline.\n")
 		return b.String()
 	}
 
-	b.WriteString(toolutil.MarkdownTableHeader("Scanner", "Vulnerabilities", "Scanned Resources"))
+	b.WriteString(toolutil.MarkdownTableHeader("Scanner", "Vulnerabilities", "Scanned Resources", "Scans"))
 	for _, s := range scanners {
 		if s.summary == nil {
 			continue
 		}
 		b.WriteString(toolutil.MarkdownTableRow(
-			s.name,
+			toolutil.EscapeMdTableCell(s.name),
 			strconv.Itoa(s.summary.VulnerabilitiesCount),
 			strconv.Itoa(s.summary.ScannedResourcesCount),
+			toolutil.EscapeMdTableCell(scanStatuses(s.summary.Scans)),
 		))
 	}
 
 	fmt.Fprintf(&b, "\n**Total Vulnerabilities: %d**\n", out.TotalVulnerabilities)
+	writeScanMessages(&b, scanners)
+	writeScannedResources(&b, scanners)
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
@@ -305,6 +457,72 @@ func FormatPipelineSecuritySummaryMarkdown(out PipelineSecuritySummaryOutput) st
 		toolutil.HintAction(actionVulnSeverityCount, "see the project's counts by severity"),
 	)
 	return b.String()
+}
+
+// scannerSection is one scan type's section of the summary, under the name the
+// table shows it by.
+type scannerSection struct {
+	name    string
+	summary *ScannerSummaryItem
+}
+
+// scanStatuses names the scans that ran for a scan type and how each ended.
+func scanStatuses(scans []ScanItem) string {
+	parts := make([]string, 0, len(scans))
+	for _, scan := range scans {
+		parts = append(parts, scan.Name+" ("+scan.Status+")")
+	}
+	return strings.Join(parts, ", ")
+}
+
+// writeScanMessages writes the errors and warnings the analyzers wrote into
+// their reports, one row per message, and nothing when no scan reported any:
+// a scan type that found nothing because its scan failed is told apart here
+// from one that found nothing to report.
+func writeScanMessages(b *strings.Builder, scanners []scannerSection) {
+	var rows []string
+	for _, s := range scanners {
+		if s.summary == nil {
+			continue
+		}
+		for _, scan := range s.summary.Scans {
+			for _, message := range scan.Errors {
+				rows = append(rows, toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(s.name), toolutil.EscapeMdTableCell(scan.Name), "error", toolutil.EscapeMdTableCell(message)))
+			}
+			for _, message := range scan.Warnings {
+				rows = append(rows, toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(s.name), toolutil.EscapeMdTableCell(scan.Name), "warning", toolutil.EscapeMdTableCell(message)))
+			}
+		}
+	}
+	writeSummaryTable(b, "Scan Errors and Warnings", []string{"Scanner", "Scan", "Kind", "Message"}, rows)
+}
+
+// writeScannedResources writes the resources the DAST and API fuzzing scans
+// requested, as many as GitLab sends, and nothing when no scan listed any.
+func writeScannedResources(b *strings.Builder, scanners []scannerSection) {
+	var rows []string
+	for _, s := range scanners {
+		if s.summary == nil {
+			continue
+		}
+		for _, resource := range s.summary.ScannedResources {
+			rows = append(rows, toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(s.name), toolutil.EscapeMdTableCell(resource.RequestMethod), toolutil.EscapeMdTableCell(resource.URL)))
+		}
+	}
+	writeSummaryTable(b, "Scanned Resources", []string{"Scanner", "Method", "URL"}, rows)
+}
+
+// writeSummaryTable writes one of the summary's nested collections under its
+// heading, and nothing at all when it has no rows.
+func writeSummaryTable(b *strings.Builder, title string, columns, rows []string) {
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n### %s\n\n", toolutil.EscapeMdHeading(title))
+	b.WriteString(toolutil.MarkdownTableHeader(columns...))
+	for _, row := range rows {
+		b.WriteString(row)
+	}
 }
 
 func init() {

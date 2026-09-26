@@ -27,51 +27,44 @@ query($projectPath: ID!) {
 }
 `
 
+// summarySectionFields is what every scan type's section of a pipeline's
+// security report summary is read with, decoded into [gqlScannerSummary]:
+// the counts, the scans that ran for the type with what each reported going
+// wrong, and the resources a DAST or API fuzzing scan requested. GitLab caps
+// scannedResources at the first twenty, and the CSV path is where the rest are.
+const summarySectionFields = `
+          vulnerabilitiesCount
+          scannedResourcesCount
+          scannedResourcesCsvPath
+          scans {
+            nodes {
+              name
+              status
+              errors
+              warnings
+            }
+          }
+          scannedResources {
+            nodes {
+              requestMethod
+              url
+            }
+          }
+`
+
 const queryPipelineSecuritySummary = `
 query($projectPath: ID!, $pipelineIID: ID!) {
   project(fullPath: $projectPath) {
     pipeline(iid: $pipelineIID) {
       securityReportSummary {
-        sast {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        dast {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        dependencyScanning {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        containerScanning {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        secretDetection {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        coverageFuzzing {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        apiFuzzing {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
-        clusterImageScanning {
-          vulnerabilitiesCount
-          scannedResourcesCount
-          scannedResourcesCsvPath
-        }
+        sast {` + summarySectionFields + `}
+        dast {` + summarySectionFields + `}
+        dependencyScanning {` + summarySectionFields + `}
+        containerScanning {` + summarySectionFields + `}
+        secretDetection {` + summarySectionFields + `}
+        coverageFuzzing {` + summarySectionFields + `}
+        apiFuzzing {` + summarySectionFields + `}
+        clusterImageScanning {` + summarySectionFields + `}
       }
     }
   }
@@ -90,9 +83,36 @@ type gqlSeverityCount struct {
 }
 
 type gqlScannerSummary struct {
-	VulnerabilitiesCount    int    `json:"vulnerabilitiesCount"`
-	ScannedResourcesCount   int    `json:"scannedResourcesCount"`
-	ScannedResourcesCsvPath string `json:"scannedResourcesCsvPath"`
+	VulnerabilitiesCount    int                            `json:"vulnerabilitiesCount"`
+	ScannedResourcesCount   int                            `json:"scannedResourcesCount"`
+	ScannedResourcesCsvPath string                         `json:"scannedResourcesCsvPath"`
+	Scans                   *gqlScanConnection             `json:"scans"`
+	ScannedResources        *gqlScannedResourcesConnection `json:"scannedResources"`
+}
+
+// gqlScanConnection holds the scans that ran for one scan type.
+type gqlScanConnection struct {
+	Nodes []gqlScan `json:"nodes"`
+}
+
+// gqlScan is one security scan a pipeline ran: normally one per job that
+// published a report of the type.
+type gqlScan struct {
+	Name     string   `json:"name"`
+	Status   string   `json:"status"`
+	Errors   []string `json:"errors"`
+	Warnings []string `json:"warnings"`
+}
+
+// gqlScannedResourcesConnection holds the resources a scan requested.
+type gqlScannedResourcesConnection struct {
+	Nodes []gqlScannedResource `json:"nodes"`
+}
+
+// gqlScannedResource is one resource a DAST or API fuzzing scan requested.
+type gqlScannedResource struct {
+	RequestMethod string `json:"requestMethod"`
+	URL           string `json:"url"`
 }
 
 type gqlSecurityReportSummary struct {
@@ -179,10 +199,33 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 // Pipeline security summary types.
 
 // ScannerSummaryItem represents the security scan results from a single scanner type.
+//
+// Scans are what ran for the type and how each ended, with the errors and
+// warnings the analyzer wrote into its report: a scan type that found nothing
+// because its scan failed reads here as a failure rather than as a clean
+// result. ScannedResources are the first twenty resources a DAST or API
+// fuzzing scan requested, which is as many as GitLab sends; the CSV path
+// downloads them all.
 type ScannerSummaryItem struct {
-	VulnerabilitiesCount    int    `json:"vulnerabilities_count"`
-	ScannedResourcesCount   int    `json:"scanned_resources_count"`
-	ScannedResourcesCsvPath string `json:"scanned_resources_csv_path,omitempty"`
+	VulnerabilitiesCount    int                   `json:"vulnerabilities_count"`
+	ScannedResourcesCount   int                   `json:"scanned_resources_count"`
+	ScannedResourcesCsvPath string                `json:"scanned_resources_csv_path,omitempty"`
+	Scans                   []ScanItem            `json:"scans,omitempty"`
+	ScannedResources        []ScannedResourceItem `json:"scanned_resources,omitempty"`
+}
+
+// ScanItem is one security scan the pipeline ran for a scan type.
+type ScanItem struct {
+	Name     string   `json:"name"`
+	Status   string   `json:"status"`
+	Errors   []string `json:"errors,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// ScannedResourceItem is one resource a DAST or API fuzzing scan requested.
+type ScannedResourceItem struct {
+	RequestMethod string `json:"request_method,omitempty"`
+	URL           string `json:"url"`
 }
 
 // PipelineSecuritySummaryInput is the input for retrieving a pipeline's security report summary.
@@ -287,9 +330,20 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 // gqlToScannerSummary converts a raw GraphQL scanner summary struct into a
 // [ScannerSummaryItem] output struct.
 func gqlToScannerSummary(s *gqlScannerSummary) *ScannerSummaryItem {
-	return &ScannerSummaryItem{
+	item := &ScannerSummaryItem{
 		VulnerabilitiesCount:    s.VulnerabilitiesCount,
 		ScannedResourcesCount:   s.ScannedResourcesCount,
 		ScannedResourcesCsvPath: s.ScannedResourcesCsvPath,
 	}
+	if s.Scans != nil {
+		for _, scan := range s.Scans.Nodes {
+			item.Scans = append(item.Scans, ScanItem(scan))
+		}
+	}
+	if s.ScannedResources != nil {
+		for _, resource := range s.ScannedResources.Nodes {
+			item.ScannedResources = append(item.ScannedResources, ScannedResourceItem(resource))
+		}
+	}
+	return item
 }
