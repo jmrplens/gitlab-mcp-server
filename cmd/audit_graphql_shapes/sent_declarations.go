@@ -195,6 +195,9 @@ func epicNoteDeclarations(pkg string) []sentDeclaration {
 		return sentDeclaration{Package: pkg, SchemaType: "Note", Field: field, Category: category, Reason: reason}
 	}
 	return []sentDeclaration{
+		note("authorIsContributor", categoryNeverSentHere, "Types::Notes::NoteType resolves it as Note#contributor?, "+
+			"which is project&.team&.contributor?(author_id) (app/models/note.rb). An epic is a group-level work item, "+
+			"so its notes carry no project and the value is null on every note of an epic; nothing in EE overrides it."),
 		note("awardEmoji", categorySeparateAction, "A note's award emoji are a collection of their own, added and "+
 			"removed through the awardEmojiAdd and awardEmojiRemove mutations. This server serves them as actions of the "+
 			"awardemoji domain for issue, merge request and snippet notes; an epic note's would be actions there too, "+
@@ -204,6 +207,10 @@ func epicNoteDeclarations(pkg string) []sentDeclaration {
 		note("duoCreatedSession", categoryOutsideSurface, duoReason),
 		note("duoTriggeredSession", categoryOutsideSurface, duoReason),
 		note("duoWorkflowLinks", categoryOutsideSurface, duoReason),
+		note("maxAccessLevelOfAuthor", categoryNeverSentHere, "Types::Notes::NoteType resolves it as "+
+			"Note#human_max_access, which is project&.team&.human_max_access(author_id) (app/models/note.rb); the EE "+
+			"override (ee/app/models/ee/note.rb) answers only for a group wiki note. An epic's notes carry no project and "+
+			"are not wiki notes, so the value is null on every note of an epic."),
 		note("position", categoryNeverSentHere, "A note's position is the diff line a diff note sits on: "+
 			"Types::Notes::NoteType answers it only when the note's position is a Gitlab::Diff::Position, which "+
 			"only a diff note on a merge request or a commit carries, so it is null on every note of an epic."),
@@ -360,11 +367,32 @@ func epicSentDeclarations() []sentDeclaration {
 		{
 			Package:    toolsDir + "/epicdiscussions",
 			SchemaType: "Discussion",
+			Field:      "createdAt",
+			Category:   categoryPublishedElsewhere,
+			Reason: "Discussion delegates created_at to its first note (app/models/discussion.rb), and the thread's " +
+				"notes are published in order, each with its created_at, so the thread's creation time is the first note's, " +
+				"published as notes[0].created_at. Selecting it again costs six in the list query's complexity at a page of " +
+				"a hundred, against a limit that query sits 30 under.",
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "Discussion",
 			Field:      "noteable",
 			Category:   categoryNotThisResponse,
 			Reason: "The object a thread is on is the epic the caller named by full_path and epic_iid to reach the " +
 				"thread at all. Its fields are the epic surface, which the epic tools publish, and repeating the epic " +
 				"inside every thread of its own list would answer a threads call with the epic again.",
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "Discussion",
+			Field:      "replyId",
+			Category:   categoryPublishedElsewhere,
+			Reason: "Discussion#reply_id is its first note's discussion_id, and Discussion#id is the same value unless " +
+				"Discussion.override_discussion_id rewrites it, which only OutOfContextDiscussion does, for a commit's " +
+				"thread shown on a merge request. A thread on an epic is never one, so reply_id is the thread's id, " +
+				"published as id, which is what the reply action takes. Selecting it again costs six in the list query's " +
+				"complexity at a page of a hundred, against a limit that query sits 30 under.",
 		},
 		{
 			Package:    toolsDir + "/epicdiscussions",

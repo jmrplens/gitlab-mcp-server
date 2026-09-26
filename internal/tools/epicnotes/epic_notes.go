@@ -15,9 +15,15 @@ import (
 
 // GraphQL queries and mutations for work item notes.
 
-// noteUserFields are the fields every person on a note is selected with: the
-// author, whoever last edited it and whoever resolved it.
-const noteUserFields = "id name username webUrl avatarUrl"
+// noteAuthorFields are the fields a note's author is selected with, the full
+// object the canonical author key has always carried.
+const noteAuthorFields = "id name username webUrl avatarUrl"
+
+// noteUserRefFields are the fields whoever last edited a note and whoever
+// resolved it are selected with: enough to name the person, and three fields
+// fewer than the author, which is what keeps the list query under GitLab's
+// complexity limit (see [noteFields]).
+const noteUserRefFields = "id username"
 
 // noteFields are the fields of the note every document here decodes into
 // [gqlNoteNode], spelled once so the list query and the two mutations cannot
@@ -26,26 +32,34 @@ const noteUserFields = "id name username webUrl avatarUrl"
 // in its own right (the query shorthand), and the document inventory would
 // read it as one no request carries. What the schema offers on a note and this
 // leaves out is answered in cmd/audit_graphql_shapes/sent_declarations.go.
+//
+// The list query sends this selection for up to a hundred threads, and GitLab
+// charges the work item discussions connection six times its contents at that
+// page size (complexity_multiplier 0.05), so every field here costs six in the
+// query that get and list send. GitLab refuses a query above 250 from any
+// caller but an administrator, before running it. Measured on GitLab.com on
+// 2026-09-26, the list query costs 220 at first=100, the page every get sends;
+// the selection issue 968 first widened cost 274 and was refused on every
+// call. The package's tests hold the figure, so a field added here is measured
+// against that limit before it ships.
 const noteFields = `
       id
       body
-      author { ` + noteUserFields + ` }
+      author { ` + noteAuthorFields + ` }
       system
       internal
       imported
       externalAuthor
-      authorIsContributor
-      maxAccessLevelOfAuthor
       createdAt
       updatedAt
       lastEditedAt
-      lastEditedBy { ` + noteUserFields + ` }
+      lastEditedBy { ` + noteUserRefFields + ` }
       noteableId
       noteableType
       resolvable
       resolved
       resolvedAt
-      resolvedBy { ` + noteUserFields + ` }
+      resolvedBy { ` + noteUserRefFields + ` }
       url`
 
 const queryListWorkItemNotes = `
@@ -110,26 +124,24 @@ mutation($id: NoteID!) {
 // gqlNoteNode represents a note from the GitLab GraphQL API, as [noteFields]
 // selects it.
 type gqlNoteNode struct {
-	ID                     string         `json:"id"`
-	Body                   string         `json:"body"`
-	Author                 gqlNoteAuthor  `json:"author"`
-	System                 bool           `json:"system"`
-	Internal               bool           `json:"internal"`
-	Imported               bool           `json:"imported"`
-	ExternalAuthor         string         `json:"externalAuthor"`
-	AuthorIsContributor    *bool          `json:"authorIsContributor"`
-	MaxAccessLevelOfAuthor string         `json:"maxAccessLevelOfAuthor"`
-	CreatedAt              *string        `json:"createdAt"`
-	UpdatedAt              *string        `json:"updatedAt"`
-	LastEditedAt           string         `json:"lastEditedAt"`
-	LastEditedBy           *gqlNoteAuthor `json:"lastEditedBy"`
-	NoteableID             int64          `json:"noteableId"`
-	NoteableType           string         `json:"noteableType"`
-	Resolvable             bool           `json:"resolvable"`
-	Resolved               bool           `json:"resolved"`
-	ResolvedAt             string         `json:"resolvedAt"`
-	ResolvedBy             *gqlNoteAuthor `json:"resolvedBy"`
-	URL                    string         `json:"url"`
+	ID             string          `json:"id"`
+	Body           string          `json:"body"`
+	Author         gqlNoteAuthor   `json:"author"`
+	System         bool            `json:"system"`
+	Internal       bool            `json:"internal"`
+	Imported       bool            `json:"imported"`
+	ExternalAuthor string          `json:"externalAuthor"`
+	CreatedAt      *string         `json:"createdAt"`
+	UpdatedAt      *string         `json:"updatedAt"`
+	LastEditedAt   string          `json:"lastEditedAt"`
+	LastEditedBy   *gqlNoteUserRef `json:"lastEditedBy"`
+	NoteableID     int64           `json:"noteableId"`
+	NoteableType   string          `json:"noteableType"`
+	Resolvable     bool            `json:"resolvable"`
+	Resolved       bool            `json:"resolved"`
+	ResolvedAt     string          `json:"resolvedAt"`
+	ResolvedBy     *gqlNoteUserRef `json:"resolvedBy"`
+	URL            string          `json:"url"`
 }
 
 // gqlNoteAuthor represents the author of a note as selected from the GraphQL
@@ -141,6 +153,13 @@ type gqlNoteAuthor struct {
 	Username  string `json:"username"`
 	WebURL    string `json:"webUrl"`
 	AvatarURL string `json:"avatarUrl"`
+}
+
+// gqlNoteUserRef represents whoever last edited a note or resolved it, as
+// [noteUserRefFields] selects them.
+type gqlNoteUserRef struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
 }
 
 // gqlNoteNodes holds a list of note nodes.
@@ -199,23 +218,21 @@ func (r gqlNotesResponse) topLevelError(operation string) error {
 // canonical `author` key.
 func nodeToOutput(n gqlNoteNode) Output {
 	out := Output{
-		Body:                   n.Body,
-		Author:                 noteAuthorOutput(n.Author),
-		System:                 n.System,
-		Internal:               n.Internal,
-		Imported:               n.Imported,
-		ExternalAuthor:         n.ExternalAuthor,
-		AuthorIsContributor:    n.AuthorIsContributor,
-		MaxAccessLevelOfAuthor: n.MaxAccessLevelOfAuthor,
-		LastEditedAt:           n.LastEditedAt,
-		LastEditedBy:           optionalNoteUserOutput(n.LastEditedBy),
-		NoteableID:             n.NoteableID,
-		NoteableType:           n.NoteableType,
-		Resolvable:             n.Resolvable,
-		Resolved:               n.Resolved,
-		ResolvedAt:             n.ResolvedAt,
-		ResolvedBy:             optionalNoteUserOutput(n.ResolvedBy),
-		URL:                    n.URL,
+		Body:           n.Body,
+		Author:         noteAuthorOutput(n.Author),
+		System:         n.System,
+		Internal:       n.Internal,
+		Imported:       n.Imported,
+		ExternalAuthor: n.ExternalAuthor,
+		LastEditedAt:   n.LastEditedAt,
+		LastEditedBy:   optionalNoteUserOutput(n.LastEditedBy),
+		NoteableID:     n.NoteableID,
+		NoteableType:   n.NoteableType,
+		Resolvable:     n.Resolvable,
+		Resolved:       n.Resolved,
+		ResolvedAt:     n.ResolvedAt,
+		ResolvedBy:     optionalNoteUserOutput(n.ResolvedBy),
+		URL:            n.URL,
 	}
 	if _, id, err := toolutil.ParseGID(n.ID); err == nil {
 		out.ID = id
@@ -291,33 +308,34 @@ type DeleteInput struct {
 // The keys the REST note entity shares with GraphQL's Note carry the REST
 // spelling (internal, imported, noteable_id, noteable_type and the resolution
 // keys), so an epic note reads like every other note this server answers
-// with. quick_actions_status is set by create and update alone, and only when
-// the body carried a quick action: it is GitLab's account of what the commands
-// did. A create whose body held nothing but quick actions answers with the
-// status and no note, id 0, since GitLab ran the commands and kept none.
+// with. last_edited_by and resolved_by are the author's object carrying the
+// id and the username alone, which is what the list query can afford to
+// select for a hundred threads. quick_actions_status is set by create and
+// update alone, and only when the body carried a quick action: it is GitLab's
+// account of what the commands did. A create whose body held nothing but
+// quick actions answers with the status and no note, id 0, since GitLab ran
+// the commands and kept none.
 type Output struct {
 	toolutil.HintableOutput
-	ID                     int64                              `json:"id"`
-	Body                   string                             `json:"body"`
-	Author                 *NoteUserOutput                    `json:"author,omitempty"`
-	CreatedAt              string                             `json:"created_at"`
-	UpdatedAt              string                             `json:"updated_at,omitempty"`
-	System                 bool                               `json:"system"`
-	Internal               bool                               `json:"internal"`
-	Imported               bool                               `json:"imported"`
-	ExternalAuthor         string                             `json:"external_author,omitempty"`
-	AuthorIsContributor    *bool                              `json:"author_is_contributor,omitempty"`
-	MaxAccessLevelOfAuthor string                             `json:"max_access_level_of_author,omitempty"`
-	LastEditedAt           string                             `json:"last_edited_at,omitempty"`
-	LastEditedBy           *NoteUserOutput                    `json:"last_edited_by,omitempty"`
-	NoteableID             int64                              `json:"noteable_id,omitempty"`
-	NoteableType           string                             `json:"noteable_type,omitempty"`
-	Resolvable             bool                               `json:"resolvable,omitempty"`
-	Resolved               bool                               `json:"resolved,omitempty"`
-	ResolvedAt             string                             `json:"resolved_at,omitempty"`
-	ResolvedBy             *NoteUserOutput                    `json:"resolved_by,omitempty"`
-	URL                    string                             `json:"url,omitempty"`
-	QuickActionsStatus     *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
+	ID                 int64                              `json:"id"`
+	Body               string                             `json:"body"`
+	Author             *NoteUserOutput                    `json:"author,omitempty"`
+	CreatedAt          string                             `json:"created_at"`
+	UpdatedAt          string                             `json:"updated_at,omitempty"`
+	System             bool                               `json:"system"`
+	Internal           bool                               `json:"internal"`
+	Imported           bool                               `json:"imported"`
+	ExternalAuthor     string                             `json:"external_author,omitempty"`
+	LastEditedAt       string                             `json:"last_edited_at,omitempty"`
+	LastEditedBy       *NoteUserOutput                    `json:"last_edited_by,omitempty"`
+	NoteableID         int64                              `json:"noteable_id,omitempty"`
+	NoteableType       string                             `json:"noteable_type,omitempty"`
+	Resolvable         bool                               `json:"resolvable,omitempty"`
+	Resolved           bool                               `json:"resolved,omitempty"`
+	ResolvedAt         string                             `json:"resolved_at,omitempty"`
+	ResolvedBy         *NoteUserOutput                    `json:"resolved_by,omitempty"`
+	URL                string                             `json:"url,omitempty"`
+	QuickActionsStatus *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
 }
 
 // ListOutput holds a paginated list of epic notes.

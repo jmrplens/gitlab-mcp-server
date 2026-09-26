@@ -165,7 +165,9 @@ Add a comment (note) to a GitLab group epic via the Work Items GraphQL API. Supp
 
 > **Quick actions.** A body carrying a quick action (`/label ~bug`, `/close`) has it run against the epic, and the answer carries `quick_actions_status` with GitLab's account of it: `command_names`, `commands_only`, `messages` for what applied and `error_messages` for what did not. A body naming no command carries no `quick_actions_status`, although GitLab answers it with an empty one. A body holding nothing but quick actions is run and kept as no note, so the answer is the status with no note (`id` 0), where it used to be reported as a failure while GitLab had run the commands. The same holds for the discussion create and reply actions below.
 >
-> **What a note carries.** Every epic note, listed or read back, carries `internal`, `imported`, `external_author`, `author_is_contributor`, `max_access_level_of_author`, `last_edited_at` and `last_edited_by`, `noteable_id` and `noteable_type`, the resolution keys (`resolvable`, `resolved`, `resolved_at`, `resolved_by`) and its web `url`, spelled the way the REST note tools spell the keys they share.
+> **What a note carries.** Every epic note, listed or read back, carries `internal`, `imported`, `external_author`, `last_edited_at` and `last_edited_by`, `noteable_id` and `noteable_type`, the resolution keys (`resolvable`, `resolved`, `resolved_at`, `resolved_by`) and its web `url`, spelled the way the REST note tools spell the keys they share. The author is the full user object; `last_edited_by` and `resolved_by` are the same object carrying the `id` and `username` alone. GitLab also offers whether the author is a contributor and their highest access level, and leaves both null on every note of an epic, since it reads them from the note's project and an epic's notes have none, so neither is published.
+>
+> **What a list may cost.** The list and read actions send one query that GitLab charges by page size, and it refuses a query above a complexity of 250 from any user but an administrator before running it. At a page of 100, the most a list asks for and what every read sends, the query costs 220, measured on GitLab.com; every field added to a note would cost six more there.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -194,7 +196,7 @@ Permanently delete a comment from a GitLab group epic via the Work Items GraphQL
 
 List all discussion threads on a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination. The work item notes widget pages forward only: it rejects `last` and `before`, so the response carries `has_next_page` and `end_cursor` alone.
 
-> **What a thread carries.** Each thread carries its `reply_id`, `created_at` and resolution (`resolvable`, `resolved`, `resolved_at`, `resolved_by`), and each note in it the same keys an epic note carries, with the people named by username.
+> **What a thread carries.** Each thread carries its resolution (`resolvable`, `resolved`, `resolved_at`, `resolved_by`), and each note in it the same keys an epic note carries, with the people named by username. A thread's creation time is its first note's `created_at`, and the id a reply names is the thread's `id`, which on an epic is the one GitLab tells a reply to use, so neither is repeated on the thread. The list query costs 220 of the 250 GitLab allows at a page of 100, measured on GitLab.com, for the same reason as the notes list.
 
 | Annotation | **Read** |
 | ---------- | -------- |

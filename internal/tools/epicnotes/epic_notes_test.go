@@ -27,13 +27,13 @@ const (
 							"notes": {
 								"nodes": [
 									{"id": "gid://gitlab/Note/100", "body": "This looks good", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice", "webUrl": "https://gitlab.example.com/alice", "avatarUrl": "https://gitlab.example.com/avatar/alice.png"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-15T10:00:00Z",
-										"internal": true, "imported": true, "externalAuthor": "reporter@example.com", "authorIsContributor": true, "maxAccessLevelOfAuthor": "Owner",
-										"lastEditedAt": "2026-01-15T10:30:00Z", "lastEditedBy": {"id": "gid://gitlab/User/7", "name": "Carol Editor", "username": "carol", "webUrl": "https://gitlab.example.com/carol", "avatarUrl": "https://gitlab.example.com/avatar/carol.png"},
+										"internal": true, "imported": true, "externalAuthor": "reporter@example.com",
+										"lastEditedAt": "2026-01-15T10:30:00Z", "lastEditedBy": {"id": "gid://gitlab/User/7", "username": "carol"},
 										"noteableId": 41, "noteableType": "Issue", "resolvable": true, "resolved": true, "resolvedAt": "2026-01-15T11:00:00Z",
-										"resolvedBy": {"id": "gid://gitlab/User/8", "name": "Dave Resolver", "username": "dave", "webUrl": "https://gitlab.example.com/dave", "avatarUrl": "https://gitlab.example.com/avatar/dave.png"},
+										"resolvedBy": {"id": "gid://gitlab/User/8", "username": "dave"},
 										"url": "https://gitlab.example.com/groups/my-group/-/epics/1#note_100"},
 									{"id": "gid://gitlab/Note/101", "body": "changed the description", "author": {"id": "gid://gitlab/User/1", "name": "Administrator", "username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z",
-										"internal": false, "imported": false, "externalAuthor": null, "authorIsContributor": null, "maxAccessLevelOfAuthor": null,
+										"internal": false, "imported": false, "externalAuthor": null,
 										"lastEditedAt": null, "lastEditedBy": null, "noteableId": 41, "noteableType": "Issue", "resolvable": false, "resolved": false, "resolvedAt": null, "resolvedBy": null, "url": null}
 								]
 							}
@@ -612,7 +612,6 @@ func assertEpicNotesList(t *testing.T, out ListOutput) {
 // holds, so a key read into the wrong field, or two assignments swapped, shows
 // up in the comparison.
 func wantFixtureNote100() Output {
-	contributor := true
 	return Output{
 		ID:   100,
 		Body: "This looks good",
@@ -623,29 +622,21 @@ func wantFixtureNote100() Output {
 			WebURL:    "https://gitlab.example.com/alice",
 			AvatarURL: "https://gitlab.example.com/avatar/alice.png",
 		},
-		CreatedAt:              "2026-01-15T10:00:00Z",
-		UpdatedAt:              "2026-01-15T10:00:00Z",
-		System:                 false,
-		Internal:               true,
-		Imported:               true,
-		ExternalAuthor:         "reporter@example.com",
-		AuthorIsContributor:    &contributor,
-		MaxAccessLevelOfAuthor: "Owner",
-		LastEditedAt:           "2026-01-15T10:30:00Z",
-		LastEditedBy: &NoteUserOutput{
-			ID: 7, Username: "carol", Name: "Carol Editor",
-			WebURL: "https://gitlab.example.com/carol", AvatarURL: "https://gitlab.example.com/avatar/carol.png",
-		},
-		NoteableID:   41,
-		NoteableType: "Issue",
-		Resolvable:   true,
-		Resolved:     true,
-		ResolvedAt:   "2026-01-15T11:00:00Z",
-		ResolvedBy: &NoteUserOutput{
-			ID: 8, Username: "dave", Name: "Dave Resolver",
-			WebURL: "https://gitlab.example.com/dave", AvatarURL: "https://gitlab.example.com/avatar/dave.png",
-		},
-		URL: "https://gitlab.example.com/groups/my-group/-/epics/1#note_100",
+		CreatedAt:      "2026-01-15T10:00:00Z",
+		UpdatedAt:      "2026-01-15T10:00:00Z",
+		System:         false,
+		Internal:       true,
+		Imported:       true,
+		ExternalAuthor: "reporter@example.com",
+		LastEditedAt:   "2026-01-15T10:30:00Z",
+		LastEditedBy:   &NoteUserOutput{ID: 7, Username: "carol"},
+		NoteableID:     41,
+		NoteableType:   "Issue",
+		Resolvable:     true,
+		Resolved:       true,
+		ResolvedAt:     "2026-01-15T11:00:00Z",
+		ResolvedBy:     &NoteUserOutput{ID: 8, Username: "dave"},
+		URL:            "https://gitlab.example.com/groups/my-group/-/epics/1#note_100",
 	}
 }
 
@@ -1591,5 +1582,39 @@ func TestFormatListMarkdown(t *testing.T) {
 				t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
+	}
+}
+
+// measuredListComplexity is the complexity GitLab.com reported for
+// queryListWorkItemNotes at first=100 on 2026-09-26, read from the refusal an
+// anonymous request gets above 200. It is the figure the page every get sends
+// costs, and the most a list may ask for.
+const measuredListComplexity = 220
+
+// TestQueryListWorkItemNotes_Complexity_IsTheMeasuredFigureUnderGitLabsLimit
+// verifies the list document still costs what GitLab measured it at, and that
+// the figure is under the limit GitLab refuses a query above. The document is
+// the one both get and list send, and GitLab charges every field under the
+// discussions connection six times at a page of a hundred, so a single field
+// added to the note costs six: the selection issue 968 first widened cost 274
+// and was refused on every get. No other test can see it, since the mock
+// judges a document by the schema, which says nothing about cost. When this
+// fails because the selection changed, send the document to GitLab with
+// first=100, read the figure from the refusal or from a
+// queryComplexity { score } selection (whose own cost is 2), and record it.
+func TestQueryListWorkItemNotes_Complexity_IsTheMeasuredFigureUnderGitLabsLimit(t *testing.T) {
+	got, err := testutil.GitLabQueryComplexity(queryListWorkItemNotes, map[string]any{
+		"fullPath": testFullPath, "iid": "1", "first": toolutil.GraphQLMaxFirst,
+	})
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity() error = %v", err)
+	}
+	if got != measuredListComplexity {
+		t.Errorf("queryListWorkItemNotes costs %d at first=%d by the estimate, and GitLab measured %d: measure it again and record the figure",
+			got, toolutil.GraphQLMaxFirst, measuredListComplexity)
+	}
+	if got > testutil.GitLabAuthenticatedMaxComplexity {
+		t.Errorf("queryListWorkItemNotes costs %d at first=%d, over the %d GitLab refuses a query above",
+			got, toolutil.GraphQLMaxFirst, testutil.GitLabAuthenticatedMaxComplexity)
 	}
 }

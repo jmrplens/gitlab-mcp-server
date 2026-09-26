@@ -717,10 +717,9 @@ func TestCreate_CreatedNoteWithoutItsDiscussion_PublishesTheNoteAndAnEmptyThread
 }
 
 // TestList_EveryFieldGitLabSendsIsPublished verifies each field the documents
-// now select reaches the output under its own key: the thread's reply id,
-// creation time and resolution, and on each note the internal and imported
-// flags, the external author, the contributor and access level of the author,
-// the last edit, the noteable, the resolution and the web URL.
+// now select reaches the output under its own key: the thread's resolution,
+// and on each note the internal and imported flags, the external author, the
+// last edit, the noteable, the resolution and the web URL.
 //
 // Every value is distinct from every other of its kind, so a key read into the
 // wrong field, or two assignments swapped, fails the whole-value comparison.
@@ -730,17 +729,17 @@ func TestList_EveryFieldGitLabSendsIsPublished(t *testing.T) {
 	const data = `{"namespace": {"workItem": {"id": "gid://gitlab/WorkItem/1", "widgets": [{"discussions": {
 		"pageInfo": {"hasNextPage": false, "endCursor": null},
 		"nodes": [{
-			"id": "gid://gitlab/Discussion/d1hex", "replyId": "gid://gitlab/Discussion/r1hex", "createdAt": "2026-01-01T00:00:00Z",
+			"id": "gid://gitlab/Discussion/d1hex",
 			"resolvable": true, "resolved": true, "resolvedAt": "2026-01-03T00:00:00Z", "resolvedBy": {"username": "erin"},
 			"notes": {"nodes": [
 				{"id": "gid://gitlab/Note/100", "body": "first note", "author": {"username": "alice"}, "system": false,
-				 "internal": true, "imported": true, "externalAuthor": "reporter@example.com", "authorIsContributor": false,
-				 "maxAccessLevelOfAuthor": "Developer", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-02T00:00:00Z",
+				 "internal": true, "imported": true, "externalAuthor": "reporter@example.com",
+				 "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-02T00:00:00Z",
 				 "lastEditedAt": "2026-01-02T12:00:00Z", "lastEditedBy": {"username": "carol"}, "noteableId": 41, "noteableType": "Issue",
 				 "resolvable": true, "resolved": true, "resolvedAt": "2026-01-03T00:00:00Z", "resolvedBy": {"username": "dave"},
 				 "url": "https://gitlab.example.com/groups/my-group/-/epics/1#note_100"},
 				{"id": "gid://gitlab/Note/101", "body": "reply", "author": {"username": "bob"}, "system": false,
-				 "internal": false, "imported": false, "externalAuthor": null, "authorIsContributor": null, "maxAccessLevelOfAuthor": null,
+				 "internal": false, "imported": false, "externalAuthor": null,
 				 "createdAt": "2026-01-02T00:00:00Z", "updatedAt": null, "lastEditedAt": null, "lastEditedBy": null,
 				 "noteableId": 41, "noteableType": "Issue", "resolvable": true, "resolved": false, "resolvedAt": null, "resolvedBy": null, "url": null}
 			]}
@@ -757,15 +756,14 @@ func TestList_EveryFieldGitLabSendsIsPublished(t *testing.T) {
 	if len(out.Discussions) != 1 {
 		t.Fatalf("len(Discussions) = %d, want 1", len(out.Discussions))
 	}
-	notContributor := false
 	want := Output{
-		ID: "d1hex", ReplyID: "r1hex", CreatedAt: "2026-01-01T00:00:00Z",
+		ID:         "d1hex",
 		Resolvable: true, Resolved: true, ResolvedAt: "2026-01-03T00:00:00Z", ResolvedBy: "erin",
 		Notes: []NoteOutput{
 			{
 				ID: 100, Body: "first note", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
-				Internal: true, Imported: true, ExternalAuthor: "reporter@example.com", AuthorIsContributor: &notContributor,
-				MaxAccessLevelOfAuthor: "Developer", LastEditedAt: "2026-01-02T12:00:00Z", LastEditedBy: "carol",
+				Internal: true, Imported: true, ExternalAuthor: "reporter@example.com",
+				LastEditedAt: "2026-01-02T12:00:00Z", LastEditedBy: "carol",
 				NoteableID: 41, NoteableType: "Issue", Resolvable: true, Resolved: true, ResolvedAt: "2026-01-03T00:00:00Z",
 				ResolvedBy: "dave", URL: "https://gitlab.example.com/groups/my-group/-/epics/1#note_100",
 			},
@@ -1961,4 +1959,38 @@ func graphqlSessionMux() http.Handler {
 			testutil.RespondGraphQL(w, http.StatusOK, gqlDestroyNoteData)
 		},
 	})
+}
+
+// measuredListComplexity is the complexity GitLab.com reported for
+// queryListDiscussions at first=100 on 2026-09-26, read from the refusal an
+// anonymous request gets above 200. It is the figure the page every get sends
+// costs, and the most a list may ask for.
+const measuredListComplexity = 220
+
+// TestQueryListDiscussions_Complexity_IsTheMeasuredFigureUnderGitLabsLimit
+// verifies the list document still costs what GitLab measured it at, and that
+// the figure is under the limit GitLab refuses a query above. The document is
+// the one both get and list send, and GitLab charges every field under the
+// discussions connection six times at a page of a hundred, so a single field
+// added to a thread or a note costs six: the selection issue 968 first
+// widened cost exactly 250, with nothing to spare. No other test can see it,
+// since the mock judges a document by the schema, which says nothing about
+// cost. When this fails because the selection changed, send the document to
+// GitLab with first=100, read the figure from the refusal or from a
+// queryComplexity { score } selection (whose own cost is 2), and record it.
+func TestQueryListDiscussions_Complexity_IsTheMeasuredFigureUnderGitLabsLimit(t *testing.T) {
+	got, err := testutil.GitLabQueryComplexity(queryListDiscussions, map[string]any{
+		"fullPath": testFullPath, "iid": "1", "first": toolutil.GraphQLMaxFirst,
+	})
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity() error = %v", err)
+	}
+	if got != measuredListComplexity {
+		t.Errorf("queryListDiscussions costs %d at first=%d by the estimate, and GitLab measured %d: measure it again and record the figure",
+			got, toolutil.GraphQLMaxFirst, measuredListComplexity)
+	}
+	if got > testutil.GitLabAuthenticatedMaxComplexity {
+		t.Errorf("queryListDiscussions costs %d at first=%d, over the %d GitLab refuses a query above",
+			got, toolutil.GraphQLMaxFirst, testutil.GitLabAuthenticatedMaxComplexity)
+	}
 }

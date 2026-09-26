@@ -25,6 +25,17 @@ import (
 // inventory would read it as one no request carries. What the schema offers
 // on a note and this leaves out is answered in
 // cmd/audit_graphql_shapes/sent_declarations.go.
+//
+// The list query sends this selection for up to a hundred threads, and GitLab
+// charges the work item discussions connection six times its contents at that
+// page size (complexity_multiplier 0.05), so every field here and on the
+// thread costs six in the query that get and list send. GitLab refuses a
+// query above 250 from any caller but an administrator, before running it.
+// Measured on GitLab.com on 2026-09-26, the list query costs 220 at
+// first=100, the page every get sends; the selection issue 968 first widened
+// cost exactly 250, with nothing to spare. The package's tests hold the
+// figure, so a field added here is measured against that limit before it
+// ships.
 const noteFields = `
       id
       body
@@ -33,8 +44,6 @@ const noteFields = `
       internal
       imported
       externalAuthor
-      authorIsContributor
-      maxAccessLevelOfAuthor
       createdAt
       updatedAt
       lastEditedAt
@@ -61,8 +70,6 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
             }
             nodes {
               id
-              replyId
-              createdAt
               resolvable
               resolved
               resolvedAt
@@ -132,26 +139,24 @@ mutation($id: NoteID!) {
 // gqlNoteNode represents a note from the GitLab GraphQL API, as every
 // document here selects it.
 type gqlNoteNode struct {
-	ID                     string         `json:"id"`
-	Body                   string         `json:"body"`
-	Author                 gqlNoteAuthor  `json:"author"`
-	System                 bool           `json:"system"`
-	Internal               bool           `json:"internal"`
-	Imported               bool           `json:"imported"`
-	ExternalAuthor         string         `json:"externalAuthor"`
-	AuthorIsContributor    *bool          `json:"authorIsContributor"`
-	MaxAccessLevelOfAuthor string         `json:"maxAccessLevelOfAuthor"`
-	CreatedAt              *string        `json:"createdAt"`
-	UpdatedAt              *string        `json:"updatedAt"`
-	LastEditedAt           string         `json:"lastEditedAt"`
-	LastEditedBy           *gqlNoteAuthor `json:"lastEditedBy"`
-	NoteableID             int64          `json:"noteableId"`
-	NoteableType           string         `json:"noteableType"`
-	Resolvable             bool           `json:"resolvable"`
-	Resolved               bool           `json:"resolved"`
-	ResolvedAt             string         `json:"resolvedAt"`
-	ResolvedBy             *gqlNoteAuthor `json:"resolvedBy"`
-	URL                    string         `json:"url"`
+	ID             string         `json:"id"`
+	Body           string         `json:"body"`
+	Author         gqlNoteAuthor  `json:"author"`
+	System         bool           `json:"system"`
+	Internal       bool           `json:"internal"`
+	Imported       bool           `json:"imported"`
+	ExternalAuthor string         `json:"externalAuthor"`
+	CreatedAt      *string        `json:"createdAt"`
+	UpdatedAt      *string        `json:"updatedAt"`
+	LastEditedAt   string         `json:"lastEditedAt"`
+	LastEditedBy   *gqlNoteAuthor `json:"lastEditedBy"`
+	NoteableID     int64          `json:"noteableId"`
+	NoteableType   string         `json:"noteableType"`
+	Resolvable     bool           `json:"resolvable"`
+	Resolved       bool           `json:"resolved"`
+	ResolvedAt     string         `json:"resolvedAt"`
+	ResolvedBy     *gqlNoteAuthor `json:"resolvedBy"`
+	URL            string         `json:"url"`
 }
 
 // gqlCreatedNoteNode is the note createNote answers with: the note, plus the
@@ -180,8 +185,6 @@ type gqlNoteNodes struct {
 // gqlDiscussionNode represents a single discussion with its notes.
 type gqlDiscussionNode struct {
 	ID         string         `json:"id"`
-	ReplyID    string         `json:"replyId"`
-	CreatedAt  string         `json:"createdAt"`
 	Resolvable bool           `json:"resolvable"`
 	Resolved   bool           `json:"resolved"`
 	ResolvedAt string         `json:"resolvedAt"`
@@ -259,23 +262,21 @@ func (a *gqlNoteAuthor) username() string {
 // nodeToNoteOutput converts a GraphQL note node to the MCP output format.
 func nodeToNoteOutput(n gqlNoteNode) NoteOutput {
 	out := NoteOutput{
-		Body:                   n.Body,
-		Author:                 n.Author.Username,
-		System:                 n.System,
-		Internal:               n.Internal,
-		Imported:               n.Imported,
-		ExternalAuthor:         n.ExternalAuthor,
-		AuthorIsContributor:    n.AuthorIsContributor,
-		MaxAccessLevelOfAuthor: n.MaxAccessLevelOfAuthor,
-		LastEditedAt:           n.LastEditedAt,
-		LastEditedBy:           n.LastEditedBy.username(),
-		NoteableID:             n.NoteableID,
-		NoteableType:           n.NoteableType,
-		Resolvable:             n.Resolvable,
-		Resolved:               n.Resolved,
-		ResolvedAt:             n.ResolvedAt,
-		ResolvedBy:             n.ResolvedBy.username(),
-		URL:                    n.URL,
+		Body:           n.Body,
+		Author:         n.Author.Username,
+		System:         n.System,
+		Internal:       n.Internal,
+		Imported:       n.Imported,
+		ExternalAuthor: n.ExternalAuthor,
+		LastEditedAt:   n.LastEditedAt,
+		LastEditedBy:   n.LastEditedBy.username(),
+		NoteableID:     n.NoteableID,
+		NoteableType:   n.NoteableType,
+		Resolvable:     n.Resolvable,
+		Resolved:       n.Resolved,
+		ResolvedAt:     n.ResolvedAt,
+		ResolvedBy:     n.ResolvedBy.username(),
+		URL:            n.URL,
 	}
 	if _, id, err := toolutil.ParseGID(n.ID); err == nil {
 		out.ID = id
@@ -308,8 +309,6 @@ func nodeToDiscussionOutput(disc gqlDiscussionNode) Output {
 	}
 	return Output{
 		ID:         extractDiscussionHex(disc.ID),
-		ReplyID:    extractDiscussionHex(disc.ReplyID),
-		CreatedAt:  disc.CreatedAt,
 		Resolvable: disc.Resolvable,
 		Resolved:   disc.Resolved,
 		ResolvedAt: disc.ResolvedAt,
@@ -383,45 +382,40 @@ type DeleteNoteInput struct {
 // and kept none.
 type NoteOutput struct {
 	toolutil.HintableOutput
-	ID                     int64                              `json:"id"`
-	Body                   string                             `json:"body"`
-	Author                 string                             `json:"author"`
-	CreatedAt              string                             `json:"created_at"`
-	UpdatedAt              string                             `json:"updated_at,omitempty"`
-	System                 bool                               `json:"system"`
-	Internal               bool                               `json:"internal"`
-	Imported               bool                               `json:"imported"`
-	ExternalAuthor         string                             `json:"external_author,omitempty"`
-	AuthorIsContributor    *bool                              `json:"author_is_contributor,omitempty"`
-	MaxAccessLevelOfAuthor string                             `json:"max_access_level_of_author,omitempty"`
-	LastEditedAt           string                             `json:"last_edited_at,omitempty"`
-	LastEditedBy           string                             `json:"last_edited_by,omitempty"`
-	NoteableID             int64                              `json:"noteable_id,omitempty"`
-	NoteableType           string                             `json:"noteable_type,omitempty"`
-	Resolvable             bool                               `json:"resolvable,omitempty"`
-	Resolved               bool                               `json:"resolved,omitempty"`
-	ResolvedAt             string                             `json:"resolved_at,omitempty"`
-	ResolvedBy             string                             `json:"resolved_by,omitempty"`
-	URL                    string                             `json:"url,omitempty"`
-	QuickActionsStatus     *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
+	ID                 int64                              `json:"id"`
+	Body               string                             `json:"body"`
+	Author             string                             `json:"author"`
+	CreatedAt          string                             `json:"created_at"`
+	UpdatedAt          string                             `json:"updated_at,omitempty"`
+	System             bool                               `json:"system"`
+	Internal           bool                               `json:"internal"`
+	Imported           bool                               `json:"imported"`
+	ExternalAuthor     string                             `json:"external_author,omitempty"`
+	LastEditedAt       string                             `json:"last_edited_at,omitempty"`
+	LastEditedBy       string                             `json:"last_edited_by,omitempty"`
+	NoteableID         int64                              `json:"noteable_id,omitempty"`
+	NoteableType       string                             `json:"noteable_type,omitempty"`
+	Resolvable         bool                               `json:"resolvable,omitempty"`
+	Resolved           bool                               `json:"resolved,omitempty"`
+	ResolvedAt         string                             `json:"resolved_at,omitempty"`
+	ResolvedBy         string                             `json:"resolved_by,omitempty"`
+	URL                string                             `json:"url,omitempty"`
+	QuickActionsStatus *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
 }
 
 // Output represents a discussion thread.
 //
-// reply_id is the thread id a reply names, the one the thread has in GitLab's
-// database. It differs from id only where GitLab shows a thread in the
-// context of another object (a commit's thread on a merge request), so on an
-// epic the two agree; it is published because it is what GitLab says to reply
-// with. The resolution keys are the thread's own, which GitLab derives from
-// its notes.
+// The resolution keys are the thread's own, which GitLab derives from its
+// notes. The thread's creation time is its first note's, published on
+// notes[0], and the id a reply names is the thread's id on an epic, so
+// neither is repeated here (cmd/audit_graphql_shapes/sent_declarations.go
+// says why for each).
 // quick_actions_status is set by create alone, when the opening note carried
 // a quick action; a body of quick actions alone opens no thread, so the
 // output then carries the status, an empty id and no notes.
 type Output struct {
 	toolutil.HintableOutput
 	ID                 string                             `json:"id"`
-	ReplyID            string                             `json:"reply_id,omitempty"`
-	CreatedAt          string                             `json:"created_at,omitempty"`
 	Resolvable         bool                               `json:"resolvable,omitempty"`
 	Resolved           bool                               `json:"resolved,omitempty"`
 	ResolvedAt         string                             `json:"resolved_at,omitempty"`
