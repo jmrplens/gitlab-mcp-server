@@ -42,10 +42,12 @@ type Output struct {
 	LastUsedIPs    []string                            `json:"last_used_ips,omitempty"`
 }
 
-// ListOutput holds a list of impersonation tokens.
+// ListOutput holds one page of a user's impersonation tokens and the
+// pagination GitLab sent with it.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Tokens []Output `json:"tokens"`
+	Tokens     []Output                  `json:"tokens"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // PATOutput represents a personal access token.
@@ -140,7 +142,7 @@ func toPATOutput(t *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutput
 
 // --- Handlers ---.
 
-// List retrieves all impersonation tokens for a user.
+// List retrieves one page of a user's impersonation tokens.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if input.UserID <= 0 {
 		return ListOutput{}, errors.New(errUserIDPositive)
@@ -157,7 +159,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = input.Sort
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	tokens, _, err := client.GL().Users.GetAllImpersonationTokens(input.UserID, opts, gl.WithContext(ctx))
+	tokens, resp, err := client.GL().Users.GetAllImpersonationTokens(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_impersonation_tokens", err, http.StatusForbidden,
 			"impersonation tokens require admin token; verify user_id with user.get; state must be one of {all, active, inactive}")
@@ -170,7 +172,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	for i, t := range tokens {
 		out = append(out, toOutput(t, extras[i]))
 	}
-	return ListOutput{Tokens: out}, nil
+	return ListOutput{Tokens: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Get retrieves a specific impersonation token.

@@ -507,12 +507,6 @@ func TestFormatPATMarkdownString(t *testing.T) {
 
 // TestList_PaginationParams asserts that the page and per_page a caller gave
 // reach the listing request's query.
-//
-// It stops there because there is nothing further to assert: ListOutput carries
-// no [toolutil.PaginationOutput], so the page, total and next-page headers
-// GitLab answers a paged listing with are read by nothing. That is the R-PAGE
-// finding this action is the worked example of, and closing it moves the
-// published surface rather than the tests.
 func TestList_PaginationParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -531,6 +525,29 @@ func TestList_PaginationParams(t *testing.T) {
 	}
 	if len(out.Tokens) != 0 {
 		t.Errorf("len(out.Tokens) = %d, want 0", len(out.Tokens))
+	}
+}
+
+// TestList_NextPageHeader_PublishesThePaginationBlock holds the other half of
+// paging: the page, total and next-page headers GitLab answers a paged listing
+// with reach the output, so a caller holding the first page can tell a second
+// exists and which page to ask for. This action was the worked example of the
+// R-PAGE finding, answering with a bare list of tokens.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathListTokens)
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"id":1,"name":"token-1","active":true,"scopes":["api"],"revoked":false}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -828,6 +845,31 @@ func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 		"| --- | --- | --- | --- | --- | --- |\n" +
 		"| 1 | token-a | " + yes + " | " + no + " | api, read_user | 31 Dec 2026 |\n" +
 		"| 2 | token-b | " + no + " | " + yes + " | read_api | never |\n" +
+		tokListHints
+
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdownString_APageOfALongerList pins what a page that is not
+// the whole list renders: the total in the heading, the page it is between
+// the heading and the table, and the pagination line before the next steps.
+func TestFormatListMarkdownString_APageOfALongerList(t *testing.T) {
+	out := ListOutput{
+		Tokens: []Output{
+			{ID: 1, Name: "token-a", Active: true, Scopes: []string{"api"}, ExpiresAt: "2026-12-31"},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+
+	yes, no := toolutil.BoolEmoji(true), toolutil.BoolEmoji(false)
+	want := "## Impersonation Tokens (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| ID | Name | Active | Revoked | Scopes | Expires At |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | token-a | " + yes + " | " + no + " | api | 31 Dec 2026 |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
 		tokListHints
 
 	if got := FormatListMarkdownString(out); got != want {

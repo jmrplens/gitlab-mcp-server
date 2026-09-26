@@ -43,10 +43,12 @@ type Output struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
-// ListOutput holds the list response.
+// ListOutput holds the list response: one page of a group's certificates and
+// the pagination GitLab sent with it.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Certificates []Output `json:"certificates"`
+	Certificates []Output                  `json:"certificates"`
+	Pagination   toolutil.PaginationOutput `json:"pagination"`
 }
 
 func toOutput(c *gl.GroupSSHCertificate) Output {
@@ -88,7 +90,7 @@ func listQueryParameters(in ListInput) gl.RequestOptionFunc {
 	return gl.WithKeysetPaginationParameters("?" + q.Encode())
 }
 
-// List returns all SSH certificates for a group.
+// List returns one page of a group's SSH certificates.
 func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -96,7 +98,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if in.GroupID.String() == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	certs, _, err := client.GL().GroupSSHCertificates.ListGroupSSHCertificates(
+	certs, resp, err := client.GL().GroupSSHCertificates.ListGroupSSHCertificates(
 		in.GroupID.String(),
 		gl.WithContext(ctx),
 		listQueryParameters(in),
@@ -104,7 +106,10 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")
 	}
-	out := ListOutput{Certificates: make([]Output, 0, len(certs))}
+	out := ListOutput{
+		Certificates: make([]Output, 0, len(certs)),
+		Pagination:   toolutil.PaginationFromResponse(resp),
+	}
 	for _, c := range certs {
 		out.Certificates = append(out.Certificates, toOutput(c))
 	}

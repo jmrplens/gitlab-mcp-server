@@ -143,6 +143,31 @@ func TestList_PaginationParameters(t *testing.T) {
 	}
 }
 
+// TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page: GitLab serves twenty certificates at
+// a time, and a caller given the first twenty with nothing beside them could
+// neither tell a second page exists nor ask for it.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/groups/mygroup/ssh_certificates" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"id":1,"title":"cert-1","key":"ssh-rsa AAAA1","created_at":"2026-01-01T00:00:00Z"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{GroupID: toolutil.StringOrInt("mygroup")})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestList_NoPaginationInput_SendsNoPaginationParameters holds that a caller
 // who asked for no particular page is sent to GitLab asking for none.
 // ListGroupSSHCertificates takes no options struct, so this handler renders the
