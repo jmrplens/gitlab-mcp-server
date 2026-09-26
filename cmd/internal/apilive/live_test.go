@@ -273,6 +273,20 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 		}
 	})
 
+	t.Run("a record from the version before this one is refused too", func(t *testing.T) {
+		// The older direction is the one the guard was written for: version 1
+		// spelled a merged exposure like a nested one, so a reader that let it
+		// through would resolve it into the wrong keys without a word.
+		other := want
+		other.SchemaVersion = SchemaVersion - 1
+		if writeErr := Write(dir, other); writeErr != nil {
+			t.Fatalf("Write: %v", writeErr)
+		}
+		if _, readErr := Read(dir); readErr == nil || !strings.Contains(readErr.Error(), "schema version") {
+			t.Errorf("error = %v, want a refusal naming the schema version", readErr)
+		}
+	})
+
 	t.Run("a missing record says so rather than reading as empty", func(t *testing.T) {
 		_, readErr := Read(filepath.Join(dir, "nowhere"))
 		if readErr == nil {
@@ -285,6 +299,27 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 			t.Errorf("error = %q, want it to name the reading step", readErr)
 		}
 	})
+}
+
+// TestPath_TheDefaultLocation_IsTheRecordTheRepositoryCommits verifies that
+// DefaultDir and FileName name the file this repository commits, which every
+// other test here reaches only through [Path] and so could not tell moved.
+//
+// The generator writes where they point and every audit reads from there, so
+// the two would move together and stay green while the committed record, which
+// scripts/check-em-dash.sh also names by its path, went unread.
+func TestPath_TheDefaultLocation_IsTheRecordTheRepositoryCommits(t *testing.T) {
+	t.Parallel()
+	// The package sits three levels below the repository root.
+	committed := filepath.Join("..", "..", "..", Path(DefaultDir))
+
+	info, err := os.Stat(committed)
+	if err != nil {
+		t.Fatalf("Path(DefaultDir) names %s, which the repository does not hold: %v", Path(DefaultDir), err)
+	}
+	if !info.Mode().IsRegular() {
+		t.Errorf("Path(DefaultDir) names %s, which is not a file", Path(DefaultDir))
+	}
 }
 
 // TestWrite_TheRecordIsDiffable verifies that a re-pin reads as a diff rather
