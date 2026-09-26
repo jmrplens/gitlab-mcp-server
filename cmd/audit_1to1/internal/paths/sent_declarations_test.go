@@ -4,9 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
 // TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain
@@ -67,12 +71,201 @@ func TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain(t *te
 // with what a reader should look for.
 func TestSentCheck_StaleDeclarations_AreSilentUntilTheCheckRuns(t *testing.T) {
 	unused := []string{"internal/tools/keys.APIEntitiesUserWithAdmin.*"}
-	if stale := (SentCheck{Ran: false, UnusedDeclarations: unused}).staleDeclarations(); stale != nil {
+	contradicted := []string{"internal/tools/keys.APIEntitiesUser.license is declared as " + categoryOptionNeverRequested + ", and it is not true"}
+	if stale := (SentCheck{Ran: false, UnusedDeclarations: unused, ContradictedDeclarations: contradicted}).staleDeclarations(); stale != nil {
 		t.Errorf("staleDeclarations() = %v before the check ran, want nothing", stale)
 	}
-	stale := (SentCheck{Ran: true, UnusedDeclarations: unused}).staleDeclarations()
-	if len(stale) != 1 || stale[0][:len(unused[0])] != unused[0] {
-		t.Errorf("staleDeclarations() = %v, want the one key with its explanation", stale)
+	stale := (SentCheck{Ran: true, UnusedDeclarations: unused, ContradictedDeclarations: contradicted}).staleDeclarations()
+	if len(stale) != 2 || stale[0][:len(unused[0])] != unused[0] || stale[1] != contradicted[0] {
+		t.Errorf("staleDeclarations() = %v, want the unused key with its explanation, then the contradicted one as written", stale)
+	}
+}
+
+// The spellings the option evidence fixture shares.
+const (
+	evidenceEntity    = "API::Entities::Proj"
+	evidenceReader    = "internal/tools/reader"
+	evidenceAsker     = "internal/tools/asker"
+	evidenceProject   = "GET /projects/:project_id"
+	evidenceLanguages = "GET /projects/:project_id/languages"
+)
+
+// optionEvidenceFixture is a record and an inventory in which every way the
+// two option categories can be refuted is planted beside a case where the
+// evidence holds.
+//
+// GET /projects/:id declares license and with_custom_attributes, the languages
+// route declares nothing, reader calls the project route with no query at all,
+// and asker calls it with statistics in its query and license in its body, so
+// a name in either half of a request counts as sent. license_url shares
+// license's option, which is how two findings come to fail one declaration in
+// the same words.
+func optionEvidenceFixture() optionEvidence {
+	symbol := func(option string, inverse bool) []apilive.Condition {
+		return []apilive.Condition{{Kind: "SymbolCondition", Symbol: option, Inverse: inverse}}
+	}
+	record := apilive.Document{
+		SchemaVersion: apilive.SchemaVersion,
+		Entities: map[string]apilive.Entity{
+			evidenceEntity: {Fields: []apilive.Field{
+				{Name: "license", Conditions: symbol("license", false)},
+				{Name: "license_url", Conditions: symbol("license", false)},
+				{Name: "custom_attributes", Conditions: symbol("with_custom_attributes", false)},
+				{Name: "stats", Conditions: symbol("include_stats", false)},
+				{Name: "archived_only", Conditions: symbol("archived", true)},
+				{Name: "reference", Conditions: []apilive.Condition{{Kind: "HashCondition", Hash: "{:with_reference=>true}"}}},
+				{Name: "name"},
+			}},
+		},
+		Routes: []apilive.Route{
+			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:id", Params: map[string]apilive.Param{"id": {Required: true}, "license": {}, "with_custom_attributes": {}}},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:id/languages"},
+		},
+	}
+	requests := []requestinventory.Row{
+		{Package: evidenceReader, Kind: "rest", Method: "GET", Path: "/projects/:project_id"},
+		{Package: evidenceAsker, Kind: "rest", Method: "GET", Path: "/projects/:project_id", Query: []string{"statistics"}, Body: []string{"license"}},
+		{Package: evidenceAsker, Kind: "rest", Method: "GET", Path: "/projects/:project_id/languages"},
+	}
+	return newOptionEvidence(newConditionIndex(record), newOperationIndex(record), requests)
+}
+
+// TestOptionEvidence_AnOptionDeclaration_IsHeldToTheRouteAndTheInventory
+// verifies that the two presenter-option categories are judged against their
+// own evidence and not only against whether a finding still matches them.
+//
+// Each crossing is planted once: a package that sends the option it is
+// declared never to request, a never-requested option no route declares, a
+// field gated by no symbol condition at all or by an inverse one, and an
+// option declared never passed that a route does declare. Beside them sit a
+// never-requested option whose evidence holds with the declaring route listed
+// before one that declares nothing, a never-passed option no route declares,
+// a hash condition passed over, and a finding of another category left alone.
+// Two findings failing one declaration in the same words are one entry, and a
+// never-requested declaration that answers only type-grain findings is refused
+// once, while one that is judged at package grain is not refused for also
+// answering a type.
+func TestOptionEvidence_AnOptionDeclaration_IsHeldToTheRouteAndTheInventory(t *testing.T) {
+	declare := func(pkg, field, category string) sentDeclaration {
+		return sentDeclaration{Package: pkg, Entity: evidenceEntity, Field: field, Category: category, Reason: "planted"}
+	}
+	declarations := []sentDeclaration{
+		declare(evidenceReader, "license", categoryOptionNeverRequested),
+		declare(evidenceReader, "custom_attributes", categoryOptionNeverRequested),
+		declare(evidenceAsker, "license", categoryOptionNeverRequested),
+		declare(evidenceReader, "stats", categoryOptionNeverRequested),
+		declare(evidenceReader, "reference", categoryOptionNeverRequested),
+		declare(evidenceReader, "archived_only", categoryOptionNeverRequested),
+		declare(evidenceAsker, "custom_attributes", categoryOptionNeverPassed),
+		declare(evidenceAsker, "stats", categoryOptionNeverPassed),
+		declare(evidenceAsker, "reference", categoryOptionNeverPassed),
+		declare("internal/tools/twice", declaredSegment, categoryOptionNeverPassed),
+		declare("internal/tools/typeonly", "license", categoryOptionNeverRequested),
+		declare(evidenceAsker, declaredSegment, categoryDocumentedNotSent),
+	}
+	finding := func(pkg, field string, operations ...string) UnsurfacedField {
+		return UnsurfacedField{Grain: grainPackage, Package: pkg, Field: field, Entity: evidenceEntity, Operations: operations}
+	}
+	byPackage := []UnsurfacedField{
+		finding(evidenceReader, "license", evidenceProject, evidenceLanguages),
+		finding(evidenceReader, "custom_attributes", evidenceProject),
+		finding(evidenceAsker, "license", evidenceProject),
+		finding(evidenceReader, "stats", evidenceProject, evidenceLanguages),
+		finding(evidenceReader, "reference", evidenceProject),
+		finding(evidenceReader, "archived_only", evidenceProject),
+		finding(evidenceAsker, "custom_attributes", evidenceProject),
+		finding(evidenceAsker, "stats", evidenceProject, evidenceLanguages),
+		finding(evidenceAsker, "reference", evidenceProject),
+		finding("internal/tools/twice", "license", evidenceProject),
+		finding("internal/tools/twice", "license_url", evidenceProject),
+		finding(evidenceAsker, "name", evidenceProject),
+		finding(evidenceReader, "name", evidenceProject),
+	}
+	typed := func(pkg, typeName, field string) UnsurfacedField {
+		return UnsurfacedField{Grain: grainType, Package: pkg, Type: typeName, Field: field, Entity: evidenceEntity, Operations: []string{"GET /projects/:"}}
+	}
+	byType := []UnsurfacedField{
+		typed("internal/tools/typeonly", "Output", "license"),
+		typed("internal/tools/typeonly", "DetailOutput", "license"),
+		typed(evidenceReader, "Output", "custom_attributes"),
+		typed(evidenceAsker, "Output", "custom_attributes"),
+		typed("internal/tools/nobody", "Output", "license"),
+	}
+
+	got := optionEvidenceFixture().contradictions(declarations, byPackage, byType)
+
+	passedAs := " is declared as " + categoryOptionNeverPassed + ", and "
+	requestedAs := " is declared as " + categoryOptionNeverRequested + ", and "
+	noSymbol := " by no symbol condition naming an option a request could send"
+	want := []string{
+		evidenceAsker + "." + evidenceEntity + ".license" + requestedAs +
+			"the package sends license on GET /projects/:project_id, so the key is on a response it reads: publish the field and drop the declaration",
+		evidenceReader + "." + evidenceEntity + ".stats" + requestedAs +
+			"no route the finding names declares include_stats as a parameter, so no request can ask for the key: the category is " + categoryOptionNeverPassed,
+		evidenceReader + "." + evidenceEntity + ".reference" + requestedAs + "the record gates " + evidenceEntity + ".reference" + noSymbol,
+		evidenceReader + "." + evidenceEntity + ".archived_only" + requestedAs + "the record gates " + evidenceEntity + ".archived_only" + noSymbol,
+		evidenceAsker + "." + evidenceEntity + ".custom_attributes" + passedAs +
+			"GET /projects/:project_id declares with_custom_attributes as a parameter, so a request can ask for the key: if this package never sends it " +
+			"the category is " + categoryOptionNeverRequested + ", and if it does the field belongs on the surface",
+		"internal/tools/twice." + evidenceEntity + ".*" + passedAs +
+			"GET /projects/:project_id declares license as a parameter, so a request can ask for the key: if this package never sends it " +
+			"the category is " + categoryOptionNeverRequested + ", and if it does the field belongs on the surface",
+		"internal/tools/typeonly." + evidenceEntity + ".license" + requestedAs +
+			"it answers type-grain findings alone: their operations are not rows of the request inventory, which is the evidence the category rests on, " +
+			"so nothing can hold it to it",
+	}
+	sort.Strings(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("contradictions() =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+
+	if none := optionEvidenceFixture().contradictions(declarations, nil, nil); none != nil {
+		t.Errorf("contradictions() over no finding = %q, want nil", none)
+	}
+}
+
+// TestOptionEvidence_TheRealTable_HoldsUntilThePackageAsksForTheOption
+// verifies the crossing issue 973's review was about against the committed
+// record and inventory rather than a fixture: attestations reads a project to
+// probe it, never asks GET /projects/:id for its license, and so is declared
+// never to receive the license pair. Planting one recorded request that asks
+// for it has to turn both declarations from answers into refusals, since the
+// finding they answer would stay exactly where it is.
+func TestOptionEvidence_TheRealTable_HoldsUntilThePackageAsksForTheOption(t *testing.T) {
+	root := repoRoot(t)
+	record, err := apilive.Read(filepath.Join(root, apilive.DefaultDir))
+	if err != nil {
+		t.Fatalf("read the live record: %v", err)
+	}
+	inventory, err := requestinventory.Read(root)
+	if err != nil {
+		t.Fatalf("read the request inventory: %v", err)
+	}
+	attestations := toolsDir + "/attestations"
+	findings := []UnsurfacedField{
+		{Grain: grainPackage, Package: attestations, Field: "license", Entity: projectWithAccessEntity, Operations: []string{evidenceProject}},
+		{Grain: grainPackage, Package: attestations, Field: "license_url", Entity: projectWithAccessEntity, Operations: []string{evidenceProject}},
+	}
+	evidence := func(requests []requestinventory.Row) optionEvidence {
+		return newOptionEvidence(newConditionIndex(record), newOperationIndex(record), requests)
+	}
+
+	if got := evidence(inventory.Requests).contradictions(declaredUnsurfaced, findings, nil); got != nil {
+		t.Fatalf("contradictions() = %q on the committed inventory, want the declarations to hold", got)
+	}
+
+	planted := append(slices.Clone(inventory.Requests), requestinventory.Row{
+		Package: attestations, Kind: "rest", Method: "GET", Path: "/projects/:project_id", Query: []string{"license"},
+	})
+	got := evidence(planted).contradictions(declaredUnsurfaced, findings, nil)
+	refusal := " is declared as " + categoryOptionNeverRequested + ", and the package sends license on " + evidenceProject +
+		", so the key is on a response it reads: publish the field and drop the declaration"
+	want := []string{
+		attestations + "." + projectWithAccessEntity + ".license" + refusal,
+		attestations + "." + projectWithAccessEntity + ".license_url" + refusal,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("contradictions() =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
 

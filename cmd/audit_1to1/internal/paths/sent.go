@@ -108,12 +108,18 @@ type SentCheck struct {
 	// accounted for no finding at either grain, which is a finding of its own
 	// for the reason [TypedShapeCheck.UnusedDeclarations] records.
 	UnusedDeclarations []string `json:"unused_declarations,omitempty"`
+	// ContradictedDeclarations names the presenter-option declarations that
+	// still match their findings while the record or the inventory refutes
+	// what they claim, each with what refutes it (see [optionEvidence]). They
+	// fail the gate beside the unused ones, since a declaration whose reason
+	// has stopped being true answers its finding with a falsehood.
+	ContradictedDeclarations []string `json:"contradicted_declarations,omitempty"`
 }
 
 // staleDeclarations renders this run's unused declarations as the findings
-// the gate reports, and nothing when the check did not run, for the reason
-// [TypedShapeCheck.staleDeclarations] records: every declaration would be
-// unused then, and all of them stale.
+// the gate reports, followed by the contradicted ones, and nothing when the
+// check did not run, for the reason [TypedShapeCheck.staleDeclarations]
+// records: every declaration would be unused then, and all of them stale.
 func (c SentCheck) staleDeclarations() []string {
 	if !c.Ran {
 		return nil
@@ -122,7 +128,7 @@ func (c SentCheck) staleDeclarations() []string {
 	for _, key := range c.UnusedDeclarations {
 		stale = append(stale, key+" is declared as a field GitLab's document lists and the endpoint does not send, and no finding matched it: the document no longer lists the field on that component, or the package now publishes it")
 	}
-	return stale
+	return append(stale, c.ContradictedDeclarations...)
 }
 
 // unsurfacedCounts returns how many findings say always, how many say when,
@@ -287,6 +293,25 @@ func (c *conditionIndex) annotate(finding *UnsurfacedField) {
 		return
 	}
 	finding.Sent = sentWhen
+}
+
+// presenterOption is the option a field's symbol condition names, which is the
+// request parameter of the same name a route passes to the presenter when it
+// declares one: `if: :license` on a project is sent when GET /projects/:id is
+// asked with license=true.
+//
+// It is empty for a field gated by no symbol condition, and for one gated by
+// `unless: :option` alone, since not sending that option is what sends the
+// key. A block or a hash condition can name an option too, in a form this does
+// not parse, and answers empty rather than a guess.
+func (c *conditionIndex) presenterOption(entity, field string) string {
+	fields, _ := c.doc.Fields(entity)
+	for _, condition := range fields[field].Conditions {
+		if condition.Symbol != "" && !condition.Inverse {
+			return condition.Symbol
+		}
+	}
+	return ""
 }
 
 // entity returns an entity's gates by field name, and false for one the record

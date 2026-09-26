@@ -1,6 +1,12 @@
 package paths
 
-import "sort"
+import (
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
+)
 
 // sentDeclaration answers a finding of the sent dimension: a field GitLab's
 // document lists among an operation's response properties that the endpoint
@@ -63,7 +69,10 @@ const (
 	// that endpoint's response, and never on one this package asked for. Kept
 	// apart from [categoryOptionNeverPassed] because it is the one of the
 	// three that a change here, and not only a GitLab release, can retire: a
-	// package that starts sending the parameter starts receiving the key.
+	// package that starts sending the parameter starts receiving the key. That
+	// change leaves the finding exactly where it was, so [optionEvidence] holds
+	// each declaration to the route's params and the package's recorded
+	// requests rather than trusting its match.
 	categoryOptionNeverRequested = "entity-option-this-package-never-requests"
 	// categoryEntityPublishedElsewhere is an entity the package does surface,
 	// on another type or under a shape of this server's own, so the field
@@ -358,10 +367,12 @@ const (
 		"lib/api/commits.rb passes from its stats parameter on the two commit routes that declare it. PUT " +
 		"/projects/:id/repository/submodules/:submodule (lib/api/submodules.rb:64) presents the commit with the current user alone and " +
 		"declares no such parameter, so the key has never been on its response."
-	reasonEpicReferenceNeverPassed = "ee/lib/api/entities/epic.rb:129 exposes reference `if: { with_reference: true }`. Every epic route " +
-		"presents through epic_options (ee/lib/api/helpers/epics_helpers.rb), which never sets it; the only caller that does is " +
-		"ee/lib/api/entities/epic_issue_link.rb, for the epic nested in an epic-issue link. GET /groups/:id/epics has never sent the key, " +
-		"and GitLab deprecated it in favor of references, which this package publishes."
+	reasonEpicReferenceNeverPassed = "ee/lib/api/entities/epic.rb:129 exposes reference `if: { with_reference: true }`, and no epic " +
+		"route passes with_reference: the routes in ee/lib/api/epics.rb present through epic_options (ee/lib/api/helpers/epics_helpers.rb), " +
+		"which never sets it, and neither do the options the list merges into it; the child-epic routes in ee/lib/api/epic_links.rb " +
+		"present the entity with no options at all. The only caller that sets it is ee/lib/api/entities/epic_issue_link.rb, for the " +
+		"epic nested in an epic-issue link. GET /groups/:id/epics has never sent the key, and GitLab deprecated it in favor of " +
+		"references, which this package publishes."
 )
 
 // declaredUnsurfaced holds every field GitLab's document lists that the
@@ -704,14 +715,169 @@ func classifySentFindings(declarations []sentDeclaration, byPackage, byType []Un
 func classifySent(declarations []sentDeclaration, found []UnsurfacedField, used map[string]bool) []UnsurfacedField {
 	var classified []UnsurfacedField
 	for _, finding := range found {
-		for _, declaration := range declarations {
-			if declaration.covers(finding) {
-				finding.Category, finding.Reason = declaration.Category, declaration.Reason
-				used[declaration.key()] = true
-				break
-			}
+		if declaration, ok := coveringDeclaration(declarations, finding); ok {
+			finding.Category, finding.Reason = declaration.Category, declaration.Reason
+			used[declaration.key()] = true
 		}
 		classified = append(classified, finding)
 	}
 	return classified
+}
+
+// coveringDeclaration is the declaration that answers a finding: the first in
+// the table that covers it, which is the one rule both the classification and
+// the evidence check below read, so the two can never disagree about which
+// entry a finding was answered by.
+func coveringDeclaration(declarations []sentDeclaration, finding UnsurfacedField) (sentDeclaration, bool) {
+	for _, declaration := range declarations {
+		if declaration.covers(finding) {
+			return declaration, true
+		}
+	}
+	return sentDeclaration{}, false
+}
+
+// requestKey names what one package was recorded sending to one operation, in
+// the spelling a package-grain finding carries its operations in.
+type requestKey struct {
+	pkg       string
+	operation string
+}
+
+// optionEvidence is what the two presenter-option categories that turn on a
+// request parameter rest on, read from the same record and inventory the
+// findings they answer came from: the parameters each route declares, and
+// the names each package was recorded sending it.
+//
+// Staleness alone cannot hold these categories. A declaration is stale when
+// it matches no finding, and both of these keep matching theirs after their
+// evidence is gone: a package that starts sending the option and still does
+// not publish the key leaves the finding exactly where it was, now answered by
+// a reason that is false. So each is judged against its own evidence as well
+// as against the findings.
+type optionEvidence struct {
+	conditions *conditionIndex
+	index      *operationIndex
+	sent       map[requestKey]map[string]bool
+}
+
+// newOptionEvidence indexes the inventory's query and body names by package
+// and operation.
+func newOptionEvidence(conditions *conditionIndex, index *operationIndex, requests []requestinventory.Row) optionEvidence {
+	sent := map[requestKey]map[string]bool{}
+	for _, request := range requests {
+		key := requestKey{pkg: request.Package, operation: request.Method + " " + request.Path}
+		names := sent[key]
+		if names == nil {
+			names = map[string]bool{}
+			sent[key] = names
+		}
+		for _, name := range request.Query {
+			names[name] = true
+		}
+		for _, name := range request.Body {
+			names[name] = true
+		}
+	}
+	return optionEvidence{conditions: conditions, index: index, sent: sent}
+}
+
+// contradictions names every option declaration whose evidence the record or
+// the inventory refutes, each with what refutes it.
+//
+// Only a package-grain finding is judged, because only its operations are the
+// inventory's own rows: a type-grain finding carries the collapsed spellings
+// of the routes a client-go struct reaches, and no package was recorded
+// sending those. That leaves one way for a declaration of
+// [categoryOptionNeverRequested] to escape its evidence, answering type-grain
+// findings alone, and that is refused too, since the request inventory is the
+// whole of what the category claims.
+//
+// [categoryOptionNeverPassed] is held to the half of its evidence the record
+// can read: none of the routes a finding names may declare the option as a
+// parameter, since a route that does can be asked for the key. A field gated
+// by a block or a hash condition names its option in a form this does not
+// parse, and is passed over rather than guessed at.
+func (e optionEvidence) contradictions(declarations []sentDeclaration, byPackage, byType []UnsurfacedField) []string {
+	var found []string
+	judged := map[string]bool{}
+	for _, finding := range byPackage {
+		declaration, ok := coveringDeclaration(declarations, finding)
+		if !ok {
+			continue
+		}
+		var problem string
+		switch declaration.Category {
+		case categoryOptionNeverRequested:
+			judged[declaration.key()] = true
+			problem = e.neverRequested(finding)
+		case categoryOptionNeverPassed:
+			problem = e.neverPassed(finding)
+		}
+		if problem != "" {
+			found = append(found, declaration.key()+" is declared as "+declaration.Category+", and "+problem)
+		}
+	}
+	for _, finding := range byType {
+		declaration, ok := coveringDeclaration(declarations, finding)
+		if !ok || declaration.Category != categoryOptionNeverRequested || judged[declaration.key()] {
+			continue
+		}
+		judged[declaration.key()] = true
+		found = append(found, declaration.key()+" is declared as "+declaration.Category+", and it answers type-grain findings alone: "+
+			"their operations are not rows of the request inventory, which is the evidence the category rests on, so nothing can hold it to it")
+	}
+	sort.Strings(found)
+	return slices.Compact(found)
+}
+
+// neverRequested judges one finding answered as an option this package never
+// requests: the field is gated by a symbol condition, a route the finding
+// names declares that option as a parameter, and the package was never
+// recorded sending it to any of them. It returns what refutes the claim, or
+// nothing when the evidence holds.
+func (e optionEvidence) neverRequested(finding UnsurfacedField) string {
+	option := e.conditions.presenterOption(finding.Entity, finding.Field)
+	if option == "" {
+		return "the record gates " + finding.Entity + "." + finding.Field + " by no symbol condition naming an option a request could send"
+	}
+	declared := false
+	for _, operation := range finding.Operations {
+		if e.sent[requestKey{pkg: finding.Package, operation: operation}][option] {
+			return "the package sends " + option + " on " + operation + ", so the key is on a response it reads: publish the field and drop the declaration"
+		}
+		if e.declares(operation, option) {
+			declared = true
+		}
+	}
+	if !declared {
+		return "no route the finding names declares " + option + " as a parameter, so no request can ask for the key: the category is " + categoryOptionNeverPassed
+	}
+	return ""
+}
+
+// neverPassed judges one finding answered as an option no endpoint passes, on
+// the half of the claim the record can read: no route the finding names may
+// declare the option as a parameter.
+func (e optionEvidence) neverPassed(finding UnsurfacedField) string {
+	option := e.conditions.presenterOption(finding.Entity, finding.Field)
+	if option == "" {
+		return ""
+	}
+	for _, operation := range finding.Operations {
+		if e.declares(operation, option) {
+			return operation + " declares " + option + " as a parameter, so a request can ask for the key: if this package never sends it the category is " +
+				categoryOptionNeverRequested + ", and if it does the field belongs on the surface"
+		}
+	}
+	return ""
+}
+
+// declares reports whether the route an operation reaches declares the named
+// parameter. An operation the record holds no route for declares nothing.
+func (e optionEvidence) declares(operation, param string) bool {
+	method, path, _ := strings.Cut(operation, " ")
+	route, _, _ := e.index.lookup(method, path)
+	_, declared := route.Params[param]
+	return declared
 }
