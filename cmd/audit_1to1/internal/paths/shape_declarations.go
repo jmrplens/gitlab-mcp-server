@@ -108,9 +108,10 @@ const reasonGroupDatadogProperties = "lib/api/integrations/integratable_operatio
 const reasonPipelineNamePresented = "lib/api/ci/pipelines.rb describes GET /projects/:id/pipelines with " +
 	"`model: Entities::Ci::PipelineBasic` and presents `with: Entities::Ci::PipelineBasicWithMetadata`, which is " +
 	"PipelineBasic plus name (lib/api/entities/ci/pipeline_basic_with_metadata.rb). pipelines.md prints name in the " +
-	"example body of \"List project pipelines\", and client-go's PipelineInfo models it. The merge request pipeline list " +
-	"presents PipelineBasic and sends no name, so the key arrives from the project list, which is the route List fills " +
-	"this type from."
+	"example body of \"List project pipelines\", and client-go's PipelineInfo models it. The other two routes the type " +
+	"is filled from send no name: GET /projects/:id/merge_requests/:merge_request_iid/pipelines presents PipelineBasic " +
+	"and the POST at the same path presents Pipeline (lib/api/merge_requests.rb), so the field is tagged omitempty and " +
+	"is absent from every row those routes filled rather than published empty."
 
 // declaredShapeFields holds every published field the type-grain join reports
 // that GitLab does send, each with the reason the record does not say so.
