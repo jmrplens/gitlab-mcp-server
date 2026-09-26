@@ -2553,7 +2553,9 @@ func TestEnabledEvents_All(t *testing.T) {
 
 // TestEnabledEvents_OneFlagEach verifies each of the six flags the list used
 // to drop is named on its own, which is the state a hook subscribed to only
-// that flag renders in.
+// that flag renders in, and that the Duo flow callback setting, a pointer
+// because an instance older than 19.4 does not send it, is named when it is
+// on and not when GitLab sent it off.
 func TestEnabledEvents_OneFlagEach(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -2566,6 +2568,8 @@ func TestEnabledEvents_OneFlagEach(t *testing.T) {
 		{name: "resource_access_token", hook: HookOutput{ResourceAccessTokenEvents: true}, want: "resource_access_token"},
 		{name: "project", hook: HookOutput{ProjectEvents: true}, want: "project"},
 		{name: "repository_update", hook: HookOutput{RepositoryUpdateEvents: true}, want: "repository_update"},
+		{name: "duo_flow_callback", hook: HookOutput{DuoFlowCallbackEnabled: new(true)}, want: "duo_flow_callback"},
+		{name: "duo_flow_callback sent off", hook: HookOutput{DuoFlowCallbackEnabled: new(false)}, want: "none"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := enabledEvents(tc.hook); got != tc.want {

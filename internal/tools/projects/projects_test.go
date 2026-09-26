@@ -1872,6 +1872,70 @@ func TestProjectGetHook_Success(t *testing.T) {
 	}
 }
 
+// TestProjectGetHook_DuoFlowCallbackEnabled_TellsOffFromNotSent verifies the
+// Duo flow callback setting, which lib/api/entities/project_hook.rb sends on
+// every hook from GitLab 19.4 and client-go does not model, is published as
+// GitLab sent it, false included, and left out of an older instance's answer.
+func TestProjectGetHook_DuoFlowCallbackEnabled_TellsOffFromNotSent(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want *bool
+	}{
+		{"sent on", `{"id":1,"url":"https://example.com/hook","duo_flow_callback_enabled":true}`, new(true)},
+		{"sent off", `{"id":1,"url":"https://example.com/hook","duo_flow_callback_enabled":false}`, new(false)},
+		{"not sent", `{"id":1,"url":"https://example.com/hook"}`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathProject42Hook1 {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := GetHook(context.Background(), client, GetHookInput{ProjectID: "42", HookID: 1})
+			if err != nil {
+				t.Fatalf("GetHook() unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(out.DuoFlowCallbackEnabled, tt.want) {
+				t.Errorf("DuoFlowCallbackEnabled = %v, want %v", out.DuoFlowCallbackEnabled, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatHookMarkdown_DuoFlowCallbackRowOnlyWhenSent verifies the card lists
+// the Duo flow callback with the value GitLab sent, and leaves the row out of
+// a hook whose answer carried no key, since off would be a claim nobody made.
+func TestFormatHookMarkdown_DuoFlowCallbackRowOnlyWhenSent(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   *bool
+		wantRow string
+	}{
+		{"sent on", new(true), "| Duo Flow Callback | ✅ |\n"},
+		{"sent off", new(false), "| Duo Flow Callback | ❌ |\n"},
+		{"not sent", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := FormatHookMarkdown(HookOutput{ID: 3, URL: testHookURL, DuoFlowCallbackEnabled: tt.value})
+			if tt.wantRow == "" {
+				if strings.Contains(md, "Duo Flow Callback") {
+					t.Errorf("FormatHookMarkdown() names the Duo flow callback for a hook GitLab sent no key for:\n%s", md)
+				}
+				return
+			}
+			if !strings.Contains(md, "| Vulnerability | ❌ |\n"+tt.wantRow) {
+				t.Errorf("FormatHookMarkdown() is missing %q after the last event row:\n%s", tt.wantRow, md)
+			}
+		})
+	}
+}
+
 // TestProjectGetHook_EmptyProjectID verifies ProjectGetHook when empty project ID.
 func TestProjectGetHook_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -4904,6 +4968,69 @@ func TestGet_MergeTrainEnforcement_IsTheLevelGitLabSpells(t *testing.T) {
 				t.Errorf("MergeTrainEnforcement = nil, want %q", *tt.want)
 			case tt.want != nil && *got != *tt.want:
 				t.Errorf("MergeTrainEnforcement = %q, want %q", *got, *tt.want)
+			}
+		})
+	}
+}
+
+// TestGet_TheTwoMergeSettingsGitLab194Sends verifies the two project settings
+// lib/api/entities/project.rb sends from GitLab 19.4 reach the output:
+// automatic_rebase_enabled, which client-go's Project models and every
+// project answer carries, and ci_skip_branch_pipelines_for_mrs, which it does
+// not model and which only a caller holding admin_project is sent. The second
+// keeps off apart from not sent, the case of any other caller.
+func TestGet_TheTwoMergeSettingsGitLab194Sends(t *testing.T) {
+	tests := []struct {
+		name       string
+		payload    string
+		wantRebase bool
+		wantSkip   *bool
+	}{
+		{"both on", `{"id":42,"name":"test","automatic_rebase_enabled":true,"ci_skip_branch_pipelines_for_mrs":true}`, true, new(true)},
+		{"both off", `{"id":42,"name":"test","automatic_rebase_enabled":false,"ci_skip_branch_pipelines_for_mrs":false}`, false, new(false)},
+		{"no admin_project", `{"id":42,"name":"test","automatic_rebase_enabled":true}`, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProject42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.payload)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.AutomaticRebaseEnabled != tt.wantRebase {
+				t.Errorf("AutomaticRebaseEnabled = %v, want %v", out.AutomaticRebaseEnabled, tt.wantRebase)
+			}
+			if !reflect.DeepEqual(out.CISkipBranchPipelinesForMRs, tt.wantSkip) {
+				t.Errorf("CISkipBranchPipelinesForMRs = %v, want %v", out.CISkipBranchPipelinesForMRs, tt.wantSkip)
+			}
+		})
+	}
+}
+
+// TestUpdate_AutomaticRebaseEnabled_ReachesTheOptionOnlyWhenGiven verifies the
+// automatic rebase setting is sent as the caller gave it, false included, and
+// left out of the options when the caller did not name it, so an update of
+// another setting does not turn it off.
+func TestUpdate_AutomaticRebaseEnabled_ReachesTheOptionOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name  string
+		input *bool
+	}{
+		{"on", new(true)},
+		{"off", new(false)},
+		{"not given", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := buildUpdateOpts(UpdateInput{ProjectID: "42", AutomaticRebaseEnabled: tt.input})
+			if !reflect.DeepEqual(opts.AutomaticRebaseEnabled, tt.input) {
+				t.Errorf("AutomaticRebaseEnabled = %v, want %v", opts.AutomaticRebaseEnabled, tt.input)
 			}
 		})
 	}
@@ -9736,9 +9863,8 @@ func TestProjectGet_EachScalarIsPublishedUnderItsOwnKey(t *testing.T) {
 // levels whose enabled value the older flags derive from. The outcomes it
 // declares are the entity's own: public_builds is the older spelling of
 // public_jobs, the six enabled flags follow their access level rather than
-// the copy client-go keeps of the deprecated key, and two flags client-go
-// models are not published, one because no GitLab entity sends it and one
-// still on the client-go 3.12 backlog.
+// the copy client-go keeps of the deprecated key, and one flag client-go
+// models is not published because no GitLab entity sends it.
 func TestProjectGet_EachFlagIsPublishedUnderItsOwnKey(t *testing.T) {
 	derivedFromLevel := "the entity computes it from the access level; the deprecated copy client-go decodes is not read"
 	derived := map[string]flagOutcome{
@@ -9751,7 +9877,6 @@ func TestProjectGet_EachFlagIsPublishedUnderItsOwnKey(t *testing.T) {
 		"snippets_enabled":                {why: derivedFromLevel},
 		"container_registry_enabled":      {why: derivedFromLevel},
 		"ci_opt_in_jwt":                   {why: "client-go models it and no GitLab entity sends it (upstream-bugs.md)"},
-		"automatic_rebase_enabled":        {why: "not published yet: client-go 3.12 added it, and no entity or route of the live GitLab record declares it (gitlab-api-live.json)"},
 		"issues_access_level":             {publishes: []string{"issues_enabled"}, why: "an enabled level is what the older flag reports"},
 		"merge_requests_access_level":     {publishes: []string{"merge_requests_enabled"}, why: "an enabled level is what the older flag reports"},
 		"builds_access_level":             {publishes: []string{"jobs_enabled"}, why: "an enabled level is what the older flag reports"},

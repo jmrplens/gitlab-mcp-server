@@ -786,16 +786,33 @@ func CapturedDeployKeys(capture *gitlabclient.ResponseCapture, decoded int) ([]D
 }
 
 // NamespaceExtra is the three limits GitLab's namespace entity sends to a
-// caller who may change them. client-go v3.12.0 carries all three, and it
-// carries them as plain int64, where a null and a limit of zero are the same
-// value: a null shared_runners_minutes_limit is how GitLab says there is no
-// limit at all, so reading these from the SDK would publish "no limit" as
-// "limited to zero minutes". The other five fields this shape used to read
-// retired with that release, their SDK types carrying what GitLab sends.
+// caller who may change them, and the compute-minute usage it sends to one who
+// may read it. client-go v3.12.0 carries the three limits, and it carries them
+// as plain int64, where a null and a limit of zero are the same value: a null
+// shared_runners_minutes_limit is how GitLab says there is no limit at all, so
+// reading these from the SDK would publish "no limit" as "limited to zero
+// minutes". The other five fields this shape used to read retired with that
+// release, their SDK types carrying what GitLab sends. client-go models no
+// usage at all.
 type NamespaceExtra struct {
-	SharedRunnersMinutesLimit      *int64 `json:"shared_runners_minutes_limit"`
-	ExtraSharedRunnersMinutesLimit *int64 `json:"extra_shared_runners_minutes_limit"`
-	AdditionalPurchasedStorageSize *int64 `json:"additional_purchased_storage_size"`
+	SharedRunnersMinutesLimit      *int64                `json:"shared_runners_minutes_limit"`
+	ExtraSharedRunnersMinutesLimit *int64                `json:"extra_shared_runners_minutes_limit"`
+	AdditionalPurchasedStorageSize *int64                `json:"additional_purchased_storage_size"`
+	CIMinutesUsage                 *CIMinutesUsageOutput `json:"ci_minutes_usage"`
+}
+
+// CIMinutesUsageOutput is the compute-minute usage
+// ee/lib/api/entities/ci/minutes/usage.rb renders for a namespace in the
+// current billing period: the total, and the part of it drawn from the monthly
+// quota and from purchased minutes. ee/lib/ee/api/entities/namespace.rb sends
+// it only for a top-level namespace whose caller holds admin_ci_minutes, which
+// is its owner or an administrator, and GitLab sends it from 19.4
+// (namespaces.md). All three are whole minutes, as Ci::Minutes::Usage computes
+// them.
+type CIMinutesUsageOutput struct {
+	TotalMinutesUsed     int64 `json:"total_minutes_used"`
+	MonthlyMinutesUsed   int64 `json:"monthly_minutes_used"`
+	PurchasedMinutesUsed int64 `json:"purchased_minutes_used"`
 }
 
 // CapturedNamespace reads them off the captured answer to a request for one
@@ -1111,7 +1128,7 @@ func CapturedUsers(capture *gitlabclient.ResponseCapture, decoded int) ([]UserEx
 	return capturedList[UserExtra](capture, decoded, "users")
 }
 
-// InstanceUserExtra is [UserExtra] plus the five keys only the instance-wide
+// InstanceUserExtra is [UserExtra] plus the six keys only the instance-wide
 // user routes ever send, which is what separates internal/tools/users from the
 // three group-scoped packages sharing the smaller shape: those serve
 // GET /groups/:id/{enterprise_users,provisioned_users,saml_users}, and GitLab
@@ -1120,24 +1137,30 @@ func CapturedUsers(capture *gitlabclient.ResponseCapture, decoded int) ([]UserEx
 // bio_html comes from lib/api/entities/users/bio_html.rb, which only
 // UserProfile includes, so of the routes here it is on GET /users/:id alone.
 // The three license-gated keys come from ee/lib/ee/api/entities/user_with_admin.rb,
-// which only POST /users and PUT /users/:id present. unconfirmed_email is not a
+// which only POST /users and PUT /users/:id present. provisioned_by_project_id
+// comes from lib/api/entities/user_with_admin.rb itself, with no license, and
+// so reaches an administrator on every route presenting that entity or one
+// inheriting it; users.md dates it to GitLab 19.3. unconfirmed_email is not a
 // user key at all: lib/api/entities/service_account.rb sends it, on the six-key
 // object POST /service_accounts answers with, when the account has an address
 // change waiting to be confirmed.
 //
-// The two identifiers are pointers for the reason the counts are: a license
-// that does not carry the feature sends no key, and group 0 is not that.
+// The three identifiers are pointers for the reason the counts are: a license
+// that does not carry the feature, or a release that predates the key, sends
+// no key, and group 0 is not that. provisioned_by_project_id is also sent as
+// null for a user no project provisioned, which reads the same way.
 type InstanceUserExtra struct {
 	UserExtra
 	BioHTML                     string     `json:"bio_html"`
 	EnterpriseGroupID           *int64     `json:"enterprise_group_id"`
 	EnterpriseGroupAssociatedAt *time.Time `json:"enterprise_group_associated_at"`
 	ProvisionedByGroupID        *int64     `json:"provisioned_by_group_id"`
+	ProvisionedByProjectID      *int64     `json:"provisioned_by_project_id"`
 	UnconfirmedEmail            string     `json:"unconfirmed_email"`
 }
 
 // CapturedInstanceUser reads, off the captured answer to a request for one
-// user on an instance-wide route, everything [CapturedUser] reads and the five
+// user on an instance-wide route, everything [CapturedUser] reads and the six
 // keys beside it.
 func CapturedInstanceUser(capture *gitlabclient.ResponseCapture) (InstanceUserExtra, error) {
 	return capturedOne[InstanceUserExtra](capture)
@@ -1337,6 +1360,10 @@ type ProjectExtra struct {
 	DuoDependencyBumpBreakingChanges      *bool   `json:"duo_dependency_bump_breaking_changes_enabled"`
 	SecurityPolicyPipelineMustSucceed     *bool   `json:"security_policy_pipeline_must_succeed"`
 	SPPRepositoryPipelineAccess           *bool   `json:"spp_repository_pipeline_access"`
+	// CISkipBranchPipelinesForMRs is one of the CI/CD settings
+	// lib/api/entities/project.rb sends only to a caller holding admin_project
+	// on the project, and GitLab sends it from 19.4 (projects.md).
+	CISkipBranchPipelinesForMRs *bool `json:"ci_skip_branch_pipelines_for_mrs"`
 }
 
 // CapturedProject reads, off the captured answer to a request that renders the
@@ -1387,12 +1414,16 @@ func CapturedNestedUserBasics(capture *gitlabclient.ResponseCapture, decoded int
 	return out, nil
 }
 
-// GroupHookExtra is what lib/api/entities/group_hook.rb sends that client-go's
-// GroupHook does not model. The SDK carries repository_update_events on the
-// project hook and on the system hook and not on this one; the entity sends it
-// on every group hook, so a plain value is the honest shape.
+// GroupHookExtra is what ee/lib/api/entities/group_hook.rb sends that
+// client-go's GroupHook does not model. The SDK carries
+// repository_update_events on the project hook and on the system hook and not
+// on this one; the entity sends it on every group hook, so a plain value is
+// the honest shape. duo_flow_callback_enabled is sent on every group hook from
+// GitLab 19.4 (group_webhooks.md), so it is a pointer: an older instance sends
+// no key, and that is not a hook with the setting off.
 type GroupHookExtra struct {
-	RepositoryUpdateEvents bool `json:"repository_update_events"`
+	RepositoryUpdateEvents bool  `json:"repository_update_events"`
+	DuoFlowCallbackEnabled *bool `json:"duo_flow_callback_enabled"`
 }
 
 // CapturedGroupHook reads that key off the answer to a request for one hook.

@@ -849,10 +849,12 @@ func TestFormatExistsMarkdownString_SuggestionsOnlyWhenGitLabSentThem(t *testing
 // namespaceSentJSON is one namespace as GitLab renders it for a caller allowed
 // to see everything: the administrator's project and repository figures, the
 // compute-minute and purchased-storage limits a caller who may change them is
-// shown, and the two subscription dates.
+// shown, the compute-minute usage an owner is shown, and the two subscription
+// dates.
 const namespaceSentJSON = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
 	`"projects_count":12,"root_repository_size":34567,` +
 	`"shared_runners_minutes_limit":400,"extra_shared_runners_minutes_limit":50,` +
+	`"ci_minutes_usage":{"total_minutes_used":130,"monthly_minutes_used":110,"purchased_minutes_used":20},` +
 	`"additional_purchased_storage_size":10240,"additional_purchased_storage_ends_on":"2027-03-31",` +
 	`"max_seats_used_changed_at":"2026-05-06T07:08:09Z","end_date":"2027-01-31"}`
 
@@ -920,8 +922,9 @@ func namespaceBodyFor(list bool, body string) string {
 }
 
 // TestNamespaces_PublishTheFieldsGitLabSendsBesideTheSDKs verifies every
-// handler answering with a namespace publishes the eight keys the SDK's own
-// Namespace does not model, read off the captured response.
+// handler answering with a namespace publishes the keys it reads beside the
+// SDK's own Namespace, the three limits and the compute-minute usage off the
+// captured response among them.
 func TestNamespaces_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
 	for _, namespaceCall := range namespaceCalls {
 		t.Run(namespaceCall.name, func(t *testing.T) {
@@ -938,6 +941,10 @@ func TestNamespaces_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
 			assertInt64Ptr(t, "shared_runners_minutes_limit", out.SharedRunnersMinutesLimit, 400)
 			assertInt64Ptr(t, "extra_shared_runners_minutes_limit", out.ExtraSharedRunnersMinutesLimit, 50)
 			assertInt64Ptr(t, "additional_purchased_storage_size", out.AdditionalPurchasedStorageSize, 10240)
+			wantUsage := toolutil.CIMinutesUsageOutput{TotalMinutesUsed: 130, MonthlyMinutesUsed: 110, PurchasedMinutesUsed: 20}
+			if out.CIMinutesUsage == nil || *out.CIMinutesUsage != wantUsage {
+				t.Errorf("ci_minutes_usage = %+v, want %+v", out.CIMinutesUsage, wantUsage)
+			}
 			if out.AdditionalPurchasedStorageEndsOn != "2027-03-31" {
 				t.Errorf("additional_purchased_storage_ends_on = %q, want 2027-03-31", out.AdditionalPurchasedStorageEndsOn)
 			}
@@ -978,6 +985,9 @@ func TestNamespaces_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 				out.AdditionalPurchasedStorageSize != nil {
 				t.Error("the limits should be absent for a caller who may not change them")
 			}
+			if out.CIMinutesUsage != nil {
+				t.Errorf("ci_minutes_usage = %+v, want none for a caller who may not read it", out.CIMinutesUsage)
+			}
 			if out.AdditionalPurchasedStorageEndsOn != "" || out.MaxSeatsUsedChangedAt != "" || out.EndDate != "" {
 				t.Errorf("dates = %q / %q / %q, want none", out.AdditionalPurchasedStorageEndsOn,
 					out.MaxSeatsUsedChangedAt, out.EndDate)
@@ -991,7 +1001,8 @@ func TestNamespaces_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 // GitLab sent. client-go models projects_count on its own Namespace as of
 // v3.12.0, so the SDK's decoder is what refuses the string GitLab sent there;
 // the capture that survives in this package reads the three limits, whose
-// null the SDK's plain int64 cannot tell from a limit of zero.
+// null the SDK's plain int64 cannot tell from a limit of zero, and the
+// compute-minute usage, which the SDK does not model.
 func TestNamespaces_UnreadableFields(t *testing.T) {
 	const poisoned = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
 		`"projects_count":"many"}`
@@ -1014,6 +1025,7 @@ func TestFormatMarkdownString_SentFields(t *testing.T) {
 		ID: 1, Name: "group1", Path: "group1", Kind: "group", FullPath: "group1",
 		ProjectsCount: 12, RootRepositorySize: 34567,
 		SharedRunnersMinutesLimit: &limit, ExtraSharedRunnersMinutesLimit: &extra,
+		CIMinutesUsage:                 &toolutil.CIMinutesUsageOutput{TotalMinutesUsed: 130, MonthlyMinutesUsed: 110, PurchasedMinutesUsed: 20},
 		AdditionalPurchasedStorageSize: &storage, AdditionalPurchasedStorageEndsOn: "2027-03-31",
 		MaxSeatsUsedChangedAt: "2026-05-06T07:08:09Z", EndDate: "2027-01-31",
 	})
@@ -1029,6 +1041,9 @@ func TestFormatMarkdownString_SentFields(t *testing.T) {
 		"- **Max Seats Used Changed At**: 6 May 2026 07:08 UTC\n" +
 		"- **Shared Runners Minutes Limit**: 400\n" +
 		"- **Extra Shared Runners Minutes Limit**: 50\n" +
+		"- **Compute Minutes Used**: 130\n" +
+		"- **Monthly Compute Minutes Used**: 110\n" +
+		"- **Purchased Compute Minutes Used**: 20\n" +
 		"- **Additional Purchased Storage Size**: 10240\n" +
 		"- **Additional Purchased Storage Ends On**: 31 Mar 2027\n\n" +
 		namespaceCardHint

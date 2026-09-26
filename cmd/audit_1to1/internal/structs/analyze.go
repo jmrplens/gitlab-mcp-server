@@ -62,6 +62,8 @@ const (
 	docGroupsList       = "groups.md#list-all-groups"
 	docGroupsGet        = "groups.md#get-a-single-group"
 	docGroupHooks       = "group_webhooks.md"
+	docProjectHooks     = "project_webhooks.md"
+	docNamespaces       = "namespaces.md"
 	docIssuesList       = "issues.md#list-issues"
 	docProjectsGet      = "projects.md#get-a-single-project"
 	docProjectUsersList = "projects.md#list-a-projects-users"
@@ -673,6 +675,7 @@ var docAddedFields = map[string]string{
 	"groups.DetailOutput.unique_project_download_limit_interval_in_seconds": docGroupsGet,
 	"groups.DetailOutput.web_based_commit_signing_enabled":                  docGroupsGet,
 	"groups.HookOutput.repository_update_events":                            docGroupHooks,
+	"groups.HookOutput.duo_flow_callback_enabled":                           docGroupHooks,
 
 	"issues.BasicOutput.blocking_issues_count": docIssuesList,
 	"issues.BasicOutput.start_date":            docIssuesList,
@@ -704,9 +707,18 @@ var docAddedFields = map[string]string{
 	"projects.Output.spp_repository_pipeline_access":               docProjectsGet,
 	"projects.Output.warn_about_potentially_unwanted_characters":   docProjectsGet,
 	"projects.Output.web_based_commit_signing_enabled":             docProjectsGet,
+	"projects.Output.ci_skip_branch_pipelines_for_mrs":             docProjectsGet,
+	"projects.HookOutput.duo_flow_callback_enabled":                docProjectHooks,
 	"projects.ApprovalRuleOutput.coverage_minimum_threshold":       docMRApprovals,
 	"projects.ProjectUserOutput.locked":                            docProjectUsersList,
 	"projects.ProjectUserOutput.public_email":                      docProjectUsersList,
+
+	// namespaces: the compute-minute usage ee/lib/ee/api/entities/namespace.rb
+	// renders through ee/lib/api/entities/ci/minutes/usage.rb for an owner of
+	// a top-level namespace, which client-go's Namespace does not model, read
+	// from the captured response (ADR-0021, toolutil.CapturedNamespace).
+	// Recorded in docs/development/upstream-bugs.md.
+	"namespaces.Output.ci_minutes_usage": docNamespaces,
 
 	// tokens — lib/api/entities/personal_access_token.rb exposes granular on
 	// every token, and the entities inheriting it add granular_scopes and
@@ -795,6 +807,7 @@ var docAddedFields = map[string]string{
 	"users.Output.enterprise_group_id":                docUsersEnterpriseGroup,
 	"users.Output.enterprise_group_associated_at":     docUsersEnterpriseGroup,
 	"users.Output.provisioned_by_group_id":            docUsers,
+	"users.Output.provisioned_by_project_id":          docUsers,
 	"enterpriseusers.Output.commit_email":             docUsers,
 	"enterpriseusers.Output.discord":                  docUsers,
 	"enterpriseusers.Output.github":                   docUsers,

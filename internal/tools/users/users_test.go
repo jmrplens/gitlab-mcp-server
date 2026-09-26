@@ -241,6 +241,77 @@ func TestGet_UserOnAProfileTheCallerMayNotReadSendsNoCounts(t *testing.T) {
 	}
 }
 
+// TestGet_UserReadsTheProvisioningProject verifies provisioned_by_project_id,
+// which lib/api/entities/user_with_admin.rb exposes to an administrator with
+// no license and client-go's User does not model, reaches the output when
+// GitLab sends a project, and stays absent both when it sends null (no project
+// provisioned the user) and when it sends no key (a caller who is not an
+// administrator, or a release before the key).
+func TestGet_UserReadsTheProvisioningProject(t *testing.T) {
+	provisioned := int64(55)
+	cases := []struct {
+		name string
+		body string
+		want *int64
+	}{
+		{name: "a project provisioned the user", body: `{"id":42,"username":"testuser","provisioned_by_project_id":55}`, want: &provisioned},
+		{name: "no project provisioned the user", body: `{"id":42,"username":"testuser","provisioned_by_project_id":null}`},
+		{name: "the key was not sent", body: `{"id":42,"username":"testuser"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := Get(context.Background(), client, GetInput{UserID: 42})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			switch {
+			case tc.want == nil && out.ProvisionedByProjectID != nil:
+				t.Errorf("ProvisionedByProjectID = %d, want absent", *out.ProvisionedByProjectID)
+			case tc.want != nil && (out.ProvisionedByProjectID == nil || *out.ProvisionedByProjectID != *tc.want):
+				t.Errorf("ProvisionedByProjectID = %v, want %d", out.ProvisionedByProjectID, *tc.want)
+			}
+		})
+	}
+}
+
+// TestList_UsersPairsTheProvisioningProjectByPosition verifies an
+// administrator's list, where every row is a UserWithAdmin, carries each
+// user's own provisioning project rather than the first row's.
+func TestList_UsersPairsTheProvisioningProjectByPosition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathListUsers {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id":1,"username":"alice","provisioned_by_project_id":null},
+				{"id":2,"username":"bot","provisioned_by_project_id":77}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Users) != 2 {
+		t.Fatalf("got %d users, want 2", len(out.Users))
+	}
+	if out.Users[0].ProvisionedByProjectID != nil {
+		t.Errorf("Users[0].ProvisionedByProjectID = %d, want absent", *out.Users[0].ProvisionedByProjectID)
+	}
+	if got := out.Users[1].ProvisionedByProjectID; got == nil || *got != 77 {
+		t.Errorf("Users[1].ProvisionedByProjectID = %v, want 77", got)
+	}
+}
+
 // TestList_UsersAPIError verifies List when users API error.
 func TestList_UsersAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

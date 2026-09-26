@@ -130,6 +130,7 @@ readable without opening the tracker:
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
+| 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1216,7 +1217,8 @@ of change whose test is one assertion on the built URL.
 **What**: one field per struct, each exposed by the rendering entity with no
 condition at all, so every response of every endpoint that renders it carries
 the field and the SDK drops it. Every entity reference is to the tag
-`v19.3.1-ee`, which is the release the record was taken from.
+`v19.3.1-ee`, the release the live record was taken from when this entry was
+written; the record has been re-pinned to 19.4.1-ee since.
 
 - `Topic` (`topics.go`) has no `organization_id`, which
   [lib/api/entities/projects/topic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/projects/topic.rb)
@@ -1590,7 +1592,8 @@ inviting a caller to send a parameter that is discarded.
   around without leaving the SDK method behind, so both stand.
 
 **What**: four gaps in client-go v3.0.0's `geo_sites.go`, measured against the
-`v19.3.1-ee` entities the committed live record was taken from.
+`v19.3.1-ee` entities the live record was taken from when this entry was
+written; the record has been re-pinned to 19.4.1-ee since.
 
 - `GeoSite` carries 19 of the 23 keys
   [ee/lib/api/entities/geo_site.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/geo_site.rb)
@@ -1663,7 +1666,8 @@ they belong to a major version or to a new method beside the old one.
 
 **What**: three gaps in client-go v3.0.0's `merge_requests.go` and
 `merge_request_approvals.go`, measured against the `v19.3.1-ee` entities the
-committed live record was taken from.
+live record was taken from when this entry was written; the record has been
+re-pinned to 19.4.1-ee since.
 
 - `BasicMergeRequest` carries 50 of the 55 keys
   [lib/api/entities/merge_request_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/merge_request_basic.rb)
@@ -1731,7 +1735,8 @@ beside the old one.
 
 **What**: `User` in client-go v3.0.0's `users.go` carries 48 keys and is the
 one struct every user-returning method decodes into, measured against the
-`v19.3.1-ee` entities the committed live record was taken from. GitLab serves
+`v19.3.1-ee` entities the live record was taken from when this entry was
+written (it has been re-pinned to 19.4.1-ee since). GitLab serves
 six different user entities through those methods, and the struct models the
 union of none of them.
 
@@ -1813,7 +1818,8 @@ keys and is what `ListIssueRelations` decodes
 [lib/api/entities/related_issue.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/related_issue.rb),
 which is `API::Entities::Issue` plus four link keys, and the struct models
 roughly the shape of `IssueBasic` instead. Measured against the `v19.3.1-ee`
-entities the committed live record was taken from, twenty-four keys are
+entities the live record was taken from when this entry was written (it has
+been re-pinned to 19.4.1-ee since), twenty-four keys are
 missing and only one key of the entity is genuinely absent from that response.
 
 - Nineteen are exposed with no condition, so every relation of every response
@@ -2227,6 +2233,58 @@ it.
 
 **Effort**: small, two struct tags and a test, like
 [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
+
+### Five response keys and three parameters GitLab 19.4 added that v3.14.0 does not model
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes for the five keys, which are read from the captured
+  response beside the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
+  through `toolutil.CapturedGroupHook`, `CapturedProject`,
+  `CapturedInstanceUser` and `CapturedNamespace` in
+  `internal/toolutil/sent_shapes.go`, and through `projectHookAPI`, the body
+  the project hook handlers in `internal/tools/projects` already decode
+  themselves. They retire when the structs carry the keys. None for the three
+  parameters, which this server does not offer: taking them would mean building
+  the request outside the SDK's option struct.
+
+**What**: every key below is absent from the 19.3.1-ee live record and present
+in the 19.4.1-ee one (`docs/development/gitlab-api-live.json`), and client-go
+v3.14.0 declares none of them.
+
+- `GroupHook` (`group_hooks.go`) and `ProjectHook` (`project_hooks.go`) declare
+  no `duo_flow_callback_enabled`, which `ee/lib/api/entities/group_hook.rb` and
+  `lib/api/entities/project_hook.rb` expose on every hook. `AddGroupHookOptions`,
+  `EditGroupHookOptions`, `AddProjectHookOptions` and `EditProjectHookOptions`
+  lack the parameter the four write routes declare, which group_webhooks.md and
+  project_webhooks.md put behind the `duo_flow_callback_hooks` feature flag.
+- `Project` (`projects.go`) declares no `ci_skip_branch_pipelines_for_mrs`,
+  which `lib/api/entities/project.rb` exposes among the CI/CD settings a caller
+  holding `admin_project` is sent, and `EditProjectOptions` lacks the parameter
+  `PUT /projects/:id` declares for it. The release added
+  `automatic_rebase_enabled` beside it, and that one client-go does model, on
+  the struct and on the options.
+- `User` (`users.go`) declares no `provisioned_by_project_id`, which
+  `lib/api/entities/user_with_admin.rb` exposes with no license, so it reaches
+  an administrator on every route presenting that entity. users.md dates it to
+  19.3; the 19.3.1-ee record does not carry it.
+- `Namespace` (`namespaces.go`) declares no `ci_minutes_usage`, the object
+  `ee/lib/ee/api/entities/namespace.rb` renders through
+  `ee/lib/api/entities/ci/minutes/usage.rb` (`total_minutes_used`,
+  `monthly_minutes_used`, `purchased_minutes_used`, all integers) for a
+  top-level namespace whose caller holds `admin_ci_minutes`.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), which
+reported the five keys as soon as the live record was re-pinned to 19.4.1-ee
+([issue 965](https://github.com/jmrplens/gitlab-mcp-server/issues/965)), and
+the record's route params for the three parameters.
+
+**Effort**: small. Four scalar members with `json` tags, one struct of three
+integers for the usage, and three option fields with `url` and `json` tags.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

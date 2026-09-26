@@ -250,6 +250,7 @@ type Output struct {
 	OpenIssuesCount                           int64    `json:"open_issues_count,omitempty"`
 	MergeMethod                               string   `json:"merge_method,omitempty"`
 	SquashOption                              string   `json:"squash_option,omitempty"`
+	AutomaticRebaseEnabled                    bool     `json:"automatic_rebase_enabled"`
 	OnlyAllowMergeIfPipelineSucceeds          bool     `json:"only_allow_merge_if_pipeline_succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool     `json:"only_allow_merge_if_all_discussions_are_resolved"`
 	RemoveSourceBranchAfterMerge              bool     `json:"remove_source_branch_after_merge"`
@@ -418,6 +419,9 @@ type Output struct {
 	DuoDependencyBumpBreakingChanges      *bool   `json:"duo_dependency_bump_breaking_changes_enabled,omitempty" tier:"ultimate"`
 	SecurityPolicyPipelineMustSucceed     *bool   `json:"security_policy_pipeline_must_succeed,omitempty" tier:"ultimate"`
 	SPPRepositoryPipelineAccess           *bool   `json:"spp_repository_pipeline_access,omitempty" tier:"ultimate"`
+	// CISkipBranchPipelinesForMRs is one of the CI/CD settings GitLab sends
+	// only to a caller holding admin_project on the project, from 19.4.
+	CISkipBranchPipelinesForMRs *bool `json:"ci_skip_branch_pipelines_for_mrs,omitempty"`
 }
 
 // GetInput defines parameters for retrieving a project.
@@ -511,6 +515,7 @@ type UpdateInput struct {
 	MergeMethod                               string               `json:"merge_method,omitempty"  jsonschema:"Merge method (merge, rebase_merge, ff)"`
 	Topics                                    []string             `json:"topics,omitempty"        jsonschema:"Topic tags for the project"`
 	SquashOption                              string               `json:"squash_option,omitempty" jsonschema:"Squash option (never, always, default_on, default_off)"`
+	AutomaticRebaseEnabled                    *bool                `json:"automatic_rebase_enabled,omitempty" jsonschema:"Rebase the source branch automatically before merge"`
 	OnlyAllowMergeIfPipelineSucceeds          *bool                `json:"only_allow_merge_if_pipeline_succeeds,omitempty" jsonschema:"Only allow merge when pipeline succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved *bool                `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merge when all discussions are resolved"`
 	IssuesEnabled                             *bool                `json:"issues_enabled,omitempty"           jsonschema:"Enable/disable issues feature (use 'issues_enabled' not 'issues_access_level')"`
@@ -714,7 +719,7 @@ func ToBasicOutput(p *gl.Project) BasicOutput {
 // renders it: everything [ToBasicOutput] carries, every other SDK field with
 // full nested objects on their canonical keys (owner, permissions,
 // forked_from_project, _links, statistics, shared_with_groups,
-// container_expiration_policy), and the seventeen keys client-go does not
+// container_expiration_policy), and the eighteen keys client-go does not
 // model, read from the captured response.
 func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 	out := Output{
@@ -724,6 +729,7 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		OpenIssuesCount:                  p.OpenIssuesCount,
 		MergeMethod:                      string(p.MergeMethod),
 		SquashOption:                     string(p.SquashOption),
+		AutomaticRebaseEnabled:           p.AutomaticRebaseEnabled,
 		OnlyAllowMergeIfPipelineSucceeds: p.OnlyAllowMergeIfPipelineSucceeds,
 		OnlyAllowMergeIfAllDiscussionsAreResolved: p.OnlyAllowMergeIfAllDiscussionsAreResolved,
 		RemoveSourceBranchAfterMerge:              p.RemoveSourceBranchAfterMerge,
@@ -865,6 +871,7 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		DuoDependencyBumpBreakingChanges:       extra.DuoDependencyBumpBreakingChanges,
 		SecurityPolicyPipelineMustSucceed:      extra.SecurityPolicyPipelineMustSucceed,
 		SPPRepositoryPipelineAccess:            extra.SPPRepositoryPipelineAccess,
+		CISkipBranchPipelinesForMRs:            extra.CISkipBranchPipelinesForMRs,
 	}
 	if p.MarkedForDeletionOn != nil {
 		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)
@@ -1677,6 +1684,9 @@ func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.RemoveSourceBranchAfterMerge != nil {
 		opts.RemoveSourceBranchAfterMerge = input.RemoveSourceBranchAfterMerge
 	}
+	if input.AutomaticRebaseEnabled != nil {
+		opts.AutomaticRebaseEnabled = input.AutomaticRebaseEnabled
+	}
 	if input.AutocloseReferencedIssues != nil {
 		opts.AutocloseReferencedIssues = input.AutocloseReferencedIssues
 	}
@@ -2174,6 +2184,12 @@ type HookOutput struct {
 	TokenPresent              bool               `json:"token_present"`
 	SigningTokenPresent       bool               `json:"signing_token_present"`
 	CreatedAt                 time.Time          `json:"created_at"`
+	// DuoFlowCallbackEnabled says whether GitLab Duo flow events are sent to
+	// the hook. lib/api/entities/project_hook.rb sends it on every hook from
+	// GitLab 19.4 and client-go does not model it, so it is read beside the
+	// SDK's fields and is absent from an older instance's answer rather than
+	// reported off.
+	DuoFlowCallbackEnabled *bool `json:"duo_flow_callback_enabled,omitempty"`
 }
 
 // HookURLVariable mirrors gl.HookURLVariable, a webhook URL variable. The value
@@ -2272,7 +2288,8 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 
 type projectHookAPI struct {
 	gl.ProjectHook
-	ResourceDeployTokenEvents bool `json:"resource_deploy_token_events"`
+	ResourceDeployTokenEvents bool  `json:"resource_deploy_token_events"`
+	DuoFlowCallbackEnabled    *bool `json:"duo_flow_callback_enabled"`
 }
 
 func projectHooksPath(projectID string) string {
@@ -2300,6 +2317,7 @@ func doProjectRequest[T any](ctx context.Context, client *gitlabclient.Client, m
 func hookOutputFromAPI(h *projectHookAPI) HookOutput {
 	out := hookOutputFromGL(&h.ProjectHook)
 	out.ResourceDeployTokenEvents = h.ResourceDeployTokenEvents
+	out.DuoFlowCallbackEnabled = h.DuoFlowCallbackEnabled
 	return out
 }
 

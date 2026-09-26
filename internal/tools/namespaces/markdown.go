@@ -85,6 +85,11 @@ func writeSeatRows(c *toolutil.Card, out Output) {
 	writeCountPtr(c, "Seats In Use", out.SeatsInUse)
 	writeCountPtr(c, "Shared Runners Minutes Limit", out.SharedRunnersMinutesLimit)
 	writeCountPtr(c, "Extra Shared Runners Minutes Limit", out.ExtraSharedRunnersMinutesLimit)
+	if usage := out.CIMinutesUsage; usage != nil {
+		c.Int("Compute Minutes Used", usage.TotalMinutesUsed)
+		c.Int("Monthly Compute Minutes Used", usage.MonthlyMinutesUsed)
+		c.Int("Purchased Compute Minutes Used", usage.PurchasedMinutesUsed)
+	}
 	writeCountPtr(c, "Additional Purchased Storage Size", out.AdditionalPurchasedStorageSize)
 	c.Time("Additional Purchased Storage Ends On", out.AdditionalPurchasedStorageEndsOn)
 }
