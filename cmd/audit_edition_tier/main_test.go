@@ -7,11 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1498,6 +1501,32 @@ func TestExpectedTierForAction_ExceptionAndOverrideOnOneAction_ExceptionWins(t *
 	}
 }
 
+// fakeModuleRoot returns a new directory holding a go.mod of a module that is
+// not this one, which is all cmdutil.RepositoryRoot looks for.
+func fakeModuleRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/fakeroot\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	return root
+}
+
+// runReport runs the entry point with args, which must exit 0, and decodes the
+// report it printed to stdout.
+func runReport(t *testing.T, args ...string) *report {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	if got := runMain(append([]string{"audit_edition_tier"}, args...), &stdout, &stderr); got != 0 {
+		t.Fatalf("runMain(%v) = %d (stderr %q), want 0", args, got, stderr.String())
+	}
+	var rep report
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		t.Fatalf("stdout is not the JSON report: %v", err)
+	}
+	return &rep
+}
+
 // TestRunMain_FakeRepositoryRoot_GradesFromItsCacheAndHonoursTheFlags drives
 // the entry point from two directories below the root of a module that is not
 // this one, whose doc cache holds a Free branches page and nothing else. It
@@ -1506,29 +1535,13 @@ func TestExpectedTierForAction_ExceptionAndOverrideOnOneAction_ExceptionWins(t *
 // the report goes to stdout when -output is not given, every page the cache
 // lacks is refused as offline, and -gaps-only is what drops the green domain.
 func TestRunMain_FakeRepositoryRoot_GradesFromItsCacheAndHonoursTheFlags(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/fakeroot\n"), 0o600); err != nil {
-		t.Fatalf("write go.mod: %v", err)
-	}
+	root := fakeModuleRoot(t)
 	seedDoc(t, apidocs.CacheDir(root), "branches", freeBadgeDoc)
 	work := filepath.Join(root, "nested", "dir")
 	if err := os.MkdirAll(work, 0o750); err != nil {
 		t.Fatalf("create working directory: %v", err)
 	}
 	t.Chdir(work)
-
-	runReport := func(t *testing.T, args ...string) *report {
-		t.Helper()
-		var stdout, stderr bytes.Buffer
-		if got := runMain(append([]string{"audit_edition_tier"}, args...), &stdout, &stderr); got != 0 {
-			t.Fatalf("runMain(%v) = %d (stderr %q), want 0", args, got, stderr.String())
-		}
-		var rep report
-		if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
-			t.Fatalf("stdout is not the JSON report: %v", err)
-		}
-		return &rep
-	}
 
 	t.Run("default_output_is_stdout_and_keeps_the_green_domain", func(t *testing.T) {
 		rep := runReport(t, "-offline")
@@ -1550,6 +1563,165 @@ func TestRunMain_FakeRepositoryRoot_GradesFromItsCacheAndHonoursTheFlags(t *test
 		}
 		findDomain(t, rep, "issues")
 	})
+}
+
+// docHost stands in for GitLab's raw documentation endpoint for the length of
+// one test. It is installed as http.DefaultTransport, which is what every
+// fetcher runMain builds sends through, because apidocs.New leaves its
+// client's transport unset; the fetchers themselves stay exactly as runMain
+// builds them, base URLs included. It records every URL asked for and answers
+// the ones it holds a page for. Any other URL is a 404, which apidocs gives up
+// on at once instead of retrying with a backoff.
+type docHost struct {
+	mu    sync.Mutex
+	pages map[string]string
+	asked []string
+}
+
+// RoundTrip records the URL and answers it from pages. It never calls into
+// testing.T, since the client decides which goroutine it runs on.
+func (h *docHost) RoundTrip(req *http.Request) (*http.Response, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	target := req.URL.String()
+	h.asked = append(h.asked, target)
+	body, ok := h.pages[target]
+	status := http.StatusOK
+	if !ok {
+		status = http.StatusNotFound
+	}
+	return &http.Response{
+		StatusCode:    status,
+		Status:        fmt.Sprintf("%d %s", status, http.StatusText(status)),
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{},
+		Body:          io.NopCloser(strings.NewReader(body)),
+		ContentLength: int64(len(body)),
+		Request:       req,
+	}, nil
+}
+
+// requests returns the URLs asked for so far, in the order they were asked.
+func (h *docHost) requests() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.asked)
+}
+
+// serveDocs installs a docHost answering pages as the process's default
+// transport and restores the real one when the test ends.
+func serveDocs(t *testing.T, pages map[string]string) *docHost {
+	t.Helper()
+	host := &docHost{pages: pages}
+	saved := http.DefaultTransport
+	http.DefaultTransport = host
+	t.Cleanup(func() { http.DefaultTransport = saved })
+	return host
+}
+
+// seedAgedDocs writes content into cache for each area and dates every page age
+// ago, which is what the fetchers' freshness window is measured against.
+func seedAgedDocs(t *testing.T, cache, content string, age time.Duration, areas ...string) {
+	t.Helper()
+	stamp := time.Now().Add(-age)
+	for _, area := range areas {
+		seedDoc(t, cache, area, content)
+		if err := os.Chtimes(filepath.Join(cache, filepath.FromSlash(area)+".md"), stamp, stamp); err != nil {
+			t.Fatalf("date cached %s: %v", area, err)
+		}
+	}
+}
+
+// dependencyGrade is what the report says about the one domain and action of
+// the download test: whether the owner page was read, the tier it badges, the
+// domain's note, and the tier and note the action was graded with.
+type dependencyGrade struct {
+	fetched    bool
+	page       string
+	domainNote string
+	expected   string
+	actionNote string
+}
+
+// TestRunMain_DocDownloads_EachFetcherAsksItsOwnRootWhenTheFlagsSay drives the
+// entry point with the doc fetchers it builds itself, against a stand-in for
+// GitLab's raw endpoint, and holds what no -offline run can show: which root
+// each fetcher downloads from, and when -refresh and -max-age make a fetcher
+// download at all. The two fetchers share one cache directory and differ only
+// in their base URL, so crossing them, or dropping either flag, changed no
+// report an offline test read. The catalog is one merge request dependency
+// action: its owner page lives under doc/api/ and its tier badge on a
+// user-facing page under doc/, so one run reads a page through each fetcher.
+// The host badges the owner page Free and the dependency page Premium, and a
+// cache the test seeds badges both Ultimate, so the report says where each
+// grading came from and the request log says what was asked, in order.
+func TestRunMain_DocDownloads_EachFetcherAsksItsOwnRootWhenTheFlagsSay(t *testing.T) {
+	const (
+		ownerArea = "merge_requests"
+		depsArea  = "user/project/merge_requests/dependencies"
+	)
+	ownerURL := apidocs.DefaultBaseURL + ownerArea + ".md"
+	depsURL := apidocs.DefaultUserDocBaseURL + depsArea + ".md"
+	stubCatalogs(t, actioncatalog.NewCatalog(), oneActionCatalog(t, "merge_request", "dependencies_list", "mergerequests"), nil)
+
+	downloaded := dependencyGrade{
+		fetched: true, page: "free", expected: "premium",
+		actionNote: "documented on doc/" + depsArea + ".md (page tier premium)",
+	}
+	cached := dependencyGrade{
+		fetched: true, page: "ultimate", expected: "ultimate",
+		actionNote: "documented on doc/" + depsArea + ".md (page tier ultimate)",
+	}
+	const noCache = -1 // a cacheAge that seeds nothing
+	cases := []struct {
+		name      string
+		cacheAge  time.Duration
+		args      []string
+		wantAsked []string
+		want      dependencyGrade
+	}{
+		{
+			name: "an_empty_cache_is_filled_from_each_fetchers_own_root", cacheAge: noCache,
+			wantAsked: []string{ownerURL, depsURL}, want: downloaded,
+		},
+		{name: "a_fresh_cached_page_is_served_without_a_download", cacheAge: 0, want: cached},
+		{
+			name: "refresh_downloads_pages_the_cache_holds_fresh", cacheAge: 0, args: []string{"-refresh"},
+			wantAsked: []string{ownerURL, depsURL}, want: downloaded,
+		},
+		{
+			name: "max_age_below_the_cache_age_downloads_again", cacheAge: 2 * time.Hour, args: []string{"-max-age", "1h"},
+			wantAsked: []string{ownerURL, depsURL}, want: downloaded,
+		},
+		{name: "max_age_above_the_cache_age_serves_the_cache", cacheAge: 2 * time.Hour, args: []string{"-max-age", "3h"}, want: cached},
+		{
+			name: "offline_with_an_empty_cache_downloads_nothing", cacheAge: noCache, args: []string{"-offline"},
+			want: dependencyGrade{page: "free", domainNote: offlineFetchNote(ownerArea)},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := fakeModuleRoot(t)
+			if tc.cacheAge != noCache {
+				seedAgedDocs(t, apidocs.CacheDir(root), ultimateBadgeDoc, tc.cacheAge, ownerArea, depsArea)
+			}
+			t.Chdir(root)
+			host := serveDocs(t, map[string]string{ownerURL: freeBadgeDoc, depsURL: premiumBadgeDoc})
+
+			rep := runReport(t, tc.args...)
+			if asked := host.requests(); !slices.Equal(asked, tc.wantAsked) {
+				t.Errorf("URLs asked for = %q, want %q", asked, tc.wantAsked)
+			}
+			d := findDomain(t, rep, "mergerequests")
+			a := findAction(t, d, "merge_request.dependencies_list")
+			got := dependencyGrade{fetched: d.DocFetched, page: d.PageTier, domainNote: d.Note, expected: a.Expected, actionNote: a.Note}
+			if got != tc.want {
+				t.Errorf("graded %+v, want %+v", got, tc.want)
+			}
+		})
+	}
 }
 
 // realCatalogIndex builds the catalog the report is taken from and returns its
