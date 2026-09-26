@@ -1572,6 +1572,38 @@ them either: `two_factor_enabled` on a project member, which
 from the **request** as well: GitLab accepts neither, so offering them was
 inviting a caller to send a parameter that is discarded.
 
+**A third batch** came from the type grain of R-PATH (`shapes.typed` in
+`go run ./cmd/audit_1to1/ -scope=paths`), which holds an output type against
+what the live record says the routes it models send. Each field below is one
+client-go models on a struct this server's output types pair with, and one no
+entity renders on the routes those types answer. Read against the 19.5.0-pre
+tree:
+
+| SDK struct  | Field                                   | Why no response carries it                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `User`      | `skype`                                 | GitLab dropped it: `app/models/user.rb` ignores the column since 18.4, and nothing under `lib/api` or `ee/lib/api` names it, as a key or as a parameter                                                                                                                                                                                                                                                                                                                                      |
+| `User`      | `extern_uid`, `provider`                | `lib/api/entities/identity.rb` exposes both inside the `identities` array; no user entity renders them at the top level                                                                                                                                                                                                                                                                                                                                                                      |
+| `User`      | `can_create_organization`               | only `API::Entities::ApplicationSetting` exposes the name. It was published without `omitempty` on three outputs, so every user they answered with said `false`                                                                                                                                                                                                                                                                                                                              |
+| `User`      | `current_sign_in_ip`, `last_sign_in_ip` | exposed by `UserDetailsWithAdmin` alone. The enterprise, provisioned and SAML user routes present `UserPublic` (`ee/lib/api/group_enterprise_users.rb`, `ee/lib/ee/api/groups.rb`), so the two left those three outputs and stay on the one for the instance user routes                                                                                                                                                                                                                     |
+| `Group`     | `duo_availability`                      | a create and update parameter (`ee/lib/ee/api/helpers/groups_helpers.rb`); the one entity carrying the name is `ApplicationSetting`                                                                                                                                                                                                                                                                                                                                                          |
+| `Project`   | `public_builds`                         | `lib/api/entities/project.rb` renders the column as `public_jobs` alone, since the 9.0 rename client-go's own comment cites. This server published its own copy of `public_jobs` under the old key, and dropped it rather than keep a key no GitLab answer carries                                                                                                                                                                                                                           |
+| `Issue`     | `external_id`                           | filled by `Issue.UnmarshalJSON` from a string `id`, which only `API::Entities::ExternalIssue` sends, on the closes-issues and related-issues routes of a merge request whose project uses an external tracker. Removed from the issues output, and kept on the rows of those two routes, where it is the one place the tracker's identifier survives the decode                                                                                                                              |
+| `Issue`     | `label_details`                         | filled by the same unmarshaller only when `labels` arrives as objects, which `IssueBasic` renders under `with_labels_details` alone. Search and the two merge request listings take no such parameter, so the key left the basic issue they answer with and stays on the issues output, whose routes do take it                                                                                                                                                                              |
+| `IssueLink` | `source_issue`, `target_issue`          | typed `*Issue`, while `lib/api/entities/issue_link.rb` renders both `using: IssueBasic`: twelve of the issue's keys never arrive at either position (`external_id`, `health_status`, `moved_to_id`, `label_details`, `references`, `subscribed`, `_links`, `issue_link_id`, `epic_issue_id`, `epic`, `iteration`, `service_desk_reply_to`), and the three IssueBasic keys `Issue` does not model (`type`, `start_date`, `blocking_issues_count`) are read from the captured response instead |
+
+They add 51 `missing_output` rows to the R-OUTPUT diff, answered here as the
+first batch's are. Eleven of the 51 are on `issues.ReferencedOutput`, the row
+type the two referenced-issue listings now answer with: `label_details`, and
+the ten `issues.BasicOutput` already carries, since IssueBasic is less than the
+whole issue client-go models, which is the split
+[the Group, Project and Issue entry](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two)
+records.
+
+`skype` survives on the request side of client-go too: `CreateUserOptions` and
+`ModifyUserOptions` still send it, Grape drops it, and this server's two user
+inputs still offer it. That is the input half of this batch, left to a change
+of its own because it moves the request rather than the response.
+
 ### The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity
 
 - **Reported**: in part, in the Geo block of the umbrella issue
