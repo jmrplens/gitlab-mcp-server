@@ -741,7 +741,7 @@ type transportBudget struct {
 	// key already counted against a source is not counted again until its
 	// window lapses. A blocked source adds no pairs, but a source the full
 	// limiter table never tracks is never blocked, so only the sweep bounds
-	// the map (register row AUB-002, F-29, issue 950).
+	// the map (register row AUB-002, F-35, issue 982).
 	charged map[string]time.Time
 }
 

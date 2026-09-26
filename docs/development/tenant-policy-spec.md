@@ -363,16 +363,17 @@ is fixed by the register. They are filed, grouped where one change would answer 
 | [959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) | Where the server stands on rate limiting tool invocations, and on behavior chosen from `clientInfo`                              |
 | [960](https://github.com/jmrplens/gitlab-mcp-server/issues/960) | Stale statements about the tenant policy in comments, ADRs, the development guide and the site                                   |
 | [961](https://github.com/jmrplens/gitlab-mcp-server/issues/961) | The refusal and ending behaviors of go-sdk that decide what a refused caller sees                                                |
+| [982](https://github.com/jmrplens/gitlab-mcp-server/issues/982) | The transport-source budget remembers every (source, key) pair it charges, and only its sweep bounds that record                 |
 
-Two findings grew after they were filed, when the register was read against the code as a
-whole. F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)) also
-records the idle session timeout's variable, which refuses a zero its flag accepts
+One finding grew after it was filed, and one was added, when the register was read
+against the code as a whole. F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958))
+also records the idle session timeout's variable, which refuses a zero its flag accepts
 (`END-005`, the dated record's version 1.2), and the tool-call bucket's burst, whose zero
 beside a positive rate refuses startup rather than meaning off (`RTC-001`, version 1.3);
-both are departures from `INV-015` of the kind the issue is about. F-29
-([issue 950](https://github.com/jmrplens/gitlab-mcp-server/issues/950)) also records the
+both are departures from `INV-015` of the kind the issue is about. F-35
+([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) records the
 transport-source budget's map of charged (source, key) pairs, which only the sweep bounds,
-since a source the full failure table never tracks is never blocked (`AUB-002`, version
-1.3). That map belongs to a finding of its own rather than to issue 950, which is about
-OAuth verification while the map is kept in both authentication modes; until that
-finding is filed, `AUB-002` carries F-29.
+since a source the full failure table never tracks is never blocked (`AUB-002`), a
+departure from `INV-010`. Version 1.3 of the dated record put that map under F-29, whose
+issue (950) is about OAuth verification while the map is kept in both authentication
+modes, and version 1.4 gave it a finding of its own once it was filed.

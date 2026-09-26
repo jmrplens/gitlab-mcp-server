@@ -30,7 +30,7 @@ who a caller is and what it may hold, spread over `cmd/server`, `internal/server
 `internal/gitlab`, `internal/elicitation`, `internal/cachehints`,
 `internal/clientcompat` and `internal/tools`. The six families the issue names alone are
 named on 147 non-test lines in 15 files. Four of the decisions are keyed finer than the
-tenant while their own reason is per user or per process, and thirty-four findings record
+tenant while their own reason is per user or per process, and thirty-five findings record
 where today's answers disagree with the definition, with each other or with the protocol.
 
 The issue asked for a module that decides and does not enforce, where the next limit is

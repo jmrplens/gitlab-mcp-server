@@ -548,7 +548,7 @@ func (f Finding) Records(invariant string) bool {
 	return has(f.Invariants, invariant)
 }
 
-// AllFindings returns the specification's thirty-four findings, in order, each
+// AllFindings returns the specification's thirty-five findings, in order, each
 // with the issue it is filed as.
 func AllFindings() []Finding {
 	return []Finding{
@@ -586,6 +586,7 @@ func AllFindings() []Finding {
 		{ID: "F-32", Issue: 955},
 		{ID: "F-33", Issue: 959},
 		{ID: "F-34", Issue: 958, Invariants: []string{"INV-015"}},
+		{ID: "F-35", Issue: 982, Invariants: []string{"INV-010"}},
 	}
 }
 

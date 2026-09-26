@@ -289,14 +289,14 @@ func admitDecisions() []Decision {
 			// source and the primary key, both of which a caller mints. A
 			// source stops adding pairs once it is blocked, but a source that
 			// arrives after the limiter's table is full is never blocked, so
-			// nothing but the sweep bounds the map. F-29 carries it until it is
-			// filed as a finding of its own: issue 950 is about OAuth
-			// verification, and this map is kept in both authentication modes.
+			// nothing but the sweep bounds the map, which F-35 records
+			// (issue 982). It is kept in both authentication modes, so it is
+			// not F-29's, whose issue is about OAuth verification.
 			Table:  true,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
 			// Whether the budget exists is TransportSourceBudgetOn's answer.
 			Functions: []string{"TransportSourceBudgetOn"},
-			Findings:  []string{"F-16", "F-29"},
+			Findings:  []string{"F-16", "F-35"},
 			Refusals:  blockedRefusals,
 			// The window falls back to the default when AUB-001's is zero, in
 			// three places kept in step by hand (issue 958). It is declared by

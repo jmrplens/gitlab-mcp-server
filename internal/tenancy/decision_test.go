@@ -168,10 +168,10 @@ func TestDecision_RecordsDeparture(t *testing.T) {
 	}
 }
 
-// TestAllFindings_AreTheSpecificationsThirtyFourWithTheirIssues holds the
-// findings register to the specification's thirty-four, in order, each filed
+// TestAllFindings_AreTheSpecificationsThirtyFiveWithTheirIssues holds the
+// findings register to the specification's thirty-five, in order, each filed
 // as the issue the tracker holds it under.
-func TestAllFindings_AreTheSpecificationsThirtyFourWithTheirIssues(t *testing.T) {
+func TestAllFindings_AreTheSpecificationsThirtyFiveWithTheirIssues(t *testing.T) {
 	issues := map[int][]string{
 		950: {"F-29", "F-30"},
 		951: {"F-03", "F-31"},
@@ -185,6 +185,7 @@ func TestAllFindings_AreTheSpecificationsThirtyFourWithTheirIssues(t *testing.T)
 		959: {"F-19", "F-33"},
 		960: {"F-04", "F-23", "F-26", "F-27"},
 		961: {"F-20", "F-21", "F-22", "F-24"},
+		982: {"F-35"},
 	}
 	want := map[string]int{}
 	for issue, ids := range issues {
@@ -193,8 +194,8 @@ func TestAllFindings_AreTheSpecificationsThirtyFourWithTheirIssues(t *testing.T)
 		}
 	}
 	findings := AllFindings()
-	if len(findings) != 34 || len(want) != 34 {
-		t.Fatalf("%d findings and %d in the issue map, want 34 of each", len(findings), len(want))
+	if len(findings) != 35 || len(want) != 35 {
+		t.Fatalf("%d findings and %d in the issue map, want 35 of each", len(findings), len(want))
 	}
 	for i, f := range findings {
 		t.Run(f.ID, func(t *testing.T) {
@@ -206,8 +207,8 @@ func TestAllFindings_AreTheSpecificationsThirtyFourWithTheirIssues(t *testing.T)
 			}
 		})
 	}
-	if FindingIssue("F-35") != 0 {
-		t.Error("F-35 names no finding and was given an issue")
+	if FindingIssue("F-36") != 0 {
+		t.Error("F-36 names no finding and was given an issue")
 	}
 }
 
@@ -221,7 +222,7 @@ func TestFinding_Records(t *testing.T) {
 		{"INV-003", "F-04"},
 		{"INV-004", "F-03"},
 		{"INV-008", "F-08,F-09"},
-		{"INV-010", "F-29,F-31"},
+		{"INV-010", "F-29,F-31,F-35"},
 		{"INV-011", "F-07"},
 		{"INV-012", "F-07,F-10"},
 		{"INV-015", "F-34"},
