@@ -108,9 +108,10 @@ type distinctRecord struct {
 //
 // A limit of zero or less turns it off, and so does a window or step of zero
 // or less: the constructor returns nil rather than a live object with limits
-// nothing can reach, so "off" is one state rather than several.
+// nothing can reach, so "off" is one state rather than several. Which settings
+// mean off is the tenant policy register's answer, [tenancy.EscalationOn].
 func NewDistinctTokenBudget(limit int, window, step time.Duration) *DistinctTokenBudget {
-	if limit <= 0 || window <= 0 || step <= 0 {
+	if !tenancy.EscalationOn(limit, window, step) { // register row AUB-003
 		return nil
 	}
 	return &DistinctTokenBudget{

@@ -15,8 +15,10 @@
 //     codes.go);
 //   - the rules promoted here from the layers, so that changing one is an
 //     edit of the register: which bucket each MCP method is charged to
-//     ([MeterFor], meter.go), and which holdings make a pool entry busy
-//     ([Busy], busy.go);
+//     ([MeterFor], meter.go), which holdings make a pool entry busy
+//     ([Busy], busy.go), and which settings switch an authentication budget
+//     off and when the transport-source budget exists ([BudgetOn],
+//     [EscalationOn], [TransportSourceBudgetOn], budget.go);
 //   - the table of authentication failures and what each is charged
 //     ([Failures]);
 //   - the channels go-sdk v1.8.0 carries for each method ([Carriages]);

@@ -247,7 +247,9 @@ func admitDecisions() []Decision {
 			Resource: "failed authentications one address may produce in a window",
 			Key:      KeyAddress, StdioKey: KeyNone,
 			Values: []string{"AuthFailureLimit", "AuthFailureWindow", "AuthFailureLimitMax", "AuthFailureWindowMax"},
-			Source: Configurable, Flags: []string{"--auth-failure-limit", "--auth-failure-window"},
+			// Which settings mean off is BudgetOn's answer.
+			Functions: []string{"BudgetOn"},
+			Source:    Configurable, Flags: []string{"--auth-failure-limit", "--auth-failure-window"},
 			Envs:   []string{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "GITLAB_MCP_AUTH_FAILURE_WINDOW"},
 			Config: []string{"AuthFailureLimit", "AuthFailureWindow"}, Malformed: RefuseStartup, Zero: ZeroOff,
 			Decided:  []string{"issue 790"},
@@ -276,8 +278,10 @@ func admitDecisions() []Decision {
 			Resource: "distinct failing primary keys one transport source may produce in a window",
 			Key:      KeySource, StdioKey: KeyNone,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
-			Findings: []string{"F-16"},
-			Refusals: blockedRefusals,
+			// Whether the budget exists is TransportSourceBudgetOn's answer.
+			Functions: []string{"TransportSourceBudgetOn"},
+			Findings:  []string{"F-16"},
+			Refusals:  blockedRefusals,
 			// The window falls back to the default when AUB-001's is zero, in
 			// three places kept in step by hand (issue 958). It is declared by
 			// all three rather than moved to one.
@@ -297,7 +301,10 @@ func admitDecisions() []Decision {
 				"AuthDistinctTokenLimit", "AuthDistinctTokenWindow", "AuthDistinctTokenLimitMax",
 				"AuthDistinctTokenWindowMax", "AuthEscalationFirst", "AuthEscalationSecond", "AuthEscalationThird",
 			},
-			Source: Configurable, Flags: []string{"--auth-distinct-token-limit", "--auth-distinct-token-window"},
+			// Which settings mean off, the escalation step among them, is
+			// EscalationOn's answer.
+			Functions: []string{"EscalationOn"},
+			Source:    Configurable, Flags: []string{"--auth-distinct-token-limit", "--auth-distinct-token-window"},
 			Envs:   []string{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW"},
 			Config: []string{"AuthDistinctTokenLimit", "AuthDistinctWindow"}, Malformed: RefuseStartup,
 			Zero: ZeroOff, OffWith: "AUB-001",

@@ -107,9 +107,9 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 }
 
 // TestDecisions_FunctionsNameThePromotedRules pins which rows name a register
-// function in this layer: the four rows of the method meter name MeterFor,
-// POL-003 names Busy, and every other row names none until the layer that
-// promotes the zero rule lands.
+// function: the four rows of the method meter name MeterFor, POL-003 names
+// Busy, the three authentication budgets name the switch that says whether
+// each is on, and every other row names none.
 func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 	want := map[string]string{
 		"RTC-001": "MeterFor",
@@ -117,6 +117,9 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 		"RTC-003": "MeterFor",
 		"RTC-004": "MeterFor",
 		"POL-003": "Busy",
+		"AUB-001": "BudgetOn",
+		"AUB-002": "TransportSourceBudgetOn",
+		"AUB-003": "EscalationOn",
 	}
 	for _, d := range Decisions() {
 		t.Run(d.ID, func(t *testing.T) {
