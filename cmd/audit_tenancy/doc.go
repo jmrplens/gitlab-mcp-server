@@ -68,17 +68,16 @@
 //
 // # Declarations
 //
-// declarations.go holds what the rules match the code against and the two
-// tables a reviewer judges. notADecision is the exemption table: each entry
-// names a declaration shaped like a limit that decides nothing about a
-// caller, keyed `package:Name` the way the register names a site, with a
-// category and a reason. pending lists the rows whose values have not moved
-// into the register yet, for which G2, G3 and G6 are deferred and every other
-// rule applies in full; each value layer of issue 565 deletes its rows, and
-// the last deletes the list. A declaration that answers nothing is a finding
-// on the terms every declaration table here is held to: an exemption nothing
-// needed, one naming a category nobody defined, a pending entry that names no
-// row, and a pending row whose deferred checks already pass.
+// declarations.go holds what the rules match the code against and the table a
+// reviewer judges. notADecision is the exemption table: each entry names a
+// declaration shaped like a limit that decides nothing about a caller, keyed
+// `package:Name` the way the register names a site, with a category and a
+// reason. A declaration that answers nothing is a finding on the terms every
+// declaration table here is held to: an exemption nothing needed, and one
+// naming a category nobody defined. Every rule applies to every row; the
+// deferral the migration of issue 565 needed while the values moved into the
+// register is gone, so a row whose value its layer reads as a literal is a
+// finding the day it is written.
 //
 // # What it reads, and what it cannot see
 //
@@ -96,7 +95,7 @@
 // rather than passing, and the finding names the position rather than the
 // policy. A rule row's logic is declared by symbol, so G1 fails when the
 // symbol disappears and nothing fails when its logic changes; that is what
-// the promoted rules of the later layers exist for.
+// promoting a rule into the register exists for.
 //
 // # Code identity
 //

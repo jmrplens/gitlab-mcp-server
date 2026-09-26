@@ -109,13 +109,12 @@ func fixtureRules() rules {
 type fixture struct {
 	// files are the sources, keyed by their path under fixtureDir. The leaf's
 	// values and codes are supplied unless a test names them.
-	files   map[string]string
-	rows    []tenancy.Decision
-	fails   []tenancy.Failure
-	derive  []derivation
-	rules   *rules
-	exempt  map[string]exemption
-	pending []string
+	files  map[string]string
+	rows   []tenancy.Decision
+	fails  []tenancy.Failure
+	derive []derivation
+	rules  *rules
+	exempt map[string]exemption
 	// validate replaces the register's validators, which the fixture's rows
 	// would never satisfy.
 	validate error
@@ -148,9 +147,8 @@ func (f fixture) config(t *testing.T) auditConfig {
 			validate:         func([]tenancy.Decision) error { return validate },
 			validateFailures: func([]tenancy.Failure) error { return nil },
 		},
-		rules:   r,
-		exempt:  f.exempt,
-		pending: f.pending,
+		rules:  r,
+		exempt: f.exempt,
 	}
 }
 
@@ -218,7 +216,7 @@ func TestRun_AFinding_IsReportedAndFailsOnlyUnderCheck(t *testing.T) {
 			}
 			wantOut := "G1 ROW-001: names " + siteDir + ":gone, which matches nothing: " + siteDir + " declares nothing named gone\n" +
 				"audit_tenancy: 1 rows, 0 failures and 1 declared sites over 2 packages " +
-				"(0 refusal returns, 0 refusals, 0 reasons and 0 settings read); 1 findings, 0 rows pending, 0 declarations exempted\n"
+				"(0 refusal returns, 0 refusals, 0 reasons and 0 settings read); 1 findings, 0 declarations exempted\n"
 			if stdout.String() != wantOut {
 				t.Fatalf("stdout = %q, want %q", stdout.String(), wantOut)
 			}
@@ -296,10 +294,10 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 // TestRunMain_TheTree_PassesTheGate is the gate on this repository, the run
 // `make check-tenancy` makes: every row, failure and derivation of the real
 // register against the real server and internal/, with the real exemption
-// table and pending list. It is what says the tables in declarations.go
-// describe the tree today, and the summary line is held so a rule that stops
-// reading anything is a failure rather than a quiet pass. Every value layer
-// has moved its rows, so the list is empty and no row is deferred.
+// table. It is what says the tables in declarations.go describe the tree
+// today, and the summary line is held so a rule that stops reading anything
+// is a failure rather than a quiet pass. Every rule applies to every row: no
+// row's binding checks wait for anything.
 //
 // It runs with the environment naming Windows on arm64, which is what a
 // Windows host's toolchain would be told: the verdict must not depend on the
@@ -317,7 +315,7 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 	for name, want := range map[string]string{
 		"exempted literal":    "cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
 		"exempted name":       "internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
-		"verdict":             "; 0 findings, 0 rows pending, 51 declarations exempted\n",
+		"verdict":             "; 0 findings, 51 declarations exempted\n",
 		"what the rules read": "(21 refusal returns, 70 refusals, 10 reasons and 31 settings read)",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -326,18 +324,6 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 			}
 		})
 	}
-	t.Run("no pending rows", func(t *testing.T) {
-		if strings.Contains(out, "pending (") {
-			t.Fatalf("stdout lists pending rows, and every value layer has moved its own:\n%s", out)
-		}
-	})
-}
-
-// sortedPending is the pending list in the order the report prints it.
-func sortedPending() []string {
-	out := slices.Clone(pending)
-	slices.Sort(out)
-	return out
 }
 
 // TestMain_ExitsWithTheCodeRunMainDecided: main hands runMain's code to the
@@ -389,7 +375,7 @@ func TestDefaultPatterns_AreTheServerAndInternal(t *testing.T) {
 		t.Fatalf("defaultPatterns = %v, want %v", defaultPatterns, want)
 	}
 	cfg := productionConfig("root")
-	if cfg.dir != "root" || !slices.Equal(cfg.pending, pending) || len(cfg.exempt) != len(notADecision) {
+	if cfg.dir != "root" || len(cfg.exempt) != len(notADecision) {
 		t.Fatalf("productionConfig = %+v, want the tree at root held to the real tables", cfg)
 	}
 }

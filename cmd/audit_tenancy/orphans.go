@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"path/filepath"
@@ -16,28 +15,15 @@ import (
 // register does read it; every exported function of its rule files is named
 // in some row's Functions. A register value nothing reads is a policy that
 // decides nothing, and it reads as though it did.
-//
-// A constant of a pending row is deferred: its site has not moved yet, so
-// nothing reads it by design until that row's layer lands.
 func (g *gate) checkOrphans() []Finding {
 	leaf := g.p.byDir[g.reg.leaf]
 	if leaf == nil {
 		return nil
 	}
-	deferred := map[string]bool{}
-	for _, d := range g.reg.decisions {
-		if g.pending[d.ID] {
-			for _, name := range rowConstants(d) {
-				deferred[name] = true
-			}
-		}
-	}
 	var found []Finding
 	for _, c := range exportedConsts(g.p, g.leafFiles(g.rules.valueFiles)) {
-		if !deferred[c.name] {
-			if msg := g.orphanProblem(c.name); msg != "" {
-				found = append(found, Finding{Rule: "G6", Subject: siteKey(g.reg.leaf, c.name), Position: c.at, Message: msg})
-			}
+		if msg := g.orphanProblem(c.name); msg != "" {
+			found = append(found, Finding{Rule: "G6", Subject: siteKey(g.reg.leaf, c.name), Position: c.at, Message: msg})
 		}
 	}
 	named := map[string]bool{}
@@ -55,18 +41,6 @@ func (g *gate) checkOrphans() []Finding {
 		}
 	}
 	return found
-}
-
-// rowConstants are the register constants one row owns: its values, and what
-// its Alias and Arg sites read.
-func rowConstants(d tenancy.Decision) []string {
-	names := slices.Clone(d.Values)
-	for _, s := range d.Sites {
-		if s.Role == tenancy.Alias || s.Role == tenancy.Arg {
-			names = append(names, s.Reads)
-		}
-	}
-	return names
 }
 
 // orphanProblem says why the register constant name is an orphan, or returns
@@ -159,19 +133,4 @@ func exportedFuncs(p *program, files []*ast.File) []leafDecl {
 		}
 	}
 	return out
-}
-
-// orphanFindingsFor are the G6 findings a pending row would have if it were
-// not pending, for the pending check.
-func (g *gate) orphanFindingsFor(d tenancy.Decision) []Finding {
-	var found []Finding
-	for _, name := range rowConstants(d) {
-		if g.leafConst(name) == nil {
-			continue
-		}
-		if msg := g.orphanProblem(name); msg != "" {
-			found = append(found, Finding{Rule: "G6", Subject: siteKey(g.reg.leaf, name), Message: fmt.Sprintf("%s (%s)", msg, d.ID)})
-		}
-	}
-	return found
 }

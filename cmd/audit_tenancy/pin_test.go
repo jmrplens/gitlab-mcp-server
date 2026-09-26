@@ -34,21 +34,19 @@ var noValue int
 func notAValue() {}
 `
 
-// TestCheckPins_AnEqualValueOfEqualType_Passes, a const and a var, and on a
-// pending row too: a pin moves nothing, so nothing waits for a layer.
+// TestCheckPins_AnEqualValueOfEqualType_Passes, a const and a var.
 func TestCheckPins_AnEqualValueOfEqualType_Passes(t *testing.T) {
 	report := fixture{
 		files: map[string]string{"site/site.go": pinSource},
 		rows: []tenancy.Decision{row("ROW-001",
 			pinSite("sameLimit", "Limit"), pinSite("sameWindow", "Window"), pinSite("sameVar", "Window"))},
-		pending: []string{"ROW-001"},
 	}.run(t)
 	assertFindings(t, report, "G4")
 }
 
 // TestCheckPins_Drift_IsAFinding: a different value, a different type, a
 // different kind of constant, a value that does not fold, a register constant
-// that does not exist and a site holding no value each fail, pending or not.
+// that does not exist and a site holding no value each fail.
 func TestCheckPins_Drift_IsAFinding(t *testing.T) {
 	report := fixture{
 		files: map[string]string{"site/site.go": pinSource},
@@ -56,7 +54,6 @@ func TestCheckPins_Drift_IsAFinding(t *testing.T) {
 			pinSite("otherLimit", "Limit"), pinSite("typedLimit", "Limit"), pinSite("name", "Limit"),
 			pinSite("notConstant", "Window"), pinSite("noValue", "Limit"), pinSite("notAValue", "Limit"),
 			pinSite("sameLimit", "Missing"), pinSite("gone", "Limit"))},
-		pending: []string{"ROW-001"},
 	}.run(t)
 	assertFindings(t, report, "G4",
 		"ROW-001: "+siteDir+":name is \"x\" where Limit is 64",

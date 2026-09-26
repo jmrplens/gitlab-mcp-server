@@ -14,9 +14,6 @@ import (
 // statement of a default stated twice (issue 958) is held to the first
 // without aliasing it, so drift between the two is a finding rather than a
 // surprise.
-//
-// It applies to every row, pending or not: a pin moves nothing, so there is
-// nothing for a later layer to do before it holds.
 func (g *gate) checkPins() []Finding {
 	var found []Finding
 	for _, d := range g.reg.decisions {

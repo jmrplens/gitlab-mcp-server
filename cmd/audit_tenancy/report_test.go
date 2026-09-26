@@ -18,28 +18,26 @@ func TestFinding_String_WithAndWithoutAPosition(t *testing.T) {
 	}
 }
 
-// TestReport_Write_PrintsWhatAReaderNeeds: the findings, the pending rows,
-// what the exemption table answered only when verbose, and the summary line;
-// a report with nothing pending prints no pending line.
+// TestReport_Write_PrintsWhatAReaderNeeds: the findings, what the exemption
+// table answered only when verbose, and the summary line; a report with no
+// finding prints the summary line alone.
 func TestReport_Write_PrintsWhatAReaderNeeds(t *testing.T) {
 	report := Report{
-		Summary:  Summary{Rows: 2, Failures: 1, Sites: 3, Packages: 4, Returns: 5, Refusals: 6, Reasons: 7, Settings: 8, Findings: 1, Pending: 1, Exempted: 1},
+		Summary:  Summary{Rows: 2, Failures: 1, Sites: 3, Packages: 4, Returns: 5, Refusals: 6, Reasons: 7, Settings: 8, Findings: 1, Exempted: 1},
 		Findings: []Finding{{Rule: "G1", Subject: "ROW", Message: "m"}},
-		Pending:  []string{"ROW-002"},
 		Excused:  []Excuse{{Key: "cmd/server:x", Part: partNames, Category: categoryTransport, Reason: "r"}},
 	}
 	summary := "audit_tenancy: 2 rows, 1 failures and 3 declared sites over 4 packages " +
-		"(5 refusal returns, 6 refusals, 7 reasons and 8 settings read); 1 findings, 1 rows pending, 1 declarations exempted\n"
+		"(5 refusal returns, 6 refusals, 7 reasons and 8 settings read); 1 findings, 1 declarations exempted\n"
 	tests := []struct {
 		name    string
 		report  Report
 		verbose bool
 		want    string
 	}{
-		{"quiet", report, false, "G1 ROW: m\npending (G2, G3 and G6 deferred until the layer that moves their values): ROW-002\n" + summary},
-		{"verbose", report, true, "G1 ROW: m\npending (G2, G3 and G6 deferred until the layer that moves their values): ROW-002\n" +
-			"cmd/server:x: not a decision (names, transport): r\n" + summary},
-		{"nothing pending", Report{Summary: report.Summary}, false, summary},
+		{"quiet", report, false, "G1 ROW: m\n" + summary},
+		{"verbose", report, true, "G1 ROW: m\ncmd/server:x: not a decision (names, transport): r\n" + summary},
+		{"nothing found", Report{Summary: report.Summary}, false, summary},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

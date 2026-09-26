@@ -1,7 +1,6 @@
 package main
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -35,97 +34,6 @@ func TestCategories_EachSaysWhatItCovers(t *testing.T) {
 			}
 		})
 	}
-}
-
-// movedByValueLayers are the Valued rows whose values a layer of issue 565 has
-// already moved into the register, each layer appending its own: the
-// holdings, the listen and watcher ceilings with the code they refuse with and
-// the watch cadence and back-off (L3); the pool's size, idle timeout and probe
-// ceiling, the OAuth admission lifetimes, the credential re-checks, the idle
-// session timeout and the request state's lifetime (L4); the authentication
-// failure budgets, their escalation ladder, table ceiling and sweep, with the
-// gate's own refusal codes (L5); the tool-call, completion and listing
-// buckets with the in-band retry-later code, the upstream retry policy and the
-// tier probe's namespace paging (L6).
-var movedByValueLayers = []string{
-	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-007", "RTC-005",
-	"ADM-002", "ADM-005", "ADM-006", "ADM-008", "ADM-009", "ADM-010",
-	"END-005", "IDN-011", "POL-001", "POL-004", "POL-006",
-	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
-	"AUT-003", "RTC-001", "RTC-002", "RTC-003", "RTC-006",
-}
-
-// TestPending_IsTheValuedRowsNotYetMoved: the list holds each of the
-// register's Valued rows that no value layer has moved yet, once, and nothing
-// else, which is what "the rows not yet migrated" means; a moved row is
-// Valued too, and pending never names it again.
-func TestPending_IsTheValuedRowsNotYetMoved(t *testing.T) {
-	var valued []string
-	for _, d := range tenancy.Decisions() {
-		if d.Disposition == tenancy.Valued {
-			valued = append(valued, d.ID)
-		}
-	}
-	all := append(slices.Clone(pending), movedByValueLayers...)
-	if len(all) != len(valued) || !sameSet(all, valued) {
-		t.Fatalf("pending = %v and moved = %v, want together the Valued rows %v, each once", sortedPending(), movedByValueLayers, valued)
-	}
-}
-
-// sameSet reports whether a and b hold the same strings.
-func sameSet(a, b []string) bool {
-	seen := map[string]int{}
-	for _, s := range a {
-		seen[s]++
-	}
-	for _, s := range b {
-		seen[s]--
-	}
-	for _, n := range seen {
-		if n != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// TestCheckPending_HoldsTheListToTheRegister: an entry naming no row fails,
-// and so does a pending row whose alias, argument and orphan checks already
-// pass, since the layer that moved it forgot to say so; a row still reading a
-// literal stays pending.
-func TestCheckPending_HoldsTheListToTheRegister(t *testing.T) {
-	source := siteHeader + `
-const moved = leaf.Limit
-
-const unmoved = 64
-`
-	report := fixture{
-		files: map[string]string{"site/site.go": source},
-		rows: []tenancy.Decision{
-			row("ROW-001", aliasSite("moved", "Limit")),
-			row("ROW-002", aliasSite("unmoved", "Limit")),
-		},
-		pending: []string{"ROW-001", "ROW-002", "ROW-404"},
-	}.run(t)
-	assertFindings(t, report, "G1",
-		"ROW-001: is pending, and its alias, argument and orphan checks already pass: take it out of pending",
-		"ROW-404: is pending, and the register has no such row",
-	)
-	if strings.Join(report.Pending, ",") != "ROW-001,ROW-002,ROW-404" {
-		t.Fatalf("pending = %v, want the list sorted", report.Pending)
-	}
-}
-
-// TestCheckPending_AnOrphanKeepsARowPending: a pending row whose alias passes
-// while a value it owns is still read by nothing stays pending.
-func TestCheckPending_AnOrphanKeepsARowPending(t *testing.T) {
-	source := siteHeader + `
-const moved = leaf.Limit
-`
-	d := row("ROW-001", aliasSite("moved", "Limit"))
-	d.Values = []string{"Limit", "Window", "Missing"}
-	report := fixture{files: map[string]string{"site/site.go": source}, rows: []tenancy.Decision{d}, pending: []string{"ROW-001"}}.run(t)
-	assertFindings(t, report, "G1")
 }
 
 // TestCheckExemptions_HoldsTheTableToWhatItAnswered: an exemption that

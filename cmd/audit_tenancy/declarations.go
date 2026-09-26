@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
@@ -269,37 +268,6 @@ var notADecision = map[string]exemption{
 	// A decision the inventory does not list.
 	"internal/subscriptions:settledFactor": {categoryUninventoried, "how much slower a settled resource is polled than the base cadence; " +
 		"it belongs with the cadence HLD-007 holds, and the answer to question Q7 moved only the base and minimum intervals there"},
-}
-
-// pending are the rows whose values have not moved into the register yet.
-// G2, G3 and G6 are deferred for them, and every other rule applies in full,
-// so each of their sites must already exist and every pin must already agree.
-// Each value layer of issue 565 deleted the rows it moved, and the last of
-// them left the list empty; the layer that closes the gate deletes it with the
-// deferral. A row listed here whose deferred checks already pass is a finding:
-// the layer that moved it forgot to say so.
-var pending = []string{}
-
-// checkPending holds the pending list to the register: every entry is a row,
-// and a row stays pending only while a deferred check would still fail.
-func (g *gate) checkPending() []Finding {
-	var found []Finding
-	for _, id := range sortedKeys(g.pending) {
-		i := slices.IndexFunc(g.reg.decisions, func(d tenancy.Decision) bool { return d.ID == id })
-		if i < 0 {
-			found = append(found, Finding{Rule: "G1", Subject: id, Message: "is pending, and the register has no such row"})
-			continue
-		}
-		d := g.reg.decisions[i]
-		deferred := slices.Concat(g.aliasFindings(d), g.argFindings(d), g.orphanFindingsFor(d))
-		if len(deferred) == 0 {
-			found = append(found, Finding{
-				Rule: "G1", Subject: id,
-				Message: "is pending, and its alias, argument and orphan checks already pass: take it out of pending",
-			})
-		}
-	}
-	return found
 }
 
 // checkExemptions holds the exemption table to what it answered: an entry
