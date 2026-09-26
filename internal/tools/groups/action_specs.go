@@ -308,7 +308,7 @@ func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 				CommonConfusions: []string{"Set include_subgroups=true to also include projects in descendant groups."},
 			},
 		}
-		options.IndividualTool.Description = "List the projects in a GitLab group. Returns: projects with path, visibility, and archived status. See also: gitlab_group_get, gitlab_subgroups_list, gitlab_group_transfer_project."
+		options.IndividualTool.Description = "List the projects in a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_get, gitlab_subgroups_list, gitlab_group_transfer_project."
 	case "gitlab_group_search":
 		options.Usage = "Search for groups by name or path keywords. Use when the user wants to find groups matching a term without already knowing an ID or path."
 		options.Aliases = []string{"search groups", "find group by name", "lookup groups"}
@@ -568,7 +568,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"Lists projects shared *into* the group. Use group.projects for the group's own projects."},
 			},
 		}
-		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: shared projects with path, visibility, and archived status. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
+		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
 	case "gitlab_group_transfer":
 		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends."
 		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}

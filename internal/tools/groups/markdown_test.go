@@ -185,24 +185,29 @@ func TestFormatMemberListMarkdown_NamesTheAccountStateAndTheMembership(t *testin
 }
 
 // TestFormatListProjectsMarkdown_OpensWithAHeading verifies the group project
-// table names and counts what it shows, which it did not do at all, and leaves
-// the archived cell of a row GitLab rendered as BasicProjectDetails empty
-// rather than answering for it.
+// table names and counts what it shows, which it did not do at all, links each
+// name to its project, shows when each was last active, and leaves the
+// archived cell of a row GitLab rendered as BasicProjectDetails empty rather
+// than answering for it.
 func TestFormatListProjectsMarkdown_OpensWithAHeading(t *testing.T) {
 	md := FormatListProjectsMarkdown(ListProjectsOutput{
 		Projects: []ProjectItem{
-			{ID: 4, Name: "api", PathWithNamespace: "acme/api", Visibility: "private", Archived: new(false)},
+			{
+				ID: 4, Name: "api", PathWithNamespace: "acme/api", Visibility: "private", Archived: new(false),
+				WebURL: "https://gitlab.example.com/acme/api", LastActivityAt: "2026-04-05T06:07:00Z",
+			},
 			{ID: 5, Name: "basic", PathWithNamespace: "acme/basic", Visibility: "public"},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
 	})
 
 	want := "## Group Projects (2)\n\n" +
-		"| ID | Name | Path | Visibility | Archived |\n| --- | --- | --- | --- | --- |\n" +
-		"| 4 | api | acme/api | private | ❌ |\n" +
-		"| 5 | basic | acme/basic | public |  |\n" +
+		"| ID | Name | Path | Visibility | Archived | Last Activity |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 4 | [api](https://gitlab.example.com/acme/api) | acme/api | private | ❌ | 5 Apr 2026 06:07 UTC |\n" +
+		"| 5 | basic | acme/basic | public |  |  |\n" +
 		"\nPage 1 of 1 | 2 items total\n" +
 		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'project.get' to view a project's details\n" +
 		"- Use action 'project.create' to add a new project to this group\n"
 	if md != want {

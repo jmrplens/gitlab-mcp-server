@@ -135,7 +135,7 @@ List descendant subgroups of a GitLab group. Returns each subgroup's name, path,
 
 ### `gitlab_group_projects`
 
-List projects belonging to a GitLab group. Supports filtering by search, archived status, visibility, and including subgroup projects. Returns project name, path, visibility, and archived status with pagination.
+List projects belonging to a GitLab group. Supports filtering by search, archived status, visibility, and including subgroup projects. Returns a compact row per project with pagination: ID, names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status (absent under `simple`, whose response does not carry it), and the created and last-activity times. The rest of a project is what `project.get` returns.
 
 | Annotation | **Read** |
 | ---------- | -------- |
