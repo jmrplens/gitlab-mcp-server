@@ -80,8 +80,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 }
 
 // TestDecisions_DispositionCounts pins how many rows the register holds of
-// each disposition in this layer: RTC-004 and POL-003 stay ruled until the
-// layers that promote them.
+// each disposition in this layer: RTC-004 is promoted to MeterFor, and POL-003
+// stays ruled until the layer that promotes it.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -93,8 +93,8 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 27},
-		{"ruled", Ruled, 37},
-		{"promoted", Promoted, 0},
+		{"ruled", Ruled, 36},
+		{"promoted", Promoted, 1},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 10},
 	} {
@@ -106,14 +106,23 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 	}
 }
 
-// TestDecisions_FunctionsAreEmptyInThisLayer holds every row's Functions
-// empty: no register function answers part of a decision until the layers that
-// promote the method meter, the busy rule and the zero rule land.
-func TestDecisions_FunctionsAreEmptyInThisLayer(t *testing.T) {
+// TestDecisions_FunctionsNameThePromotedRules pins which rows name a register
+// function in this layer: the four rows of the method meter name MeterFor, and
+// every other row names none until the layers that promote the busy rule and
+// the zero rule land.
+func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
+	want := map[string]string{
+		"RTC-001": "MeterFor",
+		"RTC-002": "MeterFor",
+		"RTC-003": "MeterFor",
+		"RTC-004": "MeterFor",
+	}
 	for _, d := range Decisions() {
-		if len(d.Functions) != 0 {
-			t.Errorf("%s names functions %v", d.ID, d.Functions)
-		}
+		t.Run(d.ID, func(t *testing.T) {
+			if got := strings.Join(d.Functions, ","); got != want[d.ID] {
+				t.Errorf("%s names functions %q, want %q", d.ID, got, want[d.ID])
+			}
+		})
 	}
 }
 
@@ -391,7 +400,7 @@ func rowPins() map[string]rowPin {
 		"RTC-003": {Allow, Rate, ClassD, Valued, KeyEntry, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
 			{methods: "tools/list", channel: RPC, code: -42900, prefix: pinRate, answer: RetryLater},
 		}},
-		"RTC-004": {Allow, Rule, ClassP, Ruled, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
+		"RTC-004": {Allow, Rule, ClassP, Promoted, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
 		"RTC-005": {Allow, Rate, ClassD, Valued, KeyEntry, KeyProcess, KeyTenant, KeyTenant, []refusalPin{
 			{methods: pinSubMeths, channel: RPC, code: -32000, prefix: "subscriptions: rate limited", answer: RetryLater},
 			{methods: "notifications/resources/updated", channel: Silent, answer: NoAnswer},

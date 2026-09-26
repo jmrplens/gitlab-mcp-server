@@ -81,16 +81,12 @@ const defaultThrottleWindow = 10 * time.Second
 // names could be read.
 const methodToolsCall = "tools/call"
 
-// The other methods that reach GitLab with the caller's credential. They
-// share tools/call's bucket, because to GitLab a read is a read whichever
-// MCP method asked for it, and a limit that metered one door left the other
-// three open.
-const (
-	methodResourcesRead       = "resources/read"
-	methodResourcesSubscribe  = "resources/subscribe"
-	methodSubscriptionsListen = "subscriptions/listen"
-	methodPromptsGet          = "prompts/get"
-)
+// methodResourcesRead is one of the other methods that reach GitLab with the
+// caller's credential, and share tools/call's bucket because to GitLab a read
+// is a read whichever MCP method asked for it. Which methods those are is
+// decided by [tenancy.MeterFor] (register rows RTC-001 to RTC-004), where the
+// reason is kept; this name remains for the tests that refuse one.
+const methodResourcesRead = "resources/read"
 
 // methodToolsList is the catalog listing, metered on a bucket of its own for a
 // reason none of the methods above share: it reaches no upstream at all, and
@@ -272,8 +268,10 @@ func CatalogListingRPS(rps float64) float64 {
 //
 // Every other method (initialize, resources/list, prompts/list) bypasses the
 // limiter: they reach no upstream and cost little to answer, and metering
-// something cheap buys nothing and costs a concept. If limiter is nil, this
-// function is a no-op.
+// something cheap buys nothing and costs a concept. Which bucket each method
+// draws on, and so which draws on none, is [tenancy.MeterFor]'s answer
+// (register rows RTC-001 to RTC-004); the buckets and the refusals stay here.
+// If limiter is nil, this function is a no-op.
 func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 	if limiter == nil {
 		return
@@ -300,19 +298,19 @@ func AttachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 			limiter := resolve(ctx)
 			completions := limiter.forCompletions()
 			catalog := limiter.forCatalog()
-			switch method {
-			case methodToolsCall:
+			switch tenancy.MeterFor(method) { // register rows RTC-001 to RTC-004
+			case tenancy.MeterToolResult:
 				if !limiter.allow() {
 					result := rateLimitedResult(req)
 					limiter.reportRefusal(ctx, extractToolName(req))
 					return result, nil
 				}
-			case methodResourcesRead, methodResourcesSubscribe, methodSubscriptionsListen, methodPromptsGet:
+			case tenancy.MeterToolRPC:
 				if !limiter.allow() {
 					limiter.reportRefusal(ctx, method)
 					return nil, rateLimitedError(method)
 				}
-			case methodToolsList:
+			case tenancy.MeterCatalog:
 				if !isInternalInspection(ctx) && !catalog.allow() {
 					// Reported on the bucket that refused, so the line carries
 					// the rate that actually applied rather than the tool-call
@@ -320,7 +318,7 @@ func AttachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 					catalog.reportRefusal(ctx, method)
 					return nil, rateLimitedError(method)
 				}
-			case "completion/complete":
+			case tenancy.MeterCompletion:
 				if !completions.allow() {
 					return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{}}}, nil
 				}
