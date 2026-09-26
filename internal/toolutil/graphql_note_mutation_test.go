@@ -33,10 +33,11 @@ type testNote struct {
 
 // TestExecGraphQLNoteMutation_Success verifies the happy path: the payload
 // under the configured key is decoded and its note node returned, with no
-// quick actions status when GitLab sent none, since a body without a quick
-// action is answered with a null status.
+// quick actions status for a body that named no command. GitLab answers such
+// a body with a status all the same, empty, which is what the fixture sends.
 func TestExecGraphQLNoteMutation_Success(t *testing.T) {
-	gql := fakeGraphQL{body: `{"data":{"createNote":{"note":{"id":"gid://gitlab/Note/7","body":"hi"},"errors":[],"quickActionsStatus":null}}}`}
+	gql := fakeGraphQL{body: `{"data":{"createNote":{"note":{"id":"gid://gitlab/Note/7","body":"hi"},"errors":[],` +
+		`"quickActionsStatus":{"commandNames":[],"commandsOnly":false,"messages":null,"errorMessages":null}}}}`}
 	result, err := ExecGraphQLNoteMutation[testNote](context.Background(), gql, GraphQLNoteMutation{
 		Op: "epicNoteCreate", Hint: "hint", PayloadKey: "createNote", Query: "mutation {}",
 	})
@@ -48,6 +49,50 @@ func TestExecGraphQLNoteMutation_Success(t *testing.T) {
 	}
 	if result.QuickActions != nil {
 		t.Errorf("quick actions = %+v, want nil for a body that carried none", result.QuickActions)
+	}
+}
+
+// TestGraphQLQuickActionsStatus_Output_ReadsTheEmptyStatusAsNone verifies
+// which statuses reach a caller. GitLab builds one for every note on an item
+// that supports quick actions, so the empty one it answers a body without a
+// command with must read as none, while a status carrying any one of its four
+// fields is a report and is published whole: each case sets exactly one, so
+// no field can be dropped from the test without a case failing.
+func TestGraphQLQuickActionsStatus_Output_ReadsTheEmptyStatusAsNone(t *testing.T) {
+	tests := []struct {
+		name   string
+		status *graphQLQuickActionsStatus
+		want   *QuickActionsStatusOutput
+	}{
+		{name: "no status", status: nil, want: nil},
+		{name: "the empty status of a body without a command", status: &graphQLQuickActionsStatus{CommandNames: []string{}}, want: nil},
+		{
+			name:   "a command alone",
+			status: &graphQLQuickActionsStatus{CommandNames: []string{"label"}},
+			want:   &QuickActionsStatusOutput{CommandNames: []string{"label"}},
+		},
+		{
+			name:   "a body of commands alone",
+			status: &graphQLQuickActionsStatus{CommandsOnly: true},
+			want:   &QuickActionsStatusOutput{CommandsOnly: true},
+		},
+		{
+			name:   "a message alone",
+			status: &graphQLQuickActionsStatus{Messages: []string{"Added ~bug label."}},
+			want:   &QuickActionsStatusOutput{Messages: []string{"Added ~bug label."}},
+		},
+		{
+			name:   "a failure alone",
+			status: &graphQLQuickActionsStatus{ErrorMessages: []string{"Commands did not apply"}},
+			want:   &QuickActionsStatusOutput{ErrorMessages: []string{"Commands did not apply"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.status.output(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("output() = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 

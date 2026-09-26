@@ -92,9 +92,14 @@ const gqlCreateNoteData = `{
       "updatedAt": null,
       "discussion": {"id": "gid://gitlab/Discussion/d2hex"}
     },
-    "errors": []
+    "errors": [],
+    "quickActionsStatus": {"commandNames": [], "commandsOnly": false, "messages": null, "errorMessages": null}
   }
 }`
+
+// The three plain note mutations above and below carry the empty quick
+// actions status GitLab answers a body that named no command with, since it
+// builds one for every note on a work item; the outputs carry none.
 
 const gqlCreateNoteReplyData = `{
   "createNote": {
@@ -106,7 +111,8 @@ const gqlCreateNoteReplyData = `{
       "createdAt": "2026-01-04T00:00:00Z",
       "updatedAt": null
     },
-    "errors": []
+    "errors": [],
+    "quickActionsStatus": {"commandNames": [], "commandsOnly": false, "messages": null, "errorMessages": null}
   }
 }`
 
@@ -120,7 +126,8 @@ const gqlUpdateNoteData = `{
       "createdAt": "2026-01-01T00:00:00Z",
       "updatedAt": "2026-01-05T00:00:00Z"
     },
-    "errors": []
+    "errors": [],
+    "quickActionsStatus": {"commandNames": [], "commandsOnly": false, "messages": null, "errorMessages": null}
   }
 }`
 
@@ -151,6 +158,16 @@ func assertSelectsQuickActionsStatus(t *testing.T, r *http.Request) {
 	}
 	if !strings.Contains(body.Query, toolutil.GraphQLQuickActionsStatusSelection) {
 		t.Errorf("the note mutation does not select %q:\n%s", toolutil.GraphQLQuickActionsStatusSelection, body.Query)
+	}
+}
+
+// assertNoQuickActionsStatus holds an output to carrying no quick actions
+// status, which is what a body naming no command must produce although GitLab
+// answers it with an empty status rather than none; label names the call.
+func assertNoQuickActionsStatus(t *testing.T, label string, status *toolutil.QuickActionsStatusOutput) {
+	t.Helper()
+	if status != nil {
+		t.Errorf("%s QuickActionsStatus = %+v, want nil for a body without a quick action", label, *status)
 	}
 }
 
@@ -1056,9 +1073,7 @@ func TestCreate(t *testing.T) {
 				if out.Notes[0].ID != 200 {
 					t.Errorf("note ID=%d, want 200", out.Notes[0].ID)
 				}
-				if out.QuickActionsStatus != nil {
-					t.Errorf("QuickActionsStatus = %+v, want nil for a body without a quick action", out.QuickActionsStatus)
-				}
+				assertNoQuickActionsStatus(t, "Create()", out.QuickActionsStatus)
 			},
 		},
 		{
@@ -1263,6 +1278,7 @@ func TestAddNote(t *testing.T) {
 				if out.Author != "dave" {
 					t.Errorf("got Author=%q, want dave", out.Author)
 				}
+				assertNoQuickActionsStatus(t, "AddNote()", out.QuickActionsStatus)
 			},
 		},
 		{
@@ -1444,6 +1460,7 @@ func TestUpdateNote(t *testing.T) {
 				if out.UpdatedAt == "" {
 					t.Error("expected UpdatedAt to be set")
 				}
+				assertNoQuickActionsStatus(t, "UpdateNote()", out.QuickActionsStatus)
 			},
 		},
 		{

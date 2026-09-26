@@ -138,7 +138,9 @@ func epicNoteIDs(notes []epicnotes.Output) []int64 {
 
 // TestEpicNotes_Lifecycle_CreateListGetUpdateDelete writes one note on the
 // fixture epic per surface, finds it in the listing, reads it back, edits
-// it, deletes it and checks the listing no longer holds it.
+// it, deletes it and checks the listing no longer holds it. Neither the note
+// nor its edit names a command, so neither answer carries a quick actions
+// status.
 //
 // Replaces: TestMeta_EpicNotes
 func TestEpicNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
@@ -153,6 +155,11 @@ func TestEpicNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 		if created.ID == 0 || created.Body != body {
 			e.T.Fatalf("epic_note_create answered %+v, want a note with an ID carrying %q", created, body)
 		}
+		// GitLab answers a body without a command with an empty quick actions
+		// status rather than none, which must not reach the output.
+		if created.QuickActionsStatus != nil {
+			e.T.Errorf("epic_note_create answered a body without a quick action with the status %+v, want none", *created.QuickActionsStatus)
+		}
 		note := withParams(params, map[string]any{"note_id": created.ID})
 
 		listed := harness.Do[epicnotes.ListOutput](s, actionEpicNoteList, params)
@@ -166,6 +173,9 @@ func TestEpicNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 		updated := harness.Do[epicnotes.Output](s, actionEpicNoteUpdate, withParams(note, map[string]any{"body": "updated " + body}))
 		if updated.Body != "updated "+body {
 			e.T.Errorf("epic_note_update answered the body %q, want the one just written", updated.Body)
+		}
+		if updated.QuickActionsStatus != nil {
+			e.T.Errorf("epic_note_update answered a body without a quick action with the status %+v, want none", *updated.QuickActionsStatus)
 		}
 
 		harness.DoVoid(s, actionEpicNoteDelete, note)

@@ -49,9 +49,10 @@ type GraphQLNoteMutation struct {
 // QuickActionsStatusOutput mirrors GitLab's QuickActionsStatus, what a note
 // mutation reports about the quick actions its body carried: the commands it
 // recognized, whether the body held nothing else (in which case GitLab keeps
-// no note), what the commands did, and what they failed to do. GitLab sends
-// it only when the body carried a quick action, so a nil pointer on an output
-// is a body that carried none.
+// no note), what the commands did, and what they failed to do. A nil pointer
+// on an output is a body that carried none: GitLab answers a status for every
+// note on an item that supports quick actions, an empty one when the body
+// named no command, and the decoder reads the empty one as none.
 type QuickActionsStatusOutput struct {
 	CommandNames  []string `json:"command_names,omitempty"`
 	CommandsOnly  bool     `json:"commands_only"`
@@ -68,9 +69,22 @@ type graphQLQuickActionsStatus struct {
 	Messages      []string `json:"messages"`
 }
 
-// output converts the decoded status to the published one, nil for nil.
+// output converts the decoded status to the published one, nil when GitLab
+// sent none or sent the empty one it answers for a body that named no
+// command.
+//
+// Notes::CreateService and Notes::UpdateService build a QuickActionsStatus for
+// every note on a work item, an issue, a merge request or a commit, whether or
+// not the body named a command, and createNote and updateNote answer with it
+// whenever it exists. For a body without a command it carries no command, no
+// message, no failure and commandsOnly false, which says nothing, and
+// publishing it would put a quick actions section on every note a caller
+// writes. Any one of the four set is a report worth publishing.
 func (s *graphQLQuickActionsStatus) output() *QuickActionsStatusOutput {
 	if s == nil {
+		return nil
+	}
+	if len(s.CommandNames) == 0 && !s.CommandsOnly && len(s.Messages) == 0 && len(s.ErrorMessages) == 0 {
 		return nil
 	}
 	return &QuickActionsStatusOutput{

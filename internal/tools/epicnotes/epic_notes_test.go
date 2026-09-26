@@ -102,19 +102,24 @@ const (
 		}
 	}`
 
-	// GraphQL response for createNote mutation.
+	// GraphQL response for createNote mutation. The body named no command, and
+	// GitLab answers it with an empty quick actions status all the same, since
+	// it builds one for every note on a work item; the output carries none.
 	gqlCreateNoteData = `{
 		"createNote": {
 			"note": {"id": "gid://gitlab/Note/200", "body": "New comment", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-16T10:00:00Z", "updatedAt": "2026-01-16T10:00:00Z"},
-			"errors": []
+			"errors": [],
+			"quickActionsStatus": {"commandNames": [], "commandsOnly": false, "messages": null, "errorMessages": null}
 		}
 	}`
 
-	// GraphQL response for updateNote mutation.
+	// GraphQL response for updateNote mutation, with the empty status of a
+	// new body that named no command.
 	gqlUpdateNoteData = `{
 		"updateNote": {
 			"note": {"id": "gid://gitlab/Note/100", "body": "Updated comment", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-16T11:00:00Z"},
-			"errors": []
+			"errors": [],
+			"quickActionsStatus": {"commandNames": [], "commandsOnly": false, "messages": null, "errorMessages": null}
 		}
 	}`
 
