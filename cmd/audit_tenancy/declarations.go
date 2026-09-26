@@ -278,7 +278,6 @@ var notADecision = map[string]exemption{
 // deletes the list. A row listed here whose deferred checks already pass is a
 // finding: the layer that moved it forgot to say so.
 var pending = []string{
-	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
 	"AUT-003",
 	"RTC-001", "RTC-002", "RTC-003", "RTC-006",
 }

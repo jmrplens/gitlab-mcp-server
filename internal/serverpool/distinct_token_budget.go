@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // distinctDigestLen is how much of the SHA-256 digest of a credential is kept
@@ -27,7 +29,7 @@ const distinctDigestLen = 16
 // attacker who keeps going after the third block stays on the hour rather than
 // being blocked for a day, because the block is a defense and not a
 // punishment, and a permanent one lands on whoever inherits the address.
-var escalationLadder = [...]int{1, 10, 60}
+var escalationLadder = [...]int{tenancy.AuthEscalationFirst, tenancy.AuthEscalationSecond, tenancy.AuthEscalationThird} // register row AUB-003
 
 // DistinctTokenBudget counts the distinct credentials one address has had
 // refused inside a window, and blocks that address for longer each time the

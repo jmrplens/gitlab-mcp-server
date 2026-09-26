@@ -104,15 +104,15 @@ const (
 // day makes a block outlive the incident that caused it, and a limit in the
 // millions is a budget that never fires.
 const (
-	DefaultAuthFailureLimit       = 10
-	DefaultAuthFailureWindow      = 1 * time.Minute
-	DefaultAuthDistinctTokenLimit = 50
-	DefaultAuthDistinctWindow     = 10 * time.Minute
+	DefaultAuthFailureLimit       = tenancy.AuthFailureLimit        // register row AUB-001
+	DefaultAuthFailureWindow      = tenancy.AuthFailureWindow       // register row AUB-001
+	DefaultAuthDistinctTokenLimit = tenancy.AuthDistinctTokenLimit  // register row AUB-003
+	DefaultAuthDistinctWindow     = tenancy.AuthDistinctTokenWindow // register row AUB-003
 
-	MaxAuthFailureLimit       = 100000
-	MaxAuthFailureWindow      = 24 * time.Hour
-	MaxAuthDistinctTokenLimit = 100000
-	MaxAuthDistinctWindow     = 24 * time.Hour
+	MaxAuthFailureLimit       = tenancy.AuthFailureLimitMax        // register row AUB-001
+	MaxAuthFailureWindow      = tenancy.AuthFailureWindowMax       // register row AUB-001
+	MaxAuthDistinctTokenLimit = tenancy.AuthDistinctTokenLimitMax  // register row AUB-003
+	MaxAuthDistinctWindow     = tenancy.AuthDistinctTokenWindowMax // register row AUB-003
 )
 
 // Meta-tool param schema modes.

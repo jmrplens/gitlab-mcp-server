@@ -41,6 +41,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
@@ -3522,7 +3523,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 // periodicCleanupInterval is how often the expiring caches (token identities,
 // rejected tokens, failure budgets) are swept. A var only so a test can make
 // the tick arrive; nothing at runtime writes it.
-var periodicCleanupInterval = 5 * time.Minute
+var periodicCleanupInterval = tenancy.AuthSweepInterval // register row AUB-005
 
 // startPeriodicCleanup runs cleanup on every tick until ctx ends.
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {
