@@ -173,7 +173,7 @@ func Analyze(root string, gapsOnly bool) (Report, error) {
 
 	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
-	offered := collectOffered(auditshared.CachedActionSpecs(client, true))
+	offered := collectOffered(auditshared.CachedActionSpecs(client))
 
 	return buildReport(pkgs, sdkEnums, offered, acceptedEnumGaps, gapsOnly), nil
 }

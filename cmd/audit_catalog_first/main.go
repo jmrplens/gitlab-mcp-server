@@ -966,7 +966,7 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	client := clientForAudit()
 
 	coverage := make(map[string]packageActionCoverage)
-	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client, true))
+	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client))
 	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
 
 	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})

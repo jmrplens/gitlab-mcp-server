@@ -262,7 +262,7 @@ func buildReport(gapsOnly bool, minAliases int) report {
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)
-	groups := auditshared.CachedActionSpecs(client, true)
+	groups := auditshared.CachedActionSpecs(client)
 	allClusters := collectAllClusters(groups)
 
 	packagesOut := buildPackageReports(groups, allClusters, projected, minAliases, gapsOnly)

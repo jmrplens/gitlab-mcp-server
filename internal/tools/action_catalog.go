@@ -85,7 +85,7 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 // megabytes, which is why [BuildActionCatalog] pays it once per configuration.
 func buildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
 	tier := opts.effectiveTier()
-	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, tier.IsEnterprise()), opts.SpecGroups)
+	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client), opts.SpecGroups)
 	specGroups = filterActionSpecGroupsByTier(specGroups, tier)
 	catalog := actioncatalog.NewCatalog()
 	for _, specGroup := range specGroups {

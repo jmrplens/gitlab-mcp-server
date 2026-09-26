@@ -406,7 +406,7 @@ func TestPackageToolCount_ScanAndCatalog_TakeTheHighestOfTheThree(t *testing.T) 
 // catalog rather than of this command, and an action that stopped carrying
 // either name would silently drop out of these counts instead of failing here.
 func TestActionSpecToolCounts_RealCatalog_CountsDistinctToolsPerOwner(t *testing.T) {
-	for _, group := range tools.CollectActionSpecs(nil, true) {
+	for _, group := range tools.CollectActionSpecs(nil) {
 		for _, spec := range group.Actions {
 			if strings.TrimSpace(spec.OwnerPackage) == "" || strings.TrimSpace(spec.IndividualTool.Name) == "" {
 				t.Fatalf("action %s.%s names owner %q and tool %q, want both", group.ToolName, spec.Name, spec.OwnerPackage, spec.IndividualTool.Name)

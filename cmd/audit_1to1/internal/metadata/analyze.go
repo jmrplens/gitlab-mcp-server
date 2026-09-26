@@ -59,7 +59,7 @@ func buildReport(gapsOnly bool) report {
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)
-	packagesOut := collectPackages(auditshared.CachedActionSpecs(client, true), projected, gapsOnly)
+	packagesOut := collectPackages(auditshared.CachedActionSpecs(client), projected, gapsOnly)
 	return report{
 		SchemaVersion: shared.SchemaVersion,
 		Summary:       summarize(packagesOut),

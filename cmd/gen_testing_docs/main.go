@@ -870,7 +870,7 @@ func isActionSpecType(expr ast.Expr) bool {
 
 func actionSpecToolCounts() map[string]int {
 	toolsByPackage := map[string]map[string]struct{}{}
-	for _, group := range tools.CollectActionSpecs(nil, true) {
+	for _, group := range tools.CollectActionSpecs(nil) {
 		for _, spec := range group.Actions {
 			owner := strings.TrimSpace(spec.OwnerPackage)
 			toolName := strings.TrimSpace(spec.IndividualTool.Name)
