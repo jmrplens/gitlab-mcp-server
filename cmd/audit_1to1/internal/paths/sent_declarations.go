@@ -185,9 +185,24 @@ const reasonGroupScopedUserRoutes = "the three group-scoped user endpoints prese
 // internal/tools/groupmembers really publishes on its member output.
 const memberEntity = "API::Entities::Member"
 
-// accessRequesterEntity is what the access-request routes present, inheriting
-// Member and merging UserBasic into it.
+// accessRequesterEntity is what the access-request routes present: UserBasic
+// merged in, and requested_at.
 const accessRequesterEntity = "API::Entities::AccessRequester"
+
+// The two access-request types, split so that each publishes the entity its
+// own routes present. Both decode client-go's AccessRequest, which is what
+// every one of the six routes answers with in client-go, so the type grain
+// holds each against the union and reports the other entity's keys.
+const (
+	reasonAccessRequesterNotAMember = "accessrequests.Output is filled by the two access-request lists and the two requests " +
+		"to join (lib/api/access_requests.rb), which present Entities::AccessRequester: UserBasic merged in, and requested_at, " +
+		"which this type publishes. Member is what the two approve routes present, and accessrequests.MemberOutput, which " +
+		"they fill, publishes it. A pending request is a person asking, not a membership, so none of Member's keys has ever " +
+		"been on a response this type is read from."
+	reasonApprovedMemberNotARequester = "accessrequests.MemberOutput is filled by the two approve routes (lib/api/access_requests.rb), " +
+		"which present Entities::Member and not Entities::AccessRequester. requested_at belongs to the pending request the " +
+		"approval ended, and accessrequests.Output, which the lists and the requests to join fill, publishes it."
+)
 
 // The three presenter options behind [categoryOptionNeverPassed] in the member
 // and user families, each naming the routes checked against the record at
@@ -231,7 +246,7 @@ const (
 // The four keys both entities do share, from the UserBasic each inherits, are
 // published rather than declared: locked, public_email, avatar_path and
 // custom_attributes are on a billable member exactly as they are on a member.
-const reasonBillableMemberEntity = "ee/lib/api/groups.rb describes GET /groups/:id/billable_members with Entities::Member and presents " +
+const reasonBillableMemberEntity = "ee/lib/ee/api/members.rb describes GET /groups/:id/billable_members with Entities::Member and presents " +
 	"::API::Entities::BillableMember, which inherits UserBasic and adds the seat keys rather than the membership ones. " +
 	"A billable member is a user who costs a seat and not a membership record: it has no access level, no expiry, no " +
 	"creator and no role, so this key has never been on that response. The record holds both entities and only the " +
@@ -663,6 +678,14 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// short reference.
 	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::CommitDetail", Field: "stats", Category: categoryOptionNeverPassed, Reason: reasonSubmoduleCommitStatsNeverPassed},
 	{Package: toolsDir + "/epics", Entity: "API::Entities::Epic", Field: "reference", Category: categoryOptionNeverPassed, Reason: reasonEpicReferenceNeverPassed},
+
+	// The two access-request types, each answered for the entity of the
+	// other's routes alone. Both pair with client-go's AccessRequest, so
+	// readSDKRoutes puts all six routes in front of each, and a splat over
+	// the other's entity is right here because no key of it can reach the
+	// type: the routes that fill one never present the other.
+	{Package: accessRequestsPkg, Type: "Output", Entity: memberEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonAccessRequesterNotAMember},
+	{Package: accessRequestsPkg, Type: "MemberOutput", Entity: accessRequesterEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonApprovedMemberNotARequester},
 
 	{
 		Package:  toolsDir + "/geo",

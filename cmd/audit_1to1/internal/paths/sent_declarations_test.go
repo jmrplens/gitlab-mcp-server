@@ -271,9 +271,10 @@ func TestOptionEvidence_TheRealTable_HoldsUntilThePackageAsksForTheOption(t *tes
 
 // TestDeclaredUnsurfaced_NamesWhatTheTreeHolds verifies the real table against
 // the real tree, since an entry is a claim about it: each names a package
-// under internal/tools, an entity the committed live record holds, a known
-// category and a reason. What the reason claims about GitLab's source is not
-// checked here; that is what the reason is written down for.
+// under internal/tools, a type that package declares when it narrows to one,
+// an entity the committed live record holds, a known category and a reason.
+// What the reason claims about GitLab's source is not checked here; that is
+// what the reason is written down for.
 func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 	root := repoRoot(t)
 	doc, err := apilive.Read(filepath.Join(root, apilive.DefaultDir))
@@ -284,6 +285,8 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 		t.Run(declaration.key(), func(t *testing.T) {
 			if _, statErr := os.Stat(filepath.Join(root, declaration.Package)); statErr != nil {
 				t.Errorf("package %s: %v", declaration.Package, statErr)
+			} else if declaration.Type != "" && !packageTypeNames(t, filepath.Join(root, declaration.Package))[declaration.Type] {
+				t.Errorf("package %s declares no type %s", declaration.Package, declaration.Type)
 			}
 			if _, held := doc.Entities[declaration.Entity]; !held {
 				t.Errorf("entity %s is not in the live record", declaration.Entity)
