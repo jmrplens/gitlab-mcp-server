@@ -102,7 +102,7 @@ func mrDraftNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 }
 
 func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Aliases:        []string{individualTool},
 		Usage:          "Use to execute mrdraftnotes domain action.",
 		Tags:           []string{"merge_request", "review", "draft_note"},
@@ -110,6 +110,14 @@ func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "mrdraftnotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if individualTool == "gitlab_mr_draft_note_publish_all" {
+		// GitLab declares the two values on the bulk_publish route and refuses
+		// any other with a 400; approving is a separate action.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("reviewer_state", "requested_changes", "reviewed"),
+		}
+	}
+	return options
 }
 
 // projectGuidance is the shared parameter guidance for project_id across draft
@@ -219,13 +227,25 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_publish_all, gitlab_mr_draft_note_list.",
 	},
 	"gitlab_mr_draft_note_publish_all": {
-		Usage:   "Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone. Review with mr_review.draft_note_list first.",
-		Aliases: []string{"publish all draft notes", "submit mr review", "post all pending comments", "finish mr review"},
-		Related: []string{actionDraftNoteList, actionDraftNotePublish},
+		Usage:   "Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Optionally post a summary note with it (note, internal) and record the caller's reviewer state (reviewer_state: requested_changes or reviewed, which is not an approval). Cannot be undone. Review with mr_review.draft_note_list first.",
+		Aliases: []string{"publish all draft notes", "submit mr review", "post all pending comments", "finish mr review", "submit review with summary", "request changes on mr review"},
+		Related: []string{actionDraftNoteList, actionDraftNotePublish, "merge_request.approve"},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
+			"note": {
+				SemanticRole:     "comment_body",
+				ValueSource:      "The Markdown summary of the review the user wants posted once the drafts are published.",
+				ExampleBinding:   `params.note:"Two blocking comments inline; the rest are nits."`,
+				CommonConfusions: []string{"This is one extra note beside the drafts. It does not edit or replace any draft note."},
+			},
+			"reviewer_state": {
+				SemanticRole:     "review_state",
+				ValueSource:      "requested_changes when the review blocks the merge, reviewed when it does not.",
+				ExampleBinding:   `params.reviewer_state:"requested_changes"`,
+				CommonConfusions: []string{"reviewed is not an approval. Approve with merge_request.approve instead."},
+			},
 		},
-		Description: "Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.",
+		Description: "Publish all of the user's pending draft notes on a merge request, optionally with a summary note and a reviewer state. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.",
 	},
 }

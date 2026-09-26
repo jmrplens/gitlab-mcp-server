@@ -3,7 +3,10 @@ package mrdraftnotes
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -306,6 +309,69 @@ func mrDraftNoteSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+// TestActionSpecs_PublishAll_ReviewerStateIsAnEnumOfGitLabsTwoValues verifies
+// that the bulk publish action publishes reviewer_state as the two values
+// GitLab's route declares, and that no other draft note action carries a
+// schema override, since none of them takes the parameter.
+func TestActionSpecs_PublishAll_ReviewerStateIsAnEnumOfGitLabsTwoValues(t *testing.T) {
+	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	want := []toolutil.InputSchemaOverride{
+		{PropertyPath: "reviewer_state", Values: map[string]any{"enum": []any{"requested_changes", "reviewed"}}},
+	}
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if tool == "gitlab_mr_draft_note_publish_all" {
+				if !reflect.DeepEqual(spec.InputSchemaOverrides, want) {
+					t.Errorf("input schema overrides =\n got %#v\nwant %#v", spec.InputSchemaOverrides, want)
+				}
+				return
+			}
+			if len(spec.InputSchemaOverrides) != 0 {
+				t.Errorf("input schema overrides = %#v, want none on an action that takes no reviewer_state", spec.InputSchemaOverrides)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_PublishAll_RouteSendsTheReviewOptions verifies that the
+// canonical route decodes note, internal and reviewer_state from the caller's
+// arguments and that each reaches the bulk_publish body with its value, so the
+// schema a model reads and the request GitLab receives name the same three.
+func TestActionSpecs_PublishAll_RouteSendsTheReviewOptions(t *testing.T) {
+	var body []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/bulk_publish") {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
+		}
+		body = read
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(client))
+
+	if _, err := byTool["gitlab_mr_draft_note_publish_all"].Route.Handler(t.Context(), map[string]any{
+		"project_id": "42", "merge_request_iid": 1,
+		"note": "Summary", "internal": true, "reviewer_state": "requested_changes",
+	}); err != nil {
+		t.Fatalf("Route.Handler(gitlab_mr_draft_note_publish_all) error: %v", err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("decode request body %q: %v", body, err)
+	}
+	want := map[string]any{"note": "Summary", "internal": true, "reviewer_state": "requested_changes"}
+	if !reflect.DeepEqual(sent, want) {
+		t.Errorf("bulk_publish body = %#v, want %#v", sent, want)
+	}
 }
 
 // TestDecorateDraftNoteMeta_UnknownTool verifies the metadata decorator leaves

@@ -5,8 +5,10 @@ package mrdraftnotes
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -507,49 +509,71 @@ func TestDraftNotePublishAll_Success(t *testing.T) {
 	}
 }
 
-// TestDraftNotePublishAll_SendsNoPublishParameters pins the body of the
-// bulk-publish POST, which client-go v3.12.0 changed without changing a line
-// here and without failing anything.
+// TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven pins the
+// body of the bulk-publish POST for each combination of the three optional
+// parameters: each one the caller named reaches the body with its value, and
+// none the caller left out is sent.
 //
-// v3.12.0 added PublishAllDraftNotesWithOptions and made PublishAllDraftNotes
-// delegate to it with a nil *PublishAllDraftNotesOptions. NewRequestToURL
-// decides whether to marshal a body with `opt != nil`, an interface
-// comparison, and a typed nil pointer held in an interface is not nil, so the
-// body went from absent (Content-Length 0) under v3.0.0 to the four bytes
-// "null". Grape sets its form hash only for a body that parses to a Hash, so
-// the endpoint is expected to see the same empty parameter set and the call
-// keeps working; the bytes on the wire are what moved, and the other tests
-// here assert only the path and the method. Recorded in
-// docs/development/upstream-bugs.md as a client-go defect.
-//
-// What this holds is the property that outlives an upstream fix: PublishAll
-// sends none of the note, internal and reviewer_state parameters the endpoint
-// gained in that release, however the empty body happens to be spelled. An
-// empty or null body cannot carry a parameter, so the two accepted spellings
-// are the assertion.
-func TestDraftNotePublishAll_SendsNoPublishParameters(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != pathDraftNotes+"/bulk_publish" || r.Method != http.MethodPost {
-			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
-			return
-		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("read body: %v", err)
-			http.Error(w, "read body", http.StatusInternalServerError)
-			return
-		}
-		if got := strings.TrimSpace(string(body)); got != "" && got != "null" {
-			t.Errorf("bulk_publish body = %q, want an empty or null body carrying no publish parameters", got)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
+// The empty case is the one with a history. client-go v3.12.0 made
+// PublishAllDraftNotes delegate to PublishAllDraftNotesWithOptions with a nil
+// options pointer, which NewRequestToURL marshals as the four bytes "null"
+// (recorded in docs/development/upstream-bugs.md). PublishAll now calls the
+// options variant itself with a non-nil value, so a call naming nothing sends
+// the empty object: a body that parses to a Hash with no keys, which is what
+// Grape reads as no parameters. An internal of false is asserted as sent, so a
+// handler that forwards the flag only when it is true fails here.
+func TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven(t *testing.T) {
+	internalOff, internalOn := false, true
+	tests := []struct {
+		name  string
+		input PublishAllInput
+		want  map[string]any
+	}{
+		{name: "nothing set", input: PublishAllInput{}, want: map[string]any{}},
+		{name: "note only", input: PublishAllInput{Note: "Looks good overall"}, want: map[string]any{"note": "Looks good overall"}},
+		{name: "internal false", input: PublishAllInput{Note: "Visible", Internal: &internalOff}, want: map[string]any{"note": "Visible", "internal": false}},
+		{name: "reviewer state only", input: PublishAllInput{ReviewerState: "reviewed"}, want: map[string]any{"reviewer_state": "reviewed"}},
+		{
+			name:  "every option",
+			input: PublishAllInput{Note: "Two blockers inline", Internal: &internalOn, ReviewerState: "requested_changes"},
+			want:  map[string]any{"note": "Two blockers inline", "internal": true, "reviewer_state": "requested_changes"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != pathDraftNotes+"/bulk_publish" || r.Method != http.MethodPost {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+					return
+				}
+				read, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read body: %v", err)
+					http.Error(w, "read body", http.StatusInternalServerError)
+					return
+				}
+				body = read
+				w.WriteHeader(http.StatusNoContent)
+			}))
 
-	if err := PublishAll(context.Background(), client, PublishAllInput{
-		ProjectID: "42",
-		MRIID:     1,
-	}); err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+			input := tt.input
+			input.ProjectID, input.MRIID = "42", 1
+			if err := PublishAll(context.Background(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			var sent map[string]any
+			if err := json.Unmarshal(body, &sent); err != nil {
+				t.Fatalf("bulk_publish body %q is not a JSON object: %v", body, err)
+			}
+			if sent == nil {
+				t.Fatalf("bulk_publish body = %q, want a JSON object rather than null", body)
+			}
+			if !reflect.DeepEqual(sent, tt.want) {
+				t.Errorf("bulk_publish body = %#v, want %#v", sent, tt.want)
+			}
+		})
 	}
 }
 

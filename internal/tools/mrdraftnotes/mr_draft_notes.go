@@ -102,10 +102,16 @@ type PublishInput struct {
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 }
 
-// PublishAllInput defines parameters for publishing all draft notes.
+// PublishAllInput defines parameters for publishing all draft notes. The
+// three optional fields finish the review in the same call: a summary note
+// posted after the drafts, whether that note is internal, and the review state
+// the caller records as a reviewer.
 type PublishAllInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
+	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	MRIID         int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
+	Note          string               `json:"note,omitempty" jsonschema:"Summary comment GitLab posts on the merge request after publishing the drafts. Markdown is supported"`
+	Internal      *bool                `json:"internal,omitempty" jsonschema:"Whether the summary note is internal, visible only to members who can see internal notes. Defaults to false and applies only together with note"`
+	ReviewerState string               `json:"reviewer_state,omitempty" jsonschema:"Review state to record for the caller as a reviewer after publishing: requested_changes or reviewed. It does not record a formal approval"`
 }
 
 // ---------------------------------------------------------------------------
@@ -438,7 +444,17 @@ func Publish(ctx context.Context, client *gitlabclient.Client, input PublishInpu
 	return nil
 }
 
-// PublishAll publishes all pending draft notes on a merge request.
+// PublishAll publishes all pending draft notes on a merge request, and with
+// them the summary note and reviewer state the caller named, if any.
+//
+// It calls the options variant because the other binding sends none of the
+// three parameters. client-go marks that variant deprecated only because it
+// plans to fold the options into PublishAllDraftNotes in v4, and says to use
+// it meanwhile whenever the options are needed. The options are always a
+// non-nil value, so a call naming none of them sends the empty object `{}`,
+// the one empty body Grape parses to the parameter set it means; a nil
+// pointer would reach the body as the `null` recorded in
+// docs/development/upstream-bugs.md.
 func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishAllInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -449,7 +465,14 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 	if input.MRIID <= 0 {
 		return toolutil.ErrRequiredInt64("draftNotePublishAll", "merge_request_iid")
 	}
-	_, err := client.GL().DraftNotes.PublishAllDraftNotes(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	opts := &gl.PublishAllDraftNotesOptions{Internal: input.Internal}
+	if input.Note != "" {
+		opts.Note = new(input.Note)
+	}
+	if input.ReviewerState != "" {
+		opts.ReviewerState = new(input.ReviewerState)
+	}
+	_, err := client.GL().DraftNotes.PublishAllDraftNotesWithOptions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries note, internal and reviewer_state until client-go v4 folds them into PublishAllDraftNotes.
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNotePublishAll", err, http.StatusForbidden,
 			"publishes all current user's draft notes on the MR. Cannot be undone; verify project_id + merge_request_iid; use mr_review.draft_note_list first to review pending drafts")

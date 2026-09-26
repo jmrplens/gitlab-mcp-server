@@ -182,7 +182,7 @@ Publish a single draft note on a GitLab merge request, making it visible to all 
 
 ### `gitlab_mr_draft_note_publish_all`
 
-Publish all pending draft notes on a GitLab merge request at once, making them visible to all participants. This action cannot be undone.
+Publish all pending draft notes on a GitLab merge request at once, making them visible to all participants. The same call can finish the review: `note` posts a summary comment after the drafts, `internal` makes that comment internal, and `reviewer_state` (`requested_changes` or `reviewed`) records the caller's review state, which is not an approval. This action cannot be undone.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
