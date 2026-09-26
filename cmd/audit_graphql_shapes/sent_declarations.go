@@ -58,6 +58,15 @@ const (
 	// categoryDeprecated's evidence is prose, and the evidence is the same
 	// kind: the field's entry in GitLab's GraphQL API reference.
 	categoryExperiment = "experiment-upstream"
+	// categoryNewerThanFloor is a field GitLab added after the oldest release
+	// the documents sharing the selection are held to. GitLab refuses a whole
+	// document that names a field it does not have yet, just as it refuses one
+	// naming a field it removed, so selecting it would stop every action
+	// sharing the selection on every instance between that floor and the
+	// field's release. The pin cannot say it, since it records one release and
+	// no history; the evidence is the first versioned GitLab GraphQL reference
+	// that lists the field, beside the last that does not.
+	categoryNewerThanFloor = "newer-than-release-floor"
 	// categorySeparateAction is a collection a caller would page through,
 	// which is an action of its own rather than a field of the object it
 	// hangs from.

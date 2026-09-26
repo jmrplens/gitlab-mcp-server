@@ -149,6 +149,7 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 		categoryLookup:             true,
 		categoryDeprecated:         true,
 		categoryExperiment:         true,
+		categoryNewerThanFloor:     true,
 		categorySeparateAction:     true,
 		categoryPublishedElsewhere: true,
 		categoryAffordance:         true,

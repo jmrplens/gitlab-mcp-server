@@ -1935,8 +1935,13 @@ func containsStr(s, sub string) bool {
 // triagedVulnNode is a vulnerability carrying every field a triager reads
 // beyond the ones sampleVulnGetNode has: who changed its state and what they
 // wrote, the CVSS and EPSS data, the report's links, a leaked token's status,
-// the issues and merge request linked to it, and a DAST location. Every value
-// is distinct, so a field filled from the one beside it fails.
+// the issues and merge request linked to it, and a DAST location. Every
+// string and number is distinct, so a field filled from the one beside it
+// fails. The three default-branch booleans cannot all differ, so
+// presentOnDefaultBranch and removedFromCode share false here and
+// TestNodeToItem_DefaultBranchSignals_EachReadFromItsOwnField tells those two
+// apart; resolvedOnDefaultBranch, the one true, is what a vulnerability no
+// longer present on the default branch carries.
 const triagedVulnNode = `{
   "id": "gid://gitlab/Vulnerability/90",
   "uuid": "4b5c9e0d-2f3a-5e6b-8c7d-1a2b3c4d5e6f",
@@ -1955,15 +1960,13 @@ const triagedVulnNode = `{
   "resolvedBy": {"username": "bob", "name": "Bob", "webUrl": "https://gitlab.example.com/bob"},
   "confirmedAt": "2026-01-20T12:00:00Z",
   "confirmedBy": {"username": "alice", "name": "Alice", "webUrl": "https://gitlab.example.com/alice"},
-  "dueDate": "2026-03-01",
   "solution": "Encode the output.",
   "hasRemediations": false,
   "dismissalReason": "ACCEPTABLE_RISK",
   "falsePositive": false,
-  "unverified": true,
-  "presentOnDefaultBranch": true,
+  "presentOnDefaultBranch": false,
   "resolvedOnDefaultBranch": true,
-  "removedFromCode": true,
+  "removedFromCode": false,
   "userNotesCount": 3,
   "primaryIdentifier": null,
   "identifiers": [],
@@ -2021,15 +2024,11 @@ func triagedVulnItem() Item {
 		ResolvedBy:              &toolutil.UserCoreRefOutput{Username: "bob", Name: "Bob", WebURL: "https://gitlab.example.com/bob"},
 		ConfirmedAt:             "2026-01-20T12:00:00Z",
 		ConfirmedBy:             &toolutil.UserCoreRefOutput{Username: "alice", Name: "Alice", WebURL: "https://gitlab.example.com/alice"},
-		DueDate:                 "2026-03-01",
 		Project:                 &ProjectItem{ID: "gid://gitlab/Project/1", Name: "p", FullPath: "g/p"},
 		WebURL:                  "https://gitlab.example.com/g/p/-/security/vulnerabilities/90",
 		Solution:                "Encode the output.",
 		FalsePositive:           &notFalsePositive,
-		Unverified:              true,
-		PresentOnDefaultBranch:  true,
 		ResolvedOnDefaultBranch: true,
-		RemovedFromCode:         true,
 		UserNotesCount:          3,
 		HasIssues:               true,
 		IssueLinks: []IssueLinkItem{
@@ -2094,6 +2093,63 @@ func TestNodeToItem_AbsentObjects_PublishNothing(t *testing.T) {
 	}
 }
 
+// TestNodeToItem_DefaultBranchSignals_EachReadFromItsOwnField verifies that
+// the three booleans GitLab computes about the default branch each reach their
+// own output field. Three booleans cannot all differ in one fixture, so each
+// case sets one of them alone: a field filled from either of the other two
+// reads false where the case wants true, or true where it wants false.
+func TestNodeToItem_DefaultBranchSignals_EachReadFromItsOwnField(t *testing.T) {
+	for _, tc := range []struct {
+		name                       string
+		node                       gqlVulnerabilityNode
+		present, resolved, removed bool
+	}{
+		{name: "present on the default branch alone", node: gqlVulnerabilityNode{PresentOnDefaultBranch: true}, present: true},
+		{name: "resolved on the default branch alone", node: gqlVulnerabilityNode{ResolvedOnDefaultBranch: true}, resolved: true},
+		{name: "removed from the code alone", node: gqlVulnerabilityNode{RemovedFromCode: true}, removed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			item := nodeToItem(tc.node)
+			if item.PresentOnDefaultBranch != tc.present || item.ResolvedOnDefaultBranch != tc.resolved ||
+				item.RemovedFromCode != tc.removed {
+				t.Errorf("present, resolved, removed = %t, %t, %t; want %t, %t, %t",
+					item.PresentOnDefaultBranch, item.ResolvedOnDefaultBranch, item.RemovedFromCode,
+					tc.present, tc.resolved, tc.removed)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_CodeSignals_EachFlagUnderItsOwnLabel verifies that the
+// two signals the card states only when they hold are each written under
+// their own label: a vulnerability GitLab no longer detects on the default
+// branch but still finds in the code must not read as removed from the code,
+// and the other way round.
+func TestFormatGetMarkdown_CodeSignals_EachFlagUnderItsOwnLabel(t *testing.T) {
+	const (
+		resolvedRow = "- **No longer detected on the default branch**\n"
+		removedRow  = "- **Removed from the code**\n"
+	)
+	for _, tc := range []struct {
+		name      string
+		item      Item
+		want, not string
+	}{
+		{name: "resolved on the default branch alone", item: Item{ID: "1", ResolvedOnDefaultBranch: true}, want: resolvedRow, not: removedRow},
+		{name: "removed from the code alone", item: Item{ID: "1", RemovedFromCode: true}, want: removedRow, not: resolvedRow},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatGetMarkdown(GetOutput{Vulnerability: tc.item})
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("the card lacks %q:\n%s", tc.want, got)
+			}
+			if strings.Contains(got, tc.not) {
+				t.Errorf("the card carries %q, which does not hold:\n%s", tc.not, got)
+			}
+		})
+	}
+}
+
 // TestFormatGetMarkdown_TriageRowsAndCollections verifies the card a fully
 // triaged vulnerability renders: the people linked to their profiles beside
 // the time of each state change, the default-branch signals, the enrichment
@@ -2122,12 +2178,9 @@ func TestFormatGetMarkdown_TriageRowsAndCollections(t *testing.T) {
 		"- **Resolved**: 1 Feb 2026 12:00 UTC\n" +
 		"- **Resolved By**: [Bob (@bob)](https://gitlab.example.com/bob)\n" +
 		"- **Dismissal Reason**: ACCEPTABLE_RISK\n" +
-		"- **Due Date**: 1 Mar 2026\n" +
-		"- **Present On Default Branch**: ✅\n" +
+		"- **Present On Default Branch**: ❌\n" +
 		"- **No longer detected on the default branch**\n" +
-		"- **Removed from the code**\n" +
 		"- **False Positive**: ❌\n" +
-		"- ⚠️ **Unverified: detected without an identified source**\n" +
 		"- **Has Issues**: ✅\n" +
 		"- **Has Merge Request**: ✅\n" +
 		"- **Merge Request**: [!34 Encode search output](https://gitlab.example.com/g/p/-/merge_requests/34)\n" +

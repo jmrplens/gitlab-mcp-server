@@ -81,10 +81,10 @@ type IssueLinkItem struct {
 //
 // The three people GitLab records against a state change are published beside
 // the time of it, and the triage signals it computes (present on the default
-// branch, resolved there, removed from the code, detected without an
-// identified source) beside the state. present_on_default_branch is written at
-// false as well as true, since GitLab always sends it and false is the answer
-// that matters: the vulnerability was found only on another branch.
+// branch, resolved there, removed from the code) beside the state.
+// present_on_default_branch is written at false as well as true, since GitLab
+// always sends it and false is the answer that matters: the vulnerability was
+// found only on another branch.
 type Item struct {
 	ID                      string                                   `json:"id"`
 	UUID                    string                                   `json:"uuid,omitempty"`
@@ -109,14 +109,12 @@ type Item struct {
 	ResolvedBy              *toolutil.UserCoreRefOutput              `json:"resolved_by,omitempty"`
 	ConfirmedAt             string                                   `json:"confirmed_at,omitempty"`
 	ConfirmedBy             *toolutil.UserCoreRefOutput              `json:"confirmed_by,omitempty"`
-	DueDate                 string                                   `json:"due_date,omitempty"`
 	Project                 *ProjectItem                             `json:"project,omitempty"`
 	WebURL                  string                                   `json:"web_url,omitempty"`
 	PrimaryID               *IdentifierItem                          `json:"primary_identifier,omitempty"`
 	Solution                string                                   `json:"solution,omitempty"`
 	HasRemediations         bool                                     `json:"has_remediations,omitempty"`
 	FalsePositive           *bool                                    `json:"false_positive,omitempty"`
-	Unverified              bool                                     `json:"unverified,omitempty"`
 	PresentOnDefaultBranch  bool                                     `json:"present_on_default_branch"`
 	ResolvedOnDefaultBranch bool                                     `json:"resolved_on_default_branch,omitempty"`
 	RemovedFromCode         bool                                     `json:"removed_from_code,omitempty"`
@@ -146,12 +144,31 @@ const referenceSelection = `
 // output claimed an empty description and no identifiers for a vulnerability
 // that has both. make check-graphql-shapes refuses that shape.
 //
-// Every field here is one GitLab's GraphQL reference lists as generally
-// available. The Vulnerability fields it marks Status: Experiment are left
-// out on purpose, and cmd/audit_graphql_shapes/sent_declarations_security.go
-// names each: GitLab may change or remove an experiment without notice, and a
-// document naming a field GitLab no longer has is refused whole, so one of
-// them here would put every one of these six actions at the experiment's mercy.
+// GitLab refuses a whole document that names a field it does not have, so the
+// fields here decide which GitLab releases these six actions work on at all,
+// and two kinds are left out on purpose, each named in
+// cmd/audit_graphql_shapes/sent_declarations_security.go:
+//
+//   - a field GitLab's GraphQL reference marks Status: Experiment, which GitLab
+//     may change or remove without notice (dueDate among them);
+//   - a field newer than GitLab 18.10, the oldest release this selection is
+//     served by. The newest field selected is removedFromCode, added in 18.10;
+//     unverified, added in 18.11, would stop all six actions on every 18.10
+//     instance for one boolean. Measured against GitLab's versioned GraphQL
+//     references, the selection before issue 967 was served back to 16.11 at
+//     least, and what moved the floor is, newest first: removedFromCode
+//     (18.10), findingTokenStatus.lastVerifiedAt (18.5), the location's
+//     dependency package path (18.3), findingTokenStatus (18.1),
+//     cveEnrichment.isKnownExploit (17.7), cveEnrichment (17.6) and
+//     containerRepositoryUrl (17.4).
+//
+// The list sends this selection for up to 100 nodes, and GitLab refuses a
+// query whose complexity exceeds 250 for an authenticated caller, which every
+// call this server makes is (AUTHENTICATED_MAX_COMPLEXITY in GitLab's
+// app/graphql/gitlab_schema.rb). Measured on GitLab.com (19.5-pre),
+// the list at first=100 costs 235, against at most 200 before issue 967, so a
+// field added here is measured against that ceiling first: nothing in the
+// unit suite can see it.
 const vulnFields = `
     id
     uuid
@@ -170,12 +187,10 @@ const vulnFields = `
     resolvedBy {` + toolutil.UserCoreRefSelection + `}
     confirmedAt
     confirmedBy {` + toolutil.UserCoreRefSelection + `}
-    dueDate
     solution
     hasRemediations
     dismissalReason
     falsePositive
-    unverified
     presentOnDefaultBranch
     resolvedOnDefaultBranch
     removedFromCode
@@ -332,12 +347,10 @@ type gqlVulnerabilityNode struct {
 	ResolvedBy              *toolutil.GraphQLUserCoreRef              `json:"resolvedBy"`
 	ConfirmedAt             string                                    `json:"confirmedAt"`
 	ConfirmedBy             *toolutil.GraphQLUserCoreRef              `json:"confirmedBy"`
-	DueDate                 string                                    `json:"dueDate"`
 	Solution                string                                    `json:"solution"`
 	HasRemediations         bool                                      `json:"hasRemediations"`
 	DismissalReason         string                                    `json:"dismissalReason"`
 	FalsePositive           *bool                                     `json:"falsePositive"`
-	Unverified              bool                                      `json:"unverified"`
 	PresentOnDefaultBranch  bool                                      `json:"presentOnDefaultBranch"`
 	ResolvedOnDefaultBranch bool                                      `json:"resolvedOnDefaultBranch"`
 	RemovedFromCode         bool                                      `json:"removedFromCode"`
@@ -387,12 +400,10 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 		ResolvedBy:              n.ResolvedBy.Output(),
 		ConfirmedAt:             n.ConfirmedAt,
 		ConfirmedBy:             n.ConfirmedBy.Output(),
-		DueDate:                 n.DueDate,
 		Solution:                n.Solution,
 		HasRemediations:         n.HasRemediations,
 		DismissalReason:         n.DismissalReason,
 		FalsePositive:           n.FalsePositive,
-		Unverified:              n.Unverified,
 		PresentOnDefaultBranch:  n.PresentOnDefaultBranch,
 		ResolvedOnDefaultBranch: n.ResolvedOnDefaultBranch,
 		RemovedFromCode:         n.RemovedFromCode,

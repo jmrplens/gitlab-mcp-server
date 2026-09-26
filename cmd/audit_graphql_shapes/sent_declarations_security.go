@@ -105,8 +105,20 @@ func securitySentDeclarations() []sentDeclaration {
 			Field:      "severityOverrides",
 			Category:   categorySeparateAction,
 			Reason: "The history of the finding's severity changes, paged as a connection. A history is a list a " +
-				"caller asks for on its own, not a field every finding of a page carries; the severity before any " +
-				"override is published as original_severity beside the current one.",
+				"caller pages through on its own, not a field every finding of a page carries, and no action of " +
+				"this server reads it yet, so the history itself is out of reach until one does; the severity " +
+				"before any override is published as original_severity beside the current one.",
+		},
+		{
+			Package:    securityFindingsPackage,
+			SchemaType: securityFindingType,
+			Field:      "unverified",
+			Category:   categoryNewerThanFloor,
+			Reason: "unverified (whether the finding was detected without an identified source) was added in " +
+				"GitLab 18.11: GitLab's versioned GraphQL reference lists PipelineSecurityReportFinding.unverified " +
+				"from 18.11 and not in 18.10. GitLab refuses a whole document that names a field it does not have, " +
+				"and every other field queryListFindings selects is served from 18.5, so selecting it would stop " +
+				"the findings list on every instance from 18.5 to 18.10 for one boolean.",
 		},
 		{
 			Package:    toolutilDir,
@@ -178,12 +190,13 @@ func scannerDeclarations(pkg string) []sentDeclaration {
 // vulnerabilityDeclarations answers the Vulnerability fields no document of
 // the vulnerabilities package selects.
 func vulnerabilityDeclarations() []sentDeclaration {
-	declarations := make([]sentDeclaration, 0, 31)
+	declarations := make([]sentDeclaration, 0, 33)
 	for _, experiment := range []struct{ field, introduced, meaning string }{
 		{"aiWorkflows", "18.6", "the AI workflows triggered for the vulnerability"},
 		{"archivalInformation", "17.11", "whether the vulnerability is about to be archived in the next month"},
 		{"ascpComponent", "19.4", "the ASCP component the vulnerability belongs to, null while the ascp_component_vulnerability_association feature flag is off"},
 		{"dependencies", "18.2", "the dependencies the vulnerability affects"},
+		{"dueDate", "18.11", "the date the vulnerability is due to be fixed by"},
 		{"duoSastVrWorkflowEnabled", "19.1", "whether the SAST vulnerability review workflow is enabled for the project"},
 		{"flags", "18.5", "the flags set on the vulnerability"},
 		{"initialDetectedPipeline", "18.2", "the pipeline where the vulnerability was first detected"},
@@ -222,11 +235,24 @@ func vulnerabilityDeclarations() []sentDeclaration {
 		sentDeclaration{
 			Package:    vulnerabilitiesPackage,
 			SchemaType: vulnerabilityType,
+			Field:      "unverified",
+			Category:   categoryNewerThanFloor,
+			Reason: "unverified (whether the finding was detected without an identified source) was added in " +
+				"GitLab 18.11: GitLab's versioned GraphQL reference lists Vulnerability.unverified from 18.11 and " +
+				"not in 18.10. GitLab refuses a whole document that names a field it does not have, and every " +
+				"other field of the selection the list, the get and the four state changes share is served from " +
+				"18.10 (the newest, removedFromCode, was added then), so selecting it would stop all six actions " +
+				"on every 18.10 instance for one boolean.",
+		},
+		sentDeclaration{
+			Package:    vulnerabilitiesPackage,
+			SchemaType: vulnerabilityType,
 			Field:      "externalIssueLinks",
 			Category:   categorySeparateAction,
-			Reason: "The links to issues in an external tracker (Jira), paged as a connection. Reading an external " +
-				"tracker's issues is a list a caller asks for on its own; the GitLab issues linked to the " +
-				"vulnerability are published as issue_links.",
+			Reason: "The links to issues in an external tracker (Jira), paged as a connection. They are a list a " +
+				"caller pages through on its own, and no action of this server lists them yet, so they are out " +
+				"of reach until one does; the GitLab issues linked to the vulnerability are published as " +
+				"issue_links.",
 		},
 		sentDeclaration{
 			Package:    vulnerabilitiesPackage,
@@ -235,7 +261,8 @@ func vulnerabilityDeclarations() []sentDeclaration {
 			Category:   categorySeparateAction,
 			Reason: "Every merge request linked to fix the vulnerability, paged as a connection. GitLab resolves " +
 				"mergeRequest to the first of this same list (Types::VulnerabilityType#merge_request is " +
-				"merge_requests.first), which is published as merge_request; the rest would be a list action.",
+				"merge_requests.first), which is published as merge_request. The others are a list of their own, " +
+				"and no action of this server lists them yet, so they are out of reach until one does.",
 		},
 		sentDeclaration{
 			Package:    vulnerabilitiesPackage,
@@ -243,15 +270,17 @@ func vulnerabilityDeclarations() []sentDeclaration {
 			Field:      "severityOverrides",
 			Category:   categorySeparateAction,
 			Reason: "The history of the vulnerability's severity changes, paged as a connection. A history is a " +
-				"list a caller asks for on its own, not a field every vulnerability of a page carries.",
+				"list a caller pages through on its own, not a field every vulnerability of a page carries, and " +
+				"no action of this server reads it yet, so it is out of reach until one does.",
 		},
 		sentDeclaration{
 			Package:    vulnerabilitiesPackage,
 			SchemaType: vulnerabilityType,
 			Field:      "stateTransitions",
 			Category:   categorySeparateAction,
-			Reason: "The history of the vulnerability's state changes, paged as a connection. What a caller " +
-				"reading the vulnerability needs of it is published: the latest transition's comment as " +
+			Reason: "The history of the vulnerability's state changes, paged as a connection. No action of this " +
+				"server reads the history yet, so the earlier transitions are out of reach until one does; what a " +
+				"caller reading the vulnerability needs of the latest is published: its comment as " +
 				"state_comment, and who confirmed, dismissed or resolved it with when.",
 		},
 		detailsDeclaration(vulnerabilitiesPackage, vulnerabilityType),
@@ -335,8 +364,9 @@ func notesDeclaration(field, what string) sentDeclaration {
 		Field:      field,
 		Category:   categorySeparateAction,
 		Reason: "The vulnerability's conversation, " + what + ", paged as a connection. Their count is published as " +
-			"user_notes_count; reading them is a notes action of its own, the way every other noteable in this " +
-			"server is served, rather than a field every vulnerability of a list carries.",
+			"user_notes_count. A conversation is a list a caller pages through on its own, the way this server " +
+			"reads an issue's or a merge request's, rather than a field every vulnerability of a list carries, " +
+			"and no action of this server reads a vulnerability's yet, so it is out of reach until one does.",
 	}
 }
 

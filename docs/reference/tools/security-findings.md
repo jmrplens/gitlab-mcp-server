@@ -78,16 +78,17 @@ Each finding includes:
 | `dismissed_by`        | object | Who dismissed it: `username`, `name`, `web_url`                                                                                                                                |
 | `dismissal_reason`    | string | Why it was dismissed                                                                                                                                                           |
 | `false_positive`      | bool   | GitLab's false-positive verdict, only where the project is licensed for the detection                                                                                          |
-| `unverified`          | bool   | Whether it was found without an identified source                                                                                                                              |
 | `evidence`            | object | Supporting evidence: `summary`, `source`, `source_id`, `source_url`, and the HTTP `request` and `response` a DAST or API fuzzing scan recorded, with any `supporting_messages` |
-| `remediations`        | array  | Fixes the scanner proposed: `summary` and the patch as `diff`                                                                                                                  |
+| `remediations`        | array  | Fixes the scanner proposed: `summary`, and as `diff` the patch in the form `git apply` takes, decoded from the base64 the report format carries it in                          |
 | `links`               | array  | References the security report attached: `name` and `url`                                                                                                                      |
 | `assets`              | array  | Artifacts the scan attached: `name`, `type`, `url`                                                                                                                             |
-| `token_status`        | object | For a leaked secret, whether it still works: `status` and `last_verified_at`                                                                                                   |
+| `token_status`        | object | For a leaked secret, whether it still works: `status`, `last_verified_at`, `created_at` and `updated_at`                                                                       |
 | `vulnerability_id`    | string | Linked vulnerability GID (if tracked)                                                                                                                                          |
 | `vulnerability_state` | string | Current state of the linked vulnerability                                                                                                                                      |
 
 The issue links and the merge request of a finding are those of its vulnerability, since GitLab resolves both through it: read them with `vulnerability.get` on the `vulnerability_id`.
+
+The action needs GitLab 18.5 or later, the release that added the newest fields it reads (`original_severity` and the token status's `last_verified_at`). A finding's `unverified` flag, added in 18.11, is not read, since GitLab refuses a whole document that names a field it does not have.
 
 ---
 

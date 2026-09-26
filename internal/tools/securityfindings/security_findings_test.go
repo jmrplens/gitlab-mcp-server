@@ -801,6 +801,39 @@ func TestList_EvidenceShapes(t *testing.T) {
 	}
 }
 
+// dockerfilePatch is a remediation's patch as git apply takes it, and
+// dockerfilePatchBase64 the same patch as a security report carries it and
+// GitLab's GraphQL API passes it on.
+const (
+	dockerfilePatch       = "--- a/Dockerfile\n+++ b/Dockerfile\n@@ -1 +1 @@\n-FROM debian:12.1\n+FROM debian:12.2\n"
+	dockerfilePatchBase64 = "LS0tIGEvRG9ja2VyZmlsZQorKysgYi9Eb2NrZXJmaWxlCkBAIC0xICsxIEBACi1GUk9NIGRlYmlhbjoxMi4xCitGUk9NIGRlYmlhbjoxMi4yCg=="
+)
+
+// TestRemediationToItem_DecodesThePatchAndPassesAnythingElseThrough verifies
+// that a remediation's diff is published as the patch it encodes: the report
+// format carries it in base64 and GitLab does not decode it. A value that is
+// not base64, such as a patch a report wrote unencoded, and one that decodes
+// to bytes that are not text, are both published exactly as GitLab sent them.
+func TestRemediationToItem_DecodesThePatchAndPassesAnythingElseThrough(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		diff string
+		want string
+	}{
+		{name: "a base64 patch is decoded", diff: dockerfilePatchBase64, want: dockerfilePatch},
+		{name: "a patch the report wrote unencoded is kept", diff: dockerfilePatch, want: dockerfilePatch},
+		{name: "base64 of bytes that are not text is kept as sent", diff: "//4=", want: "//4="},
+		{name: "no diff stays empty", diff: "", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := remediationToItem(gqlRemediation{Summary: "Upgrade", Diff: tc.diff})
+			if want := (RemediationItem{Summary: "Upgrade", Diff: tc.want}); got != want {
+				t.Errorf("remediationToItem() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
 // TestList_TriageFields_ReachTheOutputWhole verifies that every field the
 // triage of issue 967 surfaced on a finding travels from GitLab's answer to
 // the output, compared as one value through a document the mock validated
@@ -823,9 +856,9 @@ func TestList_TriageFields_ReachTheOutputWhole(t *testing.T) {
   "dismissedAt": "2026-02-02T12:00:00Z",
   "dismissedBy": {"username": "carol", "name": "Carol", "webUrl": "https://gitlab.example/carol"},
   "dismissalReason": "ACCEPTABLE_RISK",
-  "falsePositive": false, "unverified": true,
+  "falsePositive": false,
   "evidence": null,
-  "remediations": [{"summary": "Upgrade openssl to 3.0.3", "diff": "ZGlmZg=="}],
+  "remediations": [{"summary": "Upgrade openssl to 3.0.3", "diff": "` + dockerfilePatchBase64 + `"}],
   "links": [{"name": "Advisory", "url": "https://openssl.org/news/secadv"}],
   "assets": [{"name": "scan log", "type": "http_session", "url": "https://gitlab.example/asset/1"}],
   "findingTokenStatus": {"status": "INACTIVE", "lastVerifiedAt": "2026-02-01T00:00:00Z", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-02-01T00:00:01Z"},
@@ -862,8 +895,7 @@ func TestList_TriageFields_ReachTheOutputWhole(t *testing.T) {
 		DismissedBy:     &toolutil.UserCoreRefOutput{Username: "carol", Name: "Carol", WebURL: "https://gitlab.example/carol"},
 		DismissalReason: "ACCEPTABLE_RISK",
 		FalsePositive:   &notFalsePositive,
-		Unverified:      true,
-		Remediations:    []RemediationItem{{Summary: "Upgrade openssl to 3.0.3", Diff: "ZGlmZg=="}},
+		Remediations:    []RemediationItem{{Summary: "Upgrade openssl to 3.0.3", Diff: dockerfilePatch}},
 		Links:           []toolutil.VulnerabilityLinkOutput{{Name: "Advisory", URL: "https://openssl.org/news/secadv"}},
 		Assets:          []AssetItem{{Name: "scan log", Type: "http_session", URL: "https://gitlab.example/asset/1"}},
 		TokenStatus: &toolutil.VulnerabilityTokenStatusOutput{

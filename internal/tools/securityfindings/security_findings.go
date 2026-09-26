@@ -2,9 +2,11 @@ package securityfindings
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -37,7 +39,6 @@ type FindingItem struct {
 	DismissedBy      *toolutil.UserCoreRefOutput              `json:"dismissed_by,omitempty"`
 	DismissalReason  string                                   `json:"dismissal_reason,omitempty"`
 	FalsePositive    *bool                                    `json:"false_positive,omitempty"`
-	Unverified       bool                                     `json:"unverified,omitempty"`
 	Evidence         *EvidenceItem                            `json:"evidence,omitempty"`
 	Remediations     []RemediationItem                        `json:"remediations,omitempty"`
 	Links            []toolutil.VulnerabilityLinkOutput       `json:"links,omitempty"`
@@ -113,7 +114,10 @@ type SupportingMessageItem struct {
 }
 
 // RemediationItem is a fix the scanner proposed, with the patch that applies
-// it when the scanner produced one.
+// it when the scanner produced one. Diff is the patch in the form git apply
+// takes: GitLab passes on the report's value unchanged, which the security
+// report format defines as that patch encoded in base64, so it is decoded
+// before it is published (see [remediationToItem]).
 type RemediationItem struct {
 	Summary string `json:"summary,omitempty"`
 	Diff    string `json:"diff,omitempty"`
@@ -151,7 +155,17 @@ const (
             `
 )
 
-// GraphQL query for pipeline security report findings.
+// queryListFindings reads one page of a pipeline's security report findings.
+//
+// GitLab refuses a whole document that names a field it does not have, so
+// what it selects decides the oldest GitLab the action works on at all. The
+// newest fields selected are originalSeverity and the token status's
+// lastVerifiedAt, both added in GitLab 18.5, below the 18.10 the vulnerability
+// documents are held to; unverified, added in 18.11, is left out and declared
+// in cmd/audit_graphql_shapes/sent_declarations_security.go. At first=100 on
+// GitLab.com (19.5-pre) the document costs 201 of the 250 complexity GitLab
+// allows an authenticated caller, against at most 200 before issue 967, and
+// nothing in the unit suite can see that ceiling.
 const queryListFindings = `
 query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $scanner: [String!], $reportType: [String!], $state: [VulnerabilityState!], $sort: PipelineSecurityReportFindingSort) {
   project(fullPath: $projectPath) {
@@ -193,7 +207,6 @@ query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: 
           dismissedBy {` + toolutil.UserCoreRefSelection + `}
           dismissalReason
           falsePositive
-          unverified
           evidence {
             summary
             source {
@@ -284,7 +297,6 @@ type gqlFindingNode struct {
 	DismissedBy        *toolutil.GraphQLUserCoreRef              `json:"dismissedBy"`
 	DismissalReason    string                                    `json:"dismissalReason"`
 	FalsePositive      *bool                                     `json:"falsePositive"`
-	Unverified         bool                                      `json:"unverified"`
 	Evidence           *gqlEvidence                              `json:"evidence"`
 	Remediations       []gqlRemediation                          `json:"remediations"`
 	Links              []toolutil.GraphQLVulnerabilityLink       `json:"links"`
@@ -386,7 +398,6 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 		DismissedBy:      n.DismissedBy.Output(),
 		DismissalReason:  n.DismissalReason,
 		FalsePositive:    n.FalsePositive,
-		Unverified:       n.Unverified,
 		Evidence:         evidenceToItem(n.Evidence),
 		Links:            toolutil.VulnerabilityLinkOutputs(n.Links),
 		TokenStatus:      n.FindingTokenStatus.Output(),
@@ -402,7 +413,7 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 		item.Identifiers = append(item.Identifiers, IdentifierItem(id))
 	}
 	for _, remediation := range n.Remediations {
-		item.Remediations = append(item.Remediations, RemediationItem(remediation))
+		item.Remediations = append(item.Remediations, remediationToItem(remediation))
 	}
 	for _, asset := range n.Assets {
 		item.Assets = append(item.Assets, AssetItem(asset))
@@ -412,6 +423,24 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 		item.VulnState = n.Vulnerability.State
 	}
 	return item
+}
+
+// remediationToItem converts a fix the scanner proposed, decoding its patch.
+//
+// GitLab's security report format defines a remediation's diff as a
+// base64-encoded patch compatible with git apply, in the Diff section of
+// doc/development/integrations/secure.md, and its GraphQL API passes the
+// report's value through without decoding it, so a caller handed the value as
+// GitLab sent it reads a blob where the field's name promises a patch. A value
+// that is not base64, or that does not decode to text, is published as GitLab
+// sent it: a report that wrote the patch unencoded is then still read as a
+// patch, and nothing is guessed at.
+func remediationToItem(r gqlRemediation) RemediationItem {
+	diff := r.Diff
+	if patch, err := base64.StdEncoding.DecodeString(r.Diff); err == nil && utf8.Valid(patch) {
+		diff = string(patch)
+	}
+	return RemediationItem{Summary: r.Summary, Diff: diff}
 }
 
 // evidenceToItem converts the evidence GitLab sent, and answers nil for

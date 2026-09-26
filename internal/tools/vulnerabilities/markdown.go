@@ -127,14 +127,12 @@ func writeVulnerabilityRows(c *toolutil.Card, v Item) {
 	c.Time("Resolved", v.ResolvedAt)
 	writeUser(c, "Resolved By", v.ResolvedBy)
 	c.Field("Dismissal Reason", v.DismissalReason)
-	c.Time("Due Date", v.DueDate)
 	c.Bool("Present On Default Branch", v.PresentOnDefaultBranch)
 	// The two signals that the code no longer carries the vulnerability are
 	// stated only when they hold, the way GitLab's report badges them.
 	c.Flag("", "No longer detected on the default branch", v.ResolvedOnDefaultBranch)
 	c.Flag("", "Removed from the code", v.RemovedFromCode)
 	c.BoolPtr("False Positive", v.FalsePositive)
-	c.Warn("Unverified: detected without an identified source", v.Unverified)
 	c.Bool("Has Issues", v.HasIssues)
 	c.Bool("Has Merge Request", v.HasMR)
 	if mr := v.MergeRequest; mr != nil {
