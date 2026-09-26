@@ -17,7 +17,8 @@ func Get(ctx context.Context, c *gl.Client) {
 }
 `
 
-// fixtureClean is the same package with both calls passing the context.
+// fixtureClean is the same package with only the call that passes the
+// context.
 const fixtureClean = fixtureHeader + `
 func Get(ctx context.Context, c *gl.Client) {
 	_, _, _ = c.Version.GetVersion(gl.WithContext(ctx))
@@ -108,18 +109,76 @@ func TestRun_SourceThatDoesNotTypeCheck_FailsOnStderr(t *testing.T) {
 }
 
 // TestRun_PatternMatchingNothing_FailsRatherThanPassing guards the silence a
-// gate must not have: auditing no package is not a clean run.
+// gate must not have: auditing no package is not a clean run. A pattern
+// naming a directory that is not there is refused by the load, and one over a
+// module holding no package at all by the rule that a load returning nothing
+// is no answer. Each refusal is held to its own words, so a run that failed
+// for another reason cannot pass for it, and no report is printed beside it.
 func TestRun_PatternMatchingNothing_FailsRatherThanPassing(t *testing.T) {
-	var stdout, stderr strings.Builder
-	code := run(auditConfig{
-		dir:      repoRoot(t),
-		patterns: []string{"./cmd/audit_sdk_context/nothing-is-here/..."},
-	}, true, false, &stdout, &stderr)
-	if code != 1 {
-		t.Fatalf("exit = %d, want 1", code)
+	empty := writeTree(t, map[string]string{"go.mod": "module example.com/empty\n\ngo 1.27\n"})
+	tests := []struct {
+		name       string
+		dir        string
+		pattern    string
+		wantStderr string
+	}{
+		{
+			name: "a directory that is not there", dir: repoRoot(t), pattern: "./cmd/audit_sdk_context/nothing-is-here/...",
+			wantStderr: toolName + ": load ./cmd/audit_sdk_context/nothing-is-here/...: ",
+		},
+		{
+			name: "a module holding no package", dir: empty, pattern: "./...",
+			wantStderr: toolName + ": no packages matched ./... in " + empty + "\n",
+		},
 	}
-	if stderr.String() == "" {
-		t.Fatal("stderr is empty, want the refusal")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr strings.Builder
+			code := run(auditConfig{dir: tt.dir, patterns: []string{tt.pattern}}, true, false, &stdout, &stderr)
+			if code != 1 {
+				t.Fatalf("exit = %d, want 1", code)
+			}
+			assertBegins(t, "stderr", stderr.String(), tt.wantStderr)
+			assertBegins(t, "stdout", stdout.String(), "")
+		})
+	}
+}
+
+// TestAudit_ARelativeDir_NamesFilesBelowTheRootItResolvesTo: -dir defaults to
+// ".", and a file is named below the absolute root that resolves to. Named
+// against the relative spelling instead, no absolute file path can be made
+// relative to it, and every finding and every unjudged file would be printed
+// in full.
+func TestAudit_ARelativeDir_NamesFilesBelowTheRootItResolvesTo(t *testing.T) {
+	root := repoRoot(t)
+	t.Chdir(root)
+	report, err := audit(auditConfig{
+		dir:      ".",
+		patterns: []string{"./" + fixtureDir},
+		overlay: fixtureOverlay(root, map[string]string{
+			"fixture.go": fixtureWithAFinding,
+			"hidden.go": `//go:build ignore
+
+package fixture
+
+import gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+var _ = gl.WithContext
+`,
+		}),
+	})
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	files := make([]string, 0, len(report.Findings))
+	for _, finding := range report.Findings {
+		files = append(files, finding.File)
+	}
+	if want := []string{fixtureDir + "/fixture.go"}; !slices.Equal(files, want) {
+		t.Fatalf("finding files = %v, want %v", files, want)
+	}
+	if want := []string{fixtureDir + "/hidden.go"}; !slices.Equal(report.Unjudged, want) {
+		t.Fatalf("unjudged = %v, want %v", report.Unjudged, want)
 	}
 }
 
@@ -153,8 +212,10 @@ func TestAudit_RootThatCannotBeResolved_FailsRatherThanLoading(t *testing.T) {
 
 // TestRunMain_ParsesTheCommandLine holds what each argument does: an unknown
 // flag is a usage error, a help request is not a failure, and the patterns
-// and flags reach the run they describe. The package named is this command's
-// own, which is real source and clean.
+// and flags reach the run they describe. Both streams are held, since the
+// usage text belongs on stderr and a report on stdout, and text written to the
+// wrong one is still written. The package named is this command's own, which
+// is real source and clean.
 func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 	root := repoRoot(t)
 	tests := []struct {
@@ -162,9 +223,13 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 		args       []string
 		wantCode   int
 		wantStdout string
+		wantStderr string
 	}{
-		{name: "unknown flag", args: []string{"-nope"}, wantCode: 2},
-		{name: "help", args: []string{"-h"}, wantCode: 0},
+		{
+			name: "unknown flag", args: []string{"-nope"}, wantCode: 2,
+			wantStderr: "flag provided but not defined: -nope\nUsage of audit_sdk_context:\n",
+		},
+		{name: "help", args: []string{"-h"}, wantCode: 0, wantStderr: "Usage of audit_sdk_context:\n"},
 		{
 			name: "one package under check and verbose", args: []string{"-dir", root, "-check", "-v", "./cmd/audit_sdk_context"}, wantCode: 0,
 			wantStdout: "\naudit_sdk_context: 0 calls building or sending a request in 1 packages",
@@ -176,10 +241,24 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 			if code := runMain(tt.args, &stdout, &stderr); code != tt.wantCode {
 				t.Fatalf("exit = %d, want %d; stderr = %q", code, tt.wantCode, stderr.String())
 			}
-			if !strings.HasPrefix(stdout.String(), tt.wantStdout) {
-				t.Fatalf("stdout = %q, want it to begin %q", stdout.String(), tt.wantStdout)
-			}
+			assertBegins(t, "stdout", stdout.String(), tt.wantStdout)
+			assertBegins(t, "stderr", stderr.String(), tt.wantStderr)
 		})
+	}
+}
+
+// assertBegins holds one output stream to what it has to begin with, and an
+// empty want to a stream that carries nothing at all.
+func assertBegins(t *testing.T, stream, got, want string) {
+	t.Helper()
+	if want == "" {
+		if got != "" {
+			t.Fatalf("%s = %q, want nothing", stream, got)
+		}
+		return
+	}
+	if !strings.HasPrefix(got, want) {
+		t.Fatalf("%s = %q, want it to begin %q", stream, got, want)
 	}
 }
 
@@ -237,6 +316,73 @@ func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
 	if !slices.Equal(codes, []int{2}) {
 		t.Fatalf("exit codes = %v, want the 2 runMain returned for an unknown flag", codes)
 	}
+}
+
+// TestMain_WritesTheReportToStdoutAndTheComplaintToStderr: main hands runMain
+// the process's standard output and standard error in that order, which is
+// what lets a caller tell a report from a command line that could not be read.
+// Each case is held on both streams, because handed over the other way round
+// the text is not lost, only moved. The streams are read when main runs, so
+// replacing them here is what main sees.
+func TestMain_WritesTheReportToStdoutAndTheComplaintToStderr(t *testing.T) {
+	root := repoRoot(t)
+	previousExit, previousArgs := exitProcess, os.Args
+	previousStdout, previousStderr := os.Stdout, os.Stderr
+	t.Cleanup(func() {
+		exitProcess, os.Args = previousExit, previousArgs
+		os.Stdout, os.Stderr = previousStdout, previousStderr
+	})
+	exitProcess = func(int) {}
+	tests := []struct {
+		name       string
+		args       []string
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "a report", args: []string{"-dir", root, "./cmd/audit_sdk_context"},
+			wantStdout: "audit_sdk_context: 0 calls building or sending a request in 1 packages",
+		},
+		{name: "an unknown flag", args: []string{"-nope"}, wantStderr: "flag provided but not defined: -nope\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			stdout := createFile(t, filepath.Join(dir, "stdout"))
+			stderr := createFile(t, filepath.Join(dir, "stderr"))
+			os.Args = append([]string{toolName}, tt.args...)
+			os.Stdout, os.Stderr = stdout, stderr
+			main()
+			os.Stdout, os.Stderr = previousStdout, previousStderr
+			assertBegins(t, "stdout", closeAndRead(t, stdout), tt.wantStdout)
+			assertBegins(t, "stderr", closeAndRead(t, stderr), tt.wantStderr)
+		})
+	}
+}
+
+// createFile creates an empty file to stand in for one of the process's
+// streams.
+func createFile(t *testing.T, path string) *os.File {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("prepare %s: %v", path, err)
+	}
+	return file
+}
+
+// closeAndRead closes a file that stood in for a stream and returns what was
+// written to it.
+func closeAndRead(t *testing.T, file *os.File) string {
+	t.Helper()
+	if err := file.Close(); err != nil {
+		t.Fatalf("close %s: %v", file.Name(), err)
+	}
+	content, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatalf("read %s: %v", file.Name(), err)
+	}
+	return string(content)
 }
 
 // TestDefaultPatterns_CoverTheRepositorysLibrarySource states what the gate
