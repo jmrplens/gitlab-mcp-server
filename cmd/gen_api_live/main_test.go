@@ -303,6 +303,10 @@ func TestRunGenerate_ARecordThatIsNotAGitLab_IsRefusedRatherThanWritten(t *testi
 // the Go. Decoding a shape that moved would populate the fields that still
 // match and silently drop the rest, which is the one failure a reader could
 // not detect afterwards.
+//
+// The whole sentence is the assertion, with both figures in it: the refusal
+// names two versions, and one that named them the other way round would send
+// a maintainer to change the side that was right.
 func TestRunGenerate_AnIntrospectionFromAnotherSchema_IsRefused(t *testing.T) {
 	payload := wholeEnough()
 	payload.SchemaVersion = apilive.SchemaVersion + 1
@@ -312,8 +316,12 @@ func TestRunGenerate_AnIntrospectionFromAnotherSchema_IsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("an introspection from another schema was accepted")
 	}
-	if !strings.Contains(err.Error(), "schema version") {
-		t.Errorf("error = %q, want it to name the schema version", err)
+	want := fmt.Sprintf(
+		"the introspection is schema version %d and this build writes version %d: the script and the command moved apart",
+		apilive.SchemaVersion+1, apilive.SchemaVersion,
+	)
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err, want)
 	}
 }
 
@@ -566,6 +574,11 @@ const windowsGOOS = "windows"
 // the tests using it ask is which argument is which: a container name where an
 // image belongs, or a source where a destination belongs, reads the same in a
 // joined line.
+//
+// A call's arguments and its newline are two writes, so a line is complete
+// only once its newline is there: a test that acts on the log while a call is
+// still running waits for the newline, or a stand-in killed between the two
+// writes leaves the next call recorded on the same line.
 func recordingDocker(t *testing.T, script string) (docker dockerPath, log string) {
 	t.Helper()
 	log = filepath.Join(t.TempDir(), "calls.log")
@@ -1362,11 +1375,18 @@ esac
 		// here: the test goroutine reads the calls afterwards. A run that ended
 		// some other way has already cancelled the context, and then there is
 		// nothing left to interrupt.
+		//
+		// What is waited for is the probe's whole line, newline included. The
+		// stand-in writes a call's arguments and its newline in two writes, so
+		// a cancellation that landed between them would kill the shell before
+		// the newline, and the teardown's removal would be recorded on the
+		// probe's line instead of on its own.
+		probeRecorded := strings.Join([]string{"exec", containerName, "gitlab-rails", "runner", readyProbe}, "\t") + "\t\n"
 		for range 10000 {
 			if ctx.Err() != nil {
 				return
 			}
-			if raw, err := os.ReadFile(log); err == nil && strings.Contains(string(raw), "exec\t") {
+			if raw, err := os.ReadFile(log); err == nil && strings.Contains(string(raw), probeRecorded) {
 				break
 			}
 			time.Sleep(time.Millisecond)
