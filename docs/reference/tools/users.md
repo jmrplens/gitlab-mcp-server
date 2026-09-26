@@ -311,7 +311,7 @@ Get an SSH key and its user by SSH key fingerprint (`SHA256:` or `MD5:`).
 
 ### `gitlab_list_gpg_keys`
 
-List the currently authenticated user's GPG keys. Returns each key's ID, armored public key, and creation timestamp.
+List the currently authenticated user's GPG keys, one page at a time. Returns each key's ID, armored public key, and creation timestamp, with pagination metadata. Standard pagination (`page`, `per_page`).
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -341,7 +341,7 @@ Delete a GPG key from the currently authenticated user's account by `key_id`.
 
 ### `gitlab_list_gpg_keys_for_user`
 
-List a specific user's GPG keys by `user_id`. Returns each key's ID, armored public key, and creation timestamp.
+List a specific user's GPG keys by `user_id`, one page at a time. Returns each key's ID, armored public key, and creation timestamp, with pagination metadata. Standard pagination (`page`, `per_page`).
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -375,7 +375,7 @@ Delete a GPG key from a specific user's account (admin only) by `user_id` and `k
 
 ### `gitlab_list_emails`
 
-List email addresses for the currently authenticated GitLab user. Returns email ID, address, and confirmation status.
+List email addresses for the currently authenticated GitLab user, one page at a time. Returns email ID, address, and confirmation status, with pagination metadata. Standard pagination (`page`, `per_page`).
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -405,7 +405,7 @@ Delete an email address from the currently authenticated user's account by `emai
 
 ### `gitlab_list_emails_for_user`
 
-List all email addresses registered to a specific user's account by `user_id`. Supports offset and keyset pagination plus `order_by` and `sort`.
+List the email addresses registered to a specific user's account by `user_id`, with pagination metadata. Supports offset and keyset pagination plus `order_by` and `sort`.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -532,7 +532,7 @@ Create a new instance-level service account. Optionally set `name`, `username`, 
 
 ### `gitlab_list_service_accounts`
 
-List all instance-level service accounts. Supports ordering by `id`, `username`, or `name` with `sort` direction and pagination.
+List the instance-level service accounts, one page at a time, with pagination metadata. Supports ordering by `id` or `username` with `sort` direction and pagination.
 
 | Annotation | **Read** |
 | ---------- | -------- |

@@ -91,11 +91,13 @@ Delete a SCIM identity from a group.
 
 ### `gitlab_list_group_ssh_certificates`
 
-List SSH certificates for a group.
+List SSH certificates for a group, one page at a time, with the pagination block GitLab answered with.
 
 | Parameter  | Type       | Required | Description                  |
 | ---------- | ---------- | :------: | ---------------------------- |
 | `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `page`     | int        |    No    | Page number for pagination   |
+| `per_page` | int        |    No    | Items per page (max 100)     |
 
 **Annotation**: Read
 

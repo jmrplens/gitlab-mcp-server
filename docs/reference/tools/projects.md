@@ -245,7 +245,7 @@ List the custom Pages domains for a project with pagination. Returns domains wit
 
 ### `gitlab_pages_domain_list_all`
 
-List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use instead of `gitlab_pages_domain_list` when the full instance surface is needed.
+List the GitLab Pages custom domains across the whole instance (admin only), one page at a time, with pagination metadata. Standard pagination (`page`, `per_page`). Use instead of `gitlab_pages_domain_list` when the full instance surface is needed.
 
 | Annotation | **Read** |
 | ---------- | -------- |

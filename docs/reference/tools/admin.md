@@ -179,7 +179,7 @@ Delete a GitLab license by ID (admin).
 
 ### `gitlab_list_system_hooks`
 
-List all system hooks (admin). Returns ID, URL and event subscriptions.
+List the system hooks (admin), one page at a time. Returns ID, URL and event subscriptions, with the pagination block GitLab answered with. Standard pagination (`page`, `per_page`).
 
 | Annotation | **Read** |
 | ---------- | -------- |
