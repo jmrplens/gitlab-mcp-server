@@ -99,13 +99,17 @@ func TestPackageTypeNames_ReadsDeclarationsAndNothingElse(t *testing.T) {
 	got := packageTypeNames(t, dir)
 
 	for _, want := range []string{"Output", "Alias"} {
-		if !got[want] {
-			t.Errorf("packageTypeNames() is missing %s: %v", want, got)
-		}
+		t.Run("counts "+want, func(t *testing.T) {
+			if !got[want] {
+				t.Errorf("packageTypeNames() is missing %s: %v", want, got)
+			}
+		})
 	}
 	for _, absent := range []string{"Mentioned", "Constant", "Function", "TestOnly", "Text"} {
-		if got[absent] {
-			t.Errorf("packageTypeNames() counts %s, which is not a type declared in a source file", absent)
-		}
+		t.Run("skips "+absent, func(t *testing.T) {
+			if got[absent] {
+				t.Errorf("packageTypeNames() counts %s, which is not a type declared in a source file", absent)
+			}
+		})
 	}
 }

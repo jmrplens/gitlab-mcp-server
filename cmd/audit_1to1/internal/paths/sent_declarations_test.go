@@ -336,9 +336,11 @@ func TestDeclaredUnsurfaced_AccessRequestTypes_AnswerOnlyTheOtherEntitysOwnKeys(
 		t.Fatalf("describedRoutes() read %d operations, want the six access-request routes: %v", len(described.Operations), described.Operations)
 	}
 	for key, want := range map[string]string{"locked": accessRequesterEntity, "requested_at": accessRequesterEntity, "access_level": memberEntity} {
-		if got := described.EntityOf[key]; got != want {
-			t.Errorf("EntityOf[%q] = %q, want %q", key, got, want)
-		}
+		t.Run("credited "+key, func(t *testing.T) {
+			if got := described.EntityOf[key]; got != want {
+				t.Errorf("EntityOf[%q] = %q, want %q", key, got, want)
+			}
+		})
 	}
 
 	finding := func(typeName, field string) UnsurfacedField {
