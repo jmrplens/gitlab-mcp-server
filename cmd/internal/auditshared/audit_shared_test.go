@@ -12,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -19,6 +22,11 @@ import (
 // TestIsGenericUsage_Scenarios_ClassifiesPlaceholderText verifies that the
 // placeholder template and blank strings are generic while curated usage
 // text is not, including the case-insensitive and whitespace-tolerant forms.
+//
+// The last four curated cases each hold one edge of the template to the whole
+// text: its wording after a lead-in, its wording followed by more guidance,
+// and "execute" and "action" as parts of longer words. Without the anchor or
+// the word boundary each pins, that curated text would be reported generic.
 func TestIsGenericUsage_Scenarios_ClassifiesPlaceholderText(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -28,10 +36,15 @@ func TestIsGenericUsage_Scenarios_ClassifiesPlaceholderText(t *testing.T) {
 		{name: "empty", usage: "", want: true},
 		{name: "whitespace only", usage: "  \n\t", want: true},
 		{name: "placeholder template", usage: "Use to execute the list action.", want: true},
+		{name: "placeholder as the tree writes it", usage: "Use to execute runners domain action.", want: true},
 		{name: "placeholder without period", usage: "use to execute branch action", want: true},
 		{name: "placeholder with trailing whitespace", usage: "  Use to execute create action.  ", want: true},
 		{name: "curated usage", usage: "Use to list the branches of a project.", want: false},
 		{name: "placeholder prefix but different ending", usage: "Use to execute a pipeline and wait.", want: false},
+		{name: "template wording after a lead-in", usage: "Read the job log first, then use to execute the retry action.", want: false},
+		{name: "template wording followed by guidance", usage: "Use to execute the retry action, then poll the job until it finishes.", want: false},
+		{name: "execute as the start of a longer word", usage: "Use to executes the scheduled play action.", want: false},
+		{name: "action as the end of a longer word", usage: "Use to execute a merge request interaction.", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,9 +62,12 @@ func TestIsGenericUsage_Scenarios_ClassifiesPlaceholderText(t *testing.T) {
 //
 // The padded name is the case that holds the lookup to the trimmed spelling:
 // without the trim it misses the projection and the spec reads as healthy
-// rather than as the weak description it is.
+// rather than as the weak description it is. The weak text planted under the
+// empty name is what makes the no-tool guard observable: without it that spec
+// would read as healthy only because the lookup missed.
 func TestWeakIndividualDescription_Scenarios_ChecksProjectedText(t *testing.T) {
 	projected := map[string]string{
+		"":                  "Lists things.",
 		"gitlab_full":       "Lists things. Returns: a list. See also: gitlab_other.",
 		"gitlab_no_returns": "Lists things. See also: gitlab_other.",
 		"gitlab_no_see":     "Lists things. Returns: a list.",
@@ -154,6 +170,53 @@ func TestNewStubGitLabClient_Default_AnswersVersionAndClosesOnCleanup(t *testing
 	}
 }
 
+// tokenRecorder is an http.RoundTripper that keeps the PRIVATE-TOKEN header
+// of every request it forwards. http.Client calls it on the goroutine that
+// sent the request, so the test reads what it wrote without synchronization.
+type tokenRecorder struct {
+	next http.RoundTripper
+	seen *[]string
+}
+
+// RoundTrip records the request's PRIVATE-TOKEN header and forwards it.
+func (r tokenRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
+	*r.seen = append(*r.seen, req.Header.Get("PRIVATE-TOKEN"))
+	return r.next.RoundTrip(req)
+}
+
+// TestNewStubGitLabClient_Token_SendsTheTokenItWasGiven verifies the stub
+// client authenticates with the caller's token. Every command passes
+// StubToken, so a delegation that dropped its argument for that constant would
+// read the same from each of them; only the header on the wire tells the two
+// apart, which is why the token here is one no constant of the package shares.
+func TestNewStubGitLabClient_Token_SendsTheTokenItWasGiven(t *testing.T) {
+	const token = "caller-chosen-stub-token"
+	client, cleanup := NewStubGitLabClient(token)
+	t.Cleanup(cleanup)
+
+	var seen []string
+	httpClient := client.GL().HTTPClient()
+	next := httpClient.Transport
+	if next == nil {
+		next = http.DefaultTransport
+	}
+	httpClient.Transport = tokenRecorder{next: next, seen: &seen}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if _, _, err := client.GL().Version.GetVersion(gl.WithContext(ctx)); err != nil {
+		t.Fatalf("GetVersion() error = %v", err)
+	}
+	if len(seen) == 0 {
+		t.Fatal("no request reached the transport, want the version request")
+	}
+	for i, got := range seen {
+		if got != token {
+			t.Errorf("request %d PRIVATE-TOKEN = %q, want the caller's %q", i, got, token)
+		}
+	}
+}
+
 // TestCachedActionSpecs_RepeatedCalls_ShareOneCollectionPerFlag verifies the
 // cache collects the catalog once per enterprise flag: each flag's repeated
 // call hands back that flag's own backing slice, and the two flags are cached
@@ -206,5 +269,39 @@ func TestCachedIndividualDescriptions_RepeatedCalls_ProjectOnce(t *testing.T) {
 	again := CachedIndividualDescriptions(client)
 	if reflect.ValueOf(again).Pointer() != reflect.ValueOf(descriptions).Pointer() {
 		t.Fatal("second call returned a different map, want the shared cached map")
+	}
+}
+
+// TestCachedIndividualDescriptions_CatalogSpecs_EveryIndividualToolIsProjected
+// verifies the projection holds a description for every individual tool the
+// collected catalog names, Premium and Ultimate ones included. Both discovery
+// audits read a spec the projection lacks as healthy, so a surface listed
+// below Ultimate would pass every licensed description unread while the count
+// of Free tools still looked like the whole surface.
+func TestCachedIndividualDescriptions_CatalogSpecs_EveryIndividualToolIsProjected(t *testing.T) {
+	client, cleanup := NewStubGitLabClient(StubToken)
+	t.Cleanup(cleanup)
+
+	projected := CachedIndividualDescriptions(client)
+	checked := make(map[edition.Tier]int)
+	var missing []string
+	for _, group := range CachedActionSpecs(client, true) {
+		for _, spec := range group.Actions {
+			name := strings.TrimSpace(spec.IndividualTool.Name)
+			if name == "" {
+				continue
+			}
+			tier := edition.TierFromEdition(spec.Edition)
+			checked[tier]++
+			if _, ok := projected[name]; !ok {
+				missing = append(missing, name+" ("+tier.String()+")")
+			}
+		}
+	}
+	if checked[edition.Premium] == 0 || checked[edition.Ultimate] == 0 {
+		t.Fatalf("individual tools checked per tier = %v, want Premium and Ultimate ones among them", checked)
+	}
+	if len(missing) > 0 {
+		t.Fatalf("%d of the catalog's individual tools have no projected description, first %q", len(missing), missing[:min(len(missing), 5)])
 	}
 }
