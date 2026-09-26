@@ -191,8 +191,11 @@ func sumResources(client *gitlabclient.Client) int {
 }
 
 // readVersionFile reads the repository VERSION file and returns the trimmed
-// semantic version string.
-func readVersionFile() (string, error) {
+// semantic version string. It is a variable so a test can make that read
+// fail: the file sits under the root this binary derives from its own source
+// path, so no input a test controls can take it away, and without the seam
+// the arms that stop the payload and exit non-zero on it are never reached.
+var readVersionFile = func() (string, error) {
 	return readVersionFileAt(repositoryRoot())
 }
 

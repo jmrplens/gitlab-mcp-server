@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -153,6 +155,21 @@ func TestCountToolPackages_ReportsCatalogFirstPackages(t *testing.T) {
 	}
 	if got := countToolPackages(); got != want {
 		t.Fatalf("countToolPackages() = %d, want %d", got, want)
+	}
+}
+
+// TestRepositoryRoot_FromItsOwnSourcePath_NamesThisModulesRoot verifies the
+// root every published count and the VERSION read are taken under is this
+// module's own. The "." fallback beside it is never what a run reads, since
+// runtime.Caller cannot fail for the frame asking about itself, so the path it
+// derives is the one property of that function a test can hold.
+func TestRepositoryRoot_FromItsOwnSourcePath_NamesThisModulesRoot(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repositoryRoot(), "go.mod")) //#nosec G304 -- fixed in-repo path
+	if err != nil {
+		t.Fatalf("read go.mod under repositoryRoot(): %v", err)
+	}
+	if !strings.HasPrefix(string(data), "module github.com/jmrplens/gitlab-mcp-server/v3\n") {
+		t.Fatalf("go.mod under %s is not this module's:\n%s", repositoryRoot(), data)
 	}
 }
 
@@ -416,7 +433,11 @@ func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 }
 
 // TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta verifies the audit
-// separates spec-backed enterprise actions from actions missing ActionSpecs.
+// separates spec-backed enterprise actions from actions missing ActionSpecs,
+// and returns each list sorted. The self-managed catalog is walked before the
+// GitLab.com one, so each list here gets an ID from the second catalog that
+// sorts ahead of the first catalog's: without the sort the report would print
+// them in walk order, which no fixture sorted already could show.
 func TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta(t *testing.T) {
 	base := catalogWithActions(t, catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true})
 	selfManagedEnterprise := catalogWithActions(
@@ -430,14 +451,16 @@ func TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta(t *testing.T) {
 		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_geo", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_orbit", actionName: "status", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_audit_event", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_legacy_route", actionName: "list"},
 	)
 
 	audit := auditEnterpriseActionSpecs(base, selfManagedEnterprise, gitLabComEnterprise)
-	if !slices.Equal(audit.SpecBacked, []string{"geo.list", "orbit.status"}) {
-		t.Fatalf("SpecBacked = %v, want [geo.list orbit.status]", audit.SpecBacked)
+	if want := []string{"audit_event.list", "geo.list", "orbit.status"}; !slices.Equal(audit.SpecBacked, want) {
+		t.Fatalf("SpecBacked = %v, want %v", audit.SpecBacked, want)
 	}
-	if !slices.Equal(audit.MissingSpec, []string{"missing_spec.list"}) {
-		t.Fatalf("MissingSpec = %v, want [missing_spec.list]", audit.MissingSpec)
+	if want := []string{"legacy_route.list", "missing_spec.list"}; !slices.Equal(audit.MissingSpec, want) {
+		t.Fatalf("MissingSpec = %v, want %v", audit.MissingSpec, want)
 	}
 }
 
@@ -606,15 +629,12 @@ func TestPrintRow_FormatsWithLabelAndValue(t *testing.T) {
 		printRow("Test metric", 42)
 	})
 
-	// Padding to metricLabelWidth characters followed by "42".
-	if !strings.Contains(output, "  Test metric") {
-		t.Fatalf("printRow() missing padded label:\n%q", output)
-	}
-	if !strings.Contains(output, "42\n") {
-		t.Fatalf("printRow() missing value and newline:\n%q", output)
-	}
-	if !strings.HasPrefix(output, "  ") {
-		t.Fatalf("printRow() output should start with two-space indent: %q", output)
+	// The label padded to metricLabelWidth characters, so every value of the
+	// report starts in one column, then a space and the value.
+	label := "Test metric"
+	want := "  " + label + strings.Repeat(" ", metricLabelWidth-len(label)) + " 42\n"
+	if output != want {
+		t.Fatalf("printRow() = %q, want %q", output, want)
 	}
 }
 
@@ -837,6 +857,40 @@ func TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset(t *testing.T) {
 	}
 }
 
+// TestPrintMetaSchemaModes_UntrimmedMixedCaseEnv_ReportsTheModeTheServerRuns
+// verifies the active mode is read the way the server parses the variable,
+// trimmed and case-insensitive: a deployment exporting " Full " runs the full
+// schema, so a report naming opaque for it would misstate the one setting the
+// section exists to size.
+func TestPrintMetaSchemaModes_UntrimmedMixedCaseEnv_ReportsTheModeTheServerRuns(t *testing.T) {
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", " Full ")
+
+	output := captureStdout(t, func() {
+		printMetaSchemaModes(newAuditMetricsClient(t))
+	})
+
+	if !strings.Contains(output, "  Active mode (env): full\n") {
+		t.Fatalf("printMetaSchemaModes() did not report the full mode the server would run:\n%s", output)
+	}
+}
+
+// TestPrintMetaSchemaModes_ModeSetBeforehand_LeavesTheProcessOnOpaque verifies
+// the sizing table hands the process back on the default mode whatever mode
+// it found. It switches the process-wide mode once per row, so without the
+// reset every later listing in the process would register under full, the
+// last row's mode.
+func TestPrintMetaSchemaModes_ModeSetBeforehand_LeavesTheProcessOnOpaque(t *testing.T) {
+	t.Cleanup(tools.SetMetaParamSchemaScoped(config.MetaParamSchemaCompact))
+
+	captureStdout(t, func() {
+		printMetaSchemaModes(newAuditMetricsClient(t))
+	})
+
+	if got := tools.MetaParamSchema(); got != config.MetaParamSchemaOpaque {
+		t.Fatalf("meta parameter schema after the table = %q, want %q", got, config.MetaParamSchemaOpaque)
+	}
+}
+
 // TestTotalInputSchemaBytes_MissingAndBrokenSchemas_CountsOnlySerializable verifies the
 // sizing sum counts exactly the serialized schemas: a tool without one and a
 // tool whose schema cannot be marshaled contribute nothing, and a real schema
@@ -924,6 +978,55 @@ func TestCollectMetrics_RealSurfaces_AgreesWithSiteStats(t *testing.T) {
 	wantStatic, wantTemplates := countResources(newAuditMetricsClient(t))
 	if metrics.staticResources != wantStatic || metrics.templateResources != wantTemplates {
 		t.Fatalf("resource counts = (%d, %d), want (%d, %d)", metrics.staticResources, metrics.templateResources, wantStatic, wantTemplates)
+	}
+}
+
+// TestCollectMetrics_RealSurfaces_SearchMetricsMeasureTheirOwnCatalog verifies
+// each deployment's search-index metrics are measured over that deployment's
+// catalog. The three are filled side by side from three catalogs of one type,
+// so reading the GitLab.com catalog into the self-managed row is a legal
+// assignment the report prints without complaint; the action count a set of
+// metrics carries is what names the catalog it was measured over.
+func TestCollectMetrics_RealSurfaces_SearchMetricsMeasureTheirOwnCatalog(t *testing.T) {
+	metrics := collectedMetrics(t)
+
+	tests := []struct {
+		name    string
+		metrics dynamictools.RegistryMetrics
+		actions int
+	}{
+		{name: "base", metrics: metrics.dynamicBaseMetrics, actions: metrics.dynamicBaseActions},
+		{name: "self-managed enterprise", metrics: metrics.dynamicEnterpriseMetrics, actions: metrics.dynamicEnterpriseActions},
+		{name: "GitLab.com enterprise", metrics: metrics.dynamicGitLabComEnterpriseMetrics, actions: metrics.dynamicGitLabComEnterpriseActions},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.metrics.ActionCount != tt.actions {
+				t.Fatalf("search metrics count %d actions, want the %d routes of the %s catalog", tt.metrics.ActionCount, tt.actions, tt.name)
+			}
+		})
+	}
+}
+
+// TestCollectMetrics_RealSurfaces_EnterpriseAuditSubtractsTheFreeCatalog
+// verifies the enterprise ActionSpec audit the report prints is the delta of
+// the two enterprise catalogs over the Free one. Its three catalog arguments
+// share a type, so handing it the self-managed enterprise catalog as the base
+// is a legal call that leaves only the GitLab.com additions to classify, and
+// the report would print that short list as the whole enterprise delta.
+func TestCollectMetrics_RealSurfaces_EnterpriseAuditSubtractsTheFreeCatalog(t *testing.T) {
+	metrics := collectedMetrics(t)
+	client := newAuditMetricsClient(t)
+
+	want := auditEnterpriseActionSpecs(
+		dynamicActionCatalog(client, false),
+		dynamicActionCatalog(client, true),
+		dynamicActionCatalog(newGitLabComClient(t), true),
+	)
+	got := metrics.enterpriseActionAudit
+	if !slices.Equal(got.SpecBacked, want.SpecBacked) || !slices.Equal(got.MissingSpec, want.MissingSpec) {
+		t.Fatalf("enterprise audit = %d spec-backed %v, %d missing %v; want %d spec-backed, %d missing",
+			len(got.SpecBacked), got.SpecBacked, len(got.MissingSpec), got.MissingSpec, len(want.SpecBacked), len(want.MissingSpec))
 	}
 }
 
@@ -1223,6 +1326,108 @@ func TestPrintReport_FixtureMetrics_ListsSurfaceDeltas(t *testing.T) {
 	}
 }
 
+// TestPrintReport_FixtureMetrics_PairsEveryRowWithItsOwnValue verifies the
+// core, category and codebase sections against a payload in which no two
+// printed values agree, each section compared whole. The rows read fields of
+// one type, most of them one per deployment, so a row reading its neighbour's
+// field is a legal call that only such a payload can catch: on the real
+// surface every dynamic row reads 2, and the fixture above leaves two of them
+// and all eighteen search-index rows at 0.
+func TestPrintReport_FixtureMetrics_PairsEveryRowWithItsOwnValue(t *testing.T) {
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "opaque")
+	metaBase := countedTools("meta_base", 12)
+	metaEnterprise := append(slices.Clone(metaBase), countedTools("meta_enterprise", 7)...)
+	metaGitLabCom := append(slices.Clone(metaEnterprise), countedTools("meta_gitlab_com", 8)...)
+	individual := countedTools("individual", 30)
+	metrics := auditMetrics{
+		individualTools:                   individual,
+		gitLabComIndividualTools:          append(slices.Clone(individual), countedTools("individual_gitlab_com", 6)...),
+		metaBase:                          metaBase,
+		metaEnterprise:                    metaEnterprise,
+		metaGitLabComEnterprise:           metaGitLabCom,
+		dynamicBase:                       countedTools("dynamic_base", 2),
+		dynamicEnterprise:                 countedTools("dynamic_enterprise", 3),
+		dynamicGitLabComEnterprise:        countedTools("dynamic_gitlab_com", 4),
+		dynamicBaseActions:                100,
+		dynamicEnterpriseActions:          110,
+		dynamicGitLabComEnterpriseActions: 116,
+		dynamicBaseMetrics:                dynamictools.RegistryMetrics{IndexTokenCount: 201, IndexPostingCount: 202, AliasCount: 203, SearchableAliasCount: 204, UnsearchableAliasCount: 205, AmbiguousAliasCount: 206},
+		dynamicEnterpriseMetrics:          dynamictools.RegistryMetrics{IndexTokenCount: 207, IndexPostingCount: 208, AliasCount: 209, SearchableAliasCount: 210, UnsearchableAliasCount: 211, AmbiguousAliasCount: 212},
+		dynamicGitLabComEnterpriseMetrics: dynamictools.RegistryMetrics{IndexTokenCount: 213, IndexPostingCount: 214, AliasCount: 215, SearchableAliasCount: 216, UnsearchableAliasCount: 217, AmbiguousAliasCount: 218},
+		enterpriseActionAudit:             enterpriseActionSpecAudit{SpecBacked: countedIDs("spec", 9), MissingSpec: countedIDs("legacy", 5)},
+		gitLabComEnterpriseDomains:        map[string]int{"project": 3},
+		staticResources:                   14,
+		templateResources:                 15,
+		promptCount:                       41,
+		toolPackages:                      50,
+		srcFiles:                          60,
+		testFiles:                         70,
+		elicitationCount:                  10,
+	}
+
+	output := captureStdout(t, func() {
+		printReport(metrics, newAuditMetricsClient(t), defaultTopDomains)
+	})
+	searchRows := captureStdout(t, func() {
+		printDynamicSearchMetrics(metrics.dynamicBaseMetrics, metrics.dynamicEnterpriseMetrics, metrics.dynamicGitLabComEnterpriseMetrics)
+	})
+
+	sections := []struct {
+		name, start, end, want string
+	}{
+		{
+			name: "core", start: "## Core Metrics\n\n", end: "\n## Tool Categories\n",
+			want: metricRow("Individual MCP tools (self-managed enterprise)", 30) +
+				metricRow("Individual MCP tools (GitLab.com enterprise)", 36) +
+				metricRow("Meta-tools (base)", 12) +
+				metricRow("Meta-tools (self-managed enterprise)", 19) +
+				metricRow("Meta-tools (GitLab.com enterprise)", 27) +
+				metricRow("Dynamic tools (base)", 2) +
+				metricRow("Dynamic tools (self-managed enterprise)", 3) +
+				metricRow("Dynamic tools (GitLab.com enterprise)", 4) +
+				metricRow("Dynamic catalog actions (base)", 100) +
+				metricRow("Dynamic catalog actions (self-managed enterprise)", 110) +
+				metricRow("Dynamic catalog actions (GitLab.com enterprise)", 116) +
+				searchRows +
+				metricRow("Spec-backed enterprise catalog actions", 9) +
+				metricRow("Enterprise catalog actions missing ActionSpec", 5) +
+				metricRow("Enterprise-only meta-tools", 7) +
+				metricRow("GitLab.com-only meta-tools", 8) +
+				metricRow("GitLab.com-only individual tools", 6) +
+				metricRow("MCP Resources (total)", 29) +
+				metricRow("  Static resources", 14) +
+				metricRow("  Resource templates", 15) +
+				metricRow("  Workspace roots", 1) +
+				metricRow("MCP Prompts", 41),
+		},
+		{
+			name: "categories", start: "## Tool Categories\n\n", end: "\n## Meta-Tool Schema Modes\n",
+			want: metricRow("Elicitation tools", 10) + metricRow("Standard tools", 20),
+		},
+		{
+			name: "codebase", start: "## Codebase Metrics\n\n", end: "\n## Catalog Domain Breakdown",
+			want: metricRow("internal/tools Go packages", 50) + metricRow("Source files (.go)", 60) + metricRow("Test files (_test.go)", 70),
+		},
+	}
+	for _, section := range sections {
+		t.Run(section.name, func(t *testing.T) {
+			if got := sectionBetween(t, output, section.start, section.end); got != section.want {
+				t.Fatalf("%s section =\n%s\nwant\n%s", section.name, got, section.want)
+			}
+		})
+	}
+}
+
+// countedIDs builds n canonical action IDs in domain, for a fixture whose only
+// interesting property is how many actions an audit list holds.
+func countedIDs(domain string, n int) []string {
+	ids := make([]string, 0, n)
+	for i := range n {
+		ids = append(ids, fmt.Sprintf("%s.action_%d", domain, i))
+	}
+	return ids
+}
+
 // namedTools builds tool definitions carrying only the names a list assertion
 // needs.
 func namedTools(names ...string) []*mcp.Tool {
@@ -1312,7 +1517,10 @@ func TestRun_ZeroTopDomains_PrintsTheReportWithoutADomainRow(t *testing.T) {
 
 // TestRun_JSONMode_WritesTheSummaryToTheGivenWriter verifies that -json emits
 // the JSON summary to the writer run was handed rather than to os.Stdout, and
-// that the document carries the counts the report is built from.
+// that the document is the one the self-managed and GitLab.com clients measure
+// in their own places. run builds both clients and hands them on as two
+// arguments of one type, so a crossing is a legal call that only a comparison
+// with the measurement taken the right way round can see.
 func TestRun_JSONMode_WritesTheSummaryToTheGivenWriter(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -1321,16 +1529,12 @@ func TestRun_JSONMode_WritesTheSummaryToTheGivenWriter(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run() = %d, want 0 (stderr: %s)", code, stderr.String())
 	}
-	var summary map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &summary); err != nil {
-		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout.String())
+	var want bytes.Buffer
+	if err := writeJSONSummary(&want, collectedMetrics(t)); err != nil {
+		t.Fatalf("writeJSONSummary() error: %v", err)
 	}
-	for _, key := range []string{"individual_tools", "meta_base", "meta_enterprise", "dynamic_base", "resources", "prompts", "tool_packages"} {
-		t.Run(key, func(t *testing.T) {
-			if _, ok := summary[key]; !ok {
-				t.Errorf("summary has no %q key: %v", key, summary)
-			}
-		})
+	if stdout.String() != want.String() {
+		t.Fatalf("run() -json wrote\n%s\nwant\n%s", stdout.String(), want.String())
 	}
 }
 
@@ -1353,8 +1557,12 @@ func TestRun_JSONMode_WriterFails_ReportsAndExitsOne(t *testing.T) {
 }
 
 // TestRun_ReportMode_PrintsTheMarkdownReport verifies the default mode writes
-// the human report and nothing to stderr.
+// the human report and nothing to stderr, and that the report is the one the
+// shared measurement renders with the self-managed client sizing the schema
+// table. Both clients reach this mode as arguments of one type, and the only
+// place the report shows which one sized that table is the byte totals.
 func TestRun_ReportMode_PrintsTheMarkdownReport(t *testing.T) {
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "opaque")
 	var stderr bytes.Buffer
 
 	var code int
@@ -1377,11 +1585,19 @@ func TestRun_ReportMode_PrintsTheMarkdownReport(t *testing.T) {
 	if !strings.Contains(out, "top 3)") {
 		t.Errorf("report does not carry the -top-domains value run was given:\n%s", out)
 	}
+	want := captureStdout(t, func() {
+		printReport(collectedMetrics(t), newAuditMetricsClient(t), 3)
+	})
+	if out != want {
+		t.Errorf("run() report differs from the shared measurement rendered with the self-managed client:\n%s\nwant\n%s", out, want)
+	}
 }
 
 // TestRun_SiteStats_WritesAndThenVerifies verifies the site-stats mode writes
-// the JSON document, and that running it again with checkOnly accepts the file
-// it just wrote and rejects a modified one.
+// the payload the self-managed and GitLab.com clients measure in their own
+// places, and that running it again with checkOnly accepts the file it just
+// wrote and rejects a modified one. A write checked only against itself is
+// green whichever client measured which row.
 func TestRun_SiteStats_WritesAndThenVerifies(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "stats.json")
 	var stdout, stderr bytes.Buffer
@@ -1393,8 +1609,8 @@ func TestRun_SiteStats_WritesAndThenVerifies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read written stats: %v", err)
 	}
-	if !json.Valid(written) {
-		t.Fatalf("written stats are not JSON:\n%s", written)
+	if want := renderSiteStatsJSON(newSiteStats(t)); !bytes.Equal(written, want) {
+		t.Fatalf("written stats =\n%s\nwant\n%s", written, want)
 	}
 
 	stderr.Reset()
@@ -1411,5 +1627,30 @@ func TestRun_SiteStats_WritesAndThenVerifies(t *testing.T) {
 	}
 	if stderr.Len() == 0 {
 		t.Error("check mode failed without saying why")
+	}
+}
+
+// TestRun_SiteStats_VersionUnreadable_ReportsAndWritesNothing verifies a
+// VERSION read that fails ends the site-stats mode before anything reaches
+// disk: the failure is named on stderr, the exit code is 1, and the target is
+// never created, since a payload without its version is not worth publishing.
+func TestRun_SiteStats_VersionUnreadable_ReportsAndWritesNothing(t *testing.T) {
+	failVersionRead(t, errors.New("read VERSION: planted failure"))
+	path := filepath.Join(t.TempDir(), "stats.json")
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditOptions{topDomains: 1, siteStatsPath: path}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Errorf("run() = %d, want 1", code)
+	}
+	if stderr.String() != "read VERSION: planted failure\n" {
+		t.Errorf("stderr = %q, want the VERSION read failure alone", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing", stdout.String())
+	}
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("stat %s = %v, want the target never written", path, err)
 	}
 }
