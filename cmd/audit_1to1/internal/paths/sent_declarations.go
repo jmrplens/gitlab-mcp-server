@@ -56,6 +56,15 @@ const (
 	// true is sent unless a route refuses, so the same reasoning would
 	// publish a key the endpoint suppresses on every response.
 	categoryOptionTurnedOff = "entity-option-the-endpoint-turns-off"
+	// categoryOptionNeverRequested is the third reading of a presenter option,
+	// where the route does declare it as a request parameter and passes it
+	// through, and this package's own requests never send it. The evidence is
+	// therefore the request inventory rather than the route: the key can be on
+	// that endpoint's response, and never on one this package asked for. Kept
+	// apart from [categoryOptionNeverPassed] because it is the one of the
+	// three that a change here, and not only a GitLab release, can retire: a
+	// package that starts sending the parameter starts receiving the key.
+	categoryOptionNeverRequested = "entity-option-this-package-never-requests"
 	// categoryEntityPublishedElsewhere is an entity the package does surface,
 	// on another type or under a shape of this server's own, so the field
 	// names the comparison looks for are not the names the caller reads.
@@ -188,8 +197,8 @@ const (
 		"request parameter but an option the endpoint has to pass. None of the routes this type serves declares it, so the key has never been " +
 		"on one of their responses. Publishing it would advertise a field the endpoint cannot return."
 	reasonCustomAttributesNeverPassed = "lib/api/entities/user_basic.rb exposes custom_attributes under the with_custom_attributes option, which " +
-		"lib/api/helpers/custom_attributes_helpers.rb only supplies on the endpoints that declare it. None of the routes this type serves does, " +
-		"so the key has never been on one of their responses."
+		"lib/api/helpers/custom_attributes.rb only supplies on the endpoints that declare it, and there only to a caller who asks and may " +
+		"read custom attributes. None of the routes this type serves declares it, so the key has never been on one of their responses."
 	reasonShowSeatInfoNeverPassed = "ee/lib/ee/api/entities/member.rb exposes is_using_seat under the show_seat_info option. The group and project " +
 		"member lists declare that parameter and the access-request routes do not, so a member can carry the key and an access request cannot. " +
 		"The difference is per route set, not per entity: both render through the same Member."
@@ -300,6 +309,60 @@ const reasonPackageVersionsOnTheDetailItem = "lib/api/entities/package.rb expose
 	"(lib/api/project_packages.rb:67, `present paginate(packages)`) never sends them. packages.ListItem is held against GET " +
 	"/projects/:id/packages/:package_id as well only because client-go's GetProjectPackage answers with the same Package " +
 	"struct; that route presents one package (line 89) and fills packages.DetailItem, which publishes the versions."
+
+// The entities the fields below were read on that no constant above names.
+const (
+	projectWithAccessEntity   = "API::Entities::Projects::WithAccessAndCatalogSetting"
+	basicProjectDetailsEntity = "API::Entities::BasicProjectDetails"
+	groupDetailEntity         = "API::Entities::GroupDetail"
+)
+
+// The presenter options behind the 31 package-grain findings the live record
+// used to report as sent on every response, because version 2 of it recorded
+// every hash and symbol condition as its kind alone (issue 973). Each was read
+// against GitLab's source at v19.3.1-ee, the version the record pins, and each
+// holds on none of the requests the package makes: either the route presents
+// the entity without the option, or it declares the option as a parameter the
+// package never sends.
+//
+// The license pair and custom_attributes on a project answer six packages at
+// once and are one reason, because it is one fact about one route and the
+// request inventory's rows for it: each of those packages reads a project to
+// probe that it exists or to resolve its web URL, and none reads it to present
+// it.
+const (
+	reasonProjectOptionsNeverRequested = "lib/api/entities/basic_project_details.rb exposes license and license_url under the license " +
+		"option (lines 23 and 31) and custom_attributes under with_custom_attributes (line 43). GET /projects/:id (lib/api/projects.rb) " +
+		"declares both as parameters defaulting to false and passes them to the presenter, and this package calls it with no query at all, " +
+		"which is what the request inventory's row for it records: it reads the project to probe that it exists or to resolve its web URL, " +
+		"never to present it. Neither option is ever set, so the keys have never been on a response this package reads. " +
+		"internal/tools/projects sends license and with_custom_attributes on the same route and publishes all three keys."
+	reasonGroupProjectsLicenseNeverPassed = "lib/api/entities/basic_project_details.rb exposes license and license_url under the license " +
+		"option. GET /groups/:id/projects and GET /groups/:id/projects/shared both present through present_projects in " +
+		"lib/api/groups.rb, which passes the entity, the current user and whatever with_custom_attributes adds, and never license, which " +
+		"neither route declares. The keys have never been on either response; GET /projects/:id is the one route that sends them."
+	reasonJobTokenScopeProjectOptionsNeverPassed = "lib/api/entities/basic_project_details.rb exposes license and license_url under the " +
+		"license option and custom_attributes under with_custom_attributes. lib/api/project_job_token_scope.rb presents the inbound " +
+		"allowlist with Entities::BasicProjectDetails and no option at all, and none of the three routes declares either parameter; the " +
+		"groups allowlist presents BasicGroupDetails and the POST a ProjectScopeLink, whatever their annotations say. None of the three " +
+		"keys has ever been on one of their responses."
+	reasonGroupStatisticsNeverPassed = "lib/api/entities/group.rb:42 exposes statistics under the statistics option, which only the group " +
+		"list's present_groups in lib/api/groups.rb sets, and only for a caller who can read all resources. GET /groups/:id presents through " +
+		"present_group_details and POST /groups/:id/share presents the group with the current user alone; neither passes the option and " +
+		"neither declares the parameter, so the key has never been on either response."
+	reasonGroupCustomAttributesNeverRequested = "lib/api/entities/group.rb:40 exposes custom_attributes under with_custom_attributes. " +
+		"GET /groups/:id declares that parameter and present_group_details in lib/api/groups.rb passes it only when the caller sends it, " +
+		"and this package calls the route with no query at all, as the probe that tells a group with no LDAP links from a group that is " +
+		"not there. The key has never been on a response it reads; internal/tools/groups sends the parameter and publishes the key."
+	reasonSubmoduleCommitStatsNeverPassed = "lib/api/entities/commit_detail.rb:8 exposes stats under the include_stats option, which " +
+		"lib/api/commits.rb passes from its stats parameter on the two commit routes that declare it. PUT " +
+		"/projects/:id/repository/submodules/:submodule (lib/api/submodules.rb:64) presents the commit with the current user alone and " +
+		"declares no such parameter, so the key has never been on its response."
+	reasonEpicReferenceNeverPassed = "ee/lib/api/entities/epic.rb:129 exposes reference `if: { with_reference: true }`. Every epic route " +
+		"presents through epic_options (ee/lib/api/helpers/epics_helpers.rb), which never sets it; the only caller that does is " +
+		"ee/lib/api/entities/epic_issue_link.rb, for the epic nested in an epic-issue link. GET /groups/:id/epics has never sent the key, " +
+		"and GitLab deprecated it in favor of references, which this package publishes."
+)
 
 // declaredUnsurfaced holds every field GitLab's document lists that the
 // endpoint does not send, each with the source that says so.
@@ -520,6 +583,63 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 		Category: categoryOptionTurnedOff,
 		Reason:   reasonIncludeSubscribedTurnedOff,
 	},
+
+	// The 31 package-grain findings issue 973 moved from sent-always to
+	// sent-when, answered under the conditions the record now carries. Each
+	// is named field by field: every other key of these entities is either
+	// published or a finding of its own, and a splat would swallow the next
+	// key GitLab adds.
+	//
+	// custom_attributes on a user, from routes that declare no option: the
+	// current user's own GET /user, and the participants of an issue and of a
+	// merge request.
+	{Package: toolsDir + "/awardemoji", Entity: userPublicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
+	{Package: toolsDir + "/health", Entity: userPublicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
+	{Package: issuesPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
+	{Package: mergeRequestsPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
+
+	// The license pair and custom_attributes on the project the six packages
+	// that read one without presenting it get back from GET /projects/:id.
+	// users publishes a user's custom_attributes, so the package grain finds
+	// that name published there and reports only the license pair.
+	{Package: toolsDir + "/attestations", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/attestations", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/attestations", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/events", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/events", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/events", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/projectdiscovery", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/projectdiscovery", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/projectdiscovery", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/securityfindings", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/securityfindings", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/securityfindings", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: usersPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: usersPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/vulnerabilities", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/vulnerabilities", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: toolsDir + "/vulnerabilities", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+
+	// The license pair on a group's projects, which the group routes never
+	// ask the presenter for.
+	{Package: groupsPkg, Entity: "API::Entities::Project", Field: "license", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
+	{Package: groupsPkg, Entity: "API::Entities::Project", Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
+
+	// The same three project keys on the job token allowlists.
+	{Package: toolsDir + "/jobtokenscope", Entity: basicProjectDetailsEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
+	{Package: toolsDir + "/jobtokenscope", Entity: basicProjectDetailsEntity, Field: "license", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
+	{Package: toolsDir + "/jobtokenscope", Entity: basicProjectDetailsEntity, Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
+
+	// A group's statistics, which no route presenting one group sets, and its
+	// custom attributes, which the one route that can is never asked for.
+	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
+	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonGroupCustomAttributesNeverRequested},
+	{Package: groupMembersPkg, Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
+
+	// The commit a submodule update answers with, and an epic's deprecated
+	// short reference.
+	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::CommitDetail", Field: "stats", Category: categoryOptionNeverPassed, Reason: reasonSubmoduleCommitStatsNeverPassed},
+	{Package: toolsDir + "/epics", Entity: "API::Entities::Epic", Field: "reference", Category: categoryOptionNeverPassed, Reason: reasonEpicReferenceNeverPassed},
 
 	{
 		Package:  toolsDir + "/geo",
