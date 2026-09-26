@@ -680,11 +680,17 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 
 	// The two access-request types, each answered for the entity of the
 	// other's routes alone. Both pair with client-go's AccessRequest, so
-	// readSDKRoutes puts all six routes in front of each, and a splat over
-	// the other's entity is right here because no key of it can reach the
-	// type: the routes that fill one never present the other.
+	// readSDKRoutes puts all six routes in front of each. Both entities merge
+	// UserBasic, and describedRoutes credits a key the two share to the entity
+	// of the first route it absorbs; the routes are sorted by operation, so
+	// that is always a GET or POST presenting AccessRequester and never a PUT
+	// approve presenting Member. The splat over Member on Output therefore
+	// reaches Member's own keys and nothing Output could be sent. The reverse
+	// is not true: a splat over AccessRequester on MemberOutput would also
+	// answer every UserBasic key, which the approve routes do send, so that
+	// entry names requested_at, the one key AccessRequester adds.
 	{Package: accessRequestsPkg, Type: "Output", Entity: memberEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonAccessRequesterNotAMember},
-	{Package: accessRequestsPkg, Type: "MemberOutput", Entity: accessRequesterEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonApprovedMemberNotARequester},
+	{Package: accessRequestsPkg, Type: "MemberOutput", Entity: accessRequesterEntity, Field: "requested_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonApprovedMemberNotARequester},
 
 	{
 		Package:  toolsDir + "/geo",

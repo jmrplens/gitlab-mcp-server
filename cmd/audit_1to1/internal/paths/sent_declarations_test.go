@@ -306,3 +306,59 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 		})
 	}
 }
+
+// TestDeclaredUnsurfaced_AccessRequestTypes_AnswerOnlyTheOtherEntitysOwnKeys
+// crosses the two Type-scoped access-request declarations against the
+// committed record, through the same join the audit makes: the six routes
+// client-go reads AccessRequest from, absorbed in the order readSDKRoutes
+// sorts them.
+//
+// Both entities merge UserBasic, so the case that matters is a key both carry
+// (locked). It has to be credited to AccessRequester, since that is what keeps
+// the splat over Member on Output from answering it; and on either type it has
+// to stay a finding, since the lists send it to Output and the approve routes
+// send it to MemberOutput. Beside it, the one key only AccessRequester carries
+// is answered on MemberOutput and a key only Member carries on Output.
+func TestDeclaredUnsurfaced_AccessRequestTypes_AnswerOnlyTheOtherEntitysOwnKeys(t *testing.T) {
+	doc, err := apilive.Read(filepath.Join(repoRoot(t), apilive.DefaultDir))
+	if err != nil {
+		t.Fatalf("read the live record: %v", err)
+	}
+	found := map[string]map[sdkRoute]bool{"AccessRequest": {}}
+	for _, scope := range []string{"/groups/:", "/projects/:"} {
+		found["AccessRequest"][sdkRoute{Method: "GET", Path: scope + "/access_requests", Many: true}] = true
+		found["AccessRequest"][sdkRoute{Method: "POST", Path: scope + "/access_requests"}] = true
+		found["AccessRequest"][sdkRoute{Method: "PUT", Path: scope + "/access_requests/:/approve"}] = true
+	}
+	described := describedRoutes([]string{"AccessRequest"}, sortedRoutes(found), newOperationIndex(doc))
+	if len(described.Operations) != 6 {
+		t.Fatalf("describedRoutes() read %d operations, want the six access-request routes: %v", len(described.Operations), described.Operations)
+	}
+	for key, want := range map[string]string{"locked": accessRequesterEntity, "requested_at": accessRequesterEntity, "access_level": memberEntity} {
+		if got := described.EntityOf[key]; got != want {
+			t.Errorf("EntityOf[%q] = %q, want %q", key, got, want)
+		}
+	}
+
+	finding := func(typeName, field string) UnsurfacedField {
+		return UnsurfacedField{Grain: grainType, Package: accessRequestsPkg, Type: typeName, Field: field, Entity: described.EntityOf[field], Sent: sentAlways}
+	}
+	cases := []struct {
+		name         string
+		finding      UnsurfacedField
+		wantCategory string
+	}{
+		{name: "a shared key MemberOutput drops stays a finding", finding: finding("MemberOutput", "locked")},
+		{name: "a shared key Output drops stays a finding", finding: finding("Output", "locked")},
+		{name: "the requester's own key is answered on MemberOutput", finding: finding("MemberOutput", "requested_at"), wantCategory: categorySDKRouteFillsAnotherType},
+		{name: "a member's own key is answered on Output", finding: finding("Output", "access_level"), wantCategory: categorySDKRouteFillsAnotherType},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, classified, _ := classifySentFindings(declaredUnsurfaced, nil, []UnsurfacedField{tc.finding})
+			if len(classified) != 1 || classified[0].Category != tc.wantCategory {
+				t.Errorf("classifySentFindings(%+v) = %+v, want category %q", tc.finding, classified, tc.wantCategory)
+			}
+		})
+	}
+}
