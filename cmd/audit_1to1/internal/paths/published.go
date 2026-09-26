@@ -115,6 +115,17 @@ func recordDir(root string) string {
 // nothing, and a field of that type publishes its own name and nothing under
 // it.
 //
+// One exception to that: a type a domain package declares as, or from, a type
+// of another package under internal/tools (`type Output = labeldata.Output`)
+// is that type under the package's own name, the way an alias of a shared
+// shape is. Four packages publish their whole response that way, the project
+// and group labels and iterations, and without it the package grain read
+// each as publishing no field of the entity its every route answers with.
+// Every package under internal/tools is read as such a library too, keyed the
+// way a domain package qualifies it (labeldata.Output), and only an alias or
+// a defined type resolves through it: a field typed as another tools package's
+// type still publishes its own name and nothing under it.
+//
 // A package that does not parse contributes nothing rather than failing the
 // scope, for the reason [publishedTypesIn] records.
 func publishedTypes(root string) []publishedType {
@@ -123,7 +134,15 @@ func publishedTypes(root string) []publishedType {
 	if err != nil {
 		return nil
 	}
-	shared, sharedNested := sharedShapes(filepath.Join(root, sharedDir))
+	shared, sharedNested := sharedShapes(filepath.Join(root, sharedDir), sharedPrefix)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		shapes, nestedShapes := sharedShapes(filepath.Join(base, entry.Name()), entry.Name()+".")
+		maps.Copy(shared, shapes)
+		maps.Copy(sharedNested, nestedShapes)
+	}
 
 	var out []publishedType
 	for _, entry := range entries {
@@ -186,17 +205,27 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 	// toolutil.MergeRequestOutput, has not made the alias a response of its
 	// own; unless an exported function of the package returns it, which is
 	// what a handler does with the note it adds to a discussion.
-	for local, target := range aliases {
+	//
+	// A type declared from another tools package is resolved the same way when
+	// that package declares it, and stays the scalar the parse recorded it as
+	// when it does not, which is every type from outside this repository.
+	resolve := func(local, target string) {
 		resolved, ok := shared[target]
 		if !ok {
-			continue
+			return
 		}
 		resolved.Name = local
 		byName[local] = resolved
 		found = append(found, resolved)
-		if (nested[target] || sharedNested[strings.TrimPrefix(target, sharedPrefix)]) && !parsed.returned[local] {
+		if (nested[target] || sharedNested[target]) && !parsed.returned[local] {
 			nested[local] = true
 		}
+	}
+	for _, local := range slices.Sorted(maps.Keys(aliases)) {
+		resolve(local, aliases[local])
+	}
+	for _, local := range slices.Sorted(maps.Keys(parsed.qualified)) {
+		resolve(local, parsed.qualified[local])
 	}
 
 	out := make([]publishedType, 0, len(found))
@@ -265,6 +294,12 @@ type parsedPackage struct {
 	// aliases maps every type it declares as, or from, a shared shape to that
 	// shape's key.
 	aliases map[string]string
+	// qualified maps every type it declares as, or from, a type another
+	// package declares, the shared one aside, to that type's qualified name
+	// (labeldata.Output). Each is among the scalars too, since nothing here
+	// knows whether the other package is one this repository can read, and
+	// [publishedTypesIn] resolves the ones it can.
+	qualified map[string]string
 	// returned holds every type an exported function of the package returns,
 	// which is what a handler does with its response.
 	returned map[string]bool
@@ -279,7 +314,8 @@ func parsePackage(dir string) parsedPackage {
 	parsed := parsedPackage{
 		nested: map[string]bool{}, enveloped: map[string]bool{}, wraps: map[string][]string{},
 		alternatives: map[string][]string{},
-		scalars:      map[string]bool{}, aliases: map[string]string{}, returned: map[string]bool{},
+		scalars:      map[string]bool{}, aliases: map[string]string{}, qualified: map[string]string{},
+		returned: map[string]bool{},
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -383,14 +419,16 @@ func oneFamily(types []string, related func(a, b string) bool) bool {
 	return len(reached) == len(distinct)
 }
 
-// sharedShapes reads the shapes internal/toolutil declares, each flattened
-// within that package and keyed the way a domain package names it
-// (toolutil.X), so that a field of that type, an embed of it, or an alias
-// of it resolves to its fields, and returns beside them the shapes another
-// shared shape names as a field type. A field of one shared shape typed as
-// another is rekeyed the same way, so that it resolves from a domain package
-// too. The hints type is left out (see [hintsType]).
-func sharedShapes(dir string) (shapes map[string]declaredStruct, nested map[string]bool) {
+// sharedShapes reads the shapes one package declares, each flattened within
+// that package and keyed the way another package names it (prefix is
+// "toolutil." for internal/toolutil and "labeldata." for the tools package of
+// that name), so that a field of that type, an embed of it, or an alias of it
+// resolves to its fields, and returns beside them, keyed the same way, the
+// shapes another shape of the package names as a field type. A field of one
+// shape typed as another of the package is rekeyed the same way, so that it
+// resolves from a domain package too. The hints type is left out (see
+// [hintsType]).
+func sharedShapes(dir, prefix string) (shapes map[string]declaredStruct, nested map[string]bool) {
 	parsed := parsePackage(dir)
 	byName := make(map[string]declaredStruct, len(parsed.structs))
 	for _, candidate := range parsed.structs {
@@ -402,7 +440,7 @@ func sharedShapes(dir string) (shapes map[string]declaredStruct, nested map[stri
 	delete(byName, strings.TrimPrefix(hintsType, sharedPrefix))
 	shapes = make(map[string]declaredStruct, len(parsed.structs))
 	for _, candidate := range parsed.structs {
-		key := sharedPrefix + candidate.Name
+		key := prefix + candidate.Name
 		if !ast.IsExported(candidate.Name) || key == hintsType {
 			continue
 		}
@@ -410,12 +448,20 @@ func sharedShapes(dir string) (shapes map[string]declaredStruct, nested map[stri
 		whole.Name = key
 		for tag, typeName := range whole.FieldTypes {
 			if _, local := byName[typeName]; local {
-				whole.FieldTypes[tag] = sharedPrefix + typeName
+				whole.FieldTypes[tag] = prefix + typeName
 			}
 		}
 		shapes[key] = whole
 	}
-	return shapes, parsed.nested
+	// Only the package's own shapes are named, since what one package nests
+	// of another's says nothing about how a third uses it.
+	nested = map[string]bool{}
+	for name := range parsed.nested {
+		if _, local := byName[name]; local {
+			nested[prefix+name] = true
+		}
+	}
+	return shapes, nested
 }
 
 // declaredStruct is one struct as parsed, before the top-level output types
@@ -540,6 +586,9 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 					parsed.aliases[typed.Name.Name] = target
 				} else {
 					parsed.scalars[typed.Name.Name] = true
+					if qualified := qualifiedName(typed.Type); qualified != "" {
+						parsed.qualified[typed.Name.Name] = qualified
+					}
 				}
 				return false
 			}
@@ -610,6 +659,23 @@ func namedType(expr ast.Expr) string {
 			return ""
 		}
 	}
+}
+
+// qualifiedName is the qualified name a type is declared as, or from, when it
+// is written as another package's type and nothing else (`labeldata.Output`),
+// and "" otherwise. It is kept apart from [namedType], which is read wherever a
+// field names a type and would otherwise start resolving the fields of every
+// type from another package that a struct names.
+func qualifiedName(expr ast.Expr) string {
+	selector, isSelector := expr.(*ast.SelectorExpr)
+	if !isSelector {
+		return ""
+	}
+	pkg, isIdent := selector.X.(*ast.Ident)
+	if !isIdent {
+		return ""
+	}
+	return pkg.Name + "." + selector.Sel.Name
 }
 
 // framingShapes are the shared shapes a response carries because of how this

@@ -218,6 +218,12 @@ func (s responseSources) note(pkg, operation string, entityOf map[string]string,
 func sentCheck(conditions *conditionIndex, sources responseSources, published []publishedType) SentCheck {
 	check := SentCheck{Ran: true, Record: apilive.FileName}
 
+	// A package publishes the fields of every type it declares, its rows
+	// included, and the fields of the types those name one level down. The
+	// second half is what reaches a shared shape a package names without
+	// declaring (`diffs: []toolutil.DiffOutput`): it is the row of the list
+	// exactly as a local row type is, and leaving it out reported a package
+	// as failing to surface the fields of its own rows.
 	publishedBy := map[string]map[string]bool{}
 	for _, publishedType := range published {
 		fields := publishedBy[publishedType.Package]
@@ -227,6 +233,11 @@ func sentCheck(conditions *conditionIndex, sources responseSources, published []
 		}
 		for _, field := range publishedType.Fields {
 			fields[field] = true
+		}
+		for _, nested := range publishedType.Nested {
+			for _, field := range nested.Fields {
+				fields[field] = true
+			}
 		}
 	}
 

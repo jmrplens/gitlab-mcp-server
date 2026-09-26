@@ -376,6 +376,130 @@ func TestNamedType_OnlyALocalNameOrASharedShape_IsOneOfOurs(t *testing.T) {
 	}
 }
 
+// TestQualifiedName_OnlyAnotherPackagesTypeAsWritten_IsNamed verifies what a
+// type declared as, or from, another package's type is read as: the qualified
+// name when that is all it is, and nothing for a local name, for a type built
+// around one, or for a selector that is not a package's.
+func TestQualifiedName_OnlyAnotherPackagesTypeAsWritten_IsNamed(t *testing.T) {
+	cases := []struct {
+		name string
+		expr ast.Expr
+		want string
+	}{
+		{
+			name: "another package's type",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "labeldata"}, Sel: &ast.Ident{Name: "Output"}},
+			want: "labeldata.Output",
+		},
+		{name: "a local name", expr: &ast.Ident{Name: "Output"}},
+		{name: "a slice of another package's type", expr: &ast.ArrayType{Elt: &ast.SelectorExpr{X: &ast.Ident{Name: "labeldata"}, Sel: &ast.Ident{Name: "Output"}}}},
+		{
+			name: "a selector whose left side is itself a selector",
+			expr: &ast.SelectorExpr{
+				X:   &ast.SelectorExpr{X: &ast.Ident{Name: "outer"}, Sel: &ast.Ident{Name: "inner"}},
+				Sel: &ast.Ident{Name: "Thing"},
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := qualifiedName(testCase.expr); got != testCase.want {
+				t.Errorf("qualifiedName() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPublishedTypes_AnAliasOfAnotherToolsPackagesType_IsThatType verifies the
+// alias the project and group labels and iterations publish their responses
+// through (`type Output = labeldata.Output`): it resolves to the fields that
+// package declares, flattened there, and is nested when the package nests it.
+// A type declared from a package this tree does not hold, which is every type
+// from outside this repository, stays the scalar it was read as and publishes
+// nothing. A field typed as another tools package's type is not resolved,
+// since that is how two domain packages would come to publish each other's
+// shapes.
+func TestPublishedTypes_AnAliasOfAnotherToolsPackagesType_IsThatType(t *testing.T) {
+	root := writePackage(t, "labels", `package labels
+
+type Output = labeldata.Output
+
+type ListOutput struct {
+	Labels []Output `+"`json:\"labels\"`"+`
+}
+
+type SDKOutput = gitlab.Label
+
+type RowOutput struct {
+	Other labeldata.Row `+"`json:\"other\"`"+`
+}
+`)
+	writeToolsPackage(t, root, "labeldata", `package labeldata
+
+type base struct {
+	ID int64 `+"`json:\"id\"`"+`
+}
+
+type Output struct {
+	base
+	Name string `+"`json:\"name\"`"+`
+	Row  Row    `+"`json:\"row\"`"+`
+}
+
+type Row struct {
+	Color string `+"`json:\"color\"`"+`
+}
+`)
+	writeShared(t, root, "package toolutil\n")
+
+	var labels []publishedType
+	for _, published := range publishedTypes(root) {
+		if published.Package == "internal/tools/labels" {
+			labels = append(labels, published)
+		}
+	}
+
+	want := []publishedType{
+		{Package: "internal/tools/labels", Name: "ListOutput", Fields: []string{"labels"}, Nested: map[string]nestedType{
+			"labels": {Name: "Output", Fields: []string{"id", "name", "row"}},
+		}, Wraps: []string{"Output"}},
+		{Package: "internal/tools/labels", Name: "Output", Fields: []string{"id", "name", "row"}, Inner: true, Payload: true},
+		{Package: "internal/tools/labels", Name: "RowOutput", Fields: []string{"other"}},
+	}
+	if !reflect.DeepEqual(labels, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", labels, want)
+	}
+}
+
+// TestSharedShapes_NestedShapes_AreThePackagesOwnUnderItsPrefix verifies the
+// nesting a shape library reports: the shapes it names as a field type itself,
+// keyed the way another package names them, and not a shape of a third
+// package it happens to name, since what one package nests of another's says
+// nothing about how a domain package aliasing it uses it.
+func TestSharedShapes_NestedShapes_AreThePackagesOwnUnderItsPrefix(t *testing.T) {
+	dir := t.TempDir()
+	writeSourceFile(t, dir, "lib.go", `package labeldata
+
+type Output struct {
+	Row   Row                     `+"`json:\"row\"`"+`
+	Owner toolutil.BasicUserOutput `+"`json:\"owner\"`"+`
+}
+
+type Row struct {
+	Color string `+"`json:\"color\"`"+`
+}
+`)
+
+	shapes, nested := sharedShapes(dir, "labeldata.")
+
+	if !reflect.DeepEqual(nested, map[string]bool{"labeldata.Row": true}) {
+		t.Errorf("nested = %v, want the library's own row alone", nested)
+	}
+	if got := shapes["labeldata.Output"].FieldTypes["row"]; got != "labeldata.Row" {
+		t.Errorf("Output's row field is typed %q, want the rekeyed labeldata.Row", got)
+	}
+}
+
 // TestPublishedTypes_ATreeWithoutTools_ReadsNothing verifies the shape a caller
 // pointed at the wrong root meets: nothing, rather than a panic or a finding.
 func TestPublishedTypes_ATreeWithoutTools_ReadsNothing(t *testing.T) {
