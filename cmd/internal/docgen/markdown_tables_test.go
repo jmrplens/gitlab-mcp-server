@@ -271,7 +271,8 @@ func TestFormatMarkdownTables_TableDriven(t *testing.T) {
 // pipe, a pipe or a backtick the author escaped, a code span that runs to the
 // very end of a line, a separator that is not one, an explicit left alignment,
 // a second table after the first, an already formatted table after one that is
-// not, and a CRLF document whose last line carries no line ending at all.
+// not, an already formatted table whose first data row would parse as a
+// separator, and a CRLF document whose last line carries no line ending at all.
 func TestFormatMarkdownTables_EdgeCases_TableDriven(t *testing.T) {
 	runFormatTableCases(t, []formatTableCase{
 		{
@@ -504,6 +505,30 @@ func TestFormatMarkdownTables_EdgeCases_TableDriven(t *testing.T) {
 				"",
 			}, "\n"),
 			wantChanged: true,
+		},
+		{
+			// An already formatted table is still a table the formatter
+			// takes whole: read as "not a table" because nothing in it
+			// changed, the walk resumes at its separator, reads that as a
+			// header and the dash row under it as a separator, and rewrites
+			// the dash row as the separator it is taken for. Only a data row
+			// that parses as a separator shows it, which is why every other
+			// formatted fixture here passes either way.
+			name: "an already formatted table whose first row is all dashes is left whole",
+			input: strings.Join([]string{
+				"| Long header | B   |",
+				"| ----------- | --- |",
+				"| ---         | --- |",
+				"| z           | y   |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| Long header | B   |",
+				"| ----------- | --- |",
+				"| ---         | --- |",
+				"| z           | y   |",
+				"",
+			}, "\n"),
 		},
 		{
 			name:        "crlf table without a final newline",
