@@ -346,6 +346,41 @@ func TestCollect_AConstantAGroupedDeclarationRepeats_IsInTheInventory(t *testing
 	})
 }
 
+// wrappedFixture declares documents whose value is an expression around the
+// literal rather than the literal itself: parentheses, a conversion, and both
+// around a concatenation. The type checker folds each to one constant, so each
+// is one named document, and the literal inside it starts at a position of its
+// own rather than at the one the declaration's value starts at.
+const wrappedFixture = `package wrapped
+
+type document string
+
+const parenthesized = (@@query { currentUser { id } }@@)
+
+const converted = document(@@query { currentUser { username } }@@)
+
+const parenthesizedConcatenation = (@@query { currentUser {@@ + @@ name } }@@)
+`
+
+// TestCollect_ADocumentWrappedInAnExpression_IsReportedOnceUnderItsName
+// verifies that a named document is not reported a second time as an inline
+// one when its value is written inside parentheses or a conversion.
+//
+// The declared value is what gets claimed, and the literal inside it starts one
+// token later, so a walk that descended into the value used to find the
+// literal unclaimed and record it again with no name. That second entry has no
+// object either, so cmd/audit_readonly_graphql reports it as a document it can
+// tie to no handler, and cmd/audit_graphql_documents reports a refusal of it
+// twice: a false finding in one gate and a doubled one in the other.
+func TestCollect_ADocumentWrappedInAnExpression_IsReportedOnceUnderItsName(t *testing.T) {
+	found := loadFixture(t, map[string]string{"wrapped": wrappedFixture})
+
+	want := []string{"converted", "parenthesized", "parenthesizedConcatenation"}
+	if got := names(found); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("collected %v, want each wrapped document once, under its name: %v", got, want)
+	}
+}
+
 // TestFromPackages_NoPackages_CollectsNothing verifies the in-source half
 // survives being handed nothing. Every load this repository does refuses an
 // empty result before it gets here, and an exported function that indexes the

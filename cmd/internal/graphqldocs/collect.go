@@ -233,7 +233,18 @@ func (c *collector) walk(pkg *packages.Package) {
 
 // visit records what one node declares or writes, and reports whether the walk
 // should descend into it.
+//
+// A value already recorded under the name it is declared as is not entered at
+// all. Checking the claim only where a literal or a concatenation is met was
+// not enough: a value written as `(...)` or as a conversion starts one token
+// before the literal inside it, so the literal arrived unclaimed and was
+// recorded a second time with no name and no object. Nothing folded to a
+// constant can hold a function literal, so skipping the whole value loses no
+// document.
 func (c *collector) visit(pkg *packages.Package, node ast.Node) bool {
+	if expr, isExpr := node.(ast.Expr); isExpr && c.claimed[expr.Pos()] {
+		return false
+	}
 	switch typed := node.(type) {
 	case *ast.ImportSpec:
 		return false
@@ -314,9 +325,6 @@ func repeatedConstant(object types.Object) (string, bool) {
 // declared under a name. It reports whether it recorded one, which is what
 // stops a concatenation from being reported again piece by piece.
 func (c *collector) recordInline(pkg *packages.Package, expr ast.Expr) bool {
-	if c.claimed[expr.Pos()] {
-		return true
-	}
 	text, ok := constantDocument(pkg, expr)
 	if !ok {
 		return false
