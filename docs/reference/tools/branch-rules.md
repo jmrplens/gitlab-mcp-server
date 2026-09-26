@@ -53,7 +53,7 @@ List branch rules for a project. Returns a paginated list of all branch rules wi
 
 ### Output fields
 
-Each branch rule includes the fields below. The server sends one of two GraphQL documents: a Community Edition instance, or one without a Premium or Ultimate license, is asked only for the fields every edition defines, and every field marked Premium or Ultimate is then absent rather than `false`, since the instance was never asked. The tier is the licensed feature the field reports on; GitLab's GraphQL schema declares none.
+Each branch rule includes the fields below. A Community Edition instance, or one without a Premium or Ultimate license, is asked only for the fields every edition defines, and every field marked Premium or Ultimate is then absent rather than `false`, since the instance was never asked. A Premium or Ultimate instance older than GitLab 18.8 is answered the same way for the four security-policy flags and a status check's `hmac` (see the notes below). The tier is the licensed feature the field reports on; GitLab's GraphQL schema declares none.
 
 | Field                     | Type   | Tier     | Description                                                                       |
 | ------------------------- | ------ | -------- | --------------------------------------------------------------------------------- |
@@ -96,22 +96,22 @@ Each entry of `push_access_levels`, `merge_access_levels` and `unprotect_access_
 
 ### Approval rules
 
-| Field                | Type   | Description                                                  |
-| -------------------- | ------ | ------------------------------------------------------------ |
-| `id`                 | string | Global ID of the approval rule                               |
-| `name`               | string | Approval rule name                                           |
-| `approvals_required` | int    | Number of required approvals                                 |
-| `type`               | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`)                     |
-| `eligible_approvers` | array  | Users eligible to approve, in the same user shape as a grant |
+| Field                | Type   | Description                                                                                                                                                                                     |
+| -------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | string | Global ID of the approval rule                                                                                                                                                                  |
+| `name`               | string | Approval rule name                                                                                                                                                                              |
+| `approvals_required` | int    | Number of required approvals                                                                                                                                                                    |
+| `type`               | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`)                                                                                                                                                        |
+| `eligible_approvers` | array  | Users eligible to approve, in the same user shape as a grant, the `id` included: GitLab identifies an approver by a global ID, which is published as the same numeric id a grant's user carries |
 
 ### External status checks
 
-| Field          | Type   | Description                               |
-| -------------- | ------ | ----------------------------------------- |
-| `id`           | string | Global ID of the status check             |
-| `name`         | string | Check name                                |
-| `external_url` | string | URL of the external service               |
-| `hmac`         | bool   | Whether an HMAC secret signs the requests |
+| Field          | Type   | Description                                                                    |
+| -------------- | ------ | ------------------------------------------------------------------------------ |
+| `id`           | string | Global ID of the status check                                                  |
+| `name`         | string | Check name                                                                     |
+| `external_url` | string | URL of the external service                                                    |
+| `hmac`         | bool   | Whether an HMAC secret signs the requests; absent on a release older than 18.8 |
 
 ---
 
@@ -129,7 +129,7 @@ Each entry of `push_access_levels`, `merge_access_levels` and `unprotect_access_
 - The `matching_branches_count` field shows how many actual branches match wildcard patterns (e.g. `release/*`)
 - Approval rules, unprotect grants and user and group grants are only available on GitLab Premium/Ultimate; external status checks and the security-policy flags on Ultimate
 - The grant lists, an approval rule's eligible approvers and the lists under a rule are read from their first page, which GitLab sizes at up to 100 entries
-- GitLab refuses a whole GraphQL document that names a field it does not have, so the newest field a document selects is the oldest release it works on: on a Premium or Ultimate instance the listing needs GitLab 18.8 (the two warn-mode policy flags), and on a Community or Free one nothing newer than 16.11
+- GitLab refuses a whole GraphQL document that names a field it does not have, so the newest field a document selects is the oldest release it works on. The listing works from GitLab 16.11 on every edition: a Premium or Ultimate instance is asked first for everything above, and when it is older than 18.8 and refuses the four security-policy flags or a status check's `hmac` (added between 17.3 and 18.8), it is asked again without those five, which are then absent rather than `false`. That costs one extra request on such an instance, and a release from 17.3 to 18.7 is not asked for the one or two of the five it already serves
 - Left out on purpose: the fields GitLab still marks as experiments (a rule's and a protection's group-level flag, a rule's squash option, the custom role a grant names), an approval rule's coverage threshold, which GitLab added in 19.2, and a granted group's parent, which took the Premium and Ultimate document past the complexity GitLab accepts at a page of 100 (it scores 226 of 250 without it, measured on GitLab.com)
 
 ## Related

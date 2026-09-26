@@ -5,6 +5,7 @@ package branchrules
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"slices"
@@ -20,32 +21,31 @@ import (
 
 // janeJSON and deployBotJSON are the two user references the fixtures name,
 // spelled once so a grant, a deploy key and an approval rule read the same
-// user back.
+// user back. They are access-level users, which GitLab identifies by the bare
+// numeric id; janeApproverJSON is the same user as an eligible approver, a
+// UserCore, which GitLab identifies by a global ID.
 const (
 	janeJSON = `{"id": "21", "username": "jane", "name": "Jane Doe", "publicEmail": "jane@example.com",
+		"avatarUrl": "https://gitlab.example.com/uploads/jane.png", "webUrl": "https://gitlab.example.com/jane", "webPath": "/jane"}`
+	janeApproverJSON = `{"id": "gid://gitlab/User/21", "username": "jane", "name": "Jane Doe", "publicEmail": "jane@example.com",
 		"avatarUrl": "https://gitlab.example.com/uploads/jane.png", "webUrl": "https://gitlab.example.com/jane", "webPath": "/jane"}`
 	deployBotJSON = `{"id": "22", "username": "deploy-bot", "name": "Deploy Bot", "publicEmail": null,
 		"avatarUrl": null, "webUrl": "https://gitlab.example.com/deploy-bot", "webPath": "/deploy-bot"}`
 )
 
-// sampleBranchRuleNode is a branch rule as the Enterprise document answers it,
-// with every kind of grant, every flag and both of the lists it carries.
-const sampleBranchRuleNode = `{
-	"id": "gid://gitlab/Projects::BranchRule/7",
+// ruleHeaderJSON, grantListsJSON and approvalRulesJSON are the parts of a
+// protected Enterprise rule both Enterprise documents answer alike, spelled
+// once so the 18.8 fixture and the base one differ only by what the base
+// document does not ask for.
+const (
+	ruleHeaderJSON = `"id": "gid://gitlab/Projects::BranchRule/7",
 	"name": "main",
 	"isDefault": true,
 	"isProtected": true,
 	"matchingBranchesCount": 1,
 	"createdAt": "2026-01-15T10:00:00Z",
-	"updatedAt": "2026-06-20T14:30:00Z",
-	"branchProtection": {
-		"allowForcePush": false,
-		"codeOwnerApprovalRequired": true,
-		"modificationBlockedByPolicy": true,
-		"protectedFromPushBySecurityPolicy": false,
-		"warnModificationBlockedByPolicy": true,
-		"warnProtectedFromPushBySecurityPolicy": false,
-		"pushAccessLevels": {"nodes": [
+	"updatedAt": "2026-06-20T14:30:00Z"`
+	grantListsJSON = `"pushAccessLevels": {"nodes": [
 			{"accessLevel": 40, "accessLevelDescription": "Maintainers", "user": null, "group": null, "deployKey": null},
 			{"accessLevel": 40, "accessLevelDescription": "Jane Doe", "user": ` + janeJSON + `, "group": null, "deployKey": null},
 			{"accessLevel": 40, "accessLevelDescription": "Deploy key", "user": null, "group": null,
@@ -60,16 +60,34 @@ const sampleBranchRuleNode = `{
 			{"accessLevel": 40, "accessLevelDescription": "Jane Doe", "user": ` + janeJSON + `, "group": null},
 			{"accessLevel": 40, "accessLevelDescription": "Acme", "user": null,
 				"group": {"id": "3", "name": "Acme", "webUrl": "https://gitlab.example.com/groups/acme", "avatarUrl": "https://gitlab.example.com/uploads/acme.png"}}
-		]}
-	},
-	"approvalRules": {
+		]}`
+	approvalRulesJSON = `"approvalRules": {
 		"nodes": [
 			{"id": "gid://gitlab/ApprovalProjectRule/1", "name": "Security Review", "approvalsRequired": 2, "type": "REGULAR",
-				"eligibleApprovers": {"nodes": [` + janeJSON + `]}},
+				"eligibleApprovers": {"nodes": [` + janeApproverJSON + `]}},
 			{"id": "gid://gitlab/ApprovalProjectRule/2", "name": "Coverage-Check", "approvalsRequired": 1, "type": "REPORT_APPROVER",
 				"eligibleApprovers": {"nodes": []}}
 		]
+	}`
+)
+
+// sampleBranchRuleNode is a branch rule as the 18.8 Enterprise document
+// answers it, with every kind of grant, every flag and both of the lists it
+// carries. Each security-policy flag holds the opposite value to its warn-mode
+// twin, and the two enforced flags differ from each other, so a flag decoded
+// or published as its twin reads back wrong.
+const sampleBranchRuleNode = `{
+	` + ruleHeaderJSON + `,
+	"branchProtection": {
+		"allowForcePush": false,
+		"codeOwnerApprovalRequired": true,
+		"modificationBlockedByPolicy": true,
+		"protectedFromPushBySecurityPolicy": false,
+		"warnModificationBlockedByPolicy": false,
+		"warnProtectedFromPushBySecurityPolicy": true,
+		` + grantListsJSON + `
 	},
+	` + approvalRulesJSON + `,
 	"externalStatusChecks": {
 		"nodes": [
 			{"id": "gid://gitlab/MergeRequests::ExternalStatusCheck/3", "name": "SonarQube", "externalUrl": "https://sonar.example.com/check", "hmac": true}
@@ -77,7 +95,26 @@ const sampleBranchRuleNode = `{
 	}
 }`
 
-// sampleUnprotectedRuleNode is an Enterprise rule that protects nothing.
+// sampleBaseRuleNode is the same rule as the base Enterprise document answers
+// it, which asks for neither the security-policy flags nor a status check's
+// hmac.
+const sampleBaseRuleNode = `{
+	` + ruleHeaderJSON + `,
+	"branchProtection": {
+		"allowForcePush": false,
+		"codeOwnerApprovalRequired": true,
+		` + grantListsJSON + `
+	},
+	` + approvalRulesJSON + `,
+	"externalStatusChecks": {
+		"nodes": [
+			{"id": "gid://gitlab/MergeRequests::ExternalStatusCheck/3", "name": "SonarQube", "externalUrl": "https://sonar.example.com/check"}
+		]
+	}
+}`
+
+// sampleUnprotectedRuleNode is an Enterprise rule that protects nothing, which
+// both Enterprise documents answer alike.
 const sampleUnprotectedRuleNode = `{
 	"id": null,
 	"name": "feature/*",
@@ -91,7 +128,8 @@ const sampleUnprotectedRuleNode = `{
 	"externalStatusChecks": {"nodes": []}
 }`
 
-// jane and deployBot are what janeJSON and deployBotJSON decode to.
+// jane and deployBot are what janeJSON and deployBotJSON decode to, and jane
+// is what janeApproverJSON decodes to as well.
 var (
 	jane = UserRef{
 		ID: "21", Username: "jane", Name: "Jane Doe", PublicEmail: "jane@example.com",
@@ -115,8 +153,8 @@ func wantProtectedRule() BranchRuleItem {
 			CodeOwnerApprovalRequired:             new(true),
 			ModificationBlockedByPolicy:           new(true),
 			ProtectedFromPushBySecurityPolicy:     new(false),
-			WarnModificationBlockedByPolicy:       new(true),
-			WarnProtectedFromPushBySecurityPolicy: new(false),
+			WarnModificationBlockedByPolicy:       new(false),
+			WarnProtectedFromPushBySecurityPolicy: new(true),
 			PushAccessLevels: []PushAccess{
 				{AccessLevel: 40, AccessLevelDescription: "Maintainers"},
 				{AccessLevel: 40, AccessLevelDescription: "Jane Doe", User: &jane},
@@ -150,9 +188,24 @@ func wantProtectedRule() BranchRuleItem {
 			},
 		},
 		ExternalStatusChecks: []ExternalStatusCheck{
-			{ID: "gid://gitlab/MergeRequests::ExternalStatusCheck/3", Name: "SonarQube", ExternalURL: "https://sonar.example.com/check", HMAC: true},
+			{ID: "gid://gitlab/MergeRequests::ExternalStatusCheck/3", Name: "SonarQube", ExternalURL: "https://sonar.example.com/check", HMAC: new(true)},
 		},
 	}
+}
+
+// wantBaseRule is sampleBaseRuleNode as the output publishes it: the rule
+// wantProtectedRule is, with the five fields the base document does not ask
+// for absent rather than false.
+func wantBaseRule() BranchRuleItem {
+	rule := wantProtectedRule()
+	protection := *rule.BranchProtection
+	protection.ModificationBlockedByPolicy = nil
+	protection.ProtectedFromPushBySecurityPolicy = nil
+	protection.WarnModificationBlockedByPolicy = nil
+	protection.WarnProtectedFromPushBySecurityPolicy = nil
+	rule.BranchProtection = &protection
+	rule.ExternalStatusChecks[0].HMAC = nil
+	return rule
 }
 
 // wantUnprotectedRule is sampleUnprotectedRuleNode as the output publishes it.
@@ -483,6 +536,171 @@ func TestList_EnterpriseSendsTheEnterpriseDocument(t *testing.T) {
 	}
 }
 
+// undefinedFieldRefusal is how GitLab older than 18.8 answers the Enterprise
+// document, as GitLab.com answers a field it does not define: HTTP 200, no
+// data, and the refusal classified by its extensions code.
+const undefinedFieldRefusal = `{"data": null, "errors": [{
+	"message": "Field 'warnModificationBlockedByPolicy' doesn't exist on type 'BranchProtection'",
+	"locations": [{"line": 17, "column": 11}],
+	"extensions": {"code": "undefinedField", "typeName": "BranchProtection", "fieldName": "warnModificationBlockedByPolicy"}
+}]}`
+
+// otherRefusal is a refusal of another kind, which no older document answers
+// any better.
+const otherRefusal = `{"data": null, "errors": [{
+	"message": "Query has complexity of 251, which exceeds max complexity of 250",
+	"extensions": {"code": "complexityTooHigh"}
+}]}`
+
+// TestList_OlderEnterpriseRelease_AskedAgainWithTheBaseDocument verifies what
+// a licensed instance older than 18.8 is answered with. It refuses the
+// Enterprise document for naming a field it does not have, and the listing is
+// asked again with the base document, whose every field it serves, rather
+// than refused whole: the grants, the approval rules and the status checks are
+// published, and the five fields the base document does not ask for are
+// absent rather than false. A refusal of any other kind is reported at once,
+// and a base document refused as well is reported with GitLab's own words.
+func TestList_OlderEnterpriseRelease_AskedAgainWithTheBaseDocument(t *testing.T) {
+	baseAnswer := `{"data": {"project": {"branchRules": {"nodes": [` + sampleBaseRuleNode + `, ` + sampleUnprotectedRuleNode + `],
+		"pageInfo": {"hasNextPage": false, "endCursor": null}}}}}`
+	tests := []struct {
+		name string
+		// answers is what GitLab answers each document with, by document.
+		answers map[string]string
+		// wantSent is the documents the listing sends, in order.
+		wantSent []string
+		// wantErr is a fragment of the error, empty for a listing answered.
+		wantErr string
+		// wantNotServed says whether the error is the one an older release
+		// answers with.
+		wantNotServed bool
+	}{
+		{
+			name:     "a release older than 18.8 is answered from the base document",
+			answers:  map[string]string{queryListBranchRulesEE: undefinedFieldRefusal, queryListBranchRulesEEBase: baseAnswer},
+			wantSent: []string{queryListBranchRulesEE, queryListBranchRulesEEBase},
+		},
+		{
+			name:     "a refusal of another kind is reported without asking again",
+			answers:  map[string]string{queryListBranchRulesEE: otherRefusal},
+			wantSent: []string{queryListBranchRulesEE},
+			wantErr:  "exceeds max complexity",
+		},
+		{
+			name:          "a base document refused as well is reported",
+			answers:       map[string]string{queryListBranchRulesEE: undefinedFieldRefusal, queryListBranchRulesEEBase: undefinedFieldRefusal},
+			wantSent:      []string{queryListBranchRulesEE, queryListBranchRulesEEBase},
+			wantErr:       "doesn't exist on type 'BranchProtection'",
+			wantNotServed: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sent []string
+			client := testutil.NewTestClient(t, answerByDocument(t, tt.answers, &sent))
+			client.SetEnterprise(true)
+			out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
+
+			if !slices.Equal(sent, tt.wantSent) {
+				t.Errorf("List() sent %d document(s), want %d, in the order Enterprise then base", len(sent), len(tt.wantSent))
+			}
+			if tt.wantErr != "" {
+				assertRefusal(t, err, tt.wantErr, tt.wantNotServed)
+				return
+			}
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			if len(out.Rules) != 2 {
+				t.Fatalf("len(Rules) = %d, want 2", len(out.Rules))
+			}
+			assertRule(t, "rule[0]", out.Rules[0], wantBaseRule())
+			assertRule(t, "rule[1]", out.Rules[1], wantUnprotectedRule())
+		})
+	}
+}
+
+// answerByDocument answers each branch rules document the listing sends with
+// the body answers holds for it, and records the documents in the order they
+// were sent. A document answers does not hold is reported and refused.
+func answerByDocument(t *testing.T, answers map[string]string, sent *[]string) http.Handler {
+	t.Helper()
+	return graphqlMux(map[string]http.HandlerFunc{
+		"branchRules": func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Query string `json:"query"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode request: %v", err)
+			}
+			*sent = append(*sent, body.Query)
+			answer, ok := answers[body.Query]
+			if !ok {
+				t.Errorf("List() sent a document this case does not answer:\n%s", body.Query)
+				answer = otherRefusal
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(answer))
+		},
+	})
+}
+
+// assertRefusal holds a listing GitLab refused to the error it reports: one
+// carrying GitLab's words, marked as a field the release does not have only
+// when that is what GitLab said.
+func assertRefusal(t *testing.T, err error, wantMessage string, wantNotServed bool) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), wantMessage) {
+		t.Fatalf("List() error = %v, want it to carry %q", err, wantMessage)
+	}
+	if got := errors.Is(err, errFieldNotServed); got != wantNotServed {
+		t.Errorf("errors.Is(err, errFieldNotServed) = %t, want %t", got, wantNotServed)
+	}
+}
+
+// TestWriteStatusCheckSection_HMACNotAsked pins a status check a release older
+// than 18.8 was not asked about: its HMAC column reads as not asked rather
+// than as no.
+func TestWriteStatusCheckSection_HMACNotAsked(t *testing.T) {
+	var b strings.Builder
+	writeStatusCheckSection(&b, BranchRuleItem{Name: "main", ExternalStatusChecks: []ExternalStatusCheck{
+		{Name: "SonarQube", ExternalURL: "https://sonar.example.com/check"},
+	}})
+
+	want := "\n### External Status Checks for main\n\n" +
+		"| Name | URL | HMAC |\n" +
+		"| --- | --- | --- |\n" +
+		"| SonarQube | [https://sonar.example.com/check](https://sonar.example.com/check) | - |\n"
+
+	if got := b.String(); got != want {
+		t.Errorf("status check section mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestGQLUserRefApprover pins how an eligible approver's id is published: the
+// global ID GitLab identifies a UserCore by is read back to the numeric id an
+// access-level user carries, and an id that is not a global ID is published as
+// GitLab sent it rather than dropped.
+func TestGQLUserRefApprover(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		want string
+	}{
+		{"a user global ID", "gid://gitlab/User/21", "21"},
+		{"a bare numeric id", "21", "21"},
+		{"anything else", "not-an-id", "not-an-id"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := gqlUserRef{ID: tt.id, Username: "jane"}.approver()
+			if got.ID != tt.want || got.Username != "jane" {
+				t.Errorf("approver() = %+v, want id %q and the rest of the reference kept", got, tt.want)
+			}
+		})
+	}
+}
+
 // selectionPaths lists every field path a document selects, from the node of
 // the branch rules connection down, so two documents can be compared by what
 // they ask for rather than by how they are spelled.
@@ -511,14 +729,52 @@ func selectionPaths(t *testing.T, document string) []string {
 }
 
 // TestQueryListBranchRules_EnterpriseAsksEverythingCommunityDoes verifies that
-// the two documents differ only by addition, so a licensed instance is never
-// told less than a Free one about the same rule.
+// the three documents differ only by addition, so a licensed instance is never
+// told less than a Free one about the same rule, whichever release it runs.
 func TestQueryListBranchRules_EnterpriseAsksEverythingCommunityDoes(t *testing.T) {
-	enterprise := selectionPaths(t, queryListBranchRulesEE)
-	for _, path := range selectionPaths(t, queryListBranchRulesCE) {
-		if _, found := slices.BinarySearch(enterprise, path); !found {
-			t.Errorf("the Community document asks for %s and the Enterprise one does not", path)
+	for _, pair := range []struct {
+		name, smaller, larger string
+	}{
+		{"Community within base Enterprise", queryListBranchRulesCE, queryListBranchRulesEEBase},
+		{"base Enterprise within Enterprise", queryListBranchRulesEEBase, queryListBranchRulesEE},
+	} {
+		t.Run(pair.name, func(t *testing.T) {
+			larger := selectionPaths(t, pair.larger)
+			for _, path := range selectionPaths(t, pair.smaller) {
+				if _, found := slices.BinarySearch(larger, path); !found {
+					t.Errorf("the smaller document asks for %s and the larger one does not", path)
+				}
+			}
+		})
+	}
+}
+
+// TestQueryListBranchRulesEEBase_LeavesOutExactlyTheFieldsNewerThan1611 holds
+// the base Enterprise document to its purpose: it is the Enterprise document
+// less the five fields GitLab added after 16.11, and nothing else, so a
+// release that refuses the Enterprise document for one of them is told
+// everything else. Each path carries the first versioned GitLab GraphQL
+// reference that lists it.
+func TestQueryListBranchRulesEEBase_LeavesOutExactlyTheFieldsNewerThan1611(t *testing.T) {
+	const protection = ".project.branchRules.nodes.branchProtection"
+	newer := []string{
+		".project.branchRules.nodes.externalStatusChecks.nodes.hmac", // 17.3
+		protection + ".modificationBlockedByPolicy",                  // 18.0
+		protection + ".protectedFromPushBySecurityPolicy",            // 18.7
+		protection + ".warnModificationBlockedByPolicy",              // 18.8
+		protection + ".warnProtectedFromPushBySecurityPolicy",        // 18.8
+	}
+	slices.Sort(newer)
+
+	base := selectionPaths(t, queryListBranchRulesEEBase)
+	var missing []string
+	for _, path := range selectionPaths(t, queryListBranchRulesEE) {
+		if _, found := slices.BinarySearch(base, path); !found {
+			missing = append(missing, path)
 		}
+	}
+	if !slices.Equal(missing, newer) {
+		t.Errorf("the base Enterprise document leaves out %v, want exactly %v", missing, newer)
 	}
 }
 
@@ -562,9 +818,9 @@ func TestQueryListBranchRulesCE_AsksNoEnterpriseField(t *testing.T) {
 	}
 }
 
-// TestQueryListBranchRules_AsksNoExperimentOrLaterField holds both documents
-// to the releases they are measured to work on and to the complexity GitLab
-// accepts. GitLab refuses a whole document naming a field it does not have, so
+// TestQueryListBranchRules_AsksNoExperimentOrLaterField holds all three
+// documents to the releases they are measured to work on and to the complexity
+// GitLab accepts. GitLab refuses a whole document naming a field it does not have, so
 // one experiment GitLab renames or one field newer than the instance stops
 // every call, and the pinned schema cannot catch either, being one release of
 // GitLab.com. Each path below is answered in cmd/audit_graphql_shapes instead,
@@ -584,12 +840,16 @@ func TestQueryListBranchRules_AsksNoExperimentOrLaterField(t *testing.T) {
 		protection + ".pushAccessLevels.nodes.memberRole",      // experiment, 19.2
 		protection + ".mergeAccessLevels.nodes.memberRole",     // experiment, 19.2
 		protection + ".unprotectAccessLevels.nodes.memberRole", // experiment, 19.2
-		rule + ".approvalRules.nodes.coverageMinimumThreshold", // 19.2, past the 18.8 floor
+		rule + ".approvalRules.nodes.coverageMinimumThreshold", // 19.2, past the 18.8 Enterprise document's release
 		protection + ".pushAccessLevels.nodes.group.parent",    // 256 of the 250 complexity GitLab allows at first: 100
 		protection + ".mergeAccessLevels.nodes.group.parent",
 		protection + ".unprotectAccessLevels.nodes.group.parent",
 	}
-	for name, document := range map[string]string{"Community": queryListBranchRulesCE, "Enterprise": queryListBranchRulesEE} {
+	for name, document := range map[string]string{
+		"Community":       queryListBranchRulesCE,
+		"base Enterprise": queryListBranchRulesEEBase,
+		"Enterprise":      queryListBranchRulesEE,
+	} {
 		t.Run(name, func(t *testing.T) {
 			selected := selectionPaths(t, document)
 			for _, path := range leftOut {
@@ -675,7 +935,9 @@ func TestList_Pagination(t *testing.T) {
 
 // TestList_NullOptionalFields verifies that an Enterprise rule whose nullable
 // fields GitLab sent as null publishes each as absent: the timestamps, the
-// three grant lists, the approval rules and the status checks.
+// three grant lists, the approval rules and the status checks. Its policy flags
+// hold the pattern opposite to sampleBranchRuleNode's, so between the two
+// fixtures every flag is seen true and false against each of the others.
 func TestList_NullOptionalFields(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -695,8 +957,8 @@ func TestList_NullOptionalFields(t *testing.T) {
 								"codeOwnerApprovalRequired": false,
 								"modificationBlockedByPolicy": false,
 								"protectedFromPushBySecurityPolicy": true,
-								"warnModificationBlockedByPolicy": false,
-								"warnProtectedFromPushBySecurityPolicy": true,
+								"warnModificationBlockedByPolicy": true,
+								"warnProtectedFromPushBySecurityPolicy": false,
 								"pushAccessLevels": null,
 								"mergeAccessLevels": null,
 								"unprotectAccessLevels": null
@@ -730,8 +992,8 @@ func TestList_NullOptionalFields(t *testing.T) {
 			CodeOwnerApprovalRequired:             new(false),
 			ModificationBlockedByPolicy:           new(false),
 			ProtectedFromPushBySecurityPolicy:     new(true),
-			WarnModificationBlockedByPolicy:       new(false),
-			WarnProtectedFromPushBySecurityPolicy: new(true),
+			WarnModificationBlockedByPolicy:       new(true),
+			WarnProtectedFromPushBySecurityPolicy: new(false),
 		},
 	})
 }
@@ -850,7 +1112,7 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		"| feature/* | ❌ | ❌ | 5 | - | - | - | - | None | None |\n" +
 		"\n### Protection for main\n\n" +
 		"- ⚠️ **Modification blocked by a security policy**\n" +
-		"- ⚠️ **Modification would be blocked by a warn-mode policy**\n" +
+		"- ⚠️ **Push would be blocked by a warn-mode policy**\n" +
 		"\n| Grant | Allowed | Detail |\n" +
 		"| --- | --- | --- |\n" +
 		"| Push | Maintainers | - |\n" +
@@ -910,15 +1172,20 @@ func TestFormatListMarkdown_CommunityRule(t *testing.T) {
 }
 
 // TestFormatListMarkdown_PolicyFlagsWithoutGrants pins a rule whose only
-// content below the table is its policy flags: the grants table is not opened
-// for nothing, and a push-blocking policy and its warn-mode twin are both
-// marked as the restrictions they are.
+// content below the table is its policy flags, and whose policies are all in
+// warn mode: the grants table is not opened for nothing, and each warn-mode
+// flag is marked under its own label while the enforced twin beside it, off,
+// is not. TestFormatListMarkdown_WithRules holds the other pattern, one
+// enforced flag and the other warn-mode one, so a label paired with the wrong
+// flag of the four changes one of the two cards.
 func TestFormatListMarkdown_PolicyFlagsWithoutGrants(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{Rules: []BranchRuleItem{{
 		Name: "main",
 		BranchProtection: &BranchProtection{
 			CodeOwnerApprovalRequired:             new(false),
-			ProtectedFromPushBySecurityPolicy:     new(true),
+			ModificationBlockedByPolicy:           new(false),
+			ProtectedFromPushBySecurityPolicy:     new(false),
+			WarnModificationBlockedByPolicy:       new(true),
 			WarnProtectedFromPushBySecurityPolicy: new(true),
 		},
 	}}})
@@ -927,7 +1194,7 @@ func TestFormatListMarkdown_PolicyFlagsWithoutGrants(t *testing.T) {
 		branchRuleTableHeader +
 		"| main | ❌ | ❌ | 0 | - | - | ❌ | ❌ | None | None |\n" +
 		"\n### Protection for main\n\n" +
-		"- ⚠️ **Push blocked by a security policy**\n" +
+		"- ⚠️ **Modification would be blocked by a warn-mode policy**\n" +
 		"- ⚠️ **Push would be blocked by a warn-mode policy**\n" +
 		"\nShowing 1 items | no more pages\n" +
 		branchRuleListHints

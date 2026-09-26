@@ -210,8 +210,9 @@ func userCell(u UserRef) string {
 	return toolutil.MdTitleLink("@"+u.Username, u.WebURL)
 }
 
-// boolPtrCell renders a flag the Community document never asks about: the
-// dash for one GitLab was not asked, the flag otherwise.
+// boolPtrCell renders a flag a document may not ask about, the Community one
+// or the base Enterprise one: the dash for one GitLab was not asked, the flag
+// otherwise.
 func boolPtrCell(v *bool) string {
 	if v == nil {
 		return absentCell
@@ -288,7 +289,7 @@ func writeStatusCheckSection(b *strings.Builder, r BranchRuleItem) {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(esc.Name),
 			toolutil.MdTitleLink(esc.ExternalURL, esc.ExternalURL),
-			toolutil.BoolEmoji(esc.HMAC),
+			boolPtrCell(esc.HMAC),
 		))
 	}
 }

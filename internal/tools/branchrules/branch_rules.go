@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -33,7 +35,9 @@ type BranchRuleItem struct {
 }
 
 // BranchProtection holds protection settings for a branch rule: who may push,
-// merge and unprotect, and the flags that decide what a push may do.
+// merge and unprotect, and the flags that decide what a push may do. The four
+// security-policy flags are absent rather than false on a release older than
+// 18.8, which is not asked about them (see [List]).
 type BranchProtection struct {
 	AllowForcePush                        bool         `json:"allow_force_push"`
 	CodeOwnerApprovalRequired             *bool        `json:"code_owner_approval_required,omitempty" tier:"premium"`
@@ -63,8 +67,12 @@ type PushAccess struct {
 	DeployKey *AccessDeployKey `json:"deploy_key,omitempty"`
 }
 
-// UserRef identifies a user a grant or an approval rule names. The id is the
-// one GitLab sends, which for these objects is the numeric id as a string.
+// UserRef identifies a user a grant, a deploy key or an approval rule names.
+// The id is the user's numeric id as a string wherever the user appears: a
+// grant's user and a deploy key's user carry it bare, and an eligible
+// approver, which GitLab identifies by a global ID (gid://gitlab/User/21), is
+// read back to the same number, so one user matches itself across the
+// response.
 type UserRef struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
@@ -104,11 +112,13 @@ type ApprovalRule struct {
 }
 
 // ExternalStatusCheck represents an external status check on a branch rule.
+// Whether an HMAC secret signs its requests is absent rather than false on a
+// release older than 18.8, which is not asked (see [List]).
 type ExternalStatusCheck struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	ExternalURL string `json:"external_url"`
-	HMAC        bool   `json:"hmac"`
+	HMAC        *bool  `json:"hmac,omitempty"`
 }
 
 // GraphQL query.
@@ -117,25 +127,35 @@ type ExternalStatusCheck struct {
 // so the three grant lists and the two user positions cannot drift apart.
 // Every Enterprise field is one GitLab adds in ee/, so on a Community instance
 // the whole document would be refused rather than the field answered empty:
-// that is why there are two documents and not one.
+// that is why the Community document is a document of its own.
 //
 // The same refusal makes the newest field a document selects the oldest
-// release it works on. Measured against GitLab's versioned GraphQL
-// references, the Enterprise document needs GitLab 18.8 (the two warn-mode
-// policy flags) and the Community one nothing newer than 16.11, the oldest
-// reference read. The fields GitLab marks as experiments (the rule's and the
-// protection's isGroupLevel, the rule's squashOption, a grant's memberRole)
-// are left out, since GitLab may change or remove an experiment and would then
-// refuse every call, and so is the approval rule's coverageMinimumThreshold,
-// added in 19.2, which would raise the Enterprise floor to 19.2 for one
-// number. cmd/audit_graphql_shapes declares each.
+// release it works on. Measured against GitLab's versioned GraphQL references
+// (16.11, the oldest read, to 19.4), every field the Community document and
+// the base Enterprise document select is served from 16.11, while five the
+// Enterprise document adds are newer: an external status check's hmac (17.3),
+// modificationBlockedByPolicy (18.0), protectedFromPushBySecurityPolicy (18.7)
+// and the two warn-mode flags (18.8). A licensed instance is therefore sent
+// the 18.8 document first and the base one when it refuses a field it does not
+// have (see [List]), so the listing works from 16.11 on every edition and a
+// release from 18.8 reports all five. One from 17.3 to 18.7 is answered
+// without the one or two of them it already serves, the price of two
+// Enterprise documents rather than one per release that added a field.
+//
+// The fields GitLab marks as experiments (the rule's and the protection's
+// isGroupLevel, the rule's squashOption, a grant's memberRole) are left out,
+// since GitLab may change or remove an experiment and would then refuse every
+// call, and so is the approval rule's coverageMinimumThreshold, added in 19.2,
+// which would move every release from 18.8 to 19.1 onto the base document for
+// one number. cmd/audit_graphql_shapes declares each.
 //
 // GitLab also charges each document a complexity it refuses above 250 for an
 // authenticated caller, and branchRules multiplies what one rule costs by the
 // page size. Measured on GitLab.com on 2026-09-26, the Enterprise document
-// scores 137 at the default page of 20 and 226 at the largest of 100, and the
-// Community one 49 and 80. Selecting each group's parent as well cost 256 at a
-// page of 100, which GitLab refuses, and is why no grant selects it.
+// scores 137 at the default page of 20 and 226 at the largest of 100, the base
+// Enterprise one 126 and 208, and the Community one 49 and 80. Selecting each
+// group's parent as well cost 256 at a page of 100, which GitLab refuses, and
+// is why no grant selects it.
 
 // userRefSelection is every field AccessLevelUser offers, which is also what a
 // user reference is published as wherever this package names one.
@@ -177,9 +197,45 @@ const deployKeySelection = `deployKey {
                 }
               }`
 
+// grantListsSelection is the three grant lists of a protection as both
+// Enterprise documents select them.
+const grantListsSelection = `pushAccessLevels {
+            nodes {
+              ` + accessLevelSelection + `
+              ` + deployKeySelection + `
+            }
+          }
+          mergeAccessLevels {
+            nodes {
+              ` + accessLevelSelection + `
+            }
+          }
+          unprotectAccessLevels {
+            nodes {
+              ` + accessLevelSelection + `
+            }
+          }`
+
+// approvalRulesSelection is a rule's approval rules with the users each lets
+// approve, as both Enterprise documents select them.
+const approvalRulesSelection = `approvalRules {
+          nodes {
+            id
+            name
+            approvalsRequired
+            type
+            eligibleApprovers {
+              nodes {
+                ` + userRefSelection + `
+              }
+            }
+          }
+        }`
+
 // queryListBranchRulesEE includes Enterprise-only fields (codeOwnerApprovalRequired,
-// approvalRules, externalStatusChecks). Used when the resolved tier is
-// Premium or Ultimate (GITLAB_MCP_TIER=premium/ultimate or a detected EE license).
+// approvalRules, externalStatusChecks, the security-policy flags). Used when the
+// resolved tier is Premium or Ultimate (GITLAB_MCP_TIER=premium/ultimate or a
+// detected EE license), on GitLab 18.8 and later.
 const queryListBranchRulesEE = `
 query($projectPath: ID!, $first: Int!, $after: String) {
   project(fullPath: $projectPath) {
@@ -199,42 +255,54 @@ query($projectPath: ID!, $first: Int!, $after: String) {
           protectedFromPushBySecurityPolicy
           warnModificationBlockedByPolicy
           warnProtectedFromPushBySecurityPolicy
-          pushAccessLevels {
-            nodes {
-              ` + accessLevelSelection + `
-              ` + deployKeySelection + `
-            }
-          }
-          mergeAccessLevels {
-            nodes {
-              ` + accessLevelSelection + `
-            }
-          }
-          unprotectAccessLevels {
-            nodes {
-              ` + accessLevelSelection + `
-            }
-          }
+          ` + grantListsSelection + `
         }
-        approvalRules {
-          nodes {
-            id
-            name
-            approvalsRequired
-            type
-            eligibleApprovers {
-              nodes {
-                ` + userRefSelection + `
-              }
-            }
-          }
-        }
+        ` + approvalRulesSelection + `
         externalStatusChecks {
           nodes {
             id
             name
             externalUrl
             hmac
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+`
+
+// queryListBranchRulesEEBase is the Enterprise document without the five
+// fields GitLab added after 16.11: the four security-policy flags and a status
+// check's hmac. A licensed instance is sent it only once it has refused
+// queryListBranchRulesEE for naming a field it does not have.
+const queryListBranchRulesEEBase = `
+query($projectPath: ID!, $first: Int!, $after: String) {
+  project(fullPath: $projectPath) {
+    branchRules(first: $first, after: $after) {
+      nodes {
+        id
+        name
+        isDefault
+        isProtected
+        matchingBranchesCount
+        createdAt
+        updatedAt
+        branchProtection {
+          allowForcePush
+          codeOwnerApprovalRequired
+          ` + grantListsSelection + `
+        }
+        ` + approvalRulesSelection + `
+        externalStatusChecks {
+          nodes {
+            id
+            name
+            externalUrl
           }
         }
       }
@@ -359,17 +427,24 @@ type gqlBranchProtectionCE struct {
 	MergeAccessLevels *gqlNodes[gqlAccessLevelCE]     `json:"mergeAccessLevels"`
 }
 
-// gqlBranchProtection is the protection the Enterprise document selects.
+// gqlBranchProtectionEEBase is the protection both Enterprise documents
+// select, which every release from 16.11 serves.
+type gqlBranchProtectionEEBase struct {
+	AllowForcePush            bool                          `json:"allowForcePush"`
+	CodeOwnerApprovalRequired bool                          `json:"codeOwnerApprovalRequired"`
+	PushAccessLevels          *gqlNodes[gqlPushAccessLevel] `json:"pushAccessLevels"`
+	MergeAccessLevels         *gqlNodes[gqlAccessLevel]     `json:"mergeAccessLevels"`
+	UnprotectAccessLevels     *gqlNodes[gqlAccessLevel]     `json:"unprotectAccessLevels"`
+}
+
+// gqlBranchProtection is the protection the 18.8 Enterprise document selects:
+// the base one with the security-policy flags.
 type gqlBranchProtection struct {
-	AllowForcePush                        bool                          `json:"allowForcePush"`
-	CodeOwnerApprovalRequired             bool                          `json:"codeOwnerApprovalRequired"`
-	ModificationBlockedByPolicy           bool                          `json:"modificationBlockedByPolicy"`
-	ProtectedFromPushBySecurityPolicy     bool                          `json:"protectedFromPushBySecurityPolicy"`
-	WarnModificationBlockedByPolicy       bool                          `json:"warnModificationBlockedByPolicy"`
-	WarnProtectedFromPushBySecurityPolicy bool                          `json:"warnProtectedFromPushBySecurityPolicy"`
-	PushAccessLevels                      *gqlNodes[gqlPushAccessLevel] `json:"pushAccessLevels"`
-	MergeAccessLevels                     *gqlNodes[gqlAccessLevel]     `json:"mergeAccessLevels"`
-	UnprotectAccessLevels                 *gqlNodes[gqlAccessLevel]     `json:"unprotectAccessLevels"`
+	gqlBranchProtectionEEBase
+	ModificationBlockedByPolicy           bool `json:"modificationBlockedByPolicy"`
+	ProtectedFromPushBySecurityPolicy     bool `json:"protectedFromPushBySecurityPolicy"`
+	WarnModificationBlockedByPolicy       bool `json:"warnModificationBlockedByPolicy"`
+	WarnProtectedFromPushBySecurityPolicy bool `json:"warnProtectedFromPushBySecurityPolicy"`
 }
 
 type gqlApprovalRule struct {
@@ -380,11 +455,19 @@ type gqlApprovalRule struct {
 	EligibleApprovers *gqlNodes[gqlUserRef] `json:"eligibleApprovers"`
 }
 
-type gqlExternalStatusCheck struct {
+// gqlExternalStatusCheckBase is a status check as both Enterprise documents
+// select it.
+type gqlExternalStatusCheckBase struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	ExternalURL string `json:"externalUrl"`
-	HMAC        bool   `json:"hmac"`
+}
+
+// gqlExternalStatusCheck is a status check as the 18.8 Enterprise document
+// selects it, with whether an HMAC secret signs its requests.
+type gqlExternalStatusCheck struct {
+	gqlExternalStatusCheckBase
+	HMAC bool `json:"hmac"`
 }
 
 // gqlBranchRuleFields are the fields both documents select.
@@ -404,7 +487,17 @@ type gqlBranchRuleNodeCE struct {
 	BranchProtection *gqlBranchProtectionCE `json:"branchProtection"`
 }
 
-// gqlBranchRuleNode is a branch rule as the Enterprise document selects it.
+// gqlBranchRuleNodeEEBase is a branch rule as the base Enterprise document
+// selects it.
+type gqlBranchRuleNodeEEBase struct {
+	gqlBranchRuleFields
+	BranchProtection     *gqlBranchProtectionEEBase            `json:"branchProtection"`
+	ApprovalRules        *gqlNodes[gqlApprovalRule]            `json:"approvalRules"`
+	ExternalStatusChecks *gqlNodes[gqlExternalStatusCheckBase] `json:"externalStatusChecks"`
+}
+
+// gqlBranchRuleNode is a branch rule as the 18.8 Enterprise document selects
+// it.
 type gqlBranchRuleNode struct {
 	gqlBranchRuleFields
 	BranchProtection     *gqlBranchProtection              `json:"branchProtection"`
@@ -440,6 +533,20 @@ func convertNodes[T, R any](connection *gqlNodes[T], convert func(T) R) []R {
 // userRef converts a decoded user reference.
 func (u gqlUserRef) userRef() UserRef {
 	return UserRef(u)
+}
+
+// approver converts an eligible approver. It is a UserCore, whose id GitLab
+// sends as a global ID (gid://gitlab/User/21) where an access level's user
+// carries the bare numeric id, so it is read back to that number and the same
+// user is published with the same id wherever a branch rule names it. An id
+// that is not a user global ID is published as GitLab sent it rather than
+// dropped.
+func (u gqlUserRef) approver() UserRef {
+	ref := u.userRef()
+	if _, id, err := toolutil.ParseGID(u.ID); err == nil {
+		ref.ID = strconv.FormatInt(id, 10)
+	}
+	return ref
 }
 
 // access converts a grant as every edition reports it.
@@ -497,19 +604,26 @@ func (p gqlBranchProtectionCE) protection() *BranchProtection {
 	}
 }
 
-// protection converts the protection the Enterprise document selects.
-func (p gqlBranchProtection) protection() *BranchProtection {
+// protection converts the protection both Enterprise documents select.
+func (p gqlBranchProtectionEEBase) protection() *BranchProtection {
 	return &BranchProtection{
-		AllowForcePush:                        p.AllowForcePush,
-		CodeOwnerApprovalRequired:             new(p.CodeOwnerApprovalRequired),
-		ModificationBlockedByPolicy:           new(p.ModificationBlockedByPolicy),
-		ProtectedFromPushBySecurityPolicy:     new(p.ProtectedFromPushBySecurityPolicy),
-		WarnModificationBlockedByPolicy:       new(p.WarnModificationBlockedByPolicy),
-		WarnProtectedFromPushBySecurityPolicy: new(p.WarnProtectedFromPushBySecurityPolicy),
-		PushAccessLevels:                      convertNodes(p.PushAccessLevels, gqlPushAccessLevel.pushAccess),
-		MergeAccessLevels:                     convertNodes(p.MergeAccessLevels, gqlAccessLevel.access),
-		UnprotectAccessLevels:                 convertNodes(p.UnprotectAccessLevels, gqlAccessLevel.access),
+		AllowForcePush:            p.AllowForcePush,
+		CodeOwnerApprovalRequired: new(p.CodeOwnerApprovalRequired),
+		PushAccessLevels:          convertNodes(p.PushAccessLevels, gqlPushAccessLevel.pushAccess),
+		MergeAccessLevels:         convertNodes(p.MergeAccessLevels, gqlAccessLevel.access),
+		UnprotectAccessLevels:     convertNodes(p.UnprotectAccessLevels, gqlAccessLevel.access),
 	}
+}
+
+// protection converts the protection the 18.8 Enterprise document selects,
+// with its security-policy flags.
+func (p gqlBranchProtection) protection() *BranchProtection {
+	out := p.gqlBranchProtectionEEBase.protection()
+	out.ModificationBlockedByPolicy = new(p.ModificationBlockedByPolicy)
+	out.ProtectedFromPushBySecurityPolicy = new(p.ProtectedFromPushBySecurityPolicy)
+	out.WarnModificationBlockedByPolicy = new(p.WarnModificationBlockedByPolicy)
+	out.WarnProtectedFromPushBySecurityPolicy = new(p.WarnProtectedFromPushBySecurityPolicy)
+	return out
 }
 
 // approvalRule converts an approval rule with its eligible approvers.
@@ -518,7 +632,7 @@ func (ar gqlApprovalRule) approvalRule() ApprovalRule {
 		ID:                ar.ID,
 		Name:              ar.Name,
 		ApprovalsRequired: ar.ApprovalsRequired,
-		EligibleApprovers: convertNodes(ar.EligibleApprovers, gqlUserRef.userRef),
+		EligibleApprovers: convertNodes(ar.EligibleApprovers, gqlUserRef.approver),
 	}
 	if ar.Type != nil {
 		rule.Type = *ar.Type
@@ -526,9 +640,17 @@ func (ar gqlApprovalRule) approvalRule() ApprovalRule {
 	return rule
 }
 
-// statusCheck converts an external status check.
+// statusCheck converts an external status check as both Enterprise documents
+// select it.
+func (esc gqlExternalStatusCheckBase) statusCheck() ExternalStatusCheck {
+	return ExternalStatusCheck{ID: esc.ID, Name: esc.Name, ExternalURL: esc.ExternalURL}
+}
+
+// statusCheck converts an external status check with its HMAC flag.
 func (esc gqlExternalStatusCheck) statusCheck() ExternalStatusCheck {
-	return ExternalStatusCheck(esc)
+	check := esc.gqlExternalStatusCheckBase.statusCheck()
+	check.HMAC = new(esc.HMAC)
+	return check
 }
 
 // item converts the fields both editions select into a [BranchRuleItem],
@@ -559,8 +681,20 @@ func (n gqlBranchRuleNodeCE) item() BranchRuleItem {
 	return item
 }
 
-// item converts an Enterprise node into a [BranchRuleItem], with its approval
-// rules and external status checks.
+// item converts a node of the base Enterprise document into a
+// [BranchRuleItem], with its approval rules and external status checks.
+func (n gqlBranchRuleNodeEEBase) item() BranchRuleItem {
+	item := n.gqlBranchRuleFields.item()
+	if n.BranchProtection != nil {
+		item.BranchProtection = n.BranchProtection.protection()
+	}
+	item.ApprovalRules = convertNodes(n.ApprovalRules, gqlApprovalRule.approvalRule)
+	item.ExternalStatusChecks = convertNodes(n.ExternalStatusChecks, gqlExternalStatusCheckBase.statusCheck)
+	return item
+}
+
+// item converts a node of the 18.8 Enterprise document into a
+// [BranchRuleItem], with its approval rules and external status checks.
 func (n gqlBranchRuleNode) item() BranchRuleItem {
 	item := n.gqlBranchRuleFields.item()
 	if n.BranchProtection != nil {
@@ -589,19 +723,42 @@ type ListOutput struct {
 	Pagination toolutil.GraphQLForwardPaginationOutput `json:"pagination"`
 }
 
+// errFieldNotServed marks a document GitLab refused for naming a field the
+// instance does not have, which is how a release older than a document's
+// newest field answers it.
+var errFieldNotServed = errors.New("this GitLab release does not have a field the document selects")
+
+// undefinedFieldCode is the code GitLab's GraphQL validation gives a field the
+// type it is selected on does not define (graphql-ruby's
+// FieldsAreDefinedOnTypeError; GitLab.com answers it with HTTP 200).
+const undefinedFieldCode = "undefinedField"
+
 // List retrieves branch rules for a project via the GitLab GraphQL API.
 // It selects the EE query (with approval rules, external status checks, and
 // code owner approval) when the client is configured for Enterprise, otherwise
 // it uses the CE-compatible query that omits EE-only fields.
+//
+// A licensed instance is sent the 18.8 Enterprise document first, and the base
+// one when it refuses a field the first names: that is how a release from 16.11
+// to 18.7 answers, and it answers before running anything, so a retry repeats
+// no work GitLab did. Holding every licensed instance to the base document
+// instead would leave the four security-policy flags and a status check's hmac
+// unread on every release that serves them, and holding it to the 18.8 one
+// alone would refuse the whole listing, grants included, below 18.8. A
+// refusal of any other kind is reported as it is.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if input.ProjectPath == "" {
 		return ListOutput{}, errors.New("list_branch_rules: project_path is required")
 	}
 
-	if client.IsEnterprise() {
-		return listWith[gqlBranchRuleNode](ctx, client, queryListBranchRulesEE, input)
+	if !client.IsEnterprise() {
+		return listWith[gqlBranchRuleNodeCE](ctx, client, queryListBranchRulesCE, input)
 	}
-	return listWith[gqlBranchRuleNodeCE](ctx, client, queryListBranchRulesCE, input)
+	out, err := listWith[gqlBranchRuleNode](ctx, client, queryListBranchRulesEE, input)
+	if errors.Is(err, errFieldNotServed) {
+		return listWith[gqlBranchRuleNodeEEBase](ctx, client, queryListBranchRulesEEBase, input)
+	}
+	return out, err
 }
 
 // listWith runs one branch rules document against the variables the input
@@ -646,7 +803,38 @@ type gqlResponse[N branchRuleConverter] struct {
 	Data struct {
 		Project *gqlProjectBranchRules[N] `json:"project"`
 	} `json:"data"`
-	Errors []toolutil.GraphQLError `json:"errors"`
+	Errors []gqlError `json:"errors"`
+}
+
+// gqlError is a top-level GraphQL error with the code GitLab classifies it by,
+// which is what tells a field the instance does not have from any other
+// refusal without reading the message.
+type gqlError struct {
+	Message    string `json:"message"`
+	Extensions struct {
+		Code string `json:"code"`
+	} `json:"extensions"`
+}
+
+// namesUndefinedField reports whether GitLab refused the document for naming a
+// field it does not define.
+func (e gqlError) namesUndefinedField() bool {
+	return e.Extensions.Code == undefinedFieldCode
+}
+
+// refusal reads the top-level errors GitLab answered a document with, marking
+// the error with [errFieldNotServed] when one of them is a field the instance
+// does not have, and answers nil when there are none.
+func refusal(responseErrors []gqlError) error {
+	messages := make([]toolutil.GraphQLError, 0, len(responseErrors))
+	for _, responseError := range responseErrors {
+		messages = append(messages, toolutil.GraphQLError{Message: responseError.Message})
+	}
+	err := toolutil.GraphQLTopLevelError("list_branch_rules", messages)
+	if slices.ContainsFunc(responseErrors, gqlError.namesUndefinedField) {
+		return fmt.Errorf("%w (%w)", err, errFieldNotServed)
+	}
+	return err
 }
 
 // doGraphQLList executes a branch rules GraphQL query and returns the output.
@@ -665,7 +853,7 @@ func doGraphQLList[N branchRuleConverter](ctx context.Context, client *gitlabcli
 	// array, which client-go does not turn into an error, so a query the
 	// instance refused would otherwise be reported as a missing project.
 	if resp.Data.Project == nil {
-		if graphQLErr := toolutil.GraphQLTopLevelError("list_branch_rules", resp.Errors); graphQLErr != nil {
+		if graphQLErr := refusal(resp.Errors); graphQLErr != nil {
 			return ListOutput{}, graphQLErr
 		}
 		return ListOutput{}, fmt.Errorf("list_branch_rules: project %q not found", projectPath)
