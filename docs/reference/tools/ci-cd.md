@@ -205,7 +205,7 @@ List pipeline bridge (trigger) jobs for a pipeline. Bridge jobs connect upstream
 
 ### `gitlab_job_artifacts`
 
-Download the artifacts archive (zip) for a specific job. Returns base64-encoded content (limited to 1MB). Use for retrieving build outputs.
+Download the artifacts archive (zip) for a specific job, or one report the job produced by naming it in `file_type` (`junit`, `cobertura`, `sast`, `dotenv` and the other downloadable types GitLab declares). Returns base64-encoded content (limited to 1MB), stored as GitLab keeps it, so a report may be gzip-compressed. `file_type` needs GitLab 19.4 or later: an older instance ignores it and answers with the archive. Use for retrieving build outputs.
 
 | Annotation | **Read** |
 | ---------- | -------- |

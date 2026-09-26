@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -47,6 +49,44 @@ func guidanceJobID() toolutil.ParameterGuidance {
 		ExampleBinding:   "params.job_id:12345",
 		CommonConfusions: []string{"job_id is the global database ID, not the per-pipeline index. Do not pass a pipeline ID as job_id."},
 	}
+}
+
+// artifactFileTypes returns the file_type values job.artifacts offers, the
+// downloadable artifact types GitLab declares on
+// GET /projects/:id/jobs/:job_id/artifacts, spelled from client-go's own
+// constants so a value the SDK renames fails to compile rather than drift.
+func artifactFileTypes() []string {
+	values := []gl.ArtifactFileTypeValue{
+		gl.ArtifactFileTypeArchive,
+		gl.ArtifactFileTypeAccessibility,
+		gl.ArtifactFileTypeAPIFuzzing,
+		gl.ArtifactFileTypeBrowserPerformance,
+		gl.ArtifactFileTypeClusterImageScanning,
+		gl.ArtifactFileTypeCobertura,
+		gl.ArtifactFileTypeCodequality,
+		gl.ArtifactFileTypeContainerScanning,
+		gl.ArtifactFileTypeCycloneDX,
+		gl.ArtifactFileTypeDAST,
+		gl.ArtifactFileTypeDependencyScanning,
+		gl.ArtifactFileTypeDotenv,
+		gl.ArtifactFileTypeJacoco,
+		gl.ArtifactFileTypeJUnit,
+		gl.ArtifactFileTypeLicenseScanning,
+		gl.ArtifactFileTypeLoadPerformance,
+		gl.ArtifactFileTypeLSIF,
+		gl.ArtifactFileTypeMetrics,
+		gl.ArtifactFileTypePerformance,
+		gl.ArtifactFileTypeRequirements,
+		gl.ArtifactFileTypeRequirementsV2,
+		gl.ArtifactFileTypeSARIF,
+		gl.ArtifactFileTypeSAST,
+		gl.ArtifactFileTypeSecretDetection,
+	}
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = string(v)
+	}
+	return out
 }
 
 // guidancePipelineID is the shared parameter guidance for the pipeline_id input
@@ -269,13 +309,25 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 		}
 		options.IndividualTool.Description = "Wait for a CI job to finish, polling until terminal state or timeout. Returns: final job snapshot, wait duration, poll count, and timed-out flag. See also: gitlab_job_get, gitlab_job_trace, gitlab_job_retry."
 	case "gitlab_job_artifacts":
-		options.Usage = "Download the full artifact archive for a CI job by project_id and job_id. Use this to retrieve all build outputs as a base64-encoded archive. Prefer download_single_artifact for one file."
-		options.Aliases = []string{"download job artifacts", "get artifact archive", "fetch job artifacts"}
+		options.Usage = "Download the full artifact archive for a CI job by project_id and job_id. Use this to retrieve all build outputs as a base64-encoded archive, or one report the job produced (junit, cobertura, sast, dotenv and the rest) by naming it in file_type, which needs GitLab 19.4 or later: an older instance ignores file_type and answers with the archive. Prefer download_single_artifact for one file of the archive."
+		options.Aliases = []string{"download job artifacts", "get artifact archive", "fetch job artifacts", "download job junit report", "get job test report artifact"}
 		options.RelatedActions = []string{actionJobDownloadSingle, actionJobKeepArtifacts, actionJobGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": guidanceProjectID(), "job_id": guidanceJobID(),
+			"file_type": {
+				SemanticRole:     "artifact_type",
+				ValueSource:      "Omit for the archive of the job's artifacts:paths. Name a report type only when the job declares it under artifacts:reports in .gitlab-ci.yml.",
+				ExampleBinding:   `params.file_type:"junit"`,
+				CommonConfusions: []string{"A report type the job did not produce answers 404, the same as a job whose artifacts expired."},
+			},
 		}
-		options.IndividualTool.Description = "Download the full artifact archive for a CI job (base64-encoded, truncated at 1MB). Returns: archive size, content, and truncation flag. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get."
+		// GitLab declares these values on the route (Enums::Ci::JobArtifact
+		// DOWNLOADABLE_TYPES) and refuses any other with a 400; they are the
+		// constants client-go declares for gl.ArtifactFileTypeValue.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("file_type", artifactFileTypes()...),
+		}
+		options.IndividualTool.Description = "Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB. Returns: size, content, and truncation flag. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get."
 	case "gitlab_job_download_artifacts":
 		options.Usage = "Download the latest successful artifacts for a ref by project_id, ref_name, and job name. Use this to fetch the most recent build output for a branch or tag without knowing the job ID."
 		options.Aliases = []string{"download latest artifacts", "get artifacts for ref", "fetch ref artifacts"}

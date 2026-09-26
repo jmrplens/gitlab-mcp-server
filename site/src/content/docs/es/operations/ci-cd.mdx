@@ -299,8 +299,8 @@ El dominio `job` proporciona gestión completa de jobs. Sus acciones son IDs `jo
 | `cancel`             | Cancelar un job en ejecución                                                                       |
 | `retry`              | Reintentar un job fallido                                                                          |
 | `trace`              | Obtener la salida del log del job                                                                  |
-| `artifacts`          | Listar artefactos del job                                                                          |
-| `download_artifacts` | Descargar el archivo de artefactos de un job                                                       |
+| `artifacts`          | Descargar el archivo de artefactos de un job, o un informe por `file_type` (19.4+)                 |
+| `download_artifacts` | Descargar el último archivo de artefactos de una ref y un nombre de job                            |
 | `download_single_*`  | Descargar un único fichero de los artefactos de un job, por ID de job o por ref y nombre de job    |
 | `keep_artifacts`     | Conservar los artefactos más allá de su caducidad                                                  |
 | `delete_artifacts`   | Eliminar los artefactos de un job (una variante a nivel de proyecto elimina los de todos los jobs) |

@@ -202,7 +202,7 @@ func FormatArtifactsMarkdown(out ArtifactsOutput) string {
 	c := toolutil.NewCard(&b, artifactsHeading(out))
 	c.Int("Size (bytes)", int64(out.Size))
 	c.Warn("Truncated at 1 MB", out.Truncated)
-	c.Note("The archive is base64-encoded; decode it to extract the files.")
+	c.Note("The content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading.")
 	c.End(toolutil.HintAction(actionJobDownloadSingle, "fetch one file out of the archive instead"))
 	return b.String()
 }

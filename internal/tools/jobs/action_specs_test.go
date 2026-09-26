@@ -113,6 +113,67 @@ func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Artifacts_FileTypeIsAnEnumOfGitLabsDownloadableTypes holds
+// the file_type schema to the 24 values GitLab declares on the artifacts route
+// (Enums::Ci::JobArtifact DOWNLOADABLE_TYPES at v19.4.0-ee), written out here
+// as literals so a constant client-go renamed or dropped fails the test rather
+// than quietly changing what a model is offered, and holds the override to the
+// one action whose route takes the parameter.
+func TestActionSpecs_Artifacts_FileTypeIsAnEnumOfGitLabsDownloadableTypes(t *testing.T) {
+	want := []any{
+		"archive", "accessibility", "api_fuzzing", "browser_performance", "cluster_image_scanning",
+		"cobertura", "codequality", "container_scanning", "cyclonedx", "dast", "dependency_scanning",
+		"dotenv", "jacoco", "junit", "license_scanning", "load_performance", "lsif", "metrics",
+		"performance", "requirements", "requirements_v2", "sarif", "sast", "secret_detection",
+	}
+	for tool, spec := range newJobsRouteSpecs(t) {
+		t.Run(tool, func(t *testing.T) {
+			var enum []any
+			for _, override := range spec.InputSchemaOverrides {
+				if override.PropertyPath == "file_type" {
+					enum, _ = override.Values["enum"].([]any)
+				}
+			}
+			if tool != "gitlab_job_artifacts" {
+				if enum != nil {
+					t.Errorf("file_type enum = %v on an action whose route takes no file_type", enum)
+				}
+				return
+			}
+			if !slices.Equal(enum, want) {
+				t.Errorf("file_type enum =\n got %v\nwant %v", enum, want)
+			}
+			if !strings.Contains(spec.Usage, "GitLab 19.4 or later") || !strings.Contains(spec.IndividualTool.Description, "GitLab 19.4 or later") {
+				t.Errorf("usage %q and description %q must both state the GitLab release file_type needs", spec.Usage, spec.IndividualTool.Description)
+			}
+			if guidance := spec.ParameterGuidance["file_type"]; guidance.SemanticRole != "artifact_type" {
+				t.Errorf("file_type guidance = %+v, want the artifact_type role", guidance)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_Artifacts_RouteSendsFileType verifies the canonical route
+// decodes file_type from the caller's arguments and puts it on the request, so
+// the schema a model reads and the query GitLab receives name the same value.
+func TestActionSpecs_Artifacts_RouteSendsFileType(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/jobs/7/artifacts" || r.URL.Query().Get("file_type") != "cobertura" {
+			t.Errorf("request = %s?%s, want the artifacts route asking for cobertura", r.URL.Path, r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte("<coverage/>"))
+	}))
+	spec := jobSpecsByTool(t, ActionSpecs(client))["gitlab_job_artifacts"]
+	result, err := spec.Route.Handler(t.Context(), map[string]any{"project_id": "42", "job_id": 7, "file_type": "cobertura"})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	out, ok := result.(ArtifactsOutput)
+	if !ok || out.JobID != 7 || out.Size != len("<coverage/>") {
+		t.Errorf("Route.Handler result = %#v, want the 11-byte report of job 7", result)
+	}
+}
+
 // TestToOutput_OptionalFields verifies that ToOutput populates the optional
 // pointer fields (ArtifactsExpireAt, User, Runner, ErasedAt, Commit) that are
 // nil by default. The two timestamps share one value and are checked for
