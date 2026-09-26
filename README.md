@@ -474,10 +474,10 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,348 |       303,206 |
-| Unit tests (`_test.go`)  |       924 |       600,351 |
+| Source (`.go`, non-test) |     1,348 |       303,207 |
+| Unit tests (`_test.go`)  |       924 |       600,352 |
 | End-to-end tests         |       497 |       103,199 |
-| **Total**                | **2,769** | **1,006,756** |
+| **Total**                | **2,769** | **1,006,758** |
 
 ### Functions
 
