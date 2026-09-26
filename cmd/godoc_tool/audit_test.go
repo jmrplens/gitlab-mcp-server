@@ -248,7 +248,11 @@ func symbolFinding(category, name, detail string) finding {
 // own name. Two types share an undocumented method name, and each finding
 // names its receiver: a symbol finding carries no file, so "MissingMethod"
 // alone would not say which of the two to document, while the sentence
-// still asks for the comment to open with the bare method name.
+// still asks for the comment to open with the bare method name. That bare
+// name is also what the comment is judged against, which only a well-formed
+// method can show: Widget.GoodMethod opens with "GoodMethod" and must not be
+// reported, where judging it against its label "Widget.GoodMethod" would
+// report every correctly documented method in the tree as malformed.
 func TestAuditPackage_ReportsEachSymbolUnderItsOwnCategory(t *testing.T) {
 	t.Parallel()
 
@@ -278,6 +282,9 @@ func (Widget) MissingMethod() {}
 
 // Does something.
 func (Widget) FormMethod() {}
+
+// GoodMethod opens with its own name.
+func (Widget) GoodMethod() {}
 
 // Gadget is documented.
 type Gadget struct{}
