@@ -186,3 +186,35 @@ func TestWriteArtifacts_WritesTheSDLVerbatim(t *testing.T) {
 		t.Errorf("writeArtifacts() wrote %q, want the SDL verbatim %q", written, minimalSDL)
 	}
 }
+
+// TestWriteArtifacts_WritesTheRecordInTheCommittedLayout verifies the record's
+// bytes, not only its content: the keys in the order the committed source.json
+// carries them, two-space indentation and one trailing newline.
+//
+// A re-pin with the same facts has to produce no diff, and one with new facts a
+// diff of only the lines that changed. Every reader decodes the record, so a
+// writer that indented it another way would pass every other test here and
+// rewrite the whole file on the next regeneration.
+func TestWriteArtifacts_WritesTheRecordInTheCommittedLayout(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := writeArtifacts(dir, minimalSDL, sampleSource); err != nil {
+		t.Fatalf("writeArtifacts() error = %v, want nil", err)
+	}
+
+	written, err := os.ReadFile(filepath.Join(dir, graphqlschema.SourceFileName))
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	const want = `{
+  "instance": "https://gitlab.example.com/api/graphql",
+  "gitlab_version": "19.4.0",
+  "gitlab_revision": "abc1234",
+  "retrieved_at": "2026-09-06",
+  "types": 3
+}
+`
+	if string(written) != want {
+		t.Errorf("writeArtifacts() wrote the record as\n%s\nwant\n%s", written, want)
+	}
+}

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/pprof"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // newPprofTestClient serves the profiling handlers from this test process
@@ -144,6 +146,43 @@ func TestPprofClient_ReadsProfilesAndTheGoroutineTotal(t *testing.T) {
 			t.Errorf("goroutineCount = %d, want at least this test's goroutine", count)
 		}
 	})
+}
+
+// deadlineTransport answers every request at once with a 200 and remembers the
+// deadline the request's context carried, which is the only place the time a
+// read is given can be seen without spending it.
+type deadlineTransport struct {
+	deadline time.Time
+	ok       bool
+}
+
+func (d *deadlineTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	d.deadline, d.ok = req.Context().Deadline()
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("profile")), Request: req}, nil
+}
+
+// TestPprofClient_CPUProfile_IsGivenItsWholeDurationAndTheGrace verifies a
+// CPU profile's request may run for the profile's own duration plus the grace,
+// since the handler answers only once it has sampled for that long.
+//
+// A request given the grace alone would abandon every profile longer than
+// thirty seconds just before it was written, and the step would record a
+// profile that failed for no reason the server gave.
+func TestPprofClient_CPUProfile_IsGivenItsWholeDurationAndTheGrace(t *testing.T) {
+	transport := &deadlineTransport{}
+	client := &pprofClient{base: "http://pprof.test", client: &http.Client{Transport: transport}}
+
+	started := time.Now()
+	if got := client.cpuProfile(t.Context(), 100); got.err != nil {
+		t.Fatalf("cpuProfile: %v", got.err)
+	}
+	if !transport.ok {
+		t.Fatal("the profile request carried no deadline")
+	}
+	want := 100*time.Second + profileGrace
+	if given := transport.deadline.Sub(started); given < want-time.Second || given > want+time.Second {
+		t.Errorf("the request was given %s, want the profile's 100 s plus the %s grace", given.Round(time.Second), profileGrace)
+	}
 }
 
 // TestPprofClient_HeapReads_ForceACollection verifies both heap reads ask for

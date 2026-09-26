@@ -245,7 +245,14 @@ func symbolFinding(category, name, detail string) finding {
 // without a test noticing, as long as the fixture had one symbol of each;
 // this fixture has one of each for every kind, the type-associated
 // constructors, constants and variables included, and holds each to its
-// own name.
+// own name. Two types share an undocumented method name, and each finding
+// names its receiver: a symbol finding carries no file, so "MissingMethod"
+// alone would not say which of the two to document, while the sentence
+// still asks for the comment to open with the bare method name. That bare
+// name is also what the comment is judged against, which only a well-formed
+// method can show: Widget.GoodMethod opens with "GoodMethod" and must not be
+// reported, where judging it against its label "Widget.GoodMethod" would
+// report every correctly documented method in the tree as malformed.
 func TestAuditPackage_ReportsEachSymbolUnderItsOwnCategory(t *testing.T) {
 	t.Parallel()
 
@@ -275,6 +282,14 @@ func (Widget) MissingMethod() {}
 
 // Does something.
 func (Widget) FormMethod() {}
+
+// GoodMethod opens with its own name.
+func (Widget) GoodMethod() {}
+
+// Gadget is documented.
+type Gadget struct{}
+
+func (Gadget) MissingMethod() {}
 
 const MissingConst = 1
 
@@ -308,8 +323,9 @@ var MissingTypedVar Mode
 		symbolFinding(categoryFuncForm, "FormFunc", `func comment must start with "FormFunc"; got "Does not start with its name."`),
 		symbolFinding(categoryFuncMissing, "MissingFunc", "missing func documentation"),
 		symbolFinding(categoryFuncMissing, "NewWidget", "missing func documentation"),
-		symbolFinding(categoryMethodForm, "FormMethod", `method comment must start with "FormMethod"; got "Does something."`),
-		symbolFinding(categoryMethodMissing, "MissingMethod", "missing method documentation"),
+		symbolFinding(categoryMethodForm, "Widget.FormMethod", `method comment must start with "FormMethod"; got "Does something."`),
+		symbolFinding(categoryMethodMissing, "Gadget.MissingMethod", "missing method documentation"),
+		symbolFinding(categoryMethodMissing, "Widget.MissingMethod", "missing method documentation"),
 		symbolFinding(categoryTypeForm, "FormType", `type comment must start with "FormType"; got "Describes a type without naming it."`),
 		symbolFinding(categoryTypeMissing, "MissingType", "missing type documentation"),
 		symbolFinding(categoryVarForm, "FormVar", `var comment must start with one exported name in the group; got "Not the name either."`),
@@ -461,7 +477,13 @@ func writeAuditFile(t *testing.T, dir, name, content string) {
 // audited package count and the finding list.
 func writeModuleFixture(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	return writeModuleFixtureIn(t, t.TempDir())
+}
+
+// writeModuleFixtureIn writes the fixture writeModuleFixture describes into
+// dir, creating it, and returns dir.
+func writeModuleFixtureIn(t *testing.T, dir string) string {
+	t.Helper()
 	writeAuditFile(t, dir, "go.mod", "module example.com/fixture\n\ngo 1.27\n")
 	writeAuditFile(t, dir, "a/a.go", "package a\n\nfunc Missing() {}\n")
 	writeAuditFile(t, dir, "a/a_test.go", "package a\n\nimport \"testing\"\n\nfunc TestUndocumented(t *testing.T) {}\n")
@@ -503,14 +525,19 @@ var findingB = finding{
 // TestRun_AuditsModuleAndReportsFindings verifies the audit command end to
 // end against a real module: go list discovers both packages, the JSON
 // report carries every finding in sorted order with the counts derived from
-// them, --include-tests adds the test finding, and --ignore-internal drops
-// the internal package from both the count and the findings.
+// them, --include-tests adds the test finding and says so in the report, and
+// --ignore-internal drops the internal package from both the count and the
+// findings. That last flag reads the import path and not the directory: a
+// checkout that happens to live under a directory named internal still has
+// its own non-internal packages audited.
 func TestRun_AuditsModuleAndReportsFindings(t *testing.T) {
 	testCases := []struct {
-		name         string
-		args         []string
-		wantPackages int
-		wantFindings func(dir string) []finding
+		name             string
+		args             []string
+		underInternalDir bool
+		wantPackages     int
+		wantIncludeTests bool
+		wantFindings     func(dir string) []finding
 	}{
 		{
 			name:         "default audits source symbols only",
@@ -519,9 +546,10 @@ func TestRun_AuditsModuleAndReportsFindings(t *testing.T) {
 			wantFindings: func(string) []finding { return []finding{findingA, findingPkgA, findingB} },
 		},
 		{
-			name:         "include-tests adds test documentation findings",
-			args:         []string{"--format=json", "--include-tests"},
-			wantPackages: 2,
+			name:             "include-tests adds test documentation findings",
+			args:             []string{"--format=json", "--include-tests"},
+			wantPackages:     2,
+			wantIncludeTests: true,
 			wantFindings: func(dir string) []finding {
 				return []finding{findingA, findingPkgA, findingTestA(dir), findingB}
 			},
@@ -532,11 +560,22 @@ func TestRun_AuditsModuleAndReportsFindings(t *testing.T) {
 			wantPackages: 1,
 			wantFindings: func(string) []finding { return []finding{findingA, findingPkgA} },
 		},
+		{
+			name:             "ignore-internal judges the import path, not where the checkout lives",
+			args:             []string{"--format=json", "--ignore-internal"},
+			underInternalDir: true,
+			wantPackages:     1,
+			wantFindings:     func(string) []finding { return []finding{findingA, findingPkgA} },
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := writeModuleFixture(t)
+			root := t.TempDir()
+			if tc.underInternalDir {
+				root = filepath.Join(root, "internal", "checkout")
+			}
+			dir := writeModuleFixtureIn(t, root)
 			t.Chdir(dir)
 			wantFindings := tc.wantFindings(dir)
 
@@ -544,32 +583,47 @@ func TestRun_AuditsModuleAndReportsFindings(t *testing.T) {
 			if err != nil {
 				t.Fatalf("run(%v) error = %v", tc.args, err)
 			}
-
-			var got report
-			if unmarshalErr := json.Unmarshal([]byte(out), &got); unmarshalErr != nil {
-				t.Fatalf("decode report: %v\n%s", unmarshalErr, out)
-			}
-			if got.Packages != tc.wantPackages {
-				t.Errorf("Packages = %d, want %d", got.Packages, tc.wantPackages)
-			}
-			if !reflect.DeepEqual(got.Findings, wantFindings) {
-				t.Errorf("Findings = %+v\nwant %+v", got.Findings, wantFindings)
-			}
-			wantCategories := countBy(wantFindings, func(f finding) string { return f.Category })
-			if !reflect.DeepEqual(got.ByCategory, wantCategories) {
-				t.Errorf("ByCategory = %v, want %v", got.ByCategory, wantCategories)
-			}
-			wantPerPackage := countBy(wantFindings, func(f finding) string { return f.ImportPath })
-			if !reflect.DeepEqual(got.ByPackage, wantPerPackage) {
-				t.Errorf("ByPackage = %v, want %v", got.ByPackage, wantPerPackage)
-			}
-			if _, parseErr := time.Parse(time.RFC3339, got.GeneratedAt); parseErr != nil {
-				t.Errorf("GeneratedAt = %q, want RFC3339: %v", got.GeneratedAt, parseErr)
-			}
-			if !strings.HasSuffix(out, "}\n") {
-				t.Errorf("JSON report does not end with a newline: %q", out)
-			}
+			assertJSONReport(t, out, report{
+				IncludeTests: tc.wantIncludeTests,
+				Packages:     tc.wantPackages,
+				Findings:     wantFindings,
+			})
 		})
+	}
+}
+
+// assertJSONReport decodes out as the JSON report and holds it to want: the
+// package count, the include-tests flag and the findings as want gives them,
+// the two tallies as derived from want's findings, and a generation time and
+// trailing newline as every report carries.
+func assertJSONReport(t *testing.T, out string, want report) {
+	t.Helper()
+	var got report
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode report: %v\n%s", err, out)
+	}
+	if got.Packages != want.Packages {
+		t.Errorf("Packages = %d, want %d", got.Packages, want.Packages)
+	}
+	if got.IncludeTests != want.IncludeTests {
+		t.Errorf("IncludeTests = %t, want %t", got.IncludeTests, want.IncludeTests)
+	}
+	if !reflect.DeepEqual(got.Findings, want.Findings) {
+		t.Errorf("Findings = %+v\nwant %+v", got.Findings, want.Findings)
+	}
+	wantCategories := countBy(want.Findings, func(f finding) string { return f.Category })
+	if !reflect.DeepEqual(got.ByCategory, wantCategories) {
+		t.Errorf("ByCategory = %v, want %v", got.ByCategory, wantCategories)
+	}
+	wantPerPackage := countBy(want.Findings, func(f finding) string { return f.ImportPath })
+	if !reflect.DeepEqual(got.ByPackage, wantPerPackage) {
+		t.Errorf("ByPackage = %v, want %v", got.ByPackage, wantPerPackage)
+	}
+	if _, err := time.Parse(time.RFC3339, got.GeneratedAt); err != nil {
+		t.Errorf("GeneratedAt = %q, want RFC3339: %v", got.GeneratedAt, err)
+	}
+	if !strings.HasSuffix(out, "}\n") {
+		t.Errorf("JSON report does not end with a newline: %q", out)
 	}
 }
 

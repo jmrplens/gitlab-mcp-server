@@ -155,17 +155,49 @@ func TestMovePackageDoc_ReportsErrors(t *testing.T) {
 // TestMovePackageDoc_SkipsFilesOnceTheHolderIsFound covers the branch a second
 // source file takes after an earlier one has already supplied the comment: the
 // comment-bearing file sorts first, so the holder is set before the second file
-// is reached and that file is passed over rather than read again.
+// is reached and that file is passed over rather than read. The second file
+// carries a well-formed package comment of its own, so reading it would make it
+// the holder: the comment that moves is the first file's, and the second keeps
+// its own for the audit to report as a duplicate.
 func TestMovePackageDoc_SkipsFilesOnceTheHolderIsFound(t *testing.T) {
+	const second = "// Package sample is documented a second time.\npackage sample\n\n// More is more.\nfunc More() {}\n"
 	pkg := writePackageFixture(t, "sample", map[string]string{
 		"aaa.go": "// Package sample is documented here.\npackage sample\n",
-		"zzz.go": "package sample\n\n// More is more.\nfunc More() {}\n",
+		"zzz.go": second,
 	})
-	if err := movePackageDoc(pkg.Dir); err != nil {
-		t.Fatalf("movePackageDoc() error = %v", err)
+	captureFixStdout(t, func() {
+		if err := movePackageDoc(pkg.Dir); err != nil {
+			t.Errorf("movePackageDoc() error = %v", err)
+		}
+	})
+	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), "// Package sample is documented here.\npackage sample\n"; got != want {
+		t.Errorf("doc.go = %q, want %q", got, want)
 	}
-	if _, err := os.Stat(filepath.Join(pkg.Dir, "doc.go")); err != nil {
-		t.Errorf("doc.go missing: %v", err)
+	if got := readFixtureFile(t, pkg.Dir, "zzz.go"); got != second {
+		t.Errorf("zzz.go = %q, want it untouched", got)
+	}
+}
+
+// TestMovePackageDoc_PassesOverFilesThatAreNotGoSource verifies the mover reads
+// Go source and nothing else in the package directory: a README beside the
+// holder is neither parsed, which would fail, nor touched, and the package
+// comment still moves.
+func TestMovePackageDoc_PassesOverFilesThatAreNotGoSource(t *testing.T) {
+	const readme = "# sample\n\nNot Go, so never parsed.\n"
+	pkg := writePackageFixture(t, "sample", map[string]string{
+		"README.md": readme,
+		"sample.go": "// Package sample provides a fixture.\npackage sample\n",
+	})
+	captureFixStdout(t, func() {
+		if err := movePackageDoc(pkg.Dir); err != nil {
+			t.Errorf("movePackageDoc() error = %v", err)
+		}
+	})
+	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), "// Package sample provides a fixture.\npackage sample\n"; got != want {
+		t.Errorf("doc.go = %q, want %q", got, want)
+	}
+	if got := readFixtureFile(t, pkg.Dir, "README.md"); got != readme {
+		t.Errorf("README.md = %q, want it untouched", got)
 	}
 }
 
@@ -182,16 +214,71 @@ func TestMovePackageDoc_ReportsAFileItCannotRead(t *testing.T) {
 	}
 }
 
+// positionFailure is the sentence the position guard refuses a holder with.
+const positionFailure = "package comment does not sit above the package clause"
+
 // TestMoveToDocGo_ReportsAMalformedPosition covers the guard against a package
-// comment that does not sit above the package clause. A real parse never
-// produces that, so the holder's source is truncated to put the package offset
-// past the end of it.
+// comment that does not sit above the package clause, one bound at a time: a
+// comment that ends after the clause starts, and a clause that starts past
+// the end of the source. A real parse produces neither, so each holder is
+// built by hand, and each is refused by the guard itself rather than by a
+// slice or a format further on.
 func TestMoveToDocGo_ReportsAMalformedPosition(t *testing.T) {
-	h := buildHolder(t, "sample.go", "// Package sample is documented.\npackage sample\n")
-	h.src = h.src[:2]
-	if err := h.moveToDocGo(t.TempDir()); err == nil {
-		t.Error("moveToDocGo() with a truncated source = nil, want a position failure")
-	}
+	t.Run("the comment comes after the package clause", func(t *testing.T) {
+		h := buildHolder(t, "sample.go", "package sample\n\n// Package sample is documented below the clause.\n")
+		h.file.Doc = h.file.Comments[0]
+		err := h.moveToDocGo(t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), positionFailure) {
+			t.Errorf("moveToDocGo() error = %v, want %q", err, positionFailure)
+		}
+	})
+	t.Run("the package clause starts past the end of the source", func(t *testing.T) {
+		h := buildHolder(t, "sample.go", "// Package sample is documented.\npackage sample\n")
+		h.src = h.src[:2]
+		err := h.moveToDocGo(t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), positionFailure) {
+			t.Errorf("moveToDocGo() error = %v, want %q", err, positionFailure)
+		}
+	})
+}
+
+// TestMoveToDocGo_BoundsAreTheSlicesItTakes verifies the other side of each
+// bound the position guard reads, so it refuses exactly the holders its three
+// slices would fail on. A comment ending where the package keyword begins
+// still sits above the clause and moves. A source that ends where the clause
+// begins can be sliced too, so the guard lets it through and its comment
+// moves.
+func TestMoveToDocGo_BoundsAreTheSlicesItTakes(t *testing.T) {
+	t.Run("a comment ending where the clause begins moves", func(t *testing.T) {
+		dir := t.TempDir()
+		h := buildHolder(t, filepath.Join(dir, "sample.go"), "/* Package sample is documented. */package sample\n")
+		h.file.Doc = h.file.Comments[0]
+		captureFixStdout(t, func() {
+			if err := h.moveToDocGo(dir); err != nil {
+				t.Errorf("moveToDocGo() error = %v", err)
+			}
+		})
+		if got, want := readFixtureFile(t, dir, "doc.go"), "/* Package sample is documented. */\npackage sample\n"; got != want {
+			t.Errorf("doc.go = %q, want %q", got, want)
+		}
+		if got, want := readFixtureFile(t, dir, "sample.go"), "package sample\n"; got != want {
+			t.Errorf("sample.go = %q, want %q", got, want)
+		}
+	})
+	t.Run("a source ending where the clause begins is let through", func(t *testing.T) {
+		const src = "// Package sample is documented.\npackage sample\n"
+		dir := t.TempDir()
+		h := buildHolder(t, filepath.Join(dir, "sample.go"), src)
+		h.src = h.src[:strings.Index(src, "package")]
+		captureFixStdout(t, func() {
+			if err := h.moveToDocGo(dir); err != nil {
+				t.Errorf("moveToDocGo() error = %v", err)
+			}
+		})
+		if got, want := readFixtureFile(t, dir, "doc.go"), src; got != want {
+			t.Errorf("doc.go = %q, want %q", got, want)
+		}
+	})
 }
 
 // TestMoveToDocGo_ReportsFormatFailures covers both format steps, which cannot
@@ -289,25 +376,45 @@ func TestMovePackageDocs_CollectsErrorsFromTheWalk(t *testing.T) {
 
 // TestMovePackageDocs_WalksDirectoriesAndSkipsTestdata verifies the walker
 // reaches nested packages, takes a file path as its directory, and leaves
-// testdata trees alone.
+// alone every tree that is not this repository's own source: testdata, vendor
+// and node_modules by name, a dot-directory, and a directory holding a .git
+// entry, which is another checkout such as a nested worktree. Each skipped
+// tree holds a package whose comment would move if it were walked, one per
+// rule, so each rule is shown to skip on its own. The root is entered although
+// it holds a .git entry of its own, since a walk pointed at a checkout means it.
 func TestMovePackageDocs_WalksDirectoriesAndSkipsTestdata(t *testing.T) {
 	root := t.TempDir()
+	writeAuditFile(t, root, ".git", "gitdir: elsewhere\n")
+	writeAuditFile(t, root, "root.go", "// Package root sits at the root of the walk.\npackage root\n")
 	writeAuditFile(t, root, "a/a.go", "// Package a is nested.\npackage a\n")
 	writeAuditFile(t, root, "a/deeper/d.go", "// Package deeper is deeper.\npackage deeper\n")
-	writeAuditFile(t, root, "a/testdata/t.go", "// Package t is a fixture.\npackage t\n")
+	const walkedAway = "// Package p would move if walked.\npackage p\n"
+	writeAuditFile(t, root, "a/testdata/p.go", walkedAway)
+	writeAuditFile(t, root, "a/vendor/p.go", walkedAway)
+	writeAuditFile(t, root, "a/node_modules/p.go", walkedAway)
+	writeAuditFile(t, root, "a/.hidden/p.go", walkedAway)
+	writeAuditFile(t, root, "a/worktree/p.go", walkedAway)
+	writeAuditFile(t, root, "a/worktree/.git", "gitdir: elsewhere\n")
+	skipped := []string{"a/testdata", "a/vendor", "a/node_modules", "a/.hidden", "a/worktree"}
 
-	if err := movePackageDocs(root); err != nil {
-		t.Fatalf("movePackageDocs() error = %v", err)
-	}
-	for _, dir := range []string{"a", "a/deeper"} {
+	captureFixStdout(t, func() {
+		if err := movePackageDocs(root); err != nil {
+			t.Errorf("movePackageDocs() error = %v", err)
+		}
+	})
+	for _, dir := range []string{".", "a", "a/deeper"} {
 		t.Run(dir, func(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir), "doc.go")); err != nil {
 				t.Errorf("%s/doc.go missing: %v", dir, err)
 			}
 		})
 	}
-	if _, err := os.Stat(filepath.Join(root, "a", "testdata", "doc.go")); err == nil {
-		t.Errorf("testdata got a doc.go")
+	for _, dir := range skipped {
+		t.Run(dir, func(t *testing.T) {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir), "doc.go")); err == nil {
+				t.Errorf("%s got a doc.go", dir)
+			}
+		})
 	}
 
 	if err := movePackageDocs(filepath.Join(root, "missing")); err == nil {

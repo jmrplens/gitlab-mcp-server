@@ -9,8 +9,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
 	"os"
@@ -138,7 +140,10 @@ func TestReadShards_ShardThatCannotBeDescribed_StillMerges(t *testing.T) {
 //
 // Both spellings of empty are covered because they arrive differently: a
 // zero-byte file is what an interrupted create leaves, and a blank line is what
-// a writer that flushed a newline and nothing else leaves.
+// a writer that flushed a newline and nothing else leaves. A line of whitespace
+// alone is the same blank line, since the reader trims before it decides. The
+// refusal names the shard and the directory as two values, and both are
+// asserted in their places so the two cannot be exchanged unnoticed.
 func TestReadShards_ShardHoldingNoRequest_IsAnError(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -160,6 +165,13 @@ func TestReadShards_ShardHoldingNoRequest_IsAnError(t *testing.T) {
 				writeShard(t, dir, "requests-2.jsonl")
 			},
 		},
+		{
+			name: "a shard holding only whitespace",
+			write: func(t *testing.T, dir string) {
+				t.Helper()
+				writeShard(t, dir, "requests-2.jsonl", " \t ")
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,8 +183,8 @@ func TestReadShards_ShardHoldingNoRequest_IsAnError(t *testing.T) {
 			if err == nil {
 				t.Fatal("readShards error = nil, want a refusal naming the empty shard")
 			}
-			if !strings.Contains(err.Error(), "requests-2.jsonl") {
-				t.Errorf("error = %q, want it to name the empty shard", err)
+			if want := fmt.Sprintf("shard requests-2.jsonl in %s holds no request", dir); !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to contain %q", err, want)
 			}
 			if !strings.Contains(err.Error(), "make record-request-inventory") {
 				t.Errorf("error = %q, want it to name the target that records again", err)
@@ -190,21 +202,28 @@ func TestReadShards_ShardHoldingNoRequest_IsAnError(t *testing.T) {
 // creates that directory: a checkout running the gate before recording
 // anything is the ordinary way to arrive here, and it used to be answered with
 // a bare "no such file or directory".
+//
+// A path that is a file is its own answer, and it is asserted whole: on Unix
+// the listing's own error already reads "not a directory", so a looser
+// expectation would pass with the check that names the misconfiguration gone.
 func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
+	nothingRecorded := func(dir string) string {
+		return "no .jsonl shard in " + dir + ": nothing has recorded a run here. `make record-request-inventory` records one"
+	}
 	tests := []struct {
 		name string
 		dir  func(t *testing.T) string
-		want string
+		want func(dir string) string
 	}{
 		{
 			name: "a directory that is not there",
 			dir:  func(t *testing.T) string { t.Helper(); return filepath.Join(t.TempDir(), "absent") },
-			want: "make record-request-inventory",
+			want: nothingRecorded,
 		},
 		{
 			name: "a directory holding no shard",
 			dir:  func(t *testing.T) string { t.Helper(); return t.TempDir() },
-			want: "no .jsonl shard",
+			want: nothingRecorded,
 		},
 		{
 			name: "a shard directory that is not a directory",
@@ -216,18 +235,19 @@ func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
 				}
 				return path
 			},
-			want: "read shard directory",
+			want: func(dir string) string { return "read shard directory: " + dir + " is not a directory" },
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := readShards(tt.dir(t))
+			dir := tt.dir(t)
+			_, err := readShards(dir)
 			if err == nil {
 				t.Fatal("readShards succeeded, want an error")
 			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Errorf("error = %q, want it to contain %q", err, tt.want)
+			if want := tt.want(dir); !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("error = %q, want it to begin %q", err, want)
 			}
 		})
 	}
@@ -322,10 +342,15 @@ func TestReadShard_UnreadableShard_NamesTheFailure(t *testing.T) {
 // TestReadShard_MalformedLine_NamesFileAndLine verifies that a corrupt shard
 // is reported precisely enough to find, since the merge reads a hundred and
 // seventy-six of them.
+//
+// The blank line ahead of the corrupt one is counted: the number is where an
+// editor opens the file, not how many records came before, and the two differ
+// exactly when a shard carries a blank line.
 func TestReadShard_MalformedLine_NamesFileAndLine(t *testing.T) {
 	dir := t.TempDir()
 	writeShard(t, dir, "requests-1.jsonl",
 		`{"package":"internal/tools/issues","kind":"rest","method":"GET","path":"/projects"}`,
+		"",
 		`{"package":`)
 
 	_, err := readShards(dir)
@@ -333,8 +358,8 @@ func TestReadShard_MalformedLine_NamesFileAndLine(t *testing.T) {
 	if err == nil {
 		t.Fatal("readShards succeeded, want an error")
 	}
-	if !strings.Contains(err.Error(), "line 2") {
-		t.Errorf("error = %q, want it to name line 2", err)
+	if want := fmt.Sprintf("parse %s line 3: ", filepath.Join(dir, "requests-1.jsonl")); !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("error = %q, want it to begin %q", err, want)
 	}
 }
 
@@ -347,8 +372,30 @@ func TestReadShard_OverlongLine_IsReported(t *testing.T) {
 
 	_, err := readShards(dir)
 
-	if err == nil || !strings.Contains(err.Error(), "read ") {
-		t.Fatalf("readShards error = %v, want a read failure", err)
+	if !errors.Is(err, bufio.ErrTooLong) {
+		t.Fatalf("readShards error = %v, want the scanner's refusal of an overlong line", err)
+	}
+	if want := fmt.Sprintf("read %s: ", filepath.Join(dir, "requests-1.jsonl")); !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("error = %q, want it to begin %q", err, want)
+	}
+}
+
+// TestReadShard_LineLongerThanTheScannerDefault_IsRead verifies that the bound
+// a line is read under is maxShardLine and not bufio's default of 64 KiB. Every
+// other line in these tests is short and the overlong one is refused under
+// either bound, so without this the call that raises the bound could go and
+// nothing would say so.
+func TestReadShard_LineLongerThanTheScannerDefault_IsRead(t *testing.T) {
+	dir := t.TempDir()
+	long := "/" + strings.Repeat("x", 2*bufio.MaxScanTokenSize)
+	writeShard(t, dir, "requests-1.jsonl", `{"package":"internal/tools/issues","kind":"rest","method":"GET","path":"`+long+`"}`)
+
+	recorded, err := readShards(dir)
+	if err != nil {
+		t.Fatalf("readShards error = %v, want a line under maxShardLine read", err)
+	}
+	if len(recorded.records) != 1 || recorded.records[0].Path != long {
+		t.Errorf("read %d record(s), want the one carrying the %d-byte path", len(recorded.records), len(long))
 	}
 }
 
@@ -560,74 +607,77 @@ func TestLess_KeyFields_DecideInPriorityOrder(t *testing.T) {
 // that a handler calling a different endpoint stops being invisible, and a
 // gate answering "the file changed" would hand that back.
 //
-// Each line is asserted under the heading it belongs to rather than anywhere in
-// the report, because the two headings differ only in which way round the same
-// comparison was run and a report listing every moved request under the wrong
-// one of them would tell a reader the opposite of what happened. The unchanged
-// row is here for the other half of that: a request both sides agree on appears
-// under neither heading, which is the only case where the membership test says
-// yes.
+// The whole report is compared rather than searched, because every part of it
+// is something a reader acts on: the two headings differ only in which way
+// round one comparison was run, so a line under the wrong one says the opposite
+// of what happened, and a line that gained or lost a part names a request that
+// was never made. Each part of a line is here both present and absent, and one
+// pair of rows differs in nothing but the package, since a request that moved
+// between packages is a change a line without its package could not show. The
+// unchanged row is the one case where the membership test says yes.
 func TestDifferences_StaleArtifact_NamesTheRequestsThatMoved(t *testing.T) {
-	const unchanged = "/projects/:id/unchanged"
 	committed := render([]row{
-		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"state"}},
-		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/old_place"},
-		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: unchanged},
+		{Package: "internal/tools/tags", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/repository/tags"},
+		{Package: "internal/tools/milestones", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/repository/branches"},
+		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodPut, Path: "/projects/:id/issues/:issue_id", Query: []string{"confidential"}, Body: []string{"assignee_ids"}},
 	})
 	now := []row{
 		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"per_page", "state"}},
 		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodPost, Path: "/projects/:id/issues", Body: []string{"description", "title"}},
-		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: unchanged},
-		{Package: "internal/tools/issues", Kind: requestinventory.KindGraphQL, Method: http.MethodPost, Path: "/graphql", Operation: "query project", Variables: []string{"fullPath"}},
+		{Package: "internal/tools/epics", Kind: requestinventory.KindGraphQL, Method: http.MethodPost, Path: "/api/graphql", Operation: "query group", Variables: []string{"fullPath", "iid"}},
+		{Package: "internal/tools/branches", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/repository/branches"},
+		{Package: "internal/tools/tags", Kind: requestinventory.KindREST, Method: http.MethodGet, Path: "/projects/:id/repository/tags"},
 	}
 
 	report := differences(committed, now)
 
-	// The removed heading is written second, so cutting the report on it hands
-	// back the added section and the removed one in that order.
-	added, removed, split := strings.Cut(report, "in the committed inventory and no longer issued")
-	if !split {
-		t.Fatalf("report = %q, want both headings", report)
+	want := strings.Join([]string{
+		"",
+		"  now issued and not in the committed inventory (4):",
+		"    internal/tools/issues GET /projects/:id/issues ?per_page,state",
+		"    internal/tools/issues POST /projects/:id/issues {description,title}",
+		"    internal/tools/epics POST /api/graphql query group $fullPath,iid",
+		"    internal/tools/branches GET /projects/:id/repository/branches",
+		"  in the committed inventory and no longer issued (2):",
+		"    internal/tools/milestones GET /projects/:id/repository/branches",
+		"    internal/tools/issues PUT /projects/:id/issues/:issue_id ?confidential {assignee_ids}",
+	}, "\n")
+	if report != want {
+		t.Errorf("report =\n%s\nwant\n%s", report, want)
 	}
-	tests := []struct {
-		section string
-		want    string
-	}{
-		{section: added, want: "now issued and not in the committed inventory (3)"},
-		{section: added, want: "/graphql query project $fullPath"},
-		{section: added, want: "/projects/:id/issues ?per_page,state"},
-		{section: added, want: "POST /projects/:id/issues {description,title}"},
-		{section: removed, want: "(2)"},
-		{section: removed, want: "/projects/:id/old_place"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			if !strings.Contains(tt.section, tt.want) {
-				t.Errorf("section = %q, want it to contain %q", tt.section, tt.want)
-			}
-		})
-	}
-	t.Run("a request both sides agree on is under neither heading", func(t *testing.T) {
-		if strings.Contains(report, unchanged) {
-			t.Errorf("report = %q, want it to leave %q out", report, unchanged)
-		}
-	})
 }
 
-// TestDifferences_ManyOrUnreadable_StaysReadable verifies the two edges of the
+// TestDifferences_ManyOrUnreadable_StaysReadable verifies the edges of the
 // report: a change too large to print is capped rather than dumped into a CI
-// log, and a committed file that is not this format leaves the failure to
-// stand on its own.
+// log, a change of exactly the cap is listed whole with no remainder line, and
+// a committed file that is not this format leaves the failure to stand on its
+// own. The listed rows are counted, since a report that printed all of them and
+// still said how many it had left out would read as capped and not be.
 func TestDifferences_ManyOrUnreadable_StaysReadable(t *testing.T) {
 	many := make([]row, 0, maxReportedDifferences+3)
 	for i := range cap(many) {
 		many = append(many, row{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodGet, Path: "/projects/:id/thing" + string(rune('a'+i))})
 	}
+	listed := func(report string) int {
+		return strings.Count(report, "\n    internal/tools/issues GET ")
+	}
 
 	t.Run("a change larger than the cap", func(t *testing.T) {
 		report := differences(render(nil), many)
-		if !strings.Contains(report, "and 3 more") {
-			t.Errorf("report = %q, want it to cap the list", report)
+		if got := listed(report); got != maxReportedDifferences {
+			t.Errorf("listed %d rows, want the cap of %d: %q", got, maxReportedDifferences, report)
+		}
+		if !strings.HasSuffix(report, "\n    and 3 more") {
+			t.Errorf("report = %q, want it to end by counting the 3 it left out", report)
+		}
+	})
+	t.Run("a change of exactly the cap", func(t *testing.T) {
+		report := differences(render(nil), many[:maxReportedDifferences])
+		if got := listed(report); got != maxReportedDifferences {
+			t.Errorf("listed %d rows, want all %d: %q", got, maxReportedDifferences, report)
+		}
+		if strings.Contains(report, "\n    and ") {
+			t.Errorf("report = %q, want no remainder line when nothing was left out", report)
 		}
 	})
 	t.Run("a committed file in another format", func(t *testing.T) {

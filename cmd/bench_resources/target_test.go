@@ -17,8 +17,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -715,6 +718,44 @@ func TestHTTPTarget_HealthThatCannotBeRead_IsNotHealthy(t *testing.T) {
 	if asked.Load() < 2 {
 		t.Errorf("the address was asked %d times, want the wait to have kept polling", asked.Load())
 	}
+	// And kept polling at a pace: a wait that asked in a tight loop would
+	// spend a core of the host it is measuring on asking.
+	if asked.Load() > 10 {
+		t.Errorf("the address was asked %d times in %s, want a poll every 50 ms or so", asked.Load(), healthWait)
+	}
+}
+
+// TestHTTPTarget_HealthThatNeverAnswers_IsGivenUpOn verifies a listener that
+// accepts the health request and never answers it costs one request timeout,
+// after which the wait reports the server unhealthy rather than waiting on.
+//
+// This is the collision the wait was written for: after a lost port the
+// address can belong to something that accepts and says nothing, and a poll
+// with no timeout of its own would sit on that connection for as long as the
+// caller's context lives.
+func TestHTTPTarget_HealthThatNeverAnswers_IsGivenUpOn(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+
+	previous := healthWait
+	healthWait = 100 * time.Millisecond
+	t.Cleanup(func() { healthWait = previous })
+
+	tgt := &httpTarget{addr: strings.TrimPrefix(server.URL, "http://"), output: &lockedBuffer{}}
+	var err error
+	finishWithin(t, 20*time.Second, "a health wait on a listener that never answers", func() {
+		_, err = tgt.waitHealthy(t.Context(), nil)
+	})
+	if err == nil || !strings.Contains(err.Error(), "never became healthy") {
+		t.Errorf("waitHealthy = %v, want the wait to give up on a listener that never answers", err)
+	}
 }
 
 // TestProcWait_SecondCallerWaitsForTheFirst pins the defect the single-flight
@@ -795,5 +836,85 @@ func TestStdioTarget_ExecFailure_NamesTheClient(t *testing.T) {
 	}
 	if procs := tgt.processes(); len(procs) != 0 {
 		t.Errorf("%d processes recorded for a client that never started", len(procs))
+	}
+}
+
+// TestHTTPTarget_Arguments_SwitchTheLimiterAndSizeThePoolOnlyWhenAsked
+// verifies the server is started with the per-credential limiter switched off
+// unless a bound puts its own switch in that place, with a pool size only when
+// one was asked for, and that close returns only once the process has been
+// reaped.
+//
+// The arguments are read back from the running process's own command line,
+// which is the only place they can be seen: the stand-in accepts every one of
+// them, so a server started with the limiter on would answer the same.
+func TestHTTPTarget_Arguments_SwitchTheLimiterAndSizeThePoolOnlyWhenAsked(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the command line is read back from /proc")
+	}
+	stub := startStubGitLab()
+	t.Cleanup(stub.close)
+	cases := []struct {
+		name       string
+		boundArgs  []string
+		maxClients int
+		want       []string
+		absent     []string
+	}{
+		{name: "a point scenario", want: []string{limiterOffArg}, absent: []string{"--max-http-clients"}},
+		{
+			name: "a bound in force and a sized pool", boundArgs: []string{"--rate-limit-rps=5"}, maxClients: 3,
+			want: []string{"--rate-limit-rps=5", "--max-http-clients=3"}, absent: []string{limiterOffArg},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tgt := &httpTarget{
+				binary: standinBinary(t), plan: standinPlan(transportHTTP), stubURL: stub.url,
+				boundArgs: tc.boundArgs, maxClients: tc.maxClients,
+			}
+			t.Cleanup(tgt.close)
+			if _, err := tgt.start(t.Context()); err != nil {
+				t.Fatalf("start: %v", err)
+			}
+			assertStartedWith(t, serverCommandLine(t, tgt), tc.want, tc.absent)
+
+			tgt.close()
+			if cmd, _ := tgt.command(); cmd == nil || cmd.ProcessState == nil {
+				t.Error("close returned before the server was reaped")
+			}
+		})
+	}
+}
+
+// serverCommandLine reads the one running server's arguments back from /proc.
+func serverCommandLine(t *testing.T, tgt *httpTarget) []string {
+	t.Helper()
+	procs := tgt.processes()
+	if len(procs) != 1 {
+		t.Fatalf("%d processes, want the one server", len(procs))
+	}
+	raw, err := os.ReadFile("/proc/" + strconv.Itoa(procs[0].Pid) + "/cmdline")
+	if err != nil {
+		t.Fatalf("read the server's command line: %v", err)
+	}
+	return strings.Split(strings.TrimRight(string(raw), "\x00"), "\x00")
+}
+
+// assertStartedWith checks every wanted argument is on the command line and no
+// argument starts with an absent one's prefix.
+func assertStartedWith(t *testing.T, args, want, absent []string) {
+	t.Helper()
+	for _, w := range want {
+		if !slices.Contains(args, w) {
+			t.Errorf("the server was started with %q, want %q among them", args, w)
+		}
+	}
+	for _, a := range absent {
+		for _, arg := range args {
+			if strings.HasPrefix(arg, a) {
+				t.Errorf("the server was started with %q, want nothing starting %q", arg, a)
+			}
+		}
 	}
 }

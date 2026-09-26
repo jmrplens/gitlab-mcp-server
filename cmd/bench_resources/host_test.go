@@ -3,6 +3,7 @@
 package main
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -224,19 +225,50 @@ func TestHostFacts_OtherPlatforms(t *testing.T) {
 	})
 }
 
+// TestHostFacts_Linux_EachFigureFromItsProcFile verifies each figure is held
+// to the file it is read from, in the unit it is published in, so a divisor
+// that is off by a factor of 1024 shows. Off Linux the files are absent and
+// both sides are the unknown answer.
+func TestHostFacts_Linux_EachFigureFromItsProcFile(t *testing.T) {
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+	runtimeGOOS = "linux"
+
+	wantModel := parseCPUModel(readFileString("/proc/cpuinfo"))
+	if wantModel == "" {
+		wantModel = "unknown"
+	}
+	if got := cpuModel(); got != wantModel {
+		t.Errorf("cpuModel = %q, want %q from /proc/cpuinfo", got, wantModel)
+	}
+	totalKiB := parseMemTotalKiB(readFileString("/proc/meminfo"))
+	if got, want := totalMemoryGiB(), totalKiB/(1024*1024); math.Abs(got-want) > 0.01 {
+		t.Errorf("totalMemoryGiB = %v, want MemTotal's %v KiB in GiB, %v", got, totalKiB, want)
+	}
+	// MemAvailable moves between two reads, so the comparison allows for that
+	// and for nothing like a factor of 1024.
+	wantMiB := parseMeminfoKiB(readFileString("/proc/meminfo"), "MemAvailable:") / 1024
+	if got := availableMemoryMiB(); math.Abs(got-wantMiB) > 0.05*wantMiB+1 {
+		t.Errorf("availableMemoryMiB = %v, want MemAvailable in MiB, about %v", got, wantMiB)
+	}
+}
+
 // TestParseMeminfoKiB_ReadsTheNamedField verifies each field is read by its
 // own name, since MemTotal and MemAvailable sit lines apart in the same file
 // and mean different things to the budget.
 func TestParseMeminfoKiB_ReadsTheNamedField(t *testing.T) {
 	// Truncated: is the one line with a name and no value, which a reader that
 	// only checked the name would index past the end of.
-	meminfo := "MemTotal:       63729784 kB\nMemFree:         1104924 kB\nMemAvailable:   25729000 kB\nBroken: x kB\nTruncated:\n"
+	// HugePages_Free: is a real field with no unit after its value, which is
+	// the shortest line a value can be read from.
+	meminfo := "MemTotal:       63729784 kB\nMemFree:         1104924 kB\nMemAvailable:   25729000 kB\nHugePages_Free:        7\nBroken: x kB\nTruncated:\n"
 	cases := []struct {
 		field string
 		want  float64
 	}{
 		{field: "MemTotal:", want: 63729784},
 		{field: "MemAvailable:", want: 25729000},
+		{field: "HugePages_Free:", want: 7},
 		{field: "Broken:", want: 0},
 		{field: "Missing:", want: 0},
 		{field: "Truncated:", want: 0},
@@ -303,5 +335,42 @@ func TestHostInfo_RealMachine_FillsThePlatformFields(t *testing.T) {
 	host := hostInfo()
 	if host.OS == "" || host.Arch == "" || host.GoVersion == "" || host.CPUs < 1 {
 		t.Errorf("hostInfo did not fill the runtime-known fields: %+v", host)
+	}
+	// Each from its own source: the operating system and the architecture are
+	// both short words, and a record naming one where the other belongs
+	// describes a machine nobody measured on.
+	if host.OS != runtime.GOOS || host.Arch != runtime.GOARCH || host.GoVersion != runtime.Version() || host.CPUs != runtime.NumCPU() {
+		t.Errorf("hostInfo = %+v, want %s/%s, %s and %d processors from the runtime",
+			host, runtime.GOOS, runtime.GOARCH, runtime.Version(), runtime.NumCPU())
+	}
+}
+
+// TestHostInfo_FakeMacOS_EveryFieldFromItsOwnSource verifies the whole host
+// record on a platform whose every answer the test decides: the processor from
+// sysctl, the memory from sysctl, the kernel from uname, each a different
+// string or figure, so a record that put the kernel where the processor
+// belongs cannot pass.
+//
+// On a real machine the two might coincide in being unknown; here neither is.
+func TestHostInfo_FakeMacOS_EveryFieldFromItsOwnSource(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a shell script cannot stand in for sysctl on Windows")
+	}
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+	runtimeGOOS = "darwin"
+	dir := fakeSysctl(t, "17179869184")
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if err := os.WriteFile(filepath.Join(dir, "uname"), []byte("#!/bin/sh\necho 24.6.0\n"), 0o700); err != nil { //#nosec G306 -- a script the test must execute
+		t.Fatalf("write the fake uname: %v", err)
+	}
+	t.Setenv("PATH", dir)
+
+	want := HostInfo{
+		OS: runtime.GOOS, Arch: runtime.GOARCH, CPUModel: "Fake M9", CPUs: runtime.NumCPU(),
+		MemTotalGiB: 16, Kernel: "24.6.0", GoVersion: runtime.Version(),
+	}
+	if got := hostInfo(); got != want {
+		t.Errorf("hostInfo = %+v\nwant %+v", got, want)
 	}
 }

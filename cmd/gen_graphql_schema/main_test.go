@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/provenance"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
@@ -168,8 +169,15 @@ func TestRun_Generation_ATruncatedAnswer_DoesNotReplaceAWholePin(t *testing.T) {
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1 for an answer that would replace a whole pin:\n%s", status, errOut)
 	}
-	if !strings.Contains(errOut, "refusing to replace a whole schema with a truncated answer") {
-		t.Errorf("stderr does not say what it refused:\n%s", errOut)
+	// The whole line, because it names two places and two counts, one of each
+	// per side, and a sentence reporting either pair the wrong way round sends
+	// the reader to the half that was right. tinySchema answers with one type.
+	wantRefusal := fmt.Sprintf(
+		"gen_graphql_schema: %s answered with 1 types and the pin in %s carries %d: refusing to replace a whole schema with a truncated answer\n",
+		truncated.URL, dir, canonicalSource.Types,
+	)
+	if errOut != wantRefusal {
+		t.Errorf("stderr = %q, want exactly %q", errOut, wantRefusal)
 	}
 
 	_, source, err := readArtifacts(dir)
@@ -269,18 +277,19 @@ func TestRun_Generation_AWholeAnswer_WritesEveryFieldOfThePin(t *testing.T) {
 		t.Errorf("the instance was asked with %q, want the credential on the introspection and the version alike", asked)
 	}
 
-	// The report's two numbers are a size and a count, in that order. They are
-	// the same Go type and nothing else prints either, so reporting one in the
-	// other's place reads as a plausible line about a different schema.
+	// The report is compared whole. Its two numbers are a size and a count, in
+	// that order, and it names the endpoint asked and both files written: each
+	// pair is the same Go type, so reporting one in the other's place reads as
+	// a plausible line about a different run.
 	sdl, err := os.ReadFile(filepath.Join(dir, graphqlschema.SDLFileName))
 	if err != nil {
 		t.Fatalf("read the schema back: %v", err)
 	}
-	if wantSize := fmt.Sprintf("(%d KiB)", len(sdl)/1024); !strings.Contains(out, wantSize) {
-		t.Errorf("stdout does not report the schema's size as %s:\n%s", wantSize, out)
-	}
-	if wantCount := fmt.Sprintf("%d loaded", types); !strings.Contains(out, wantCount) {
-		t.Errorf("stdout does not report %s:\n%s", wantCount, out)
+	wantOut := fmt.Sprintf("gen_graphql_schema: introspecting %s\n"+
+		"gen_graphql_schema: wrote gitlab-schema.graphql (%d KiB) and source.json; %s, %d loaded\n",
+		server.URL, len(sdl)/1024, want, types)
+	if out != wantOut {
+		t.Errorf("stdout = %q, want exactly %q", out, wantOut)
 	}
 
 	// The endpoint is not gitlab.com, so that warning is expected; a whole
@@ -418,13 +427,17 @@ func loadedTypes(sdl string) int {
 // pin that every gate in the repository accepted in silence, and the guarantee
 // the whole gate rests on could be swapped out by one flag.
 //
-// The two refusals that count something spell the whole sentence, numbers
-// included, rather than the phrase that names them. Each holds one figure
-// against another (the record against the floor, the record against the schema
-// beside it) and a message that reports the pair the wrong way round tells a
-// reader to fix the half that was already right. Nothing else here can see
-// that: two arguments of one Sprintf have no branch to flip.
+// Every refusal spells its whole sentence rather than the phrase that names it.
+// Most hold one value against another (the instance against gitlab.com, the
+// record against the floor, the record against the schema beside it) and a
+// message that reports the pair the wrong way round, or one value twice, tells
+// a reader to fix the half that was already right. The dated ones read the
+// pin's noun and its consequence out of one struct literal, two strings of one
+// type. Nothing else here can see any of that: two arguments of one Sprintf
+// have no branch to flip.
 func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
+	daysOld := provenance.Days(fixedClock().Sub(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+
 	cases := []struct {
 		name   string
 		source graphqlschema.Source
@@ -433,7 +446,8 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 		{
 			name:   "another instance",
 			source: withSource(func(s *graphqlschema.Source) { s.Instance = "https://gitlab.gnome.org/api/graphql" }),
-			want:   "not https://gitlab.com/api/graphql",
+			want: "the pin was taken from https://gitlab.gnome.org/api/graphql, not https://gitlab.com/api/graphql: " +
+				"the gate would then promise what that instance accepts, which is not what this server targets",
 		},
 		{
 			name:   "a truncated or narrower answer",
@@ -446,27 +460,30 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 		{
 			name:   "an introspection with no token",
 			source: withSource(func(s *graphqlschema.Source) { s.GitLabVersion = graphqlintrospect.UnknownVersion }),
-			want:   "records no GitLab version",
+			want:   noVersionRefusal,
 		},
 		{
 			name:   "an introspection whose record was emptied by hand",
 			source: withSource(func(s *graphqlschema.Source) { s.GitLabVersion = "" }),
-			want:   "records no GitLab version",
+			want:   noVersionRefusal,
 		},
 		{
 			name:   "a pin past the window",
 			source: withSource(func(s *graphqlschema.Source) { s.RetrievedAt = "2020-01-01" }),
-			want:   "days old and the window is",
+			want: fmt.Sprintf(
+				"the pin is %d days old and the window is %d: GitLab narrows fields in place, so a pin this old can no longer report a document that broke since",
+				daysOld, provenance.Days(provenance.MaxAge),
+			),
 		},
 		{
 			name:   "a date nothing can read",
 			source: withSource(func(s *graphqlschema.Source) { s.RetrievedAt = "one tuesday" }),
-			want:   "is not a date",
+			want:   `the pin says it was taken on "one tuesday", which is not a date: nothing can then say how old the gate is`,
 		},
 		{
 			name:   "a date that has not happened",
 			source: withSource(func(s *graphqlschema.Source) { s.RetrievedAt = "2026-09-07" }),
-			want:   "has not happened yet",
+			want:   "the pin says it was taken on 2026-09-07, which has not happened yet: no regeneration writes a day in the future",
 		},
 		{
 			name:   "a record beside a schema it did not come from",
@@ -507,6 +524,10 @@ func withSource(spoil func(*graphqlschema.Source)) graphqlschema.Source {
 	return source
 }
 
+// noVersionRefusal is the sentence both ways of recording no version produce.
+const noVersionRefusal = "the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: " +
+	"nothing can then say which release the gate speaks for"
+
 // TestRun_Generation_WarnsWhenThePinIsNotOfGitLabCom verifies that the person
 // who ran a non-canonical generation is told at once. The same facts fail in
 // CI, and learning them an hour later from a red pipeline is the worse of the
@@ -537,6 +558,41 @@ func TestRun_Generation_WarnsWhenThePinIsNotOfGitLabCom(t *testing.T) {
 				t.Errorf("stderr does not warn %q:\n%s", want, errOut)
 			}
 		})
+	}
+}
+
+// TestRun_Generation_RecordsTheUTCDayWhateverTheZone verifies that a pin
+// records the UTC day it was taken on, not the calendar day of the machine
+// that took it.
+//
+// The age check reads that day as midnight UTC, so a pin dated by a clock
+// ahead of UTC would name a day that has not happened yet and fail its own
+// --check the moment it was written. This clock is past midnight in UTC+14 and
+// mid-morning in UTC, which is where the two calendars disagree.
+func TestRun_Generation_RecordsTheUTCDayWhateverTheZone(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(tinySchema))
+	}))
+	t.Cleanup(server.Close)
+	aheadOfUTC := func() time.Time {
+		return time.Date(2026, 9, 7, 0, 30, 0, 0, time.FixedZone("UTC+14", 14*60*60))
+	}
+	dir := filepath.Join(t.TempDir(), "pinned")
+
+	status, _, errOut := runCommand(t, genRun{endpoint: server.URL, dir: dir, client: server.Client(), now: aheadOfUTC})
+
+	if status != 0 {
+		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
+	}
+	_, source, err := readArtifacts(dir)
+	if err != nil {
+		t.Fatalf("the artifacts it wrote do not read back: %v", err)
+	}
+	if source.RetrievedAt != "2026-09-06" {
+		t.Errorf("the record is dated %s, want 2026-09-06, the UTC day of %s", source.RetrievedAt, aheadOfUTC())
+	}
+	if strings.Contains(errOut, "has not happened yet") {
+		t.Errorf("a pin written a moment ago was judged to come from the future:\n%s", errOut)
 	}
 }
 
@@ -655,14 +711,15 @@ func TestMainEntry_CheckMode_ReportsThePinAndHandsBackTheStatus(t *testing.T) {
 }
 
 // TestMainEntry_CredentialResolution_FollowsGITLABURLNotTheFlag verifies that
-// the token is judged against the instance GITLAB_URL names rather than followed
-// to whatever -url points at, and that the withholding is said out loud.
+// main says out loud when it withholds the token, naming the instance GITLAB_URL
+// gives it and the one -url asks, and says nothing when the two agree.
 //
 // -url takes an arbitrary endpoint, so this is the one decision in main that is
 // not plumbing: a token resolved against the flag instead of the environment is
 // a credential handed to an instance nobody named. A note that is not printed is
 // the same defect one step quieter, since the version then reads "unknown" with
-// nothing saying why.
+// nothing saying why. Check mode sends no request, so whether the token really
+// stayed home is asserted by the generation test below.
 func TestMainEntry_CredentialResolution_FollowsGITLABURLNotTheFlag(t *testing.T) {
 	const instance = "https://gitlab.example.com"
 
@@ -719,6 +776,61 @@ func TestMainEntry_CredentialResolution_FollowsGITLABURLNotTheFlag(t *testing.T)
 			}
 			if !strings.Contains(errOut, testCase.wantNote) {
 				t.Errorf("stderr does not say why the token was withheld (%q):\n%s", testCase.wantNote, errOut)
+			}
+		})
+	}
+}
+
+// TestMainEntry_Generation_SendsTheTokenOnlyToTheInstanceItBelongsTo verifies
+// the request rather than the note about it: main hands run the credential
+// CredentialFor resolved, never GITLAB_TOKEN as the environment holds it.
+//
+// Check mode sends nothing, so the note is all its sibling above can observe.
+// This one generates against a local instance and records the Authorization
+// header of every request that arrived. A main that read the environment
+// directly would print the same note and send the token to whatever -url names
+// anyway, which is the leak the resolution exists to prevent; one that sent
+// nothing would lose the version for the instance the token does belong to.
+func TestMainEntry_Generation_SendsTheTokenOnlyToTheInstanceItBelongsTo(t *testing.T) {
+	const token = "glpat-not-a-real-token"
+
+	cases := []struct {
+		name     string
+		instance func(serverURL string) string
+		want     string
+	}{
+		{name: "GITLAB_URL names the instance asked", instance: func(serverURL string) string { return serverURL }, want: "Bearer " + token},
+		{name: "GITLAB_URL names another instance", instance: func(string) string { return "https://gitlab.example.com" }, want: ""},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var authorizations []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				mu.Lock()
+				authorizations = append(authorizations, r.Header.Get("Authorization"))
+				mu.Unlock()
+				if strings.Contains(string(body), "metadata") {
+					_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.4.0","revision":"abc1234"}}}`))
+					return
+				}
+				_, _ = w.Write([]byte(tinySchema))
+			}))
+			t.Cleanup(server.Close)
+			t.Setenv("GITLAB_URL", testCase.instance(server.URL))
+			t.Setenv("GITLAB_TOKEN", token)
+
+			status, _, errOut := runMainCapturing(t, "-url", server.URL, "-dir", filepath.Join(t.TempDir(), "pinned"))
+
+			if status != 0 {
+				t.Fatalf("exit status %d, want 0: a probe of a narrower instance still writes. stderr:\n%s", status, errOut)
+			}
+			mu.Lock()
+			asked := slices.Clone(authorizations)
+			mu.Unlock()
+			if wantAsked := []string{testCase.want, testCase.want}; !slices.Equal(asked, wantAsked) {
+				t.Errorf("the instance was asked with %q, want %q on the introspection and the version alike", asked, wantAsked)
 			}
 		})
 	}

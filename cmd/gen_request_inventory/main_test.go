@@ -96,10 +96,13 @@ func TestRun_Check_PassesOnACurrentInventory(t *testing.T) {
 
 // TestRun_Check_FailsOnADriftedInventory verifies the gate's whole purpose: a
 // handler that starts calling a different endpoint changes the artifact, and
-// an artifact that no longer matches is a failure naming how to fix it.
+// an artifact that no longer matches is a failure naming how to fix it. Each
+// failure names the artifact it judged, which is how a reader running -out
+// against another file learns which one the gate read.
 func TestRun_Check_FailsOnADriftedInventory(t *testing.T) {
 	stubCatalog(t)
 	root, shardDir, outputPath := prepareRoot(t)
+	target := filepath.Join(root, outputPath)
 
 	tests := []struct {
 		name  string
@@ -109,24 +112,24 @@ func TestRun_Check_FailsOnADriftedInventory(t *testing.T) {
 		{
 			name:  "an artifact that was never written",
 			setup: func(*testing.T) {},
-			want:  "read ",
+			want:  "read " + target + ": ",
 		},
 		{
 			name: "an artifact holding something else",
 			setup: func(t *testing.T) {
 				t.Helper()
-				if err := os.WriteFile(filepath.Join(root, outputPath), []byte("{}\n"), 0o600); err != nil {
+				if err := os.WriteFile(target, []byte("{}\n"), 0o600); err != nil {
 					t.Fatalf("WriteFile error = %v", err)
 				}
 			},
-			want: "out of date",
+			want: target + " is out of date: run `make gen-request-inventory`",
 		},
 		{
 			name: "an artifact naming a request that is no longer issued",
 			setup: func(t *testing.T) {
 				t.Helper()
 				stale := render([]row{{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodGet, Path: "/projects/:id/moved"}})
-				if err := os.WriteFile(filepath.Join(root, outputPath), stale, 0o600); err != nil {
+				if err := os.WriteFile(target, stale, 0o600); err != nil {
 					t.Fatalf("WriteFile error = %v", err)
 				}
 			},

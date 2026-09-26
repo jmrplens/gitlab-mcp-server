@@ -612,6 +612,55 @@ func TestEventStreamPayload_LineTooLong_IsReported(t *testing.T) {
 	}
 }
 
+// TestEventStreamPayload_ALargeMessage_IsReadWhole verifies a data line far
+// longer than the scanner's first buffer is read whole.
+//
+// A tools/list on the individual surface is megabytes on one line, which is
+// exactly the response the benchmark times, so the ceiling above has to be a
+// ceiling on a runaway body and never on the answer being measured.
+func TestEventStreamPayload_ALargeMessage_IsReadWhole(t *testing.T) {
+	message := `{"jsonrpc":"2.0","id":1,"result":{"blob":"` + strings.Repeat("x", 1<<20) + `"}}`
+	got, err := eventStreamPayload([]byte("event: message\ndata: " + message + "\n\n"))
+	if err != nil {
+		t.Fatalf("eventStreamPayload over a one-megabyte message: %v", err)
+	}
+	if string(got) != message {
+		t.Errorf("payload is %d bytes, want the %d-byte message whole", len(got), len(message))
+	}
+}
+
+// TestStdioRPC_ALargeResponse_IsReadWhole verifies a response line far longer
+// than the reader's first buffer reaches its caller whole, as the megabytes a
+// tools/list writes on one line have to.
+func TestStdioRPC_ALargeResponse_IsReadWhole(t *testing.T) {
+	toServer, fromClient := io.Pipe()
+	toClient, fromServer := io.Pipe()
+	defer func() { _ = toServer.Close() }()
+
+	blob := strings.Repeat("y", 1<<20)
+	go func() {
+		var request struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.NewDecoder(toServer).Decode(&request); err != nil {
+			return
+		}
+		_, _ = io.WriteString(fromServer, `{"jsonrpc":"2.0","id":`+itoa(request.ID)+`,"result":{"blob":"`+blob+`"}}`+"\n")
+	}()
+
+	client := newStdioRPC(fromClient, toClient)
+	defer client.close()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	got, err := client.call(ctx, methodToolsList, nil)
+	if err != nil {
+		t.Fatalf("call over a one-megabyte response: %v", err)
+	}
+	if !strings.Contains(string(got), blob) {
+		t.Errorf("the response is %d bytes, want the megabyte result whole", len(got))
+	}
+}
+
 // failingReader is a server output that fails on the first read, which is
 // what a broken pipe looks like to the demultiplexer.
 type failingReader struct{}

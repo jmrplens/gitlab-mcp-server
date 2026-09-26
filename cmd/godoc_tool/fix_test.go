@@ -1,5 +1,5 @@
-// main_test.go covers the add_docs command's documentation generation
-// heuristics.
+// fix_test.go covers the fix subcommand's documentation generation
+// heuristics (formerly the add_docs command).
 //
 // Tests verify processFile preserves manually authored docs, regenerates
 // stale generated docs, and produces the expected phrasing for tests,
@@ -18,9 +18,12 @@ import (
 	"testing"
 )
 
-// TestProcessFile_DocumentsMissingSymbols verifies processFile inserts docs for functions, types, and values.
+// TestProcessFile_DocumentsMissingSymbols verifies processFile inserts docs
+// for functions, types, and values, down to the exact bytes: each comment
+// lands on the line above its own declaration and every declaration is still
+// there, which a check that the three sentences appear somewhere cannot see.
+// The source ends in blank lines, and the rewrite ends in exactly one newline.
 func TestProcessFile_DocumentsMissingSymbols(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sample.go")
 	source := `package sample
 
 func ListProjects() {}
@@ -28,21 +31,30 @@ func ListProjects() {}
 type ProjectInput struct{}
 
 const defaultLimit = 20
+
+
 `
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
+	want := `package sample
 
-	processFile(path)
+// ListProjects lists projects for the sample package.
+func ListProjects() {}
 
-	updatedBytes, err := os.ReadFile(path) //#nosec G304 -- test fixture path from t.TempDir.
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
+// ProjectInput defines parameters for the project operation.
+type ProjectInput struct{}
+
+// defaultLimit identifies the default limit constant used by this package.
+const defaultLimit = 20
+`
+	path := writeFixFile(t, t.TempDir(), "sample.go", source)
+
+	captureFixStdout(t, func() {
+		if err := processFile(path); err != nil {
+			t.Errorf("processFile() error = %v", err)
+		}
+	})
+	if got := readFixFile(t, path); got != want {
+		t.Fatalf("rewritten file =\n%s\nwant\n%s", got, want)
 	}
-	updated := string(updatedBytes)
-	assertContains(t, updated, "// ListProjects lists projects for the sample package.")
-	assertContains(t, updated, "// ProjectInput defines parameters for the project operation.")
-	assertContains(t, updated, "// defaultLimit identifies the default limit constant used by this package.")
 }
 
 // TestProcessFile_PreservesManualDocsAndSkipsInit verifies processFile avoids overwriting useful existing docs.
@@ -70,29 +82,101 @@ func init() {}
 	}
 }
 
-// TestProcessFile_ReplacesGeneratedDocs verifies processFile regenerates stale helper comments from earlier tool versions.
+// TestProcessFile_ReplacesGeneratedDocs verifies processFile regenerates
+// stale helper comments from earlier tool versions, the whole comment and not
+// only its first line: the stale one here runs over two lines, and the range
+// replaced runs from the first of them to the last.
 func TestProcessFile_ReplacesGeneratedDocs(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sample.go")
 	source := `package sample
 
 // helper verifies the behavior of helper.
+// An earlier version of the fixer wrote this second line too.
 func helper() {}
 `
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
+	want := `package sample
 
-	processFile(path)
+// helper implements the helper helper used by sample.
+func helper() {}
+`
+	path := writeFixFile(t, t.TempDir(), "sample.go", source)
 
-	updatedBytes, err := os.ReadFile(path) //#nosec G304 -- test fixture path from t.TempDir.
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
+	captureFixStdout(t, func() {
+		if err := processFile(path); err != nil {
+			t.Errorf("processFile() error = %v", err)
+		}
+	})
+	if got := readFixFile(t, path); got != want {
+		t.Fatalf("rewritten file =\n%s\nwant\n%s", got, want)
 	}
-	updated := string(updatedBytes)
-	if strings.Contains(updated, "verifies the behavior of helper") {
-		t.Fatalf("processFile() kept generated doc:\n%s", updated)
+}
+
+// TestProcessFile_GroupedDeclarationsReplaceOnlyTheSpecComment verifies which
+// comment a symbol inside a grouped declaration is judged by and which one is
+// rewritten. A symbol with a comment of its own is judged by that comment,
+// not by the group's: a stale generated one is replaced in place, leaving the
+// hand-written group comment above the parenthesis alone, and a hand-written
+// one is kept even under a stale generated group comment. Every other shape
+// of the two comments resolves the same way whichever is consulted first, so
+// these are the cases that tell the order apart, for types and values both.
+func TestProcessFile_GroupedDeclarationsReplaceOnlyTheSpecComment(t *testing.T) {
+	source := `package sample
+
+// Limits used by the sample package.
+const (
+	// maxItems names the max items value shared by this package.
+	maxItems = 10
+	// minItems is the smallest page a caller may ask for.
+	minItems = 1
+)
+
+// Shapes used by the sample package.
+type (
+	// widget holds data for the sample package.
+	widget struct{}
+	// gadget is written by hand.
+	gadget struct{}
+)
+
+// settings holds data for the sample package.
+var (
+	// defaultName is written by hand.
+	defaultName = "sample"
+)
+`
+	want := `package sample
+
+// Limits used by the sample package.
+const (
+	// maxItems identifies the max items constant used by this package.
+	maxItems = 10
+	// minItems is the smallest page a caller may ask for.
+	minItems = 1
+)
+
+// Shapes used by the sample package.
+type (
+	// widget holds widget data for the sample package.
+	widget struct{}
+	// gadget is written by hand.
+	gadget struct{}
+)
+
+// settings holds data for the sample package.
+var (
+	// defaultName is written by hand.
+	defaultName = "sample"
+)
+`
+	path := writeFixFile(t, t.TempDir(), "sample.go", source)
+
+	captureFixStdout(t, func() {
+		if err := processFile(path); err != nil {
+			t.Errorf("processFile() error = %v", err)
+		}
+	})
+	if got := readFixFile(t, path); got != want {
+		t.Fatalf("rewritten file =\n%s\nwant\n%s", got, want)
 	}
-	assertContains(t, updated, "// helper implements the helper helper used by sample.")
 }
 
 // TestGenerateFuncDoc_TestFunctionVariants verifies generateFuncDoc handles test, benchmark, fuzz, and example naming patterns.
@@ -859,7 +943,9 @@ func TestGenerateMethodDoc_EmptyReceiverListNamesTheReceiver(t *testing.T) {
 
 // TestGenerateExportedFuncDoc_SpecialNames verifies the registration and
 // Markdown-formatter names get their fixed sentences and any other exported
-// function is described by its inferred action.
+// function is described by its inferred action. An exported Format or Build
+// name is one of those others: the formatter and builder sentences belong to
+// the unexported-helper generator, which an exported name never reaches.
 func TestGenerateExportedFuncDoc_SpecialNames(t *testing.T) {
 	t.Parallel()
 
@@ -871,6 +957,8 @@ func TestGenerateExportedFuncDoc_SpecialNames(t *testing.T) {
 		{name: "RegisterMeta", want: "RegisterMeta registers the sample domain meta-tool on the given server."},
 		{name: "FormatMarkdownList", want: "FormatMarkdownList renders the sample result as a Markdown-formatted MCP response."},
 		{name: "ListProjects", want: "ListProjects lists projects for the sample package."},
+		{name: "FormatRow", want: "FormatRow coordinates format row for the sample package."},
+		{name: "BuildParams", want: "BuildParams coordinates build params for the sample package."},
 	}
 
 	for _, tc := range testCases {
@@ -1088,7 +1176,10 @@ func TestInferAction_PrefixesAndFallback(t *testing.T) {
 // TestCamelToWords_SplitsAndInitialisms verifies identifier-to-prose
 // conversion: the empty name, digit boundaries in both directions, a run of
 // digits staying one word, underscores, preserved initialisms and the
-// multi-word replacements. The last case pins that the classifiers are ASCII
+// multi-word replacements. A digit boundary beside an underscore adds a
+// second space next to the one the underscore became, and the words still
+// come out singly spaced, which is why the splitter need not ask whether
+// either rune is a space. The last case pins that the classifiers are ASCII
 // only, so a case boundary either side of a non-ASCII letter is not a word
 // boundary; that is a limitation of generated prose and not a defect, and
 // pinning it is what would make a change to it deliberate.
@@ -1103,6 +1194,8 @@ func TestCamelToWords_SplitsAndInitialisms(t *testing.T) {
 		{name: "empty", in: "", want: "resources"},
 		{name: "underscore only collapses to nothing", in: "_", want: "resources"},
 		{name: "underscores", in: "project_id", want: "project ID"},
+		{name: "a digit after an underscore", in: "page_2", want: "page 2"},
+		{name: "a digit before an underscore", in: "v2_beta", want: "v 2 beta"},
 		{name: "digit boundary", in: "v2Client", want: "v 2 client"},
 		{name: "a run of digits stays one word", in: "port8080Number", want: "port 8080 number"},
 		{name: "a trailing digit run splits once and the head is an initialism", in: "sha256", want: "SHA 256"},
@@ -1388,27 +1481,100 @@ func TestIsTableDrivenCompositeLit_Shapes(t *testing.T) {
 	}
 }
 
-// TestProcessFile_OutOfRangeInsertionIsSkipped verifies the bounds guard in the
-// insertion loop drops an insertion whose line range falls outside the file,
-// leaving the source unchanged. A real parse never yields such a range, so it
-// drives the collectInsertions seam.
-func TestProcessFile_OutOfRangeInsertionIsSkipped(t *testing.T) {
+// stubCollectInsertions makes processFile splice exactly ins, whatever the
+// file declares, until the test ends.
+func stubCollectInsertions(t *testing.T, ins insertion) {
+	t.Helper()
 	original := collectInsertions
 	collectInsertions = func(*token.FileSet, *ast.File, string, bool) []insertion {
-		return []insertion{{startLine: 9999, endLine: 9998, comment: "ignored"}}
+		return []insertion{ins}
 	}
 	t.Cleanup(func() { collectInsertions = original })
+}
 
-	source := "package sample\n\nfunc ListProjects() {}\n"
-	path := writeFixFile(t, t.TempDir(), "sample.go", source)
+// TestProcessFile_OutOfRangeInsertionIsSkipped verifies the bounds guard in the
+// insertion loop drops an insertion whose line range falls outside the file,
+// leaving the source unchanged rather than splicing lines the file does not
+// have or indexing past its end. Each case breaks one bound and keeps the
+// others, so each bound is shown to be read on its own; the one starting a
+// line past the last used to pass the guard and panic reading that line's
+// indentation. A real parse never yields such a range, so it drives the
+// collectInsertions seam.
+func TestProcessFile_OutOfRangeInsertionIsSkipped(t *testing.T) {
+	const source = "package sample\n\nfunc ListProjects() {}\n"
+	testCases := []struct {
+		name               string
+		startLine, endLine int
+	}{
+		{name: "starts before the first line", startLine: 0, endLine: 0},
+		{name: "starts one line past the last", startLine: 4, endLine: 3},
+		{name: "starts far past the end", startLine: 9999, endLine: 9998},
+		{name: "ends before it starts", startLine: 3, endLine: 1},
+		{name: "ends past the last line", startLine: 1, endLine: 4},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubCollectInsertions(t, insertion{startLine: tc.startLine, endLine: tc.endLine, comment: "ignored"})
+			path := writeFixFile(t, t.TempDir(), "sample.go", source)
 
-	captureFixStdout(t, func() {
-		if err := processFile(path); err != nil {
-			t.Errorf("processFile() error = %v", err)
-		}
-	})
-	if got := readFixFile(t, path); got != source {
-		t.Fatalf("processFile() rewrote the file for an out-of-range insertion:\n%s", got)
+			captureFixStdout(t, func() {
+				if err := processFile(path); err != nil {
+					t.Errorf("processFile() error = %v", err)
+				}
+			})
+			if got := readFixFile(t, path); got != source {
+				t.Fatalf("processFile() rewrote the file for an out-of-range insertion:\n%s", got)
+			}
+		})
+	}
+}
+
+// TestProcessFile_InsertionAtTheEdgesOfTheFileIsApplied verifies the other
+// side of each bound the guard reads: a comment inserted before the first
+// line, and a replacement whose range ends on the last line, are both
+// spliced in rather than dropped as out of range. A comment with more lines
+// than the file it goes into is spliced whole as well. Like the out-of-range
+// cases, these are reached through the collectInsertions seam.
+func TestProcessFile_InsertionAtTheEdgesOfTheFileIsApplied(t *testing.T) {
+	testCases := []struct {
+		name   string
+		source string
+		ins    insertion
+		want   string
+	}{
+		{
+			name:   "before the first line",
+			source: "package sample\n\nfunc ListProjects() {}\n",
+			ins:    insertion{startLine: 1, endLine: 0, comment: "first"},
+			want:   "// first\npackage sample\n\nfunc ListProjects() {}\n",
+		},
+		{
+			name:   "a range ending on the last line",
+			source: "package sample\n\nfunc ListProjects() {}\n",
+			ins:    insertion{startLine: 3, endLine: 3, comment: "last"},
+			want:   "package sample\n\n// last\n",
+		},
+		{
+			name:   "a comment longer than the file",
+			source: "package sample\n",
+			ins:    insertion{startLine: 1, endLine: 0, comment: "one\ntwo"},
+			want:   "// one\n// two\npackage sample\n",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubCollectInsertions(t, tc.ins)
+			path := writeFixFile(t, t.TempDir(), "sample.go", tc.source)
+
+			captureFixStdout(t, func() {
+				if err := processFile(path); err != nil {
+					t.Errorf("processFile() error = %v", err)
+				}
+			})
+			if got := readFixFile(t, path); got != tc.want {
+				t.Fatalf("rewritten file = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -503,7 +503,7 @@ func (t *httpTarget) close() {
 	if t.cancel != nil {
 		t.cancel()
 	}
-	if cmd, reap := t.command(); cmd != nil && reap != nil {
+	if cmd, reap := t.command(); cmd != nil {
 		reap.wait(cmd)
 	}
 }

@@ -125,7 +125,10 @@ func (h *packageDocHolder) moveToDocGo(dir string) error {
 	docStart := h.fset.Position(h.file.Doc.Pos()).Offset
 	docEnd := h.fset.Position(h.file.Doc.End()).Offset
 	pkgStart := h.fset.Position(h.file.Package).Offset
-	if docStart < 0 || docEnd > pkgStart || pkgStart > len(h.src) {
+	// An offset from a FileSet is never negative, so the two bounds that can
+	// fail are the comment ending past the package clause and the clause
+	// starting past the end of the source.
+	if docEnd > pkgStart || pkgStart > len(h.src) {
 		return fmt.Errorf("%s: package comment does not sit above the package clause", h.path)
 	}
 

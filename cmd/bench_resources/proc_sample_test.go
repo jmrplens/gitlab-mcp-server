@@ -91,6 +91,25 @@ func TestParseProcStatCPU_CommandNameWithSpaces_CountsFromTheParenthesis(t *test
 	if got != want {
 		t.Errorf("CPU seconds = %v, want %v", got, want)
 	}
+
+	// The parenthesis is where the count starts wherever it falls, the first
+	// byte included: what is before it is never read.
+	fromTheParenthesis, err := parseProcStatCPU(") " + strings.Join(after, " ") + "\n")
+	if err != nil || fromTheParenthesis != want {
+		t.Errorf("parseProcStatCPU from the parenthesis = %v, %v, want %v", fromTheParenthesis, err, want)
+	}
+}
+
+// TestParseProcStatusRSS_AValueWithoutItsUnit_IsRead verifies a VmRSS line is
+// read from its value, whether or not the unit follows it.
+func TestParseProcStatusRSS_AValueWithoutItsUnit_IsRead(t *testing.T) {
+	got, err := parseProcStatusRSS("Name:\tserver\nVmRSS:\t4096\n")
+	if err != nil {
+		t.Fatalf("parseProcStatusRSS: %v", err)
+	}
+	if want := uint64(4096 * 1024); got != want {
+		t.Errorf("VmRSS = %d bytes, want %d", got, want)
+	}
 }
 
 // TestParseProcStatCPU_Malformed_ReturnsError verifies a truncated or
@@ -102,6 +121,9 @@ func TestParseProcStatCPU_Malformed_ReturnsError(t *testing.T) {
 	}{
 		{name: "no parenthesis", line: "12345 server S 1 2 3"},
 		{name: "too few fields", line: "12345 (server) S 1 2 3"},
+		// One short: utime is there and stime is not, which a reader that
+		// counted to the utime only would index past.
+		{name: "no stime", line: "12345 (server) S 1 2 3 4 -1 0 0 0 0 0 1000"},
 		{name: "unparseable utime", line: "12345 (server) S 1 2 3 4 -1 0 0 0 0 0 x 776 0 0 20 0 14 0"},
 	}
 	for _, tc := range tests {
@@ -179,6 +201,19 @@ func TestCountGoroutines_Traceback_CountsOnlyGoroutineHeaders(t *testing.T) {
 
 	if got := countGoroutines(dump); got != 3 {
 		t.Errorf("countGoroutines = %d, want 3", got)
+	}
+}
+
+// TestCountGoroutines_ALongLineBeforeTheTraceback_IsReadPast verifies a line
+// longer than the scanner's first buffer does not end the count.
+//
+// The traceback shares stderr with everything else the process wrote, and a
+// server logs whole requests: a line of a few hundred kilobytes ahead of the
+// dump would otherwise stop the reader there and publish a count of none.
+func TestCountGoroutines_ALongLineBeforeTheTraceback_IsReadPast(t *testing.T) {
+	dump := strings.Repeat("x", 256*1024) + "\ngoroutine 1 [running]:\nmain.main()\n\ngoroutine 7 [select]:\n"
+	if got := countGoroutines(dump); got != 2 {
+		t.Errorf("countGoroutines = %d past a 256 KiB line, want the 2 goroutines after it", got)
 	}
 }
 
@@ -540,5 +575,82 @@ func TestSettledRSS_TheProcessGoesAway_ReportsNothing(t *testing.T) {
 
 	if got := settledRSS(vanishing); got != 0 {
 		t.Errorf("settledRSS = %d for a process that went away mid-settle, want 0", got)
+	}
+}
+
+// fakeProcess lays out one process directory of the test's own, points the
+// Linux reader at it whatever the platform, and returns a function that sets
+// the resident set the next read will find, in KiB. A process whose resident
+// set the test decides is the only way to hold a figure computed from two
+// readings to the readings it was computed from.
+func fakeProcess(t *testing.T, pid int) (setRSS func(kib int)) {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, strconv.Itoa(pid))
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("create %s: %v", dir, err)
+	}
+	stat := strconv.Itoa(pid) + " (server) S 0 1 1 0 -1 0 0 0 0 0 1 1 0 0 20 0 1 0 1 0 0\n"
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if err := os.WriteFile(filepath.Join(dir, "stat"), []byte(stat), 0o600); err != nil {
+		t.Fatalf("write the stat file: %v", err)
+	}
+	previousRoot, previousGOOS := procRoot, runtimeGOOS
+	procRoot, runtimeGOOS = root, "linux"
+	t.Cleanup(func() { procRoot, runtimeGOOS = previousRoot, previousGOOS })
+	return func(kib int) {
+		//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+		if err := os.WriteFile(filepath.Join(dir, "status"), []byte("VmRSS:\t"+strconv.Itoa(kib)+" kB\n"), 0o600); err != nil {
+			t.Errorf("write the status file: %v", err)
+		}
+	}
+}
+
+// TestSettledRSS_TwoSamplesOnePercentApart_HaveSettled verifies two readings
+// exactly one percent apart count as settled, and that the reading returned is
+// the second of them rather than one taken after the process moved on.
+//
+// The process is a directory of the test's own whose resident set is rewritten
+// before every read: 400 KiB, then 404 KiB, then twice that for as long as it
+// is asked. A threshold read as strictly less than one percent, or as one
+// percent of something other than the previous reading, waits past the pair
+// and reports the jump.
+func TestSettledRSS_TwoSamplesOnePercentApart_HaveSettled(t *testing.T) {
+	const pid = 7
+	setRSS := fakeProcess(t, pid)
+	sequence := []int{400, 404, 800}
+	reads := 0
+	s := newSampler(t.Context(), time.Hour, func() []int {
+		setRSS(sequence[min(reads, len(sequence)-1)])
+		reads++
+		return []int{pid}
+	})
+
+	if got, want := settledRSS(s), uint64(404*1024); got != want {
+		t.Errorf("settledRSS = %d after readings of 400 and 404 KiB, want %d: one percent apart is settled", got, want)
+	}
+}
+
+// TestSettledRSS_AFirstReadingOfNothing_IsNotSettled verifies a first sample
+// that finds no process is not taken as the settled figure, and the loop waits
+// for two real readings to agree instead.
+//
+// The settle starts the moment a process is spawned, before it may be visible
+// to the reader, and nothing is within one percent of nothing: counting that
+// as agreement would publish zero for a server that was about to be measured.
+func TestSettledRSS_AFirstReadingOfNothing_IsNotSettled(t *testing.T) {
+	const pid, notYet = 9, 8
+	fakeProcess(t, pid)(300)
+	reads := 0
+	s := newSampler(t.Context(), time.Hour, func() []int {
+		reads++
+		if reads == 1 {
+			return []int{notYet}
+		}
+		return []int{pid}
+	})
+
+	if got, want := settledRSS(s), uint64(300*1024); got != want {
+		t.Errorf("settledRSS = %d after a first read that found nothing and then 300 KiB twice, want %d", got, want)
 	}
 }

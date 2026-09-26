@@ -128,7 +128,6 @@ func readShards(dir string) (recording, error) {
 	}
 
 	var merged recording
-	shards := 0
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != shardExt {
 			continue
@@ -150,11 +149,12 @@ func readShards(dir string) (recording, error) {
 		if len(read) == 0 {
 			return recording{}, fmt.Errorf("shard %s in %s holds no request: a recording was interrupted before it wrote one, so the merge would silently drop whatever that test process saw. Record again with `make record-request-inventory`", entry.Name(), dir)
 		}
-		shards++
 		merged.records = append(merged.records, read...)
 		merged.written = newest(merged.written, entry)
 	}
-	if shards == 0 {
+	// Every shard merged above contributed a record, since an empty one was
+	// refused, so a recording with no record in it is one with no shard.
+	if len(merged.records) == 0 {
 		return recording{}, notRecorded(dir)
 	}
 	return merged, nil
