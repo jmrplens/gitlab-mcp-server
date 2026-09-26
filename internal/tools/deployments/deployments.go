@@ -426,10 +426,15 @@ type ApproveOrRejectInput struct {
 	RepresentedAs string               `json:"represented_as,omitempty" jsonschema:"Name of the approval rule to act as, when the user belongs to multiple approval rules"`
 }
 
-// ApproveOrRejectOutput represents the result of approving or rejecting a deployment.
+// ApproveOrRejectOutput represents the result of approving or rejecting a
+// deployment: the sentence this server composes, and the approval GitLab
+// recorded (Entities::Deployments::Approval), which client-go's
+// ApproveOrRejectProjectDeployment does not decode at all and is read from the
+// captured response (ADR-0021).
 type ApproveOrRejectOutput struct {
 	toolutil.HintableOutput
-	Message string `json:"message"`
+	Message  string                             `json:"message"`
+	Approval *toolutil.DeploymentApprovalOutput `json:"approval,omitempty"`
 }
 
 // ApproveOrReject approves or rejects a blocked deployment.
@@ -454,6 +459,7 @@ func ApproveOrReject(ctx context.Context, client *gitlabclient.Client, input App
 		opts.RepresentedAs = new(input.RepresentedAs)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, err := client.GL().Deployments.ApproveOrRejectProjectDeployment(
 		string(input.ProjectID), int64(input.DeploymentID), opts, gitlab.WithContext(ctx),
 	)
@@ -465,8 +471,13 @@ func ApproveOrReject(ctx context.Context, client *gitlabclient.Client, input App
 		return ApproveOrRejectOutput{}, toolutil.WrapErrWithStatusHint("approve_or_reject_deployment", err, http.StatusNotFound,
 			"verify deployment_id with environment.deployment_list. Only deployments awaiting approval can be acted on")
 	}
+	var approval toolutil.DeploymentApprovalOutput
+	if err = captured.Decode(&approval); err != nil {
+		return ApproveOrRejectOutput{}, toolutil.WrapErr("approve_or_reject_deployment", err)
+	}
 
 	return ApproveOrRejectOutput{
-		Message: fmt.Sprintf("Deployment #%d %s successfully", input.DeploymentID, input.Status),
+		Message:  fmt.Sprintf("Deployment #%d %s successfully", input.DeploymentID, input.Status),
+		Approval: &approval,
 	}, nil
 }
