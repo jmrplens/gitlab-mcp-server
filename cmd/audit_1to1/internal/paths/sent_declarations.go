@@ -162,10 +162,10 @@ const (
 	serviceAccountEntity = "API::Entities::ServiceAccount"
 )
 
-// reasonGroupScopedUserRoutes answers the five keys held against the three
+// reasonGroupScopedUserRoutes answers the six keys held against the three
 // group-scoped user types that only an instance-wide route can send.
 //
-// It is one reason for fifteen findings because it is one artifact. All four
+// It is one reason for eighteen findings because it is one artifact. All four
 // user output types pair with client-go's User, and readSDKRoutes unions the
 // eleven endpoints its service methods reach in front of every one of them.
 // Three of those endpoints fill these types: GET /groups/:id/enterprise_users
@@ -176,10 +176,11 @@ const (
 const reasonGroupScopedUserRoutes = "the three group-scoped user endpoints present ::API::Entities::UserPublic, which carries none of these keys: " +
 	"bio_html comes from lib/api/entities/users/bio_html.rb, which only UserProfile includes and only GET /users/:id presents; " +
 	"enterprise_group_id, enterprise_group_associated_at and provisioned_by_group_id come from " +
-	"ee/lib/ee/api/entities/user_with_admin.rb, which only POST /users and PUT /users/:id present; and unconfirmed_email is not a user " +
-	"key at all but one of the six on lib/api/entities/service_account.rb, which POST /service_accounts answers with. All five reach " +
-	"this type only because it decodes the same gl.User those endpoints do, and all five are published on internal/tools/users, which " +
-	"is the package those routes fill."
+	"ee/lib/ee/api/entities/user_with_admin.rb and provisioned_by_project_id, since 19.4, from lib/api/entities/user_with_admin.rb, " +
+	"the entity only instance routes present (POST /users and PUT /users/:id, and GET /users and GET /user to an administrator); and " +
+	"unconfirmed_email is not a user key at all but one of the six on lib/api/entities/service_account.rb, which POST /service_accounts " +
+	"answers with. All six reach this type only because it decodes the same gl.User those endpoints do, and internal/tools/users is " +
+	"the package those routes fill."
 
 // memberEntity is the entity the billable members route annotates and the one
 // internal/tools/groupmembers really publishes on its member output.
@@ -205,11 +206,12 @@ const (
 )
 
 // The three presenter options behind [categoryOptionNeverPassed] in the member
-// and user families, each naming the routes checked against the record at
-// v19.3.1-ee. only_path is declared by none of the 2110 routes in that record,
-// which is why every type carrying a user answers avatar_path this way; the
-// contrast that makes the check worth running is render_html, which looks the
-// same in the entity and is a declared parameter on three of them.
+// and user families, each naming the routes checked against the record, first
+// at v19.3.1-ee and again at 19.4.1-ee. only_path is declared by none of the
+// 2152 routes in the record at 19.4.1-ee, which is why every type carrying a
+// user answers avatar_path this way; the contrast that makes the check worth
+// running is render_html, which looks the same in the entity and is a declared
+// parameter on three of them.
 //
 // A presenter option is not a request parameter a caller can smuggle in: Grape
 // passes it only where the endpoint declares it, so a route that does not
@@ -228,15 +230,16 @@ const (
 		"The difference is per route set, not per entity: both render through the same Member."
 )
 
-// reasonBillableMemberEntity answers the nine membership keys the record reads
+// reasonBillableMemberEntity answers the ten membership keys the record reads
 // against the billable members list.
 //
-// It is one reason for nine fields because it is one mistake: the route's desc
+// It is one reason for ten fields because it is one mistake: the route's desc
 // annotates a different entity than its handler presents, so every key the
 // annotated entity adds beyond the presented one is reported at once. The
 // record itself holds both entities and settles it. API::Entities::Member
 // carries access_level, created_by, expires_at, the two identities,
-// is_using_seat, override, membership_state and member_role;
+// is_using_seat, override, membership_state, member_role and, since 19.4,
+// two_factor_enabled;
 // API::Entities::BillableMember carries none of them and carries
 // last_activity_on, membership_type, removable, is_last_owner and last_login_at
 // instead, which client-go's BillableGroupMember models and this type
@@ -279,9 +282,10 @@ const (
 //
 // render_html is unlike the presenter options above in one way that does not
 // change the answer: it is a real request parameter, so a caller can ask for it
-// where an endpoint declares it. Of the 2110 routes in the record exactly three
-// do, and the only merge request one is the single-merge-request GET, which is
-// why toolutil.MergeRequestOutput publishes both keys and this type does not.
+// where an endpoint declares it. Of the 2152 routes in the record at 19.4.1-ee
+// exactly three do, and the only merge request one is the single-merge-request
+// GET, which is why toolutil.MergeRequestOutput publishes both keys and this
+// type does not.
 const reasonRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exposes title_html and description_html only when the presenter is given " +
 	"render_html. Neither GET /projects/:id/issues/:issue_iid/related_merge_requests nor GET /projects/:id/issues/:issue_iid/closed_by declares that " +
 	"parameter, so Grape passes the option on neither and the keys have never been on either response. The single-merge-request GET does declare it, " +
@@ -356,7 +360,8 @@ const (
 // The presenter options behind the 31 package-grain findings the live record
 // used to report as sent on every response, because version 2 of it recorded
 // every hash and symbol condition as its kind alone (issue 973). Each was read
-// against GitLab's source at v19.3.1-ee, the version the record pins, and each
+// against GitLab's source at v19.3.1-ee, the version the record pinned then,
+// every line they cite reads the same at 19.4.1-ee, which it pins now, and each
 // holds on none of the requests the package makes: either the route presents
 // the entity without the option, or it declares the option as a parameter the
 // package never sends.
@@ -443,10 +448,12 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 			"already 1:1 and the 49 fields read against it are the whole Group entity arriving through the wrong " +
 			"annotation. Recorded in docs/development/upstream-bugs.md; the fix is gitlab-org/gitlab!254699.",
 	},
-	// The nine membership keys the billable members list is read against.
+	// The ten membership keys the billable members list is read against.
 	// Named one by one rather than with a splat: internal/tools/groupmembers
 	// also publishes API::Entities::Member on its own Output, where a finding
-	// is real, and a splat over the entity would swallow that too.
+	// is real, and a splat over the entity would swallow that too. The tenth,
+	// which Member exposes since 19.4 and groupmembers.Output publishes, is
+	// narrowed to the billable member type for the same reason.
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "access_level", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "created_by", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "expires_at", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
@@ -456,6 +463,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "member_role", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "membership_state", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "override", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
+	{Package: groupMembersPkg, Type: "BillableMemberOutput", Entity: memberEntity, Field: "two_factor_enabled", Category: categoryDocumentedNotSent, Reason: reasonBillableMemberEntity},
 
 	// The two user keys UserBasic gates behind a presenter option, across the
 	// three member-family packages whose routes never pass one. Each entry is
@@ -501,7 +509,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	{Package: groupsPkg, Entity: userPublicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
 	{Package: groupSAMLPkg, Entity: userPublicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
 
-	// The five keys the three group-scoped user types are held to and only an
+	// The six keys the three group-scoped user types are held to and only an
 	// instance-wide route can send. Named one by one rather than with a splat
 	// over each entity: every other key of UserPublic on these types is
 	// published, and UserProfile and UserWithAdmin both inherit the whole of
@@ -521,6 +529,9 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "enterprise_group_associated_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "provisioned_by_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 	{Package: groupSAMLPkg, Entity: serviceAccountEntity, Field: "unconfirmed_email", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: enterpriseUsersPkg, Entity: userWithAdminEntity, Field: "provisioned_by_project_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupsPkg, Entity: userWithAdminEntity, Field: "provisioned_by_project_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "provisioned_by_project_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 
 	// The same two user keys on the project's user list. GET /projects/:id/users
 	// declares search, skip_users and pagination and neither option, so it is
@@ -558,18 +569,6 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 			"publishes both. BasicProjectDetails carries neither, which is what BasicOutput models.",
 	},
 
-	// The two entities client-go's Group methods put in front of the group
-	// types, neither of which a group route sends.
-	{
-		Package: groupsPkg, Entity: "API::Entities::BasicProjectDetails", Field: declaredSegment,
-		Category: categoryDocumentedNotSent,
-		Reason: "the only endpoint in the union naming this entity is GET /projects/:id/job_token_scope/groups_allowlist, " +
-			"which presents BasicGroupDetails and whose desc annotation is the project allowlist's, copied; measured against " +
-			"a fixture and recorded in docs/development/upstream-bugs.md under \"Three job token scope endpoints declare a " +
-			"response entity they do not send\". internal/tools/projects publishes BasicProjectDetails, from the routes that " +
-			"really send it.",
-	},
-
 	// EpicIssue on the issue types. The union carries it because client-go's
 	// Issue methods reach the epic's issue list, which is a route of another
 	// package.
@@ -585,7 +584,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	{
 		Package: issuesPkg, Entity: "API::Entities::MRNote", Field: "note",
 		Category: categoryDocumentedNotSent,
-		Reason: "lib/api/merge_requests.rb:975 declares success Entities::MRNote and line 994 presents Entities::IssueBasic " +
+		Reason: "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents Entities::IssueBasic " +
 			"beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and never a " +
 			"note. Recorded in docs/development/upstream-bugs.md for the documentation merge request.",
 	},

@@ -203,11 +203,11 @@
 // which returns a bare array of tokens while GitLab serves twenty at a time. A
 // caller cannot tell it has one page and cannot ask for the next.
 //
-// The oracle is the live record's params: 308 of its 2110 mounted routes declare
-// per_page, 304 of those declare page beside it and the other four take a cursor
-// or a page_token. That is a far stronger statement than a guess from an
-// endpoint's name, and it is available because the record asks the router rather
-// than reading prose.
+// The oracle is the live record's params: 318 of its 2152 mounted routes declare
+// per_page at 19.4.1-ee, 311 of those declare page beside it and the other seven
+// take a cursor or a page_token. That is a far stronger statement than a guess
+// from an endpoint's name, and it is available because the record asks the
+// router rather than reading prose.
 //
 // An action is judged when its output is a collection envelope, which is exactly
 // one content field that is a list of objects, with this server's own framing

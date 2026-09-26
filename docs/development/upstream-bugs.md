@@ -110,7 +110,7 @@ readable without opening the tracker:
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
-| 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), merged | **Yes, 19.4.0** | No | Yes, until the live record is taken from 19.4 or later |
+| 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), merged | **Yes, 19.4.0** | No | No, retired when the live record was taken from 19.4.1-ee |
 | 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699), open and approved | No | No | Yes |
 | 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | No | No | No | No | Not needed |
 | 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
@@ -2897,17 +2897,17 @@ markdown. We keep emitting both.
   commit `1dd45490`), and released: held to the tags that contain that commit,
   read on 2026-09-24, it is in `v19.4.0-ee`, tagged on 2026-09-16, and in
   `v19.4.1-ee`, so 19.4.0 is the first GitLab whose annotations say what the
-  three endpoints send. The declaration below still stands, because the record
-  this repository commits was taken from `19.3.1-ee` and still carries the
-  three wrong annotations. It retires when `cmd/gen_api_live` is run against a
-  19.4 or later image, which waits until the work in flight has landed; the
-  stale-declaration check then fails on it until it is removed.
+  three endpoints send. The record this repository commits was re-taken from
+  `19.4.1-ee` on 2026-09-26 (issue 965), which carries the three corrected
+  annotations, and the stale-declaration check then failed on the declaration
+  below until it was removed.
 - **Blocking**: no.
-- **Workaround**: yes, a declaration. The 13 findings this produces against
-  `internal/tools/groups`' output are answered under
-  `documented-response-is-not-the-one-sent`, which is the category built for
-  exactly this: the record is right about what GitLab says and wrong about what
-  GitLab sends, because GitLab itself is wrong about it.
+- **Workaround**: no longer. While the record came from `19.3.1-ee` it was a
+  declaration: the 13 findings this produced against `internal/tools/groups`'
+  output were answered under `documented-response-is-not-the-one-sent`, which
+  is the category built for exactly this: the record was right about what
+  GitLab said and wrong about what GitLab sent, because GitLab itself was wrong
+  about it.
 
 Three Grape `desc` blocks in `lib/api/project_job_token_scope.rb` name a
 response entity the handler beneath them does not present. The wrong line and
