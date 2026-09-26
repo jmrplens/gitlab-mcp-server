@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -229,6 +231,110 @@ func TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.state.busy(); got != tt.want {
 				t.Errorf("busy() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// busyStateCase is one credential state busy() is measured in, with the answer
+// it gives there.
+type busyStateCase struct {
+	name  string
+	state *credentialState
+	want  bool
+}
+
+// busyStates builds a credential state for each way busy() reaches its answer:
+// one holding an open listen stream and no watcher, where the stream count
+// decides and the watcher count is never read; one holding a watcher and no
+// stream, where both are read; and one holding neither, where both are read and
+// both are zero. Each carries a watcher manager, so what they hold is the only
+// difference between them.
+//
+// It takes a testing.TB, unlike the helpers the tests above build states with,
+// because the allocation pin and the benchmark measure the same three states.
+//
+// The watcher polls at the production cadence a pipeline that has finished is
+// polled at, so it stays quiet for the length of a measurement: a poll landing
+// inside one would be counted against busy(), since the allocation count a
+// measurement reads is the process's.
+func busyStates(tb testing.TB) []busyStateCase {
+	tb.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentType, mimeJSON)
+		switch r.URL.Path {
+		case "/api/v4/version":
+			_, _ = w.Write([]byte(`{"version":"16.0.0","revision":"test"}`))
+		case "/api/v4/projects/42/pipelines/99":
+			_, _ = w.Write([]byte(`{"id":99,"iid":7,"status":"success","ref":"main","sha":"abc123",` +
+				`"web_url":"https://gitlab.example.com/p/-/pipelines/99","source":"push"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	tb.Cleanup(gitlab.Close)
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: gitlab.URL, GitLabToken: testToken})
+	if err != nil {
+		tb.Fatalf("gitlabclient.NewClient: %v", err)
+	}
+	holding := func(owner string) *credentialState {
+		runtime := newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), subscriptions.Options{})
+		tb.Cleanup(runtime.close)
+		return &credentialState{owner: owner, listen: &listenCounter{}, subs: runtime}
+	}
+
+	streaming := holding("owner-streaming")
+	if !streaming.listen.acquire(0) {
+		tb.Fatal("the listen counter refused a stream with no ceiling configured")
+	}
+	watching := holding("owner-watching")
+	if err = watching.subs.manager.Subscribe(tb.Context(), testSession, "gitlab://project/42/pipeline/99"); err != nil {
+		tb.Fatalf("Subscribe: %v", err)
+	}
+	quiet := holding("owner-quiet")
+
+	return []busyStateCase{
+		{name: "stream_open", state: streaming, want: true},
+		{name: "watchers_only", state: watching, want: true},
+		{name: "neither", state: quiet, want: false},
+	}
+}
+
+// TestCredentialState_Busy_AllocatesNothing pins busy() at no allocation in
+// each of the three states it can be asked about.
+//
+// The pool's idle sweep asks it under the pool's write lock, once for every
+// entry the sweep passes, so whatever it costs is paid while every other
+// request waits for that lock. It reads one counter and, only when no stream is
+// open, the watcher count behind the manager's mutex, and neither allocates.
+// This is the baseline the layer that moves the predicate into the register
+// (POL-003) is held to: reading the state through the interface that layer
+// declares must not allocate either.
+//
+// It does not run in parallel: the count a measurement reads is the whole
+// process's, so a test allocating beside it would be counted against busy().
+func TestCredentialState_Busy_AllocatesNothing(t *testing.T) {
+	for _, tc := range busyStates(t) {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.state.busy(); got != tc.want {
+				t.Fatalf("busy() = %v, want %v; the state is not the one this case measures", got, tc.want)
+			}
+			if allocs := testing.AllocsPerRun(1000, func() { _ = tc.state.busy() }); allocs != 0 {
+				t.Errorf("busy() allocates %v times per call, want 0", allocs)
+			}
+		})
+	}
+}
+
+// BenchmarkCredentialState_Busy measures busy() in the same three states as
+// [TestCredentialState_Busy_AllocatesNothing], which is the baseline benchstat
+// compares the layer that moves the predicate into the register against.
+func BenchmarkCredentialState_Busy(b *testing.B) {
+	for _, tc := range busyStates(b) {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_ = tc.state.busy()
 			}
 		})
 	}
@@ -462,6 +568,84 @@ func TestServerShell_NewCredentialState_TakesWhatTheEntryDecides(t *testing.T) {
 	}
 	if state.subs.reader.client != entry.Client() {
 		t.Error("the watcher polls with a client other than the entry's; the authorization check would be somebody else's")
+	}
+}
+
+// TestServerShell_TwoCredentialsOfOneUser_HoldTwoOfEverything pins the server
+// half of what one GitLab user holding two tokens gets today: two credential
+// states, each with a rate-limit bucket, a listen counter and a watcher manager
+// of its own.
+//
+// The tenant policy specification defines a tenant as the pair (canonical
+// instance URL, GitLab user id), and many credentials map to one tenant
+// (TEN-001, TEN-003). What a credential holds on a shared server is keyed on
+// its pool entry instead, and an entry is one per token, so one user's two
+// tokens hold two of everything (F-01, issue 955). This is AC-004 of the
+// specification's dated record (plan/issue-565/spec.md) on the server, beside
+// the pool's own half in internal/serverpool, and it pins the behavior as it
+// is, not a target: a change that keys an allowance on the tenant is the change
+// that must break it, and say so.
+func TestServerShell_TwoCredentialsOfOneUser_HoldTwoOfEverything(t *testing.T) {
+	// The stub answers every token as user 42, so the two below are one user's.
+	gitlab := gateStubGitLab(t, false)
+	pool := serverpool.New(&config.Config{
+		GitLabURL:      gitlab,
+		Tier:           edition.Free,
+		TierExplicit:   true,
+		IgnoreScopes:   true,
+		RateLimitRPS:   config.DefaultHTTPRateLimitRPS,
+		RateLimitBurst: config.DefaultRateLimitBurst,
+	}, okFactory)
+	first := gateTestEntry(t, pool, "glpat-first-token-of-user-42", gitlab)
+	second := gateTestEntry(t, pool, "glpat-second-token-of-user-42", gitlab)
+	if first.Identity().UserID != "42" || second.Identity().UserID != "42" {
+		t.Fatalf("identities = %+v and %+v, want one user, 42", first.Identity(), second.Identity())
+	}
+	if first.Config().GitLabURL != second.Config().GitLabURL {
+		t.Fatalf("instances = %q and %q, want one instance", first.Config().GitLabURL, second.Config().GitLabURL)
+	}
+
+	shell, err := newServerShell(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	}, withSubscriptionOptions(fastOptions()))
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	mine := shell.newCredentialState(first)
+	t.Cleanup(func() { mine.close(nil, endOfCredentialEviction) })
+	theirs := shell.newCredentialState(second)
+	t.Cleanup(func() { theirs.close(nil, endOfCredentialEviction) })
+
+	if mine.owner == theirs.owner {
+		t.Errorf("both states carry owner %q; one token's notifications would reach the other's sessions", mine.owner)
+	}
+	if mine.limiter == nil || theirs.limiter == nil {
+		t.Fatal("a state was built with no bucket although the entries resolved a rate")
+	}
+	if mine.limiter == theirs.limiter {
+		t.Error("the two tokens draw on one bucket; the limit would be the user's, which nothing here keys on")
+	}
+	if mine.listen == nil || theirs.listen == nil {
+		t.Fatal("a state was built with no listen counter")
+	}
+	if mine.listen == theirs.listen {
+		t.Error("the two tokens share one listen counter")
+	}
+	if mine.subs == nil || theirs.subs == nil {
+		t.Fatal("a state was built with no watchers on a full capability surface")
+	}
+	if mine.subs.manager == theirs.subs.manager {
+		t.Error("the two tokens share one watcher manager")
+	}
+
+	// Two counters in what they count, and not only in where they live: a
+	// stream one token holds open is not one the other holds.
+	if !mine.listen.acquire(0) {
+		t.Fatal("the listen counter refused a stream with no ceiling configured")
+	}
+	if got := theirs.listen.count(); got != 0 {
+		t.Errorf("the other token's counter reads %d open streams, want 0", got)
 	}
 }
 

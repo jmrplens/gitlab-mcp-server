@@ -1461,3 +1461,218 @@ func TestForCompletions_IsDerivedOnceAndKept(t *testing.T) {
 		t.Errorf("(*RateLimiter)(nil).forCompletions() = %p, want nil", got)
 	}
 }
+
+// neverDryLimiter returns a bucket no test or benchmark here can empty: a
+// billion tokens a second and a burst of a million. Every request it meets takes
+// the admitted path, which is the one every served request pays for.
+func neverDryLimiter() *RateLimiter {
+	return NewRateLimiter(1e9, 1<<20)
+}
+
+// meteredResourceURI is the one resource the metered session serves.
+const meteredResourceURI = "test://one"
+
+// meteredMethodCase is one method the allocation pins and the benchmark drive
+// the rate-limit middleware with.
+type meteredMethodCase struct {
+	method string
+	// request is what the middleware is handed when it is called directly.
+	request mcp.Request
+	// call asks for the same method over a client session.
+	call func(context.Context, *mcp.ClientSession) error
+	// allocs is how many times the middleware allocates for one admitted
+	// request of the method, as measured on this tree (Go 1.27.1, go-sdk
+	// v1.8.0, golang.org/x/time/rate as go.mod pins it).
+	allocs float64
+}
+
+// meteredMethodCases is one method for each bucket the middleware charges
+// (tools/call and resources/read share the tool-call bucket and are refused on
+// different channels, so both are here), and one method it charges to none.
+func meteredMethodCases() []meteredMethodCase {
+	completion := &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: "ref/prompt", Name: "review"},
+		Argument: mcp.CompleteParamsArgument{Name: "project", Value: "gitl"},
+	}
+	return []meteredMethodCase{
+		{
+			method:  methodToolsCall,
+			request: &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "echo"}},
+			call: func(ctx context.Context, s *mcp.ClientSession) error {
+				_, err := s.CallTool(ctx, &mcp.CallToolParams{Name: "echo"})
+				return err
+			},
+		},
+		{
+			method:  methodResourcesRead,
+			request: &mcp.ReadResourceRequest{Params: &mcp.ReadResourceParams{URI: meteredResourceURI}},
+			call: func(ctx context.Context, s *mcp.ClientSession) error {
+				_, err := s.ReadResource(ctx, &mcp.ReadResourceParams{URI: meteredResourceURI})
+				return err
+			},
+		},
+		{
+			method:  methodToolsList,
+			request: &mcp.ListToolsRequest{Params: &mcp.ListToolsParams{}},
+			call: func(ctx context.Context, s *mcp.ClientSession) error {
+				_, err := s.ListTools(ctx, nil)
+				return err
+			},
+		},
+		{
+			method:  "completion/complete",
+			request: &mcp.CompleteRequest{Params: completion},
+			call: func(ctx context.Context, s *mcp.ClientSession) error {
+				_, err := s.Complete(ctx, completion)
+				return err
+			},
+		},
+		{
+			method:  "resources/list",
+			request: &mcp.ListResourcesRequest{Params: &mcp.ListResourcesParams{}},
+			call: func(ctx context.Context, s *mcp.ClientSession) error {
+				_, err := s.ListResources(ctx, nil)
+				return err
+			},
+		},
+	}
+}
+
+// rateLimitMiddlewareUnderTest returns the handler [AttachRateLimitFunc]
+// installs, resolving every request to limiter, with a handler behind it that
+// answers every method at once with served.
+//
+// It is the middleware exactly as a request meets it and nothing else: what the
+// SDK does to decode a request and dispatch it, which a round trip over a
+// session adds and a dependency update moves, is outside it. The handler is
+// taken from a middleware added last, which the SDK calls once, as it is added,
+// with the handler the ones before it make.
+func rateLimitMiddlewareUnderTest(tb testing.TB, limiter *RateLimiter) (handler mcp.MethodHandler, served mcp.Result) {
+	tb.Helper()
+	served = &mcp.CallToolResult{}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddReceivingMiddleware(func(mcp.MethodHandler) mcp.MethodHandler {
+		return func(context.Context, string, mcp.Request) (mcp.Result, error) { return served, nil }
+	})
+	AttachRateLimitFunc(server, func(context.Context) *RateLimiter { return limiter })
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		handler = next
+		return next
+	})
+	if handler == nil {
+		tb.Fatal("the SDK did not hand the last middleware the handler before it; the middleware cannot be measured on its own")
+	}
+	return handler, served
+}
+
+// meteredSession connects a client over an in-memory transport to a server
+// answering every method [meteredMethodCases] asks, with the rate-limit
+// middleware resolving every request to limiter, the way [connectClient]
+// connects the tests above. It takes a testing.TB so the benchmark can use it.
+func meteredSession(tb testing.TB, limiter *RateLimiter) *mcp.ClientSession {
+	tb.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{
+		CompletionHandler: func(context.Context, *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+			return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{"suggested"}}}, nil
+		},
+	})
+	registerEchoTool(server)
+	server.AddResource(&mcp.Resource{URI: meteredResourceURI, Name: "one"},
+		func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: req.Params.URI, Text: "hi"}}}, nil
+		})
+	server.AddPrompt(&mcp.Prompt{Name: "review", Arguments: []*mcp.PromptArgument{{Name: "project"}}},
+		func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			return &mcp.GetPromptResult{}, nil
+		})
+	AttachRateLimitFunc(server, func(context.Context) *RateLimiter { return limiter })
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		tb.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		tb.Fatalf("client connect: %v", err)
+	}
+	tb.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+// TestAttachRateLimitFunc_AllocationsPerMethod pins how many times the
+// rate-limit middleware allocates for one admitted request of each method it
+// charges, and of one it charges to none.
+//
+// The middleware runs in front of every request a client sends, so an
+// allocation added to it is paid by every request of every tenant. The pins are
+// the counts measured on this tree, and they are the baseline the layer that
+// moves the method switch into the register (RTC-001 to RTC-004) is held to:
+// asking the register which bucket a method belongs to must not allocate where
+// the switch did not.
+//
+// The middleware is measured on its own, called directly with a handler behind
+// it that answers at once (see [rateLimitMiddlewareUnderTest]), so the count is
+// of the middleware and not of the SDK around it; [BenchmarkAttachRateLimitFunc]
+// weighs it against a whole round trip. Each method is first asked over a
+// session too, which keeps the benchmark's session half answering. A refusal
+// allocates its answer and is pinned by what it says, by the tests above,
+// rather than by what it costs.
+//
+// It does not run in parallel: the count a measurement reads is the whole
+// process's, so a test allocating beside it would be counted against the
+// middleware.
+func TestAttachRateLimitFunc_AllocationsPerMethod(t *testing.T) {
+	limiter := neverDryLimiter()
+	handler, served := rateLimitMiddlewareUnderTest(t, limiter)
+	session := meteredSession(t, limiter)
+	ctx := t.Context()
+
+	for _, tc := range meteredMethodCases() {
+		t.Run(tc.method, func(t *testing.T) {
+			if err := tc.call(ctx, session); err != nil {
+				t.Fatalf("%s over a session: %v", tc.method, err)
+			}
+			result, err := handler(ctx, tc.method, tc.request)
+			if err != nil || result != served {
+				t.Fatalf("%s was answered by the middleware (%v, %v); the measurement below would be of a refusal", tc.method, result, err)
+			}
+			got := testing.AllocsPerRun(1000, func() { _, _ = handler(ctx, tc.method, tc.request) })
+			if got != tc.allocs {
+				t.Errorf("the middleware allocates %v times per %s, want %v", got, tc.method, tc.allocs)
+			}
+		})
+	}
+}
+
+// BenchmarkAttachRateLimitFunc measures one admitted request of each method
+// [TestAttachRateLimitFunc_AllocationsPerMethod] pins, at two depths: the
+// middleware called on its own, where a change to how it charges a method
+// shows, and a whole round trip over an in-memory session, the way the tests
+// above drive it, where that change is weighed against what a request costs
+// anyway. It is the baseline benchstat compares the layer that moves the method
+// switch into the register against.
+func BenchmarkAttachRateLimitFunc(b *testing.B) {
+	limiter := neverDryLimiter()
+	handler, _ := rateLimitMiddlewareUnderTest(b, limiter)
+	session := meteredSession(b, limiter)
+	ctx := b.Context()
+
+	for _, tc := range meteredMethodCases() {
+		b.Run("middleware/"+tc.method, func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_, _ = handler(ctx, tc.method, tc.request)
+			}
+		})
+		b.Run("session/"+tc.method, func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				if err := tc.call(ctx, session); err != nil {
+					b.Fatalf("%s: %v", tc.method, err)
+				}
+			}
+		})
+	}
+}
