@@ -124,7 +124,7 @@ func TestExecute_RenderAndCheck_NeverMeasure(t *testing.T) {
 	if err := execute(check); err != nil {
 		t.Errorf("execute (check) over what the redraw wrote: %v", err)
 	}
-	if after := readFileForTest(t, record); after != before {
+	if readFileForTest(t, record) != before {
 		t.Error("the record changed under a redraw and a check, which read it and nothing else")
 	}
 }
