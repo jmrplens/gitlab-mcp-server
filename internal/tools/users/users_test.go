@@ -808,6 +808,50 @@ func TestListEmails_Success(t *testing.T) {
 	}
 }
 
+// TestListEmails_PageAndPerPage_ReachTheRequest holds that the page a caller
+// asks for is the page GitLab is asked for. client-go's ListEmails takes no
+// options struct, so until the input carried page and per_page this action
+// could only ever read GitLab's first page.
+func TestListEmails_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, pathListEmails)
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"email":"secondary@example.com"}]`)
+	}))
+
+	out, err := ListEmails(context.Background(), client, ListEmailsInput{
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+	})
+	if err != nil {
+		t.Fatalf("ListEmails() unexpected error: %v", err)
+	}
+	if len(out.Emails) != 1 || out.Emails[0].ID != 2 {
+		t.Errorf("emails = %+v, want the one address of page 2", out.Emails)
+	}
+}
+
+// TestListEmails_NextPageHeader_PublishesThePaginationBlock holds that the
+// page GitLab answers is published as a page, so a caller holding the first
+// page can tell a second exists and which to ask for.
+func TestListEmails_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathListEmails)
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"email":"primary@example.com"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := ListEmails(context.Background(), client, ListEmailsInput{})
+	if err != nil {
+		t.Fatalf("ListEmails() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestListEmails_APIError verifies ListEmails when API error.
 func TestListEmails_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1994,6 +2038,27 @@ func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 			"| --- | --- | --- |\n"+
 			"| 1 | primary@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
 			"| 2 | alias@example.com | ❌ awaiting confirmation |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.current' to view your full profile\n")
+}
+
+// TestFormatEmailListMarkdownString_APageOfALongerList verifies that a page
+// which is not the whole list says so: the total in the heading, the page
+// between the heading and the table, and the pagination line before the next
+// steps.
+func TestFormatEmailListMarkdownString_APageOfALongerList(t *testing.T) {
+	out := EmailListOutput{
+		Emails:     []EmailOutput{{ID: 1, Email: "primary@example.com", ConfirmedAt: "2026-01-01T00:00:00Z"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+
+	assertMarkdown(t, FormatEmailListMarkdownString(out),
+		"## Email Addresses (2)\n\n"+
+			"Showing 1 of 2 results (page 1 of 2)\n\n"+
+			"| ID | Email | Confirmed |\n"+
+			"| --- | --- | --- |\n"+
+			"| 1 | primary@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
+			"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.current' to view your full profile\n")
 }

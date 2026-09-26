@@ -422,18 +422,25 @@ type EmailOutput struct {
 	ConfirmedAt string `json:"confirmed_at,omitempty"`
 }
 
-// EmailListOutput holds a list of emails.
+// EmailListOutput holds one page of the current user's email addresses and
+// the pagination GitLab sent with it.
 type EmailListOutput struct {
 	toolutil.HintableOutput
-	Emails []EmailOutput `json:"emails"`
+	Emails     []EmailOutput             `json:"emails"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListEmailsInput is an empty struct for listing current user's emails.
-type ListEmailsInput struct{}
+// ListEmailsInput holds the page of the current user's email addresses to
+// list. GitLab pages GET /user/emails like any other list, and client-go's
+// ListEmails takes no options struct, so the page travels as a request option.
+type ListEmailsInput struct {
+	toolutil.PaginationInput
+}
 
-// ListEmails retrieves email addresses for the current authenticated user.
-func ListEmails(ctx context.Context, client *gitlabclient.Client, _ ListEmailsInput) (EmailListOutput, error) {
-	emails, _, err := client.GL().Users.ListEmails(gl.WithContext(ctx))
+// ListEmails retrieves one page of the current authenticated user's email
+// addresses.
+func ListEmails(ctx context.Context, client *gitlabclient.Client, input ListEmailsInput) (EmailListOutput, error) {
+	emails, resp, err := client.GL().Users.ListEmails(gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return EmailListOutput{}, toolutil.WrapErrWithStatusHint("list_emails", err, http.StatusUnauthorized,
 			"listing your emails requires a valid token with read_user or api scope")
@@ -447,7 +454,7 @@ func ListEmails(ctx context.Context, client *gitlabclient.Client, _ ListEmailsIn
 		}
 		out = append(out, o)
 	}
-	return EmailListOutput{Emails: out}, nil
+	return EmailListOutput{Emails: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Contribution Events.

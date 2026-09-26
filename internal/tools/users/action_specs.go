@@ -235,10 +235,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Delete a specific user's SSH key. Returns: confirmation with the deleted key ID. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user.",
 	},
 	"gitlab_list_emails": {
-		usage:          "List the authenticated user's registered email addresses. Use when the prompt asks which emails are on the current account.",
+		usage:          "List the authenticated user's registered email addresses, one page at a time with page and per_page. Use when the prompt asks which emails are on the current account.",
 		aliases:        []string{"list emails", "list my emails", "show email addresses"},
 		relatedActions: []string{actionUserCurrent, actionUserModify},
-		description:    "List the current user's email addresses. Returns: email entries with ID, address, and confirmation time. See also: gitlab_user_current, gitlab_modify_user.",
+		description:    "List the current user's email addresses. Returns: email entries with ID, address, and confirmation time, with pagination metadata. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_list_user_contribution_events": {
 		usage:          "List a user's recent contribution events (pushes, comments, merges) filtered by action, target type, date range, and scope. Use when the prompt asks what a user has done recently.",
@@ -364,7 +364,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "List instance-level service accounts with order_by/sort and pagination. Admin-only. Use when the prompt asks which service accounts exist.",
 		aliases:        []string{"list service accounts", "show service accounts", "service account inventory"},
 		relatedActions: []string{"user.create_service_account", "user.update_service_account"},
-		description:    "List instance-level service accounts. Returns: service account summaries with ID, username, name, and email. Requires admin token. See also: gitlab_create_service_account, gitlab_update_instance_service_account.",
+		description:    "List instance-level service accounts. Returns: service account summaries with ID, username, name, and email, with pagination metadata. Requires admin token. See also: gitlab_create_service_account, gitlab_update_instance_service_account.",
 	},
 	"gitlab_update_instance_service_account": {
 		usage:          "Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Admin-only.",
