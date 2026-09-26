@@ -13,12 +13,18 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Sample GraphQL response payloads.
 
+// sampleResourceNode is a catalog resource as the get document answers it.
+// Its inputs carry defaults of each JSON kind GitLab sends, as components/sast
+// on gitlab.com does: a string, a boolean and a number.
 const sampleResourceNode = `{
 	"id": "gid://gitlab/Ci::CatalogResource/1",
 	"name": "go-pipeline",
@@ -27,6 +33,7 @@ const sampleResourceNode = `{
 	"fullPath": "my-group/go-pipeline",
 	"webPath": "/explore/catalog/my-group/go-pipeline",
 	"starCount": 42,
+	"starrersPath": "/my-group/go-pipeline/-/starrers",
 	"last30DayUsageCount": 7,
 	"archived": false,
 	"topics": ["go", "ci"],
@@ -35,43 +42,63 @@ const sampleResourceNode = `{
 	"latestReleasedAt": "2026-06-15T10:30:00Z",
 	"versions": {"nodes": [
 		{
+			"id": "gid://gitlab/Ci::Catalog::Resources::Version/21",
 			"name": "2.1.0",
 			"releasedAt": "2026-06-15T10:30:00Z",
 			"createdAt": "2026-06-15T10:29:00Z",
 			"semver": {"major": 2, "minor": 1, "patch": 0},
 			"path": "/my-group/go-pipeline/-/tags/2.1.0",
-			"readmeHtml": "<h1>Go Pipeline</h1><p>Components for Go projects.</p>",
+			"author": {"id": "gid://gitlab/User/5", "username": "gopher", "name": "Go Pher",
+				"webUrl": "https://gitlab.example.com/gopher", "avatarUrl": "/uploads/-/system/user/avatar/5/avatar.png"},
+			"commit": {"sha": "0d64668d42dea9a265409e194a034653d41362ae", "shortId": "0d64668d", "title": "Release 2.1.0",
+				"webUrl": "https://gitlab.example.com/my-group/go-pipeline/-/commit/0d64668d42dea9a265409e194a034653d41362ae"},
 			"components": {"nodes": [
 				{
+					"id": "gid://gitlab/Ci::Catalog::Resources::Component/31",
 					"name": "build",
 					"description": "Build Go binary",
 					"includePath": "gitlab.example.com/my-group/go-pipeline/build@2.1.0",
+					"last30DayUsageCount": 12,
 					"inputs": [
-						{"name": "go_version", "description": "Go version to use", "type": "string", "required": false, "default": "1.22"},
-						{"name": "binary_name", "description": "Output binary name", "type": "string", "required": true, "default": null}
+						{"name": "go_version", "description": "Go version to use", "type": "STRING", "required": false, "default": "1.22",
+							"options": ["1.22", "1.23"], "regex": "^1\\.[0-9]+$",
+							"rules": [{"if": "$[[ inputs.legacy ]] == true", "default": "1.21", "options": ["1.20", "1.21"]}]},
+						{"name": "binary_name", "description": "Output binary name", "type": "STRING", "required": true, "default": null,
+							"options": null, "regex": null, "rules": null},
+						{"name": "race", "description": "Run with the race detector", "type": "BOOLEAN", "required": false, "default": false,
+							"options": null, "regex": null, "rules": null}
 					]
 				},
 				{
+					"id": "gid://gitlab/Ci::Catalog::Resources::Component/32",
 					"name": "test",
 					"description": "Run Go tests with coverage",
 					"includePath": "gitlab.example.com/my-group/go-pipeline/test@2.1.0",
+					"last30DayUsageCount": 0,
 					"inputs": [
-						{"name": "coverage_threshold", "description": "Minimum coverage %", "type": "number", "required": false, "default": "80"}
+						{"name": "coverage_threshold", "description": "Minimum coverage %", "type": "NUMBER", "required": false, "default": 80,
+							"options": null, "regex": null, "rules": null}
 					]
 				}
 			]}
 		},
 		{
+			"id": "gid://gitlab/Ci::Catalog::Resources::Version/20",
 			"name": "2.0.0",
 			"releasedAt": "2026-03-01T08:00:00Z",
 			"createdAt": "2026-03-01T07:59:00Z",
 			"semver": {"major": 2, "minor": 0, "patch": 0},
 			"path": "/my-group/go-pipeline/-/tags/2.0.0",
-			"readmeHtml": null,
+			"author": null,
+			"commit": null,
 			"components": {"nodes": [
-				{"name": "build", "description": null, "includePath": "gitlab.example.com/my-group/go-pipeline/build@2.0.0", "inputs": []}
+				{"id": "gid://gitlab/Ci::Catalog::Resources::Component/30", "name": "build", "description": null,
+					"includePath": "gitlab.example.com/my-group/go-pipeline/build@2.0.0", "last30DayUsageCount": null, "inputs": []}
 			]}
 		}
+	]},
+	"latestVersion": {"nodes": [
+		{"readme": "# Go Pipeline\n\nComponents for Go projects.", "readmeHtml": "<h1>Go Pipeline</h1><p>Components for Go projects.</p>"}
 	]}
 }`
 
@@ -134,6 +161,9 @@ func TestList_Success(t *testing.T) {
 	}
 	if r.WebPath != "/explore/catalog/my-group/go-pipeline" {
 		t.Errorf("WebPath = %q", r.WebPath)
+	}
+	if r.StarrersPath != "/my-group/go-pipeline/-/starrers" {
+		t.Errorf("StarrersPath = %q", r.StarrersPath)
 	}
 }
 
@@ -343,6 +373,86 @@ func TestList_ContradictoryPageSizes(t *testing.T) {
 	}
 }
 
+// selectedField is one field a document selects: its path by response key,
+// and the value of its first argument when it takes one.
+type selectedField struct {
+	path  string
+	first string
+}
+
+// documentFields lists every field a document selects, named by the key each
+// position is answered under, so an aliased selection reads as the alias.
+func documentFields(t *testing.T, document string) []selectedField {
+	t.Helper()
+	parsed, err := parser.ParseQuery(&ast.Source{Input: document})
+	if err != nil {
+		t.Fatalf("parse document: %v", err)
+	}
+	var fields []selectedField
+	var walk func(prefix string, set ast.SelectionSet)
+	walk = func(prefix string, set ast.SelectionSet) {
+		for _, selection := range set {
+			field, ok := selection.(*ast.Field)
+			if !ok {
+				t.Fatalf("selection %T under %q, want fields only", selection, prefix)
+			}
+			path := prefix + "." + field.Alias
+			selected := selectedField{path: path}
+			if argument := field.Arguments.ForName("first"); argument != nil {
+				selected.first = argument.Value.Raw
+			}
+			fields = append(fields, selected)
+			walk(path, field.SelectionSet)
+		}
+	}
+	walk("", parsed.Operations[0].SelectionSet)
+	return fields
+}
+
+// TestQueryListResources_ReadsOnlyTheLatestVersionName holds the listing to
+// what it publishes of a version, its name. It used to ask every resource on
+// the page for its latest version's rendered README and every component with
+// its inputs, which a page of twenty on gitlab.com paid for with 3 MB and
+// twenty seconds and threw away.
+func TestQueryListResources_ReadsOnlyTheLatestVersionName(t *testing.T) {
+	const versions = ".ciCatalogResources.nodes.versions"
+	var got []selectedField
+	for _, field := range documentFields(t, queryListResources) {
+		if strings.HasPrefix(field.path, versions) {
+			got = append(got, field)
+		}
+	}
+	want := []selectedField{{path: versions, first: "1"}, {path: versions + ".nodes"}, {path: versions + ".nodes.name"}}
+	if !slices.Equal(got, want) {
+		t.Errorf("the listing selects %+v under versions, want %+v", got, want)
+	}
+}
+
+// TestQueryGetResource_ReadsTheReadmeOnceUnderTheAlias holds the get document
+// to the one place GitLab lets it read a README: CiCatalogResourceVersion.readme
+// is resolved for a single version per request and refused with an error for
+// every other, so the README may appear only under a connection of one, and
+// never under the ten versions.
+func TestQueryGetResource_ReadsTheReadmeOnceUnderTheAlias(t *testing.T) {
+	var readmes []string
+	aliasFirst := ""
+	for _, field := range documentFields(t, queryGetResource) {
+		if strings.HasSuffix(field.path, ".readme") || strings.HasSuffix(field.path, ".readmeHtml") {
+			readmes = append(readmes, field.path)
+		}
+		if field.path == ".ciCatalogResource.latestVersion" {
+			aliasFirst = field.first
+		}
+	}
+	want := []string{".ciCatalogResource.latestVersion.nodes.readme", ".ciCatalogResource.latestVersion.nodes.readmeHtml"}
+	if !slices.Equal(readmes, want) {
+		t.Errorf("the README is selected at %v, want only %v", readmes, want)
+	}
+	if aliasFirst != "1" {
+		t.Errorf("the aliased connection asks for first: %q, want 1", aliasFirst)
+	}
+}
+
 // Get tests.
 
 // TestGet_ByFullPath verifies that retrieving a CI catalog resource by its
@@ -373,93 +483,109 @@ func TestGet_ByFullPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-
-	r := out.Resource
-	if r.Name != "go-pipeline" {
-		t.Errorf("Name = %q, want go-pipeline", r.Name)
-	}
-	if r.ReadmeHTML != "<h1>Go Pipeline</h1><p>Components for Go projects.</p>" {
-		t.Errorf("ReadmeHTML = %q", r.ReadmeHTML)
-	}
-	if len(r.Components) != 2 {
-		t.Fatalf("expected 2 components, got %d", len(r.Components))
-	}
-	if r.Components[0].Name != "build" {
-		t.Errorf("Components[0].Name = %q, want build", r.Components[0].Name)
-	}
-	if r.Components[0].Description != "Build Go binary" {
-		t.Errorf("Components[0].Description = %q", r.Components[0].Description)
-	}
-	if len(r.Components[0].Inputs) != 2 {
-		t.Fatalf("expected 2 inputs on build component, got %d", len(r.Components[0].Inputs))
-	}
-
-	goVersion := r.Components[0].Inputs[0]
-	if goVersion.Name != "go_version" {
-		t.Errorf("Inputs[0].Name = %q, want go_version", goVersion.Name)
-	}
-	if goVersion.Required {
-		t.Error("go_version should not be required")
-	}
-	if goVersion.Default != "1.22" {
-		t.Errorf("Inputs[0].Default = %q, want 1.22", goVersion.Default)
-	}
-	// The description and the type are what tell a model how to fill an
-	// input; both are nullable in the schema and so pass through a guard of
-	// their own, which nothing held until this asserted them.
-	if goVersion.Description != "Go version to use" {
-		t.Errorf("Inputs[0].Description = %q, want Go version to use", goVersion.Description)
-	}
-	if goVersion.Type != "string" {
-		t.Errorf("Inputs[0].Type = %q, want string", goVersion.Type)
-	}
-
-	binaryName := r.Components[0].Inputs[1]
-	if !binaryName.Required {
-		t.Error("binary_name should be required")
-	}
-
-	if len(r.Versions) != 2 {
-		t.Fatalf("expected 2 versions, got %d", len(r.Versions))
-	}
-	if r.Versions[0].Name != "2.1.0" {
-		t.Errorf("Versions[0].Name = %q", r.Versions[0].Name)
-	}
-	if r.Versions[1].Name != "2.0.0" {
-		t.Errorf("Versions[1].Name = %q", r.Versions[1].Name)
-	}
-	assertSampleDetailFields(t, r)
+	assertDetail(t, out.Resource, wantSampleDetail())
 }
 
-// assertSampleDetailFields checks the schema-mirroring fields the shared
-// fixture carries: version semver/timestamps/path plus the resource-level
-// archived, topics, visibility, verification, and usage fields.
-func assertSampleDetailFields(t *testing.T, r ResourceDetail) {
+// wantSampleDetail is sampleResourceNode as the get action publishes it: every
+// field of the resource, the latest version's README from the alias, the
+// latest version's components as the detail's own, and each input's default
+// and options as the JSON value GitLab sent, a boolean false and a number
+// included.
+func wantSampleDetail() ResourceDetail {
+	buildUsage, testUsage := 12, 0
+	build := ComponentItem{
+		ID:                  "gid://gitlab/Ci::Catalog::Resources::Component/31",
+		Name:                "build",
+		Description:         "Build Go binary",
+		IncludePath:         "gitlab.example.com/my-group/go-pipeline/build@2.1.0",
+		Last30DayUsageCount: &buildUsage,
+		Inputs: []InputItem{
+			{
+				Name: "go_version", Description: "Go version to use", Type: "STRING", Default: "1.22",
+				Options: []any{"1.22", "1.23"}, Regex: `^1\.[0-9]+$`,
+				Rules: []InputRule{{If: "$[[ inputs.legacy ]] == true", Default: "1.21", Options: []any{"1.20", "1.21"}}},
+			},
+			{Name: "binary_name", Description: "Output binary name", Type: "STRING", Required: true},
+			{Name: "race", Description: "Run with the race detector", Type: "BOOLEAN", Default: false},
+		},
+	}
+	test := ComponentItem{
+		ID:                  "gid://gitlab/Ci::Catalog::Resources::Component/32",
+		Name:                "test",
+		Description:         "Run Go tests with coverage",
+		IncludePath:         "gitlab.example.com/my-group/go-pipeline/test@2.1.0",
+		Last30DayUsageCount: &testUsage,
+		Inputs:              []InputItem{{Name: "coverage_threshold", Description: "Minimum coverage %", Type: "NUMBER", Default: float64(80)}},
+	}
+	latest := []ComponentItem{build, test}
+	return ResourceDetail{
+		ID:                  "gid://gitlab/Ci::CatalogResource/1",
+		Name:                "go-pipeline",
+		Description:         "Reusable Go CI/CD pipeline components",
+		Icon:                "https://gitlab.example.com/uploads/icon.png",
+		FullPath:            "my-group/go-pipeline",
+		WebPath:             "/explore/catalog/my-group/go-pipeline",
+		StarCount:           42,
+		StarrersPath:        "/my-group/go-pipeline/-/starrers",
+		Last30DayUsageCount: 7,
+		Topics:              []string{"go", "ci"},
+		VerificationLevel:   "UNVERIFIED",
+		VisibilityLevel:     "public",
+		LatestReleasedAt:    "2026-06-15T10:30:00Z",
+		LatestVersionName:   "2.1.0",
+		Readme:              "# Go Pipeline\n\nComponents for Go projects.",
+		ReadmeHTML:          "<h1>Go Pipeline</h1><p>Components for Go projects.</p>",
+		Versions: []VersionItem{
+			{
+				ID:         "gid://gitlab/Ci::Catalog::Resources::Version/21",
+				Name:       "2.1.0",
+				ReleasedAt: "2026-06-15T10:30:00Z",
+				CreatedAt:  "2026-06-15T10:29:00Z",
+				Semver:     "2.1.0",
+				Path:       "/my-group/go-pipeline/-/tags/2.1.0",
+				Author: &VersionAuthor{
+					ID: "gid://gitlab/User/5", Username: "gopher", Name: "Go Pher",
+					WebURL: "https://gitlab.example.com/gopher", AvatarURL: "/uploads/-/system/user/avatar/5/avatar.png",
+				},
+				Commit: &VersionCommit{
+					SHA: "0d64668d42dea9a265409e194a034653d41362ae", ShortID: "0d64668d", Title: "Release 2.1.0",
+					WebURL: "https://gitlab.example.com/my-group/go-pipeline/-/commit/0d64668d42dea9a265409e194a034653d41362ae",
+				},
+				Components: latest,
+			},
+			{
+				ID:         "gid://gitlab/Ci::Catalog::Resources::Version/20",
+				Name:       "2.0.0",
+				ReleasedAt: "2026-03-01T08:00:00Z",
+				CreatedAt:  "2026-03-01T07:59:00Z",
+				Semver:     "2.0.0",
+				Path:       "/my-group/go-pipeline/-/tags/2.0.0",
+				Components: []ComponentItem{{
+					ID: "gid://gitlab/Ci::Catalog::Resources::Component/30", Name: "build",
+					IncludePath: "gitlab.example.com/my-group/go-pipeline/build@2.0.0",
+				}},
+			},
+		},
+		Components: latest,
+	}
+}
+
+// assertDetail compares a published detail with the one expected, value for
+// value, and shows both as JSON when they differ.
+func assertDetail(t *testing.T, got, want ResourceDetail) {
 	t.Helper()
-	if r.Versions[0].Semver != "2.1.0" {
-		t.Errorf("Versions[0].Semver = %q, want 2.1.0", r.Versions[0].Semver)
+	if reflect.DeepEqual(got, want) {
+		return
 	}
-	if r.Versions[0].CreatedAt != "2026-06-15T10:29:00Z" {
-		t.Errorf("Versions[0].CreatedAt = %q", r.Versions[0].CreatedAt)
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal the published detail: %v", err)
 	}
-	if r.Versions[0].Path != "/my-group/go-pipeline/-/tags/2.1.0" {
-		t.Errorf("Versions[0].Path = %q", r.Versions[0].Path)
+	wantJSON, err := json.MarshalIndent(want, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal the expected detail: %v", err)
 	}
-	if r.Archived {
-		t.Error("Archived = true, want false")
-	}
-	if len(r.Topics) != 2 || r.Topics[0] != "go" || r.Topics[1] != "ci" {
-		t.Errorf("Topics = %v, want [go ci]", r.Topics)
-	}
-	if r.VisibilityLevel != "public" {
-		t.Errorf("VisibilityLevel = %q, want public", r.VisibilityLevel)
-	}
-	if r.VerificationLevel != "UNVERIFIED" {
-		t.Errorf("VerificationLevel = %q, want UNVERIFIED", r.VerificationLevel)
-	}
-	if r.Last30DayUsageCount != 7 {
-		t.Errorf("Last30DayUsageCount = %d, want 7", r.Last30DayUsageCount)
-	}
+	t.Errorf("detail mismatch:\ngot:\n%s\nwant:\n%s", gotJSON, wantJSON)
 }
 
 // TestGet_NoVersions verifies the detail conversion when the resource has no
@@ -492,8 +618,46 @@ func TestGet_NoVersions(t *testing.T) {
 		t.Fatalf("Get() error = %v", err)
 	}
 	r := out.Resource
-	if len(r.Versions) != 0 || len(r.Components) != 0 || r.ReadmeHTML != "" || r.LatestVersionName != "" {
+	if len(r.Versions) != 0 || len(r.Components) != 0 || r.Readme != "" || r.ReadmeHTML != "" || r.LatestVersionName != "" {
 		t.Errorf("draft resource should have no versions/components/readme, got %+v", r)
+	}
+}
+
+// TestGet_LatestVersionReadme_EachShapeOfTheAlias verifies the README is read
+// from the aliased single-version connection whatever shape it comes back in:
+// null, with no node, with a node carrying neither text, and with one carrying
+// only the rendered half. Each is a guard a draft resource, a version GitLab
+// could not read the README of, or a reader without code access reaches.
+func TestGet_LatestVersionReadme_EachShapeOfTheAlias(t *testing.T) {
+	tests := []struct {
+		name           string
+		alias          string
+		readme, render string
+	}{
+		{"null alias", `null`, "", ""},
+		{"no node", `{"nodes": []}`, "", ""},
+		{"neither text", `{"nodes": [{"readme": null, "readmeHtml": null}]}`, "", ""},
+		{"rendered only", `{"nodes": [{"readme": null, "readmeHtml": "<p>x</p>"}]}`, "", "<p>x</p>"},
+		{"source only", `{"nodes": [{"readme": "x", "readmeHtml": null}]}`, "x", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"ciCatalogResource": {
+						"id": "gid://gitlab/Ci::CatalogResource/9", "name": "r", "fullPath": "g/r", "webPath": "/r",
+						"starCount": 0, "last30DayUsageCount": 0, "archived": false,
+						"versions": {"nodes": []}, "latestVersion": `+tt.alias+`}}`)
+				},
+			})
+			out, err := Get(context.Background(), testutil.NewTestClient(t, handler), GetInput{FullPath: "g/r"})
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			if out.Resource.Readme != tt.readme || out.Resource.ReadmeHTML != tt.render {
+				t.Errorf("README = %q, rendered %q; want %q, %q", out.Resource.Readme, out.Resource.ReadmeHTML, tt.readme, tt.render)
+			}
+		})
 	}
 }
 
@@ -660,7 +824,7 @@ func TestGet_ComponentInput_NullOptionalsStayEmpty(t *testing.T) {
 	if input.Name != "target" || !input.Required {
 		t.Errorf("input = %+v, want the required input named target", input)
 	}
-	if input.Description != "" || input.Type != "" || input.Default != "" {
+	if input.Description != "" || input.Type != "" || input.Default != nil {
 		t.Errorf("input optionals = %+v, want all three empty", input)
 	}
 }
@@ -956,17 +1120,130 @@ func TestFormatGetMarkdown_WithComponents(t *testing.T) {
 		"#### build\n\n" +
 		"- **Description**: Build binary\n" +
 		"- **Include**: `gitlab.example.com/my-group/go-pipeline/build@2.1.0`\n" +
-		"\n| Input | Type | Required | Default | Description |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| `go_version` | string | ❌ | 1.22 |  |\n" +
-		"| `binary_name` | string | ✅ |  |  |\n" +
+		"\n| Input | Type | Required | Default | Options | Regex | Description |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| `go_version` | string | ❌ | 1.22 |  |  |  |\n" +
+		"| `binary_name` | string | ✅ |  |  |  |  |\n" +
 		"\n### Released Versions\n\n" +
-		"| Version | Released | Components |\n" +
-		"| --- | --- | --- |\n" +
-		"| 2.1.0 | 15 Jun 2026 10:30 UTC | build |\n" +
+		"| Version | Released | Author | Commit | Components |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 2.1.0 | 15 Jun 2026 10:30 UTC |  |  | build |\n" +
 		catalogCardHints
 	if md != want {
 		t.Errorf("FormatGetMarkdown(components)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatGetMarkdown_EveryNewRow pins the card of the sample resource as
+// the get action publishes it: the starrers path, each component's ID and
+// 30-day usage (a count of zero shown as the answer it is), the inputs with
+// their JSON defaults and options and their regex, the conditional rules in a
+// table of their own, each version's author and commit, and the README fenced
+// at the end.
+func TestFormatGetMarkdown_EveryNewRow(t *testing.T) {
+	md := FormatGetMarkdown(GetOutput{Resource: wantSampleDetail()})
+	want := "## Catalog Resource: go-pipeline\n\n" +
+		"- **ID**: `gid://gitlab/Ci::CatalogResource/1`\n" +
+		"- **Full Path**: `my-group/go-pipeline`\n" +
+		"- **Web Path**: `/explore/catalog/my-group/go-pipeline`\n" +
+		"- **Stars**: 42\n" +
+		"- **Starrers Path**: `/my-group/go-pipeline/-/starrers`\n" +
+		"- **Usage (30d)**: 7\n" +
+		"- **Verification**: UNVERIFIED\n" +
+		"- **Visibility**: public\n" +
+		"- **Topics**: go, ci\n" +
+		"- **Latest Release**: 15 Jun 2026 10:30 UTC\n" +
+		"- **Latest Version**: 2.1.0\n" +
+		"- **Description**: Reusable Go CI/CD pipeline components\n" +
+		"\n### Components (Latest Version)\n\n" +
+		"#### build\n\n" +
+		"- **ID**: `gid://gitlab/Ci::Catalog::Resources::Component/31`\n" +
+		"- **Description**: Build Go binary\n" +
+		"- **Include**: `gitlab.example.com/my-group/go-pipeline/build@2.1.0`\n" +
+		"- **Usage (30d)**: 12\n" +
+		"\n| Input | Type | Required | Default | Options | Regex | Description |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| `go_version` | STRING | ❌ | 1.22 | &#91;\"1.22\",\"1.23\"] | `^1\\.[0-9]+$` | Go version to use |\n" +
+		"| `binary_name` | STRING | ✅ |  |  |  | Output binary name |\n" +
+		"| `race` | BOOLEAN | ❌ | false |  |  | Run with the race detector |\n" +
+		"\n##### Input Rules\n\n" +
+		"| Input | If | Default | Options |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| `go_version` | `$[[ inputs.legacy ]] == true` | 1.21 | &#91;\"1.20\",\"1.21\"] |\n" +
+		"\n#### test\n\n" +
+		"- **ID**: `gid://gitlab/Ci::Catalog::Resources::Component/32`\n" +
+		"- **Description**: Run Go tests with coverage\n" +
+		"- **Include**: `gitlab.example.com/my-group/go-pipeline/test@2.1.0`\n" +
+		"- **Usage (30d)**: 0\n" +
+		"\n| Input | Type | Required | Default | Options | Regex | Description |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| `coverage_threshold` | NUMBER | ❌ | 80 |  |  | Minimum coverage % |\n" +
+		"\n### Released Versions\n\n" +
+		"| Version | Released | Author | Commit | Components |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 2.1.0 | 15 Jun 2026 10:30 UTC | [@gopher](https://gitlab.example.com/gopher) | " +
+		"[0d64668d](https://gitlab.example.com/my-group/go-pipeline/-/commit/0d64668d42dea9a265409e194a034653d41362ae) | build, test |\n" +
+		"| 2.0.0 | 1 Mar 2026 08:00 UTC |  |  | build |\n" +
+		"\n### README (Latest Version)\n\n" +
+		"```markdown\n# Go Pipeline\n\nComponents for Go projects.\n```\n" +
+		catalogCardHints
+	if md != want {
+		t.Errorf("FormatGetMarkdown(sample)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestInputValueText pins how an input's default or options read in a cell,
+// for every kind of JSON value GitLab sends, and for a value no decoding of a
+// GitLab answer can produce, which fmt shows rather than nothing.
+func TestInputValueText(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"not sent", nil, ""},
+		{"a string, as itself", "1.22", "1.22"},
+		{"an empty string, as itself", "", ""},
+		{"a boolean", false, "false"},
+		{"a whole number", float64(4), "4"},
+		{"a fraction", 0.5, "0.5"},
+		{"a list", []any{"a", float64(1)}, `["a",1]`},
+		{"a value encoding/json cannot write", make(chan int), "0x"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := inputValueText(tt.value)
+			if tt.want == "0x" {
+				if !strings.HasPrefix(got, tt.want) {
+					t.Errorf("inputValueText(chan) = %q, want the address fmt prints", got)
+				}
+				return
+			}
+			if got != tt.want {
+				t.Errorf("inputValueText(%#v) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRuleOptionsText pins a rule's options: nothing for a rule that offers
+// none, whether GitLab sent null or an empty list, and the list otherwise.
+func TestRuleOptionsText(t *testing.T) {
+	tests := []struct {
+		name    string
+		options []any
+		want    string
+	}{
+		{"null", nil, ""},
+		{"empty", []any{}, ""},
+		{"one", []any{"x"}, `["x"]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ruleOptionsText(tt.options); got != tt.want {
+				t.Errorf("ruleOptionsText(%#v) = %q, want %q", tt.options, got, tt.want)
+			}
+		})
 	}
 }
 

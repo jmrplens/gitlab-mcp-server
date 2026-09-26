@@ -15,6 +15,7 @@ package main
 // Where the findings answered here are filed.
 const (
 	branchRulesPackage = toolsDir + "/branchrules"
+	ciCatalogPackage   = toolsDir + "/cicatalog"
 )
 
 // userReferenceReason is why a user named by something other than a note is
@@ -38,7 +39,54 @@ func branchRuleExperimentReason(field, introduced, meaning string) string {
 
 // domainSentDeclarations answers the sent findings of the five domains.
 func domainSentDeclarations() []sentDeclaration {
-	return branchRuleDeclarations()
+	return append(branchRuleDeclarations(), ciCatalogDeclarations()...)
+}
+
+// ciCatalogDeclarations answers what the two catalog documents leave out: the
+// user and the commit a version names, a rule's parsed condition, and the
+// experiment that lists the projects using a resource.
+func ciCatalogDeclarations() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package:    ciCatalogPackage,
+			SchemaType: "UserCore",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason: userReferenceReason("the user who published a catalog version",
+				"the id, username, name, web URL and avatar"),
+		},
+		{
+			Package:    ciCatalogPackage,
+			SchemaType: "Commit",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason: referenceStub("commit a catalog version was released from", "repository.commit_get") +
+				" The version carries the SHA, short id, title and web URL, which identify the commit.",
+		},
+		{
+			Package:    ciCatalogPackage,
+			SchemaType: "CiInputsRule",
+			Field:      "conditionTree",
+			Category:   categoryRecursiveShape,
+			Reason: "conditionTree is GitLab's parse of the rule's if expression into a CiInputsCondition, whose " +
+				"children are CiInputsConditions again, so a document could only select it to a depth fixed in " +
+				"advance. GitLab builds it from the if expression for its own frontend to evaluate " +
+				"(Types::Ci::Inputs::RuleType#condition_tree), and the expression, which is selected and published " +
+				"as written, is the whole of what it says.",
+		},
+		{
+			Package:    ciCatalogPackage,
+			SchemaType: "CiCatalogResource",
+			Field:      "projectComponentUsages",
+			Category:   categoryExperiment,
+			Reason: "GitLab's GraphQL API reference marks CiCatalogResource.projectComponentUsages (the projects " +
+				"using the resource's components) \"Introduced in GitLab 18.11. Status: Experiment.\", and GitLab " +
+				"resolves it for one resource per request, only for a maintainer of the resource project, under the " +
+				"Premium feature ci_component_usages_in_projects (ee/app/graphql/ee/types/ci/catalog/" +
+				"resource_type.rb). Selecting it would stake the catalog get on the experiment, and no listing can " +
+				"ask it of a page of resources at all.",
+		},
+	}
 }
 
 // branchRuleDeclarations answers what the two branch rule documents leave out:

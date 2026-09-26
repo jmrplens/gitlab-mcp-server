@@ -169,10 +169,11 @@ func TestJobTokens_ScopeAndList(t *testing.T) {
 
 // TestCICatalog_Get_AfterPublish marks a project as a CI/CD catalog resource,
 // publishes its first version through a real runner pipeline, and reads the
-// resource back by full path. Publishing needs a runner and pulls the
-// release-cli image, so the test needs the Docker stack; a version that does
-// not publish leaves the resource an unqueryable draft and the read is
-// skipped.
+// resource back by full path, with the README the fixture committed, the
+// version's author and commit, and the component's input with its default.
+// Publishing needs a runner and pulls the release-cli image, so the test needs
+// the Docker stack; a version that does not publish leaves the resource an
+// unqueryable draft and the read is skipped.
 //
 // Replaces: TestIndividual_CICatalogGet
 func TestCICatalog_Get_AfterPublish(t *testing.T) {
@@ -194,6 +195,36 @@ func TestCICatalog_Get_AfterPublish(t *testing.T) {
 	got := harness.Eventually[cicatalog.GetOutput](s, actionCICatalogGet, map[string]any{"full_path": project.Path},
 		2*time.Second, 60*time.Second, func(out cicatalog.GetOutput) bool { return out.Resource.FullPath == project.Path })
 	e.T.Logf("read catalog resource %s (id=%s)", got.Resource.FullPath, got.Resource.ID)
+
+	// The README comes from the aliased single-version read, and the author
+	// and the commit from the version itself: what the release published.
+	if !strings.Contains(got.Resource.Readme, "e2e catalog component") {
+		e.T.Errorf("the catalog resource carries README %q, want the one the fixture committed", got.Resource.Readme)
+	}
+	if len(got.Resource.Versions) == 0 {
+		e.T.Errorf("the catalog resource lists no version after publishing one: %+v", got.Resource)
+		return
+	}
+	version := got.Resource.Versions[0]
+	if version.Author == nil || version.Author.Username == "" {
+		e.T.Errorf("version %s names no author: %+v", version.Name, version.Author)
+	}
+	if version.Commit == nil || version.Commit.SHA == "" {
+		e.T.Errorf("version %s names no commit: %+v", version.Name, version.Commit)
+	}
+	// The component's one input has a string default, which reaches the
+	// caller as the string it is.
+	var stage *cicatalog.InputItem
+	for _, component := range got.Resource.Components {
+		for i := range component.Inputs {
+			if component.Inputs[i].Name == "stage" {
+				stage = &component.Inputs[i]
+			}
+		}
+	}
+	if stage == nil || stage.Default != "test" {
+		e.T.Errorf("the component's stage input reads %+v, want a default of \"test\"", stage)
+	}
 }
 
 // markCatalogResource marks the project as a catalog resource through GraphQL,
