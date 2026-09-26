@@ -551,12 +551,14 @@ func TestQueryListBranchRulesCE_AsksNoEnterpriseField(t *testing.T) {
 	community := selectionPaths(t, queryListBranchRulesCE)
 	enterprise := selectionPaths(t, queryListBranchRulesEE)
 	for _, path := range enterpriseOnly {
-		if _, found := slices.BinarySearch(community, path); found {
-			t.Errorf("the Community document asks for %s, which GitLab defines only in its Enterprise edition", path)
-		}
-		if _, found := slices.BinarySearch(enterprise, path); !found {
-			t.Errorf("the Enterprise document does not ask for %s, so the entry above guards nothing", path)
-		}
+		t.Run(path, func(t *testing.T) {
+			if _, found := slices.BinarySearch(community, path); found {
+				t.Errorf("the Community document asks for %s, which GitLab defines only in its Enterprise edition", path)
+			}
+			if _, found := slices.BinarySearch(enterprise, path); !found {
+				t.Errorf("the Enterprise document does not ask for %s, so the entry above guards nothing", path)
+			}
+		})
 	}
 }
 
