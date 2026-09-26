@@ -120,13 +120,11 @@ const (
 // finding names the package the decoding struct is declared in, so the note
 // mutations a shared toolutil wrapper sends are answered under the domain that
 // decodes the note and not under the wrapper; the payload around the note is
-// the wrapper's own struct, and is answered under toolutilPackage, and a shape
-// two domains decode through one struct of toolutil's is answered under
-// toolutilDir, once.
+// the wrapper's own struct, and is answered under toolutilDir, as a shape two
+// domains decode through one struct of toolutil's is, once.
 const (
-	toolsDir        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
-	toolutilDir     = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
-	toolutilPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+	toolsDir    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	toolutilDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // userCoreReason is what a user object under an author is doing there, which
@@ -384,7 +382,7 @@ func epicSentDeclarations() []sentDeclaration {
 			Reason:     viewerPermissionsReason,
 		},
 		{
-			Package:    toolutilPackage,
+			Package:    toolutilDir,
 			SchemaType: "DestroyNotePayload",
 			Field:      declaredSegment,
 			Category:   categoryNeverSentHere,
