@@ -962,11 +962,17 @@ func TestMethodPairs_ARepetitionMissingTheMethodInOneArm_IsNoPair(t *testing.T) 
 // TestDriverConfound_QuotesWhatEachProcessHandedBack verifies the sentence
 // names the cores the driver and the server each freed between the arms, and
 // that a lone arm is never read as the other having freed everything.
+//
+// The driver frees two cores and the server one and a half, so the sentence
+// is said and each of its two figures can only be the one process's own: the
+// equal case, where the harness freed exactly as much as the server, is the
+// boundary TestDriverConfound_AnswersOnlyWhenTheHarnessIsTheBetterExplanation
+// holds.
 func TestDriverConfound_QuotesWhatEachProcessHandedBack(t *testing.T) {
 	doc := fairnessDocOf(8,
-		[]armFixture{atProcess(armOff, 5, 3, 20), atProcess(armOn, 3, 1, 10)},
-		[]armFixture{atProcess(armOn, 3, 1, 10), atProcess(armOff, 5, 3, 20)})
-	want := "the driver handed back 2.00 of the host's cores with the bound in force against the 2.00 the server itself handed back"
+		[]armFixture{atProcess(armOff, 5, 3, 20), atProcess(armOn, 3.5, 1, 10)},
+		[]armFixture{atProcess(armOn, 3.5, 1, 10), atProcess(armOff, 5, 3, 20)})
+	want := "the driver handed back 2.00 of the host's cores with the bound in force against the 1.50 the server itself handed back"
 	if got := driverConfound(doc); !strings.HasPrefix(got, want) {
 		t.Errorf("driverConfound = %q, want it to begin %q", got, want)
 	}

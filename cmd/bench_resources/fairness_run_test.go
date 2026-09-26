@@ -416,11 +416,11 @@ func TestFairnessProcess_EveryFigureFromItsOwnSamples(t *testing.T) {
 	ok := func(seconds float64) cpuSample { return cpuSample{seconds: seconds, ok: true} }
 	in := processInput{
 		serverStart: ok(1), serverEnd: ok(4), driverStart: ok(0), driverEnd: ok(1),
-		wall: 2 * time.Second, served: 10, peakRSS: 3 * 1024 * 1024, meanRSS: 2 * 1024 * 1024,
+		wall: 2 * time.Second, served: 10, peakRSS: 7 * 1024 * 1024, meanRSS: 5 * 1024 * 1024,
 	}
 	got, notes := fairnessProcess(in)
 	want := FairnessProcess{
-		PhaseSeconds: 2, RSSPeakMiB: 3, RSSMeanMiB: 2,
+		PhaseSeconds: 2, RSSPeakMiB: 7, RSSMeanMiB: 5,
 		CPUSeconds: 3, CoresBusy: 1.5, CPUMsPerServed: 300,
 		DriverCPUSeconds: 1, DriverCoresBusy: 0.5,
 	}

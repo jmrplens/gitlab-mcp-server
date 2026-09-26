@@ -753,9 +753,19 @@ func TestRunStep_SettledReading_IsAFractionOfThePeakUnderLoad(t *testing.T) {
 	}
 }
 
+// The delays patternConn answers with. Each is a floor on the figure it
+// produces, since a sleep never returns early, and the two tails are far enough
+// apart that no scheduling delay on a loaded host carries a call past a listing.
+const (
+	patternCallTail  = 20 * time.Millisecond
+	patternListDelay = 10 * time.Millisecond
+	patternListTail  = 80 * time.Millisecond
+)
+
 // patternConn answers tools/call at once but for every tenth call, which takes
-// forty milliseconds, and tools/list in ten but for every tenth, which takes
-// sixty, and refuses every third tools/list; it counts what it answered.
+// patternCallTail, and tools/list in patternListDelay but for every tenth,
+// which takes patternListTail, and refuses every third tools/list; it counts
+// what it answered.
 type patternConn struct {
 	mu                     sync.Mutex
 	calls, lists, answered int
@@ -777,11 +787,11 @@ func (c *patternConn) call(_ context.Context, method string, _ map[string]any) (
 	case method == methodToolsList && n%3 == 0:
 		return nil, errors.New("refused " + method)
 	case method == methodToolsList && n%10 == 0:
-		delay = 60 * time.Millisecond
+		delay = patternListTail
 	case method == methodToolsList:
-		delay = 10 * time.Millisecond
+		delay = patternListDelay
 	case n%10 == 0:
-		delay = 40 * time.Millisecond
+		delay = patternCallTail
 	}
 	time.Sleep(delay)
 	c.mu.Lock()
@@ -806,7 +816,11 @@ func (c *patternConn) answeredCount() int {
 // tools/call is fast with a slow tenth and tools/list slower with a slower
 // tenth, so the median and the tail of each differ and the two methods'
 // medians differ too; and a third of the listings are refused, so the calls
-// answered are not twice either method's count.
+// answered are not twice either method's count. Orderings alone cannot tell
+// the two tails apart, since a listing's median sits under a call's tail as
+// well as under its own, so each figure is also held to the floor only its own
+// method's delays give it: a call's tail read from the listings, or a
+// listing's from the calls, falls under one of them.
 func TestRunStep_EachPercentileFromItsOwnMethod(t *testing.T) {
 	r := &runner{progress: progressFunc(false)}
 	f := newSeriesFixture(t, []int{1}, 0)
@@ -827,6 +841,13 @@ func TestRunStep_EachPercentileFromItsOwnMethod(t *testing.T) {
 	}
 	if step.CallP50Ms >= step.ListP50Ms {
 		t.Errorf("call p50 %v against list p50 %v, want the fast method's median under the slow one's", step.CallP50Ms, step.ListP50Ms)
+	}
+	if step.CallP99Ms < msOf(patternCallTail) || step.ListP99Ms < msOf(patternListTail) || step.CallP99Ms >= step.ListP99Ms {
+		t.Errorf("call p99 %v, list p99 %v, want at least %v and %v, the call's tail under the listing's",
+			step.CallP99Ms, step.ListP99Ms, msOf(patternCallTail), msOf(patternListTail))
+	}
+	if step.ListP50Ms < msOf(patternListDelay) {
+		t.Errorf("list p50 %v, want at least the %v every answered listing takes", step.ListP50Ms, msOf(patternListDelay))
 	}
 }
 
