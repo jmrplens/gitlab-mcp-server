@@ -219,7 +219,7 @@ type MergeRequestOutput struct {
 		{Package: "internal/tools/sample", Name: "DeleteOutput", Fields: []string{"status"}},
 		{Package: "internal/tools/sample", Name: "DiscussionOutput", Fields: []string{"notes"}, Nested: map[string]nestedType{
 			"notes": {Name: "toolutil.NoteOutput", Fields: []string{"body"}},
-		}},
+		}, Wraps: []string{"toolutil.NoteOutput"}},
 		{Package: "internal/tools/sample", Name: "MemberRoleOutput", Fields: []string{"id", "owner"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "other", "role"}, Nested: map[string]nestedType{
@@ -318,10 +318,13 @@ type GradeOutput struct {
 
 	types := publishedTypes(root)
 
+	// ListOutput publishes nothing of its own and embeds one type, so it is
+	// packaging around that type, as a one-key envelope would be; GradeOutput
+	// publishes a field beside its embed and is a response of its own.
 	want := []publishedType{
 		{Package: "internal/tools/sample", Name: "GradeOutput", Fields: []string{"Grade"}},
-		{Package: "internal/tools/sample", Name: "ListOutput", Fields: []string{"extra", "id"}},
-		{Package: "internal/tools/sample", Name: "RowOutput", Fields: []string{"extra", "id"}},
+		{Package: "internal/tools/sample", Name: "ListOutput", Fields: []string{"extra", "id"}, Wraps: []string{"RowOutput"}},
+		{Package: "internal/tools/sample", Name: "RowOutput", Fields: []string{"extra", "id"}, Payload: true},
 	}
 	if !reflect.DeepEqual(types, want) {
 		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
@@ -656,6 +659,77 @@ func TestEnvelopePayloads_TellsThePackagingFromTheContent(t *testing.T) {
 	}
 }
 
+// TestEmbeddedPayload_OneEmbedBesideTheHints_IsThePayload verifies the envelope
+// rule for a wrapper that publishes nothing of its own and embeds the response
+// instead of naming it: `GetOutput{HintableOutput; PlanLimitItem}`. The hints
+// are this server's, so they are set aside; a second embed makes the struct a
+// response of its own built from two shapes, and neither half is packaging.
+func TestEmbeddedPayload_OneEmbedBesideTheHints_IsThePayload(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name   string
+		embeds []string
+		want   []string
+	}{
+		{name: "the response beside the hints", embeds: []string{hintsType, "PlanLimitItem"}, want: []string{"PlanLimitItem"}},
+		{name: "the response alone", embeds: []string{"PlanLimitItem"}, want: []string{"PlanLimitItem"}},
+		{name: "the hints alone", embeds: []string{hintsType}},
+		{name: "two shapes", embeds: []string{"RowOutput", "StatsOutput"}},
+		{name: "nothing embedded"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := embeddedPayload(testCase.embeds); !slices.Equal(got, testCase.want) {
+				t.Errorf("embeddedPayload(%q) = %q, want %q", testCase.embeds, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPublishedTypes_AWrapperThatOnlyEmbeds_IsPackagingAroundItsPayload
+// verifies the rule end to end on the shape it was written for. The plan limits
+// are what GitLab answered with and are named by no field, only embedded, so
+// before the rule they read as a reference nothing judged while the two
+// structs around them had no pairing to be judged by. A struct whose one field
+// is a string is no envelope at all, and one wrapping a type from another
+// package names nothing the walk can resolve, so neither is credited with a
+// payload.
+func TestPublishedTypes_AWrapperThatOnlyEmbeds_IsPackagingAroundItsPayload(t *testing.T) {
+	root := writePackage(t, "planlimits", `package planlimits
+
+import "example.com/toolutil"
+
+type PlanLimitItem struct {
+	ConanMaxFileSize int64 `+"`json:\"conan_max_file_size\"`"+`
+}
+
+type GetOutput struct {
+	toolutil.HintableOutput
+	PlanLimitItem
+}
+
+type StatusOutput struct {
+	Status string `+"`json:\"status\"`"+`
+}
+
+type ForeignOutput struct {
+	Thing elsewhere.Thing `+"`json:\"thing\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	want := []publishedType{
+		{Package: "internal/tools/planlimits", Name: "ForeignOutput", Fields: []string{"thing"}},
+		{Package: "internal/tools/planlimits", Name: "GetOutput", Fields: []string{"conan_max_file_size"}, Wraps: []string{"PlanLimitItem"}},
+		{Package: "internal/tools/planlimits", Name: "PlanLimitItem", Fields: []string{"conan_max_file_size"}, Inner: true, Payload: true},
+		{Package: "internal/tools/planlimits", Name: "StatusOutput", Fields: []string{"status"}},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
 // TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse verifies the
 // second half of the envelope rule. A list that keeps two shapes of one
 // entity apart, the narrow one embedded in the wide one, wraps both, and both
@@ -690,18 +764,27 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 			{Name: "BaseOutput", Fields: []string{"b"}},
 			{Name: "StrangerOutput", Fields: []string{"s"}},
 		},
-		alternatives: [][]string{
-			{"Output", "BasicOutput"},
-			{"GroupOutput", "ProjectObject"},
-			{"DetailOutput", "CoreOutput"},
+		wraps: map[string][]string{},
+		alternatives: map[string][]string{
+			"ListOutput":  {"Output", "BasicOutput"},
+			"PairOutput":  {"GroupOutput", "ProjectObject"},
+			"ChainOutput": {"DetailOutput", "CoreOutput"},
 			// A before and an after: one type named twice is two
 			// references, not two shapes.
-			{"UserOutput", "UserOutput"},
-			{"NarrowOutput", "WideOutput"},
-			{"TopOutput", "StrangerOutput"},
+			"ChangeOutput":   {"UserOutput", "UserOutput"},
+			"ReversedOutput": {"NarrowOutput", "WideOutput"},
+			"DiamondOutput":  {"TopOutput", "StrangerOutput"},
 		},
 	}
 	resolveAlternatives(&parsed)
+	wantWraps := map[string][]string{
+		"ListOutput":     {"BasicOutput", "Output"},
+		"ChainOutput":    {"CoreOutput", "DetailOutput"},
+		"ReversedOutput": {"NarrowOutput", "WideOutput"},
+	}
+	if !reflect.DeepEqual(parsed.wraps, wantWraps) {
+		t.Errorf("wraps = %v, want only the wrappers whose payloads are shapes of one entity, each sorted: %v", parsed.wraps, wantWraps)
+	}
 	for name, want := range map[string]bool{
 		"Output": true, "BasicOutput": true,
 		"GroupOutput": false, "ProjectObject": false,

@@ -427,3 +427,118 @@ func TestStringLiteral_ALiteralTheParserWouldRefuse_IsNotRead(t *testing.T) {
 		})
 	}
 }
+
+// TestReadSDKMethodRoutes_EachServiceMethod_IsKeyedByServiceAndName verifies
+// the per-method view the projection pairings read. A compact row is filled
+// from one method's answer, so the question is which endpoints that one method
+// reaches, keyed the way a handler names the method through its interface:
+// the concrete MilestonesService behind MilestonesServiceInterface is
+// "Milestones". Two methods answering with one struct keep their routes apart
+// here, which is the whole difference from the per-struct view.
+func TestReadSDKMethodRoutes_EachServiceMethod_IsKeyedByServiceAndName(t *testing.T) {
+	dir := sdkSourceIn(t, map[string]string{
+		"milestones.go": `package gitlab
+
+import "net/http"
+
+var (
+	routeProjectsIDIssues           = route("projects/%s/issues")
+	routeProjectsIDMilestonesIssues = route("projects/%s/milestones/%d/issues")
+	routeProjectsIDIssue            = route("projects/%s/issues/%d")
+)
+
+func (s *MilestonesService) GetMilestoneIssues(pid any, milestone int64) ([]*Issue, *Response, error) {
+	return do[[]*Issue](s.client, withPath(routeProjectsIDMilestonesIssues, ProjectID{pid}, milestone))
+}
+
+func (s *IssuesService) ListProjectIssues(pid any) ([]*Issue, *Response, error) {
+	return do[[]*Issue](s.client, withPath(routeProjectsIDIssues, ProjectID{pid}))
+}
+
+func (s IssuesService) UpdateIssue(pid any, issue int64) (*Issue, *Response, error) {
+	return do[*Issue](s.client, withPath(routeProjectsIDIssue, ProjectID{pid}, issue), withMethod(http.MethodPut))
+}
+
+func (s *IssuesService) DeleteIssue(pid any, issue int64) (*Response, error) {
+	return do[none](s.client, withPath(routeProjectsIDIssue, ProjectID{pid}, issue), withMethod(http.MethodDelete))
+}
+
+func (s *IssuesService) getByHelper(pid any) (*Issue, *Response, error) {
+	return s.fetch(pid)
+}
+
+func (c *Client) Issue(pid any) (*Issue, *Response, error) {
+	return do[*Issue](c, withPath(routeProjectsIDIssue, ProjectID{pid}, 1))
+}
+
+func (s *Service) Anything() (*Issue, *Response, error) {
+	return do[*Issue](s.client, withPath(routeProjectsIDIssue, ProjectID{pid}, 1))
+}
+`,
+	})
+
+	routes := readSDKMethodRoutes(dir)
+
+	// DeleteIssue answers with the pagination wrapper alone and reaches nothing
+	// a caller reads; getByHelper names no route of its own; a method of the
+	// Client, and of a type called Service and nothing else, is not a
+	// service's.
+	want := map[string][]sdkRoute{
+		"Milestones.GetMilestoneIssues": {{Method: "GET", Path: "/projects/:/milestones/:/issues", Many: true}},
+		"Issues.ListProjectIssues":      {{Method: "GET", Path: "/projects/:/issues", Many: true}},
+		"Issues.UpdateIssue":            {{Method: "PUT", Path: "/projects/:/issues/:"}},
+	}
+	if !reflect.DeepEqual(routes, want) {
+		t.Errorf("readSDKMethodRoutes() = %+v, want %+v", routes, want)
+	}
+}
+
+// TestReadSDKMethodRoutes_ASourceThatCannotBeRead_GivesNothing verifies that
+// the per-method view fails the way the per-struct one does: a module cache it
+// cannot read contributes no route, so the projections it would have narrowed
+// are counted as unrouted rather than held against a guess.
+func TestReadSDKMethodRoutes_ASourceThatCannotBeRead_GivesNothing(t *testing.T) {
+	for name, dir := range map[string]string{
+		"no directory named": "",
+		"a directory gone":   filepath.Join(t.TempDir(), "gone"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if routes := readSDKMethodRoutes(dir); routes != nil {
+				t.Errorf("readSDKMethodRoutes(%q) = %+v, want nothing", dir, routes)
+			}
+		})
+	}
+}
+
+// TestServiceReceiver_OnlyAServiceNamesOne verifies the one branch a parsed
+// method cannot reach, a receiver list with nothing in it, beside the shapes
+// it can: a receiver that is not a service, and one called Service alone,
+// which names no service a handler could call through an interface.
+func TestServiceReceiver_OnlyAServiceNamesOne(t *testing.T) {
+	cases := []struct {
+		name     string
+		receiver *ast.FieldList
+		want     string
+	}{
+		{name: "an empty receiver list", receiver: &ast.FieldList{}},
+		{
+			name:     "a pointer to a service",
+			receiver: &ast.FieldList{List: []*ast.Field{{Type: &ast.StarExpr{X: ast.NewIdent("JobsService")}}}},
+			want:     "Jobs",
+		},
+		{
+			name:     "a service by value",
+			receiver: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("JobsService")}}},
+			want:     "Jobs",
+		},
+		{name: "the client", receiver: &ast.FieldList{List: []*ast.Field{{Type: &ast.StarExpr{X: ast.NewIdent("Client")}}}}},
+		{name: "a type called Service", receiver: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("Service")}}}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := serviceReceiver(testCase.receiver); got != testCase.want {
+				t.Errorf("serviceReceiver() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}

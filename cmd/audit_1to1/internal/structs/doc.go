@@ -14,6 +14,14 @@
 //     result struct to an MCP output struct. The SDK result fields (by json tag)
 //     are diffed against the MCP output fields (R-OUTPUT).
 //
+// Beside them it reads the projections (CollectProjections): an output struct
+// built field by field in a composite literal out of a client-go struct, with
+// no converter, together with the service methods whose answer it is read
+// from. The field diff does not read those, since a compact row held against
+// the whole SDK struct would report every field it leaves out as a gap of the
+// SDK surface; the paths scope reads them to judge the row against the one
+// endpoint it comes from.
+//
 // The report is the mechanical backlog that drives the 1:1 audit batches. It is
 // intentionally high-signal on *missing fields* (the gap class that the
 // client-go bumps repeatedly introduced) and advisory on type divergences,

@@ -55,6 +55,11 @@ type publishedType struct {
 	// what GitLab answered with, so the type grain judges it against the
 	// endpoint even though it is Inner. See [envelopePayloads].
 	Payload bool
+	// Wraps names the payloads of a type that is itself such a wrapper, sorted,
+	// and is empty for every other type. It is what lets the type grain tell an
+	// envelope whose payload it judges from an output type it cannot judge at
+	// all: both carry no pairing of their own, and only the second is a skip.
+	Wraps []string
 }
 
 // nestedType is one output type reached through a field of another.
@@ -167,7 +172,7 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 	// leaving it out reported a package as failing to surface the fields of
 	// its own rows. So is every other exported struct that is not an input,
 	// for the same reason.
-	byName := make(map[string]declaredStruct, len(found)+len(shared)+len(aliases))
+	byName := map[string]declaredStruct{}
 	maps.Copy(byName, shared)
 	for _, candidate := range found {
 		byName[candidate.Name] = candidate
@@ -209,11 +214,30 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 			Fields:  whole.Fields,
 			Inner:   !strings.HasSuffix(candidate.Name, outputSuffix) || nested[candidate.Name],
 			Payload: parsed.enveloped[candidate.Name],
+			Wraps:   structsOnly(parsed.wraps[candidate.Name], byName),
 		}
 		if !published.Inner {
 			published.Nested = nestedTypes(whole, byName, scalars)
 		}
 		out = append(out, published)
+	}
+	return out
+}
+
+// structsOnly keeps the payloads that name a struct the package can resolve,
+// or nil when none does.
+//
+// The envelope rule reads a field's type by name alone, so a struct whose one
+// field is a string reads as wrapping "string", and one whose one field is a
+// type from another package reads as wrapping nothing the walk knows. Neither
+// is packaging around a response, and a type-grain envelope that claims it is
+// would be credited with a payload no pairing can ever name.
+func structsOnly(payloads []string, byName map[string]declaredStruct) []string {
+	var out []string
+	for _, payload := range payloads {
+		if _, known := byName[payload]; known {
+			out = append(out, payload)
+		}
 	}
 	return out
 }
@@ -229,10 +253,13 @@ type parsedPackage struct {
 	// beside, which is this repository's shape for a whole response. See
 	// [envelopePayloads].
 	enveloped map[string]bool
+	// wraps holds, per wrapping struct, the payloads it wraps, sorted: the
+	// other half of enveloped.
+	wraps map[string][]string
 	// alternatives holds the payloads of every struct that wraps more than
-	// one type, left for [resolveAlternatives] to accept or refuse once every
-	// embed in the package is known.
-	alternatives [][]string
+	// one type, keyed by that struct, left for [resolveAlternatives] to accept
+	// or refuse once every embed in the package is known.
+	alternatives map[string][]string
 	// scalars holds every type it declares as something other than a struct.
 	scalars map[string]bool
 	// aliases maps every type it declares as, or from, a shared shape to that
@@ -250,8 +277,9 @@ type parsedPackage struct {
 // edit; a directory that cannot be read reads as empty for the same reason.
 func parsePackage(dir string) parsedPackage {
 	parsed := parsedPackage{
-		nested: map[string]bool{}, enveloped: map[string]bool{},
-		scalars: map[string]bool{}, aliases: map[string]string{}, returned: map[string]bool{},
+		nested: map[string]bool{}, enveloped: map[string]bool{}, wraps: map[string][]string{},
+		alternatives: map[string][]string{},
+		scalars:      map[string]bool{}, aliases: map[string]string{}, returned: map[string]bool{},
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -295,13 +323,14 @@ func resolveAlternatives(parsed *parsedPackage) {
 		}
 	}
 	related := func(a, b string) bool { return embedsTransitively(embeds, a, b) || embedsTransitively(embeds, b, a) }
-	for _, payloads := range parsed.alternatives {
+	for wrapper, payloads := range parsed.alternatives {
 		if !oneFamily(payloads, related) {
 			continue
 		}
 		for _, payload := range payloads {
 			parsed.enveloped[payload] = true
 		}
+		parsed.wraps[wrapper] = slices.Sorted(slices.Values(payloads))
 	}
 }
 
@@ -518,16 +547,22 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 			for _, name := range fieldTypes {
 				parsed.nested[name] = true
 			}
-			switch payloads := envelopePayloads(fields, fieldTypes); len(payloads) {
+			payloads := envelopePayloads(fields, fieldTypes)
+			if len(fields) == 0 {
+				payloads = embeddedPayload(embeds)
+			}
+			switch len(payloads) {
 			case 0:
 			case 1:
 				parsed.enveloped[payloads[0]] = true
+				parsed.wraps[typed.Name.Name] = payloads
 			default:
-				parsed.alternatives = append(parsed.alternatives, payloads)
+				parsed.alternatives[typed.Name.Name] = payloads
 			}
-			if len(fields) > 0 || len(embeds) > 0 {
-				found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
-			}
+			// A struct with neither fields nor embeds is kept too: it
+			// publishes nothing, so it is never compared, and a struct naming
+			// it resolves it to nothing either way.
+			found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
 			return false
 		default:
 			return true
@@ -621,6 +656,33 @@ func envelopePayloads(fields []string, fieldTypes map[string]string) []string {
 		payloads = append(payloads, typeName)
 	}
 	return payloads
+}
+
+// embeddedPayload names the one type a struct publishing no field of its own
+// embeds, the next-step hints aside, or nil when it embeds none or several.
+//
+// It is the envelope rule for the other way this repository writes one:
+// `GetOutput{HintableOutput; PlanLimitItem}` publishes exactly the plan
+// limits' fields, promoted into it, and adds nothing of its own, so the plan
+// limits are what GitLab answered with and the struct around them is
+// packaging, as `{badge: BadgeItem}` is. Without it the embedded type was
+// read as a reference for being named by another struct and never judged,
+// while the struct around it had no pairing to be judged by.
+//
+// Two embeds are left alone: a struct built from two shapes is a response of
+// its own, and neither half is what GitLab sent.
+func embeddedPayload(embeds []string) []string {
+	var payload []string
+	for _, name := range embeds {
+		if name == hintsType {
+			continue
+		}
+		payload = append(payload, name)
+	}
+	if len(payload) != 1 {
+		return nil
+	}
+	return payload
 }
 
 // jsonTags returns the json names a struct publishes, sorted, the locally

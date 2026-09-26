@@ -165,25 +165,105 @@ func routeTemplate(expr ast.Expr) (string, bool) {
 	return stringLiteral(call.Args[0])
 }
 
+// readSDKMethodRoutes parses the client-go source in dir and returns, for
+// every service method answering with a struct, the endpoints it reaches,
+// keyed "Service.Method" with the service spelled the way
+// shared.ServiceName spells the interface a handler calls it through: the
+// concrete MilestonesService behind MilestonesServiceInterface is
+// "Milestones". Every service interface client-go declares has its concrete
+// struct under that name, which is the convention the join rests on.
+//
+// It is the per-method view of what [readSDKRoutes] unions per struct, for
+// the projections a handler builds out of one method's answer: a milestone's
+// issue list is filled from GET /projects/:id/milestones/:milestone_id/issues
+// and from nothing else client-go's Issue is answered by, and judging it
+// against all of them would hold six fields of a row to twenty endpoints it is
+// never read from.
+//
+// It fails the way [readSDKRoutes] does: a directory that cannot be read
+// contributes nothing.
+func readSDKMethodRoutes(dir string) map[string][]sdkRoute {
+	files := parseSDKFiles(dir)
+	if len(files) == 0 {
+		return nil
+	}
+
+	templates := map[string]string{}
+	for _, file := range files {
+		collectRouteTemplates(file, templates)
+	}
+
+	found := map[string]map[sdkRoute]bool{}
+	for _, file := range files {
+		for _, declaration := range file.Decls {
+			function, isFunction := declaration.(*ast.FuncDecl)
+			if !isFunction || function.Recv == nil {
+				continue
+			}
+			service := serviceReceiver(function.Recv)
+			if service == "" {
+				continue
+			}
+			// A method reaching nothing adds nothing, and so is not listed.
+			_, routes := methodRoutes(function, templates)
+			addRoutes(found, service+"."+function.Name.Name, routes)
+		}
+	}
+	return sortedRoutes(found)
+}
+
+// serviceSuffix closes the name of every concrete client-go service.
+const serviceSuffix = "Service"
+
+// serviceReceiver names the service a method is declared on, without its
+// suffix, or "" for a method of anything that is not a service.
+func serviceReceiver(receiver *ast.FieldList) string {
+	if len(receiver.List) == 0 {
+		return ""
+	}
+	name, _ := resultElement(receiver.List[0].Type)
+	if !strings.HasSuffix(name, serviceSuffix) || name == serviceSuffix {
+		return ""
+	}
+	return strings.TrimSuffix(name, serviceSuffix)
+}
+
 // collectMethodRoutes records the endpoints one service method reaches, under
 // the name of the struct it answers with.
 func collectMethodRoutes(function *ast.FuncDecl, templates map[string]string, into map[string]map[sdkRoute]bool) {
+	name, routes := methodRoutes(function, templates)
+	addRoutes(into, name, routes)
+}
+
+// methodRoutes reads the struct one method answers with and the endpoints it
+// reaches. A method answering with nothing, with something that is not a
+// client-go struct, or with the pagination wrapper alone names no struct and
+// reaches nothing a caller could be answered with.
+func methodRoutes(function *ast.FuncDecl, templates map[string]string) (name string, routes []sdkRoute) {
 	if function.Type.Results == nil || len(function.Type.Results.List) == 0 {
-		return
+		return "", nil
 	}
 	name, many := resultElement(function.Type.Results.List[0].Type)
 	if name == "" || name == responseTypeName {
-		return
+		return "", nil
 	}
 
 	verb, paths := requestShape(function.Body, templates)
 	for _, path := range paths {
-		routes := into[name]
-		if routes == nil {
-			routes = map[sdkRoute]bool{}
-			into[name] = routes
+		routes = append(routes, sdkRoute{Method: verb, Path: path, Many: many})
+	}
+	return name, routes
+}
+
+// addRoutes records routes under one key.
+func addRoutes(into map[string]map[sdkRoute]bool, key string, routes []sdkRoute) {
+	for _, route := range routes {
+		known := into[key]
+		if known == nil {
+			known = map[sdkRoute]bool{}
+			into[key] = known
 		}
-		routes[sdkRoute{Method: verb, Path: path, Many: many}] = true
+		known[route] = true
 	}
 }
 

@@ -109,7 +109,13 @@ type Summary struct {
 	// models. They are published beside the package-grain count rather than
 	// instead of it, so a reader can see how much of that number the sharper
 	// join keeps. See [TypedShapeCheck].
-	TypedCompared         int `json:"typed_types_compared"`
+	TypedCompared int `json:"typed_types_compared"`
+	// TypedProjections counts how many of TypedCompared are paired through a
+	// projection rather than a converter, and TypedEnvelopes the types left
+	// out of every bucket because they are packaging around a paired payload.
+	// See [TypedShapeCheck.Projections] and [TypedShapeCheck.Envelopes].
+	TypedProjections      int `json:"typed_types_compared_through_projection"`
+	TypedEnvelopes        int `json:"typed_envelopes_judged_through_payload"`
 	TypedNoPairing        int `json:"typed_types_without_pairing"`
 	TypedNoRoute          int `json:"typed_types_without_route"`
 	TypedNoSchema         int `json:"typed_types_without_schema"`
@@ -350,6 +356,8 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 			TypedUnsurfacedDeclared: typedSentDeclared,
 			TypedUnsurfacedNotInSDK: notModelledBySDK(shapes.Typed.Unsurfaced),
 			TypedCompared:           shapes.Typed.Compared,
+			TypedProjections:        len(shapes.Typed.Projections),
+			TypedEnvelopes:          len(shapes.Typed.Envelopes),
 			TypedNoPairing:          shapes.Typed.SkippedNoPairing,
 			TypedNoRoute:            shapes.Typed.SkippedNoRoute,
 			TypedNoSchema:           shapes.Typed.SkippedNoSchema,

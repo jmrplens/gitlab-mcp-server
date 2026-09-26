@@ -175,6 +175,30 @@
 // built against: its old shape produces exactly the twenty findings the fix
 // removed, and its current one produces none.
 //
+// A converter is not the only way an output type is filled. The compact
+// projections of an entity, a milestone's issue rows, a resource group's job
+// queue, the group's project list, are built in a composite literal inside the
+// handler, or in a helper it calls, with each field read off the client-go
+// struct the handler ranged over, and no converter names the pairing.
+// structs.CollectProjections reads those literals: the struct most of the
+// literal's fields are read off, taking the receiver of the outermost field
+// selection so that `mr.Author.Username` is read off the author, and the
+// service methods answering with that struct that the function holding the
+// literal references, or failing that the functions of the package calling it,
+// up to three calls up. Such a type is judged against the endpoints of those
+// methods alone, which readSDKMethodRoutes reads per method, because a compact
+// row is filled from one endpoint and a finding about it has to name that
+// endpoint rather than every endpoint answering with the struct; one whose
+// method was not found is judged against its struct's endpoints, as a converter
+// pairing would be. A type a converter pairs keeps its converter's endpoints.
+// The types compared this way are named in shapes.typed.projections and counted
+// in typed_types_compared_through_projection. The wrapper around a paired
+// payload (`{issues: []IssueItem, pagination}`, or a struct that publishes
+// nothing of its own and embeds its payload, `{PlanLimitItem}`) is this
+// server's packaging and is judged under the payload's name, so it is listed in
+// shapes.typed.envelopes and counted in typed_envelopes_judged_through_payload
+// rather than among the types without a pairing.
+//
 // It asks the same question one level down, since schema version 2 of the
 // record carries the properties of each object a response nests. A nested
 // output type is held against the properties the document gives the response
