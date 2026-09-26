@@ -233,9 +233,10 @@ func buildAchievementActionSpecs(client *gitlabclient.Client) []ActionSpecGroup 
 }
 
 // buildOrbitActionSpecs contributes the gitlab_orbit catalog group only
-// when the deployment is GitLab.com and Enterprise is enabled. Returns
-// nil otherwise so the group is omitted from the catalog for
-// self-managed instances and CE catalogs.
+// for a GitLab.com client and returns nil otherwise, so a self-managed
+// catalog never carries it. It sees no tier: the Premium tag it applies
+// is what lets the central tier filter drop the group from a Free
+// catalog.
 func buildOrbitActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 	if client == nil || !client.IsGitLabDotCom() {
 		return nil
@@ -489,10 +490,11 @@ func buildProjectAliasActionSpecs(client *gitlabclient.Client) []ActionSpecGroup
 }
 
 // buildProjectActionSpecs contributes the gitlab_project catalog group: the
-// base CE project surface together with its paid specs (push rules, target
-// branch rules, security settings, the Dependency Firewall evaluation), each
-// tagged with its minimum tier so the central tier filter decides which of
-// them an instance is served.
+// base CE project surface together with its paid specs (approval
+// configuration and rules, pull mirroring, push rules, target branch rules,
+// security settings, the Dependency Firewall evaluation), each tagged with
+// its minimum tier so the central tier filter decides which of them an
+// instance is served.
 func buildProjectActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 130)
 	specs = append(specs, uploads.ActionSpecs(client)...)
@@ -507,10 +509,11 @@ func buildProjectActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 	specs = append(specs, pages.ActionSpecs(client)...)
 	specs = append(specs, projectmirrors.ActionSpecs(client)...)
 	specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
-	// Security settings (Ultimate) and the Premium push-rule/target-branch specs
-	// inside projects.ActionSpecs are self-tagged; the central tier filter gates
-	// them, so they are always collected here. The Dependency Firewall evaluate
-	// action is Premium and tags itself the same way.
+	// Security settings (Ultimate), the Dependency Firewall evaluation
+	// (Premium) and the paid specs inside projects.ActionSpecs all carry their
+	// minimum tier; the central tier filter gates them, so they are always
+	// collected here. The true passed to projects.ActionSpecs asks for its
+	// push-rule and target-branch-rule specs, which it leaves out otherwise.
 	specs = append(specs, editionTaggedSpecs(securitysettings.ProjectActionSpecs(client), editionUltimate)...)
 	specs = append(specs, editionTaggedSpecs(dependencyfirewall.ActionSpecs(client), editionPremium)...)
 	specs = append(specs, projects.ActionSpecs(client, true)...)
@@ -632,7 +635,7 @@ func buildTemplateActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 // any paid ones by their Edition.
 func buildUserActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 75)
-	specs = append(specs, users.ActionSpecs(client, true)...)
+	specs = append(specs, users.ActionSpecs(client)...)
 	specs = append(specs, todos.ActionSpecs(client)...)
 	specs = append(specs, events.UserActionSpecs(client)...)
 	specs = append(specs, notifications.ActionSpecs(client)...)
