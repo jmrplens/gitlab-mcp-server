@@ -71,23 +71,36 @@ func Validate(ds []Decision) error {
 	return errors.Join(errs...)
 }
 
+// The invariants the checks below name in more than one place: the rule that
+// reports a breach and the departure a row records to be let through have to
+// spell the same ID, so they read it from one constant.
+const (
+	// invNotJudgedNotCharged is INV-007: what was not judged is not charged.
+	invNotJudgedNotCharged = "INV-007"
+	// invUnitsAgree is INV-016: every limit states its key, mint cost and
+	// reason, and the units agree.
+	invUnitsAgree = "INV-016"
+	// invProcessOnProcess is INV-018: bound the process on the process.
+	invProcessOnProcess = "INV-018"
+)
+
 // rowRules are the checks made one row at a time, in the order the design
 // lists them.
 func rowRules() []rowRule {
 	return []rowRule{
 		{"share-on-mintable", "INV-003", checkShareOnMintable},
 		{"process-partner", "INV-004", checkProcessPartner},
-		{"process-absent", "INV-018", checkProcessAbsent},
+		{"process-absent", invProcessOnProcess, checkProcessAbsent},
 		{"across-keys", "INV-005", checkAcrossKeys},
 		{"channel-carried", "INV-011", checkChannelCarried},
 		{"zero-stated", "INV-015", checkZeroStated},
-		{"units-agree", "INV-016", checkUnitsAgree},
-		{"stated-unit", "INV-016", checkStatedUnit},
+		{"units-agree", invUnitsAgree, checkUnitsAgree},
+		{"stated-unit", invUnitsAgree, checkStatedUnit},
 		{"class-consistent", "spec 2.3", checkClassConsistent},
 		{"through-config", "INV-017", checkThroughConfig},
 		{"capacity-stated", "VAL-006", checkCapacityStated},
 		{"bounded-table", "INV-010", checkBoundedTable},
-		{"charged-exists", "INV-007", checkChargedExists},
+		{"charged-exists", invNotJudgedNotCharged, checkChargedExists},
 		{"stdio", "VAL-011", checkStdio},
 		{"well-formed", "spec 3.2", checkWellFormed},
 	}
@@ -133,7 +146,7 @@ func checkProcessPartner(d Decision, rows map[string]Decision) []string {
 // checkProcessAbsent refuses a ceiling nothing bounds, the way a row records a
 // resource with no bound, unless a finding records it.
 func checkProcessAbsent(d Decision, _ map[string]Decision) []string {
-	if d.Kind != Ceiling || d.Source != SourceNone || d.RecordsDeparture("INV-018") {
+	if d.Kind != Ceiling || d.Source != SourceNone || d.RecordsDeparture(invProcessOnProcess) {
 		return nil
 	}
 	return []string{"a ceiling nothing bounds, with no finding"}
@@ -238,7 +251,7 @@ func checkZeroStated(d Decision, _ map[string]Decision) []string {
 
 // checkUnitsAgree holds a class D disagreement to a finding.
 func checkUnitsAgree(d Decision, _ map[string]Decision) []string {
-	if !d.Disagrees() || d.RecordsDeparture("INV-016") {
+	if !d.Disagrees() || d.RecordsDeparture(invUnitsAgree) {
 		return nil
 	}
 	return []string{fmt.Sprintf("its reason is about the %s and its key is the %s, with no finding", d.ReasonUnit, d.Key)}
@@ -247,7 +260,7 @@ func checkUnitsAgree(d Decision, _ map[string]Decision) []string {
 // checkStatedUnit holds a reason that misstates the unit of what it cites to
 // a finding.
 func checkStatedUnit(d Decision, _ map[string]Decision) []string {
-	if d.StatedUnit == KeyNone || d.StatedUnit.Unit() == d.ReasonUnit.Unit() || d.RecordsDeparture("INV-016") {
+	if d.StatedUnit == KeyNone || d.StatedUnit.Unit() == d.ReasonUnit.Unit() || d.RecordsDeparture(invUnitsAgree) {
 		return nil
 	}
 	return []string{fmt.Sprintf("its reason names the %s while what it cites is kept per %s, with no finding",
@@ -477,7 +490,7 @@ func ValidateFailures(fs []Failure) error {
 		fn := f.At.Pkg + "." + f.At.Name
 		id := fn + ":" + f.Kind
 		violation := func(rule, detail string) {
-			errs = append(errs, &ViolationError{ID: id, Rule: rule, Invariant: "INV-007", Detail: detail})
+			errs = append(errs, &ViolationError{ID: id, Rule: rule, Invariant: invNotJudgedNotCharged, Detail: detail})
 		}
 		if f.Charged && !f.Attributable {
 			violation("charged-attributable", "charged although the caller did not cause it")
@@ -502,7 +515,7 @@ func ValidateFailures(fs []Failure) error {
 	for _, fn := range order {
 		if charged[fn] != declared[fn] {
 			errs = append(errs, &ViolationError{
-				ID: fn, Rule: "failure-count", Invariant: "INV-007",
+				ID: fn, Rule: "failure-count", Invariant: invNotJudgedNotCharged,
 				Detail: fmt.Sprintf("declares %d charged failures and lists %d", declared[fn], charged[fn]),
 			})
 		}
