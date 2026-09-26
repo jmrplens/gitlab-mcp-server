@@ -9,10 +9,10 @@ why the answer lives in one register that the layers read rather than in each la
 
 It cites decisions by their register ID (`HLD-001`, `AUB-003`): each ID is one row of
 `tenancy.Decisions()`, with its key, class, value source, zero meaning, capacity
-behavior, refusals and the symbols that decide and enforce it. The dated record the
-register was built from, with its line citations and the research behind every claim,
-is [`plan/issue-565/spec.md`](../../plan/issue-565/spec.md); it is true at the commit it
-names and at no other, which is why it lives there and not here.
+behavior, refusals and the symbols that decide and enforce it. The register was built
+from a dated record, with line citations and the research behind every claim, that was a
+working document kept outside the repository: it is true at the commit it names and at no
+other, which is why nothing here cites it.
 
 Nothing in this specification changes a value, a key, a refusal, a message or a
 configuration surface. Where the code departs from it today, the departure is a finding,
