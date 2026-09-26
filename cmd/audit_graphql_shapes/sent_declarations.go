@@ -284,7 +284,8 @@ func epicIssueDeclarations() []sentDeclaration {
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
 			Reason: "The row carries each label as the epic output does: its name under labels, and its id, name, " +
-				"color, description and text color under label_details. What is left is the label's own lifecycle " +
+				"color, description, HTML description and text color under label_details. What is left is the " +
+				"label's own lifecycle " +
 				"(created, updated, archived, locked on merge), which is the labels domain's surface, published by " +
 				"its label tools, and says nothing about the child.",
 		},
