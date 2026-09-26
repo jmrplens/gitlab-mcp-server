@@ -24,12 +24,14 @@
 package enums
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"go/constant"
 	"go/types"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -212,10 +214,10 @@ func buildReport(pkgs []*packages.Package, sdkEnums map[string]sdkEnum, offered 
 
 	packagesOut := make([]packageReport, 0, len(byPackage))
 	for _, pr := range byPackage {
-		sort.Slice(pr.Findings, func(i, j int) bool { return findingLess(pr.Findings[i], pr.Findings[j]) })
+		slices.SortFunc(pr.Findings, compareFindings)
 		packagesOut = append(packagesOut, *pr)
 	}
-	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
+	slices.SortFunc(packagesOut, func(a, b packageReport) int { return cmp.Compare(a.Package, b.Package) })
 
 	// The summary describes the whole tree whichever packages the report
 	// lists, the way the other scopes' summaries do.
@@ -245,16 +247,10 @@ func keepPackagesWithFindings(packagesOut []packageReport) []packageReport {
 	return kept
 }
 
-// findingLess orders findings by action, kind and field, so the report is
+// compareFindings orders findings by action, kind and field, so the report is
 // stable across runs.
-func findingLess(a, b Finding) bool {
-	if a.Action != b.Action {
-		return a.Action < b.Action
-	}
-	if a.Kind != b.Kind {
-		return a.Kind < b.Kind
-	}
-	return a.Field < b.Field
+func compareFindings(a, b Finding) int {
+	return cmp.Or(cmp.Compare(a.Action, b.Action), cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Field, b.Field))
 }
 
 func packageFor(byPackage map[string]*packageReport, name string) *packageReport {

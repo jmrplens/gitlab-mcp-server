@@ -870,24 +870,24 @@ func TestHelpers_Small_BehaveAsDocumented(t *testing.T) {
 			t.Errorf("difference of equal sets = %v, want nil", got)
 		}
 	})
-	t.Run("findingLess", func(t *testing.T) {
+	t.Run("compareFindings", func(t *testing.T) {
 		cases := []struct {
 			name string
 			a, b Finding
-			want bool
+			want int
 		}{
-			{name: "by_action", a: Finding{Action: "a.x"}, b: Finding{Action: "b.x"}, want: true},
-			{name: "by_kind", a: Finding{Action: "a", Kind: kindInput}, b: Finding{Action: "a", Kind: kindOutput}, want: true},
-			{name: "by_field", a: Finding{Action: "a", Kind: kindInput, Field: "z"}, b: Finding{Action: "a", Kind: kindInput, Field: "y"}, want: false},
-			// Equality is what separates a strict order from one sort.Slice
-			// may not be given, and the field is the only key a tie reaches:
-			// the two above it are each guarded by a difference.
-			{name: "equal_in_every_key", a: Finding{Action: "a", Kind: kindInput, Field: "y"}, b: Finding{Action: "a", Kind: kindInput, Field: "y"}, want: false},
+			// Each key is shown deciding against a later key that points the
+			// other way, so a comparison that skipped a key, or read them in
+			// another order, answers with the wrong sign.
+			{name: "by_action", a: Finding{Action: "a.x", Kind: kindOutput, Field: "z"}, b: Finding{Action: "b.x", Kind: kindInput, Field: "a"}, want: -1},
+			{name: "by_kind", a: Finding{Action: "a", Kind: kindInput, Field: "z"}, b: Finding{Action: "a", Kind: kindOutput, Field: "a"}, want: -1},
+			{name: "by_field", a: Finding{Action: "a", Kind: kindInput, Field: "z"}, b: Finding{Action: "a", Kind: kindInput, Field: "y"}, want: 1},
+			{name: "equal_in_every_key", a: Finding{Action: "a", Kind: kindInput, Field: "y"}, b: Finding{Action: "a", Kind: kindInput, Field: "y"}, want: 0},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				if got := findingLess(tc.a, tc.b); got != tc.want {
-					t.Errorf("findingLess = %v, want %v", got, tc.want)
+				if got := compareFindings(tc.a, tc.b); got != tc.want {
+					t.Errorf("compareFindings = %d, want %d", got, tc.want)
 				}
 			})
 		}
