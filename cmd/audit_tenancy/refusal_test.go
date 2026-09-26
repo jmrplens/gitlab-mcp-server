@@ -529,6 +529,87 @@ func TestCheckRefusals_ASentinelNamedInTwoSwitches_IsJudgedByTheLast(t *testing.
 	)
 }
 
+// outsideSource changes the code a sentinel's error is sent with in the three
+// ways G8 does not read: a second assignment in the case naming the
+// sentinel, an if naming the sentinel after the switch, and a plain
+// assignment after the switch. Each function sends -32602 for its sentinel.
+const outsideSource = `package site
+
+import (
+	"errors"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+var (
+	errSecond = errors.New("second")
+	errIf     = errors.New("if")
+	errPlain  = errors.New("plain")
+)
+
+func wireSecond(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errSecond):
+		code = codeBusy
+		code = jsonrpc.CodeInvalidParams
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+
+func wireIf(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errIf):
+		code = codeBusy
+	}
+	if errors.Is(err, errIf) {
+		code = jsonrpc.CodeInvalidParams
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+
+func wirePlain(err error) error {
+	var code int64
+	switch {
+	case errors.Is(err, errPlain):
+		code = codeBusy
+	}
+	code = jsonrpc.CodeInvalidParams
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
+}
+`
+
+// TestCheckRefusals_ACodeReassignedInOrAfterTheCase_IsNotSeen pins what G8's
+// documentation states it does not read. Each function sends -32602 for its
+// sentinel, and a row declaring -32000, the code the switch's case assigns
+// first, passes all three: a second assignment in that case joins the set
+// rather than replacing the first, and an assignment after the switch is not
+// read at all, so a row declaring the -32602 actually sent fails there. A
+// rule that reads those assignments changes this test with its documentation.
+func TestCheckRefusals_ACodeReassignedInOrAfterTheCase_IsNotSeen(t *testing.T) {
+	rpc := func(at, via string, code int) tenancy.Refusal {
+		return tenancy.Refusal{
+			Methods: []string{"resources/read"}, Channel: tenancy.RPC, Code: code,
+			At: site(at, tenancy.Refuse), Via: site(via, tenancy.Refuse),
+		}
+	}
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{
+		rpc("errSecond", "wireSecond", -32000), rpc("errSecond", "wireSecond", -32602),
+		rpc("errIf", "wireIf", -32000), rpc("errIf", "wireIf", -32602),
+		rpc("errPlain", "wirePlain", -32000), rpc("errPlain", "wirePlain", -32602),
+	}
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + gateRefusals, "site/rpc.go": rpcSource, "site/outside.go": outsideSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G8",
+		"ROW-001 refusal 4 (resources/read rpc): "+siteDir+":wireIf builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
+		"ROW-001 refusal 6 (resources/read rpc): "+siteDir+":wirePlain builds no JSON-RPC error carrying code -32602 (it carries [-32000])",
+	)
+}
+
 // TestCheckRefusals_ToolErrorRefusals: a result flagged as an error, directly
 // or through the function it returns, passes, and so does a holder that
 // returns no tool result; one that returns a result it does not flag, flags

@@ -531,14 +531,13 @@ func assignedIn(info *types.Info, node ast.Node, v *types.Var) []ast.Expr {
 }
 
 // rpcProblem says why no JSON-RPC literal in holder carries r's code, or
-// returns empty when one does. A code held in a variable counts as every
-// constant the function assigns to it, except where the holder switches on
-// at, as a Via that maps sentinels to codes does: then it counts as what
-// assignedInCase reads, the first case naming at in the last switch whose
-// such case assigns the variable. The rule reads names and source order and
-// no control flow, so an earlier case that matches at's error without naming
-// at is not seen, and neither is a return or a branch that keeps a later
-// switch from running.
+// returns empty when one does. A code held in a local variable counts as a
+// set of constants: every one the holder assigns to the variable anywhere,
+// except where an expression switch of the holder names at in a case, as a
+// Via that maps sentinels to codes does, and then only the ones assignedInCase
+// returns from a single case body. It is read with no control flow, so no
+// assignment in the set replaces another; assignedInCase says which case body
+// the set comes from and which assignments that leaves unread.
 func (g *gate) rpcProblem(r tenancy.Refusal, at, holder *declaration) string {
 	info := holder.info()
 	lits := slices.DeleteFunc(g.refusalLiterals(holder, ""), func(rl refusalLit) bool { return rl.typ.name == g.rules.gateType })
@@ -573,15 +572,20 @@ func (g *gate) rpcProblem(r tenancy.Refusal, at, holder *declaration) string {
 	return fmt.Sprintf("builds no JSON-RPC error carrying code %d (it carries %v)", r.Code, seen)
 }
 
-// assignedInCase are the expressions the holder's switches on at leave in the
-// local variable v, and whether any case names at at all. Within an
-// expression switch only the first case naming at counts, because a switch
-// takes the first case that matches, in source order, and a later case naming
-// the same sentinel is never reached for it. Across the switches of holder,
-// taken in the order they begin, only the last whose such case assigns v
-// counts, because its assignment overwrites what an earlier one left; a later
-// case naming at that assigns v nothing leaves the earlier assignment
-// standing.
+// assignedInCase are the expressions the local variable v is given inside
+// one case body of the holder's expression switches on at, and whether any
+// case of such a switch names at at all. In each switch only the first case
+// naming at is read, since a switch takes the first case that matches and a
+// later one naming the same sentinel is never reached for it. Of the switches,
+// taken in the order they begin, the last whose first such case assigns v is
+// the one whose case is returned, and a switch whose such case assigns v
+// nothing is passed over. Every assignment to v in that case body is
+// returned, a second one beside the first, and no assignment outside it is:
+// one after the switch, plain or under an if naming at, is not read. With no
+// control flow, a case whose condition adds more than at is still taken as
+// the one that matches it, an earlier case that matches at's error without
+// naming at is not seen, and neither is a return, a branch or a loop that
+// keeps a later switch from running.
 func assignedInCase(holder, at *declaration, v *types.Var) ([]ast.Expr, bool) {
 	info := holder.info()
 	var out []ast.Expr

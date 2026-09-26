@@ -58,12 +58,14 @@
 //   - G8 refusal. Every refusal's stable text begins a string its code folds
 //     (a format read up to its first verb), and the literal that carries it
 //     has the row's status, code, Retry-After source and challenge; a JSON-RPC
-//     refusal carries the row's code, read, where its holder switches on its
-//     sentinel, from the first case naming the sentinel in the last switch
-//     whose such case assigns the code, and a tool-error refusal's
-//     result is flagged as an error. Every gate literal of a function that
-//     holds a declared gate refusal is carried exactly by one of them, so a
-//     sibling of the same status cannot stand in for a literal that drifted.
+//     refusal whose code is a local variable has the row's code among the
+//     constants assigned to it, which, where its holder switches on its
+//     sentinel, are those assigned in one case body: the first case naming
+//     the sentinel, in the last switch whose such case assigns the code. A
+//     tool-error refusal's result is flagged as an error. Every gate literal
+//     of a function that holds a declared gate refusal is carried exactly by
+//     one of them, so a sibling of the same status cannot stand in for a
+//     literal that drifted.
 //   - G9 reason. Every quoted reason still appears in the doc comment of the
 //     declaration it names, or of the block around it.
 //   - G10 tripwire. A limit constructor or a literal of a limit's options
@@ -71,9 +73,9 @@
 //     package value among its inputs; a refusal literal that reads as a
 //     limit's, and a 429 or 503 written with http.Error or WriteHeader, is
 //     the refusal a row declares in its function, by code or by status; and a
-//     package-level name that reads as a limit (in every package the
-//     register's value and enforcing sites are in) is a declared site. Each
-//     is otherwise answered by the exemption table.
+//     package-level name that reads as a limit, in a package that holds an
+//     Alias, Arg, Pin or Enforce site of a row that is not a request bound,
+//     is a declared site. Each is otherwise answered by the exemption table.
 //   - G11 validate. The register's own validators accept it.
 //   - G12 leaf. The register imports only the packages the server already
 //     imports and declares no package-level variable and no init function,
@@ -128,28 +130,45 @@
 // returns the -42900 the declared rateLimitedError builds is one: part (b)
 // reads the literals a function writes, never the refusals it obtains from a
 // call); and is named in a way part (c) does not read: with no lexicon word,
-// in a package no row names, or as a value local to a function, which part (c)
-// never reads (revalidateAll's ten seconds a probe is one, stated in ADM-009
-// and bound by no row value). A layer that stops reading a register value in
-// one place while another place still reads its alias passes G6, and fails
-// only where G10, G2, G3 or G5 reads that place, as the G6 rule above lists;
-// config.Load going back to a literal burst while the --rate-limit-burst
-// default and the HTTP overlay still read config.DefaultRateLimitBurst passes,
-// although Load is a declared Arg for the rate. G8 reads a code held in a
-// variable by names and source order, with no control flow: it takes the
-// first case naming the refusal's sentinel in each switch, so a case whose
+// in a package that holds no value or enforcing site of a row that is not a
+// request bound (a package named only by a row's Refuse, Reason, Charge or
+// Derive sites, or only by request bounds, is not read: internal/completions
+// and internal/tools/dynamic are two), or as a value local to a function,
+// which part (c) never reads (revalidateAll's ten seconds a probe is one,
+// stated in ADM-009 and bound by no row value).
+//
+// A layer that stops reading a register value in one place while another
+// place still reads its alias passes G6, and fails only where G10, G2, G3 or
+// G5 reads that place, as the G6 rule above lists; config.Load going back to
+// a literal burst while the --rate-limit-burst default and the HTTP overlay
+// still read config.DefaultRateLimitBurst passes, although Load is a declared
+// Arg for the rate. Of those four, G2 judges every declared Alias and G3
+// every call a declared Arg names, so each holds every place it names; G5
+// fails an Enforce site declared to read the constant only once nothing in
+// its body refers to the constant or a declared alias of it, so it holds the
+// last such reference and not each one.
+//
+// G8 reads a code held in a local variable as a set of constants, with no
+// control flow. Where no switch of the holder names the refusal's sentinel,
+// the set is every constant the holder assigns the variable. Where one does,
+// the set is every constant assigned in one case body, the first case naming
+// the sentinel in the last switch whose such case assigns the code, and
+// nothing assigned outside that case is read: a second assignment in the
+// case joins the set rather than replacing the first, and an assignment
+// after the switch, plain or under an if naming the sentinel, is not read at
+// all, so a code changed in any of those three ways passes. A case whose
 // condition adds more than the sentinel is still taken as the one that
-// matches it, and an earlier case that matches the sentinel's error without
-// naming it (by its text or its type) is not seen; and it takes the last
-// switch whose such case assigns the code, so a return, a branch or a loop
-// that keeps a later switch from running for the sentinel is not seen
-// either. G14 cannot trace a variable read through a name that does
-// not fold. G7 binds a charge to a return by position, so a charge moved into
-// a helper the table does not name fails rather than passing, and the finding
-// names the position rather than the policy. A rule
-// row's logic is declared by symbol, so G1 fails when the symbol disappears
-// and nothing fails when its logic changes; that is what promoting a rule
-// into the register exists for.
+// matches it, an earlier case that matches the sentinel's error without
+// naming it (by its text or its type) is not seen, and neither is a return,
+// a branch or a loop that keeps a later switch from running for the
+// sentinel.
+//
+// G14 cannot trace a variable read through a name that does not fold. G7
+// binds a charge to a return by position, so a charge moved into a helper the
+// table does not name fails rather than passing, and the finding names the
+// position rather than the policy. A rule row's logic is declared by symbol,
+// so G1 fails when the symbol disappears and nothing fails when its logic
+// changes; that is what promoting a rule into the register exists for.
 //
 // # Code identity
 //

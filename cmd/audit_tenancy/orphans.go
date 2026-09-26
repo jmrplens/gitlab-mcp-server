@@ -25,8 +25,9 @@ import (
 // it only where it writes the literal straight into a listed limit
 // constructor's arguments or options literal (G10), is itself a declared
 // Alias (G2), changed a call a declared Arg names at the index it names (G3),
-// or is an Enforce site declared to read that constant (G5); anywhere else it
-// passes.
+// or is an Enforce site declared to read that constant with no other
+// reference to it or a declared alias of it left in its body (G5); anywhere
+// else it passes.
 func (g *gate) checkOrphans() []Finding {
 	leaf := g.p.byDir[g.reg.leaf]
 	if leaf == nil {
