@@ -270,6 +270,9 @@ type Output struct {
 	UpdatedAt     string      `json:"updated_at,omitempty"`
 	AwardableID   int64       `json:"awardable_id"`
 	AwardableType string      `json:"awardable_type"`
+	// URL is the image of a custom emoji, read from the captured response
+	// (see [awardExtra]); a standard emoji has none.
+	URL string `json:"url,omitempty"`
 }
 
 // ListOutput holds a paginated list of award emoji.
@@ -309,11 +312,26 @@ func createNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, notFoundHin
 	if err := validateNoteEmojiRequest(req, false); err != nil {
 		return Output{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emoji, _, err := create(string(req.ProjectID), req.IID, req.NoteID, &gl.CreateAwardEmojiOptions{Name: req.Name}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(req.Operation, err, 404, notFoundHint)
 	}
-	return toOutput(emoji), nil
+	return capturedOutput(req.Operation, emoji, captured)
+}
+
+// getNoteAwardEmoji reads one award on a note of an issue, a merge request or
+// a snippet, image URL included.
+func getNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, get func(any, int64, int64, int64, ...gl.RequestOptionFunc) (*gl.AwardEmoji, *gl.Response, error)) (Output, error) {
+	if err := validateNoteEmojiRequest(req, true); err != nil {
+		return Output{}, err
+	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	emoji, _, err := get(string(req.ProjectID), req.IID, req.NoteID, req.AwardID, gl.WithContext(ctx))
+	if err != nil {
+		return Output{}, toolutil.WrapErrWithMessage(req.Operation, err)
+	}
+	return capturedOutput(req.Operation, emoji, captured)
 }
 
 func deleteNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, listActionHint string, remove func(any, int64, int64, int64, ...gl.RequestOptionFunc) (*gl.Response, error)) error {
@@ -337,11 +355,12 @@ func listNoteAwardEmoji(ctx context.Context, req noteEmojiRequest, query emojiLi
 	if err := validateNoteEmojiRequest(req, false); err != nil {
 		return ListOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := list(string(req.ProjectID), req.IID, req.NoteID, query.applyTo(), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(req.Operation, err, 404, notFoundHint)
 	}
-	return toListOutput(emojis, resp), nil
+	return capturedListOutput(req.Operation, emojis, resp, captured)
 }
 
 // Issue Award Emoji Handlers.
@@ -355,12 +374,13 @@ func ListIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 		return ListOutput{}, toolutil.ErrRequiredInt64("issue_emoji_list", "issue_iid")
 	}
 	opts := emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := client.GL().AwardEmoji.ListIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_emoji_list", err, 404,
 			"verify the issue exists with issue.get (correct project_id and issue_iid)")
 	}
-	return toListOutput(emojis, resp), nil
+	return capturedListOutput("issue_emoji_list", emojis, resp, captured)
 }
 
 // GetIssueAwardEmoji gets a single award emoji on an issue.
@@ -374,11 +394,12 @@ func GetIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_get", "award_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emoji, _, err := client.GL().AwardEmoji.GetIssueAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("issue_emoji_get", err)
 	}
-	return toOutput(emoji), nil
+	return capturedOutput("issue_emoji_get", emoji, captured)
 }
 
 // CreateIssueAwardEmoji creates an award emoji on an issue.
@@ -390,12 +411,13 @@ func CreateIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_create", "issue_iid")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emoji, _, err := client.GL().AwardEmoji.CreateIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_emoji_create", err, 404,
 			"verify the issue exists with issue.get; emoji name must be a valid GitLab shortname without colons (e.g. \"thumbsup\")")
 	}
-	return toOutput(emoji), nil
+	return capturedOutput("issue_emoji_create", emoji, captured)
 }
 
 // DeleteIssueAwardEmoji deletes an award emoji from an issue.
@@ -433,23 +455,8 @@ func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 
 // GetIssueNoteAwardEmoji gets a single award emoji on an issue note.
 func GetIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueGetOnNoteInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.WrapErrWithMessage("issue_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_get", "issue_iid")
-	}
-	if input.NoteID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_get", "note_id")
-	}
-	if input.AwardID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_get", "award_id")
-	}
-	emoji, _, err := client.GL().AwardEmoji.GetIssuesAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
-	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("issue_note_emoji_get", err)
-	}
-	return toOutput(emoji), nil
+	return getNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, AwardID: input.AwardID, IIDField: "issue_iid", Operation: "issue_note_emoji_get"},
+		client.GL().AwardEmoji.GetIssuesAwardEmojiOnNote)
 }
 
 // CreateIssueNoteAwardEmoji creates an award emoji on an issue note.
@@ -476,12 +483,13 @@ func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MR
 		return ListOutput{}, toolutil.ErrRequiredInt64("mr_emoji_list", "merge_request_iid")
 	}
 	opts := emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_emoji_list", err, 404,
 			"verify the merge request exists with merge_request.get (correct project_id and merge_request_iid)")
 	}
-	return toListOutput(emojis, resp), nil
+	return capturedListOutput("mr_emoji_list", emojis, resp, captured)
 }
 
 // GetMRAwardEmoji gets a single award emoji on a merge request.
@@ -495,11 +503,12 @@ func GetMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRG
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "award_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emoji, _, err := client.GL().AwardEmoji.GetMergeRequestAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("mr_emoji_get", err)
 	}
-	return toOutput(emoji), nil
+	return capturedOutput("mr_emoji_get", emoji, captured)
 }
 
 // CreateMRAwardEmoji creates an award emoji on a merge request.
@@ -511,7 +520,8 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_create", "merge_request_iid")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
-	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
+	createCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(createCtx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 404) || isDuplicateAwardEmojiError(err) {
 			if existing, ok := findExistingMRAwardEmoji(ctx, client, input); ok {
@@ -521,7 +531,7 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, toolutil.WrapErrWithStatusHint("mr_emoji_create", err, 404,
 			"verify the merge request exists with merge_request.get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
-	return toOutput(emoji), nil
+	return capturedOutput("mr_emoji_create", emoji, captured)
 }
 
 func isDuplicateAwardEmojiError(err error) bool {
@@ -535,19 +545,25 @@ func findExistingMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, 
 	}
 	opts := &gl.ListAwardEmojiOptions{Page: 1, PerPage: 100}
 	for {
-		emojis, resp, listErr := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
+		pageCtx, captured := gitlabclient.WithResponseCapture(ctx)
+		emojis, resp, listErr := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(pageCtx))
 		if listErr != nil {
 			return Output{}, false
 		}
-		for _, emoji := range emojis {
+		for i, emoji := range emojis {
 			if strings.EqualFold(emoji.Name, input.Name) && emoji.User.ID == currentUser.ID {
-				return toOutput(emoji), true
+				page, pageErr := capturedListOutput("mr_emoji_create", emojis, resp, captured)
+				if pageErr != nil {
+					return Output{}, false
+				}
+				return page.AwardEmoji[i], true
 			}
 		}
-		if resp == nil || resp.NextPage == 0 {
+		next := toolutil.PaginationFromResponse(resp).NextPage
+		if next == 0 {
 			return Output{}, false
 		}
-		opts.Page = resp.NextPage
+		opts.Page = next
 	}
 }
 
@@ -586,23 +602,8 @@ func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 
 // GetMRNoteAwardEmoji gets a single award emoji on a merge request note.
 func GetMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRGetOnNoteInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "merge_request_iid")
-	}
-	if input.NoteID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "note_id")
-	}
-	if input.AwardID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "award_id")
-	}
-	emoji, _, err := client.GL().AwardEmoji.GetMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
-	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_get", err)
-	}
-	return toOutput(emoji), nil
+	return getNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, AwardID: input.AwardID, IIDField: "merge_request_iid", Operation: "mr_note_emoji_get"},
+		client.GL().AwardEmoji.GetMergeRequestAwardEmojiOnNote)
 }
 
 // CreateMRNoteAwardEmoji creates an award emoji on a merge request note.
@@ -629,12 +630,13 @@ func ListSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_emoji_list", "snippet_id")
 	}
 	opts := emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_emoji_list", err, 404,
 			"verify the snippet exists with snippet.project_get (correct project_id and snippet_id)")
 	}
-	return toListOutput(emojis, resp), nil
+	return capturedListOutput("snippet_emoji_list", emojis, resp, captured)
 }
 
 // GetSnippetAwardEmoji gets a single award emoji on a snippet.
@@ -648,11 +650,12 @@ func GetSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_get", "award_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emoji, _, err := client.GL().AwardEmoji.GetSnippetAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("snippet_emoji_get", err)
 	}
-	return toOutput(emoji), nil
+	return capturedOutput("snippet_emoji_get", emoji, captured)
 }
 
 // CreateSnippetAwardEmoji creates an award emoji on a snippet.
@@ -664,12 +667,13 @@ func CreateSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_create", "snippet_id")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emoji, _, err := client.GL().AwardEmoji.CreateSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_emoji_create", err, 404,
 			"verify the snippet exists with snippet.project_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
-	return toOutput(emoji), nil
+	return capturedOutput("snippet_emoji_create", emoji, captured)
 }
 
 // DeleteSnippetAwardEmoji deletes an award emoji from a snippet.
@@ -707,23 +711,8 @@ func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 
 // GetSnippetNoteAwardEmoji gets a single award emoji on a snippet note.
 func GetSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetGetOnNoteInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_get", "snippet_id")
-	}
-	if input.NoteID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_get", "note_id")
-	}
-	if input.AwardID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_get", "award_id")
-	}
-	emoji, _, err := client.GL().AwardEmoji.GetSnippetAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
-	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_note_emoji_get", err)
-	}
-	return toOutput(emoji), nil
+	return getNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, AwardID: input.AwardID, IIDField: "snippet_id", Operation: "snippet_note_emoji_get"},
+		client.GL().AwardEmoji.GetSnippetAwardEmojiOnNote)
 }
 
 // CreateSnippetNoteAwardEmoji creates an award emoji on a snippet note.

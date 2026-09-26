@@ -48,10 +48,10 @@ func FormatListMarkdownString(out ListOutput) string {
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Emoji", "User", "Awarded"))
 	linked := false
 	for _, e := range out.AwardEmoji {
-		linked = linked || (e.User != nil && e.User.WebURL != "")
+		linked = linked || (e.User != nil && e.User.WebURL != "") || e.URL != ""
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(e.ID, 10),
-			emojiCell(e.Name),
+			emojiCell(e.Name, e.URL),
 			awardEmojiUserMarkdown(e),
 			toolutil.FormatTime(e.CreatedAt),
 		))
@@ -63,12 +63,13 @@ func FormatListMarkdownString(out ListOutput) string {
 // emojiCell renders an emoji name in GitLab's own ":name:" spelling, or nothing
 // for an award whose name is missing, so a cell never reads "::". An emoji name
 // is not held to GitLab's own list: an instance may carry custom emoji whose
-// name a person chose.
-func emojiCell(name string) string {
+// name a person chose, and a custom emoji links to its image, the one URL
+// GitLab sends for an award.
+func emojiCell(name, url string) string {
 	if strings.TrimSpace(name) == "" {
 		return ""
 	}
-	return ":" + toolutil.EscapeMdTableCell(name) + ":"
+	return toolutil.MdTitleLink(":"+name+":", url)
 }
 
 // awardEmojiUserMarkdown renders the awarding user as a cell: a link to their
@@ -96,7 +97,7 @@ func FormatMarkdownString(out Output) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, awardEmojiHeading(out))
 	c.Int("ID", out.ID)
-	c.Markdown("Name", emojiCell(out.Name))
+	c.Markdown("Name", emojiCell(out.Name, out.URL))
 	c.Markdown("Awarded On", awardableCell(out))
 	if out.User != nil {
 		user := c.Sub("User")
