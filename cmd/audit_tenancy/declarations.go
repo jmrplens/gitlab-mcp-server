@@ -282,10 +282,9 @@ var pending = []string{
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
 	"AUT-003",
 	"END-005",
-	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-007",
 	"IDN-011",
 	"POL-001", "POL-004", "POL-006",
-	"RTC-001", "RTC-002", "RTC-003", "RTC-005", "RTC-006",
+	"RTC-001", "RTC-002", "RTC-003", "RTC-006",
 }
 
 // checkPending holds the pending list to the register: every entry is a row,

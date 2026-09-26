@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -36,18 +37,28 @@ func TestCategories_EachSaysWhatItCovers(t *testing.T) {
 	}
 }
 
-// TestPending_IsTheValuedRowsOfTheRegister: the list holds each of the
-// register's Valued rows once, and nothing else, which is what "the rows not
-// yet migrated" is before the first value layer.
-func TestPending_IsTheValuedRowsOfTheRegister(t *testing.T) {
+// movedByValueLayers are the Valued rows whose values a layer of issue 565 has
+// already moved into the register, each layer appending its own: the
+// holdings, the listen and watcher ceilings with the code they refuse with and
+// the watch cadence and back-off (L3).
+var movedByValueLayers = []string{
+	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-007", "RTC-005",
+}
+
+// TestPending_IsTheValuedRowsNotYetMoved: the list holds each of the
+// register's Valued rows that no value layer has moved yet, once, and nothing
+// else, which is what "the rows not yet migrated" means; a moved row is
+// Valued too, and pending never names it again.
+func TestPending_IsTheValuedRowsNotYetMoved(t *testing.T) {
 	var valued []string
 	for _, d := range tenancy.Decisions() {
 		if d.Disposition == tenancy.Valued {
 			valued = append(valued, d.ID)
 		}
 	}
-	if len(pending) != len(valued) || !sameSet(pending, valued) {
-		t.Fatalf("pending = %v, want the Valued rows %v", sortedPending(), valued)
+	all := append(slices.Clone(pending), movedByValueLayers...)
+	if len(all) != len(valued) || !sameSet(all, valued) {
+		t.Fatalf("pending = %v and moved = %v, want together the Valued rows %v, each once", sortedPending(), movedByValueLayers, valued)
 	}
 }
 

@@ -14,6 +14,8 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // Errors a [Reader] may return to steer a watcher. Everything else is
@@ -104,20 +106,20 @@ type Notifier interface {
 // watchers at a five-second interval would consume such a user's entire
 // budget while that same user is making tool calls through it.
 const (
-	DefaultBaseInterval = 15 * time.Second
-	DefaultMinInterval  = 5 * time.Second
-	DefaultLease        = 30 * time.Minute
-	DefaultSlowInterval = 10 * time.Minute
-	DefaultMaxLifetime  = 24 * time.Hour
-	DefaultMaxWatchers  = 10
+	DefaultBaseInterval = tenancy.WatchBaseInterval     // register row HLD-007
+	DefaultMinInterval  = tenancy.WatchMinInterval      // register row HLD-007
+	DefaultLease        = tenancy.WatchLease            // register row HLD-007
+	DefaultSlowInterval = tenancy.WatchSlowInterval     // register row HLD-007
+	DefaultMaxLifetime  = tenancy.WatchMaxLifetime      // register row HLD-007
+	DefaultMaxWatchers  = tenancy.WatchersPerCredential // register row HLD-003
 
 	// Rate-limit back-off, applied to every watcher at once and doubled
 	// per consecutive refusal.
-	rateLimitBackoff    = 30 * time.Second
-	maxRateLimitBackoff = 5 * time.Minute
+	rateLimitBackoff    = tenancy.WatchRateLimitPause    // register row RTC-005
+	maxRateLimitBackoff = tenancy.WatchRateLimitPauseMax // register row RTC-005
 	// jitterFraction spreads retries so watchers that were paused together
 	// do not resume in lockstep and re-trigger the limit.
-	jitterFraction = 0.2
+	jitterFraction = tenancy.WatchRateLimitJitter // register row RTC-005
 )
 
 // Options configures a [Manager]. The zero value is usable: every field
