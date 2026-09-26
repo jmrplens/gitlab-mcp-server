@@ -818,6 +818,30 @@ func TestTypedShapeCheck_AnEnvelopeAroundASkippedPayload_TakesItsSkip(t *testing
 	}
 }
 
+// TestTypedShapeCheck_APayloadThatIsItselfPackaging_IsCountedUnderItsEnvelope
+// verifies that a payload is never counted on its own name, even when it is a
+// top-level type, one embedded rather than named as a field, that packages a
+// paired payload of its own. The response is counted under the outermost
+// envelope, whose own payload carries no pairing, so it is the one type named
+// among the skips; listing the middle one among the envelopes as well would
+// count the one response twice.
+func TestTypedShapeCheck_APayloadThatIsItselfPackaging_IsCountedUnderItsEnvelope(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs:     []structs.OutputPairing{{Package: "milestones", MCPType: "IssueItem", SDKType: "Issue"}},
+	}, nil, milestoneIssueRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "GetOutput", Fields: []string{"id"}, Wraps: []string{"DetailOutput"}},
+		{Package: "internal/tools/milestones", Name: "DetailOutput", Fields: []string{"id"}, Payload: true, Wraps: []string{"IssueItem"}},
+		{Package: "internal/tools/milestones", Name: "IssueItem", Fields: []string{"id"}, Inner: true, Payload: true},
+	})
+
+	if check.Compared != 1 || len(check.Envelopes) != 0 || !slices.Equal(check.Skipped.NoPairing, []string{"milestones.GetOutput"}) {
+		t.Errorf("check = %+v, want the item compared and the response counted once, under the outer envelope", check)
+	}
+}
+
 // TestWrapsOnlyPaired_EveryPayload_MustBePaired verifies that one paired
 // payload among several does not make the envelope judged: the others are
 // responses nothing reads, and they are only counted if the envelope is.
