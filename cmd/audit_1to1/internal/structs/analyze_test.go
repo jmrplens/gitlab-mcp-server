@@ -521,12 +521,15 @@ func declare[V any](t *testing.T, table map[string]V, key string, value V) {
 // type's tag, a global entry suppresses its tag on every type, and a genuinely
 // invented scalar (in neither form) is still reported.
 //
-// No entry in the table uses the global form today, so the fixture declares
-// one; without it the second lookup could answer false for every tag and this
-// test, whose name has always claimed the global form, would not notice.
+// Both forms are declared by the fixture rather than read from the table. No
+// entry uses the global form today, and the table's one scoped entry,
+// Output.branch_name, answers nothing: branches.Output no longer publishes
+// branch_name. A test reading that entry would fail the day it is deleted, for
+// a reason that has nothing to do with the rule.
 func TestIsAcceptedRename_AllowsScopedAndGlobalTags(t *testing.T) {
 	declare(t, acceptedOutputRenames, "fixture_global_rename", true)
-	for _, mcpType := range []string{"Output", "OtherOutput"} {
+	declare(t, acceptedOutputRenames, "FixtureOutput.fixture_scoped_rename", true)
+	for _, mcpType := range []string{"FixtureOutput", "OtherOutput"} {
 		t.Run(mcpType, func(t *testing.T) {
 			if !isAcceptedRename(mcpType, "fixture_global_rename") {
 				t.Errorf("isAcceptedRename(%s, fixture_global_rename) = false, want true (global entry)", mcpType)
@@ -534,44 +537,46 @@ func TestIsAcceptedRename_AllowsScopedAndGlobalTags(t *testing.T) {
 		})
 	}
 
-	// The table's one scoped entry, Output.branch_name. It was written for
-	// branches.Output, which no longer publishes branch_name, so it is read
-	// here as a fixture of the scoped form and not as a fact about the tree.
-	if !isAcceptedRename("Output", "branch_name") {
-		t.Errorf("isAcceptedRename(Output, branch_name) = false, want true (seeded allowlist)")
+	if !isAcceptedRename("FixtureOutput", "fixture_scoped_rename") {
+		t.Errorf("isAcceptedRename(FixtureOutput, fixture_scoped_rename) = false, want true (scoped entry)")
 	}
 	// Same tag on a different MCP type is NOT suppressed by the scoped entry.
-	if isAcceptedRename("OtherOutput", "branch_name") {
-		t.Errorf("isAcceptedRename(OtherOutput, branch_name) = true, want false (scoped to Output)")
+	if isAcceptedRename("OtherOutput", "fixture_scoped_rename") {
+		t.Errorf("isAcceptedRename(OtherOutput, fixture_scoped_rename) = true, want false (scoped to FixtureOutput)")
 	}
 	// A genuine invented scalar is never accepted.
-	if isAcceptedRename("Output", "invented_field") {
-		t.Errorf("isAcceptedRename(Output, invented_field) = true, want false")
+	if isAcceptedRename("FixtureOutput", "invented_field") {
+		t.Errorf("isAcceptedRename(FixtureOutput, invented_field) = true, want false")
 	}
 }
 
 // TestExtraOutputFields_SuppressesAllowlistedRename verifies extraOutputFields
 // honors the accepted-rename allowlist: an allowlisted rename is not reported as
 // extra, while a genuinely invented scalar in the same struct still is.
+//
+// The rename is the fixture's own declaration, for the reason
+// TestIsAcceptedRename_AllowsScopedAndGlobalTags gives: the table's scoped
+// entry describes no field of today's tree.
 func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
+	declare(t, acceptedOutputRenames, "FixtureOutput.renamed_name", true)
 	sdkFields := map[string]string{
-		"name": "string", // SDK scalar that the MCP renames to branch_name
+		"name": "string", // SDK scalar that the MCP renames to renamed_name
 		"id":   "int",
 	}
 	mcpFields := map[string]string{
-		"branch_name":    "string", // allowlisted rename of SDK `name` → not extra
+		"renamed_name":   "string", // allowlisted rename of SDK `name` → not extra
 		"id":             "int",    // SDK-backed → not extra
 		"invented_field": "string", // genuine invented scalar → extra
 	}
 
-	// Scoped to "Output": branch_name is suppressed.
-	extras := extraOutputFields("testpkg", "Output", mcpFields, sdkFields)
+	// Scoped to "FixtureOutput": renamed_name is suppressed.
+	extras := extraOutputFields("fixturepkg", "FixtureOutput", mcpFields, sdkFields)
 	gotTags := map[string]bool{}
 	for _, e := range extras {
 		gotTags[e.Tag] = true
 	}
-	if gotTags["branch_name"] {
-		t.Errorf("allowlisted rename branch_name reported as extra: %v", extras)
+	if gotTags["renamed_name"] {
+		t.Errorf("allowlisted rename renamed_name reported as extra: %v", extras)
 	}
 	if !gotTags["invented_field"] {
 		t.Errorf("genuine invented scalar invented_field not reported as extra: %v", extras)
@@ -580,15 +585,15 @@ func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
 		t.Errorf("extra count = %d (%v), want 1 (only invented_field)", len(extras), extras)
 	}
 
-	// On a non-allowlisted MCP type, branch_name IS reported (proves it is the
+	// On a non-allowlisted MCP type, renamed_name IS reported (proves it is the
 	// allowlist, not a generic suppression, that hides it above).
-	other := extraOutputFields("testpkg", "UnlistedOutput", mcpFields, sdkFields)
+	other := extraOutputFields("fixturepkg", "UnlistedOutput", mcpFields, sdkFields)
 	otherTags := map[string]bool{}
 	for _, e := range other {
 		otherTags[e.Tag] = true
 	}
-	if !otherTags["branch_name"] {
-		t.Errorf("branch_name should be extra on UnlistedOutput (not allowlisted): %v", other)
+	if !otherTags["renamed_name"] {
+		t.Errorf("renamed_name should be extra on UnlistedOutput (not allowlisted): %v", other)
 	}
 }
 
@@ -884,18 +889,32 @@ func findPackage(t *testing.T, rep report, name string) packageReport {
 // reference subset suppresses missing-field reporting for the whole nested type,
 // and a doc-omitted field suppresses a single top-level SDK field — both keyed by
 // "<package>.<type>" / "<package>.<type>.<tag>" so they never leak across packages.
+//
+// Both entries are the fixture's own. The table entries this test used to read,
+// environments.DeployableOutput and environments.Output.project, answer no
+// finding of today's tree, and a rule test resting on them would fail the day
+// they are deleted rather than the day the rule breaks.
 func TestDocGroundedSuppression(t *testing.T) {
-	if !isCuratedRefSubset("environments", "DeployableOutput") {
-		t.Error("DeployableOutput should be a curated ref subset in environments")
+	declare(t, curatedRefSubsets, "fixturepkg.CuratedOutput", "curated subset fixture")
+	declare(t, docOmittedFields, "fixturepkg.Output.omitted_field", "doc-omitted fixture")
+
+	if !isCuratedRefSubset("fixturepkg", "CuratedOutput") {
+		t.Error("CuratedOutput should be a curated ref subset in fixturepkg")
 	}
-	if isCuratedRefSubset("otherpkg", "DeployableOutput") {
+	if isCuratedRefSubset("otherpkg", "CuratedOutput") {
 		t.Error("curated ref subset must be package-scoped, not global")
 	}
-	if !isDocOmittedField("environments", "Output", "project") {
-		t.Error("environments.Output.project should be a doc-omitted field")
+	if !isDocOmittedField("fixturepkg", "Output", "omitted_field") {
+		t.Error("fixturepkg.Output.omitted_field should be a doc-omitted field")
 	}
-	if isDocOmittedField("environments", "Output", "name") {
+	if isDocOmittedField("fixturepkg", "Output", "name") {
 		t.Error("name is documented and must not be treated as doc-omitted")
+	}
+	if isDocOmittedField("otherpkg", "Output", "omitted_field") {
+		t.Error("a doc-omitted field must be package-scoped, not global")
+	}
+	if isDocOmittedField("fixturepkg", "OtherOutput", "omitted_field") {
+		t.Error("a doc-omitted field must be scoped to its own type")
 	}
 }
 
@@ -1528,7 +1547,14 @@ func TestStructPairExported_EachSide_KeepsItsOwnFields(t *testing.T) {
 // as alternatives rather than as conditions that must both hold, either one
 // would report the other's suppressed fields, and the predicates' own tests
 // cannot see it because they never run the diff.
+//
+// Both carve-outs are the fixture's own declarations, since the table entries
+// this test used to read (environments.Output.project and
+// environments.DeployableOutput) answer no finding of today's tree.
 func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testing.T) {
+	declare(t, docOmittedFields, "fixturepkg.Output.project", "doc-omitted fixture")
+	declare(t, curatedRefSubsets, "fixturepkg.CuratedOutput", "curated subset fixture")
+
 	t.Run("a doc-omitted field is silenced and its siblings are not", func(t *testing.T) {
 		mcp := makeStruct(
 			structField{"ID", "id", tInt},
@@ -1542,7 +1568,7 @@ func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testi
 			structField{"Weight", "weight", sdkNamedStruct(t, "Weight")},
 		)
 
-		g := diffOutputGroup("environments", outputGroup{
+		g := diffOutputGroup("fixturepkg", outputGroup{
 			mcpName: "Output", mcpType: mcp,
 			pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.Environment", sdkType: sdk}},
 		})
@@ -1566,12 +1592,12 @@ func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testi
 			structField{"Project", "project", sdkNamedStruct(t, "Project")},
 		)
 
-		g := diffOutputGroup("environments", outputGroup{
-			mcpName: "DeployableOutput", mcpType: mcp,
-			pairs: []structPair{{mcpName: "DeployableOutput", mcpType: mcp, sdkName: "v2.Deployable", sdkType: sdk}},
+		g := diffOutputGroup("fixturepkg", outputGroup{
+			mcpName: "CuratedOutput", mcpType: mcp,
+			pairs: []structPair{{mcpName: "CuratedOutput", mcpType: mcp, sdkName: "v2.Deployable", sdkType: sdk}},
 		})
 
-		want := gap{Kind: "output", MCPType: "DeployableOutput", SDKType: "v2.Deployable"}
+		want := gap{Kind: "output", MCPType: "CuratedOutput", SDKType: "v2.Deployable"}
 		if !reflect.DeepEqual(g, want) {
 			t.Errorf("diffOutputGroup = %+v, want no finding on a curated subset", g)
 		}
@@ -1583,15 +1609,19 @@ func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testi
 			structField{"ID", "id", tInt},
 			structField{"Project", "project", sdkNamedStruct(t, "Project")},
 		)
-
-		g := diffOutputGroup("deployments", outputGroup{
-			mcpName: "Output", mcpType: mcp,
-			pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.Deployment", sdkType: sdk}},
-		})
-
 		want := []missingField{{Tag: "project", SDKType: "v2.Project"}}
-		if !reflect.DeepEqual(g.MissingFields, want) {
-			t.Errorf("missing fields = %+v, want the project field reported outside environments", g.MissingFields)
+
+		for _, mcpName := range []string{"Output", "CuratedOutput"} {
+			t.Run(mcpName, func(t *testing.T) {
+				g := diffOutputGroup("otherpkg", outputGroup{
+					mcpName: mcpName, mcpType: mcp,
+					pairs: []structPair{{mcpName: mcpName, mcpType: mcp, sdkName: "v2.Deployment", sdkType: sdk}},
+				})
+
+				if !reflect.DeepEqual(g.MissingFields, want) {
+					t.Errorf("missing fields = %+v, want the project field reported outside fixturepkg", g.MissingFields)
+				}
+			})
 		}
 	})
 }
@@ -2179,7 +2209,9 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 	mcpNamed := namedStruct(local, "ListInput", mcpStruct)
 	optionsNamed := namedStruct(sdkPkg, "ListBranchesOptions", optionsStruct)
 	resultNamed := namedStruct(sdkPkg, "Branch", makeStruct(structField{"Name", "name", tString}))
-	localNamed := namedStruct(local, "Scratch", makeStruct(structField{"ID", "id", tInt}))
+	// The local struct carries the Options suffix on purpose, so the suffix
+	// cannot turn it away and only the package half of the rule does.
+	localNamed := namedStruct(local, "ScratchOptions", makeStruct(structField{"ID", "id", tInt}))
 
 	handler := func(literalTypes ...types.Type) (*packages.Package, *ast.FuncDecl) {
 		param := ast.NewIdent("in")
@@ -2217,14 +2249,25 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 		}
 	})
 
-	t.Run("a result struct or a local struct is not a request", func(t *testing.T) {
-		pkg, fn := handler(resultNamed, localNamed)
+	t.Run("a client-go result struct is not a request", func(t *testing.T) {
+		pkg, fn := handler(resultNamed)
 		pairs := map[[2]string]structPair{}
 
 		collectHandlerInputs(pkg, fn, pairs)
 
 		if len(pairs) != 0 {
-			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a result or a local literal", pairs)
+			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a result literal", pairs)
+		}
+	})
+
+	t.Run("an Options struct of the handler's own package is not a request", func(t *testing.T) {
+		pkg, fn := handler(localNamed)
+		pairs := map[[2]string]structPair{}
+
+		collectHandlerInputs(pkg, fn, pairs)
+
+		if len(pairs) != 0 {
+			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a local Options literal", pairs)
 		}
 	})
 }
