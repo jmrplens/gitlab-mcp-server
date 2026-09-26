@@ -7,9 +7,11 @@ import (
 	"io"
 )
 
-// lineTable is the one allocated section a pure move of a constant changes:
-// Go's function and line table, which records the line every instruction came
-// from, and a constant moved to another package moves the lines below it.
+// lineTable is the one allocated section the comparison sets aside: Go's
+// function and line table, which records the line every instruction came
+// from, so a change that moves a line changes it. It sets aside only that
+// section's bytes: a line table of another size moves the sections the
+// linker lays out after it, and those are compared (see [compareBinaries]).
 const lineTable = ".gopclntab"
 
 // runCompare is -compare-binaries: two ELF files, and an exit code saying
@@ -40,14 +42,20 @@ func runCompare(args []string, stdout, stderr io.Writer) int {
 //
 // The allocated sections are what the loader maps into the process: the
 // instructions, the read-only data, the initialized data, the type and
-// function metadata the runtime reads. The comparison is the proof a layer
-// that only moves constants gives that it changed no code, and it was measured
-// to be the right claim rather than an expectation: the compiler's assembly
-// for such a package does change (it gains a relocation to the new import's
-// init task), while every allocated section of the linked binary but the line
-// table stays byte for byte the same. A section present in one binary and not
-// the other is a difference, and so is a section of zero-filled memory whose
-// size changed.
+// function metadata the runtime reads. The comparison is the proof a change
+// that only moves constants into the register gives that it changed no code,
+// and what it is compared against decides whether the proof can pass. Against
+// its parent it cannot, whenever the change adds an import of the register:
+// the inserted lines resize the line table, which can move the sections the
+// linker lays out after it (on Go 1.27.1 the type data among them) and every
+// reference into them; and a package that imports the register for the first
+// time changes where the linker places content-addressed read-only data, or
+// which copy of a duplicated compiler-generated function it keeps. Both were measured on the value
+// layers of issue 565, and so was the base that answers them: the parent with
+// the change's own import lines added as blank imports at the same positions,
+// against which each of those layers was byte-identical as a whole file. A
+// section present in one binary and not the other is a difference, and so is
+// a section of zero-filled memory whose size changed.
 func compareBinaries(pathA, pathB string) ([]string, error) {
 	a, err := allocatedSections(pathA)
 	if err != nil {

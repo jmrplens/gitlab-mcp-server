@@ -128,6 +128,14 @@ gitlab-mcp-server/
 - All API calls must respect `context.Context` for cancellation
 - Rate limiting awareness and retry logic
 
+### Adding or Changing a Limit
+
+- A decision about who a caller is and what it may hold, spend or be told (a ceiling, a rate, a budget, a lifetime, what zero means for a setting, a refusal and its code) is decided in the tenant policy register, `internal/tenancy` (ADR-0023), and enforced where the resource is counted; never write one as a literal in the layer that enforces it
+- The procedure: write the row in the `decisions_*.go` file for its question and its values in `values.go` (codes in `codes.go`), with its key from `key.go` (a new key carries its mint cost and evidence); freeze the value in `TestValues_AtCB6379F53` and add the ID to `specRequirementIDs`; run `go test ./internal/tenancy`, where `Validate` refuses a share on any key a caller can mint and a per-caller ceiling on a process resource with no process partner; make the layer read the constant and declare its sites on the row; answer the specification's validation checklist (`docs/development/tenant-policy-spec.md`) in the pull request
+- The gate is `make check-tenancy` (step 23 of `make analyze`, and CI), and every rule applies to every row
+- A change that moves policy without changing it is proved by `make tenancy-code-identity`: against its parent when it inserts no line and adds no importer of the register, otherwise against the parent with the change's own `internal/tenancy` import lines added as blank imports at the same positions (`BASE_TREE`). A rule promoted into the register is proved by an oracle test and a fuzz target against a verbatim copy of the code it replaced, not by the binary
+- A disagreement the register records is a finding with its own issue (`tenancy.FindingIssue`), fixed there and never on the way
+
 ### Testing
 
 - Unit tests for every tool handler

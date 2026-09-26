@@ -68,17 +68,16 @@
 //
 // # Declarations
 //
-// declarations.go holds what the rules match the code against and the two
-// tables a reviewer judges. notADecision is the exemption table: each entry
-// names a declaration shaped like a limit that decides nothing about a
-// caller, keyed `package:Name` the way the register names a site, with a
-// category and a reason. pending lists the rows whose values have not moved
-// into the register yet, for which G2, G3 and G6 are deferred and every other
-// rule applies in full; each value layer of issue 565 deletes its rows, and
-// the last deletes the list. A declaration that answers nothing is a finding
-// on the terms every declaration table here is held to: an exemption nothing
-// needed, one naming a category nobody defined, a pending entry that names no
-// row, and a pending row whose deferred checks already pass.
+// declarations.go holds what the rules match the code against and the table a
+// reviewer judges. notADecision is the exemption table: each entry names a
+// declaration shaped like a limit that decides nothing about a caller, keyed
+// `package:Name` the way the register names a site, with a category and a
+// reason. A declaration that answers nothing is a finding on the terms every
+// declaration table here is held to: an exemption nothing needed, and one
+// naming a category nobody defined. Every rule applies to every row; the
+// deferral the migration of issue 565 needed while the values moved into the
+// register is gone, so a row whose value its layer reads as a literal is a
+// finding the day it is written.
 //
 // # What it reads, and what it cannot see
 //
@@ -96,19 +95,33 @@
 // rather than passing, and the finding names the position rather than the
 // policy. A rule row's logic is declared by symbol, so G1 fails when the
 // symbol disappears and nothing fails when its logic changes; that is what
-// the promoted rules of the later layers exist for.
+// promoting a rule into the register exists for.
 //
 // # Code identity
 //
-// -compare-binaries A B is the other half of a layer that moves a value into
+// -compare-binaries A B is the other half of a change that moves a value into
 // the register: it reads two ELF binaries and exits non-zero unless every
-// allocated section but the line table, .gopclntab, is byte-identical. A
-// constant moved to another package moves the lines below it and nothing
-// else, which was measured before it was relied on: the compiler's assembly
-// for such a package gains a relocation to the new import's init task, while
-// the linked binary's instructions, data, types and function metadata stay
-// the same. `make tenancy-code-identity BASE=<ref>` builds the server at the
-// ref and in the working tree and runs the comparison.
+// allocated section but the line table, .gopclntab, is byte-identical.
+// `make tenancy-code-identity BASE=<ref>` builds the server at the ref and in
+// the working tree and runs the comparison, and BASE_TREE=<dir> names an
+// exported tree instead.
+//
+// Which base the change is compared against is the whole of the proof. A
+// change that inserts no line into the server's source and gives the register
+// no new importer is compared against its parent as it is. A change that
+// imports the register into a file is not, because the import alone moves
+// sections: the inserted lines resize the line table, which can move what the
+// linker lays out after it, and a new importer changes where the linker
+// places content-addressed data. Such a change is compared against its parent
+// with the same import lines added as blank imports at the same positions,
+// passed as BASE_TREE; each value layer of issue 565 was byte-identical to
+// that base as a whole file, while every one of them failed against its
+// parent.
+//
+// A rule promoted into the register is not proved by the binary at all: a
+// layer calls it, and the compiler may lay its callers out differently. Its
+// proof is an oracle test and a fuzz target holding it to a verbatim copy of
+// the code it replaced, with its allocations pinned.
 //
 // Usage:
 //

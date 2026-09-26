@@ -101,21 +101,6 @@ var ladder = [...]int{1, leaf.Limit}
 	assertFindings(t, report, "G2", "ROW-001: "+siteDir+":ladder element 0 is the literal 1 rather than Limit")
 }
 
-// TestCheckAliases_APendingRow_IsDeferred: a row whose values have not moved
-// yet is not held to G2, and every other rule still applies to it.
-func TestCheckAliases_APendingRow_IsDeferred(t *testing.T) {
-	source := siteHeader + `
-const literal = 64
-`
-	report := fixture{
-		files:   map[string]string{"site/site.go": source},
-		rows:    []tenancy.Decision{row("ROW-001", aliasSite("literal", "Limit"), site("gone", tenancy.Enforce))},
-		pending: []string{"ROW-001"},
-	}.run(t)
-	assertFindings(t, report, "G2")
-	assertFindings(t, report, "G1", "ROW-001: names "+siteDir+":gone, which matches nothing: "+siteDir+" declares nothing named gone")
-}
-
 // TestIsRegisterValue_NeedsTheRegistersConstant: a register function of the
 // right name is not the value, and neither is a constant of another package
 // that happens to share its name.

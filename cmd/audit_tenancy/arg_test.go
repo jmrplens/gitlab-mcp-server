@@ -84,13 +84,3 @@ func TestCheckArgs_WhatIsNotTheRegistersArgument_IsAFinding(t *testing.T) {
 		"ROW-001: "+siteDir+":notAFunction is not a function, so it has no call to parse",
 	)
 }
-
-// TestCheckArgs_APendingRow_IsDeferred.
-func TestCheckArgs_APendingRow_IsDeferred(t *testing.T) {
-	report := fixture{
-		files:   map[string]string{"site/site.go": argSource},
-		rows:    []tenancy.Decision{row("ROW-001", argSite("Literal", "parse", 1, 1, "Ratio"))},
-		pending: []string{"ROW-001"},
-	}.run(t)
-	assertFindings(t, report, "G3")
-}

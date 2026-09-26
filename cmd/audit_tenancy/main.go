@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
@@ -69,10 +68,8 @@ type auditConfig struct {
 	overlay  map[string][]byte
 	register register
 	rules    rules
-	// exempt is the exemption table and pending the rows whose binding
-	// checks are deferred; a test replaces both.
-	exempt  map[string]exemption
-	pending []string
+	// exempt is the exemption table; a test replaces it.
+	exempt map[string]exemption
 }
 
 // productionConfig is the run `make check-tenancy` makes over the tree at dir.
@@ -83,7 +80,6 @@ func productionConfig(dir string) auditConfig {
 		register: productionRegister(),
 		rules:    productionRules(),
 		exempt:   notADecision,
-		pending:  pending,
 	}
 }
 
@@ -152,13 +148,10 @@ func audit(cfg auditConfig) (Report, error) {
 	}
 	g := &gate{
 		p: p, reg: cfg.register, rules: cfg.rules, exempt: cfg.exempt,
-		pending: map[string]bool{}, used: map[string]string{},
+		used:    map[string]string{},
 		aliases: aliasIndex(cfg.register), declared: declaredKeys(cfg.register),
 	}
-	for _, id := range cfg.pending {
-		g.pending[id] = true
-	}
-	return g.run(cfg.pending), nil
+	return g.run(), nil
 }
 
 // The platform the gate judges the program on. A file behind a build
@@ -190,11 +183,10 @@ func loadProgram(cfg auditConfig) (*program, error) {
 // gate is one run's state: the program, what it is held to, and which
 // exemptions answered something.
 type gate struct {
-	p       *program
-	reg     register
-	rules   rules
-	exempt  map[string]exemption
-	pending map[string]bool
+	p      *program
+	reg    register
+	rules  rules
+	exempt map[string]exemption
 	// used records, for each exemption that answered something, which part
 	// of G10 it answered.
 	used map[string]string
@@ -210,7 +202,7 @@ type gate struct {
 }
 
 // run applies every rule and assembles the report.
-func (g *gate) run(pending []string) Report {
+func (g *gate) run() Report {
 	var found []Finding
 	found = append(found, checkResolve(g.p, g.reg, g.exempt)...)
 	found = append(found, g.checkAliases()...)
@@ -226,12 +218,9 @@ func (g *gate) run(pending []string) Report {
 	found = append(found, g.checkLeaf()...)
 	found = append(found, g.checkShareWords()...)
 	found = append(found, g.checkConfig()...)
-	found = append(found, g.checkPending()...)
 	found = append(found, g.checkExemptions()...)
 	found = sortFindings(found)
 
-	sortedPending := slices.Clone(pending)
-	slices.Sort(sortedPending)
 	var excused []Excuse
 	for _, key := range sortedKeys(g.used) {
 		e := g.exempt[key]
@@ -248,11 +237,9 @@ func (g *gate) run(pending []string) Report {
 			Reasons:  g.read.reasons,
 			Settings: g.read.settings,
 			Findings: len(found),
-			Pending:  len(pending),
 			Exempted: len(excused),
 		},
 		Findings: found,
-		Pending:  sortedPending,
 		Excused:  excused,
 	}
 }

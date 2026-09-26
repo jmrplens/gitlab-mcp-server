@@ -51,10 +51,12 @@ func TestCheckOrphans_EveryRegisterValueHasAReader(t *testing.T) {
 		aliasSite("window", "Window"))
 	d.Functions = []string{"Busy"}
 	report := fixture{
-		files:   map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules},
-		rows:    []tenancy.Decision{d, row("ROW-002", aliasSite("busy", "CodeBusy"))},
-		rules:   orphanRules(),
-		pending: []string{"ROW-002"},
+		files: map[string]string{
+			"site/site.go":  orphanSource + "\nconst busy = leaf.CodeBusy\n",
+			"leaf/rules.go": orphanLeafRules,
+		},
+		rows:  []tenancy.Decision{d, row("ROW-002", aliasSite("busy", "CodeBusy"))},
+		rules: orphanRules(),
 	}.run(t)
 	assertFindings(t, report, "G6",
 		leafDir+":Window: is a register value nothing outside the register reads",
@@ -68,8 +70,8 @@ func codeName() string { return "busy" }
 `
 
 // TestCheckOrphans_ARegisterValueNothingReads_IsAFinding: a constant no site
-// is declared to read, and a rule function no row names, each fail; a
-// constant of a pending row waits for its layer.
+// is declared to read, including one only a row's Values name, and a rule
+// function no row names, each fail.
 func TestCheckOrphans_ARegisterValueNothingReads_IsAFinding(t *testing.T) {
 	report := fixture{
 		files: map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules, "leaf/codes.go": orphanLeafCodes},
@@ -77,35 +79,13 @@ func TestCheckOrphans_ARegisterValueNothingReads_IsAFinding(t *testing.T) {
 			row("ROW-001", aliasSite("limit", "Limit")),
 			{ID: "ROW-002", Values: []string{"Window"}},
 		},
-		rules:   orphanRules(),
-		pending: []string{"ROW-002"},
+		rules: orphanRules(),
 	}.run(t)
 	assertFindings(t, report, "G6",
 		leafDir+":Busy: is a register function no row names in Functions",
 		leafDir+":CodeBusy: is a register value no Alias or Arg site reads",
 		leafDir+":Ratio: is a register value no Alias or Arg site reads",
-	)
-	// The pending row's orphan is what keeps it pending: its deferred checks
-	// still fail, so the row is not reported as ready to leave the list.
-	assertFindings(t, report, "G1")
-}
-
-// TestCheckOrphans_APendingRowsArgSiteDefersItsConstant: a constant only a
-// pending row's Arg site claims waits for that row's layer, as one only its
-// Alias claims does.
-func TestCheckOrphans_APendingRowsArgSiteDefersItsConstant(t *testing.T) {
-	report := fixture{
-		files: map[string]string{"site/site.go": orphanSource, "leaf/rules.go": orphanLeafRules},
-		rows: []tenancy.Decision{
-			row("ROW-001", aliasSite("limit", "Limit"), aliasSite("ratio", "Ratio"), aliasSite("window", "Window")),
-			row("ROW-002", argSite("Load", "Parse", 0, 1, "CodeBusy")),
-		},
-		rules:   orphanRules(),
-		pending: []string{"ROW-002"},
-	}.run(t)
-	assertFindings(t, report, "G6",
-		leafDir+":Busy: is a register function no row names in Functions",
-		leafDir+":Window: is a register value nothing outside the register reads",
+		leafDir+":Window: is a register value no Alias or Arg site reads",
 	)
 }
 

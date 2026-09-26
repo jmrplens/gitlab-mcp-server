@@ -53,11 +53,9 @@ type Summary struct {
 	Refusals int `json:"refusals"`
 	Reasons  int `json:"reasons"`
 	Settings int `json:"settings"`
-	// Findings, Pending and Exempted are the three things a reader needs:
-	// what is wrong, which rows' binding checks are deferred, and how many
-	// judgements the exemption table is standing in for.
+	// Findings and Exempted are the two things a reader needs: what is
+	// wrong, and how many judgements the exemption table is standing in for.
 	Findings int `json:"findings"`
-	Pending  int `json:"pending"`
 	Exempted int `json:"exempted"`
 }
 
@@ -76,9 +74,6 @@ type Excuse struct {
 type Report struct {
 	Summary  Summary   `json:"summary"`
 	Findings []Finding `json:"findings"`
-	// Pending are the rows whose alias, argument and orphan checks (G2, G3,
-	// G6) are deferred until the layer that moves their values lands.
-	Pending []string `json:"pending"`
 	// Excused are the declarations the exemption table answered this run.
 	Excused []Excuse `json:"excused,omitempty"`
 }
@@ -88,15 +83,11 @@ func (r Report) ok() bool {
 	return len(r.Findings) == 0
 }
 
-// write renders the report: every finding on its own line, the pending rows,
-// what the exemption table answered when verbose, and one summary line.
+// write renders the report: every finding on its own line, what the
+// exemption table answered when verbose, and one summary line.
 func (r Report) write(out io.Writer, verbose bool) {
 	for _, finding := range r.Findings {
 		fmt.Fprintln(out, finding.String())
-	}
-	if len(r.Pending) > 0 {
-		fmt.Fprintf(out, "pending (G2, G3 and G6 deferred until the layer that moves their values): %s\n",
-			strings.Join(r.Pending, ", "))
 	}
 	if verbose {
 		for _, excuse := range r.Excused {
@@ -105,10 +96,10 @@ func (r Report) write(out io.Writer, verbose bool) {
 	}
 	fmt.Fprintf(out, "%s: %d rows, %d failures and %d declared sites over %d packages "+
 		"(%d refusal returns, %d refusals, %d reasons and %d settings read); "+
-		"%d findings, %d rows pending, %d declarations exempted\n",
+		"%d findings, %d declarations exempted\n",
 		toolName, r.Summary.Rows, r.Summary.Failures, r.Summary.Sites, r.Summary.Packages,
 		r.Summary.Returns, r.Summary.Refusals, r.Summary.Reasons, r.Summary.Settings,
-		r.Summary.Findings, r.Summary.Pending, r.Summary.Exempted)
+		r.Summary.Findings, r.Summary.Exempted)
 }
 
 // sortFindings puts findings in a stable order, by rule number and then by

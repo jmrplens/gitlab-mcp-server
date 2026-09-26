@@ -11,14 +11,10 @@ import (
 // names pass the register constant at the argument index it names, and there
 // are exactly as many of them as it says. A literal in that position, or a
 // call added or removed, fails.
-//
-// It is deferred for a pending row, whose values have not moved yet.
 func (g *gate) checkArgs() []Finding {
 	var found []Finding
 	for _, d := range g.reg.decisions {
-		if !g.pending[d.ID] {
-			found = append(found, g.argFindings(d)...)
-		}
+		found = append(found, g.argFindings(d)...)
 	}
 	return found
 }

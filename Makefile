@@ -1927,8 +1927,11 @@ check-tenancy:
 ## tree with -trimpath -buildvcs=false and no build id, and compares the two
 ## with audit_tenancy -compare-binaries: every allocated ELF section but the
 ## line table must be byte-identical. BASE_TREE names a tree exported already,
-## for a build host that holds no history. Linux only, since the comparison
-## reads ELF.
+## for a build host that holds no history. A change that imports
+## internal/tenancy into a file moves sections by the import alone, so its base
+## is the parent with the same import lines added as blank imports at the same
+## positions, exported and passed as BASE_TREE. Linux only, since the
+## comparison reads ELF.
 tenancy-code-identity:
 	@test -n "$(BASE)$(BASE_TREE)" || { echo "usage: make tenancy-code-identity BASE=<ref> (or BASE_TREE=<dir>)"; exit 2; }
 	@tmp=$$(mktemp -d) && \

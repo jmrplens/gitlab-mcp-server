@@ -105,9 +105,13 @@ twice), and the gate holds the pinned literal equal to the register's.
   fails that test.
 - **POS-003**: A new limit is refused by the gate until the row that declares it exists,
   so the specification's validation checklist is answered in one place, the row.
-- **POS-004**: Moving a value into the register changes no allocated section of the server
-  binary except the line table, which the gate's code-identity mode measures for every
-  layer that claims to move policy without changing it.
+- **POS-004**: Moving a value into the register changes no code. The binary a value layer
+  builds is byte-identical to the one its parent builds once the parent imports the
+  register where the layer does, which the gate's code-identity mode checks for any change
+  that claims to move policy without changing it. Against the parent itself the
+  comparison fails, because an inserted import line resizes the line table and can move
+  what the linker lays out after it, and a new importer changes where the linker places
+  read-only data; the value layers of issue 565 measured both.
 
 ### Negative
 
@@ -124,6 +128,14 @@ twice), and the gate holds the pinned literal equal to the register's.
   construction: code identity for a value, a verbatim oracle and fuzzing for a rule.
 - **NEG-005**: The carried-channel matrix follows go-sdk; an SDK upgrade that changes what
   is carried edits it in the same change.
+- **NEG-006**: A promoted rule is a call where the code used to be written in place, and it
+  is not free. `MeterFor` inlines and leaves a second switch on the bucket it returns,
+  about 0.9 ns more for a method no bucket meters; `Busy` does not inline, since it reads
+  two interface methods, about 1 to 1.3 ns more for each pool entry an eviction scan
+  passes; the budget switches inline, and the two startup functions that call them are
+  laid out differently. None of them allocates or takes a lock, which is what the
+  promotion rule protects, and each is proved by its oracle and fuzz target rather than by
+  the binary.
 
 ### Neutral
 
@@ -163,8 +175,13 @@ obstacle: a resolver would be built from `Decisions()` and `Key.MintCost()`.
 - `TestPackage_ImportsTheStandardLibraryOnly`, `TestPackage_DependsOnTheStandardLibraryOnly`,
   `TestPackage_LinksNothingTheServerDoesNot` and `TestPackage_DeclaresNoPackageLevelVariable`
   hold the leaf to the conditions an unchanged binary rests on.
-- `make tenancy-code-identity BASE=<ref>` proves that a change which claims to move policy
-  without changing it changed no allocated section of the server binary but the line table.
+- `make tenancy-code-identity` proves that a change which claims to move policy without
+  changing it changed no code: against its parent (`BASE=<ref>`) when it inserts no line
+  and gives the register no new importer, and otherwise against its parent with the same
+  import lines added as blank imports at the same positions (`BASE_TREE=<dir>`).
+- Each promoted rule (`MeterFor`, `Busy`, `BudgetOn`, `EscalationOn`,
+  `TransportSourceBudgetOn`) is held by an oracle test and a fuzz target to a verbatim copy
+  of the code it replaced.
 
 ## Related
 

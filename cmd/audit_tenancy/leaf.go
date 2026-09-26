@@ -12,12 +12,12 @@ import (
 // Its non-test files import only the packages the rules allow, each of which
 // the server already imports, and they declare no package-level variable.
 //
-// Those are the conditions the code-identity proof rests on. A value layer
-// replaces a literal with one of the register's constants and claims that no
-// allocated section of the binary changed but the line table; that holds only
-// while importing the register adds no package the server did not link and no
-// initialization work, and nothing reachable calls a register function the
-// linker would otherwise drop.
+// Those are the conditions the code-identity proof rests on. A change that
+// replaces a literal with one of the register's constants claims that its
+// binary is the one its parent builds once the parent imports the register
+// where the change does; that holds only while importing the register adds no
+// package the server did not link and no initialization work, and nothing
+// reachable calls a register function the linker would otherwise drop.
 func (g *gate) checkLeaf() []Finding {
 	leaf := g.p.byDir[g.reg.leaf]
 	if leaf == nil {

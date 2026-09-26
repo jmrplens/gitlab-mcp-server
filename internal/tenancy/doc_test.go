@@ -94,8 +94,9 @@ func TestPackage_DependsOnTheStandardLibraryOnly(t *testing.T) {
 
 // TestPackage_LinksNothingTheServerDoesNot holds every dependency of the leaf
 // to one the server binary already has, which is the condition under which a
-// layer that makes the server import it changes no allocated section of the
-// binary but the line table.
+// layer that makes the server import it links nothing new, so that its binary
+// is the one its parent builds once the parent imports the leaf where the
+// layer does.
 func TestPackage_LinksNothingTheServerDoesNot(t *testing.T) {
 	server := map[string]bool{}
 	for _, pkg := range goListLines(t, exec.CommandContext(t.Context(), "go", "list", "-deps", "../../cmd/server")) {

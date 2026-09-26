@@ -13,14 +13,10 @@ import (
 // register constant it names, or to another declared Alias of that constant,
 // and the site keeps the constant's own typedness. For a composite literal
 // every element is an alias, and each element is declared.
-//
-// It is deferred for a pending row, whose values have not moved yet.
 func (g *gate) checkAliases() []Finding {
 	var found []Finding
 	for _, d := range g.reg.decisions {
-		if !g.pending[d.ID] {
-			found = append(found, g.aliasFindings(d)...)
-		}
+		found = append(found, g.aliasFindings(d)...)
 	}
 	return found
 }
