@@ -417,6 +417,10 @@ func (j *judge) expand(selections ast.SelectionSet) []*ast.Field {
 // on any other kind the option is ignored.
 const stringOptionKinds = types.IsBoolean | types.IsInteger | types.IsFloat | types.IsString
 
+// jsonNumber is encoding/json's Number spelled with its package path, which is
+// how [types.TypeString] writes it with no qualifier.
+const jsonNumber = "encoding/json.Number"
+
 // expectClass checks that a Go type can hold a scalar of the class. literal
 // says whether the JSON string GitLab sends may carry a number or a boolean as
 // its text: a string scalar may, since a BigInt is one, and an enum value never
@@ -426,14 +430,19 @@ const stringOptionKinds = types.IsBoolean | types.IsInteger | types.IsFloat | ty
 // field's own literal out of a JSON string, which is how a BigInt lands in an
 // int64 on purpose, and is a constraint as much as a permission: a bare number
 // or boolean is refused for not being quoted, and a string field under it
-// would need GitLab to quote its text twice.
+// would need GitLab to quote its text twice. json.Number is the one string
+// kind the option treats as a number, since it decodes one: it takes a
+// number's text out of the JSON string and refuses a bare number, exactly as
+// an integer kind does. A type defined from it keeps the string kind and none
+// of its methods, so it is an ordinary string field there.
 func (j *judge) expectClass(goType types.Type, gqlType *ast.Type, path string, class scalarClass, asString, literal bool) {
 	if class == classAny {
 		return
 	}
 	basic, isBasic := goType.Underlying().(*types.Basic)
 	if asString && isBasic && basic.Info()&stringOptionKinds != 0 {
-		if literal && basic.Info()&(types.IsBoolean|types.IsInteger|types.IsFloat) != 0 {
+		readsLiteral := basic.Info()&(types.IsBoolean|types.IsInteger|types.IsFloat) != 0 || types.TypeString(goType, nil) == jsonNumber
+		if literal && readsLiteral {
 			return
 		}
 		j.fail(path, fmt.Sprintf(`%s is %s and is decoded into %s under a ",string" option, which reads only a number or a boolean written as a JSON string's text`,

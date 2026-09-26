@@ -524,9 +524,14 @@ func calleeIdent(fun ast.Expr) *ast.Ident {
 // should not have to know. The full name carries the package path and, for a
 // method, the receiver, so a method that shares the wrapper's name in the
 // wrapper's package is not read as a call of the wrapper.
+//
+// A method of a generic type called on an instance resolves to the instance's
+// own copy of the method, whose receiver spells the instance's type arguments
+// where the declaration spells its type parameters, so the callee is compared
+// by the method it was instantiated from.
 func sameFunc(obj types.Object, fn *types.Func) bool {
 	callee, isFunc := obj.(*types.Func)
-	return isFunc && callee.FullName() == fn.FullName()
+	return isFunc && callee.Origin().FullName() == fn.FullName()
 }
 
 // instantiation binds the wrapper's type parameters to the arguments a call

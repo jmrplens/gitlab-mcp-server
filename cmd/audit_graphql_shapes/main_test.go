@@ -333,8 +333,10 @@ func asMap(service gql.Service) {
 // wrapper instantiated by a plain function that hands its own document on, a
 // call through parentheses, a call through a function value (which is not
 // followed), a call of a method with no package, a method sharing a wrapper's
-// name (which is not the wrapper), and an exported wrapper another package
-// calls through its selector.
+// name (which is not the wrapper), an exported wrapper another package calls
+// through its selector, and a wrapper that is a method of a generic type,
+// called on an instance and from a method whose receiver names its type
+// parameter differently.
 const wrappedFixture = `package wrapped
 
 import (
@@ -426,6 +428,27 @@ func callers(service gql.Service) {
 	func() {}()
 	_ = errors.New("x").Error()
 }
+
+type client[T any] struct {
+	service gql.Service
+}
+
+func (c *client[T]) sendNote(query string) {
+	var resp struct {
+		Data map[string]payload[note] @@json:"data"@@
+	}
+	_, _ = c.service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+
+func (c *client[U]) resend() {
+	c.sendNote(updateNote)
+}
+
+func viaClient(service gql.Service) {
+	c := &client[int]{service: service}
+	c.sendNote(createNote)
+	c.resend()
+}
 `
 
 // callerFixture calls the wrapped package's wrapper through a selector, from
@@ -451,12 +474,15 @@ func call(service gql.Service) {
 // call is paired and judged, the summary names the schema, and -v lists the
 // pairings with the one selection nothing reads marked rather than failed.
 //
-// Two of those ways are wrong only in a way a clean run shows. A method that
+// Three of those ways are wrong only in a way a clean run shows. A method that
 // shares a wrapper's name is not the wrapper, and reading its call as one
 // hands the wrapper a document built at run time, which fails a tree that is
-// sound. And a generic decoder whose document passes through a plain function
-// on its way out keeps the type its instantiation named, or the decoder is
-// left unjudged with only a note to say so.
+// sound. A wrapper that is a method of a generic type is the same wrapper at
+// every instance it is called on, so its calls are paired rather than passed
+// over, which would leave the wrapper with nothing calling it. And a generic
+// decoder whose document passes through a plain function on its way out keeps
+// the type its instantiation named, or the decoder is left unjudged with only
+// a note to say so.
 func TestRun_FixtureWhereEveryDecoderAgrees_PassesAndListsUnderVerbose(t *testing.T) {
 	status, out, errOut := runFixture(t, map[string]string{"sound": soundFixture, "wrapped": wrappedFixture, "caller": callerFixture}, true)
 
@@ -478,6 +504,11 @@ func TestRun_FixtureWhereEveryDecoderAgrees_PassesAndListsUnderVerbose(t *testin
 		// sent, so the pairing names the wrapper's package and the send, and
 		// the caller's package only through where it was handed over.
 		"    ok  fixture/wrapped updateNote (wrapped/wrapped.go:42, handed over at caller/caller.go:13)\n",
+		// A method of a generic type is called on an instance of it, which
+		// names its type arguments where the declaration names its type
+		// parameters, and both calls are calls of the one wrapper.
+		"    ok  fixture/wrapped createNote (wrapped/wrapped.go:101, handed over at wrapped/wrapped.go:110)\n",
+		"    ok  fixture/wrapped updateNote (wrapped/wrapped.go:101, handed over at wrapped/wrapped.go:105)\n",
 		"fixture/sound unread (sound/sound.go:",
 		"    ~ data.project.name: selected and never decoded",
 		"pairing(s) agree with their documents, 1 selection(s) nothing reads (",
@@ -945,11 +976,17 @@ func TestAbsolute_WhenTheWorkingDirectoryIsGone_KeepsTheDirAsWritten(t *testing.
 // taggedFixture carries the shapes encoding/json treats as ordinary fields and
 // a reader of Go reads as something else: an embedded struct given a json
 // name, a map whose key type is not basic at all, a type that reads itself out
-// of a string's text, and the ",string" option on every kind of value GitLab
-// sends, on a kind that ignores it, and on a list, where it is ignored too.
+// of a string's text, the ",string" option on every kind of value GitLab
+// sends, on a kind that ignores it, and on a list, where it is ignored too, and
+// the same option on json.Number, the one string kind that reads a number, and
+// on a type defined from it, which does not.
 const taggedFixture = `package tagged
 
-import "fixture/gql"
+import (
+	"encoding/json"
+
+	"fixture/gql"
+)
 
 const getProject = @@
 query { project(fullPath: "x") { id name stars } }
@@ -957,6 +994,10 @@ query { project(fullPath: "x") { id name stars } }
 
 const getQuoted = @@
 query { project(fullPath: "x") { id name stars score archived severity size sizes runtime } }
+@@
+
+const getCounted = @@
+query { project(fullPath: "x") { size stars severity counted: size } }
 @@
 
 type Identity struct {
@@ -990,6 +1031,15 @@ type quoted struct {
 	Runtime  complex128 @@json:"runtime,string"@@
 }
 
+type count json.Number
+
+type counted struct {
+	Size     json.Number @@json:"size,string"@@
+	Stars    json.Number @@json:"stars,string"@@
+	Severity json.Number @@json:"severity,string"@@
+	Counted  count       @@json:"counted,string"@@
+}
+
 func send(service gql.Service) {
 	var shaped struct {
 		Data struct {
@@ -1006,9 +1056,15 @@ func send(service gql.Service) {
 			Project *quoted @@json:"project"@@
 		} @@json:"data"@@
 	}
+	var numbered struct {
+		Data struct {
+			Project *counted @@json:"project"@@
+		} @@json:"data"@@
+	}
 	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &shaped)
 	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &keyed)
 	_, _ = service.Do(gql.GraphQLQuery{Query: getQuoted}, &read)
+	_, _ = service.Do(gql.GraphQLQuery{Query: getCounted}, &numbered)
 }
 `
 
@@ -1030,7 +1086,11 @@ func send(service gql.Service) {
 // refuses everything else GitLab sends: a bare number or boolean for not
 // being quoted, an enum value for being a name, and a plain string for not
 // being quoted twice. On a struct, a complex number or a list the option is
-// ignored, and the value is judged as though it were not there.
+// ignored, and the value is judged as though it were not there. json.Number is
+// a string kind that reads a number, so the option lets it take a BigInt's
+// text as an integer kind does and refuses it the rest as an integer kind
+// does; a type defined from it keeps its string kind and none of its methods,
+// so it is a string field under the option like any other.
 func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWouldDo(t *testing.T) {
 	status, out, errOut := runFixture(t, map[string]string{"tagged": taggedFixture}, true)
 
@@ -1050,7 +1110,10 @@ func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWould
 		"    - data.project.severity: Severity! is sent as a JSON string and is decoded into int" + option,
 		"    - data.project.sizes[]: BigInt! is sent as a JSON string and is decoded into int64\n",
 		"    - data.project.runtime: Duration! is sent as a JSON number that may carry a fraction and is decoded into complex128\n",
-		"audit_graphql_shapes: 10 disagreement(s) in 3 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
+		"    - data.project.stars: Int! is sent as a JSON integer and is decoded into json.Number" + option,
+		"    - data.project.severity: Severity! is sent as a JSON string and is decoded into json.Number" + option,
+		"    - data.project.counted: BigInt! is sent as a JSON string and is decoded into tagged.count" + option,
+		"audit_graphql_shapes: 13 disagreement(s) in 4 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
@@ -1059,8 +1122,9 @@ func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWould
 		})
 	}
 	// A string scalar into a type that reads text, under an option its kind
-	// ignores, and a BigInt quoted into a number are what the decoder
-	// accepts, so neither is a line of the report at all.
+	// ignores, and a BigInt quoted into a number, an integer kind or
+	// json.Number alike, are what the decoder accepts, so none is a line of
+	// the report at all.
 	for _, accepted := range []string{"data.project.name:", "data.project.size:"} {
 		t.Run(accepted, func(t *testing.T) {
 			if strings.Contains(errOut, accepted) {
