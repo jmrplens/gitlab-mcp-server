@@ -3,7 +3,7 @@ package tenancy
 import "fmt"
 
 // Key is what a declared decision is counted against: the unit one caller
-// holds one of, or the process that no caller can multiply (spec section 4.1).
+// holds one of, or the process that no caller can multiply (spec: Keys).
 //
 // A key is chosen from this vocabulary, never invented at the site. A decision
 // that needs a key the vocabulary does not have adds it here, with what it
@@ -11,7 +11,7 @@ import "fmt"
 // mintable-key question gets answered once rather than per limit.
 type Key uint8
 
-// The keys of spec section 4.1. The carrier and the shape are deliberately
+// The keys (spec: Keys). The carrier and the shape are deliberately
 // absent: nothing is counted against the carrier, and the shape keys a catalog
 // cache that INV-010 governs rather than an allowance.
 const (
@@ -27,14 +27,14 @@ const (
 	// KeyOwner is the random name of one entry build (IDN-003).
 	KeyOwner
 	// KeyTenant is the pair (canonical instance URL, GitLab user id)
-	// (TEN-001).
+	// (spec: The tenant).
 	KeyTenant
 	// KeyVerified is the (instance, token) pair the OAuth identity cache is
 	// keyed on (ADM-002, ADM-003, ADM-005). The rejected-token cache hashes
 	// the same pair, and is [KeyRefused]'s (ADM-006).
 	KeyVerified
 	// KeyApplication is the OAuth application uid a token was issued to
-	// (TEN-004).
+	// (spec: The tenant).
 	KeyApplication
 	// KeySession is an SDK session id, recorded to an owner (IDN-010).
 	KeySession
@@ -53,7 +53,7 @@ const (
 	KeyDeployment
 )
 
-// Axis says which side of admission a key lives on (TEN-010, spec 7.3).
+// Axis says which side of admission a key lives on (spec: Two axes).
 type Axis uint8
 
 // The axes a key can lie on.
@@ -74,8 +74,8 @@ const (
 	AxisProcess
 )
 
-// MintCost is what producing one more value of a key costs a caller (spec 4.1,
-// "Mint cost to the caller").
+// MintCost is what producing one more value of a key costs a caller (spec:
+// Keys, "Mint cost to the caller").
 type MintCost uint8
 
 // The mint costs, cheapest last among the mintable ones.
@@ -89,7 +89,7 @@ const (
 	// MintCredential costs another credential of the same GitLab user.
 	MintCredential
 	// MintPrincipal costs another GitLab user, which on self-managed any user
-	// with a personal project can create as a project bot (TEN-008).
+	// with a personal project can create as a project bot (spec: Two axes).
 	MintPrincipal
 )
 
@@ -140,9 +140,9 @@ type keyInfo struct {
 // info answers every question about k in one place, so that a key's axis, mint
 // cost, unit and evidence cannot be declared in four switches that drift.
 //
-// The evidence is spec section 4.1's, restated with the published pages it
-// rests on; the two sentences that decided issues 540 and 561 are the
-// credential's and the tenant's.
+// The evidence is the key's mint cost (spec: Keys), restated with the
+// published pages it rests on; the two sentences that decided issues 540 and
+// 561 are the credential's and the tenant's.
 func (k Key) info() keyInfo {
 	switch k {
 	case KeyNone:
@@ -281,7 +281,7 @@ func (k Key) info() keyInfo {
 	}
 }
 
-// String names the key as spec section 4.1 does.
+// String names the key as the key table does (spec: Keys).
 func (k Key) String() string { return k.info().name }
 
 // Axis reports which side of admission the key lives on.
@@ -291,15 +291,17 @@ func (k Key) Axis() Axis { return k.info().axis }
 func (k Key) MintCost() MintCost { return k.info().mint }
 
 // Mintable reports whether a caller can produce another value of the key at
-// all. It is false only for the keys no caller controls, which is TEN-008 as
-// data: the tenant is mintable too.
+// all. It is false only for the keys no caller controls: every key a request
+// yields is mintable, the tenant included (spec: Two axes), and this is that
+// rule as data.
 func (k Key) Mintable() bool { return k.MintCost() != NotMintable }
 
 // Unit reports the equivalence class a reason about this key is compared in.
 func (k Key) Unit() Unit { return k.info().unit }
 
-// Evidence is spec 4.1's sentence for the key, with the published pages it
-// rests on. [Validate] quotes it when it refuses a share on the key.
+// Evidence is the key table's sentence for the key (spec: Keys), with the
+// published pages it rests on. [Validate] quotes it when it refuses a share on
+// the key.
 func (k Key) Evidence() string { return k.info().evidence }
 
 // Derivation names the symbols that compute a value of the key today. They are

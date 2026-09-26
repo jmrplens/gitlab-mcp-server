@@ -1,10 +1,11 @@
 package tenancy
 
 // admitDecisions are the rows that answer "may this credential enter, and for
-// how long?" (spec 4.4): verification in both modes, the caches that remember
-// a verdict, the lifetimes that force a credential to be checked again, the
-// Origin and Host guards, the authentication failure budgets that run before a
-// tenant exists, and the destination rules at the door.
+// how long?" (spec: The five questions): verification in both modes, the
+// caches that remember a verdict, the lifetimes that force a credential to be
+// checked again, the Origin and Host guards, the authentication failure
+// budgets that run before a tenant exists, and the destination rules at the
+// door.
 //
 // Every gate refusal here is written by the gate or the bearer guard in front
 // of the SDK, which is the only place a status other than 400 or 404 can be

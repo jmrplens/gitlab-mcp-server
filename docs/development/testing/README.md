@@ -43,11 +43,9 @@ over the tree:
 [gremlins]: https://github.com/go-gremlins/gremlins
 
 Running both over a package and answering what they report is a procedure this
-project repeats, and the brief a run of it is driven from lives in
-[plan/mutation-sweep-brief.md](../../../plan/mutation-sweep-brief.md). That
-document is working material rather than reference: it addresses one agent
-sweeping one package, it names paths on the maintainer's own machine, and it
-will be retired when the sweep finishes. What is durable about the procedure is
+project repeats. The brief a sweep of it is driven from is working material kept
+outside the repository: it addresses one agent sweeping one package and names
+paths on the maintainer's own machine. What is durable about the procedure is
 written here instead, and this section is where a reader should start.
 
 ### What they cost, and why the figures are not generated

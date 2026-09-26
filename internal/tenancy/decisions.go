@@ -5,11 +5,11 @@ import "fmt"
 // Decisions returns every row of the register: one per requirement of the
 // specification, eighty in all.
 //
-// The rows are grouped by the question of spec section 4.4 they answer, in the
-// order the specification asks the questions (identify, admit, authorize,
-// allow, end), with the per-request bounds last; inside a group they follow the
-// specification's numbering. The table is built on each call and nothing holds
-// it, so a binary that reaches no caller of this function carries none of it.
+// The rows are grouped by the question they answer (spec: The five questions),
+// in the order the specification asks them (identify, admit, authorize, allow,
+// end), with the per-request bounds last; inside a group they follow the order
+// of their IDs. The table is built on each call and nothing holds it, so a
+// binary that reaches no caller of this function carries none of it.
 func Decisions() []Decision {
 	families := [][]Decision{
 		identifyDecisions(),

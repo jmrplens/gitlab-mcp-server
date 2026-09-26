@@ -196,7 +196,7 @@ var categories = map[string]string{
 	categoryServerState:  "refusals about the process, not a caller",
 	categoryProtocol: "protocol vocabulary: a revision the MCP specification names, or a helper carrying a " +
 		"protocol code its callers choose, where every caller passes a protocol code",
-	categoryUninventoried: "a decision the gate surfaced that the specification's inventory does not list, " +
+	categoryUninventoried: "a decision the gate surfaced that no row of the register declares, " +
 		"held here until the specification decides whether it is a row",
 	categoryTestSupport: "a name a package the server links declares for its own tests, which read a row's value or build its limit through it; the running server reads that value, or builds that limit, through a site a row declares",
 }
@@ -293,9 +293,9 @@ var notADecision = map[string]exemption{
 	"internal/toolutil:CodedError.Unwrap":         {categoryProtocol, "exposes the code a CodedError carries, which only InvalidParams and InternalError set, to -32602 and -32603"},
 	"internal/toolutil:coded":                     {categoryProtocol, "builds the CodedError InvalidParams and InternalError return, with -32602 and -32603"},
 
-	// A decision the inventory does not list.
+	// A decision no row declares.
 	"internal/subscriptions:settledFactor": {categoryUninventoried, "how much slower a settled resource is polled than the base cadence; " +
-		"it belongs with the cadence HLD-007 holds, and the specification's amendment G-18 (plan/issue-565/spec.md) moved only the base and minimum intervals there"},
+		"it belongs with the cadence HLD-007 holds, and when the register landed only the base and minimum intervals were made that row's values"},
 }
 
 // checkExemptions holds the exemption table to what it answered: an entry

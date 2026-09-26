@@ -1,16 +1,17 @@
 package tenancy
 
-// allowDecisions are the rows that answer "what may it hold or spend?" (spec
-// 4.4): the token buckets and what each method is charged to, the listen and
-// watcher ceilings with their process partners, the watch lease, the pool's
-// size, eviction and idle rules, the upstream retry policy, the telemetry
-// identity policy and the lifetime of multi-round-trip request state.
+// allowDecisions are the rows that answer "what may it hold or spend?" (spec:
+// The five questions): the token buckets and what each method is charged to,
+// the listen and watcher ceilings with their process partners, the watch
+// lease, the pool's size, eviction and idle rules, the upstream retry policy,
+// the telemetry identity policy and the lifetime of multi-round-trip request
+// state.
 //
 // Four of them are class D: keyed on the entry while their own reason is about
 // a GitLab user or the process, so one tenant holding N credentials holds N
 // units (RTC-001, RTC-003, RTC-005, HLD-003). Each carries the finding that
 // records it; moving any of them to the tenant would be a change of policy,
-// and would still leave it dividable by bots (TEN-008).
+// and would still leave it dividable by bots (spec: Two axes).
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func allowDecisions() []Decision {

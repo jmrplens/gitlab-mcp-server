@@ -7,7 +7,7 @@ import (
 
 // TestCodes_AreTheirLiterals pins every code the register declares to the
 // number a client matches on. A refusal's code is part of its wire shape
-// (CON-003), so a change here is a change clients see.
+// (spec: Refusal channels), so a change here is a change clients see.
 func TestCodes_AreTheirLiterals(t *testing.T) {
 	for _, tc := range []struct {
 		name string

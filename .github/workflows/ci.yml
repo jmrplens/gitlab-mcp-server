@@ -938,6 +938,11 @@ jobs:
           # that base. On a push to main, the commit that was there before.
           EM_DASH_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: make check-em-dash
+      # plan/ is ignored by git, so a file there is tracked only when it was
+      # force-added, and a document citing it would outlive its working copy.
+      # It needs the same checkout and nothing else, so it rides in this job.
+      - name: Check nothing under plan/ is tracked
+        run: make check-plan-untracked
 
   # One node for the jobs that depend on nothing. They are fanned in here
   # rather than straight into "ci" for the graph's sake, explained at the top

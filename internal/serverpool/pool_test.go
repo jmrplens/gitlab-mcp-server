@@ -3143,14 +3143,14 @@ func newUserStub(t *testing.T, answers map[string]userAnswer) *userStub {
 // entries that resolve to one tenant.
 //
 // The tenant policy specification defines a tenant as the pair (canonical
-// instance URL, GitLab user id) (TEN-001), and many credentials map to one
-// tenant (TEN-003). The pool keys an entry on the credential and the instance,
-// so each token is an entry of its own, with its own owner and, on the server,
-// its own bucket, listen counter and watchers. Nothing is keyed on the tenant
-// (F-01, issue 955). This is AC-004 of the specification's dated record
-// (plan/issue-565/spec.md) at the pool's grain, and it pins the behavior as it
-// is, not a target: a change that keys an allowance on the tenant is the change
-// that must break it, and say so.
+// instance URL, GitLab user id), and many credentials map to one tenant
+// (tenant-policy-spec.md, The tenant). The pool keys an entry on the credential
+// and the instance, so each token is an entry of its own, with its own owner
+// and, on the server, its own bucket, listen counter and watchers. Nothing is
+// keyed on the tenant (F-01, issue 955). This test holds that at the pool's
+// grain, beside the server's own half in cmd/server, and it pins the behavior
+// as it is, not a target: a change that keys an allowance on the tenant is the
+// change that must break it, and say so.
 func TestEntry_TwoTokensOfOneUser_AreTwoEntriesOfOneTenant(t *testing.T) {
 	const (
 		firstToken  = "glpat-first-token-of-user-42"
@@ -3210,11 +3210,11 @@ func TestEntry_TwoTokensOfOneUser_AreTwoEntriesOfOneTenant(t *testing.T) {
 //
 // GitLab makes a project access token's bearer a bot user of its own, with its
 // own id, and the tenant policy specification makes each bot a tenant of its own
-// rather than folding it into the human who made it (TEN-002): GitLab shows a
-// bot's owning resource only to administrators, and the generated username is
-// not an API contract. The pool resolves the identity GitLab answers and reads
-// nothing else, so the two identities differ however the bot's username reads.
-// This is AC-005 of the specification's dated record (plan/issue-565/spec.md).
+// rather than folding it into the human who made it (tenant-policy-spec.md, The
+// tenant): GitLab shows a bot's owning resource only to administrators, and the
+// generated username is not an API contract. The pool resolves the identity
+// GitLab answers and reads nothing else, so the two identities differ however
+// the bot's username reads.
 func TestEntry_ABotTokenAndItsCreator_AreTwoTenants(t *testing.T) {
 	const (
 		creatorToken = "glpat-token-of-the-creator"
@@ -3259,14 +3259,13 @@ func TestEntry_ABotTokenAndItsCreator_AreTwoTenants(t *testing.T) {
 //
 // The tenant policy specification makes an identity GitLab did not answer
 // unknown, never anonymous and never a reason to refuse, because a GitLab
-// outage must not become a lockout (TEN-006, SEC-006); a decision that needs the
-// tenant falls back to the entry, which is why the entry's owner must exist
-// whatever the lookup said. IDN-008 names the code that applies the rule.
-// [TestIdentityFor_UnresolvableUser_ReportsUnknown] covers a lookup answered
-// with no id in legacy mode; this is the OAuth mode, with the scopes the
-// verifier already resolved handed to the pool, and a lookup GitLab failed
-// outright. This is AC-006 of the specification's dated record
-// (plan/issue-565/spec.md).
+// outage must not become a lockout (tenant-policy-spec.md, The tenant); a
+// decision that needs the tenant falls back to the entry, which is why the
+// entry's owner must exist whatever the lookup said. IDN-008 names the code
+// that applies the rule. [TestIdentityFor_UnresolvableUser_ReportsUnknown]
+// covers a lookup answered with no id in legacy mode; this is the OAuth mode,
+// with the scopes the verifier already resolved handed to the pool, and a
+// lookup GitLab failed outright.
 //
 // A 500 is no verdict for the admission probe, so the build goes on; the
 // lookup is a GET the client retries, so this test waits out the client's

@@ -22,10 +22,10 @@ type frozenValue struct {
 // frozenValues is the table of current pins, and the table a deliberate change
 // of value edits: the constant in values.go and its line here, two lines in
 // one package (INV-021). The pins taken when the register landed are the
-// values as they stood at cb6379f53, the commit the dated record
-// (plan/issue-565/spec.md) is dated to, each copied from its section 3.2, with
-// END-005 and HLD-007's polling cadence from its amendment G-18. A limit added
-// later brings its own pin in the change that adds it.
+// values the layers held at cb6379f53, each read from the code that enforced
+// it, END-005 and HLD-007's polling cadence among them, which the register's
+// gate surfaced as it landed. A limit added later brings its own pin in the
+// change that adds it.
 func frozenValues() []frozenValue {
 	return []frozenValue{
 		{"ListenStreamsPerCredential", ListenStreamsPerCredential, 64},

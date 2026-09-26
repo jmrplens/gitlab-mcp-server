@@ -29,13 +29,11 @@
 //
 // The specification it implements is docs/development/tenant-policy-spec.md,
 // and the decision to hold policy this way is ADR-0023
-// (docs/development/adr/adr-0023-tenant-policy-is-declared-once.md). The dated
-// record the rows were taken from, with its line citations, is
-// plan/issue-565/spec.md, and it is the document the comments here cite by
-// number: a section ("spec section 3.3", "spec 4.1") and a requirement ID
-// that is not a row, an invariant or a validation item (TEN-, CON-, AC-) are
-// the dated record's, which numbers them. The row IDs, INV- and VAL- are in
-// the durable specification too.
+// (docs/development/adr/adr-0023-tenant-policy-is-declared-once.md). The
+// comments here cite that specification as "spec", by the heading of the
+// section they rest on ("(spec: Keys)", "(spec: Invariants)"), and by the IDs
+// it shares with this package: a register row ("HLD-001"), an invariant
+// ("INV-003"), a validation item ("VAL-007") or a finding ("F-04").
 //
 // # A leaf with nothing to initialize
 //

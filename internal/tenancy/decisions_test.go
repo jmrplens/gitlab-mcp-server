@@ -8,9 +8,10 @@ import (
 // specRequirementIDs is every requirement the register answers, written out
 // rather than generated, so that a requirement added and forgotten in the
 // register, or the reverse, fails here by name. The list taken when the
-// register landed is the dated record's section 3.2 (plan/issue-565/spec.md),
-// with END-005 from its amendment G-18; a limit added later adds its ID here
-// in the change that adds its row.
+// register landed is one ID per decision and per-request bound the code held
+// at cb6379f53, END-005 among them, which the register's gate surfaced as it
+// landed; a limit added later adds its ID here in the change that adds its
+// row.
 var specRequirementIDs = []string{
 	"IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006", "IDN-007",
 	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013",
@@ -210,10 +211,11 @@ func pinNarrowed(answer Answer) []refusalPin {
 	}
 }
 
-// rowPins is every row as the specification states it: its question (spec
-// 4.4), kind, class (spec 2.3 and 3.2.11), disposition, key and stdio key
-// (spec 3.2 and 4.1), the unit its reason names and the unit of what it
-// cites (spec 2.3), and every refusal (spec 3.2 and 4.3).
+// rowPins is every row's frozen declaration: its question (spec: The
+// five questions), kind, class (spec: Alignment classes), disposition, key
+// and stdio key (spec: Keys), the unit its reason names and the unit of what
+// it cites (spec: Alignment classes), and every refusal with its channel and
+// answer (spec: Refusal channels).
 //
 //nolint:maintidx // one table of literals, one entry per requirement; splitting it would scatter the pins it exists to hold in one place.
 func rowPins() map[string]rowPin {

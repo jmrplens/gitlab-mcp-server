@@ -217,8 +217,9 @@ func beginsSome(texts []string, prefix string) bool {
 // checkRefusals is G8: every refusal's stable text still begins a string the
 // code it names folds, and the literal that carries it still has the status,
 // the code and the headers the row declares. It is what makes a reworded
-// refusal, or a changed status, code or header (CON-003), fail until the row
-// changes with it.
+// refusal, or a changed status, code or header, all of which the
+// specification's Refusal channels section counts as its wire shape, fail
+// until the row changes with it.
 //
 // It reads the gate's literals in the other direction too: every gate literal
 // in a function that holds a declared gate refusal is carried exactly by one

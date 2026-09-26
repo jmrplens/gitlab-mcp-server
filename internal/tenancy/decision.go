@@ -2,8 +2,8 @@ package tenancy
 
 import "fmt"
 
-// Question is which of the five questions of spec section 4.4 a decision
-// answers. Every requirement answers exactly one.
+// Question is which of the five questions a decision answers (spec: The five
+// questions). Every requirement answers exactly one.
 type Question uint8
 
 // The five questions.
@@ -22,11 +22,12 @@ const (
 )
 
 // Class says whether a decision's key agrees with the tenant definition, given
-// the reason the code states for it (spec section 2.3). It is the class of the
-// HTTP key: on stdio every per-caller key is the process (TEN-005).
+// the reason the code states for it (spec: Alignment classes). It is the class
+// of the HTTP key: on stdio every per-caller key is the process (spec: Per
+// mode).
 type Class uint8
 
-// The alignment classes of spec section 2.3.
+// The alignment classes (spec: Alignment classes).
 const (
 	// ClassT is keyed on the tenant itself.
 	ClassT Class = iota + 1
@@ -68,8 +69,8 @@ const (
 	// Mechanism rows say how a decision is carried out. They choose no key and
 	// no value.
 	Mechanism
-	// RequestBound rows are per-request bounds of spec section 3.2.10: declared
-	// so that one list holds every requirement, and not owned.
+	// RequestBound rows are the per-request bounds, the RQB rows: declared so
+	// that one list holds every requirement, and not owned.
 	RequestBound
 )
 
@@ -196,7 +197,8 @@ const (
 	EraStdio
 )
 
-// Channel is how a refusal or an ending reaches the caller (spec 4.2.3).
+// Channel is how a refusal or an ending reaches the caller (spec: Refusal
+// channels).
 type Channel uint8
 
 // The channels.
@@ -227,7 +229,7 @@ const (
 	Startup
 )
 
-// String names the channel as spec section 4.2.3 does.
+// String names the channel in kebab case (spec: Refusal channels).
 func (c Channel) String() string {
 	switch c {
 	case Gate:
@@ -258,7 +260,7 @@ func (c Channel) String() string {
 }
 
 // Answer is the one class of next action a refusal tells its caller to take
-// (INV-012, spec 4.3).
+// (INV-012; spec: Where a refused caller learns what to do).
 type Answer uint8
 
 // The answer classes.
@@ -279,7 +281,8 @@ const (
 	NoAnswer
 )
 
-// String names the answer class as spec section 4.3 does.
+// String names the answer class in lower case (spec: Where a refused caller
+// learns what to do).
 func (a Answer) String() string {
 	switch a {
 	case RetryLater:
@@ -390,8 +393,9 @@ type Refusal struct {
 	// the credential's scope, and not when it is about the Origin, the Host or
 	// the instance a request named.
 	Challenge bool
-	// Prefix is the stable leading text clients match on (CON-003), empty
-	// when no text is carried or its start does not fold to a constant.
+	// Prefix is the stable leading text clients match on (spec: Refusal
+	// channels), empty when no text is carried or its start does not fold to a
+	// constant.
 	Prefix string
 	// Answer is the one class of next action (INV-012).
 	Answer Answer
@@ -413,7 +417,7 @@ type Refusal struct {
 type Decision struct {
 	// ID is the requirement id, "HLD-001".
 	ID string
-	// Question is the question of spec 4.4 it answers.
+	// Question is the question it answers (spec: The five questions).
 	Question Question
 	// Kind is its shape.
 	Kind Kind
@@ -537,9 +541,9 @@ type Finding struct {
 	// Issue is the number of the issue it is filed as, in
 	// https://github.com/jmrplens/gitlab-mcp-server/issues.
 	Issue int
-	// Invariants are the invariants of spec section 3.3 it records a departure
-	// from. A rule of [Validate] accepts a row that breaks an invariant only
-	// through a finding listed for that invariant here.
+	// Invariants are the invariants it records a departure from (spec:
+	// Invariants). A rule of [Validate] accepts a row that breaks an invariant
+	// only through a finding listed for that invariant here.
 	Invariants []string
 }
 

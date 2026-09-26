@@ -5,10 +5,11 @@ import (
 	"testing"
 )
 
-// TestCarriages_AreSpecSection421 pins the carried-channel matrix to spec
-// section 4.2.1, row by row. An SDK upgrade that changes what is carried
-// edits this table and the matrix in the same pull request.
-func TestCarriages_AreSpecSection421(t *testing.T) {
+// TestCarriages_AreTheCarriedChannelMatrix pins the carried-channel matrix row
+// by row: the channels go-sdk v1.8.0 carries for each method and era (spec:
+// Refusal channels). An SDK upgrade that changes what is carried edits this
+// table and the matrix in the same change.
+func TestCarriages_AreTheCarriedChannelMatrix(t *testing.T) {
 	want := []struct {
 		methods  string
 		era      Era

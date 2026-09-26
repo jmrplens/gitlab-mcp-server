@@ -475,9 +475,9 @@ and the workaround this server carries until it ships.
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
 | Source (`.go`, non-test) |     1,348 |       303,207 |
-| Unit tests (`_test.go`)  |       924 |       600,363 |
+| Unit tests (`_test.go`)  |       923 |       599,709 |
 | End-to-end tests         |       497 |       103,199 |
-| **Total**                | **2,769** | **1,006,769** |
+| **Total**                | **2,768** | **1,006,115** |
 
 ### Functions
 
@@ -486,8 +486,8 @@ and the workaround this server carries until it ships.
 | Source functions                | 10,541 |
 | . Exported (public)             |  3,238 |
 | . Unexported (private)          |  7,303 |
-| Unit test functions (`TestXxx`) | 17,923 |
-| Subtests (`t.Run(...)`)         |  6,464 |
+| Unit test functions (`TestXxx`) | 17,914 |
+| Subtests (`t.Run(...)`)         |  6,437 |
 | End-to-end test functions       |  1,345 |
 
 ### Ratios worth noting
@@ -504,8 +504,8 @@ and the workaround this server carries until it ships.
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,467 |
-| `defer` statements                 | 1,171 |
+| `if err != nil` checks             | 9,450 |
+| `defer` statements                 | 1,161 |
 | `struct` types defined             | 3,359 |
 | `//nolint` suppressions            |   238 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
@@ -514,7 +514,7 @@ and the workaround this server carries until it ships.
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   299 |
+| Go packages                    |   298 |
 | Direct dependencies (`go.mod`) |    34 |
 | Indirect dependencies          |    37 |
 

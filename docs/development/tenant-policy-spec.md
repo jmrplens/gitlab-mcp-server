@@ -243,7 +243,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 A limit whose refusal no client can see is not the limit its author meant, so the channel
 is part of the decision. `tenancy.Carriages()` is the matrix below as data, and it
 describes go-sdk as this server builds against it: an SDK upgrade that changes what is
-carried edits it in the same change.
+carried edits it in the same change. The wording is part of a refusal too: a client may
+recognize one only by its stable leading text (a refused `tools/call` by
+`toolutil.RateLimitRefusalPrefix`, which `cmd/bench_resources` reads as well), so that
+text, a row's `Prefix`, belongs to the wire shape with the code, the status and the
+headers.
 
 | Channel (`tenancy.Channel`) | What reaches the caller                                                                        | Carried for                                          |
 | --------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -368,12 +372,12 @@ is fixed by the register. They are filed, grouped where one change would answer 
 One finding grew after it was filed, and one was added, when the register was read
 against the code as a whole. F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958))
 also records the idle session timeout's variable, which refuses a zero its flag accepts
-(`END-005`, the dated record's version 1.2), and the tool-call bucket's burst, whose zero
-beside a positive rate refuses startup rather than meaning off (`RTC-001`, version 1.3);
-both are departures from `INV-015` of the kind the issue is about. F-35
+(`END-005`), and the tool-call bucket's burst, whose zero beside a positive rate refuses
+startup rather than meaning off (`RTC-001`); both are departures from `INV-015` of the
+kind the issue is about. F-35
 ([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) records the
 transport-source budget's map of charged (source, key) pairs, which only the sweep bounds,
 since a source the full failure table never tracks is never blocked (`AUB-002`), a
-departure from `INV-010`. Version 1.3 of the dated record put that map under F-29, whose
-issue (950) is about OAuth verification while the map is kept in both authentication
-modes, and version 1.4 gave it a finding of its own once it was filed.
+departure from `INV-010`. The map was first recorded under F-29, whose issue (950) is
+about OAuth verification while the map is kept in both authentication modes, and it was
+given a finding of its own once it was filed.

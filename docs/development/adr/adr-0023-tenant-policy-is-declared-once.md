@@ -16,13 +16,13 @@ token and rejected four designs on it;
 [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561) found it again about
 the pool. It had never been written down anywhere a seventh layer would find it.
 
-The specification (`docs/development/tenant-policy-spec.md`, and the dated record it was
-built from, `plan/issue-565/spec.md`) answered the question the issue put first. A tenant
-is the GitLab principal a request runs as, identified by the pair (canonical instance URL,
-GitLab user id), because GitLab authorizes, attributes and throttles per user. That pair
-is mintable too: on a self-managed instance any user with a personal project can create
-project bots, each a user of its own, with no administrator and no count cap. So the
-tenant is the unit of identity, attribution and authority, and never of a share.
+The specification (`docs/development/tenant-policy-spec.md`) answered the question the
+issue put first. A tenant is the GitLab principal a request runs as, identified by the
+pair (canonical instance URL, GitLab user id), because GitLab authorizes, attributes and
+throttles per user. That pair is mintable too: on a self-managed instance any user with a
+personal project can create project bots, each a user of its own, with no administrator
+and no count cap. So the tenant is the unit of identity, attribution and authority, and
+never of a share.
 
 Measured at `cb6379f53`, seventy caller-keyed decisions and ten per-request bounds answer
 who a caller is and what it may hold, spread over `cmd/server`, `internal/serverpool`,
@@ -218,8 +218,7 @@ obstacle: a resolver would be built from `Decisions()` and `Key.MintCost()`.
 - ADR-0015 (polled resource subscriptions), ADR-0018 (admission at the minimum scope),
   ADR-0019 (audience binding), ADR-0020 (one server per configuration shape) and ADR-0022
   (operator-named destinations).
-- The specification, `docs/development/tenant-policy-spec.md`, and its dated record,
-  `plan/issue-565/spec.md`.
+- The specification, `docs/development/tenant-policy-spec.md`.
 - Issues [540](https://github.com/jmrplens/gitlab-mcp-server/issues/540),
   [561](https://github.com/jmrplens/gitlab-mcp-server/issues/561) and
   [565](https://github.com/jmrplens/gitlab-mcp-server/issues/565).

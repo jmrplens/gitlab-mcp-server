@@ -1,10 +1,10 @@
 package tenancy
 
 // endDecisions are the rows that answer "what happens when the server ends
-// what a caller held?" (spec 4.4): why a listen was ended and what its client
-// is told, how the sessions no stream ended are closed, how a notification
-// reaches only its owner, what eviction ends, and how long a stateful session
-// may sit idle.
+// what a caller held?" (spec: The five questions): why a listen was ended and
+// what its client is told, how the sessions no stream ended are closed, how a
+// notification reaches only its owner, what eviction ends, and how long a
+// stateful session may sit idle.
 //
 // An ending is not a refusal: a conformant client comes back. So each ending
 // names its cause from a closed vocabulary where a channel exists, and a cause
@@ -55,8 +55,8 @@ func endDecisions() []Decision {
 			Sites: []Site{enforce(pkgServer, "sessionOwners.sendingMiddleware")},
 		},
 		{
-			// Surfaced by the gate rather than the inventory, and made a row by
-			// the dated record's amendment G-18. Through the flag a zero
+			// Surfaced by the gate as the register landed, not by the survey of
+			// limits before it, and made a row then. Through the flag a zero
 			// leaves the SDK with no idle timeout; the environment variable is
 			// read by the parser every positive duration shares, which refuses
 			// a zero at startup. That second half is an INV-015 departure of

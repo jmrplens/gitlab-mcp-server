@@ -15,7 +15,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
-	check-em-dash check-pr-description \
+	check-em-dash check-pr-description check-plan-untracked \
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
@@ -2174,6 +2174,19 @@ check-em-dash:
 ## disk instead, which needs no gh and is how the gate is rehearsed.
 check-pr-description:
 	scripts/check-em-dash.sh description
+
+## check-plan-untracked: fail when git tracks a file under plan/, a working area
+## .gitignore excludes, so a file there is tracked only if it was force-added.
+## It reads the index, so a file untracked with git rm --cached passes before
+## the commit that removes it. No network, no Go build.
+check-plan-untracked:
+	@tracked="$$(git ls-files -- plan)"; \
+	if [ -n "$$tracked" ]; then \
+		echo "plan/ is an untracked working area; untrack these with git rm --cached:"; \
+		echo "$$tracked" | sed 's/^/  /'; \
+		exit 1; \
+	fi; \
+	echo "OK: nothing under plan/ is tracked."
 
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:

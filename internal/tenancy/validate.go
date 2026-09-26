@@ -38,7 +38,7 @@ type setRule struct {
 	check     func(ds []Decision) []*ViolationError
 }
 
-// Validate checks the rows against the invariants of spec section 3.3 and
+// Validate checks the rows against the invariants (spec: Invariants) and
 // returns every violation joined, or nil.
 //
 // It is what answers, before review, the questions issues 540 and 561 each
@@ -347,7 +347,7 @@ func checkChargedExists(d Decision, rows map[string]Decision) []string {
 }
 
 // checkStdio holds the stdio key to one no caller can multiply: on stdio every
-// per-caller key collapses onto the process (TEN-005).
+// per-caller key collapses onto the process (spec: Per mode).
 func checkStdio(d Decision, _ map[string]Decision) []string {
 	if axis := d.StdioKey.Axis(); axis != AxisRequester && axis != AxisPreAdmission {
 		return nil

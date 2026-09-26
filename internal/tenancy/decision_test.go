@@ -91,8 +91,8 @@ func TestKind_IsAllowance(t *testing.T) {
 	}
 }
 
-// TestChannel_String names every channel as spec 4.2.3 does, and an unknown
-// one by its number.
+// TestChannel_String names every channel in kebab case (spec: Refusal
+// channels), and an unknown one by its number.
 func TestChannel_String(t *testing.T) {
 	for _, tc := range []struct {
 		channel Channel
@@ -120,8 +120,8 @@ func TestChannel_String(t *testing.T) {
 	}
 }
 
-// TestAnswer_String names every answer class as spec 4.3 does, and an unknown
-// one by its number.
+// TestAnswer_String names every answer class in lower case (spec: Where a
+// refused caller learns what to do), and an unknown one by its number.
 func TestAnswer_String(t *testing.T) {
 	for _, tc := range []struct {
 		answer Answer
