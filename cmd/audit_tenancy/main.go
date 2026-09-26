@@ -161,13 +161,26 @@ func audit(cfg auditConfig) (Report, error) {
 	return g.run(cfg.pending), nil
 }
 
+// The platform the gate judges the program on. A file behind a build
+// constraint is loaded or left out by the platform the toolchain is told, and
+// a load that took the host's would give a verdict that depends on who runs
+// it: a site or an exemption naming a declaration in a file constrained away
+// from the host would match nothing there, and fail the gate on Windows while
+// it passes on Linux. So the load names the platform the server is served
+// from, and a file constrained to another one is not read.
+const (
+	judgedGOOS   = "linux"
+	judgedGOARCH = "amd64"
+)
+
 // loadProgram loads and indexes the packages a run reads.
 func loadProgram(cfg auditConfig) (*program, error) {
 	root, err := filepath.Abs(cfg.dir)
 	if err != nil {
 		return nil, err
 	}
-	loaded, err := goprogram.LoadWith(cfg.dir, cfg.patterns, goprogram.Options{Overlay: cfg.overlay})
+	env := append(os.Environ(), "GOOS="+judgedGOOS, "GOARCH="+judgedGOARCH)
+	loaded, err := goprogram.LoadWith(cfg.dir, cfg.patterns, goprogram.Options{Overlay: cfg.overlay, Env: env})
 	if err != nil {
 		return nil, err
 	}

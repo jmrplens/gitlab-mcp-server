@@ -299,7 +299,15 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 // table and pending list. It is what says the tables in declarations.go
 // describe the tree today, and the summary line is held so a rule that stops
 // reading anything is a failure rather than a quiet pass.
+//
+// It runs with the environment naming Windows on arm64, which is what a
+// Windows host's toolchain would be told: the verdict must not depend on the
+// host, and a load that followed the environment would leave out every file
+// constrained away from Windows, a declaration the exemption table names
+// among them.
 func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
+	t.Setenv("GOOS", "windows")
+	t.Setenv("GOARCH", "arm64")
 	var stdout, stderr strings.Builder
 	if code := runMain([]string{"-dir", repoRoot(t), "-check", "-v"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, stdout.String(), stderr.String())
