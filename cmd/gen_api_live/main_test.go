@@ -606,7 +606,15 @@ func withDockerFirstOnPATH(t *testing.T, docker dockerPath) {
 // that inspected the image, a digest read off the container, or a probe that
 // sent the answer it waits for would each still pass there. Here the whole
 // argument vector of every call is the assertion.
+//
+// The wait is bounded far below what ships, so a readiness check that misreads
+// a dead container as running fails here in milliseconds, with the calls it
+// repeated, rather than sleeping out a twenty-minute deadline.
 func TestDockerQueries_AsWritten_NameTheSubjectEachIsAbout(t *testing.T) {
+	previousTimeout, previousInterval := bootTimeout, pollInterval
+	t.Cleanup(func() { bootTimeout, pollInterval = previousTimeout, previousInterval })
+	bootTimeout, pollInterval = 100*time.Millisecond, time.Millisecond
+
 	const image = "gitlab/gitlab-ee:19.3.1-ee.0"
 	for _, testCase := range []struct {
 		name   string
@@ -1341,8 +1349,13 @@ esac
 	go func() {
 		// Cancelled once the readiness probe has been asked, which is after the
 		// boot has returned and the teardown been deferred. Nothing is asserted
-		// here: the test goroutine reads the calls afterwards.
+		// here: the test goroutine reads the calls afterwards. A run that ended
+		// some other way has already cancelled the context, and then there is
+		// nothing left to interrupt.
 		for range 10000 {
+			if ctx.Err() != nil {
+				return
+			}
 			if raw, err := os.ReadFile(log); err == nil && strings.Contains(string(raw), "exec\t") {
 				break
 			}
