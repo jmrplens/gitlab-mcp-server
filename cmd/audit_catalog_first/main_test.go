@@ -28,9 +28,11 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -1134,6 +1136,15 @@ func TestBuildCoverageReport_BrokenFixtures_ReportsFirstFailingAssertion(t *test
 			},
 			wantErr: "still defines package-local RegisterTools",
 		},
+		{
+			// The selector audit leaves a directory named dist out wherever it
+			// sits, as generated output, while domain discovery reads every
+			// directory under internal/tools as a domain, so a file there is
+			// parsed for the first time by discovery.
+			name:    "a domain the selector audit skips does not parse",
+			mutate:  func(f map[string]string) { f["internal/tools/dist/broken.go"] = "package dist\n\nfunc {\n" },
+			wantErr: filepath.Join("internal", "tools", "dist", "broken.go"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2015,6 +2026,172 @@ func TestProjectionPolicyError_AMissingActionAndAStaleDeclaration_AreBothReporte
 	}
 }
 
+// swapSeam replaces the function a seam holds with value for the length of a
+// test.
+func swapSeam[T any](t *testing.T, seam *T, value T) {
+	t.Helper()
+	original := *seam
+	*seam = value
+	t.Cleanup(func() { *seam = original })
+}
+
+// errSeamRefused is what every failing seam of these tests answers, so an
+// assertion can tell the failure it planted from any other.
+var errSeamRefused = errors.New("refused by the test")
+
+// parseFailingOn parses as the parser does except for the file named name,
+// which it refuses.
+func parseFailingOn(name string) func(*token.FileSet, string, any, parser.Mode) (*ast.File, error) {
+	return func(fileSet *token.FileSet, path string, src any, mode parser.Mode) (*ast.File, error) {
+		if filepath.Base(path) == name {
+			return nil, errSeamRefused
+		}
+		return parser.ParseFile(fileSet, path, src, mode)
+	}
+}
+
+// refuseCatalog and refuseStandalone stand in for the two catalog builders,
+// which never fail over the specs compiled into this binary.
+func refuseCatalog(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+	return nil, errSeamRefused
+}
+
+func refuseStandalone(*actioncatalog.Catalog, *gitlabclient.Client, dynamictools.StandaloneOptions) (*actioncatalog.Catalog, error) {
+	return nil, errSeamRefused
+}
+
+// TestBuildCoverageReport_FailuresAfterTheSourceAudit_AreReturned verifies
+// every step of the report after the source audit hands its failure back
+// rather than writing a report around it, each with what it failed on.
+//
+// A planted tree cannot reach most of them: register.go and register_meta.go
+// have been parsed by the selector audit, the bridge files read by the bridge
+// audit and the catalog built from specs this binary was compiled with, by
+// the time each is read again, so those failures come through seams. The
+// stale declaration is a real input, and is how the projection rule fails
+// inside a report.
+func TestBuildCoverageReport_FailuresAfterTheSourceAudit_AreReturned(t *testing.T) {
+	cases := []struct {
+		name    string
+		seam    func(t *testing.T)
+		wantErr string
+	}{
+		{
+			name: "register.go no longer parses",
+			seam: func(t *testing.T) {
+				t.Helper()
+				swapSeam(t, &parseRegistrationFile, parseFailingOn(registerGoFile))
+			},
+			wantErr: filepath.Join("internal", "tools", registerGoFile) + ": refused by the test",
+		},
+		{
+			name: "register_meta.go no longer parses",
+			seam: func(t *testing.T) {
+				t.Helper()
+				swapSeam(t, &parseRegistrationFile, parseFailingOn("register_meta.go"))
+			},
+			wantErr: filepath.Join("internal", "tools", "register_meta.go") + ": refused by the test",
+		},
+		{
+			name: "the catalog cannot be built",
+			seam: func(t *testing.T) {
+				t.Helper()
+				swapSeam(t, &buildActionCatalog, refuseCatalog)
+			},
+			wantErr: "build action catalog: refused by the test",
+		},
+		{
+			name: "the standalone actions cannot be added",
+			seam: func(t *testing.T) {
+				t.Helper()
+				swapSeam(t, &addStandaloneCatalog, refuseStandalone)
+			},
+			wantErr: "add standalone dynamic catalog actions: refused by the test",
+		},
+		{
+			name: "a meta-only declaration matches nothing",
+			seam: func(t *testing.T) {
+				t.Helper()
+				table := maps.Clone(metaOnlyProjectionActions)
+				table["gone.nowhere"] = "fixture"
+				declareMetaOnlyProjections(t, table)
+			},
+			wantErr: "meta-only projection declaration for gone.nowhere (fixture) matches nothing",
+		},
+		{
+			name: "the architecture section cannot be read",
+			seam: func(t *testing.T) {
+				t.Helper()
+				swapSeam(t, &architectureReportFor, func(string, coverageSummary) (architectureReport, error) {
+					return architectureReport{}, errSeamRefused
+				})
+			},
+			wantErr: "refused by the test",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := writeCatalogFirstFixture(t, catalogFirstFixtureFiles())
+			tc.seam(t)
+
+			report, err := buildCoverageReport(root)
+
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("buildCoverageReport() error = %v, want it to contain %q", err, tc.wantErr)
+			}
+			if report.SchemaVersion != 0 || len(report.Domains) != 0 {
+				t.Errorf("buildCoverageReport() report = %+v, want none beside the failure", report.Summary)
+			}
+		})
+	}
+}
+
+// TestCatalogBuilders_Failures_NameTheStepThatFailed verifies the two readers
+// of the compiled catalog report a builder failure as their own, with the
+// step named, the projection rule and the coverage count alike.
+func TestCatalogBuilders_Failures_NameTheStepThatFailed(t *testing.T) {
+	readers := []struct {
+		name string
+		read func() error
+	}{
+		{name: "projection rule", read: func() error { return assertCatalogActionsHaveIndividualProjectionPolicy(clientForAudit()) }},
+		{name: "coverage count", read: func() error {
+			coverage, err := collectPackageActionCoverage()
+			if coverage != nil {
+				t.Errorf("collectPackageActionCoverage() = %v beside its error, want nil", coverage)
+			}
+			return err
+		}},
+	}
+	for _, reader := range readers {
+		t.Run(reader.name+"/catalog", func(t *testing.T) {
+			swapSeam(t, &buildActionCatalog, refuseCatalog)
+			if err := reader.read(); err == nil || err.Error() != "build action catalog: refused by the test" || !errors.Is(err, errSeamRefused) {
+				t.Errorf("%s error = %v, want the catalog build named and the cause wrapped", reader.name, err)
+			}
+		})
+		t.Run(reader.name+"/standalone", func(t *testing.T) {
+			swapSeam(t, &addStandaloneCatalog, refuseStandalone)
+			if err := reader.read(); err == nil || err.Error() != "add standalone dynamic catalog actions: refused by the test" || !errors.Is(err, errSeamRefused) {
+				t.Errorf("%s error = %v, want the standalone step named and the cause wrapped", reader.name, err)
+			}
+		})
+	}
+}
+
+// TestMarshalReport_EncoderFailure_IsReturned reaches the one failure a report
+// of strings, ints and maps never produces, and holds marshalReport to handing
+// back no content beside it.
+func TestMarshalReport_EncoderFailure_IsReturned(t *testing.T) {
+	swapSeam(t, &marshalIndent, func(any, string, string) ([]byte, error) { return nil, errSeamRefused })
+
+	content, err := marshalReport(coverageReport{})
+
+	if !errors.Is(err, errSeamRefused) || content != nil {
+		t.Errorf("marshalReport() = %q, %v; want no content and the encoder's error", content, err)
+	}
+}
+
 // TestProjectionPolicy_RealCatalog_ConsumesEveryDeclaration verifies the real
 // table against the catalog this binary builds, which is the run the gate
 // makes: every declaration must be consumed there, and no action may be left
@@ -2387,9 +2564,11 @@ func TestRunMain_Scenarios_ReportsTheExitCodeAndTheRefusal(t *testing.T) {
 		// blockedOutput points -output below a regular file, so the report has
 		// nowhere to go.
 		blockedOutput bool
-		want          int
-		wantStderr    string
-		wantReport    bool
+		// seam plants a failure no tree can produce, for the length of the case.
+		seam       func(t *testing.T)
+		want       int
+		wantStderr string
+		wantReport bool
 		// wantDefaultReport reads the report where the documentation says a
 		// run without -output writes it, below the working directory.
 		wantDefaultReport bool
@@ -2412,6 +2591,15 @@ func TestRunMain_Scenarios_ReportsTheExitCodeAndTheRefusal(t *testing.T) {
 			wantStderr: "build coverage report: AI context audit failed",
 		},
 		{name: "report cannot be written", blockedOutput: true, want: 1, wantStderr: "write coverage report"},
+		{
+			name: "report cannot be encoded",
+			seam: func(t *testing.T) {
+				t.Helper()
+				swapSeam(t, &marshalIndent, func(any, string, string) ([]byte, error) { return nil, errSeamRefused })
+			},
+			want:       1,
+			wantStderr: "marshal coverage report: refused by the test",
+		},
 		{name: "clean tree", want: 0, wantReport: true},
 		{name: "no output named", args: []string{}, want: 0, wantDefaultReport: true},
 	}
@@ -2419,6 +2607,9 @@ func TestRunMain_Scenarios_ReportsTheExitCodeAndTheRefusal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			workingDirectory := runMainWorkingDirectory(t, tt.outsideModule, tt.mutate)
 			t.Chdir(workingDirectory)
+			if tt.seam != nil {
+				tt.seam(t)
+			}
 			outputPath := runMainOutputPath(t, tt.blockedOutput)
 			args := tt.args
 			if args == nil {

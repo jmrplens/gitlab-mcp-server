@@ -171,6 +171,26 @@ type packageActionCoverage struct {
 // value a test can read rather than the end of the test binary.
 var exitProcess = os.Exit
 
+// Seams for failures no planted tree can produce, because each call's input
+// has already been read or built successfully a step earlier, or is compiled
+// into this binary. Each is a variable a test restores.
+var (
+	// buildActionCatalog and addStandaloneCatalog assemble the catalog both
+	// the projection rule and the coverage count read, from specs this binary
+	// was built with, where neither fails.
+	buildActionCatalog   = tools.BuildActionCatalog
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog
+	// parseRegistrationFile parses register.go and register_meta.go for the
+	// packages they name, after the selector audit has already parsed both.
+	parseRegistrationFile = parser.ParseFile
+	// architectureReportFor reads the bridge files the source audit has
+	// already read and passed.
+	architectureReportFor = buildArchitectureReport
+	// marshalIndent encodes a report of strings, ints and maps, which never
+	// fails.
+	marshalIndent = json.MarshalIndent
+)
+
 func main() {
 	exitProcess(runMain(os.Args[1:], os.Stderr))
 }
@@ -264,7 +284,7 @@ func buildCoverageReport(root string) (coverageReport, error) {
 	}
 
 	summary := summarizeCoverage(domains)
-	architecture, err := buildArchitectureReport(root, summary)
+	architecture, err := architectureReportFor(root, summary)
 	if err != nil {
 		return coverageReport{}, err
 	}
@@ -344,11 +364,11 @@ func assertCoverageInvariants(domains []domainCoverage) error {
 }
 
 func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Client) error {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
 		return fmt.Errorf("build action catalog: %w", err)
 	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	catalog, err = addStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		return fmt.Errorf("add standalone dynamic catalog actions: %w", err)
 	}
@@ -906,7 +926,7 @@ func referencedRegisterMetaPackages(root string) (map[string]bool, error) {
 
 func referencedPackages(path, selectorName string) (map[string]bool, error) {
 	fileSet := token.NewFileSet()
-	file, err := parser.ParseFile(fileSet, path, nil, 0)
+	file, err := parseRegistrationFile(fileSet, path, nil, 0)
 	if err != nil {
 		return nil, fmt.Errorf(parsePathError, path, err)
 	}
@@ -933,11 +953,11 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client, true))
 	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
 
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
 		return nil, fmt.Errorf("build action catalog: %w", err)
 	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	catalog, err = addStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("add standalone dynamic catalog actions: %w", err)
 	}
@@ -1206,7 +1226,7 @@ func cloneStringIntMap(values map[string]int) map[string]int {
 }
 
 func marshalReport(report coverageReport) ([]byte, error) {
-	content, err := json.MarshalIndent(report, "", "  ")
+	content, err := marshalIndent(report, "", "  ")
 	if err != nil {
 		return nil, err
 	}
