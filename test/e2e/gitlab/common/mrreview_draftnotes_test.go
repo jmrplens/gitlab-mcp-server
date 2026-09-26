@@ -31,7 +31,8 @@ func draftNoteIDs(drafts []mrdraftnotes.Output) []int64 {
 // listing, reads it back, changes its text, writes a second draft and
 // deletes it, then publishes the first one by itself and reads that it left
 // the drafts and became a note. A third draft is then published through
-// publish-all, and the same two reads confirm it.
+// publish-all with a summary note, and the same two reads confirm it, the
+// summary among the request's notes.
 //
 // Replaces: TestIndividual_MRDraftNotes, TestMeta_MRDraftNotes, TestMeta_DraftNotePublish
 func TestMRReviewDraftNotes_Lifecycle_CreateUpdateDeletePublish(t *testing.T) {
@@ -82,8 +83,15 @@ func TestMRReviewDraftNotes_Lifecycle_CreateUpdateDeletePublish(t *testing.T) {
 		if bulk.ID == 0 {
 			e.T.Fatalf("draft_note_create answered %+v, want a third draft with an ID", bulk)
 		}
-		harness.DoVoid(s, actionMRReviewDraftNotePublishAll, params)
+		// The bulk publish finishes the review in the same call: the summary
+		// note is posted beside the published draft.
+		summary := text + " (review summary)"
+		harness.DoVoid(s, actionMRReviewDraftNotePublishAll, withParams(params, map[string]any{"note": summary}))
 		assertDraftPublished(e, s, params, bulk.ID, text+" (published in bulk)")
+		notes := harness.Do[mrnotes.ListOutput](s, actionMRReviewNoteList, params)
+		if !slices.Contains(noteBodies(notes.Notes), summary) {
+			e.T.Errorf("no note reads the review summary %q after draft_note_publish_all: %v", summary, noteBodies(notes.Notes))
+		}
 	})
 }
 

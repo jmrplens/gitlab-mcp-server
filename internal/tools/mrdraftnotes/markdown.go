@@ -93,10 +93,8 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListHeading(&b, "Draft Notes", len(out.DraftNotes), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Author ID", "Commit", "Note"))
 	for _, d := range out.DraftNotes {
-		commit := d.CommitID
-		if len(commit) > 8 {
-			commit = commit[:8]
-		}
+		// The short SHA: the first eight characters, or all of a shorter one.
+		commit := d.CommitID[:min(len(d.CommitID), 8)]
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(d.ID, 10),
 			strconv.FormatInt(d.AuthorID, 10),
