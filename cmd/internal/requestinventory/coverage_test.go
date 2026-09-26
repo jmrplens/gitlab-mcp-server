@@ -1,6 +1,7 @@
 package requestinventory
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -29,6 +30,12 @@ func makeToolsPackage(t *testing.T, root, name string) {
 // disjoint and mean what they say: an owner that recorded something, one that
 // exists and recorded nothing, and one that is not a package under
 // internal/tools at all.
+//
+// Every count is given a value no other count shares, since two that agree in
+// the fixture can be exchanged in the code without a test noticing, and the
+// whole record is compared so an owner filed under the wrong list shows too.
+// The unmapped owner shares its name with a package that recorded a request
+// outside internal/tools, which is not an owner the catalog can mean.
 func TestClassify_Owners_AreSplitThreeWays(t *testing.T) {
 	root := t.TempDir()
 	makeToolsPackage(t, root, "issues")
@@ -39,27 +46,26 @@ func TestClassify_Owners_AreSplitThreeWays(t *testing.T) {
 	}
 	actions := []Action{
 		{ID: "issue.list", Owner: "issues"},
-		{ID: "issue.get", Owner: "issues"},
 		{ID: "topic.list", Owner: "adminspecs"},
-		{ID: "ghost.list", Owner: "nowhere"},
+		{ID: "issue.get", Owner: "issues"},
+		{ID: "completion.list", Owner: "completions"},
+		{ID: "topic.get", Owner: "adminspecs"},
+		{ID: "issue.create", Owner: "issues"},
 	}
 
 	coverage := Classify(root, rows, actions)
 
-	if coverage.Total != 4 || coverage.Covered != 2 || coverage.Silent != 1 || coverage.Unmapped != 1 {
-		t.Fatalf("coverage = %+v, want 4 actions split 2/1/1", coverage)
+	want := Coverage{
+		Total:          6,
+		Covered:        3,
+		Silent:         2,
+		Unmapped:       1,
+		SilentOwners:   []Owner{{Package: "adminspecs", Actions: []string{"topic.get", "topic.list"}}},
+		UnmappedOwners: []Owner{{Package: "completions", Actions: []string{"completion.list"}}},
 	}
-	if !slices.Equal(Packages(coverage.SilentOwners), []string{"adminspecs"}) {
-		t.Errorf("silent owners = %v, want [adminspecs]", Packages(coverage.SilentOwners))
+	if !reflect.DeepEqual(coverage, want) {
+		t.Errorf("coverage = %+v, want %+v", coverage, want)
 	}
-	if !slices.Equal(Packages(coverage.UnmappedOwners), []string{"nowhere"}) {
-		t.Errorf("unmapped owners = %v, want [nowhere]", Packages(coverage.UnmappedOwners))
-	}
-	t.Run("an owner names the actions behind its count", func(t *testing.T) {
-		if !slices.Equal(coverage.SilentOwners[0].Actions, []string{"topic.list"}) {
-			t.Errorf("silent owner actions = %v, want [topic.list]", coverage.SilentOwners[0].Actions)
-		}
-	})
 }
 
 // TestClassify_TheRootOwner_ResolvesToTheOrchestrationPackage verifies the one
@@ -79,8 +85,9 @@ func TestClassify_TheRootOwner_ResolvesToTheOrchestrationPackage(t *testing.T) {
 			[]Row{{Package: ToolsDir, Path: "/projects/:project_id"}},
 			[]Action{{ID: "discover.project", Owner: RootOwner}})
 
-		if coverage.Covered != 1 || coverage.Unmapped != 0 {
-			t.Errorf("coverage = %+v, want the root owner covered", coverage)
+		want := Coverage{Total: 1, Covered: 1, SilentOwners: []Owner{}, UnmappedOwners: []Owner{}}
+		if !reflect.DeepEqual(coverage, want) {
+			t.Errorf("coverage = %+v, want the root owner covered: %+v", coverage, want)
 		}
 	})
 
@@ -89,29 +96,83 @@ func TestClassify_TheRootOwner_ResolvesToTheOrchestrationPackage(t *testing.T) {
 			[]Row{{Package: "internal/tools/issues", Path: "/projects/:project_id/issues"}},
 			[]Action{{ID: "discover.project", Owner: RootOwner}})
 
-		if coverage.Silent != 1 || coverage.Unmapped != 0 {
-			t.Errorf("coverage = %+v, want the root owner silent rather than unmapped", coverage)
+		want := Coverage{
+			Total:          1,
+			Silent:         1,
+			SilentOwners:   []Owner{{Package: RootOwner, Actions: []string{"discover.project"}}},
+			UnmappedOwners: []Owner{},
+		}
+		if !reflect.DeepEqual(coverage, want) {
+			t.Errorf("coverage = %+v, want the root owner silent rather than unmapped: %+v", coverage, want)
 		}
 	})
+}
+
+// TestRootOwner_IsWhatTheCatalogCallsAGroupThatNamesNoOwner verifies the
+// spelling [RootOwner] claims against the catalog that assigns it.
+//
+// The classification tests spell the root owner with this constant on both
+// sides, so any value of it passes them, and no action of the real catalog is
+// owned by the orchestration package today, so the real catalog cannot pin it
+// either. A group that declares no owner is the case the constant exists for,
+// so one is added here: were the two spellings to part, the first such group
+// the catalog gained would be counted as owned by nothing, and the gate would
+// fail on a metadata defect that is not one.
+func TestRootOwner_IsWhatTheCatalogCallsAGroupThatNamesNoOwner(t *testing.T) {
+	probe := tools.ActionSpecGroup{
+		ToolName:   "gitlab_requestinventory_probe",
+		BaseDomain: "requestinventoryprobe",
+		Actions: []toolutil.ActionSpec{toolutil.NewActionSpec("probe", toolutil.RouteAction(nil,
+			func(context.Context, *gitlabclient.Client, struct{}) (struct{}, error) { return struct{}{}, nil }),
+			toolutil.ActionSpecOptions{ReadOnly: true})},
+	}
+	original := buildCatalog
+	buildCatalog = func(client *gitlabclient.Client, opts tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+		opts.SpecGroups = []tools.ActionSpecGroup{probe}
+		return original(client, opts)
+	}
+	t.Cleanup(func() { buildCatalog = original })
+
+	actions, err := Actions()
+	if err != nil {
+		t.Fatalf("Actions() error = %v", err)
+	}
+	found := slices.IndexFunc(actions, func(action Action) bool { return action.ID == "requestinventoryprobe.probe" })
+	if found < 0 {
+		t.Fatalf("the catalog holds no requestinventoryprobe.probe among its %d actions", len(actions))
+	}
+	if owner := actions[found].Owner; owner != RootOwner {
+		t.Fatalf("the catalog gave a group that names no owner the owner %q, and RootOwner spells it %q", owner, RootOwner)
+	}
+	coverage := Classify(repoRoot(t), nil, actions[found:found+1])
+	if coverage.Silent != 1 || coverage.Unmapped != 0 {
+		t.Errorf("coverage = %+v, want the action resolved to this repository's %s and counted silent", coverage, ToolsDir)
+	}
 }
 
 // TestClassify_SeveralOwnersAndActions_AreSortedForAStableReport verifies the
 // order, since a report that reshuffles between runs turns every audit into a
 // diff nobody can read.
+//
+// The owners are handed over in reverse order, and there are three of them: a
+// map this small tends to iterate in the order its keys went in, turned at a
+// random point, and with two owners a report that forgot to sort came back
+// sorted in 5 runs of 40. No turn of three keys in reverse order is sorted.
 func TestClassify_SeveralOwnersAndActions_AreSortedForAStableReport(t *testing.T) {
 	root := t.TempDir()
 
 	coverage := Classify(root, nil, []Action{
-		{ID: "zeta.get", Owner: "second"},
-		{ID: "alpha.get", Owner: "second"},
+		{ID: "zeta.get", Owner: "third"},
+		{ID: "alpha.get", Owner: "third"},
+		{ID: "gamma.get", Owner: "second"},
 		{ID: "beta.get", Owner: "first"},
 	})
 
-	if !slices.Equal(Packages(coverage.UnmappedOwners), []string{"first", "second"}) {
+	if !slices.Equal(Packages(coverage.UnmappedOwners), []string{"first", "second", "third"}) {
 		t.Fatalf("owners = %v, want them sorted", Packages(coverage.UnmappedOwners))
 	}
-	if !slices.Equal(coverage.UnmappedOwners[1].Actions, []string{"alpha.get", "zeta.get"}) {
-		t.Errorf("actions = %v, want them sorted", coverage.UnmappedOwners[1].Actions)
+	if !slices.Equal(coverage.UnmappedOwners[2].Actions, []string{"alpha.get", "zeta.get"}) {
+		t.Errorf("actions = %v, want them sorted", coverage.UnmappedOwners[2].Actions)
 	}
 }
 
@@ -186,8 +247,19 @@ func TestPackageName_Owner_IsSpelledTheWayARowSpellsIt(t *testing.T) {
 // asked for is invisible the same way: a catalog built at Free would count a
 // narrower surface and read as complete. ReadOnly is the third: nothing reads
 // it here, and R-PAGE judges pagination on reads alone, so one stuck at false
-// empties that comparison in silence.
+// empties that comparison in silence. The route is compared whole, since
+// R-PAGE reads its input schema as well as its output type.
 func TestActions_EveryField_ComesFromTheCatalogFieldItNames(t *testing.T) {
+	readRoute := toolutil.ActionRoute{
+		InputType:   reflect.TypeFor[Row](),
+		OutputType:  reflect.TypeFor[Coverage](),
+		InputSchema: map[string]any{"type": "object", "title": "read input"},
+	}
+	writeRoute := toolutil.ActionRoute{
+		InputType:   reflect.TypeFor[Inventory](),
+		OutputType:  reflect.TypeFor[Owner](),
+		InputSchema: map[string]any{"type": "object", "title": "write input"},
+	}
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
 		ToolName:   "gitlab_fixture",
 		BaseDomain: "fixture",
@@ -196,13 +268,13 @@ func TestActions_EveryField_ComesFromTheCatalogFieldItNames(t *testing.T) {
 		Name:         "read",
 		ReadOnly:     true,
 		OwnerPackage: "readerpkg",
-		Route:        toolutil.ActionRoute{OutputType: reflect.TypeFor[Coverage]()},
+		Route:        readRoute,
 	})
 	group.SetAction(actioncatalog.Action{
 		Name:         "write",
 		ReadOnly:     false,
 		OwnerPackage: "writerpkg",
-		Route:        toolutil.ActionRoute{OutputType: reflect.TypeFor[Owner]()},
+		Route:        writeRoute,
 	})
 	catalog := actioncatalog.NewCatalog()
 	if err := catalog.AddGroup(group); err != nil {
@@ -223,19 +295,11 @@ func TestActions_EveryField_ComesFromTheCatalogFieldItNames(t *testing.T) {
 	}
 
 	want := []Action{
-		{ID: "fixture.read", Owner: "readerpkg", ReadOnly: true, Route: toolutil.ActionRoute{OutputType: reflect.TypeFor[Coverage]()}},
-		{ID: "fixture.write", Owner: "writerpkg", ReadOnly: false, Route: toolutil.ActionRoute{OutputType: reflect.TypeFor[Owner]()}},
+		{ID: "fixture.read", Owner: "readerpkg", ReadOnly: true, Route: readRoute},
+		{ID: "fixture.write", Owner: "writerpkg", ReadOnly: false, Route: writeRoute},
 	}
-	if len(actions) != len(want) {
-		t.Fatalf("Actions() returned %d action(s), want %d", len(actions), len(want))
-	}
-	for i, got := range actions {
-		if got.ID != want[i].ID || got.Owner != want[i].Owner ||
-			got.ReadOnly != want[i].ReadOnly || got.Route.OutputType != want[i].Route.OutputType {
-			t.Errorf("action %d = {ID:%q Owner:%q ReadOnly:%t OutputType:%v}, want {ID:%q Owner:%q ReadOnly:%t OutputType:%v}",
-				i, got.ID, got.Owner, got.ReadOnly, got.Route.OutputType,
-				want[i].ID, want[i].Owner, want[i].ReadOnly, want[i].Route.OutputType)
-		}
+	if !reflect.DeepEqual(actions, want) {
+		t.Errorf("Actions() = %+v, want %+v", actions, want)
 	}
 	if asked.Tier != edition.Ultimate {
 		t.Errorf("the catalog was asked for at tier %q, want %q so the counts are of the whole surface", asked.Tier, edition.Ultimate)
@@ -244,18 +308,20 @@ func TestActions_EveryField_ComesFromTheCatalogFieldItNames(t *testing.T) {
 
 // TestActions_ACatalogThatWillNotBuild_IsReported verifies that a caller is
 // told rather than handed an empty action list, which would score every
-// package as covering nothing it owns.
+// package as covering nothing it owns, and told what the catalog said, since
+// that is the line the generator prints in place of its coverage count.
 func TestActions_ACatalogThatWillNotBuild_IsReported(t *testing.T) {
+	broken := errors.New("catalog is broken")
 	original := buildCatalog
 	buildCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
-		return nil, errors.New("catalog is broken")
+		return nil, broken
 	}
 	t.Cleanup(func() { buildCatalog = original })
 
 	actions, err := Actions()
 
-	if err == nil {
-		t.Fatal("Actions() error = nil, want the catalog failure")
+	if !errors.Is(err, broken) {
+		t.Fatalf("Actions() error = %v, want the catalog's own failure", err)
 	}
 	if actions != nil {
 		t.Errorf("Actions() = %v, want nothing on failure", actions)
