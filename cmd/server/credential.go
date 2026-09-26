@@ -8,6 +8,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -109,14 +110,29 @@ func (s *credentialState) close(orphaned []*mcp.ServerSession, end *watchEnd) {
 // the pool entry that owns them. Idle eviction asks this before dropping an
 // entry, which is what stops a client that subscribed and then waited from being
 // evicted for waiting. See [github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool.WithInUse].
+//
+// Which holdings make an entry busy is the register's answer (register row
+// POL-003, [tenancy.Busy]); this state is what it is asked over. An owner the
+// registry never held, or no longer holds, is nil here and never busy.
 func (s *credentialState) busy() bool {
-	if s == nil {
-		return false
+	return s != nil && tenancy.Busy(s)
+}
+
+// OpenListenStreams is how many subscriptions/listen streams this credential
+// holds open, which is what [tenancy.Busy] reads first.
+func (s *credentialState) OpenListenStreams() int64 {
+	return s.listen.count()
+}
+
+// Watchers is how many URIs this credential's subscription manager watches,
+// and zero on a capability surface that offers no subscriptions, without
+// touching a manager there is none of. Counting them takes the manager's
+// mutex, which is why [tenancy.Busy] asks only when no stream is open.
+func (s *credentialState) Watchers() int {
+	if s.subs == nil {
+		return 0
 	}
-	if s.listen.count() > 0 {
-		return true
-	}
-	return s.subs != nil && s.subs.manager.Len() > 0
+	return s.subs.manager.Len()
 }
 
 // credentialStateKey carries the pool entry a request belongs to.
