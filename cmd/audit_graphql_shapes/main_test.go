@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 )
@@ -60,6 +61,7 @@ type Project {
   archived: Boolean!
   createdAt: Time!
   size: BigInt!
+  sizes: [BigInt!]
   meta: JSON!
   runtime: Duration!
   severity: Severity!
@@ -118,18 +120,32 @@ func schemaFile(t *testing.T, sdl string) string {
 	return path
 }
 
+// walkDeadline bounds one run of the audit over a fixture module. Every
+// fixture here is walked in well under a second, so a run still going at the
+// deadline is a walk that does not end, and a gate that hangs reports nothing.
+const walkDeadline = time.Minute
+
 // runFixture runs the audit over a fixture module against the test schema
-// and returns the exit status with both streams.
+// and returns the exit status with both streams, failing the test when the
+// run has not finished within walkDeadline.
 func runFixture(t *testing.T, packages map[string]string, verbose bool) (int, string, string) {
 	t.Helper()
-	var out, errOut bytes.Buffer
-	status := run(auditRun{
+	cfg := auditRun{
 		dir:        fixtureModule(t, packages),
 		patterns:   []string{"./..."},
 		verbose:    verbose,
 		schemaPath: schemaFile(t, testSchema),
-	}, &out, &errOut)
-	return status, out.String(), errOut.String()
+	}
+	var out, errOut bytes.Buffer
+	done := make(chan int, 1)
+	go func() { done <- run(cfg, &out, &errOut) }()
+	select {
+	case status := <-done:
+		return status, out.String(), errOut.String()
+	case <-time.After(walkDeadline):
+		t.Fatalf("run() has not finished after %s over a fixture it walks in well under a second, so the walk does not end", walkDeadline)
+		return 0, "", ""
+	}
 }
 
 // soundFixture is every shape the audit accepts, written the way the
@@ -313,9 +329,11 @@ func asMap(service gql.Service) {
 
 // wrappedFixture is every hand-over shape: a parameter, a field of a struct
 // parameter, a generic wrapper, a generic wrapper called by another generic
-// wrapper with two parameters instantiated explicitly, a call through
-// parentheses, a call through a function value (which is not followed), a
-// call of a method with no package, and an exported wrapper another package
+// wrapper with two parameters instantiated explicitly, the same generic
+// wrapper instantiated by a plain function that hands its own document on, a
+// call through parentheses, a call through a function value (which is not
+// followed), a call of a method with no package, a method sharing a wrapper's
+// name (which is not the wrapper), and an exported wrapper another package
 // calls through its selector.
 const wrappedFixture = `package wrapped
 
@@ -383,10 +401,18 @@ func listAs[N any](service gql.Service, query string) {
 	decode[N, string](service, query)
 }
 
+func sendProject(service gql.Service, query string) {
+	decode[projectNode, string](service, query)
+}
+
 type projectNode struct {
 	ID   string @@json:"id"@@
 	Name string @@json:"name"@@
 }
+
+type relay struct{}
+
+func (relay) sendDoc(service gql.Service, query string) {}
 
 func callers(service gql.Service) {
 	sendDoc(service, createNote)
@@ -395,6 +421,8 @@ func callers(service gql.Service) {
 	f(service, createNote)
 	_ = exec[note](service, mutation{Query: createNote, Key: "createNote"})
 	listAs[projectNode](service, getProject)
+	sendProject(service, getProject)
+	relay{}.sendDoc(service, errors.New("x").Error())
 	func() {}()
 	_ = errors.New("x").Error()
 }
@@ -422,6 +450,13 @@ func call(service gql.Service) {
 // the passing shape end to end: every accepted way of handing a document to a
 // call is paired and judged, the summary names the schema, and -v lists the
 // pairings with the one selection nothing reads marked rather than failed.
+//
+// Two of those ways are wrong only in a way a clean run shows. A method that
+// shares a wrapper's name is not the wrapper, and reading its call as one
+// hands the wrapper a document built at run time, which fails a tree that is
+// sound. And a generic decoder whose document passes through a plain function
+// on its way out keeps the type its instantiation named, or the decoder is
+// left unjudged with only a note to say so.
 func TestRun_FixtureWhereEveryDecoderAgrees_PassesAndListsUnderVerbose(t *testing.T) {
 	status, out, errOut := runFixture(t, map[string]string{"sound": soundFixture, "wrapped": wrappedFixture, "caller": callerFixture}, true)
 
@@ -431,12 +466,18 @@ func TestRun_FixtureWhereEveryDecoderAgrees_PassesAndListsUnderVerbose(t *testin
 	if errOut != "" {
 		t.Errorf("run() wrote to stderr on a clean tree:\n%s", errOut)
 	}
+	if strings.Contains(out, "typed by a parameter no caller binds") {
+		t.Errorf("run() left a decoder unjudged although every caller binds it:\n%s", out)
+	}
 	for _, want := range []string{
 		"    ok  fixture/sound getProject (sound/sound.go:",
 		"    ok  fixture/sound an inline document (sound/sound.go:",
 		"    ok  fixture/wrapped createNote (wrapped/wrapped.go:",
 		", handed over at wrapped/wrapped.go:",
-		", handed over at caller/caller.go:",
+		// A document handed over from another package is judged where it is
+		// sent, so the pairing names the wrapper's package and the send, and
+		// the caller's package only through where it was handed over.
+		"    ok  fixture/wrapped updateNote (wrapped/wrapped.go:42, handed over at caller/caller.go:13)\n",
 		"fixture/sound unread (sound/sound.go:",
 		"    ~ data.project.name: selected and never decoded",
 		"pairing(s) agree with their documents, 1 selection(s) nothing reads (",
@@ -656,6 +697,37 @@ func handovers(service gql.Service) {
 	wrapField(service, m)
 	wrapField(service, mutation{Key: "k"})
 }
+
+func WrapExported(service gql.Service, query string) {
+	var resp response
+	_, _ = service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+`
+
+// handingFixture calls the unpaired package's exported wrapper from another
+// package in each way that cannot be paired, so the package a problem names
+// is not the one the wrapper lives in: a document built at run time, too few
+// arguments, and a document that circles through a function of its own.
+const handingFixture = `package handing
+
+import (
+	"fmt"
+
+	"fixture/gql"
+	"fixture/unpaired"
+)
+
+func serviceAndDoc() (gql.Service, string) { return gql.Service{}, "" }
+
+func relay(service gql.Service, query string) {
+	relay(service, query)
+	unpaired.WrapExported(service, query)
+}
+
+func hand(service gql.Service) {
+	unpaired.WrapExported(service, fmt.Sprint("y"))
+	unpaired.WrapExported(serviceAndDoc())
+}
 `
 
 // TestRun_FixtureWithUnpairableCalls_ReportsEachAndFails verifies that every
@@ -663,31 +735,42 @@ func handovers(service gql.Service) {
 // every wrapper nothing completes is a line on stderr with its reason, that a
 // decoder typed by a parameter nothing binds is noted rather than judged, and
 // that the run fails on the unpaired alone.
+//
+// Each line is compared from its start, because the package and the position
+// are what a reader opens and both are straight assignments nothing checks:
+// a message printed in the package's place, a wrapper's send named where the
+// call handing it a document belongs, or a problem at a caller in another
+// package filed under the wrapper's, all still carry the message. The line is
+// the one the problem is about, which for a hand-over is the call that made
+// it and not the send it never reached.
 func TestRun_FixtureWithUnpairableCalls_ReportsEachAndFails(t *testing.T) {
-	status, out, errOut := runFixture(t, map[string]string{"unpaired": unpairedFixture}, true)
+	status, out, errOut := runFixture(t, map[string]string{"unpaired": unpairedFixture, "handing": handingFixture}, true)
 
 	if status != 1 {
 		t.Fatalf("run() = %d, want 1; stderr:\n%s", status, errOut)
 	}
 	for _, want := range []string{
-		"refused is a document the schema refuses, which make check-graphql-documents reports",
-		"the document is built at run time, from fmt.Sprintf(",
-		"the document is built at run time, from m.Query,",
-		"the document is built at run time, from two(),",
-		"the document is built at run time, from runtimeDoc,",
-		"the request is not a GraphQLQuery literal written at the call or assigned to the variable the call names",
-		"the request literal sets no Query field by name",
-		"the decode target is not a pointer, so nothing GitLab answers can be written into it",
+		"\nfixture/unpaired (unpaired/unpaired.go:61): refused is a document the schema refuses, which make check-graphql-documents reports",
+		"\nfixture/unpaired (unpaired/unpaired.go:62): the document is built at run time, from fmt.Sprintf(",
+		"\nfixture/unpaired (unpaired/unpaired.go:63): the document is built at run time, from m.Query,",
+		"\nfixture/unpaired (unpaired/unpaired.go:64): the document is built at run time, from two(),",
+		"\nfixture/unpaired (unpaired/unpaired.go:65): the document is built at run time, from runtimeDoc,",
+		"\nfixture/unpaired (unpaired/unpaired.go:66): the request is not a GraphQLQuery literal written at the call or assigned to the variable the call names",
+		"\nfixture/unpaired (unpaired/unpaired.go:69): the request literal sets no Query field by name",
+		"\nfixture/unpaired (unpaired/unpaired.go:70): the decode target is not a pointer, so nothing GitLab answers can be written into it",
 		"    - data: the decode target is string, not a struct with a data field",
 		"    - data: the decode target has no data field, so everything GitLab answers is dropped",
-		"hands wrapDoc its document here, and the document is built at run time, from fmt.Sprint(",
-		"calls wrapDoc with fewer arguments than the parameter its document arrives through",
-		"hands wrapField a m that is not a literal written at the call, so its Query field cannot be read",
-		"hands wrapField a literal that sets no Query field by name",
-		"lonely receives its document through a parameter and nothing calls it, so no document reaches this decoder",
-		"hands loop a document it received through a parameter of its own, 9 hand-overs deep, which is further than this audit follows",
-		"nobody is a document no send this audit can see carries, so its decoder is judged by nobody",
-		"viaField is a document no send this audit can see carries",
+		"\nfixture/unpaired (unpaired/unpaired.go:107): hands wrapDoc its document here, and the document is built at run time, from fmt.Sprint(",
+		"\nfixture/unpaired (unpaired/unpaired.go:108): calls wrapDoc with fewer arguments than the parameter its document arrives through",
+		"\nfixture/unpaired (unpaired/unpaired.go:109): hands wrapField a m that is not a literal written at the call, so its Query field cannot be read",
+		"\nfixture/unpaired (unpaired/unpaired.go:110): hands wrapField a literal that sets no Query field by name",
+		"\nfixture/unpaired (unpaired/unpaired.go:87): lonely receives its document through a parameter and nothing calls it, so no document reaches this decoder",
+		"\nfixture/unpaired (unpaired/unpaired.go:91): hands loop a document it received through a parameter of its own, 9 hand-overs deep, which is further than this audit follows",
+		"\nfixture/unpaired (unpaired/unpaired.go:10): nobody is a document no send this audit can see carries, so its decoder is judged by nobody",
+		"\nfixture/unpaired (unpaired/unpaired.go:22): viaField is a document no send this audit can see carries",
+		"\nfixture/handing (handing/handing.go:13): hands relay a document it received through a parameter of its own, 9 hand-overs deep",
+		"\nfixture/handing (handing/handing.go:18): hands WrapExported its document here, and the document is built at run time, from fmt.Sprint(\"y\")",
+		"\nfixture/handing (handing/handing.go:19): calls WrapExported with fewer arguments than the parameter its document arrives through",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
@@ -859,16 +942,21 @@ func TestAbsolute_WhenTheWorkingDirectoryIsGone_KeepsTheDirAsWritten(t *testing.
 	}
 }
 
-// taggedFixture carries the three shapes encoding/json treats as ordinary
-// fields and a reader of Go reads as something else: an embedded struct given
-// a json name, the ",string" option on a field whose scalar is not sent as a
-// string, and a map whose key type is not basic at all.
+// taggedFixture carries the shapes encoding/json treats as ordinary fields and
+// a reader of Go reads as something else: an embedded struct given a json
+// name, a map whose key type is not basic at all, a type that reads itself out
+// of a string's text, and the ",string" option on every kind of value GitLab
+// sends, on a kind that ignores it, and on a list, where it is ignored too.
 const taggedFixture = `package tagged
 
 import "fixture/gql"
 
 const getProject = @@
 query { project(fullPath: "x") { id name stars } }
+@@
+
+const getQuoted = @@
+query { project(fullPath: "x") { id name stars score archived severity size sizes runtime } }
 @@
 
 type Identity struct {
@@ -879,6 +967,27 @@ type node struct {
 	Identity @@json:"ident"@@
 	Name     string @@json:"name"@@
 	Stars    bool   @@json:"stars,string"@@
+}
+
+type title struct {
+	Words []string
+}
+
+func (t *title) UnmarshalText(text []byte) error {
+	t.Words = []string{string(text)}
+	return nil
+}
+
+type quoted struct {
+	ID       string     @@json:"id,string"@@
+	Name     title      @@json:"name,string"@@
+	Stars    int        @@json:"stars,string"@@
+	Score    title      @@json:"score"@@
+	Archived bool       @@json:"archived,string"@@
+	Severity int        @@json:"severity,string"@@
+	Size     *int64     @@json:"size,string"@@
+	Sizes    []int64    @@json:"sizes,string"@@
+	Runtime  complex128 @@json:"runtime,string"@@
 }
 
 func send(service gql.Service) {
@@ -892,34 +1001,56 @@ func send(service gql.Service) {
 			Project map[[2]int]string @@json:"project"@@
 		} @@json:"data"@@
 	}
+	var read struct {
+		Data struct {
+			Project *quoted @@json:"project"@@
+		} @@json:"data"@@
+	}
 	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &shaped)
 	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &keyed)
+	_, _ = service.Do(gql.GraphQLQuery{Query: getQuoted}, &read)
 }
 `
 
 // TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWouldDo
-// verifies three readings a shape check has to get right because the Go source
+// verifies the readings a shape check has to get right because the Go source
 // suggests the other answer.
 //
 // An embedded struct is promoted only while it is anonymous: give it a json
 // name and encoding/json fills one field under that name, so the object's own
 // id is decoded by nothing and a walk that promoted it anyway would call the
-// document covered. The ",string" option is a permission for a scalar GitLab
-// sends as a string, not a permit to put any scalar in any field, so an
-// integer decoded into a boolean is still a disagreement. And a map key is
-// judged by what it is rather than by whether it is a string once resolved: a
-// key that is not a basic type cannot be a JSON object key either.
+// document covered. A map key is judged by what it is rather than by whether
+// it is a string once resolved: a key that is not a basic type cannot be a
+// JSON object key either. A type with UnmarshalText reads a JSON string's text
+// and nothing else, so it holds a string scalar and refuses a number.
+//
+// The ",string" option is a constraint as much as a permission. On a kind
+// encoding/json honors it for, the decoder reads the field's own literal out
+// of a JSON string, which is how a BigInt lands in an int64 on purpose, and
+// refuses everything else GitLab sends: a bare number or boolean for not
+// being quoted, an enum value for being a name, and a plain string for not
+// being quoted twice. On a struct, a complex number or a list the option is
+// ignored, and the value is judged as though it were not there.
 func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWouldDo(t *testing.T) {
 	status, out, errOut := runFixture(t, map[string]string{"tagged": taggedFixture}, true)
 
 	if status != 1 {
 		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
 	}
+	const option = ` under a ",string" option, which reads only a number or a boolean written as a JSON string's text` + "\n"
 	for _, want := range []string{
-		"    - data.project.ident: decoded from a field the document never selects, so it is always empty",
-		"    - data.project.stars: Int! is sent as a JSON integer and is decoded into bool",
-		"    - data.project: Project is an object and is decoded into map[[2]int]string, whose keys are not strings",
-		"    ~ data.project.id: selected and never decoded",
+		"    - data.project.ident: decoded from a field the document never selects, so it is always empty\n",
+		"    - data.project.stars: Int! is sent as a JSON integer and is decoded into bool" + option,
+		"    - data.project: Project is an object and is decoded into map[[2]int]string, whose keys are not strings\n",
+		"    ~ data.project.id: selected and never decoded\n",
+		"    - data.project.id: ID! is sent as a JSON string and is decoded into string" + option,
+		"    - data.project.stars: Int! is sent as a JSON integer and is decoded into int" + option,
+		"    - data.project.score: Float! is sent as a JSON number that may carry a fraction and is decoded into tagged.title\n",
+		"    - data.project.archived: Boolean! is sent as a JSON boolean and is decoded into bool" + option,
+		"    - data.project.severity: Severity! is sent as a JSON string and is decoded into int" + option,
+		"    - data.project.sizes[]: BigInt! is sent as a JSON string and is decoded into int64\n",
+		"    - data.project.runtime: Duration! is sent as a JSON number that may carry a fraction and is decoded into complex128\n",
+		"audit_graphql_shapes: 10 disagreement(s) in 3 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
@@ -927,12 +1058,24 @@ func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWould
 			}
 		})
 	}
+	// A string scalar into a type that reads text, under an option its kind
+	// ignores, and a BigInt quoted into a number are what the decoder
+	// accepts, so neither is a line of the report at all.
+	for _, accepted := range []string{"data.project.name:", "data.project.size:"} {
+		t.Run(accepted, func(t *testing.T) {
+			if strings.Contains(errOut, accepted) {
+				t.Errorf("run() reports %q, which encoding/json decodes:\n%s", accepted, errOut)
+			}
+		})
+	}
 }
 
 // tracedFixture traces a document back to a local the function declares before
-// assigning, and holds three calls the audit must not read as sends: one named
+// assigning, and holds four calls the audit must not read as sends: one named
 // Do with a single argument, one named Do whose first argument is some other
-// type of its own, and a document reached through a selector on a selector.
+// type of its own, one of another name that takes a request and a decode
+// target just as Do does, and a document reached through a selector on a
+// selector.
 const tracedFixture = `package traced
 
 import "fixture/gql"
@@ -962,6 +1105,10 @@ func (fewArgs) Do(one int) {}
 type otherQuery struct{}
 
 func (otherQuery) Do(first token, second int) {}
+
+type preparer struct{}
+
+func (preparer) Prepare(query gql.GraphQLQuery, response any) {}
 
 type response struct {
 	Data struct {
@@ -1001,6 +1148,7 @@ func viaNestedSelector(service gql.Service, h holder) {
 func notSends() {
 	fewArgs{}.Do(1)
 	otherQuery{}.Do(token{}, 2)
+	preparer{}.Prepare(gql.GraphQLQuery{Query: sent}, &response{})
 }
 `
 
@@ -1010,7 +1158,8 @@ func notSends() {
 //
 // A method named Do is not a send: the audit is looking for one that carries a
 // request and a decode target, and reading either of the other two as a send
-// would report a decoder that does not exist. A local declared before it is
+// would report a decoder that does not exist. Nor is a method that carries
+// both under another name, since only Do sends. A local declared before it is
 // assigned still yields the document it is given, so the declaration
 // contributing nothing must not stand in for the assignment that follows it,
 // and a local that is the second name of a multiple assignment takes the

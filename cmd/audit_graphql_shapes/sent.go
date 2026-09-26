@@ -257,7 +257,7 @@ type objectPosition struct {
 // this one does not have.
 func (j *judge) askSchema(at objectPosition) {
 	definition := j.schema.Types[at.gqlType.NamedType]
-	if definition == nil || j.isRoot(definition) || definition.Name == pageInfoType {
+	if j.isRoot(definition) || definition.Name == pageInfoType {
 		return
 	}
 	pkg := decoderPackage(at.goType, j.pairing.Package)
@@ -347,7 +347,7 @@ func (j *judge) countMap(gqlType *ast.Type) {
 }
 
 func (j *judge) countUndecoded(field *ast.Field) {
-	if len(field.SelectionSet) > 0 && j.isAskablePosition(fieldType(field)) {
+	if j.isAskablePosition(fieldType(field)) {
 		j.coverage.Undecoded++
 	}
 }
@@ -360,7 +360,7 @@ func (j *judge) isAskablePosition(gqlType *ast.Type) bool {
 		gqlType = gqlType.Elem
 	}
 	definition := j.schema.Types[gqlType.NamedType]
-	if definition == nil || j.isRoot(definition) || definition.Name == pageInfoType {
+	if j.isRoot(definition) || definition.Name == pageInfoType {
 		return false
 	}
 	switch definition.Kind {
@@ -399,7 +399,7 @@ func (j *judge) gateMutationErrors(definition *ast.Definition, fields []goField,
 // the value is published already, to the send names a package that publishes
 // nothing.
 func decoderPackage(goType types.Type, fallback string) string {
-	if named, ok := goType.(*types.Named); ok && named.Obj() != nil && named.Obj().Pkg() != nil {
+	if named, ok := goType.(*types.Named); ok {
 		return named.Obj().Pkg().Path()
 	}
 	return fallback
@@ -453,9 +453,6 @@ func (j *judge) classOf(fieldType *ast.Type) string {
 		return sentCollection
 	}
 	definition := j.schema.Types[fieldType.NamedType]
-	if definition == nil {
-		return sentObject
-	}
 	switch definition.Kind {
 	case ast.Scalar, ast.Enum:
 		return sentLeaf
@@ -476,7 +473,7 @@ func (j *judge) isLeafType(fieldType *ast.Type) bool {
 		fieldType = fieldType.Elem
 	}
 	definition := j.schema.Types[fieldType.NamedType]
-	return definition != nil && (definition.Kind == ast.Scalar || definition.Kind == ast.Enum)
+	return definition.Kind == ast.Scalar || definition.Kind == ast.Enum
 }
 
 // sentOf says whether the schema promises the field with every answer.
@@ -503,7 +500,7 @@ func isMutationPayload(definition *ast.Definition) bool {
 // skipSentField reports whether a field is excluded from the question, each
 // exclusion costing what its comment says against the real documents.
 func skipSentField(field *ast.FieldDefinition) bool {
-	if connectionPlumbing[field.Name] || field.Name == mutationIDField || strings.HasPrefix(field.Name, "__") {
+	if connectionPlumbing[field.Name] || field.Name == mutationIDField {
 		return true
 	}
 	// A field you must supply an identifier to fetch is a second request
@@ -531,10 +528,8 @@ func typeConditions(selections ast.SelectionSet) []string {
 			}
 			names = append(names, typeConditions(s.SelectionSet)...)
 		case *ast.FragmentSpread:
-			if s.Definition != nil {
-				names = append(names, s.Definition.TypeCondition)
-				names = append(names, typeConditions(s.Definition.SelectionSet)...)
-			}
+			names = append(names, s.Definition.TypeCondition)
+			names = append(names, typeConditions(s.Definition.SelectionSet)...)
 		}
 	}
 	return names
@@ -559,9 +554,6 @@ var outputTypeSuffixes = []string{"Output", "Item"}
 func collectPublished(pkgs []*packages.Package) publishedIndex {
 	index := publishedIndex{}
 	for _, pkg := range pkgs {
-		if pkg.Types == nil {
-			continue
-		}
 		names := map[string]string{}
 		scope := pkg.Types.Scope()
 		for _, name := range scope.Names() {
