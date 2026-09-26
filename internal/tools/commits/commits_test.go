@@ -6,6 +6,7 @@ package commits
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -937,6 +939,29 @@ func TestGetGPGSignature_Success(t *testing.T) {
 	}
 	if out.KeyUserName != "Test User" {
 		t.Errorf("KeyUserName = %q, want %q", out.KeyUserName, "Test User")
+	}
+}
+
+// TestGetGPGSignature_RequestError verifies the signature lookup reports a
+// request it could not build rather than sending nothing and answering an
+// empty signature. client-go's NewRequest has no input it refuses for the
+// fixed GET and an escaped path, so the refusal is planted through the seam,
+// and the mock fails the test if anything reaches it.
+func TestGetGPGSignature_RequestError(t *testing.T) {
+	original := newRequest
+	t.Cleanup(func() { newRequest = original })
+	refused := errors.New("request refused")
+	newRequest = func(*gl.Client, string, string, any, []gl.RequestOptionFunc) (*retryablehttp.Request, error) {
+		return nil, refused
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s: the refused request was sent", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+
+	_, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "getGPGSignature") {
+		t.Fatalf("GetGPGSignature() error = %v, want the refused request under getGPGSignature", err)
 	}
 }
 
@@ -2413,16 +2438,16 @@ func TestFormatMRsByCommitMarkdown(t *testing.T) {
 		MergeRequests: []BasicMROutput{
 			{
 				IID: 1, Title: "Feature", State: "merged",
-				SourceBranch: "feat", TargetBranch: "main", Author: "dev",
-				WebURL: "https://gitlab.example.com/-/merge_requests/1",
+				SourceBranch: "feat", TargetBranch: "main", Author: &toolutil.BasicUserOutput{Username: "dev"},
+				WebURL: "https://gitlab.example.com/-/merge_requests/1", MergedAt: "2026-03-03T00:00:00Z",
 			},
 		},
 	})
 
 	want := "## Merge Requests for Commit (1)\n\n" +
-		"| IID | Title | State | Source -> Target | Author |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | dev |\n" +
+		"| IID | Title | State | Source -> Target | Author | Merged |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | @dev | 3 Mar 2026 00:00 UTC |\n" +
 		commitMRsHints
 
 	if got != want {
@@ -3329,11 +3354,63 @@ func TestListMRsByCommit_MergeRequestWithoutAnAuthor_LeavesTheAuthorEmpty(t *tes
 	if len(out.MergeRequests) != 2 {
 		t.Fatalf("len(MergeRequests) = %d, want 2", len(out.MergeRequests))
 	}
-	if out.MergeRequests[0].Author != "" {
-		t.Errorf("Author = %q, want empty for a merge request GitLab sent no author for", out.MergeRequests[0].Author)
+	if out.MergeRequests[0].Author != nil {
+		t.Errorf("Author = %+v, want none for a merge request GitLab sent no author for", out.MergeRequests[0].Author)
 	}
-	if out.MergeRequests[1].Author != "dev" {
-		t.Errorf(fmtAuthorWant, out.MergeRequests[1].Author, "dev")
+	if author := out.MergeRequests[1].Author; author == nil || author.Username != "dev" {
+		t.Errorf("Author = %+v, want the user dev", author)
+	}
+}
+
+// TestListMRsByCommit_ARow_CarriesWhatTheCompactRowKeeps pins the whole row
+// the merge requests of a commit are listed as: the merge request under its
+// own iid key, the project, state and branches, the commit the merge landed
+// as, the author as the user object GitLab sends, labels and the four
+// instants. The description and the SHAs of the source branch GitLab sends
+// beside them are merge_request.get's.
+func TestListMRsByCommit_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"id":100,"iid":1,"project_id":42,"title":"Feature: add login","state":"merged","draft":true,
+			"description":"left to merge_request.get","sha":"feedface",
+			"source_branch":"feature/login","target_branch":"main","merge_commit_sha":"c0ffee","labels":["auth"],
+			"author":{"id":7,"username":"dev1","name":"Dev One","state":"active","avatar_url":"https://a/7.png","web_url":"https://gitlab.example.com/dev1"},
+			"web_url":"https://gitlab.example.com/mygroup/api/-/merge_requests/1",
+			"created_at":"2026-03-01T00:00:00Z","updated_at":"2026-03-02T00:00:00Z","merged_at":"2026-03-03T00:00:00Z","closed_at":"2026-03-04T00:00:00Z"
+		}]`)
+	}))
+
+	out, err := ListMRsByCommit(context.Background(), client, MRsByCommitInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("ListMRsByCommit() unexpected error: %v", err)
+	}
+
+	want := []BasicMROutput{{
+		ID: 100, IID: 1, ProjectID: 42, Title: "Feature: add login", State: "merged", Draft: true,
+		SourceBranch: "feature/login", TargetBranch: "main", MergeCommitSHA: "c0ffee", Labels: []string{"auth"},
+		Author: &toolutil.BasicUserOutput{
+			ID: 7, Username: "dev1", Name: "Dev One", State: "active",
+			AvatarURL: "https://a/7.png", WebURL: "https://gitlab.example.com/dev1",
+		},
+		WebURL:    "https://gitlab.example.com/mygroup/api/-/merge_requests/1",
+		CreatedAt: "2026-03-01T00:00:00Z", UpdatedAt: "2026-03-02T00:00:00Z", MergedAt: "2026-03-03T00:00:00Z", ClosedAt: "2026-03-04T00:00:00Z",
+	}}
+	got, err := json.Marshal(out.MergeRequests)
+	if err != nil {
+		t.Fatalf("marshal the rows: %v", err)
+	}
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal the expected rows: %v", err)
+	}
+	if string(got) != string(wantJSON) {
+		t.Errorf("MergeRequests = %s, want %s", got, wantJSON)
+	}
+	// The key a caller reads the merge request by is iid, as GitLab spells
+	// it; the row used to publish merge_request_iid, a name no response of
+	// GitLab's carries.
+	if !strings.Contains(string(got), `"iid":1`) || strings.Contains(string(got), "merge_request_iid") {
+		t.Errorf("row = %s, want the iid key and no merge_request_iid", got)
 	}
 }
 
@@ -3513,15 +3590,17 @@ func TestFormatStatusesMarkdown_StatusWithoutAState_LeavesTheCellEmpty(t *testin
 func TestFormatMRsByCommitMarkdown_MergeRequestWithoutAState_LeavesTheCellEmpty(t *testing.T) {
 	got := FormatMRsByCommitMarkdown(MRsByCommitOutput{
 		MergeRequests: []BasicMROutput{{
-			IID: 1, Title: "Feature", SourceBranch: "feat", TargetBranch: "main", Author: "dev",
+			IID: 1, Title: "Feature", SourceBranch: "feat", TargetBranch: "main",
 			WebURL: "https://gitlab.example.com/-/merge_requests/1",
 		}},
 	})
 
+	// Neither a state nor an author reached this row, and both cells stay
+	// empty rather than claiming one.
 	want := "## Merge Requests for Commit (1)\n\n" +
-		"| IID | Title | State | Source -> Target | Author |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature |  | feat -> main | dev |\n" +
+		"| IID | Title | State | Source -> Target | Author | Merged |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature |  | feat -> main |  |  |\n" +
 		commitMRsHints
 
 	if got != want {

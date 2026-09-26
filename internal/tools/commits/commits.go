@@ -857,16 +857,29 @@ type MRsByCommitInput struct {
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA,required"`
 }
 
-// BasicMROutput represents a basic merge request associated with a commit.
+// BasicMROutput is one merge request a commit belongs to, as a compact row:
+// which merge request it is and in which project, its state and branches,
+// where the merge landed, who opened it, its labels, and its dates. GitLab
+// answers the list with MergeRequestBasic, whose other keys (the description,
+// the merge options, the reviewers and assignees, time tracking and the
+// counters) are what merge_request.get returns.
 type BasicMROutput struct {
-	ID           int64  `json:"id"`
-	IID          int64  `json:"merge_request_iid"`
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	SourceBranch string `json:"source_branch"`
-	TargetBranch string `json:"target_branch"`
-	WebURL       string `json:"web_url"`
-	Author       string `json:"author,omitempty"`
+	ID             int64                     `json:"id"`
+	IID            int64                     `json:"iid"`
+	ProjectID      int64                     `json:"project_id"`
+	Title          string                    `json:"title"`
+	State          string                    `json:"state"`
+	Draft          bool                      `json:"draft,omitempty"`
+	SourceBranch   string                    `json:"source_branch"`
+	TargetBranch   string                    `json:"target_branch"`
+	MergeCommitSHA string                    `json:"merge_commit_sha,omitempty"`
+	Labels         []string                  `json:"labels,omitempty"`
+	Author         *toolutil.BasicUserOutput `json:"author,omitempty"`
+	WebURL         string                    `json:"web_url"`
+	CreatedAt      string                    `json:"created_at,omitempty"`
+	UpdatedAt      string                    `json:"updated_at,omitempty"`
+	MergedAt       string                    `json:"merged_at,omitempty"`
+	ClosedAt       string                    `json:"closed_at,omitempty"`
 }
 
 // MRsByCommitOutput holds the list of merge requests for a commit.
@@ -890,19 +903,24 @@ func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRs
 	}
 	out := make([]BasicMROutput, len(mrs))
 	for i, mr := range mrs {
-		o := BasicMROutput{
-			ID:           mr.ID,
-			IID:          mr.IID,
-			Title:        mr.Title,
-			State:        mr.State,
-			SourceBranch: mr.SourceBranch,
-			TargetBranch: mr.TargetBranch,
-			WebURL:       mr.WebURL,
+		out[i] = BasicMROutput{
+			ID:             mr.ID,
+			IID:            mr.IID,
+			ProjectID:      mr.ProjectID,
+			Title:          mr.Title,
+			State:          mr.State,
+			Draft:          mr.Draft,
+			SourceBranch:   mr.SourceBranch,
+			TargetBranch:   mr.TargetBranch,
+			MergeCommitSHA: mr.MergeCommitSHA,
+			Labels:         []string(mr.Labels),
+			Author:         toolutil.NewBasicUserOutput(mr.Author),
+			WebURL:         mr.WebURL,
+			CreatedAt:      toolutil.RFC3339Ptr(mr.CreatedAt),
+			UpdatedAt:      toolutil.RFC3339Ptr(mr.UpdatedAt),
+			MergedAt:       toolutil.RFC3339Ptr(mr.MergedAt),
+			ClosedAt:       toolutil.RFC3339Ptr(mr.ClosedAt),
 		}
-		if mr.Author != nil {
-			o.Author = mr.Author.Username
-		}
-		out[i] = o
 	}
 	return MRsByCommitOutput{MergeRequests: out}, nil
 }
@@ -1070,6 +1088,11 @@ type gpgSignatureAPI struct {
 	X509Certificate    *X509CertificateOutput `json:"x509_certificate"`
 }
 
+// newRequest builds the signature lookup's request. It is a test seam: for the
+// fixed GET and a path gl.PathEscape built, client-go's NewRequest has no input
+// it can refuse.
+var newRequest = (*gl.Client).NewRequest
+
 // rawGetGPGSignature issues a raw REST GET against the commit signature path,
 // decoding the full documented response (including the SDK-missing signature_type,
 // commit_source, key, and x509_certificate fields) into a [gpgSignatureAPI]. The
@@ -1077,7 +1100,7 @@ type gpgSignatureAPI struct {
 func rawGetGPGSignature(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, sha string) (*gpgSignatureAPI, *gl.Response, error) {
 	path := fmt.Sprintf("projects/%s/repository/commits/%s/signature",
 		gl.PathEscape(string(projectID)), gl.PathEscape(sha))
-	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRequest(client.GL(), http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return nil, nil, err
 	}
