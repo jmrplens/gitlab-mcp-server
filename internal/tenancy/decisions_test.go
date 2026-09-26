@@ -81,7 +81,7 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 
 // TestDecisions_DispositionCounts pins how many rows the register holds of
 // each disposition in this layer: RTC-004 is promoted to MeterFor, and POL-003
-// stays ruled until the layer that promotes it.
+// to Busy.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -93,8 +93,8 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 27},
-		{"ruled", Ruled, 36},
-		{"promoted", Promoted, 1},
+		{"ruled", Ruled, 35},
+		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 10},
 	} {
@@ -107,15 +107,16 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 }
 
 // TestDecisions_FunctionsNameThePromotedRules pins which rows name a register
-// function in this layer: the four rows of the method meter name MeterFor, and
-// every other row names none until the layers that promote the busy rule and
-// the zero rule land.
+// function in this layer: the four rows of the method meter name MeterFor,
+// POL-003 names Busy, and every other row names none until the layer that
+// promotes the zero rule lands.
 func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 	want := map[string]string{
 		"RTC-001": "MeterFor",
 		"RTC-002": "MeterFor",
 		"RTC-003": "MeterFor",
 		"RTC-004": "MeterFor",
+		"POL-003": "Busy",
 	}
 	for _, d := range Decisions() {
 		t.Run(d.ID, func(t *testing.T) {
@@ -427,7 +428,7 @@ func rowPins() map[string]rowPin {
 			pinListenEnd("credential_evicted", StartOver),
 			{methods: "eviction", era: EraLegacy, channel: SessionClose, answer: StartOver},
 		}},
-		"POL-003": {Allow, Rule, ClassR, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, nil},
+		"POL-003": {Allow, Rule, ClassR, Promoted, KeyEntry, KeyNone, KeyNone, KeyNone, nil},
 		"POL-004": {Allow, Lifetime, ClassR, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_reset", StartOver),
 		}},

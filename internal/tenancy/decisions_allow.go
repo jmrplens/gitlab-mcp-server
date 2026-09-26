@@ -343,10 +343,12 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
-			// Ruled until the layer that promotes the busy rule lands.
-			ID: "POL-003", Question: Allow, Kind: Rule, Class: ClassR, Disposition: Ruled,
+			// Promoted: which holdings make an entry busy is Busy's answer,
+			// and the server's per-credential state asks it over what it holds.
+			ID: "POL-003", Question: Allow, Kind: Rule, Class: ClassR, Disposition: Promoted,
 			Resource: "whether an entry is busy: an open listen stream or a watcher",
 			Key:      KeyEntry, StdioKey: KeyNone,
+			Functions: []string{"Busy"},
 			Sites: []Site{
 				enforce(pkgServer, "credentialState.busy"),
 				enforce(pkgServer, "credentialStates.inUse"),
