@@ -14,8 +14,8 @@ func TestCheckLeaf_ARegisterTheServerImportsForFree_Passes(t *testing.T) {
 
 // TestCheckLeaf_ARegisterThatCostsTheServerSomething_IsAFinding: an import
 // the rules do not allow, an allowed import the server does not already
-// import, a package-level variable and an init function each fail. A method
-// that happens to be called init is no initialization work, and passes.
+// import, a package-level variable and an init function each fail. Methods
+// that happen to be called init are no initialization work, and pass.
 func TestCheckLeaf_ARegisterThatCostsTheServerSomething_IsAFinding(t *testing.T) {
 	leafExtra := `package leaf
 
@@ -31,6 +31,10 @@ func init() { _ = fmt.Sprint("initialization work") }
 type Table struct{}
 
 func (Table) init() {}
+
+type Row struct{}
+
+func (Row) init() {}
 `
 	report := fixture{files: map[string]string{"site/site.go": siteHeader, "leaf/extra.go": leafExtra}}.run(t)
 	assertFindings(t, report, "G12",

@@ -117,6 +117,13 @@ func (g *gate) resolveMany(n int) *gateFailure {
 	return &gateFailure{status: 400, code: -40300, message: describe(n), header: newHeader("Retry-After", itoa(upstreamRetryAfter))}
 }
 
+func (g *gate) resolveTexts(n int) *gateFailure {
+	if n > 0 {
+		return &gateFailure{status: 400, code: -32600, message: "Alpha."}
+	}
+	return &gateFailure{status: 400, code: -32600, message: "Beta."}
+}
+
 type holder struct{}
 `
 
@@ -334,21 +341,25 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 // returns three refusals of one status with no stable text satisfies a row
 // with any one of them, so the literals are also read the other way. The one
 // whose code and headers no refusal declared there carries is a finding; once
-// a refusal carries it there is none; and a function one of whose refusals
-// already drifted is left to that refusal's finding.
+// a refusal carries it there is none; a sibling whose own text the row's
+// prefix does not begin is not carried by that row; and a function one of
+// whose refusals already drifted is left to that refusal's finding.
 func TestCheckRefusals_AGateLiteralNoRefusalCarries_IsAFinding(t *testing.T) {
 	plain := gateAt("gate.resolveMany", 400, -32600, "")
 	retried := gateAt("gate.resolveMany", 400, -40300, "")
 	retried.RetryAfter = tenancy.RetryAfterFixed
 	drifted := gateAt("gate.resolveMany", 400, -32000, "")
 	key := siteDir + ":gate.resolveMany"
-	unaccounted := key + ": builds a 400 gate refusal that no refusal declared at this function carries exactly: its status, text, code or headers differ from every row's"
+	unaccounted := func(key string) string {
+		return key + ": builds a 400 gate refusal that no refusal declared at this function carries exactly: its status, text, code or headers differ from every row's"
+	}
 	cases := []struct {
 		name     string
 		refusals []tenancy.Refusal
 		want     []string
 	}{
-		{"the sibling no row carries", []tenancy.Refusal{plain}, []string{unaccounted}},
+		{"the sibling no row carries", []tenancy.Refusal{plain}, []string{unaccounted(key)}},
+		{"a sibling of other text", []tenancy.Refusal{gateAt("gate.resolveTexts", 400, -32600, "Alpha.")}, []string{unaccounted(siteDir + ":gate.resolveTexts")}},
 		{"every literal carried", []tenancy.Refusal{plain, retried}, nil},
 		{"a refusal that drifted", []tenancy.Refusal{plain, drifted}, []string{
 			"ROW-001 refusal 2 (http gate): " + key + " its code is -32600, and the register says -32000",

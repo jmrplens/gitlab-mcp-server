@@ -114,15 +114,16 @@ func (g *gate) aliasReaders() map[string]map[string]bool {
 
 // readAliases is the set of declared aliases that code other than an alias
 // initializer reads, directly or through a chain of aliases: an alias is read
-// when a reader of it is not an alias, or is an alias already read. It grows
-// until a pass adds nothing.
+// when a reader of it is not an alias, or is an alias already read. A pass
+// over the aliases settles at least one more link of every chain, and no chain
+// is longer than the number of aliases, so that many passes reach the answer
+// whatever order the map hands them out in.
 func (g *gate) readAliases(readers map[string]map[string]bool) map[string]bool {
 	read := map[string]bool{}
-	for changed := true; changed; {
-		changed = false
+	for range len(g.aliases) {
 		for alias := range g.aliases {
 			if !read[alias] && slices.ContainsFunc(sortedKeys(readers[alias]), func(r string) bool { return g.aliases[r] == nil || read[r] }) {
-				read[alias], changed = true, true
+				read[alias] = true
 			}
 		}
 	}

@@ -172,7 +172,12 @@ const literalMessage = "builds a refusal that reads as a limit's (a policy code,
 // there carries, or an exemption, is answered.
 func TestCheckTripwire_RefusalLiterals(t *testing.T) {
 	d := row("ROW-001", site("gate.declared", tenancy.Refuse))
-	d.Refusals = []tenancy.Refusal{{Channel: tenancy.Gate, Status: 429, At: site("gate.declared", tenancy.Refuse)}}
+	// A gate refusal of another status in the same function declares none of
+	// gate.outside's literals.
+	d.Refusals = []tenancy.Refusal{
+		{Channel: tenancy.Gate, Status: 429, At: site("gate.declared", tenancy.Refuse)},
+		{Channel: tenancy.Gate, Status: 429, At: site("gate.outside", tenancy.Refuse)},
+	}
 	report := fixture{
 		files:  map[string]string{"site/site.go": literalSource},
 		rows:   []tenancy.Decision{d},
@@ -201,6 +206,8 @@ import (
 func tooMany(w http.ResponseWriter) { http.Error(w, "slow down", http.StatusTooManyRequests) }
 
 func draining(w http.ResponseWriter) { w.WriteHeader(http.StatusServiceUnavailable) }
+
+func throttled(w http.ResponseWriter) { w.WriteHeader(http.StatusServiceUnavailable) }
 
 func fine(w http.ResponseWriter) { w.WriteHeader(http.StatusOK) }
 
@@ -233,6 +240,7 @@ func TestCheckTripwire_ARefusalInADeclaredFunction_MustBeTheOneItDeclares(t *tes
 		rpc("callCode", "", tenancy.ToolError, 0),
 		rpc("overLimit", "", tenancy.RPC, -32000),
 		{Channel: tenancy.Gate, Status: 503, At: site("draining", tenancy.Refuse)},
+		{Channel: tenancy.Gate, Status: 429, At: site("throttled", tenancy.Refuse)},
 	}
 	report := fixture{
 		files: map[string]string{"site/site.go": siteHeader, "site/rpc.go": rpcSource, "site/writers.go": writerSource},
@@ -243,6 +251,7 @@ func TestCheckTripwire_ARefusalInADeclaredFunction_MustBeTheOneItDeclares(t *tes
 		siteDir+":globalCode: "+literalMessage,
 		siteDir+":overLimit: "+literalMessage,
 		siteDir+":tooMany: writes a 429 response that no refusal a row declares there carries",
+		siteDir+":throttled: writes a 503 response that no refusal a row declares there carries",
 	)
 }
 
