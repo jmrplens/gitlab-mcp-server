@@ -10,7 +10,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -40,6 +43,34 @@ func stubClient(t *testing.T) *gitlabclient.Client {
 	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	t.Cleanup(cleanup)
 	return client
+}
+
+// withSurface serves both views, and the edition-tier rule's three
+// listings, from list instead of the registered surface until the test ends.
+// Nothing reads the client then, so a test using it may pass nil.
+func withSurface(t *testing.T, list func(tier edition.Tier, meta bool) []*mcp.Tool) {
+	t.Helper()
+	original := listSurface
+	t.Cleanup(func() { listSurface = original })
+	listSurface = func(_ *gitlabclient.Client, tier edition.Tier, meta bool) []*mcp.Tool {
+		return list(tier, meta)
+	}
+}
+
+// cleanTool returns a tool no metadata or output rule reports: a two-word
+// name that neither reads nor deletes, a description long enough that says
+// what it returns and what to see next and claims no tier, a title, hints,
+// and a locked-down input schema beside an output schema. Each case below
+// spoils one of those.
+func cleanTool(name string) *mcp.Tool {
+	return &mcp.Tool{
+		Name:         name,
+		Title:        "A tool no rule reports",
+		Description:  "Changes a widget. Returns: the widget. See also: nothing.",
+		Annotations:  &mcp.ToolAnnotations{},
+		InputSchema:  map[string]any{"type": "object", "additionalProperties": false},
+		OutputSchema: map[string]any{"type": "object"},
+	}
 }
 
 // TestListTools_MetaSurfaceIsRegisteredAndLockedDown verifies the meta
@@ -212,8 +243,11 @@ func TestReportGate_NoViolations_SaysSo(t *testing.T) {
 // It does not assert that the total is zero, and could not: the Markdown
 // registry is global and cannot be unregistered, so the formatters other
 // tests in this package register to prove a rule fires are in the surface
-// this walk reads. That the tree itself gates on nothing is asserted per
-// rule, by the tests that own each one.
+// this walk reads. That the tree itself gates on nothing is asserted view by
+// view instead: the metadata view by
+// TestRunMetadataAudit_ServedSurface_ReportsOnlyThisPackagesOwnFormatters,
+// which sets this package's own formatters aside, and the output view by the
+// -check case of TestRunMain_CommandLine_DecidesTheExitCodeAndWhatIsRefused.
 func TestAuditViews_CheckMode_ReadsBothViews(t *testing.T) {
 	// Not parallel: captureStdout rebinds os.Stdout and checkMode is global.
 	checkMode = true

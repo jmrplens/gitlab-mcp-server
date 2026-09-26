@@ -507,15 +507,17 @@ func TestDelegatedRegisterMetaPackages_AllowListedDefinitions(t *testing.T) {
 		t.Error("isDelegatedRegisterMetaDefinition(orphaned) = true, want false")
 	}
 
+	// The whole record, since the package and the file are both strings: a
+	// record carrying the package's name as its file read true field by field
+	// on everything this test used to check.
 	unexpected := unexpectedRegisterMetaDefinitions(definitions)
-	if len(unexpected) != 1 {
-		t.Fatalf("unexpected = %#v, want only the orphaned definition", unexpected)
-	}
-	if unexpected[0].Package != "orphaned" {
-		t.Fatalf("unexpected package = %q, want orphaned", unexpected[0].Package)
-	}
-	if !strings.Contains(unexpected[0].Reason, "not referenced from internal/tools/register_meta.go") {
-		t.Fatalf("reason = %q, want the unreferenced reason", unexpected[0].Reason)
+	wantUnexpected := []unexpectedRegisterMetaDefinition{{
+		Package: "orphaned",
+		File:    "internal/tools/orphaned/register.go",
+		Reason:  "approved delegated RegisterMeta is not referenced from internal/tools/register_meta.go",
+	}}
+	if !slices.Equal(unexpected, wantUnexpected) {
+		t.Fatalf("unexpected = %#v, want %#v", unexpected, wantUnexpected)
 	}
 
 	output := captureStdout(t, func() { printRegisterMetaDefinitions(definitions) })

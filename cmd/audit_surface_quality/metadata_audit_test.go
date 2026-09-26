@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -355,7 +356,11 @@ func TestAuditResultEnvelopes_Counts_AreTheRegistryRenderedPlainly(t *testing.T)
 	want := envelopeAudit{RegistrationProblems: toolutil.MarkdownRegistrationProblems()}
 	for _, typ := range toolutil.RegisteredMarkdownTypes() {
 		want.Formatters++
-		name := typ.String() + " (" + toolutil.RegisteredMarkdownFormatterName(typ) + ")"
+		// A formatter registered as a nil function has no name to add.
+		name := typ.String()
+		if fn := toolutil.RegisteredMarkdownFormatterName(typ); fn != "" {
+			name += " (" + fn + ")"
+		}
 		for _, state := range []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage} {
 			result, panicked := renderEnvelope(testutil.FillFixture(typ, testutil.FixtureOptions{State: state, Text: fixtureText}))
 			switch {
@@ -434,15 +439,20 @@ func TestAuditResultEnvelopes_BareBlock_IsListedWithItsPosition(t *testing.T) {
 
 // TestRegisteredMarkdownTypes_EveryFormatterIsNamed pins the property the
 // envelope walk's name guard rests on: the registry records a function name
-// for every type at registration, so the guard against an empty one is never
-// taken and the report never prints a bare type. A formatter that lost its
-// name would be one a finding could not point a reader at.
+// for every type the server registers, so the served report never prints a
+// bare type. A formatter that lost its name would be one a finding could not
+// point a reader at. The one registration with no name is a nil function,
+// which this package registers on purpose to drive the guard, so the types it
+// declares are left out.
 func TestRegisteredMarkdownTypes_EveryFormatterIsNamed(t *testing.T) {
 	types := toolutil.RegisteredMarkdownTypes()
 	if len(types) == 0 {
 		t.Fatal("the registry holds no formatter, so nothing was checked")
 	}
 	for _, typ := range types {
+		if typ.PkgPath() == reflect.TypeFor[unnamedFormatter]().PkgPath() {
+			continue
+		}
 		if toolutil.RegisteredMarkdownFormatterName(typ) == "" {
 			t.Errorf("%s is registered under no function name", typ)
 		}
@@ -627,6 +637,77 @@ func TestPrintReport_AllTools_NumbersRowsAndTruncatesPastSixtyCharacters(t *test
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(output, want) {
 				t.Errorf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
+	}
+}
+
+// TestPrintReport_AllTools_AnnotationColumnSpellsEachHintInItsPlace pins the
+// annotation column of both tables. Two of the four hints are booleans and two
+// are optional, printed nil when unstated, so no single row can give each of
+// the four a value the other three lack; these two rows together differ
+// wherever any two hints could trade places, and each table has a loop of its
+// own.
+func TestPrintReport_AllTools_AnnotationColumnSpellsEachHintInItsPlace(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout.
+	no, yes := false, true
+	first := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: false, OpenWorldHint: &no}
+	second := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &yes, IdempotentHint: true}
+	individual := []*mcp.Tool{{Name: "ind_first", Annotations: first}, {Name: "ind_second", Annotations: second}}
+	meta := []*mcp.Tool{{Name: "meta_first", Annotations: first}, {Name: "meta_second", Annotations: second}}
+	vs := []violation{{tool: "ind_first", category: "naming", detail: "bad"}}
+
+	output := captureStdout(t, func() {
+		printMetadataReport(individual, meta, vs, nil, envelopeAudit{})
+	})
+
+	for _, want := range []string{
+		"| 1 | `ind_first` |  | RO=true D=nil I=false OW=false |\n",
+		"| 2 | `ind_second` |  | RO=false D=true I=true OW=nil |\n",
+		"| 1 | `meta_first` |  | RO=true D=nil I=false OW=false |\n",
+		"| 2 | `meta_second` |  | RO=false D=true I=true OW=nil |\n",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Errorf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
+	}
+}
+
+// TestPrintResultEnvelopes_EachCountAndList_SitsUnderItsOwnTitle pins the
+// envelope section over an audit in which no two counts agree: each count row
+// carries its own figure, and each list is printed whole under its own
+// heading. With every list one entry long, the four list rows could trade
+// figures, and two lists could trade headings, and still print every line.
+func TestPrintResultEnvelopes_EachCountAndList_SitsUnderItsOwnTitle(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout.
+	audit := envelopeAudit{
+		Formatters:           11,
+		NilOnZero:            5,
+		NilOnPopulated:       []string{"a.Output (a.Format)"},
+		Unannotated:          []string{"b.Output [zero] block 0 (*mcp.TextContent)", "b.Output [multi-page] block 1 (*mcp.TextContent)"},
+		Panicked:             []string{"c.One [zero]: first", "c.Two [zero]: second", "c.Three [multi-page]: third"},
+		RegistrationProblems: []string{"problem one", "problem two", "problem three", "problem four"},
+	}
+
+	output := captureStdout(t, func() { printResultEnvelopes(audit) })
+
+	for _, want := range []string{
+		"| Registered formatters | 11 |\n",
+		"| Nil render of the zero value | 5 |\n",
+		"| Nil render of the populated value | 1 |\n",
+		"| Content blocks without Annotations | 2 |\n",
+		"| Formatters that panicked | 3 |\n",
+		"| Registration problems | 4 |\n",
+		"### Nil render of the populated value (1)\n\n- `a.Output (a.Format)`\n\n",
+		"### Content blocks without Annotations (2)\n\n- `b.Output [zero] block 0 (*mcp.TextContent)`\n- `b.Output [multi-page] block 1 (*mcp.TextContent)`\n\n",
+		"### Formatters that panicked (3)\n\n- `c.One [zero]: first`\n- `c.Two [zero]: second`\n- `c.Three [multi-page]: third`\n\n",
+		"### Registration problems (4)\n\n- `problem one`\n- `problem two`\n- `problem three`\n- `problem four`\n\n",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Errorf("printResultEnvelopes() output missing %q:\n%s", want, output)
 			}
 		})
 	}
@@ -819,4 +900,190 @@ func entriesOfCategory(entries []jsonEntry, category string) []jsonEntry {
 		}
 	}
 	return matched
+}
+
+// spoiled returns [cleanTool] with one respect of it changed.
+func spoiled(name string, change func(tool *mcp.Tool)) *mcp.Tool {
+	tool := cleanTool(name)
+	change(tool)
+	return tool
+}
+
+// TestRunMetadataAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel drives
+// the metadata view over listings of its own, carrying one violation of every
+// rule on each surface the rule reads, and holds the report to the whole list
+// in the order the view composes it. The served surface carries none, so this
+// is the one place a rule dropped from the view, or handed the other surface,
+// the other surface's label or the other surface's naming pattern, is seen.
+func TestRunMetadataAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel(t *testing.T) {
+	// Not parallel: listSurface, t.Chdir, captureStdout and outputJSON are
+	// process-wide.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+	registerGatingViolation()
+
+	licensed := spoiled("gitlab_widget_licensed", func(tool *mcp.Tool) {
+		tool.Description = "Toggles a licensed widget (Ultimate). Returns: the widget."
+	})
+	individual := []*mcp.Tool{
+		cleanTool("gitlab_widget_create"),
+		// One word is the meta pattern's shape, and not the individual one's.
+		cleanTool("gitlab_widget"),
+		spoiled("gitlab_widget_describe", func(tool *mcp.Tool) { tool.Description = "short" }),
+		spoiled("gitlab_widget_bare", func(tool *mcp.Tool) { tool.Annotations = nil }),
+		cleanTool("gitlab_widget_list"),
+		spoiled("gitlab_widget_typed", func(tool *mcp.Tool) { tool.InputSchema = map[string]any{"type": "string"} }),
+		spoiled("gitlab_widget_open", func(tool *mcp.Tool) { tool.InputSchema = map[string]any{"type": "object"} }),
+		cleanTool("gitlab_widget_twice"),
+		cleanTool("gitlab_widget_twice"),
+		licensed,
+	}
+	// The meta listing is the longer one, which the served surface's is not, so
+	// the view is held to listings of any relative size.
+	meta := []*mcp.Tool{
+		cleanTool("gitlab_gadget_create"),
+		cleanTool("gitlab_gadget_update"),
+		// One word passes here, and would not under the individual pattern.
+		cleanTool("gitlab_gadget"),
+		cleanTool("Gitlab-Gadget"),
+		spoiled("gitlab_gadget_describe", func(tool *mcp.Tool) { tool.Description = "tiny" }),
+		spoiled("gitlab_gadget_bare", func(tool *mcp.Tool) { tool.Annotations = nil }),
+		// The two rules that read the individual surface alone would report
+		// these two if they were handed this one.
+		cleanTool("gitlab_gadget_list"),
+		spoiled("gitlab_gadget_typed", func(tool *mcp.Tool) { tool.InputSchema = map[string]any{"type": "array"} }),
+		spoiled("gitlab_gadget_open", func(tool *mcp.Tool) {
+			tool.InputSchema = map[string]any{"type": "object", "additionalProperties": true}
+		}),
+		cleanTool("gitlab_gadget_twice"),
+		cleanTool("gitlab_gadget_twice"),
+	}
+	withSurface(t, func(tier edition.Tier, isMeta bool) []*mcp.Tool {
+		switch {
+		case isMeta:
+			return meta
+		case tier == edition.Free:
+			// Served from Premium up, below the Ultimate its description states.
+			return slices.DeleteFunc(slices.Clone(individual), func(tool *mcp.Tool) bool { return tool == licensed })
+		default:
+			return individual
+		}
+	})
+	root := t.TempDir()
+	writeTestFile(t, root, "go.mod", "module example.com/fixture\n")
+	writeTestFile(t, root, "internal/tools/register_meta.go", "package tools\n")
+	writeTestFile(t, root, "internal/tools/legacy/register.go", "package legacy\n\nfunc RegisterMeta() {}\n")
+	t.Chdir(root)
+
+	var returned int
+	out := captureStdout(t, func() { returned = runMetadataAudit(nil) })
+
+	var got metadataJSON
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode metadata report: %v\n%s", err, truncate(out))
+	}
+	if got.IndividualTools != len(individual) || got.MetaTools != len(meta) {
+		t.Errorf("individual_tools = %d, meta_tools = %d; want %d and %d", got.IndividualTools, got.MetaTools, len(individual), len(meta))
+	}
+	if returned != got.Violations || got.Violations != len(got.Entries) {
+		t.Errorf("runMetadataAudit() = %d, violations = %d, entries = %d; want all three equal", returned, got.Violations, len(got.Entries))
+	}
+	want := []jsonEntry{
+		{"gitlab_widget", "naming", "individual tool name does not match " + toolNameRe.String()},
+		{"Gitlab-Gadget", "naming", "meta tool name does not match " + metaToolNameRe.String()},
+		{"gitlab_widget_describe", "description", `individual description too short (5 chars): "short"`},
+		{"gitlab_gadget_describe", "description", `meta description too short (4 chars): "tiny"`},
+		{"gitlab_widget_bare", "annotations", "individual tool has nil Annotations"},
+		{"gitlab_gadget_bare", "annotations", "meta tool has nil Annotations"},
+		{"gitlab_widget_list", "annotation-type", "name suggests read-only but ReadOnlyHint is false"},
+		{"gitlab_widget_typed", "input-schema", `InputSchema type="string", expected "object"`},
+		{"gitlab_widget_open", "additional-properties", "individual tool inputSchema missing additionalProperties:false"},
+		{"gitlab_gadget_open", "additional-properties", "meta tool inputSchema additionalProperties=true, want false"},
+		{"gitlab_widget_twice", "duplicate", "duplicate individual tool name"},
+		{"gitlab_gadget_twice", "duplicate", "duplicate meta tool name"},
+		{"gitlab_widget_licensed", editionTierCategory, `the description states "Ultimate" and the surface serves the tool from premium`},
+		{"legacy", "register-meta", "package-level RegisterMeta is not an approved catalog-first runtime pattern (internal/tools/legacy/register.go)"},
+	}
+	if len(got.Entries) < len(want) {
+		t.Fatalf("entries = %+v, want at least the %d this listing carries", got.Entries, len(want))
+	}
+	if !reflect.DeepEqual(got.Entries[:len(want)], want) {
+		t.Errorf("entries = %+v\nwant   %+v", got.Entries[:len(want)], want)
+	}
+	// The constant-index rule reads the global registry, which holds whatever
+	// formatters this package's tests have registered by now, so the tail is
+	// held to its rule, its place last and the one formatter this test owns.
+	var gating bool
+	for _, entry := range got.Entries[len(want):] {
+		if entry.Category != constantIndexCategory || !strings.HasPrefix(entry.Tool, "main.") {
+			t.Errorf("entry %+v follows the listing's own, where only this package's constant-index findings belong", entry)
+		}
+		gating = gating || strings.HasPrefix(entry.Tool, "main.gatingList ")
+	}
+	if !gating {
+		t.Errorf("entries = %+v, want the constant-index violation this test registered last", got.Entries)
+	}
+}
+
+// TestRunMetadataAudit_ServedSurface_ReportsOnlyThisPackagesOwnFormatters is
+// the metadata view over the surface the server registers and the tree the
+// package sits in: nothing it reports may name anything but a formatter this
+// package's tests register to prove the constant-index rule fires. Every other
+// rule is otherwise asserted over hand-made listings only, so a rule handed
+// the other surface's naming pattern, which reports every one-word meta tool,
+// was seen by nothing short of the gate's own run.
+func TestRunMetadataAudit_ServedSurface_ReportsOnlyThisPackagesOwnFormatters(t *testing.T) {
+	// Not parallel: captureStdout and outputJSON are process-wide.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+	client := stubClient(t)
+
+	out := captureStdout(t, func() { runMetadataAudit(client) })
+
+	var got metadataJSON
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode metadata report: %v\n%s", err, truncate(out))
+	}
+	for _, entry := range got.Entries {
+		if entry.Category == constantIndexCategory && strings.HasPrefix(entry.Tool, "main.") {
+			continue
+		}
+		t.Errorf("%s [%s]: %s", entry.Tool, entry.Category, entry.Detail)
+	}
+}
+
+// unnamedFormatter is the output type of a formatter registered as a nil
+// function, which is the one registration the registry records no name for.
+type unnamedFormatter struct{ Name string }
+
+// registerUnnamedFormatter registers that formatter once for the process.
+func registerUnnamedFormatter() {
+	unnamedFormatterOnce.Do(func() {
+		var render func(unnamedFormatter) string
+		toolutil.RegisterMarkdown(render)
+	})
+}
+
+// unnamedFormatterOnce keeps the unnamed formatter to one registration.
+var unnamedFormatterOnce sync.Once
+
+// TestAuditResultEnvelopes_FormatterWithNoName_IsNamedByItsTypeAlone checks
+// the envelope walk's name for a formatter the registry has no function name
+// for: the type alone, never the type followed by an empty pair of
+// parentheses, and its render's panic still listed in both states under it.
+func TestAuditResultEnvelopes_FormatterWithNoName_IsNamedByItsTypeAlone(t *testing.T) {
+	registerUnnamedFormatter()
+	audit, _ := auditResultEnvelopes()
+
+	typ := reflect.TypeFor[unnamedFormatter]().String()
+	for _, state := range []string{"zero", "multi-page"} {
+		t.Run(state, func(t *testing.T) {
+			if !hasEntryContaining(audit.Panicked, typ+" ["+state+"]: ") {
+				t.Errorf("panicked = %v, want %s listed under its type alone", audit.Panicked, typ)
+			}
+		})
+	}
+	if hasEntryContaining(audit.Panicked, typ+" (") {
+		t.Errorf("panicked = %v, want no function name after %s", audit.Panicked, typ)
+	}
 }

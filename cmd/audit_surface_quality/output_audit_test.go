@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -49,15 +51,12 @@ func TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFin
 		},
 	}
 
+	// The whole finding: its subject is the meta tool and its detail names the
+	// action, two names a field-by-field check could see traded.
 	got := collectRouteOutputSchemaFindings(routes)
-	if len(got) != 1 {
-		t.Fatalf("collectRouteOutputSchemaFindings returned %d findings, want 1: %#v", len(got), got)
-	}
-	if got[0].tool != "gitlab_package" {
-		t.Fatalf("finding tool = %q, want gitlab_package", got[0].tool)
-	}
-	if got[0].category != "route-output-schema" {
-		t.Fatalf("finding category = %q, want route-output-schema", got[0].category)
+	want := []finding{{"gitlab_package", "route-output-schema", `action "missing" has no OutputSchema (void or untyped)`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("collectRouteOutputSchemaFindings() = %#v, want %#v", got, want)
 	}
 }
 
@@ -486,6 +485,103 @@ func TestAuditRouteOutputSchema_EmptyRoutesProducesNoFindings(t *testing.T) {
 	if got := collectRouteOutputSchemaFindings(map[string]toolutil.ActionMap{}); len(got) != 0 {
 		t.Fatalf("expected 0 findings, got %d", len(got))
 	}
+}
+
+// TestRunOutputAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel drives
+// the output view over listings of its own and a catalog that cannot be
+// built, which carry one finding of every rule on each surface it reads, and
+// holds the report to the whole list in the order the view composes it. The
+// served surface carries none, so a rule dropped from the view, or handed the
+// other surface or its label, is seen here and nowhere else. The "See also:"
+// rule reads the individual surface alone, which the meta tool lacking the
+// clause holds it to.
+//
+// The same listings are read again under -check, the one run that prints
+// output findings as the gate's list, and whose count is the exit condition.
+func TestRunOutputAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel(t *testing.T) {
+	// Not parallel: listSurface, buildActionCatalog, os.Stdout, outputJSON and
+	// checkMode are process-wide.
+	original := buildActionCatalog
+	t.Cleanup(func() { buildActionCatalog = original })
+	buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+		return nil, errors.New("no catalog in this test")
+	}
+	quietWidget := spoiled("gitlab_widget_silent", func(tool *mcp.Tool) {
+		tool.Description = "Changes a widget quietly. See also: nothing."
+	})
+	quietGadget := spoiled("gitlab_gadget_silent", func(tool *mcp.Tool) { tool.Description = "Changes a gadget. See also: x." })
+	individual := []*mcp.Tool{
+		cleanTool("gitlab_widget_create"),
+		spoiled("gitlab_widget_schemaless", func(tool *mcp.Tool) { tool.OutputSchema = nil }),
+		quietWidget,
+		spoiled("gitlab_widget_untitled", func(tool *mcp.Tool) { tool.Title = "" }),
+		spoiled("gitlab_widget_isolated", func(tool *mcp.Tool) { tool.Description = "Changes a widget. Returns: the widget." }),
+	}
+	// The meta listing is the longer one, which the served surface's is not, so
+	// the view is held to listings of any relative size.
+	meta := []*mcp.Tool{
+		cleanTool("gitlab_gadget"),
+		cleanTool("gitlab_gadget_create"),
+		spoiled("gitlab_gadget_schemaless", func(tool *mcp.Tool) { tool.OutputSchema = nil }),
+		quietGadget,
+		spoiled("gitlab_gadget_untitled", func(tool *mcp.Tool) { tool.Title = "" }),
+		spoiled("gitlab_gadget_isolated", func(tool *mcp.Tool) { tool.Description = "Changes a gadget. Returns: it." }),
+	}
+	withSurface(t, func(_ edition.Tier, isMeta bool) []*mcp.Tool {
+		if isMeta {
+			return meta
+		}
+		return individual
+	})
+	entries := []jsonEntry{
+		{"gitlab_widget_schemaless", "output-schema", "individual tool missing OutputSchema"},
+		{"gitlab_gadget_schemaless", "output-schema", "meta tool missing OutputSchema"},
+		{"gitlab_widget_silent", "description-returns", fmt.Sprintf("individual description lacks 'Returns:' info (%d chars)", len(quietWidget.Description))},
+		{"gitlab_gadget_silent", "description-returns", fmt.Sprintf("meta description lacks 'Returns:' info (%d chars)", len(quietGadget.Description))},
+		{"gitlab_widget_untitled", "title", "individual tool missing Title field"},
+		{"gitlab_gadget_untitled", "title", "meta tool missing Title field"},
+		{"gitlab_widget_isolated", "see-also", "individual description lacks 'See also:' cross-references"},
+		{"gitlab_meta", "route-output-schema", "failed to build action catalog: no catalog in this test"},
+	}
+
+	t.Run("report", func(t *testing.T) {
+		outputJSON = true
+		t.Cleanup(func() { outputJSON = false })
+
+		var returned int
+		out := captureOutputStdout(t, func() { returned = runOutputAudit(nil) })
+
+		var got outputJSONReport
+		if err := json.Unmarshal([]byte(out), &got); err != nil {
+			t.Fatalf("decode output report: %v\n%s", err, out)
+		}
+		want := outputJSONReport{View: "output", IndividualTools: 5, MetaTools: 6, Findings: len(entries), Entries: entries}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("output report = %+v\nwant          %+v", got, want)
+		}
+		if returned != len(entries) {
+			t.Errorf("runOutputAudit() = %d, want the %d findings it reported", returned, len(entries))
+		}
+	})
+	t.Run("check", func(t *testing.T) {
+		checkMode = true
+		t.Cleanup(func() { checkMode = false })
+
+		var returned int
+		out := captureOutputStdout(t, func() { returned = runOutputAudit(nil) })
+
+		var want strings.Builder
+		fmt.Fprintf(&want, "output: %d violation(s)\n", len(entries))
+		for _, entry := range entries {
+			fmt.Fprintf(&want, "  %s [%s]: %s\n", entry.Tool, entry.Category, entry.Detail)
+		}
+		if out != want.String() {
+			t.Errorf("runOutputAudit() under -check printed %q, want %q", out, want.String())
+		}
+		if returned != len(entries) {
+			t.Errorf("runOutputAudit() under -check = %d, want the %d it printed", returned, len(entries))
+		}
+	})
 }
 
 // captureOutputStdout captures the output written to os.Stdout while fn runs.
