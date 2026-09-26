@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -134,20 +137,34 @@ func quietStderr(t *testing.T) {
 // right in every test that only wanted to read a message.
 func captureStderr(t *testing.T) func() string {
 	t.Helper()
-	sink, err := os.CreateTemp(t.TempDir(), "stderr")
+	return captureStream(t, &os.Stderr, "stderr")
+}
+
+// captureStdout is captureStderr for the other stream, which is where this
+// command reports a record it wrote or passed.
+func captureStdout(t *testing.T) func() string {
+	t.Helper()
+	return captureStream(t, &os.Stdout, "stdout")
+}
+
+// captureStream points *stream at a file for the test and returns what was
+// written to it, restoring the original when the test ends.
+func captureStream(t *testing.T, stream **os.File, name string) func() string {
+	t.Helper()
+	sink, err := os.CreateTemp(t.TempDir(), name)
 	if err != nil {
-		t.Fatalf("create the stderr sink: %v", err)
+		t.Fatalf("create the %s sink: %v", name, err)
 	}
-	previous := os.Stderr
-	os.Stderr = sink
+	previous := *stream
+	*stream = sink
 	t.Cleanup(func() {
-		os.Stderr = previous
+		*stream = previous
 		_ = sink.Close()
 	})
 	return func() string {
 		said, readErr := os.ReadFile(sink.Name())
 		if readErr != nil {
-			t.Fatalf("read the stderr sink: %v", readErr)
+			t.Fatalf("read the %s sink: %v", name, readErr)
 		}
 		return string(said)
 	}
@@ -157,12 +174,16 @@ func captureStderr(t *testing.T) func() string {
 // this command that has rules in it, without the half that needs Docker.
 //
 // The separation is the point of the -dump flag: a boot is slow and needs an
-// image, and none of the judgement lives there.
+// image, and none of the judgement lives there. The image, the digest and the
+// four counts are all distinct values, and the image is not the flag's default,
+// so a provenance field filled from the field beside it reads differently from
+// the one asserted.
 func TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance(t *testing.T) {
 	dir := t.TempDir()
 	payload := wholeEnough()
+	dumpPath := writeDump(t, payload)
 
-	if err := runGenerate(dir, dumpFrom{path: writeDump(t, payload)}, "gitlab/gitlab-ee:latest", false); err != nil {
+	if err := runGenerate(dir, dumpFrom{path: dumpPath, digest: "sha256:0ddba11"}, "gitlab/gitlab-ee:19.3.1-ee.0", false); err != nil {
 		t.Fatalf("runGenerate: %v", err)
 	}
 
@@ -178,10 +199,12 @@ func TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance(t *testing.T) {
 		{name: "the schema version is this build's", got: doc.SchemaVersion, want: apilive.SchemaVersion},
 		{name: "the version comes from the instance", got: doc.Source.Version, want: "19.3.1-ee"},
 		{name: "the revision comes from the instance", got: doc.Source.Revision, want: "9d55961fa80"},
-		{name: "the image is recorded", got: doc.Source.Image, want: "gitlab/gitlab-ee:latest"},
+		{name: "the image is recorded", got: doc.Source.Image, want: "gitlab/gitlab-ee:19.3.1-ee.0"},
+		{name: "the digest given beside the dump is recorded", got: doc.Source.Digest, want: "sha256:0ddba11"},
 		{name: "the entity count is counted, not copied", got: doc.Source.Entities, want: len(payload.Entities)},
 		{name: "the field count spans every entity", got: doc.Source.Fields, want: len(payload.Entities) * 13},
 		{name: "the route count is counted", got: doc.Source.Routes, want: len(payload.Routes)},
+		{name: "the licensed feature count is counted", got: doc.Source.Features, want: len(payload.Features)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if testCase.got != testCase.want {
@@ -190,9 +213,16 @@ func TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance(t *testing.T) {
 		})
 	}
 
+	// The digest is what lets two runs of one image be compared, so it has to
+	// be of the bytes the dump holds and of nothing derived from them.
 	t.Run("the digest is of what the container produced", func(t *testing.T) {
-		if len(doc.Source.SHA256) != 64 {
-			t.Errorf("sha256 = %q, want 64 hex characters", doc.Source.SHA256)
+		raw, readErr := os.ReadFile(dumpPath)
+		if readErr != nil {
+			t.Fatalf("read the dump back: %v", readErr)
+		}
+		sum := sha256.Sum256(raw)
+		if want := hex.EncodeToString(sum[:]); doc.Source.SHA256 != want {
+			t.Errorf("sha256 = %q, want %q, the digest of the dump as written", doc.Source.SHA256, want)
 		}
 	})
 	t.Run("the retrieval date is today", func(t *testing.T) {
@@ -284,6 +314,107 @@ func TestRunGenerate_AnIntrospectionFromAnotherSchema_IsRefused(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "schema version") {
 		t.Errorf("error = %q, want it to name the schema version", err)
+	}
+}
+
+// atEveryFloor builds a record holding exactly the least each floor accepts.
+//
+// One wide entity carries every field and the rest are empty, so an entity and
+// a field can each be taken away without moving the other count.
+func atEveryFloor() apilive.Document {
+	wide := make([]apilive.Field, 0, minFields)
+	for j := range minFields {
+		wide = append(wide, apilive.Field{Name: fieldName(0, j)})
+	}
+	doc := apilive.Document{
+		Entities: map[string]apilive.Entity{entityName(0): {Fields: wide}},
+		Features: map[string]string{},
+	}
+	for i := 1; i < minEntities; i++ {
+		doc.Entities[entityName(i)] = apilive.Entity{}
+	}
+	for i := range minRoutes {
+		doc.Routes = append(doc.Routes, apilive.Route{Method: "GET", Path: routePath(i)})
+	}
+	for i := range minFeatures {
+		doc.Features[featureName(i)] = apilive.TierPremium
+	}
+	return doc
+}
+
+// floorProblem is the sentence a floor reports, with the count first and the
+// minimum second: the order a reader takes it in, and the order asserted.
+func floorProblem(got int, what string, least int) string {
+	return fmt.Sprintf("it holds %d %s and a GitLab has at least %d: "+
+		"the introspection did not finish, or it ran against something that is not a GitLab", got, what, least)
+}
+
+// TestFloorProblems_AtEachFloor_PassesAndOneShortNamesItsOwnFigures holds the
+// floors where one can be wrong: at its edge.
+//
+// A record holding exactly the least a floor asks for is a GitLab and has to
+// pass, and one short of it has to be refused with that floor's own count and
+// minimum. The eight figures are all different, so a message that reads one
+// floor's count against another's minimum, or states the minimum as the count,
+// reads differently from the one asserted.
+func TestFloorProblems_AtEachFloor_PassesAndOneShortNamesItsOwnFigures(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*apilive.Document)
+		want   []string
+	}{
+		{name: "a record at every floor", mutate: func(*apilive.Document) {}},
+		{
+			name:   "one entity short",
+			mutate: func(d *apilive.Document) { delete(d.Entities, entityName(1)) },
+			want:   []string{floorProblem(minEntities-1, "entities", minEntities)},
+		},
+		{
+			name: "one exposed field short",
+			mutate: func(d *apilive.Document) {
+				wide := d.Entities[entityName(0)]
+				wide.Fields = wide.Fields[1:]
+				d.Entities[entityName(0)] = wide
+			},
+			want: []string{floorProblem(minFields-1, "exposed fields", minFields)},
+		},
+		{
+			name:   "one route short",
+			mutate: func(d *apilive.Document) { d.Routes = d.Routes[1:] },
+			want:   []string{floorProblem(minRoutes-1, "routes", minRoutes)},
+		},
+		{
+			name:   "one licensed feature short",
+			mutate: func(d *apilive.Document) { delete(d.Features, featureName(0)) },
+			want:   []string{floorProblem(minFeatures-1, "licensed features", minFeatures)},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			doc := atEveryFloor()
+			testCase.mutate(&doc)
+
+			if got := floorProblems(doc); !slices.Equal(got, testCase.want) {
+				t.Errorf("floorProblems() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestFloorProblems_EntitiesThatRefused_AreCountedAndNamedInOrder verifies the
+// line a refusal produces: how many entities refused and which, sorted.
+//
+// The record holds 402 entities of which two refused, added in the reverse of
+// their sorted order, so a line counting the whole record or listing the
+// refusals as the map yields them reads differently from the one asserted.
+func TestFloorProblems_EntitiesThatRefused_AreCountedAndNamedInOrder(t *testing.T) {
+	doc := atEveryFloor()
+	doc.Entities["API::Entities::Zulu"] = apilive.Entity{Error: "NoMethodError: undefined method `root_exposures'"}
+	doc.Entities["API::Entities::Alpha"] = apilive.Entity{Error: "NameError: uninitialized constant"}
+
+	want := []string{"2 entities refused to describe themselves (API::Entities::Alpha, API::Entities::Zulu): " +
+		"the record understates what GitLab sends"}
+	if got := floorProblems(doc); !slices.Equal(got, want) {
+		t.Errorf("floorProblems() = %q, want %q", got, want)
 	}
 }
 
@@ -426,6 +557,101 @@ func stubDocker(t *testing.T, script string) dockerPath {
 
 // windowsGOOS is spelled once so the skip above reads as one decision.
 const windowsGOOS = "windows"
+
+// recordingDocker is a stand-in that writes down every call it gets, one line
+// per call with its arguments separated by tabs, before running script. It
+// returns the stand-in and the log it writes.
+//
+// The log is read back as argument vectors rather than as text, because what
+// the tests using it ask is which argument is which: a container name where an
+// image belongs, or a source where a destination belongs, reads the same in a
+// joined line.
+func recordingDocker(t *testing.T, script string) (docker dockerPath, log string) {
+	t.Helper()
+	log = filepath.Join(t.TempDir(), "calls.log")
+	docker = stubDocker(t, `printf '%s\t' "$@" >> `+log+`
+echo >> `+log+`
+`+script)
+	return docker, log
+}
+
+// recordedCalls reads back what a recordingDocker was asked, one argument
+// vector per call in the order the calls were made.
+func recordedCalls(t *testing.T, log string) [][]string {
+	t.Helper()
+	raw, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", err)
+	}
+	var calls [][]string
+	for line := range strings.Lines(string(raw)) {
+		calls = append(calls, strings.Split(strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\t"), "\t"))
+	}
+	return calls
+}
+
+// withDockerFirstOnPATH puts the stand-in ahead of everything else on PATH,
+// where lookUpDocker finds it, and keeps the rest so a stand-in can still run
+// the ordinary tools it needs.
+func withDockerFirstOnPATH(t *testing.T, docker dockerPath) {
+	t.Helper()
+	t.Setenv("PATH", filepath.Dir(string(docker))+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestDockerQueries_AsWritten_NameTheSubjectEachIsAbout verifies that each
+// question this command puts to docker names what it is about, argument by
+// argument.
+//
+// Every stand-in elsewhere answers whatever it is asked, so a readiness check
+// that inspected the image, a digest read off the container, or a probe that
+// sent the answer it waits for would each still pass there. Here the whole
+// argument vector of every call is the assertion.
+func TestDockerQueries_AsWritten_NameTheSubjectEachIsAbout(t *testing.T) {
+	const image = "gitlab/gitlab-ee:19.3.1-ee.0"
+	for _, testCase := range []struct {
+		name   string
+		script string
+		ask    func(docker dockerPath)
+		want   [][]string
+	}{
+		{
+			name:   "running asks about the container's state",
+			script: "echo true\n",
+			ask:    func(docker dockerPath) { running(context.Background(), docker) },
+			want:   [][]string{{"inspect", "-f", "{{.State.Running}}", containerName}},
+		},
+		{
+			name:   "the digest is asked of the image",
+			script: "echo " + image + "@sha256:abc123\n",
+			ask:    func(docker dockerPath) { imageDigest(context.Background(), docker, image) },
+			want:   [][]string{{"inspect", "-f", "{{index .RepoDigests 0}}", image}},
+		},
+		{
+			name: "a wait on a dead container asks the probe, then the state, then the logs",
+			script: `case "$1" in
+  exec) exit 1 ;;
+  inspect) echo false ;;
+esac
+`,
+			ask: func(docker dockerPath) { _ = waitForRails(context.Background(), docker) },
+			want: [][]string{
+				{"exec", containerName, "gitlab-rails", "runner", readyProbe},
+				{"inspect", "-f", "{{.State.Running}}", containerName},
+				{"logs", "--tail", "20", containerName},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			docker, log := recordingDocker(t, testCase.script)
+
+			testCase.ask(docker)
+
+			if got := recordedCalls(t, log); !slices.EqualFunc(got, testCase.want, slices.Equal[[]string]) {
+				t.Errorf("docker was asked:\n%q\nwant:\n%q", got, testCase.want)
+			}
+		})
+	}
+}
 
 // TestLookUpDocker_WithNothingOnPATH_SaysWhatIsMissing verifies the one place
 // this command reads PATH reports its own failure, since every later call is
@@ -629,65 +855,78 @@ func TestDockerRun_WithNoDockerOnPATH_NamesTheImageItCouldNotBoot(t *testing.T) 
 // Driving it end to end is the only way to see the order, and the order is the
 // part that breaks: a copy before the application is up, or a teardown that
 // does not run because the function returned early, are both invisible to a
-// test of any one step.
+// test of any one step. Each call is compared whole, argument by argument, and
+// the stand-in keeps a copy of what it was handed to copy in, so a copy whose
+// source and destination changed places, or a script that is not the embedded
+// one, fails here too.
 func TestDockerRun_DrivesOneBootAndCleansUpAfterIt(t *testing.T) {
-	log := filepath.Join(t.TempDir(), "calls.log")
-	docker := stubDocker(t, `echo "$@" >> `+log+`
-case "$1" in
+	const image = "gitlab/gitlab-ee:19.3.1-ee.0"
+	copied := filepath.Join(t.TempDir(), "copied.rb")
+	docker, log := recordingDocker(t, `case "$1" in
   exec)
     case "$5" in
       /tmp/introspect.rb) echo '{"schema_version":1}' ;;
       *) echo ready ;;
     esac
     ;;
+  cp) cat "$2" > `+copied+` ;;
   inspect) echo "gitlab/gitlab-ee@sha256:deadbeef" ;;
   *) exit 0 ;;
 esac
 `)
-	t.Setenv("PATH", filepath.Dir(string(docker)))
+	withDockerFirstOnPATH(t, docker)
 
-	raw, from, err := dockerRun("gitlab/gitlab-ee:19.3.1-ee.0", false)
+	raw, from, err := dockerRun(image, false)
 	if err != nil {
 		t.Fatalf("dockerRun: %v", err)
 	}
-
-	calls, readErr := os.ReadFile(log)
-	if readErr != nil {
-		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	calls := recordedCalls(t, log)
+	if len(calls) != 7 || len(calls[1]) != 9 || len(calls[3]) != 3 {
+		t.Fatalf("docker was asked:\n%q\nwant seven calls: remove, boot, probe, copy, run, inspect, remove", calls)
 	}
-	recorded := string(calls)
+	config, staged := calls[1][7], calls[3][1]
 
+	t.Run("docker is asked for one boot, in order", func(t *testing.T) {
+		want := [][]string{
+			{"rm", "-f", containerName},
+			{"run", "-d", "--name", containerName, "--shm-size", "256m", "-e", config, image},
+			{"exec", containerName, "gitlab-rails", "runner", readyProbe},
+			{"cp", staged, containerName + ":/tmp/introspect.rb"},
+			{"exec", containerName, "gitlab-rails", "runner", "/tmp/introspect.rb"},
+			{"inspect", "-f", "{{index .RepoDigests 0}}", image},
+			{"rm", "-f", containerName},
+		}
+		if !slices.EqualFunc(calls, want, slices.Equal[[]string]) {
+			t.Errorf("docker was asked:\n%q\nwant:\n%q", calls, want)
+		}
+	})
+	t.Run("the boot is configured through the omnibus", func(t *testing.T) {
+		if !strings.HasPrefix(config, "GITLAB_OMNIBUS_CONFIG=") {
+			t.Errorf("the boot's -e was %q, want the omnibus configuration", config)
+		}
+	})
+	t.Run("the script copied in is the embedded one", func(t *testing.T) {
+		got, readErr := os.ReadFile(copied)
+		if readErr != nil {
+			t.Fatalf("reading what the stand-in was handed to copy: %v", readErr)
+		}
+		if string(got) != introspectScript {
+			t.Errorf("copied %d bytes, want the %d bytes of introspect.rb", len(got), len(introspectScript))
+		}
+	})
+	t.Run("the staged copy does not outlive the run", func(t *testing.T) {
+		if _, statErr := os.Stat(staged); !errors.Is(statErr, os.ErrNotExist) {
+			t.Errorf("the staged script %s is still there (%v), want it removed", staged, statErr)
+		}
+	})
 	t.Run("the introspection is what comes back", func(t *testing.T) {
 		if strings.TrimSpace(string(raw)) != `{"schema_version":1}` {
 			t.Errorf("output = %q, want the runner's own stdout", raw)
 		}
 	})
 	t.Run("the digest travels with it", func(t *testing.T) {
-		if from.digest != "sha256:deadbeef" || from.image != "gitlab/gitlab-ee:19.3.1-ee.0" {
+		if from.digest != "sha256:deadbeef" || from.image != image {
 			t.Errorf("origin = %+v, want the image and its repository digest", from)
-		}
-	})
-	t.Run("a stale container is removed before the boot", func(t *testing.T) {
-		if !strings.HasPrefix(recorded, "rm -f "+containerName) {
-			t.Errorf("first call was %q, want the stale container removed first", firstLine(recorded))
-		}
-	})
-	t.Run("the image asked for is the image booted", func(t *testing.T) {
-		if !strings.Contains(recorded, "run -d --name "+containerName) ||
-			!strings.Contains(recorded, "gitlab/gitlab-ee:19.3.1-ee.0") {
-			t.Errorf("calls were:\n%s\nwant the named image booted detached", recorded)
-		}
-	})
-	t.Run("the script is copied in before it is run", func(t *testing.T) {
-		copied := strings.Index(recorded, "cp ")
-		ran := strings.Index(recorded, "/tmp/introspect.rb\n")
-		if copied < 0 || ran < 0 || copied > ran {
-			t.Errorf("calls were:\n%s\nwant the copy before the run", recorded)
-		}
-	})
-	t.Run("the container is removed again", func(t *testing.T) {
-		if strings.Count(recorded, "rm -f "+containerName) != 2 {
-			t.Errorf("calls were:\n%s\nwant the container removed before and after", recorded)
 		}
 	})
 }
@@ -739,13 +978,6 @@ esac
 	if !strings.Contains(err.Error(), "no such image") {
 		t.Errorf("error = %q, want docker's own message in it", err)
 	}
-}
-
-// firstLine names the first call a stand-in recorded, for a failure message
-// that shows what happened instead of the whole log.
-func firstLine(recorded string) string {
-	line, _, _ := strings.Cut(recorded, "\n")
-	return line
 }
 
 // TestWaitForRails_WhenTheApplicationNeverAnswers_SaysTheContainerIsUp
@@ -1084,6 +1316,61 @@ esac
 	})
 }
 
+// TestDockerRun_WhenInterruptedDuringTheWait_StillTearsTheContainerDown verifies
+// the case the teardown's own comment names: a person gives up on a boot, and
+// the container is removed anyway.
+//
+// The interrupt ends the context every docker call is built from, so a removal
+// built from that same context would not even start, and three gigabytes would
+// be left running exactly when somebody asked for the run to stop. The probe
+// sleeps until it is killed, so the cancellation lands while the wait is asking
+// and not at some moment a slow machine might reorder.
+func TestDockerRun_WhenInterruptedDuringTheWait_StillTearsTheContainerDown(t *testing.T) {
+	docker, log := recordingDocker(t, `case "$1" in
+  exec) exec sleep 30 ;;
+esac
+`)
+	withDockerFirstOnPATH(t, docker)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	previous := interrupted
+	t.Cleanup(func() { interrupted = previous })
+	interrupted = func() (context.Context, context.CancelFunc) { return ctx, cancel }
+
+	go func() {
+		// Cancelled once the readiness probe has been asked, which is after the
+		// boot has returned and the teardown been deferred. Nothing is asserted
+		// here: the test goroutine reads the calls afterwards.
+		for range 10000 {
+			if raw, err := os.ReadFile(log); err == nil && strings.Contains(string(raw), "exec\t") {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		cancel()
+	}()
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("dockerRun error = %v, want the interrupt reported", err)
+	}
+	calls := recordedCalls(t, log)
+	if got, want := calls[len(calls)-1], []string{"rm", "-f", containerName}; !slices.Equal(got, want) {
+		t.Errorf("docker was asked:\n%q\nwant the last call to be %q", calls, want)
+	}
+	removals := 0
+	for _, call := range calls {
+		if slices.Equal(call, []string{"rm", "-f", containerName}) {
+			removals++
+		}
+	}
+	if removals != 2 {
+		t.Errorf("docker was asked:\n%q\nwant the container removed before the boot and after the interrupt", calls)
+	}
+}
+
 // TestDockerRun_WhenTheScriptCannotBeStaged_NeverTouchesTheContainer verifies
 // the one step of this sequence that happens on the host rather than in the
 // container, and that failing it stops the run before docker is asked to copy
@@ -1395,10 +1682,12 @@ esac
 //
 // The record on disk is checked in every case, not only the generating ones:
 // it is what says a parse that failed, or a check, left the directory exactly
-// as it found it.
+// as it found it. So are both streams, because the exit code and the stream
+// are read together: a run that ends 0 reports the record's provenance on
+// stdout and says nothing on stderr, and a run that ends otherwise says why on
+// stderr and leaves stdout empty, where a script piping the report would
+// otherwise take a refusal for one.
 func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
-	quietStderr(t)
-
 	for _, testCase := range []struct {
 		name string
 		// stage returns the command line and the directory the case is about.
@@ -1406,6 +1695,11 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 		want  int
 		// wantRecord is whether the directory holds a record afterwards.
 		wantRecord bool
+		// reportsRecord is whether stdout is the record's provenance line;
+		// otherwise stdout stays empty.
+		reportsRecord bool
+		// stderr is what stderr has to carry; empty means it stays empty.
+		stderr string
 	}{
 		{
 			name: "a whole record passes -check",
@@ -1415,7 +1709,7 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				writeRecordAt(t, dir, wholeEnough(), today())
 				return []string{"gen_api_live", "-check", "-dir", dir}, dir
 			},
-			want: 0, wantRecord: true,
+			want: 0, wantRecord: true, reportsRecord: true,
 		},
 		{
 			name: "a directory holding no record fails -check",
@@ -1424,7 +1718,7 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				dir := t.TempDir()
 				return []string{"gen_api_live", "-check", "-dir", dir}, dir
 			},
-			want: 1,
+			want: 1, stderr: "reading the live API record",
 		},
 		{
 			name: "a dump on disk becomes the record",
@@ -1433,7 +1727,7 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				dir := t.TempDir()
 				return []string{"gen_api_live", "-dump", writeDump(t, wholeEnough()), "-dir", dir}, dir
 			},
-			want: 0, wantRecord: true,
+			want: 0, wantRecord: true, reportsRecord: true,
 		},
 		{
 			name: "a dump that is not there writes nothing",
@@ -1442,7 +1736,7 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				dir := t.TempDir()
 				return []string{"gen_api_live", "-dump", filepath.Join(dir, "absent.json"), "-dir", dir}, dir
 			},
-			want: 1,
+			want: 1, stderr: "reading the introspection dump",
 		},
 		{
 			name: "a flag nobody can parse is the usage exit",
@@ -1451,7 +1745,7 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				dir := t.TempDir()
 				return []string{"gen_api_live", "-bogus", "-dir", dir}, dir
 			},
-			want: 2,
+			want: 2, stderr: "flag provided but not defined: -bogus",
 		},
 		{
 			name: "asking for help ends clean",
@@ -1460,11 +1754,12 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				dir := t.TempDir()
 				return []string{"gen_api_live", "-h", "-dir", dir}, dir
 			},
-			want: 0,
+			want: 0, stderr: "Usage of gen_api_live:",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			args, dir := testCase.stage(t)
+			stdout, stderr := captureStdout(t), captureStderr(t)
 
 			got := runMain(args)
 
@@ -1474,6 +1769,107 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 			_, statErr := os.Stat(apilive.Path(dir))
 			if onDisk := statErr == nil; onDisk != testCase.wantRecord {
 				t.Errorf("a record in %s = %v, want %v", dir, onDisk, testCase.wantRecord)
+			}
+			wantStdout := ""
+			if testCase.reportsRecord {
+				doc, err := apilive.Read(dir)
+				if err != nil {
+					t.Fatalf("read the record back: %v", err)
+				}
+				wantStdout = "gen_api_live: " + doc.Source.String() + "\n"
+			}
+			if said := stdout(); said != wantStdout {
+				t.Errorf("stdout = %q, want %q", said, wantStdout)
+			}
+			said := stderr()
+			if testCase.stderr == "" && said != "" {
+				t.Errorf("stderr = %q, want nothing on a run that ended %d", said, testCase.want)
+			}
+			if !strings.Contains(said, testCase.stderr) {
+				t.Errorf("stderr = %q, want it to carry %q", said, testCase.stderr)
+			}
+		})
+	}
+}
+
+// TestRunMain_ProvenanceFlags_ReachTheRecordAndTheRunner verifies that -image,
+// -digest and -keep each arrive where they are for, and that the defaults are
+// the ones the flag set declares.
+//
+// Every value here differs from every other and from the defaults, so a flag
+// handed to another flag's parameter, or replaced by a constant, puts a value
+// in the record or before the runner that the assertion does not name.
+func TestRunMain_ProvenanceFlags_ReachTheRecordAndTheRunner(t *testing.T) {
+	quietStderr(t)
+	previous := runner
+	t.Cleanup(func() { runner = previous })
+
+	introspected, err := json.Marshal(wholeEnough())
+	if err != nil {
+		t.Fatalf("encode the fixture: %v", err)
+	}
+	type boot struct {
+		image string
+		keep  bool
+	}
+	var booted []boot
+	runner = func(image string, keep bool) ([]byte, origin, error) {
+		booted = append(booted, boot{image: image, keep: keep})
+		return introspected, origin{image: image, digest: "sha256:ca11ab1e"}, nil
+	}
+
+	for _, testCase := range []struct {
+		name       string
+		flags      []string
+		wantBooted []boot
+		wantImage  string
+		wantDigest string
+	}{
+		{
+			name:       "a dump's -digest and -image are the record's provenance",
+			flags:      []string{"-dump", "DUMP", "-digest", "sha256:feedface", "-image", "gitlab/gitlab-ee:19.3.1-ee.0"},
+			wantImage:  "gitlab/gitlab-ee:19.3.1-ee.0",
+			wantDigest: "sha256:feedface",
+		},
+		{
+			name:       "with no dump, -image and -keep reach the runner",
+			flags:      []string{"-image", "gitlab/gitlab-ee:18.11.0-ee.0", "-keep"},
+			wantBooted: []boot{{image: "gitlab/gitlab-ee:18.11.0-ee.0", keep: true}},
+			wantImage:  "gitlab/gitlab-ee:18.11.0-ee.0",
+			wantDigest: "sha256:ca11ab1e",
+		},
+		{
+			name:       "with neither, the runner boots the latest image and removes it",
+			wantBooted: []boot{{image: "gitlab/gitlab-ee:latest", keep: false}},
+			wantImage:  "gitlab/gitlab-ee:latest",
+			wantDigest: "sha256:ca11ab1e",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			booted = nil
+			dir := t.TempDir()
+			args := []string{"gen_api_live", "-dir", dir}
+			for _, arg := range testCase.flags {
+				if arg == "DUMP" {
+					arg = writeDump(t, wholeEnough())
+				}
+				args = append(args, arg)
+			}
+
+			if code := runMain(args); code != 0 {
+				t.Fatalf("runMain(%v) = %d, want 0", args, code)
+			}
+
+			if !slices.Equal(booted, testCase.wantBooted) {
+				t.Errorf("the runner was asked for %+v, want %+v", booted, testCase.wantBooted)
+			}
+			doc, readErr := apilive.Read(dir)
+			if readErr != nil {
+				t.Fatalf("read the record back: %v", readErr)
+			}
+			if doc.Source.Image != testCase.wantImage || doc.Source.Digest != testCase.wantDigest {
+				t.Errorf("the record's source is image %q and digest %q, want %q and %q",
+					doc.Source.Image, doc.Source.Digest, testCase.wantImage, testCase.wantDigest)
 			}
 		})
 	}
