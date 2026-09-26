@@ -904,11 +904,14 @@ func TestMarkdownFormatters(t *testing.T) {
 }
 
 // TestContextCancellation verifies handlers return before making API calls when
-// the caller's context is already canceled.
+// the caller's context is already canceled. The error must open with the
+// pre-check's own label: the SDK call refuses a canceled context too, but
+// labels it with the operation, so a contains check would pass with the
+// pre-check deleted and could not tell the two apart.
 func TestContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, tt := range []struct {
 		name string
 		call func() error
@@ -941,7 +944,10 @@ func TestContextCancellation(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assertErrorContains(t, tt.call(), toolutil.ErrMsgContextCanceled)
+			err := tt.call()
+			if err == nil || !strings.HasPrefix(err.Error(), toolutil.ErrMsgContextCanceled+": ") {
+				t.Fatalf("error = %v, want it to open with %q", err, toolutil.ErrMsgContextCanceled+": ")
+			}
 		})
 	}
 }
