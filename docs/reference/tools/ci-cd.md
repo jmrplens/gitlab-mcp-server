@@ -302,7 +302,7 @@ Get one CI resource group in a project by key. Returns the resource group ID, ke
 
 ### `gitlab_edit_resource_group`
 
-Update the process mode of one CI resource group by key. Returns the updated resource group ID, key, and new process mode that controls how queued jobs sharing the resource group are serialized. Valid `process_mode` values: `unordered`, `oldest_first`, `newest_first`, `newest_ready_first`.
+Update the process mode of one CI resource group by key. Returns the updated resource group ID, key, new process mode that controls how queued jobs sharing the resource group are serialized, and created and updated times. Valid `process_mode` values: `unordered`, `oldest_first`, `newest_first`, `newest_ready_first`.
 
 | Parameter      | Required | Description                                                                      |
 | -------------- | -------- | -------------------------------------------------------------------------------- |

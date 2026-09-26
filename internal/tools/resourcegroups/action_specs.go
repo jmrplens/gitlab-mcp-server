@@ -101,7 +101,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 			},
 			related: []string{actionResourceGroupGet, actionResourceGroupList, actionResourceGroupUpcomingJobs},
 			description: "Update the process mode of one CI resource group by key. Returns: the updated resource group ID, key, " +
-				"and new process mode that controls how queued jobs sharing the resource group are serialized. " +
+				"new process mode that controls how queued jobs sharing the resource group are serialized, and created and updated times. " +
 				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
 		}
 	case specResourceGroupUpcomingJobs:

@@ -132,6 +132,7 @@ readable without opening the tracker:
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
 | 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | No | No | No | No | Partial |
 | 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | No | No | No | No | Partial |
+| 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2342,6 +2343,37 @@ params of the live record for the options.
 **Effort**: small. Twenty-one `int64` fields and one map of a four-field struct
 on `PlanLimit`, and twenty-one pointer fields with `url` and `json` tags on
 `ChangePlanLimitOptions`.
+
+### JobPipeline models five of the ten keys a job's pipeline carries
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `pipeline.resource_group_upcoming_jobs` reads the other
+  five keys from the captured response beside the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `resourcegroups.capturedUpcomingJobs`; it retires when the struct
+  carries them.
+
+**What**: `lib/api/entities/ci/job_basic.rb` at 19.4.1-ee exposes a job's
+`pipeline` with `Entities::Ci::PipelineBasic`, which sends `id`, `iid`,
+`project_id`, `sha`, `ref`, `status`, `source`, `created_at`, `updated_at` and
+`web_url`, all with no condition. `JobPipeline` in client-go v3.14.0's
+`jobs.go` carries `ID`, `ProjectID`, `Ref`, `Sha` and `Status`, so every
+method answering with a `Job`, and the resource group queue's
+`ListUpcomingJobsForASpecificResourceGroup`, drops the pipeline's number, what
+started it, both timestamps and its page. `doc/api/jobs.md` prints the five
+modeled keys in its examples, which is where the struct's shape comes from.
+
+**How we found it**: review of the resource group queue's rows for
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971), which
+published the nested pipeline and was held to the entity by hand. No audit
+here asks the sent question one level down, since the type grain compares a
+nested type only in the unpublished direction.
+
+**Effort**: small. Five fields on `JobPipeline`, `IID` an `int64`, `Source` and
+`WebURL` strings and the two timestamps `*time.Time`.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

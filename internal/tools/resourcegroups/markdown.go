@@ -88,13 +88,13 @@ func jobStatusCell(status string) string {
 	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
 }
 
-// pipelineCell names the pipeline a waiting job belongs to, or nothing when
-// GitLab rendered none.
+// pipelineCell names the pipeline a waiting job belongs to, linked to its page
+// when GitLab sent one, or nothing when GitLab rendered no pipeline.
 func pipelineCell(p *JobPipelineItem) string {
 	if p == nil {
 		return ""
 	}
-	return "#" + strconv.FormatInt(p.ID, 10)
+	return toolutil.MdTitleLink("#"+strconv.FormatInt(p.ID, 10), p.WebURL)
 }
 
 func init() {
