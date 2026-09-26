@@ -127,16 +127,16 @@ func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualT
 		options.Aliases = []string{"gitlab_list_epic_discussions", "list epic discussions", "show epic comment threads", "get epic conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionEpicGet, actionEpicNoteList}
 		options.ParameterGuidance = epicScopeGuidance()
-		options.IndividualTool.Description = "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list."
+		options.IndividualTool.Description = "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their resolution state and notes (id, author username, body, system and internal flags, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list."
 	case "gitlab_get_epic_discussion":
 		options.Usage = "Fetch one discussion thread on a group epic by its discussion_id, returning every note in the thread. Use this after group.epic_discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_epic_discussion", "get epic discussion", "show epic discussion thread", "fetch epic discussion"}
 		options.RelatedActions = []string{actionDiscussionList, actionDiscussionAddNote, actionEpicGet}
 		options.ParameterGuidance = epicScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
-		options.IndividualTool.Description = "Get a single epic discussion thread by its discussion id. Returns: the thread with every note (id, author username, body, system flag, timestamps). See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note, gitlab_epic_get."
+		options.IndividualTool.Description = "Get a single epic discussion thread by its discussion id. Returns: the thread with its resolution state and every note (id, author username, body, system and internal flags, timestamps). See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note, gitlab_epic_get."
 	case "gitlab_create_epic_discussion":
-		options.Usage = "Open a new discussion thread on a group epic with an initial note via the createNote GraphQL mutation. Use this to start a threaded conversation rather than a flat comment (use group.epic_note_create for a non-threaded note)."
+		options.Usage = "Open a new discussion thread on a group epic with an initial note via the createNote GraphQL mutation. Use this to start a threaded conversation rather than a flat comment (use group.epic_note_create for a non-threaded note). Quick actions in the body are run against the epic and quick_actions_status reports what they did. A body of quick actions alone is run and opens no thread."
 		options.Aliases = []string{"gitlab_create_epic_discussion", "create epic discussion", "start epic discussion thread", "open epic discussion"}
 		options.RelatedActions = []string{actionDiscussionAddNote, actionDiscussionList, actionEpicNoteList, actionEpicGet}
 		options.ParameterGuidance = epicScopeGuidance()
@@ -144,9 +144,9 @@ func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualT
 			"Markdown text (GitLab Flavored Markdown) for the first note of the new thread.",
 			`params.body:"Investigating this regression"`,
 		)
-		options.IndividualTool.Description = "Create a new discussion thread on a group epic with an initial note. Returns: the created thread (discussion id) with its first note. See also: gitlab_add_epic_discussion_note, gitlab_list_epic_discussions, gitlab_epic_note_create."
+		options.IndividualTool.Description = "Create a new discussion thread on a group epic with an initial note. Returns: the created thread (discussion id) with its first note, plus the status of any quick actions the body carried. See also: gitlab_add_epic_discussion_note, gitlab_list_epic_discussions, gitlab_epic_note_create."
 	case "gitlab_add_epic_discussion_note":
-		options.Usage = "Reply to an existing epic discussion thread by adding a note via the createNote GraphQL mutation. Use this after group.epic_discussion_list or group.epic_discussion_create to continue a thread. Cannot reply to a system-generated discussion."
+		options.Usage = "Reply to an existing epic discussion thread by adding a note via the createNote GraphQL mutation. Use this after group.epic_discussion_list or group.epic_discussion_create to continue a thread. Cannot reply to a system-generated discussion. Quick actions in the body are run against the epic and quick_actions_status reports what they did. A body of quick actions alone is run and kept as no note."
 		options.Aliases = []string{"gitlab_add_epic_discussion_note", "reply to epic discussion", "add note to epic discussion", "comment on epic thread"}
 		options.RelatedActions = []string{actionDiscussionCreate, actionDiscussionGet, actionDiscussionUpdateNote, actionEpicNoteList}
 		options.ParameterGuidance = epicScopeGuidance()
@@ -155,9 +155,9 @@ func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualT
 			"Markdown text (GitLab Flavored Markdown) of the reply to append to the thread.",
 			`params.body:"Confirmed, fix is on the way"`,
 		)
-		options.IndividualTool.Description = "Add a reply note to an existing epic discussion thread. Returns: the created note (id, author username, body, timestamps). See also: gitlab_create_epic_discussion, gitlab_get_epic_discussion, gitlab_update_epic_discussion_note."
+		options.IndividualTool.Description = "Add a reply note to an existing epic discussion thread. Returns: the created note (id, author username, body, timestamps), plus the status of any quick actions the body carried. See also: gitlab_create_epic_discussion, gitlab_get_epic_discussion, gitlab_update_epic_discussion_note."
 	case "gitlab_update_epic_discussion_note":
-		options.Usage = "Edit the body of an existing note in an epic discussion thread via the updateNote GraphQL mutation. Only the note author or a Maintainer/Owner can edit a note. Identify the note with note_id."
+		options.Usage = "Edit the body of an existing note in an epic discussion thread via the updateNote GraphQL mutation. Only the note author or a Maintainer/Owner can edit a note. Identify the note with note_id. Quick actions in the new body are run against the epic and quick_actions_status reports what they did. A new body of quick actions alone makes GitLab run them and delete the note."
 		options.Aliases = []string{"gitlab_update_epic_discussion_note", "edit epic discussion note", "update epic discussion reply", "modify epic thread comment"}
 		options.RelatedActions = []string{actionDiscussionAddNote, actionDiscussionDeleteNote, actionDiscussionGet}
 		options.ParameterGuidance = epicScopeGuidance()
@@ -166,7 +166,7 @@ func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualT
 			"Replacement Markdown text (GitLab Flavored Markdown) for the note body.",
 			`params.body:"Updated: the fix has merged"`,
 		)
-		options.IndividualTool.Description = "Update the body of a note in an epic discussion thread. Returns: the updated note (id, author username, body, timestamps). See also: gitlab_add_epic_discussion_note, gitlab_delete_epic_discussion_note, gitlab_get_epic_discussion."
+		options.IndividualTool.Description = "Update the body of a note in an epic discussion thread. Returns: the updated note (id, author username, body, timestamps), plus the status of any quick actions the new body carried. See also: gitlab_add_epic_discussion_note, gitlab_delete_epic_discussion_note, gitlab_get_epic_discussion."
 	case "gitlab_delete_epic_discussion_note":
 		options.Usage = "Permanently delete a note from an epic discussion thread (destructive, requires confirmation) via the destroyNote GraphQL mutation. Only the note author or a Maintainer/Owner can delete a note. System-generated notes cannot be removed. Identify the note with note_id."
 		options.Aliases = []string{"gitlab_delete_epic_discussion_note", "delete epic discussion note", "remove epic discussion reply", "delete epic thread comment"}

@@ -1176,6 +1176,90 @@ func TestFormatNoteMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatNoteMarkdown_QuickActions_SectionAfterTheBody verifies the card
+// of a note whose body carried quick actions: the note's own rows first, then
+// a section naming the commands, what they did and what they failed to do,
+// and the hints last. The section follows the body because a card row written
+// after a section lands under the section's heading.
+func TestFormatNoteMarkdown_QuickActions_SectionAfterTheBody(t *testing.T) {
+	note := NewNoteMarkdown(7, "text", "alice", "2026-05-17T12:00:00Z", NoteMarkdownFlags{}, "")
+	note.QuickActions = &QuickActionsStatusOutput{
+		CommandNames:  []string{"label", "assign"},
+		Messages:      []string{"Added bug label."},
+		ErrorMessages: []string{"Could not assign.", "Nobody to assign."},
+	}
+	md := FormatNoteMarkdown(note, NoteMarkdownOptions{Title: "Epic Note", Hints: []string{"Edit it"}})
+
+	want := "## Epic Note #7\n\n" +
+		"- **Author**: @alice\n" +
+		"- **Created**: 17 May 2026 12:00 UTC\n" +
+		"- **Body**: text\n" +
+		"\n### Quick Actions\n\n" +
+		"- **Commands**: /label, /assign\n" +
+		"- **Applied**: Added bug label.\n" +
+		"- **Failed**:\n" +
+		"  > Could not assign.\n" +
+		"  > Nobody to assign.\n" +
+		hintsSection("Edit it")
+	if md != want {
+		t.Errorf("note card:\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatQuickActionsOnlyMarkdown_SaysNoNoteWasKept verifies the answer to
+// a body of quick actions alone: there is no note to show, so the card says
+// GitLab kept none and shows what the commands did, and a status with no
+// messages writes no empty rows.
+func TestFormatQuickActionsOnlyMarkdown_SaysNoNoteWasKept(t *testing.T) {
+	md := FormatQuickActionsOnlyMarkdown("Epic Note", QuickActionsStatusOutput{
+		CommandNames: []string{"close"},
+		CommandsOnly: true,
+		Messages:     []string{"Closed this epic."},
+	}, "Read the epic")
+
+	want := "## Epic Note: quick actions only\n\n" +
+		quickActionsOnlyNote + "\n" +
+		"\n- **Commands**: /close\n" +
+		"- **Applied**: Closed this epic.\n" +
+		hintsSection("Read the epic")
+	if md != want {
+		t.Errorf("quick actions card:\n got %q\nwant %q", md, want)
+	}
+
+	bare := FormatQuickActionsOnlyMarkdown("Epic Note", QuickActionsStatusOutput{CommandsOnly: true})
+	if strings.Contains(bare, "**Commands**") || strings.Contains(bare, "**Applied**") || strings.Contains(bare, "**Failed**") {
+		t.Errorf("a status carrying nothing wrote empty rows:\n%s", bare)
+	}
+}
+
+// TestFormatDiscussionMarkdown_QuickActions_SectionAfterTheNotes verifies
+// the thread card of a discussion whose opening note carried quick actions:
+// the notes, then the section, then the hints; and a thread with none writes
+// no section.
+func TestFormatDiscussionMarkdown_QuickActions_SectionAfterTheNotes(t *testing.T) {
+	discussion := NewDiscussionMarkdown("abc123", []NoteMarkdown{
+		NewDiscussionNoteMarkdown(1, "hello", "alice", "2026-05-17T12:00:00Z"),
+	})
+	discussion.QuickActions = &QuickActionsStatusOutput{CommandNames: []string{"label"}, Messages: []string{"Added bug label."}}
+	md := FormatDiscussionMarkdown(discussion, "Reply")
+
+	want := "## Discussion abc123\n\n" +
+		"- **@alice** (17 May 2026 12:00 UTC, note 1):\n" +
+		"  > hello\n" +
+		"\n### Quick Actions\n\n" +
+		"- **Commands**: /label\n" +
+		"- **Applied**: Added bug label.\n" +
+		hintsSection("Reply")
+	if md != want {
+		t.Errorf("discussion:\n got %q\nwant %q", md, want)
+	}
+
+	discussion.QuickActions = nil
+	if plain := FormatDiscussionMarkdown(discussion, "Reply"); strings.Contains(plain, "Quick Actions") {
+		t.Errorf("a thread with no quick actions wrote the section:\n%s", plain)
+	}
+}
+
 // TestFormatNoteMarkdown_InternalAndResolvableNeedBothTheFlagAndTheOption
 // verifies that each of those two lines is written only when the note carries
 // the flag and the caller asked for the line.

@@ -15,6 +15,39 @@ import (
 
 // GraphQL queries and mutations for work item notes.
 
+// noteUserFields are the fields every person on a note is selected with: the
+// author, whoever last edited it and whoever resolved it.
+const noteUserFields = "id name username webUrl avatarUrl"
+
+// noteFields are the fields of the note every document here decodes into
+// [gqlNoteNode], spelled once so the list query and the two mutations cannot
+// select different notes. They are a field list rather than a selection set
+// in braces, because a constant that opens with a brace is a GraphQL document
+// in its own right (the query shorthand), and the document inventory would
+// read it as one no request carries. What the schema offers on a note and this
+// leaves out is answered in cmd/audit_graphql_shapes/sent_declarations.go.
+const noteFields = `
+      id
+      body
+      author { ` + noteUserFields + ` }
+      system
+      internal
+      imported
+      externalAuthor
+      authorIsContributor
+      maxAccessLevelOfAuthor
+      createdAt
+      updatedAt
+      lastEditedAt
+      lastEditedBy { ` + noteUserFields + ` }
+      noteableId
+      noteableType
+      resolvable
+      resolved
+      resolvedAt
+      resolvedBy { ` + noteUserFields + ` }
+      url`
+
 const queryListWorkItemNotes = `
 query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
   namespace(fullPath: $fullPath) {
@@ -29,13 +62,7 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
             }
             nodes {
               notes {
-                nodes {
-                  id
-                  body
-                  author { id name username webUrl avatarUrl }
-                  system
-                  createdAt
-                  updatedAt
+                nodes {` + noteFields + `
                 }
               }
             }
@@ -50,15 +77,10 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
 const mutationCreateNote = `
 mutation($noteableId: NoteableID!, $body: String!) {
   createNote(input: { noteableId: $noteableId, body: $body }) {
-    note {
-      id
-      body
-      author { id name username webUrl avatarUrl }
-      system
-      createdAt
-      updatedAt
+    note {` + noteFields + `
     }
     errors
+    ` + toolutil.GraphQLQuickActionsStatusSelection + `
   }
 }
 `
@@ -66,38 +88,48 @@ mutation($noteableId: NoteableID!, $body: String!) {
 const mutationUpdateNote = `
 mutation($id: NoteID!, $body: String!) {
   updateNote(input: { id: $id, body: $body }) {
-    note {
-      id
-      body
-      author { id name username webUrl avatarUrl }
-      system
-      createdAt
-      updatedAt
+    note {` + noteFields + `
     }
     errors
+    ` + toolutil.GraphQLQuickActionsStatusSelection + `
   }
 }
 `
 
+// mutationDestroyNote selects the errors alone: GitLab's destroyNote answers
+// with nothing else, so a note or a status selected here is null on every
+// response.
 const mutationDestroyNote = `
 mutation($id: NoteID!) {
   destroyNote(input: { id: $id }) {
-    note {
-      id
-    }
     errors
   }
 }
 `
 
-// gqlNoteNode represents a note from the GitLab GraphQL API.
+// gqlNoteNode represents a note from the GitLab GraphQL API, as [noteFields]
+// selects it.
 type gqlNoteNode struct {
-	ID        string        `json:"id"`
-	Body      string        `json:"body"`
-	Author    gqlNoteAuthor `json:"author"`
-	System    bool          `json:"system"`
-	CreatedAt *string       `json:"createdAt"`
-	UpdatedAt *string       `json:"updatedAt"`
+	ID                     string         `json:"id"`
+	Body                   string         `json:"body"`
+	Author                 gqlNoteAuthor  `json:"author"`
+	System                 bool           `json:"system"`
+	Internal               bool           `json:"internal"`
+	Imported               bool           `json:"imported"`
+	ExternalAuthor         string         `json:"externalAuthor"`
+	AuthorIsContributor    *bool          `json:"authorIsContributor"`
+	MaxAccessLevelOfAuthor string         `json:"maxAccessLevelOfAuthor"`
+	CreatedAt              *string        `json:"createdAt"`
+	UpdatedAt              *string        `json:"updatedAt"`
+	LastEditedAt           string         `json:"lastEditedAt"`
+	LastEditedBy           *gqlNoteAuthor `json:"lastEditedBy"`
+	NoteableID             int64          `json:"noteableId"`
+	NoteableType           string         `json:"noteableType"`
+	Resolvable             bool           `json:"resolvable"`
+	Resolved               bool           `json:"resolved"`
+	ResolvedAt             string         `json:"resolvedAt"`
+	ResolvedBy             *gqlNoteAuthor `json:"resolvedBy"`
+	URL                    string         `json:"url"`
 }
 
 // gqlNoteAuthor represents the author of a note as selected from the GraphQL
@@ -167,9 +199,23 @@ func (r gqlNotesResponse) topLevelError(operation string) error {
 // canonical `author` key.
 func nodeToOutput(n gqlNoteNode) Output {
 	out := Output{
-		Body:   n.Body,
-		Author: noteAuthorOutput(n.Author),
-		System: n.System,
+		Body:                   n.Body,
+		Author:                 noteAuthorOutput(n.Author),
+		System:                 n.System,
+		Internal:               n.Internal,
+		Imported:               n.Imported,
+		ExternalAuthor:         n.ExternalAuthor,
+		AuthorIsContributor:    n.AuthorIsContributor,
+		MaxAccessLevelOfAuthor: n.MaxAccessLevelOfAuthor,
+		LastEditedAt:           n.LastEditedAt,
+		LastEditedBy:           optionalNoteUserOutput(n.LastEditedBy),
+		NoteableID:             n.NoteableID,
+		NoteableType:           n.NoteableType,
+		Resolvable:             n.Resolvable,
+		Resolved:               n.Resolved,
+		ResolvedAt:             n.ResolvedAt,
+		ResolvedBy:             optionalNoteUserOutput(n.ResolvedBy),
+		URL:                    n.URL,
 	}
 	if _, id, err := toolutil.ParseGID(n.ID); err == nil {
 		out.ID = id
@@ -180,6 +226,19 @@ func nodeToOutput(n gqlNoteNode) Output {
 	if n.UpdatedAt != nil {
 		out.UpdatedAt = *n.UpdatedAt
 	}
+	return out
+}
+
+// mutationToOutput converts what a createNote or updateNote mutation answered
+// with into the output: the note with the quick actions status beside it, or
+// the status alone when the body held only quick actions and GitLab kept no
+// note.
+func mutationToOutput(result toolutil.GraphQLNoteMutationResult[gqlNoteNode]) Output {
+	var out Output
+	if result.Note != nil {
+		out = nodeToOutput(*result.Note)
+	}
+	out.QuickActionsStatus = result.QuickActions
 	return out
 }
 
@@ -228,14 +287,37 @@ type DeleteInput struct {
 // convention the full *NoteUserOutput author object is surfaced on the canonical
 // `author` key. Only fields the Work Items GraphQL notes widget actually returns
 // are populated (no invented output scalars per the 1:1 audit policy).
+//
+// The keys the REST note entity shares with GraphQL's Note carry the REST
+// spelling (internal, imported, noteable_id, noteable_type and the resolution
+// keys), so an epic note reads like every other note this server answers
+// with. quick_actions_status is set by create and update alone, and only when
+// the body carried a quick action: it is GitLab's account of what the commands
+// did. A create whose body held nothing but quick actions answers with the
+// status and no note, id 0, since GitLab ran the commands and kept none.
 type Output struct {
 	toolutil.HintableOutput
-	ID        int64           `json:"id"`
-	Body      string          `json:"body"`
-	Author    *NoteUserOutput `json:"author,omitempty"`
-	CreatedAt string          `json:"created_at"`
-	UpdatedAt string          `json:"updated_at,omitempty"`
-	System    bool            `json:"system"`
+	ID                     int64                              `json:"id"`
+	Body                   string                             `json:"body"`
+	Author                 *NoteUserOutput                    `json:"author,omitempty"`
+	CreatedAt              string                             `json:"created_at"`
+	UpdatedAt              string                             `json:"updated_at,omitempty"`
+	System                 bool                               `json:"system"`
+	Internal               bool                               `json:"internal"`
+	Imported               bool                               `json:"imported"`
+	ExternalAuthor         string                             `json:"external_author,omitempty"`
+	AuthorIsContributor    *bool                              `json:"author_is_contributor,omitempty"`
+	MaxAccessLevelOfAuthor string                             `json:"max_access_level_of_author,omitempty"`
+	LastEditedAt           string                             `json:"last_edited_at,omitempty"`
+	LastEditedBy           *NoteUserOutput                    `json:"last_edited_by,omitempty"`
+	NoteableID             int64                              `json:"noteable_id,omitempty"`
+	NoteableType           string                             `json:"noteable_type,omitempty"`
+	Resolvable             bool                               `json:"resolvable,omitempty"`
+	Resolved               bool                               `json:"resolved,omitempty"`
+	ResolvedAt             string                             `json:"resolved_at,omitempty"`
+	ResolvedBy             *NoteUserOutput                    `json:"resolved_by,omitempty"`
+	URL                    string                             `json:"url,omitempty"`
+	QuickActionsStatus     *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
 }
 
 // ListOutput holds a paginated list of epic notes.
@@ -394,7 +476,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
 	}
 
-	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicNoteCreate",
 		Hint:       "body is rendered as GitLab Flavored Markdown; max 1MB; check Premium/Ultimate license; createNote mutation may fail if work item is locked or confidential",
 		PayloadKey: "createNote",
@@ -408,7 +490,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 
-	return nodeToOutput(*note), nil
+	return mutationToOutput(result), nil
 }
 
 // Update modifies the body of an existing epic note via the updateNote
@@ -430,7 +512,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("epicNoteUpdate: body is required")
 	}
 
-	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicNoteUpdate",
 		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with group.epic_note_list; body is GFM with 1MB max; system notes cannot be edited",
 		PayloadKey: "updateNote",
@@ -444,7 +526,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, err
 	}
 
-	return nodeToOutput(*note), nil
+	return mutationToOutput(result), nil
 }
 
 // Delete removes a note from an epic via the destroyNote GraphQL mutation.

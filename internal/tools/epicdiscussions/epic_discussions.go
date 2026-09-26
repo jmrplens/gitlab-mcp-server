@@ -16,6 +16,37 @@ import (
 
 // GraphQL queries and mutations for work item discussions.
 
+// noteFields are the fields every document here selects on a note, spelled
+// once so the list query and the three mutations cannot select different
+// notes. A person on a note is selected by username, which is the shape this
+// package publishes its author in. They are a field list rather than a
+// selection set in braces, because a constant that opens with a brace is a
+// GraphQL document in its own right (the query shorthand), and the document
+// inventory would read it as one no request carries. What the schema offers
+// on a note and this leaves out is answered in
+// cmd/audit_graphql_shapes/sent_declarations.go.
+const noteFields = `
+      id
+      body
+      author { username }
+      system
+      internal
+      imported
+      externalAuthor
+      authorIsContributor
+      maxAccessLevelOfAuthor
+      createdAt
+      updatedAt
+      lastEditedAt
+      lastEditedBy { username }
+      noteableId
+      noteableType
+      resolvable
+      resolved
+      resolvedAt
+      resolvedBy { username }
+      url`
+
 const queryListDiscussions = `
 query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
   namespace(fullPath: $fullPath) {
@@ -30,14 +61,14 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
             }
             nodes {
               id
+              replyId
+              createdAt
+              resolvable
+              resolved
+              resolvedAt
+              resolvedBy { username }
               notes {
-                nodes {
-                  id
-                  body
-                  author { username }
-                  system
-                  createdAt
-                  updatedAt
+                nodes {` + noteFields + `
                 }
               }
             }
@@ -49,21 +80,18 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
 }
 `
 
+// mutationCreateNote opens a thread, so it alone also selects the discussion
+// GitLab opened for the note.
 const mutationCreateNote = `
 mutation($noteableId: NoteableID!, $body: String!) {
   createNote(input: { noteableId: $noteableId, body: $body }) {
-    note {
-      id
-      body
-      author { username }
-      system
-      createdAt
-      updatedAt
+    note {` + noteFields + `
       discussion {
         id
       }
     }
     errors
+    ` + toolutil.GraphQLQuickActionsStatusSelection + `
   }
 }
 `
@@ -71,15 +99,10 @@ mutation($noteableId: NoteableID!, $body: String!) {
 const mutationCreateNoteReply = `
 mutation($noteableId: NoteableID!, $body: String!, $discussionId: DiscussionID!) {
   createNote(input: { noteableId: $noteableId, body: $body, discussionId: $discussionId }) {
-    note {
-      id
-      body
-      author { username }
-      system
-      createdAt
-      updatedAt
+    note {` + noteFields + `
     }
     errors
+    ` + toolutil.GraphQLQuickActionsStatusSelection + `
   }
 }
 `
@@ -87,25 +110,20 @@ mutation($noteableId: NoteableID!, $body: String!, $discussionId: DiscussionID!)
 const mutationUpdateNote = `
 mutation($id: NoteID!, $body: String!) {
   updateNote(input: { id: $id, body: $body }) {
-    note {
-      id
-      body
-      author { username }
-      system
-      createdAt
-      updatedAt
+    note {` + noteFields + `
     }
     errors
+    ` + toolutil.GraphQLQuickActionsStatusSelection + `
   }
 }
 `
 
+// mutationDestroyNote selects the errors alone: GitLab's destroyNote answers
+// with nothing else, so a note or a status selected here is null on every
+// response.
 const mutationDestroyNote = `
 mutation($id: NoteID!) {
   destroyNote(input: { id: $id }) {
-    note {
-      id
-    }
     errors
   }
 }
@@ -114,12 +132,26 @@ mutation($id: NoteID!) {
 // gqlNoteNode represents a note from the GitLab GraphQL API, as every
 // document here selects it.
 type gqlNoteNode struct {
-	ID        string        `json:"id"`
-	Body      string        `json:"body"`
-	Author    gqlNoteAuthor `json:"author"`
-	System    bool          `json:"system"`
-	CreatedAt *string       `json:"createdAt"`
-	UpdatedAt *string       `json:"updatedAt"`
+	ID                     string         `json:"id"`
+	Body                   string         `json:"body"`
+	Author                 gqlNoteAuthor  `json:"author"`
+	System                 bool           `json:"system"`
+	Internal               bool           `json:"internal"`
+	Imported               bool           `json:"imported"`
+	ExternalAuthor         string         `json:"externalAuthor"`
+	AuthorIsContributor    *bool          `json:"authorIsContributor"`
+	MaxAccessLevelOfAuthor string         `json:"maxAccessLevelOfAuthor"`
+	CreatedAt              *string        `json:"createdAt"`
+	UpdatedAt              *string        `json:"updatedAt"`
+	LastEditedAt           string         `json:"lastEditedAt"`
+	LastEditedBy           *gqlNoteAuthor `json:"lastEditedBy"`
+	NoteableID             int64          `json:"noteableId"`
+	NoteableType           string         `json:"noteableType"`
+	Resolvable             bool           `json:"resolvable"`
+	Resolved               bool           `json:"resolved"`
+	ResolvedAt             string         `json:"resolvedAt"`
+	ResolvedBy             *gqlNoteAuthor `json:"resolvedBy"`
+	URL                    string         `json:"url"`
 }
 
 // gqlCreatedNoteNode is the note createNote answers with: the note, plus the
@@ -147,8 +179,14 @@ type gqlNoteNodes struct {
 
 // gqlDiscussionNode represents a single discussion with its notes.
 type gqlDiscussionNode struct {
-	ID    string       `json:"id"`
-	Notes gqlNoteNodes `json:"notes"`
+	ID         string         `json:"id"`
+	ReplyID    string         `json:"replyId"`
+	CreatedAt  string         `json:"createdAt"`
+	Resolvable bool           `json:"resolvable"`
+	Resolved   bool           `json:"resolved"`
+	ResolvedAt string         `json:"resolvedAt"`
+	ResolvedBy *gqlNoteAuthor `json:"resolvedBy"`
+	Notes      gqlNoteNodes   `json:"notes"`
 }
 
 // gqlDiscussionsConnection holds a paginated list of discussion nodes.
@@ -209,12 +247,35 @@ func formatDiscussionGID(id string) string {
 	return "gid://gitlab/Discussion/" + id
 }
 
+// username returns the username of a user GitLab may leave null on a note or
+// a thread, or "" when nobody holds the role.
+func (a *gqlNoteAuthor) username() string {
+	if a == nil {
+		return ""
+	}
+	return a.Username
+}
+
 // nodeToNoteOutput converts a GraphQL note node to the MCP output format.
 func nodeToNoteOutput(n gqlNoteNode) NoteOutput {
 	out := NoteOutput{
-		Body:   n.Body,
-		Author: n.Author.Username,
-		System: n.System,
+		Body:                   n.Body,
+		Author:                 n.Author.Username,
+		System:                 n.System,
+		Internal:               n.Internal,
+		Imported:               n.Imported,
+		ExternalAuthor:         n.ExternalAuthor,
+		AuthorIsContributor:    n.AuthorIsContributor,
+		MaxAccessLevelOfAuthor: n.MaxAccessLevelOfAuthor,
+		LastEditedAt:           n.LastEditedAt,
+		LastEditedBy:           n.LastEditedBy.username(),
+		NoteableID:             n.NoteableID,
+		NoteableType:           n.NoteableType,
+		Resolvable:             n.Resolvable,
+		Resolved:               n.Resolved,
+		ResolvedAt:             n.ResolvedAt,
+		ResolvedBy:             n.ResolvedBy.username(),
+		URL:                    n.URL,
 	}
 	if _, id, err := toolutil.ParseGID(n.ID); err == nil {
 		out.ID = id
@@ -228,12 +289,33 @@ func nodeToNoteOutput(n gqlNoteNode) NoteOutput {
 	return out
 }
 
+// mutationToNoteOutput converts what a reply or an edit answered with into
+// the note output: the note with the quick actions status beside it, or the
+// status alone when the body held only quick actions and GitLab kept no note.
+func mutationToNoteOutput(result toolutil.GraphQLNoteMutationResult[gqlNoteNode]) NoteOutput {
+	var out NoteOutput
+	if result.Note != nil {
+		out = nodeToNoteOutput(*result.Note)
+	}
+	out.QuickActionsStatus = result.QuickActions
+	return out
+}
+
 func nodeToDiscussionOutput(disc gqlDiscussionNode) Output {
 	notes := make([]NoteOutput, len(disc.Notes.Nodes))
 	for idx := range disc.Notes.Nodes {
 		notes[idx] = nodeToNoteOutput(disc.Notes.Nodes[idx])
 	}
-	return Output{ID: extractDiscussionHex(disc.ID), Notes: notes}
+	return Output{
+		ID:         extractDiscussionHex(disc.ID),
+		ReplyID:    extractDiscussionHex(disc.ReplyID),
+		CreatedAt:  disc.CreatedAt,
+		Resolvable: disc.Resolvable,
+		Resolved:   disc.Resolved,
+		ResolvedAt: disc.ResolvedAt,
+		ResolvedBy: disc.ResolvedBy.username(),
+		Notes:      notes,
+	}
 }
 
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
@@ -290,21 +372,62 @@ type DeleteNoteInput struct {
 // Output types.
 
 // NoteOutput represents a single note within a discussion.
+//
+// The keys the REST note entity shares with GraphQL's Note carry the REST
+// spelling (internal, imported, noteable_id, noteable_type and the resolution
+// keys); a person is published by username, the shape this package's author
+// has always taken. quick_actions_status is set by a reply or an edit alone,
+// and only when the body carried a quick action: it is GitLab's account of
+// what the commands did. A reply whose body held nothing but quick actions
+// answers with the status and no note, id 0, since GitLab ran the commands
+// and kept none.
 type NoteOutput struct {
 	toolutil.HintableOutput
-	ID        int64  `json:"id"`
-	Body      string `json:"body"`
-	Author    string `json:"author"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	System    bool   `json:"system"`
+	ID                     int64                              `json:"id"`
+	Body                   string                             `json:"body"`
+	Author                 string                             `json:"author"`
+	CreatedAt              string                             `json:"created_at"`
+	UpdatedAt              string                             `json:"updated_at,omitempty"`
+	System                 bool                               `json:"system"`
+	Internal               bool                               `json:"internal"`
+	Imported               bool                               `json:"imported"`
+	ExternalAuthor         string                             `json:"external_author,omitempty"`
+	AuthorIsContributor    *bool                              `json:"author_is_contributor,omitempty"`
+	MaxAccessLevelOfAuthor string                             `json:"max_access_level_of_author,omitempty"`
+	LastEditedAt           string                             `json:"last_edited_at,omitempty"`
+	LastEditedBy           string                             `json:"last_edited_by,omitempty"`
+	NoteableID             int64                              `json:"noteable_id,omitempty"`
+	NoteableType           string                             `json:"noteable_type,omitempty"`
+	Resolvable             bool                               `json:"resolvable,omitempty"`
+	Resolved               bool                               `json:"resolved,omitempty"`
+	ResolvedAt             string                             `json:"resolved_at,omitempty"`
+	ResolvedBy             string                             `json:"resolved_by,omitempty"`
+	URL                    string                             `json:"url,omitempty"`
+	QuickActionsStatus     *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
 }
 
 // Output represents a discussion thread.
+//
+// reply_id is the thread id a reply names, the one the thread has in GitLab's
+// database. It differs from id only where GitLab shows a thread in the
+// context of another object (a commit's thread on a merge request), so on an
+// epic the two agree; it is published because it is what GitLab says to reply
+// with. The resolution keys are the thread's own, which GitLab derives from
+// its notes.
+// quick_actions_status is set by create alone, when the opening note carried
+// a quick action; a body of quick actions alone opens no thread, so the
+// output then carries the status, an empty id and no notes.
 type Output struct {
 	toolutil.HintableOutput
-	ID    string       `json:"id"`
-	Notes []NoteOutput `json:"notes"`
+	ID                 string                             `json:"id"`
+	ReplyID            string                             `json:"reply_id,omitempty"`
+	CreatedAt          string                             `json:"created_at,omitempty"`
+	Resolvable         bool                               `json:"resolvable,omitempty"`
+	Resolved           bool                               `json:"resolved,omitempty"`
+	ResolvedAt         string                             `json:"resolved_at,omitempty"`
+	ResolvedBy         string                             `json:"resolved_by,omitempty"`
+	Notes              []NoteOutput                       `json:"notes"`
+	QuickActionsStatus *toolutil.QuickActionsStatusOutput `json:"quick_actions_status,omitempty"`
 }
 
 // ListOutput holds a list of epic discussions.
@@ -476,16 +599,24 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 
-	note := nodeToNoteOutput(created.gqlNoteNode)
-	discussionID := ""
-	if created.Discussion != nil {
-		discussionID = extractDiscussionHex(created.Discussion.ID)
-	}
+	return createdToDiscussionOutput(created), nil
+}
 
-	return Output{
-		ID:    discussionID,
-		Notes: []NoteOutput{note},
-	}, nil
+// createdToDiscussionOutput converts what the thread-opening createNote
+// answered with into the thread output: the thread GitLab opened with its
+// first note, and the quick actions status when the body carried a quick
+// action. A body of quick actions alone opens no thread, so the output is the
+// status with no id and no notes.
+func createdToDiscussionOutput(created toolutil.GraphQLNoteMutationResult[gqlCreatedNoteNode]) Output {
+	out := Output{Notes: []NoteOutput{}, QuickActionsStatus: created.QuickActions}
+	if created.Note == nil {
+		return out
+	}
+	out.Notes = []NoteOutput{nodeToNoteOutput(created.Note.gqlNoteNode)}
+	if created.Note.Discussion != nil {
+		out.ID = extractDiscussionHex(created.Note.Discussion.ID)
+	}
+	return out
 }
 
 // AddNote adds a reply note to an existing discussion thread via the
@@ -513,7 +644,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role")
 	}
 
-	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicDiscussionAddNote",
 		Hint:       "verify discussion_id with group.epic_discussion_list; cannot reply to a system-generated discussion; body is GFM with 1MB max",
 		PayloadKey: "createNote",
@@ -528,7 +659,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		return NoteOutput{}, err
 	}
 
-	return nodeToNoteOutput(*note), nil
+	return mutationToNoteOutput(result), nil
 }
 
 // UpdateNote updates an existing epic discussion note via the updateNote
@@ -550,7 +681,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, errors.New("epicDiscussionUpdateNote: body is required")
 	}
 
-	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicDiscussionUpdateNote",
 		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with group.epic_discussion_list; body is GFM with 1MB max",
 		PayloadKey: "updateNote",
@@ -564,7 +695,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, err
 	}
 
-	return nodeToNoteOutput(*note), nil
+	return mutationToNoteOutput(result), nil
 }
 
 // DeleteNote deletes an epic discussion note via the destroyNote GraphQL mutation.

@@ -39,3 +39,13 @@ func noteAuthorOutput(a gqlNoteAuthor) *NoteUserOutput {
 	}
 	return out
 }
+
+// optionalNoteUserOutput converts a user GitLab may leave null on a note,
+// the last editor or the resolver, into the same object as the author, or nil
+// when nobody holds that role, so the key is absent rather than an empty user.
+func optionalNoteUserOutput(a *gqlNoteAuthor) *NoteUserOutput {
+	if a == nil {
+		return nil
+	}
+	return noteAuthorOutput(*a)
+}

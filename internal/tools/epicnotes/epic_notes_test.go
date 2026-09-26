@@ -26,8 +26,15 @@ const (
 						"nodes": [{
 							"notes": {
 								"nodes": [
-									{"id": "gid://gitlab/Note/100", "body": "This looks good", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice", "webUrl": "https://gitlab.example.com/alice", "avatarUrl": "https://gitlab.example.com/avatar/alice.png"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-15T10:00:00Z"},
-									{"id": "gid://gitlab/Note/101", "body": "changed the description", "author": {"id": "gid://gitlab/User/1", "name": "Administrator", "username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z"}
+									{"id": "gid://gitlab/Note/100", "body": "This looks good", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice", "webUrl": "https://gitlab.example.com/alice", "avatarUrl": "https://gitlab.example.com/avatar/alice.png"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-15T10:00:00Z",
+										"internal": true, "imported": true, "externalAuthor": "reporter@example.com", "authorIsContributor": true, "maxAccessLevelOfAuthor": "Owner",
+										"lastEditedAt": "2026-01-15T10:30:00Z", "lastEditedBy": {"id": "gid://gitlab/User/7", "name": "Carol Editor", "username": "carol", "webUrl": "https://gitlab.example.com/carol", "avatarUrl": "https://gitlab.example.com/avatar/carol.png"},
+										"noteableId": 41, "noteableType": "Issue", "resolvable": true, "resolved": true, "resolvedAt": "2026-01-15T11:00:00Z",
+										"resolvedBy": {"id": "gid://gitlab/User/8", "name": "Dave Resolver", "username": "dave", "webUrl": "https://gitlab.example.com/dave", "avatarUrl": "https://gitlab.example.com/avatar/dave.png"},
+										"url": "https://gitlab.example.com/groups/my-group/-/epics/1#note_100"},
+									{"id": "gid://gitlab/Note/101", "body": "changed the description", "author": {"id": "gid://gitlab/User/1", "name": "Administrator", "username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z",
+										"internal": false, "imported": false, "externalAuthor": null, "authorIsContributor": null, "maxAccessLevelOfAuthor": null,
+										"lastEditedAt": null, "lastEditedBy": null, "noteableId": 41, "noteableType": "Issue", "resolvable": false, "resolved": false, "resolvedAt": null, "resolvedBy": null, "url": null}
 								]
 							}
 						}]
@@ -111,10 +118,39 @@ const (
 		}
 	}`
 
+	// GraphQL response for a createNote whose body carried text and a quick
+	// action: GitLab keeps the note and reports what the command did.
+	gqlCreateNoteWithQuickActionData = `{
+		"createNote": {
+			"note": {"id": "gid://gitlab/Note/201", "body": "Triaged", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-16T10:00:00Z", "updatedAt": "2026-01-16T10:00:00Z"},
+			"errors": [],
+			"quickActionsStatus": {"commandNames": ["label"], "commandsOnly": false, "messages": ["Added ~bug label."], "errorMessages": null}
+		}
+	}`
+
+	// GraphQL response for a createNote whose body held only a quick action:
+	// GitLab runs it and keeps no note.
+	gqlCreateNoteCommandsOnlyData = `{
+		"createNote": {
+			"note": null,
+			"errors": [],
+			"quickActionsStatus": {"commandNames": ["label"], "commandsOnly": true, "messages": ["Added ~bug label."], "errorMessages": null}
+		}
+	}`
+
+	// GraphQL response for an updateNote whose new body held only a quick
+	// action: GitLab runs it, deletes the note, and says nothing more.
+	gqlUpdateNoteDeletedData = `{
+		"updateNote": {
+			"note": null,
+			"errors": [],
+			"quickActionsStatus": null
+		}
+	}`
+
 	// GraphQL response for destroyNote mutation.
 	gqlDestroyNoteData = `{
 		"destroyNote": {
-			"note": {"id": "gid://gitlab/Note/100"},
 			"errors": []
 		}
 	}`
@@ -163,6 +199,24 @@ func assertGraphQLVariables(t *testing.T, r *http.Request, label string, want ma
 	}
 	if !reflect.DeepEqual(body.Variables, want) {
 		t.Errorf("%s variables = %v, want %v", label, body.Variables, want)
+	}
+}
+
+// assertSelectsQuickActionsStatus holds a note mutation's document to the
+// shared quick actions selection. The mock answers with its fixture whatever
+// the document selected, so a document that dropped the selection would pass
+// every assertion on the decoded status while GitLab sent none.
+func assertSelectsQuickActionsStatus(t *testing.T, r *http.Request) {
+	t.Helper()
+	var body struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode body: %v", err)
+		return
+	}
+	if !strings.Contains(body.Query, toolutil.GraphQLQuickActionsStatusSelection) {
+		t.Errorf("the note mutation does not select %q:\n%s", toolutil.GraphQLQuickActionsStatusSelection, body.Query)
 	}
 }
 
@@ -535,7 +589,26 @@ func assertEpicNotesList(t *testing.T, out ListOutput) {
 	if len(out.Notes) != 2 {
 		t.Fatalf("len(Notes) = %d, want 2", len(out.Notes))
 	}
-	assertEpicNote(t, "Notes[0]", out.Notes[0], Output{
+	assertEpicNote(t, "Notes[0]", out.Notes[0], wantFixtureNote100())
+	assertEpicNote(t, "Notes[1]", out.Notes[1], Output{
+		ID:           101,
+		Body:         "changed the description",
+		Author:       &NoteUserOutput{ID: 1, Username: "admin", Name: "Administrator"},
+		CreatedAt:    "2026-01-15T12:00:00Z",
+		UpdatedAt:    "2026-01-15T12:00:00Z",
+		System:       true,
+		NoteableID:   41,
+		NoteableType: "Issue",
+	})
+}
+
+// wantFixtureNote100 is the output note 100 of gqlNotesData converts to. Its
+// fixture sets every field the note selection reads to a value no other field
+// holds, so a key read into the wrong field, or two assignments swapped, shows
+// up in the comparison.
+func wantFixtureNote100() Output {
+	contributor := true
+	return Output{
 		ID:   100,
 		Body: "This looks good",
 		Author: &NoteUserOutput{
@@ -545,18 +618,30 @@ func assertEpicNotesList(t *testing.T, out ListOutput) {
 			WebURL:    "https://gitlab.example.com/alice",
 			AvatarURL: "https://gitlab.example.com/avatar/alice.png",
 		},
-		CreatedAt: "2026-01-15T10:00:00Z",
-		UpdatedAt: "2026-01-15T10:00:00Z",
-		System:    false,
-	})
-	assertEpicNote(t, "Notes[1]", out.Notes[1], Output{
-		ID:        101,
-		Body:      "changed the description",
-		Author:    &NoteUserOutput{ID: 1, Username: "admin", Name: "Administrator"},
-		CreatedAt: "2026-01-15T12:00:00Z",
-		UpdatedAt: "2026-01-15T12:00:00Z",
-		System:    true,
-	})
+		CreatedAt:              "2026-01-15T10:00:00Z",
+		UpdatedAt:              "2026-01-15T10:00:00Z",
+		System:                 false,
+		Internal:               true,
+		Imported:               true,
+		ExternalAuthor:         "reporter@example.com",
+		AuthorIsContributor:    &contributor,
+		MaxAccessLevelOfAuthor: "Owner",
+		LastEditedAt:           "2026-01-15T10:30:00Z",
+		LastEditedBy: &NoteUserOutput{
+			ID: 7, Username: "carol", Name: "Carol Editor",
+			WebURL: "https://gitlab.example.com/carol", AvatarURL: "https://gitlab.example.com/avatar/carol.png",
+		},
+		NoteableID:   41,
+		NoteableType: "Issue",
+		Resolvable:   true,
+		Resolved:     true,
+		ResolvedAt:   "2026-01-15T11:00:00Z",
+		ResolvedBy: &NoteUserOutput{
+			ID: 8, Username: "dave", Name: "Dave Resolver",
+			WebURL: "https://gitlab.example.com/dave", AvatarURL: "https://gitlab.example.com/avatar/dave.png",
+		},
+		URL: "https://gitlab.example.com/groups/my-group/-/epics/1#note_100",
+	}
 }
 
 // authorObj builds a canonical author object carrying just a username, for use
@@ -566,42 +651,27 @@ func authorObj(username string) *NoteUserOutput {
 }
 
 // assertEpicNote compares one converted note with the whole value it should
-// hold, label naming which note failed. Every field is asserted, including the
-// two timestamps, which are what a swapped pair of assignments shows up in.
+// hold, label naming which note failed. The comparison is of the whole value,
+// the three user objects and the quick actions status included, so a field
+// read from the wrong GraphQL key, or two assignments swapped, fails here
+// rather than passing on the fields a test happened to name.
 func assertEpicNote(t *testing.T, label string, got, want Output) {
 	t.Helper()
-	if got.ID != want.ID {
-		t.Errorf("%s.ID = %d, want %d", label, got.ID, want.ID)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s =\n %s\nwant\n %s", label, jsonText(t, got), jsonText(t, want))
 	}
-	if got.Body != want.Body {
-		t.Errorf("%s.Body = %q, want %q", label, got.Body, want.Body)
-	}
-	if got.CreatedAt != want.CreatedAt {
-		t.Errorf("%s.CreatedAt = %q, want %q", label, got.CreatedAt, want.CreatedAt)
-	}
-	if got.UpdatedAt != want.UpdatedAt {
-		t.Errorf("%s.UpdatedAt = %q, want %q", label, got.UpdatedAt, want.UpdatedAt)
-	}
-	if got.System != want.System {
-		t.Errorf("%s.System = %v, want %v", label, got.System, want.System)
-	}
-	assertEpicNoteAuthor(t, label, got.Author, want.Author)
 }
 
-// assertEpicNoteAuthor compares the canonical author object whole, so a field
-// read from the wrong GraphQL key fails here rather than passing on a username
-// that happened to be checked alone.
-func assertEpicNoteAuthor(t *testing.T, label string, got, want *NoteUserOutput) {
+// jsonText renders a value the way the tool publishes it, which is the form a
+// whole-value mismatch reads best in: every pointer shows what it points at.
+func jsonText(t *testing.T, value any) string {
 	t.Helper()
-	switch {
-	case got == nil && want == nil:
-	case got == nil:
-		t.Errorf("%s.Author = nil, want %+v", label, *want)
-	case want == nil:
-		t.Errorf("%s.Author = %+v, want nil", label, *got)
-	case *got != *want:
-		t.Errorf("%s.Author = %+v, want %+v", label, *got, *want)
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Errorf("marshal %T: %v", value, err)
+		return ""
 	}
+	return string(data)
 }
 
 // TestGet_SendsTheVariablesTheCallerNamed verifies that the group path and the
@@ -655,19 +725,7 @@ func TestGet(t *testing.T) {
 			}),
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
-				assertEpicNote(t, "Get()", out, Output{
-					ID:   100,
-					Body: "This looks good",
-					Author: &NoteUserOutput{
-						ID:        5,
-						Username:  "alice",
-						Name:      "Alice Example",
-						WebURL:    "https://gitlab.example.com/alice",
-						AvatarURL: "https://gitlab.example.com/avatar/alice.png",
-					},
-					CreatedAt: "2026-01-15T10:00:00Z",
-					UpdatedAt: "2026-01-15T10:00:00Z",
-				})
+				assertEpicNote(t, "Get()", out, wantFixtureNote100())
 			},
 		},
 		{
@@ -843,6 +901,55 @@ func TestCreate(t *testing.T) {
 			},
 		},
 		{
+			name:  "reports the quick action a note carried beside the note",
+			input: CreateInput{FullPath: testFullPath, IID: 1, Body: "Triaged\n/label ~bug"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, r *http.Request) {
+					assertSelectsQuickActionsStatus(t, r)
+					testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteWithQuickActionData)
+				},
+			}),
+			validate: func(t *testing.T, out Output) {
+				t.Helper()
+				assertEpicNote(t, "Create()", out, Output{
+					ID:        201,
+					Body:      "Triaged",
+					Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
+					CreatedAt: "2026-01-16T10:00:00Z",
+					UpdatedAt: "2026-01-16T10:00:00Z",
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{
+						CommandNames: []string{"label"},
+						Messages:     []string{"Added ~bug label."},
+					},
+				})
+			},
+		},
+		{
+			name:  "answers a body of quick actions alone with the status and no note",
+			input: CreateInput{FullPath: testFullPath, IID: 1, Body: "/label ~bug"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteCommandsOnlyData)
+				},
+			}),
+			validate: func(t *testing.T, out Output) {
+				t.Helper()
+				assertEpicNote(t, "Create()", out, Output{
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{
+						CommandNames: []string{"label"},
+						CommandsOnly: true,
+						Messages:     []string{"Added ~bug label."},
+					},
+				})
+			},
+		},
+		{
 			name:            "returns error when full_path is empty",
 			input:           CreateInput{IID: 1, Body: "note"},
 			handler:         testutil.ForbiddenHandler(t),
@@ -1004,6 +1111,45 @@ func TestUpdate(t *testing.T) {
 			},
 		},
 		{
+			name:  "reports the quick action the new body carried beside the note",
+			input: UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "Updated comment\n/close"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"updateNote": func(w http.ResponseWriter, r *http.Request) {
+					assertSelectsQuickActionsStatus(t, r)
+					testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote": {
+						"note": {"id": "gid://gitlab/Note/100", "body": "Updated comment", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-16T11:00:00Z"},
+						"errors": [],
+						"quickActionsStatus": {"commandNames": ["close"], "commandsOnly": false, "messages": null, "errorMessages": ["Could not apply close command."]}
+					}}`)
+				},
+			}),
+			validate: func(t *testing.T, out Output) {
+				t.Helper()
+				assertEpicNote(t, "Update()", out, Output{
+					ID:        100,
+					Body:      "Updated comment",
+					Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
+					CreatedAt: "2026-01-15T10:00:00Z",
+					UpdatedAt: "2026-01-16T11:00:00Z",
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{
+						CommandNames:  []string{"close"},
+						ErrorMessages: []string{"Could not apply close command."},
+					},
+				})
+			},
+		},
+		{
+			name:  "says GitLab deleted the note when the new body held only quick actions",
+			input: UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "/close"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteDeletedData)
+				},
+			}),
+			wantErr:         true,
+			wantErrContains: "epicNoteUpdate: GitLab deleted the note instead of editing it",
+		},
+		{
 			name:            "returns error when full_path is empty",
 			input:           UpdateInput{IID: 1, NoteID: 100, Body: "x"},
 			handler:         testutil.ForbiddenHandler(t),
@@ -1052,14 +1198,15 @@ func TestUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:  "returns error when updateNote returns no note",
+			name:  "reports a refusal GitLab answers at the top level as that refusal",
 			input: UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "x"},
 			handler: graphqlMux(map[string]http.HandlerFunc{
 				"updateNote": func(w http.ResponseWriter, _ *http.Request) {
-					testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote":{"note":null,"errors":[]}}`)
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"updateNote":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`)
 				},
 			}),
-			wantErr: true,
+			wantErr:         true,
+			wantErrContains: "epicNoteUpdate GraphQL errors: The resource that you are attempting to access does not exist",
 		},
 		{
 			name:            "returns error on cancelled context",
@@ -1177,6 +1324,20 @@ func TestDelete(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			// GitLab refuses a delete of a note that is gone, or that the token
+			// may not delete, with HTTP 200 and a null payload, which used to
+			// read as a successful delete.
+			name:  "reports a refusal GitLab answers at the top level rather than a delete",
+			input: DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"destroyNote":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`)
+				},
+			}),
+			wantErr:         true,
+			wantErrContains: "epicNoteDelete GraphQL errors: The resource that you are attempting to access does not exist",
+		},
+		{
 			name:            "returns error on cancelled context",
 			input:           DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100},
 			handler:         testutil.ForbiddenHandler(t),
@@ -1273,6 +1434,91 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **Body**: anonymous system entry\n" +
 				noteHintsBlock,
 		},
+		{
+			name: "renders the internal flag and who resolved the note",
+			input: Output{
+				ID:         103,
+				Body:       "resolved",
+				Author:     authorObj("alice"),
+				CreatedAt:  "2026-01-15T14:00:00Z",
+				Internal:   true,
+				Resolvable: true,
+				Resolved:   true,
+				ResolvedBy: authorObj("dave"),
+			},
+			want: "## Epic Note #103\n\n" +
+				"- **Author**: @alice\n" +
+				"- **Created**: 15 Jan 2026 14:00 UTC\n" +
+				"- **Internal note**\n" +
+				"- **Resolvable**: resolved\n" +
+				"- **Resolved By**: @dave\n" +
+				"- **Body**: resolved\n" +
+				noteHintsBlock,
+		},
+		{
+			name: "renders an unresolved note with nobody named as its resolver",
+			input: Output{
+				ID:         104,
+				Body:       "open question",
+				Author:     authorObj("alice"),
+				CreatedAt:  "2026-01-15T14:00:00Z",
+				Resolvable: true,
+			},
+			want: "## Epic Note #104\n\n" +
+				"- **Author**: @alice\n" +
+				"- **Created**: 15 Jan 2026 14:00 UTC\n" +
+				"- **Resolvable**: unresolved\n" +
+				"- **Body**: open question\n" +
+				noteHintsBlock,
+		},
+		{
+			name: "renders what the quick actions in the body did after the body",
+			input: Output{
+				ID:        105,
+				Body:      "Triaged",
+				Author:    authorObj("alice"),
+				CreatedAt: "2026-01-16T10:00:00Z",
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{
+					CommandNames: []string{"label"},
+					Messages:     []string{"Added ~bug label."},
+				},
+			},
+			want: "## Epic Note #105\n\n" +
+				"- **Author**: @alice\n" +
+				"- **Created**: 16 Jan 2026 10:00 UTC\n" +
+				"- **Body**: Triaged\n" +
+				"\n### Quick Actions\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Applied**: Added ~bug label.\n" +
+				noteHintsBlock,
+		},
+		{
+			// A note whose global ID did not parse converts with id 0; without
+			// a quick actions status it is still a note, and renders as one.
+			name:  "renders a note with no id and no quick actions as a note",
+			input: Output{Body: "unparseable identifiers", Author: authorObj("nobody")},
+			want: "## Epic Note #0\n\n" +
+				"- **Author**: @nobody\n" +
+				"- **Body**: unparseable identifiers\n" +
+				noteHintsBlock,
+		},
+		{
+			name: "renders a body of quick actions alone as the commands and no note",
+			input: Output{
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{
+					CommandNames: []string{"label"},
+					CommandsOnly: true,
+					Messages:     []string{"Added ~bug label."},
+				},
+			},
+			want: "## Epic Note: quick actions only\n\n" +
+				"The body held only quick actions, so GitLab ran them and kept no note.\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Applied**: Added ~bug label.\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'group.epic_get' to see what the quick actions changed on the epic\n" +
+				"- Use action 'group.epic_note_list' to read the epic's notes\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1298,16 +1544,16 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders table with notes",
 			input: ListOutput{
 				Notes: []Output{
-					{ID: 100, Author: authorObj("alice"), CreatedAt: "2026-01-15T10:00:00Z", System: false},
+					{ID: 100, Author: authorObj("alice"), CreatedAt: "2026-01-15T10:00:00Z", System: false, Internal: true},
 					{ID: 101, Author: authorObj("admin"), CreatedAt: "2026-01-15T12:00:00Z", System: true},
 				},
 				Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: false},
 			},
 			want: "## Epic Notes (2)\n\n" +
-				"| ID | Author | Created | System |\n" +
-				"| --- | --- | --- | --- |\n" +
-				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ |\n" +
-				"| 101 | admin | 15 Jan 2026 12:00 UTC | ✅ |\n\n" +
+				"| ID | Author | Created | System | Internal |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ | ✅ |\n" +
+				"| 101 | admin | 15 Jan 2026 12:00 UTC | ✅ | ❌ |\n\n" +
 				"Showing 2 items | no more pages\n" +
 				listHintsBlock,
 		},
@@ -1318,9 +1564,9 @@ func TestFormatListMarkdown(t *testing.T) {
 				Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "eyJpZCI6IjEwMCJ9"},
 			},
 			want: "## Epic Notes (1)\n\n" +
-				"| ID | Author | Created | System |\n" +
-				"| --- | --- | --- | --- |\n" +
-				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ |\n\n" +
+				"| ID | Author | Created | System | Internal |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ | ❌ |\n\n" +
 				"Showing 1 items | next page cursor: `eyJpZCI6IjEwMCJ9`\n" +
 				listHintsBlock,
 		},

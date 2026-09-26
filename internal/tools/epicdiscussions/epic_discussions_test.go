@@ -5,7 +5,9 @@ package epicdiscussions
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -124,7 +126,6 @@ const gqlUpdateNoteData = `{
 
 const gqlDestroyNoteData = `{
   "destroyNote": {
-    "note": {"id": "gid://gitlab/Note/100"},
     "errors": []
   }
 }`
@@ -134,6 +135,47 @@ const gqlWorkItemGIDData = `{
     "workItem": {"id": "gid://gitlab/WorkItem/1"}
   }
 }`
+
+// assertSelectsQuickActionsStatus holds a note mutation's document to the
+// shared quick actions selection. The mock answers with its fixture whatever
+// the document selected, so a document that dropped the selection would pass
+// every assertion on the decoded status while GitLab sent none.
+func assertSelectsQuickActionsStatus(t *testing.T, r *http.Request) {
+	t.Helper()
+	var body struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode body: %v", err)
+		return
+	}
+	if !strings.Contains(body.Query, toolutil.GraphQLQuickActionsStatusSelection) {
+		t.Errorf("the note mutation does not select %q:\n%s", toolutil.GraphQLQuickActionsStatusSelection, body.Query)
+	}
+}
+
+// assertNoteOutput compares one converted note with the whole value it should
+// hold, label naming the call that produced it, so a key read into the wrong
+// field or two assignments swapped fail here rather than passing on the
+// fields a case happened to name.
+func assertNoteOutput(t *testing.T, label string, got, want NoteOutput) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s =\n %s\nwant\n %s", label, jsonText(t, got), jsonText(t, want))
+	}
+}
+
+// jsonText renders a value the way the tool publishes it, which is the form a
+// whole-value mismatch reads best in: every pointer shows what it points at.
+func jsonText(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Errorf("marshal %T: %v", value, err)
+		return ""
+	}
+	return string(data)
+}
 
 // graphqlMux creates an http.Handler that routes GraphQL requests by query content.
 func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
@@ -657,6 +699,70 @@ func TestCreate_CreatedNoteWithoutItsDiscussion_PublishesTheNoteAndAnEmptyThread
 	}
 }
 
+// TestList_EveryFieldGitLabSendsIsPublished verifies each field the documents
+// now select reaches the output under its own key: the thread's reply id,
+// creation time and resolution, and on each note the internal and imported
+// flags, the external author, the contributor and access level of the author,
+// the last edit, the noteable, the resolution and the web URL.
+//
+// Every value is distinct from every other of its kind, so a key read into the
+// wrong field, or two assignments swapped, fails the whole-value comparison.
+// The second note carries the nulls GitLab sends for a note nobody edited or
+// resolved, which is the other side of each nil check on a user.
+func TestList_EveryFieldGitLabSendsIsPublished(t *testing.T) {
+	const data = `{"namespace": {"workItem": {"id": "gid://gitlab/WorkItem/1", "widgets": [{"discussions": {
+		"pageInfo": {"hasNextPage": false, "endCursor": null},
+		"nodes": [{
+			"id": "gid://gitlab/Discussion/d1hex", "replyId": "gid://gitlab/Discussion/r1hex", "createdAt": "2026-01-01T00:00:00Z",
+			"resolvable": true, "resolved": true, "resolvedAt": "2026-01-03T00:00:00Z", "resolvedBy": {"username": "erin"},
+			"notes": {"nodes": [
+				{"id": "gid://gitlab/Note/100", "body": "first note", "author": {"username": "alice"}, "system": false,
+				 "internal": true, "imported": true, "externalAuthor": "reporter@example.com", "authorIsContributor": false,
+				 "maxAccessLevelOfAuthor": "Developer", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-02T00:00:00Z",
+				 "lastEditedAt": "2026-01-02T12:00:00Z", "lastEditedBy": {"username": "carol"}, "noteableId": 41, "noteableType": "Issue",
+				 "resolvable": true, "resolved": true, "resolvedAt": "2026-01-03T00:00:00Z", "resolvedBy": {"username": "dave"},
+				 "url": "https://gitlab.example.com/groups/my-group/-/epics/1#note_100"},
+				{"id": "gid://gitlab/Note/101", "body": "reply", "author": {"username": "bob"}, "system": false,
+				 "internal": false, "imported": false, "externalAuthor": null, "authorIsContributor": null, "maxAccessLevelOfAuthor": null,
+				 "createdAt": "2026-01-02T00:00:00Z", "updatedAt": null, "lastEditedAt": null, "lastEditedBy": null,
+				 "noteableId": 41, "noteableType": "Issue", "resolvable": true, "resolved": false, "resolvedAt": null, "resolvedBy": null, "url": null}
+			]}
+		}]
+	}}]}}}`
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, data)
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{FullPath: testFullPath, IID: 5})
+	if err != nil {
+		t.Fatalf("List() error = %v, want nil", err)
+	}
+	if len(out.Discussions) != 1 {
+		t.Fatalf("len(Discussions) = %d, want 1", len(out.Discussions))
+	}
+	notContributor := false
+	want := Output{
+		ID: "d1hex", ReplyID: "r1hex", CreatedAt: "2026-01-01T00:00:00Z",
+		Resolvable: true, Resolved: true, ResolvedAt: "2026-01-03T00:00:00Z", ResolvedBy: "erin",
+		Notes: []NoteOutput{
+			{
+				ID: 100, Body: "first note", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
+				Internal: true, Imported: true, ExternalAuthor: "reporter@example.com", AuthorIsContributor: &notContributor,
+				MaxAccessLevelOfAuthor: "Developer", LastEditedAt: "2026-01-02T12:00:00Z", LastEditedBy: "carol",
+				NoteableID: 41, NoteableType: "Issue", Resolvable: true, Resolved: true, ResolvedAt: "2026-01-03T00:00:00Z",
+				ResolvedBy: "dave", URL: "https://gitlab.example.com/groups/my-group/-/epics/1#note_100",
+			},
+			{
+				ID: 101, Body: "reply", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z",
+				NoteableID: 41, NoteableType: "Issue", Resolvable: true,
+			},
+		},
+	}
+	if !reflect.DeepEqual(out.Discussions[0], want) {
+		t.Errorf("List() thread =\n %s\nwant\n %s", jsonText(t, out.Discussions[0]), jsonText(t, want))
+	}
+}
+
 // TestList verifies the List handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -950,6 +1056,59 @@ func TestCreate(t *testing.T) {
 				if out.Notes[0].ID != 200 {
 					t.Errorf("note ID=%d, want 200", out.Notes[0].ID)
 				}
+				if out.QuickActionsStatus != nil {
+					t.Errorf("QuickActionsStatus = %+v, want nil for a body without a quick action", out.QuickActionsStatus)
+				}
+			},
+		},
+		{
+			name:  "reports the quick action the opening note carried beside the thread",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "new thread\n/label ~bug"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, r *http.Request) {
+					assertSelectsQuickActionsStatus(t, r)
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{
+						"note":{"id":"gid://gitlab/Note/200","body":"new thread","author":{"username":"carol"},"system":false,"createdAt":"2026-01-03T00:00:00Z","updatedAt":null,"discussion":{"id":"gid://gitlab/Discussion/d2hex"}},
+						"errors":[],
+						"quickActionsStatus":{"commandNames":["label"],"commandsOnly":false,"messages":["Added ~bug label."],"errorMessages":null}}}`)
+				},
+			}),
+			check: func(t *testing.T, out Output) {
+				t.Helper()
+				want := Output{
+					ID:                 "d2hex",
+					Notes:              []NoteOutput{{ID: 200, Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}},
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, Messages: []string{"Added ~bug label."}},
+				}
+				if !reflect.DeepEqual(out, want) {
+					t.Errorf("Create() = %+v, want %+v", out, want)
+				}
+			},
+		},
+		{
+			name:  "answers a body of quick actions alone with the status, no thread and no notes",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "/label ~bug"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":[],
+						"quickActionsStatus":{"commandNames":["label"],"commandsOnly":true,"messages":["Added ~bug label."],"errorMessages":null}}}`)
+				},
+			}),
+			check: func(t *testing.T, out Output) {
+				t.Helper()
+				want := Output{
+					Notes:              []NoteOutput{},
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, CommandsOnly: true, Messages: []string{"Added ~bug label."}},
+				}
+				if !reflect.DeepEqual(out, want) {
+					t.Errorf("Create() = %+v, want %+v", out, want)
+				}
 			},
 		},
 		{
@@ -1104,6 +1263,48 @@ func TestAddNote(t *testing.T) {
 				if out.Author != "dave" {
 					t.Errorf("got Author=%q, want dave", out.Author)
 				}
+			},
+		},
+		{
+			name:  "reports the quick action a reply carried beside it",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "reply body\n/label ~bug"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, r *http.Request) {
+					assertSelectsQuickActionsStatus(t, r)
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{
+						"note":{"id":"gid://gitlab/Note/201","body":"reply body","author":{"username":"dave"},"system":false,"createdAt":"2026-01-04T00:00:00Z","updatedAt":null},
+						"errors":[],
+						"quickActionsStatus":{"commandNames":["label"],"commandsOnly":false,"messages":null,"errorMessages":["Could not apply label command."]}}}`)
+				},
+			}),
+			check: func(t *testing.T, out NoteOutput) {
+				t.Helper()
+				assertNoteOutput(t, "AddNote()", out, NoteOutput{
+					ID: 201, Body: "reply body", Author: "dave", CreatedAt: "2026-01-04T00:00:00Z",
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, ErrorMessages: []string{"Could not apply label command."}},
+				})
+			},
+		},
+		{
+			name:  "answers a reply of quick actions alone with the status and no note",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "/label ~bug"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":[],
+						"quickActionsStatus":{"commandNames":["label"],"commandsOnly":true,"messages":["Added ~bug label."],"errorMessages":null}}}`)
+				},
+			}),
+			check: func(t *testing.T, out NoteOutput) {
+				t.Helper()
+				assertNoteOutput(t, "AddNote()", out, NoteOutput{
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, CommandsOnly: true, Messages: []string{"Added ~bug label."}},
+				})
 			},
 		},
 		{
@@ -1286,12 +1487,32 @@ func TestUpdateNote(t *testing.T) {
 			wantErr: "epicDiscussionUpdateNote",
 		},
 		{
-			name:  "returns error when updateNote returns no note",
-			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "test"},
+			// updateNote answers with neither a note nor a status only when it
+			// deleted a note whose new body held nothing but quick actions.
+			name:  "says GitLab deleted the note when the new body held only quick actions",
+			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "/close"},
 			handler: graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote":{"note":null,"errors":[]}}`)
+				testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote":{"note":null,"errors":[],"quickActionsStatus":null}}`)
 			}}),
-			wantErr: "no note returned",
+			wantErr: "epicDiscussionUpdateNote: GitLab deleted the note instead of editing it",
+		},
+		{
+			name:  "reports the quick action the new body carried beside the note",
+			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "updated body\n/close"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, r *http.Request) {
+				assertSelectsQuickActionsStatus(t, r)
+				testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote":{
+					"note":{"id":"gid://gitlab/Note/100","body":"updated body","author":{"username":"alice"},"system":false,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-05T00:00:00Z"},
+					"errors":[],
+					"quickActionsStatus":{"commandNames":["close"],"commandsOnly":false,"messages":["Closed this epic."],"errorMessages":null}}}`)
+			}}),
+			check: func(t *testing.T, out NoteOutput) {
+				t.Helper()
+				assertNoteOutput(t, "UpdateNote()", out, NoteOutput{
+					ID: 100, Body: "updated body", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-05T00:00:00Z",
+					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"close"}, Messages: []string{"Closed this epic."}},
+				})
+			},
 		},
 		{
 			name:    "returns error on cancelled context",
@@ -1384,6 +1605,17 @@ func TestDeleteNote(t *testing.T) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 			}}),
 			wantErr: "epicDiscussionDeleteNote",
+		},
+		{
+			// GitLab refuses a delete of a note that is gone, or that the token
+			// may not delete, with HTTP 200 and a null payload, which used to
+			// read as a successful delete.
+			name:  "reports a refusal GitLab answers at the top level rather than a delete",
+			input: DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"data":{"destroyNote":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`)
+			}}),
+			wantErr: "epicDiscussionDeleteNote GraphQL errors: The resource that you are attempting to access does not exist",
 		},
 		{
 			name:    "returns error on cancelled context",
@@ -1501,6 +1733,43 @@ func TestFormatMarkdownString(t *testing.T) {
 			input: Output{ID: "d1hex"},
 			want:  "## Discussion d1hex\n" + threadHintsBlock,
 		},
+		{
+			name: "renders what the quick actions in the opening note did after the notes",
+			input: Output{
+				ID:                 "d2hex",
+				Notes:              []NoteOutput{{ID: 200, Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}},
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, Messages: []string{"Added ~bug label."}},
+			},
+			want: "## Discussion d2hex\n\n" +
+				"- **@carol** (3 Jan 2026 00:00 UTC, note 200):\n" +
+				"  > new thread\n" +
+				"\n### Quick Actions\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Applied**: Added ~bug label.\n" +
+				threadHintsBlock,
+		},
+		{
+			// A thread GitLab named no discussion for keeps its card; only a
+			// status beside the empty id means no thread was opened.
+			name:  "renders a thread with no id and no quick actions as a thread",
+			input: Output{Notes: []NoteOutput{{ID: 200, Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}}},
+			want: "## Discussion \n\n" +
+				"- **@carol** (3 Jan 2026 00:00 UTC, note 200):\n" +
+				"  > new thread\n" +
+				threadHintsBlock,
+		},
+		{
+			name: "renders a body of quick actions alone as the commands and no thread",
+			input: Output{
+				Notes:              []NoteOutput{},
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, CommandsOnly: true, Messages: []string{"Added ~bug label."}},
+			},
+			want: "## Epic Discussion: quick actions only\n\n" +
+				"The body held only quick actions, so GitLab ran them and kept no note.\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Applied**: Added ~bug label.\n" +
+				quickActionsOnlyHintsBlock,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1523,6 +1792,71 @@ func TestFormatNoteMarkdownString(t *testing.T) {
 		noteHintsBlock
 	if got != want {
 		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// quickActionsOnlyHintsBlock is the next-steps section of a card answering a
+// body of quick actions alone: there is no thread or note to act on, only the
+// epic the commands changed.
+const quickActionsOnlyHintsBlock = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.epic_get' to see what the quick actions changed on the epic\n" +
+	"- Use action 'group.epic_discussion_list' to read the epic's threads\n"
+
+// TestFormatNoteMarkdownString_QuickActionsAndResolution pins the note card
+// of a reply or an edit: the resolution state and who resolved the note, and
+// the section saying what the quick actions in the body did; and the card of
+// a reply of quick actions alone, which has no note to show. A note with no id
+// and no status is still a note, which is the other side of the check that
+// picks the second card.
+func TestFormatNoteMarkdownString_QuickActionsAndResolution(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		input NoteOutput
+		want  string
+	}{
+		{
+			name: "a resolved note with a quick action",
+			input: NoteOutput{
+				ID: 201, Body: "reply", Author: "dave", CreatedAt: "2026-01-04T00:00:00Z",
+				Resolvable: true, Resolved: true, ResolvedBy: "erin",
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, ErrorMessages: []string{"Could not apply label command."}},
+			},
+			want: "## Discussion Note #201\n\n" +
+				"- **Author**: @dave\n" +
+				"- **Created**: 4 Jan 2026 00:00 UTC\n" +
+				"- **Resolvable**: resolved\n" +
+				"- **Resolved By**: @erin\n" +
+				"- **Body**: reply\n" +
+				"\n### Quick Actions\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Failed**: Could not apply label command.\n" +
+				noteHintsBlock,
+		},
+		{
+			name:  "a note with no id and no quick actions",
+			input: NoteOutput{Body: "unparseable identifiers", Author: "nobody"},
+			want: "## Discussion Note #0\n\n" +
+				"- **Author**: @nobody\n" +
+				"- **Body**: unparseable identifiers\n" +
+				noteHintsBlock,
+		},
+		{
+			name: "a reply of quick actions alone",
+			input: NoteOutput{
+				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, CommandsOnly: true, Messages: []string{"Added ~bug label."}},
+			},
+			want: "## Epic Discussion Note: quick actions only\n\n" +
+				"The body held only quick actions, so GitLab ran them and kept no note.\n\n" +
+				"- **Commands**: /label\n" +
+				"- **Applied**: Added ~bug label.\n" +
+				quickActionsOnlyHintsBlock,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatNoteMarkdownString(tt.input); got != tt.want {
+				t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
+			}
+		})
 	}
 }
 
