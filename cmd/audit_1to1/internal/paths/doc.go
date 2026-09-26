@@ -195,9 +195,12 @@
 // in typed_types_compared_through_projection. The wrapper around a paired
 // payload (`{issues: []IssueItem, pagination}`, or a struct that publishes
 // nothing of its own and embeds its payload, `{PlanLimitItem}`) is this
-// server's packaging and is judged under the payload's name, so it is listed in
-// shapes.typed.envelopes and counted in typed_envelopes_judged_through_payload
-// rather than among the types without a pairing.
+// server's packaging and is judged under the payload's name, so once every
+// payload has been compared it is listed in shapes.typed.envelopes and counted
+// in typed_envelopes_judged_through_payload rather than among the types without
+// a pairing. A payload can be paired and still be skipped, for want of a route
+// or of a response schema, and the packaging around it is then counted in that
+// payload's skip, since the response was judged no more than the payload was.
 //
 // It asks the same question one level down, since schema version 2 of the
 // record carries the properties of each object a response nests. A nested

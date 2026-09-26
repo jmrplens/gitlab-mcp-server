@@ -747,6 +747,77 @@ func TestTypedShapeCheck_AnEnvelopeAroundAnUnpairedPayload_StaysASkip(t *testing
 	}
 }
 
+// TestTypedShapeCheck_AnEnvelopeAroundASkippedPayload_TakesItsSkip verifies
+// that packaging is listed among the envelopes only when the response it
+// packages was compared. A payload can be paired and still not be judged,
+// for want of a route or of a response schema, and the envelope around it is
+// then counted in that payload's skip rather than called judged. The envelope
+// is listed before its payloads in every case, since what it is counted as
+// has to wait for them whatever order the types are read in.
+func TestTypedShapeCheck_AnEnvelopeAroundASkippedPayload_TakesItsSkip(t *testing.T) {
+	const pkg = "internal/tools/milestones"
+	// Named to sort before IssueItem, so the case with one of each reads the
+	// compared payload first and has to keep looking.
+	converted := structs.OutputPairing{Package: "milestones", MCPType: "AnotherItem", SDKType: "Issue"}
+	cases := []struct {
+		name       string
+		pairings   structs.Pairings
+		operations map[string]response
+		methods    map[string][]sdkRoute
+		wraps      []string
+		want       SkippedTypes
+		envelopes  []string
+	}{
+		{
+			name:       "a payload whose method reaches no route",
+			pairings:   structs.Pairings{ClientGoDir: "/client-go", Projections: []structs.ProjectionPairing{issueItemProjection}},
+			operations: milestoneIssueOperations,
+			wraps:      []string{"IssueItem"},
+			want:       SkippedTypes{NoRoute: []string{"milestones.IssueItem", "milestones.MilestoneIssuesOutput"}},
+		},
+		{
+			name:     "a payload whose routes the record gives no response",
+			pairings: structs.Pairings{ClientGoDir: "/client-go", Outputs: []structs.OutputPairing{converted}},
+			wraps:    []string{"AnotherItem"},
+			want:     SkippedTypes{NoSchema: []string{"milestones.AnotherItem", "milestones.MilestoneIssuesOutput"}},
+		},
+		{
+			name:       "a compared payload beside one with no route",
+			pairings:   structs.Pairings{ClientGoDir: "/client-go", Outputs: []structs.OutputPairing{converted}, Projections: []structs.ProjectionPairing{issueItemProjection}},
+			operations: milestoneIssueOperations,
+			wraps:      []string{"AnotherItem", "IssueItem"},
+			want:       SkippedTypes{NoRoute: []string{"milestones.IssueItem", "milestones.MilestoneIssuesOutput"}},
+		},
+		{
+			name:       "every payload compared",
+			pairings:   structs.Pairings{ClientGoDir: "/client-go", Outputs: []structs.OutputPairing{converted}, Projections: []structs.ProjectionPairing{issueItemProjection}},
+			operations: milestoneIssueOperations,
+			methods:    milestoneIssueMethodRoutes,
+			wraps:      []string{"AnotherItem", "IssueItem"},
+			envelopes:  []string{"milestones.MilestoneIssuesOutput"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stubTypeGrainInputs(t, testCase.pairings, nil, milestoneIssueRoutes)
+			stubMethodRoutes(t, testCase.methods)
+
+			published := []publishedType{{Package: pkg, Name: "MilestoneIssuesOutput", Fields: []string{"issues"}, Wraps: testCase.wraps}}
+			for _, payload := range testCase.wraps {
+				published = append(published, publishedType{Package: pkg, Name: payload, Fields: []string{"id"}, Inner: true, Payload: true})
+			}
+			check := typedCheckOf("", testCase.operations, published)
+
+			if !reflect.DeepEqual(check.Skipped, testCase.want) || !slices.Equal(check.Envelopes, testCase.envelopes) {
+				t.Errorf("skipped = %+v, envelopes = %v; want %+v and %v", check.Skipped, check.Envelopes, testCase.want, testCase.envelopes)
+			}
+			if check.SkippedNoRoute != len(testCase.want.NoRoute) || check.SkippedNoSchema != len(testCase.want.NoSchema) || check.SkippedNoPairing != 0 {
+				t.Errorf("counters = %d no route, %d no schema, %d no pairing; want them to agree with the lists", check.SkippedNoRoute, check.SkippedNoSchema, check.SkippedNoPairing)
+			}
+		})
+	}
+}
+
 // TestWrapsOnlyPaired_EveryPayload_MustBePaired verifies that one paired
 // payload among several does not make the envelope judged: the others are
 // responses nothing reads, and they are only counted if the envelope is.

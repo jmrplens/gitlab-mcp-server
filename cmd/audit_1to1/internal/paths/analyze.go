@@ -112,7 +112,9 @@ type Summary struct {
 	TypedCompared int `json:"typed_types_compared"`
 	// TypedProjections counts how many of TypedCompared are paired through a
 	// projection rather than a converter, and TypedEnvelopes the types left
-	// out of every bucket because they are packaging around a paired payload.
+	// out of every bucket because they are packaging around payloads that were
+	// all compared. Packaging around a payload that was skipped is counted in
+	// that payload's skip.
 	// See [TypedShapeCheck.Projections] and [TypedShapeCheck.Envelopes].
 	TypedProjections      int `json:"typed_types_compared_through_projection"`
 	TypedEnvelopes        int `json:"typed_envelopes_judged_through_payload"`
