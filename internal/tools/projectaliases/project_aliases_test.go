@@ -11,6 +11,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // --- List ---
@@ -42,6 +43,47 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Aliases[1].ProjectID != 200 {
 		t.Errorf("second alias project_id = %d, want 200", out.Aliases[1].ProjectID)
+	}
+}
+
+// TestList_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for. client-go's ListProjectAliases takes no
+// options struct, and this action used to say it returned the full set, while
+// GitLab answered twenty aliases and stopped.
+func TestList_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/project_aliases")
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"project_id":200,"name":"alias-two"}]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1}})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Aliases) != 1 || out.Aliases[0].ID != 2 {
+		t.Errorf("aliases = %+v, want the one alias of page 2", out.Aliases)
+	}
+}
+
+// TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page, so a caller holding the first page
+// of aliases can tell a second exists and which to ask for.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/project_aliases")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"project_id":100,"name":"alias-one"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -505,6 +547,27 @@ func TestFormatListMarkdown_WithAliases(t *testing.T) {
 		"---\n💡 **Next steps:**\n" +
 		"- Use action 'project_alias.get' to see one alias\n"
 	if md != want {
+		t.Errorf("FormatListMarkdown()\n got: %q\nwant: %q", md, want)
+	}
+}
+
+// TestFormatListMarkdown_APageOfALongerList verifies that a page which is not
+// the whole list says so: the total in the heading, the page between the
+// heading and the table, and the pagination line before the next steps.
+func TestFormatListMarkdown_APageOfALongerList(t *testing.T) {
+	out := ListOutput{
+		Aliases:    []Output{{ID: 1, ProjectID: 100, Name: "alpha"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+
+	want := "## Project Aliases (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| ID | Name | Project ID |\n| --- | --- | --- |\n" +
+		"| 1 | `alpha` | 100 |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project_alias.get' to see one alias\n"
+	if md := FormatListMarkdown(out); md != want {
 		t.Errorf("FormatListMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }

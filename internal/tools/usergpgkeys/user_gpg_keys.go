@@ -22,34 +22,42 @@ type Output struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
-// ListOutput holds a list of GPG keys.
+// ListOutput holds one page of GPG keys and the pagination GitLab sent with
+// it.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Keys []Output `json:"keys"`
+	Keys       []Output                  `json:"keys"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListInput is empty — lists GPG keys for the current user.
-type ListInput struct{}
+// ListInput holds the page of the current user's GPG keys to list. GitLab
+// pages GET /user/gpg_keys, and client-go's ListGPGKeys takes no options
+// struct, so the page travels as a request option.
+type ListInput struct {
+	toolutil.PaginationInput
+}
 
-// List retrieves GPG keys for the current authenticated user.
-func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOutput, error) {
+// List retrieves one page of the current authenticated user's GPG keys.
+func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	keys, _, err := client.GL().Users.ListGPGKeys(gl.WithContext(ctx))
+	keys, resp, err := client.GL().Users.ListGPGKeys(gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_gpg_keys", err, http.StatusUnauthorized,
 			"GPG key listing requires an authenticated user; verify your token is valid (api or read_user scope)")
 	}
-	return ListOutput{Keys: toOutputList(keys)}, nil
+	return ListOutput{Keys: toOutputList(keys), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// ListForUserInput holds parameters for listing GPG keys for a specific user.
+// ListForUserInput holds parameters for listing GPG keys for a specific user,
+// and the page of them to list.
 type ListForUserInput struct {
 	UserID int64 `json:"user_id" jsonschema:"The ID of the user,required"`
+	toolutil.PaginationInput
 }
 
-// ListForUser retrieves GPG keys for a specific user.
+// ListForUser retrieves one page of a specific user's GPG keys.
 func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListForUserInput) (ListOutput, error) {
 	if input.UserID == 0 {
 		return ListOutput{}, errors.New("list_gpg_keys_for_user: user_id is required")
@@ -57,12 +65,12 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	keys, _, err := client.GL().Users.ListGPGKeysForUser(input.UserID, gl.WithContext(ctx))
+	keys, resp, err := client.GL().Users.ListGPGKeysForUser(input.UserID, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_gpg_keys_for_user", err, http.StatusNotFound,
 			"verify user_id with user.get; viewing other users' GPG keys may require admin token")
 	}
-	return ListOutput{Keys: toOutputList(keys)}, nil
+	return ListOutput{Keys: toOutputList(keys), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // GetInput holds parameters for retrieving a specific GPG key.
@@ -246,8 +254,7 @@ func FormatListMarkdownString(o ListOutput) string {
 		return toolutil.EmptyMessage("GPG keys")
 	}
 	var b strings.Builder
-	var pagination toolutil.PaginationOutput
-	toolutil.WriteListHeading(&b, "GPG Keys", len(o.Keys), pagination)
+	toolutil.WriteListHeading(&b, "GPG Keys", len(o.Keys), o.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Key (truncated)", "Created At"))
 	for _, k := range o.Keys {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -256,7 +263,7 @@ func FormatListMarkdownString(o ListOutput) string {
 			toolutil.FormatTime(k.CreatedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, pagination, false, hintGetGPGKey)
+	toolutil.WriteListFooter(&b, o.Pagination, false, hintGetGPGKey)
 	return b.String()
 }
 

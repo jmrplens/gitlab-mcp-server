@@ -59,13 +59,19 @@ type HookEventItem struct {
 	OwnerEmail string `json:"owner_email"`
 }
 
-// ListInput is empty (no params).
-type ListInput struct{}
+// ListInput holds the page of system hooks to list. GitLab pages GET /hooks,
+// and client-go's ListHooks takes no options struct, so the page travels as a
+// request option.
+type ListInput struct {
+	toolutil.PaginationInput
+}
 
-// ListOutput contains the list of system hooks.
+// ListOutput contains one page of system hooks and the pagination GitLab sent
+// with it.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Hooks []HookItem `json:"hooks"`
+	Hooks      []HookItem                `json:"hooks"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // GetInput is the input for getting a system hook.
@@ -298,10 +304,10 @@ func hookEditOptions(input EditInput) *gl.EditHookOptions {
 
 // Handlers.
 
-// List retrieves all system hooks.
-func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOutput, error) {
+// List retrieves one page of the instance's system hooks.
+func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	hooks, _, err := client.GL().SystemHooks.ListHooks(gl.WithContext(ctx))
+	hooks, resp, err := client.GL().SystemHooks.ListHooks(gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("system_hook_list", err, http.StatusForbidden,
 			"requires administrator access; system hooks are instance-wide and only available on self-managed instances")
@@ -314,7 +320,7 @@ func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOu
 	for i, h := range hooks {
 		items = append(items, toItem(h, extras[i]))
 	}
-	return ListOutput{Hooks: items}, nil
+	return ListOutput{Hooks: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Get retrieves a single system hook.

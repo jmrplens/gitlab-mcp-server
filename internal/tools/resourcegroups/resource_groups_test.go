@@ -257,6 +257,91 @@ func TestListUpcomingJobs_Error(t *testing.T) {
 	}
 }
 
+// TestLists_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for, on both list routes. Neither client-go
+// method takes an options struct, so until the inputs carried page and
+// per_page both actions could only ever read GitLab's first page.
+func TestLists_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	page := toolutil.PaginationInput{Page: 2, PerPage: 1}
+	tests := []struct {
+		name string
+		path string
+		body string
+		list func(*testing.T, *gitlabclient.Client) (int, error)
+	}{
+		{
+			name: "a project's resource groups",
+			path: "/api/v4/projects/1/resource_groups",
+			body: `[` + fixtureGroupJSON + `]`,
+			list: func(t *testing.T, client *gitlabclient.Client) (int, error) {
+				out, err := ListAll(t.Context(), client, ListInput{ProjectID: "1", PaginationInput: page})
+				return len(out.Groups), err
+			},
+		},
+		{
+			name: "the jobs waiting on one group",
+			path: "/api/v4/projects/1/resource_groups/production/upcoming_jobs",
+			body: `[{"id":10,"name":"deploy-to-prod","status":"pending","stage":"release"}]`,
+			list: func(t *testing.T, client *gitlabclient.Client) (int, error) {
+				out, err := ListUpcomingJobs(t.Context(), client, ListUpcomingJobsInput{ProjectID: "1", Key: "production", PaginationInput: page})
+				return len(out.Jobs), err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, tt.path)
+				testutil.AssertQueryParam(t, r, "page", "2")
+				testutil.AssertQueryParam(t, r, "per_page", "1")
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			listed, err := tt.list(t, client)
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if listed != 1 {
+				t.Errorf("listed %d items, want the one of page 2", listed)
+			}
+		})
+	}
+}
+
+// TestLists_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page on both list routes, so a caller
+// holding the first page can tell a second exists and which to ask for.
+func TestLists_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	headers := testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+
+	t.Run("a project's resource groups", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			testutil.AssertRequestPath(t, r, "/api/v4/projects/1/resource_groups")
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+fixtureGroupJSON+`]`, headers)
+		}))
+		out, err := ListAll(t.Context(), client, ListInput{ProjectID: "1"})
+		if err != nil {
+			t.Fatalf(fmtUnexpErr, err)
+		}
+		if out.Pagination != want {
+			t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+		}
+	})
+	t.Run("the jobs waiting on one group", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			testutil.AssertRequestPath(t, r, "/api/v4/projects/1/resource_groups/production/upcoming_jobs")
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":10,"name":"deploy-to-prod","status":"pending","stage":"release"}]`, headers)
+		}))
+		out, err := ListUpcomingJobs(t.Context(), client, ListUpcomingJobsInput{ProjectID: "1", Key: "production"})
+		if err != nil {
+			t.Fatalf(fmtUnexpErr, err)
+		}
+		if out.Pagination != want {
+			t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+		}
+	})
+}
+
 // TestFormatListMarkdown checks the whole list rendering. The two next steps
 // are named separately: reading one group and changing its process mode are
 // different actions, and one hint offering both named a tool that only reads.
@@ -347,6 +432,54 @@ func TestFormatJobsMarkdown_WithData(t *testing.T) {
 		"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n"
 	if md != want {
 		t.Errorf("FormatJobsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatLists_APageOfALongerList verifies that a page which is not the
+// whole list says so, in both list renderings: the total in the heading, the
+// page between the heading and the table, and the pagination line before the
+// next steps.
+func TestFormatLists_APageOfALongerList(t *testing.T) {
+	page := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	const pageLines = "Showing 1 of 2 results (page 1 of 2)\n\n"
+	const footerLine = "\nPage 1 of 2 | 2 items total | 1 per page\n"
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "resource groups",
+			got:  FormatListMarkdown(ListOutput{Groups: []ResourceGroupItem{{ID: 1, Key: "prod", ProcessMode: "unordered"}}, Pagination: page}),
+			want: "## Resource Groups (2)\n\n" + pageLines +
+				"| ID | Key | Process Mode |\n" +
+				"| --- | --- | --- |\n" +
+				"| 1 | prod | unordered |\n" +
+				footerLine +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'pipeline.resource_group_get' to see one resource group in full\n" +
+				"- Use action 'pipeline.resource_group_edit' to change a group's process mode\n",
+		},
+		{
+			name: "upcoming jobs",
+			got:  FormatJobsMarkdown(ListUpcomingJobsOutput{Jobs: []JobItem{{ID: 10, Name: "deploy", Status: "pending", Stage: "deploy"}}, Pagination: page}),
+			want: "## Upcoming Jobs (2)\n\n" + pageLines +
+				"| ID | Name | Status | Stage |\n" +
+				"| --- | --- | --- | --- |\n" +
+				"| 10 | deploy | 🟡 pending | deploy |\n" +
+				footerLine +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'job.get' to see one of these jobs in full\n" +
+				"- Use action 'job.trace' to read a job's log\n" +
+				"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("markdown\n got %q\nwant %q", tt.got, tt.want)
+			}
+		})
 	}
 }
 

@@ -66,16 +66,16 @@ type userGPGMeta struct {
 // userGPGActionMeta maps each individual tool name to its discovery metadata.
 var userGPGActionMeta = map[string]userGPGMeta{
 	"gitlab_list_gpg_keys": {
-		usage:       "List every GPG key on the authenticated user's own account. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys. No parameters are required.",
+		usage:       "List the GPG keys on the authenticated user's own account, one page at a time with page and per_page. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys. No parameters are required.",
 		aliases:     []string{"list gpg keys", "show my gpg keys", "view my gpg signing keys"},
 		related:     []string{actionUserGetGPGKey, actionUserAddGPGKey, actionUserDeleteGPGKey, actionUserGPGKeysForUser},
-		description: "List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.",
+		description: "List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp, with pagination metadata. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.",
 	},
 	"gitlab_list_gpg_keys_for_user": {
-		usage:       "List every GPG key registered on a specific user's account by user_id. Use after resolving a user with user.get. Viewing another user's GPG keys may require an admin token.",
+		usage:       "List the GPG keys registered on a specific user's account by user_id, one page at a time with page and per_page. Use after resolving a user with user.get. Viewing another user's GPG keys may require an admin token.",
 		aliases:     []string{"list gpg keys for user", "show another user's gpg keys", "get user gpg keys"},
 		related:     []string{actionUserGetGPGKeyForUser, actionUserAddGPGKeyForUser, actionUserDeleteGPGKeyForUser, "user.get"},
-		description: "List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",
+		description: "List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp, with pagination metadata. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",
 	},
 	"gitlab_get_gpg_key": {
 		usage:       "Fetch a single GPG key belonging to the authenticated user by key_id. Use after listing keys when the exact key ID is known and the full armored key is needed.",

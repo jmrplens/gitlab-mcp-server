@@ -44,7 +44,7 @@ func FormatListMarkdown(output ListOutput) *mcp.CallToolResult {
 		return toolutil.ToolResultWithMarkdown(toolutil.EmptyMessage("system hooks"))
 	}
 	var sb strings.Builder
-	toolutil.WriteListHeading(&sb, "System Hooks", len(output.Hooks), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&sb, "System Hooks", len(output.Hooks), output.Pagination)
 	sb.WriteString(toolutil.MarkdownTableHeader(
 		"ID", "Name", "URL", "Status", "Push", "Tag Push", "MR", "Repo Update", "SSL",
 	))
@@ -61,7 +61,7 @@ func FormatListMarkdown(output ListOutput) *mcp.CallToolResult {
 			toolutil.BoolEmoji(h.EnableSSLVerification),
 		))
 	}
-	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&sb, output.Pagination, false,
 		toolutil.HintAction(actionGet, "read one hook with its filters and headers"),
 		toolutil.HintAction(actionAdd, "register another system hook"),
 	)

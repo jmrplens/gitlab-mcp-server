@@ -12,9 +12,13 @@ import (
 
 // ListAll.
 
-// ListInput defines parameters for the list operation.
+// ListInput defines parameters for the list operation, and the page of the
+// project's resource groups to list. client-go's
+// GetAllResourceGroupsForAProject takes no options struct, so the page travels
+// as a request option.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	toolutil.PaginationInput
 }
 
 // ResourceGroupItem is a CI resource group as GitLab renders it
@@ -41,15 +45,17 @@ func toResourceGroupItem(g *gl.ResourceGroup) ResourceGroupItem {
 	}
 }
 
-// ListOutput represents the response from the list operation.
+// ListOutput represents one page of a project's resource groups and the
+// pagination GitLab sent with it.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Groups []ResourceGroupItem `json:"groups"`
+	Groups     []ResourceGroupItem       `json:"groups"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListAll lists all for the resourcegroups package.
+// ListAll lists one page of a project's resource groups.
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	groups, _, err := client.GL().ResourceGroup.GetAllResourceGroupsForAProject(string(input.ProjectID), gl.WithContext(ctx))
+	groups, resp, err := client.GL().ResourceGroup.GetAllResourceGroupsForAProject(string(input.ProjectID), gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_resource_groups", err, http.StatusNotFound, "verify project_id with project.get")
 	}
@@ -57,7 +63,7 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListInput) 
 	for _, g := range groups {
 		items = append(items, toResourceGroupItem(g))
 	}
-	return ListOutput{Groups: items}, nil
+	return ListOutput{Groups: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Get.
@@ -99,10 +105,14 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Re
 
 // ListUpcomingJobs.
 
-// ListUpcomingJobsInput defines parameters for the list upcoming jobs operation.
+// ListUpcomingJobsInput defines parameters for the list upcoming jobs
+// operation, and the page of those jobs to list. client-go's
+// ListUpcomingJobsForASpecificResourceGroup takes no options struct, so the
+// page travels as a request option.
 type ListUpcomingJobsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Key       string               `json:"key" jsonschema:"Resource group key,required"`
+	toolutil.PaginationInput
 }
 
 // JobItem is one job waiting on a resource group, as a compact row: what the
@@ -143,16 +153,18 @@ type JobPipelineItem struct {
 	WebURL    string `json:"web_url,omitempty"`
 }
 
-// ListUpcomingJobsOutput represents the response from the list upcoming jobs operation.
+// ListUpcomingJobsOutput represents one page of the jobs waiting on a
+// resource group and the pagination GitLab sent with it.
 type ListUpcomingJobsOutput struct {
 	toolutil.HintableOutput
-	Jobs []JobItem `json:"jobs"`
+	Jobs       []JobItem                 `json:"jobs"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListUpcomingJobs lists upcoming jobs for the resourcegroups package.
+// ListUpcomingJobs lists one page of the jobs waiting on a resource group.
 func ListUpcomingJobs(ctx context.Context, client *gitlabclient.Client, input ListUpcomingJobsInput) (ListUpcomingJobsOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	jobs, _, err := client.GL().ResourceGroup.ListUpcomingJobsForASpecificResourceGroup(string(input.ProjectID), input.Key, gl.WithContext(ctx))
+	jobs, resp, err := client.GL().ResourceGroup.ListUpcomingJobsForASpecificResourceGroup(string(input.ProjectID), input.Key, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListUpcomingJobsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_resource_group_upcoming_jobs", err, http.StatusNotFound, "verify the resource group key with pipeline.resource_group_list")
 	}
@@ -192,7 +204,7 @@ func ListUpcomingJobs(ctx context.Context, client *gitlabclient.Client, input Li
 		}
 		items = append(items, item)
 	}
-	return ListUpcomingJobsOutput{Jobs: items}, nil
+	return ListUpcomingJobsOutput{Jobs: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // formatters.

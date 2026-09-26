@@ -747,10 +747,10 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		},
 	},
 	"gitlab_list_system_hooks": {
-		usage:       "List instance-wide system hooks that fire on global events such as project, group, user, and key changes. Distinct from per-project webhooks.",
+		usage:       "List instance-wide system hooks that fire on global events such as project, group, user, and key changes, one page at a time with page and per_page. Distinct from per-project webhooks.",
 		aliases:     []string{"list system hooks", "show instance webhooks", "system hook list"},
 		related:     []string{actionSystemHookGet, "admin.system_hook_add", actionSystemHookTest},
-		description: "List instance system hooks. Returns: an array of system hooks with id, url, and event triggers. See also: gitlab_get_system_hook, gitlab_add_system_hook.",
+		description: "List instance system hooks. Returns: an array of system hooks with id, url, and event triggers, with pagination metadata. See also: gitlab_get_system_hook, gitlab_add_system_hook.",
 	},
 	"gitlab_get_system_hook": {
 		usage:       "Get one instance system hook by its numeric hook id.",

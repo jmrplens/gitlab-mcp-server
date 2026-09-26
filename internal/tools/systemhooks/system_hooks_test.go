@@ -15,6 +15,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpPath identifies the fmt unexp path constant used by this package.
@@ -78,6 +79,47 @@ func TestList_Success(t *testing.T) {
 	}
 	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
 		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
+	}
+}
+
+// TestList_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for. client-go's ListHooks takes no options
+// struct, so until the input carried page and per_page this action could only
+// ever read GitLab's first twenty hooks.
+func TestList_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/hooks")
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[`+hookJSON+`]`)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1}})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Hooks) != 1 {
+		t.Errorf("expected 1 hook, got %d", len(out.Hooks))
+	}
+}
+
+// TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page, so a caller holding the first page
+// of hooks can tell a second exists and which to ask for.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/hooks")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+hookJSON+`]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := List(t.Context(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
