@@ -167,6 +167,35 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_ResourceWithoutVersion_NamesNoLatestVersion verifies that a listed
+// resource GitLab answers with no version, whether the connection is null or
+// empty, names no latest version rather than failing or inventing one.
+func TestList_ResourceWithoutVersion_NamesNoLatestVersion(t *testing.T) {
+	for name, versions := range map[string]string{"null connection": `null`, "no node": `{"nodes": []}`} {
+		t.Run(name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"ciCatalogResources": {
+						"nodes": [{"id": "gid://gitlab/Ci::CatalogResource/9", "name": "draft", "fullPath": "g/draft",
+							"webPath": "/g/draft", "starCount": 0, "last30DayUsageCount": 0, "archived": false,
+							"versions": `+versions+`}],
+						"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null}}}`)
+				},
+			})
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{})
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			if len(out.Resources) != 1 || out.Resources[0].Name != "draft" {
+				t.Fatalf("List() resources = %+v, want the one draft resource", out.Resources)
+			}
+			if got := out.Resources[0].LatestVersionName; got != "" {
+				t.Errorf("LatestVersionName = %q, want none for a resource without a version", got)
+			}
+		})
+	}
+}
+
 // TestList_WithFilters verifies the List_WithFilters handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
