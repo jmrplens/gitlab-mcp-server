@@ -147,7 +147,9 @@ func processFile(path string) error {
 	for _, ins := range slices.Backward(insertions) {
 		startIdx := ins.startLine - 1
 		endIdx := ins.endLine
-		if startIdx < 0 || startIdx > len(lines) || endIdx < startIdx || endIdx > len(lines) {
+		// startIdx indexes the line the comment is indented to match, so it
+		// must name a line of the file: one past the last is out of range.
+		if startIdx < 0 || startIdx >= len(lines) || endIdx < startIdx || endIdx > len(lines) {
 			continue
 		}
 		indentIdx := startIdx
@@ -160,10 +162,9 @@ func processFile(path string) error {
 		lines = newLines
 	}
 
-	result := strings.Join(lines, "\n")
-	if !strings.HasSuffix(result, "\n") {
-		result += "\n"
-	}
+	// splitLines stripped every trailing newline, so the file ends with
+	// exactly one whatever it carried before.
+	result := strings.Join(lines, "\n") + "\n"
 
 	if dryRun {
 		fmt.Printf("// dry-run: would update %s (%d insertions)\n", cleanPath, len(insertions))
@@ -581,7 +582,8 @@ func prefixMethodDoc(name, subject string) (string, bool) {
 }
 
 // generateHandlerDoc generates a doc comment for an MCP tool handler
-// function based on its name and input type.
+// function based on its name and input type. generateFuncDoc hands it
+// unexported names only, so every prefix it tests is lowercase.
 func generateHandlerDoc(d *ast.FuncDecl, pkgName string) string {
 	name := d.Name.Name
 	if d.Type.Results != nil && len(d.Type.Results.List) == 2 {
@@ -592,10 +594,10 @@ func generateHandlerDoc(d *ast.FuncDecl, pkgName string) string {
 	if strings.Contains(name, "ToOutput") || strings.HasPrefix(name, "to") {
 		return name + " converts the GitLab API response to the tool output format."
 	}
-	if strings.HasPrefix(name, "format") || strings.HasPrefix(name, "Format") {
+	if strings.HasPrefix(name, "format") {
 		return name + " renders the result as a formatted string."
 	}
-	if strings.HasPrefix(name, "build") || strings.HasPrefix(name, "Build") {
+	if strings.HasPrefix(name, "build") {
 		return name + " constructs the request parameters from the input."
 	}
 	return helperIntentDoc(name, pkgName)
@@ -914,11 +916,8 @@ func inferAction(name string) string {
 	}
 	for _, a := range actions {
 		if strings.HasPrefix(lower, a.prefix) {
-			rest := camelToWords(name[len(a.prefix):])
-			if rest == "" || rest == "resources" {
-				return a.verb + " resources"
-			}
-			return a.verb + " " + rest
+			// camelToWords reads an empty remainder as "resources".
+			return a.verb + " " + camelToWords(name[len(a.prefix):])
 		}
 	}
 	return "coordinates " + camelToWords(name)
@@ -987,13 +986,11 @@ var commonInitialisms = map[string]string{
 }
 
 // shouldSplitIdentifier reports whether a word boundary belongs before
-// runes[index].
+// runes[index]. A boundary beside a space an underscore became doubles that
+// space, which the caller's strings.Fields collapses.
 func shouldSplitIdentifier(runes []rune, index int) bool {
 	current := runes[index]
 	previous := runes[index-1]
-	if current == ' ' || previous == ' ' {
-		return false
-	}
 	if isUpper(current) && isLower(previous) {
 		return true
 	}

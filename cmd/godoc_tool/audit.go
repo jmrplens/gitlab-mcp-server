@@ -336,15 +336,17 @@ func checkExportedDocs(pkg golist.PackageInfo, parsed parsedPackage, findings *[
 		return fmt.Errorf("build doc package %s: %w", pkg.ImportPath, err)
 	}
 	for _, fn := range docPackage.Funcs {
-		checkNamedDoc(pkg, categoryFuncMissing, categoryFuncForm, "func", fn.Name, fn.Doc, findings)
+		checkNamedDoc(pkg, categoryFuncMissing, categoryFuncForm, "func", fn.Name, fn.Name, fn.Doc, findings)
 	}
 	for _, typ := range docPackage.Types {
-		checkNamedDoc(pkg, categoryTypeMissing, categoryTypeForm, "type", typ.Name, typ.Doc, findings)
+		checkNamedDoc(pkg, categoryTypeMissing, categoryTypeForm, "type", typ.Name, typ.Name, typ.Doc, findings)
 		for _, fn := range typ.Funcs {
-			checkNamedDoc(pkg, categoryFuncMissing, categoryFuncForm, "func", fn.Name, fn.Doc, findings)
+			checkNamedDoc(pkg, categoryFuncMissing, categoryFuncForm, "func", fn.Name, fn.Name, fn.Doc, findings)
 		}
+		// A method is named with its receiver type: a symbol finding carries
+		// no file, so "Run" alone could be any of the package's Run methods.
 		for _, method := range typ.Methods {
-			checkNamedDoc(pkg, categoryMethodMissing, categoryMethodForm, "method", method.Name, method.Doc, findings)
+			checkNamedDoc(pkg, categoryMethodMissing, categoryMethodForm, "method", typ.Name+"."+method.Name, method.Name, method.Doc, findings)
 		}
 		for _, value := range typ.Consts {
 			checkValueDoc(pkg, categoryConstMissing, categoryConstForm, "const", value.Names, value.Doc, findings)
@@ -362,14 +364,17 @@ func checkExportedDocs(pkg golist.PackageInfo, parsed parsedPackage, findings *[
 	return nil
 }
 
-func checkNamedDoc(pkg golist.PackageInfo, missingCategory, formCategory, kind, name, docText string, findings *[]finding) {
+// checkNamedDoc reports a missing or malformed comment on one symbol. label
+// names the symbol in the finding; name is the identifier the comment has to
+// open with, which for a method is label without its receiver type.
+func checkNamedDoc(pkg golist.PackageInfo, missingCategory, formCategory, kind, label, name, docText string, findings *[]finding) {
 	docText = strings.TrimSpace(docText)
 	if docText == "" {
-		*findings = append(*findings, newFinding(missingCategory, pkg, "", name, fmt.Sprintf("missing %s documentation", kind)))
+		*findings = append(*findings, newFinding(missingCategory, pkg, "", label, fmt.Sprintf("missing %s documentation", kind)))
 		return
 	}
 	if !strings.HasPrefix(docText, name) {
-		*findings = append(*findings, newFinding(formCategory, pkg, "", name, fmt.Sprintf("%s comment must start with %q; got %q", kind, name, firstLine(docText))))
+		*findings = append(*findings, newFinding(formCategory, pkg, "", label, fmt.Sprintf("%s comment must start with %q; got %q", kind, name, firstLine(docText))))
 	}
 }
 
