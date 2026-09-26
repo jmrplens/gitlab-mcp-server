@@ -148,7 +148,7 @@ type CreateInput struct {
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
 	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
-	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favour of theme and still accepts it"`
+	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it"`
 }
 
 // CreateOutput contains the created broadcast message.
@@ -179,13 +179,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Font != "" {
 		opts.Font = new(input.Font)
 	}
-	if len(input.TargetAccessLevels) > 0 {
-		levels := make([]gl.AccessLevelValue, len(input.TargetAccessLevels))
-		for i, l := range input.TargetAccessLevels {
-			levels[i] = gl.AccessLevelValue(l)
-		}
-		opts.TargetAccessLevels = levels
-	}
+	opts.TargetAccessLevels = accessLevels(input.TargetAccessLevels)
 	if input.TargetPath != "" {
 		opts.TargetPath = new(input.TargetPath)
 	}
@@ -224,7 +218,7 @@ type UpdateInput struct {
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
 	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
-	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favour of theme and still accepts it"`
+	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it"`
 }
 
 // UpdateOutput contains the updated broadcast message.
@@ -251,6 +245,18 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return UpdateOutput{Message: toItem(m)}, nil
 }
 
+// accessLevels converts the caller's target access levels to the SDK's type.
+// No guard is needed for an empty list: it converts to an empty slice, which
+// the options' omitempty leaves out of the request exactly as it leaves out a
+// nil one, so a guard on the length could not be observed from the request.
+func accessLevels(levels []int64) []gl.AccessLevelValue {
+	out := make([]gl.AccessLevelValue, len(levels))
+	for i, level := range levels {
+		out[i] = gl.AccessLevelValue(level)
+	}
+	return out
+}
+
 // buildUpdateOpts maps UpdateInput fields to the GitLab API update options.
 func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, error) {
 	opts := &gl.UpdateBroadcastMessageOptions{}
@@ -274,13 +280,7 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, erro
 	if input.Font != "" {
 		opts.Font = new(input.Font)
 	}
-	if len(input.TargetAccessLevels) > 0 {
-		levels := make([]gl.AccessLevelValue, len(input.TargetAccessLevels))
-		for i, l := range input.TargetAccessLevels {
-			levels[i] = gl.AccessLevelValue(l)
-		}
-		opts.TargetAccessLevels = levels
-	}
+	opts.TargetAccessLevels = accessLevels(input.TargetAccessLevels)
 	if input.TargetPath != "" {
 		opts.TargetPath = new(input.TargetPath)
 	}

@@ -1012,7 +1012,7 @@ func TestBroadcastMessages_NoTargetAccessLevels_SendNoSuchField(t *testing.T) {
 // TestBroadcastMessages_Color_SentOnlyWhenGiven verifies that a create and an
 // update carry `color` in the body with the value the caller gave, and leave it
 // out when the caller gave none. GitLab still declares the parameter on both
-// routes although it deprecates it in favour of theme, and an absent color keeps
+// routes although it deprecates it in favor of theme, and an absent color keeps
 // the message's current one where an empty string would ask GitLab to clear it.
 func TestBroadcastMessages_Color_SentOnlyWhenGiven(t *testing.T) {
 	tests := []struct {
@@ -1041,40 +1041,42 @@ func TestBroadcastMessages_Color_SentOnlyWhenGiven(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var body []byte
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != tt.path || r.Method != tt.method {
-					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-					http.NotFound(w, r)
-					return
-				}
-				read, err := io.ReadAll(r.Body)
-				if err != nil {
-					t.Errorf("read request body: %v", err)
-					http.Error(w, "read request body", http.StatusInternalServerError)
-					return
-				}
-				body = read
-				testutil.RespondJSON(w, http.StatusOK, messageJSON)
-			}))
-
+			client, body := bodyRecordingClient(t, tt.method, tt.path)
 			if err := tt.call(client, tt.color); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 			var sent map[string]any
-			if err := json.Unmarshal(body, &sent); err != nil {
-				t.Fatalf("decode request body %q: %v", body, err)
+			if err := json.Unmarshal(*body, &sent); err != nil {
+				t.Fatalf("decode request body %q: %v", *body, err)
 			}
 			got, ok := sent["color"]
-			if tt.color == "" {
-				if ok {
-					t.Errorf("request body %s carries color = %#v, want the field to be absent", body, got)
-				}
-				return
-			}
-			if got != tt.color {
-				t.Errorf("request body %s carries color = %#v, want %q", body, got, tt.color)
+			if want := tt.color != ""; ok != want || (ok && got != tt.color) {
+				t.Errorf("request body %s carries color = %#v (present %v), want %q sent only when given", *body, got, ok, tt.color)
 			}
 		})
 	}
+}
+
+// bodyRecordingClient returns a client whose mock answers one broadcast
+// message for the given method and path, and the body of the request it
+// received. A request to anything else is reported and refused.
+func bodyRecordingClient(t *testing.T, method, path string) (*gitlabclient.Client, *[]byte) {
+	t.Helper()
+	body := new([]byte)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path || r.Method != method {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		*body = read
+		testutil.RespondJSON(w, http.StatusOK, messageJSON)
+	}))
+	return client, body
 }

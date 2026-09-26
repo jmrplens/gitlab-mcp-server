@@ -91,7 +91,7 @@ Get a specific broadcast message by ID. Requires admin access.
 
 ### `gitlab_create_broadcast_message`
 
-Create a broadcast message. Accepts `theme` for a banner's color scheme and the older `color` background hex code, which GitLab deprecates in favour of `theme` and still accepts. Requires admin access.
+Create a broadcast message. Accepts `theme` for a banner's color scheme and the older `color` background hex code, which GitLab deprecates in favor of `theme` and still accepts. Requires admin access.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
