@@ -18,9 +18,12 @@
 // an audit: an audit that needed a container could not be a gate.
 //
 // One thing evaluation does not give and the record therefore carries from
-// source: a Grape condition is a Proc, and a Proc knows where it was written
+// source: a block condition is a Proc, and a Proc knows where it was written
 // but not what it says. The generator reads those lines back from inside the
-// same image, so a condition arrives here both located and quoted.
+// same image, so a block condition arrives here both located and quoted. A
+// hash or a symbol condition is the other way round: it holds what it tests,
+// which the record keeps as its data or its option, and grape-entity keeps no
+// location for it, so it arrives quoted and never located.
 package apilive
 
 import (
@@ -154,6 +157,9 @@ type Condition struct {
 	// Inverse is true for `unless:`.
 	Inverse bool `json:"inverse,omitempty"`
 	// File and Line locate a block condition's lambda, repository relative.
+	// A hash or a symbol condition carries neither: grape-entity keeps the
+	// options it tests and nothing about where the exposure declaring it was
+	// written, and the exposure records no location of its own either.
 	File string `json:"file,omitempty"`
 	Line int    `json:"line,omitempty"`
 	// Text is those lines read back from inside the image and squeezed onto

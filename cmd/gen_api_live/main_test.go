@@ -490,7 +490,7 @@ func TestRunGenerate_AConditionNothingCanRead_IsRefusedAfterTheFloors(t *testing
 			name:   "a whole record with one unreadable condition",
 			mutate: unreadable,
 			want: "refusing to write a record whose conditions cannot be read:\n  " +
-				"1 conditions carry neither text, hash nor symbol (API::Entities::Fixture3.custom_attributes SymbolCondition): " +
+				"1 condition carries neither text, hash nor symbol (API::Entities::Fixture3.custom_attributes SymbolCondition): " +
 				"introspect.rb met a condition it does not read, and an audit can report the field it gates as gated but never by what",
 		},
 		{
@@ -561,7 +561,7 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 					{Name: "license", Conditions: []apilive.Condition{{Kind: "SymbolCondition"}}},
 				}}
 			},
-			wantsIn: "1 conditions carry neither text, hash nor symbol (API::Entities::Fixture5.license SymbolCondition)",
+			wantsIn: "1 condition carries neither text, hash nor symbol (API::Entities::Fixture5.license SymbolCondition)",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

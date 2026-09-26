@@ -191,6 +191,13 @@ type Gate struct {
 	// It is read from the condition's own file, so a field with no condition
 	// has no location to answer from and reports nothing: an exposure records
 	// where its lambda was written and not where the exposure itself was.
+	//
+	// Only a block condition has a file. A hash or a symbol condition carries
+	// none, so a field gated by one of those alone never answers "ee", even
+	// when the exposure was written under ee/: an epic's reference, gated by
+	// `if: { with_reference: true }` in ee/lib/api/entities/epic.rb, reads
+	// with no edition. Empty therefore means "no located condition said so",
+	// never "written outside ee/".
 	Edition string
 }
 

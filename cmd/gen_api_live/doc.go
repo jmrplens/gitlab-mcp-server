@@ -48,6 +48,14 @@
 // can call yet is not a gap, but it is a difference and the record says which
 // version it is.
 //
+// Nor where a hash or a symbol condition was written. grape-entity keeps a
+// block condition's Proc, which knows its file, and for the other two kinds
+// only the options they test, while an exposure records no location of its
+// own. The record therefore quotes all three kinds and locates only blocks, so
+// an edition read from a condition's file never answers ee for the other two:
+// an epic's reference is gated by `if: { with_reference: true }` in
+// ee/lib/api/entities/epic.rb and reads with no edition.
+//
 // And it cannot correct a wrong annotation. GET /api/v4/keys is annotated
 // APIEntitiesUserWithAdmin and the endpoint presents an SSH key with a user
 // under it; reading the annotation from the running router gives the same

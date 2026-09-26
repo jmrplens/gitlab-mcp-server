@@ -230,10 +230,14 @@ func conditionProblems(doc apilive.Document) []string {
 	if len(unreadable) == 0 {
 		return nil
 	}
+	subject := "conditions carry"
+	if len(unreadable) == 1 {
+		subject = "condition carries"
+	}
 	return []string{fmt.Sprintf(
-		"%d conditions carry neither text, hash nor symbol (%s): introspect.rb met a condition it does not read, "+
+		"%d %s neither text, hash nor symbol (%s): introspect.rb met a condition it does not read, "+
 			"and an audit can report the field it gates as gated but never by what",
-		len(unreadable), strings.Join(unreadable, ", "),
+		len(unreadable), subject, strings.Join(unreadable, ", "),
 	)}
 }
 
