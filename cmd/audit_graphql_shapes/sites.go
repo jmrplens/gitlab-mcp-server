@@ -596,7 +596,7 @@ func bindings(carried, added map[*types.TypeParam]types.Type) map[*types.TypePar
 	if len(carried) == 0 && len(added) == 0 {
 		return nil
 	}
-	joined := make(map[*types.TypeParam]types.Type, len(carried)+len(added))
+	joined := map[*types.TypeParam]types.Type{}
 	maps.Copy(joined, carried)
 	maps.Copy(joined, added)
 	return joined
