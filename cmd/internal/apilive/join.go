@@ -177,8 +177,9 @@ func LicensedFeatures(condition string) []string {
 
 // Gate is what a field's conditions amount to, in the terms a finding reports.
 type Gate struct {
-	// If and Unless are the condition texts, joined with " && " when a field
-	// carries several, since Grape requires all of them to pass.
+	// If and Unless are the conditions as [Condition.Describe] renders them,
+	// joined with " && " when a field carries several, since Grape requires
+	// all of them to pass.
 	If     string
 	Unless string
 	// Tier is the highest plan the conditions demand, empty when they demand
@@ -194,18 +195,26 @@ type Gate struct {
 }
 
 // Gated reports whether the field is sent under any condition at all.
+//
+// It holds for every field that carries a condition, readable or not, because
+// [Document.GateOf] renders each one through [Condition.Describe], which never
+// returns nothing. It used to fall false for a field whose only condition
+// carried no text, and so reported the opposite of what the record holds.
 func (g Gate) Gated() bool { return g.If != "" || g.Unless != "" }
 
 // GateOf reads what a field's conditions demand, resolving the tier against
 // this record's own licensed feature table.
+//
+// Every condition contributes, a hash or a symbol one through the data it
+// carries and one the record could not read through its kind, since Grape
+// skips the exposure whenever any of them fails. Dropping one that carries no
+// text is how 41 fields gated by an option or a license came to read as sent
+// on every response.
 func (d Document) GateOf(field Field) Gate {
 	var gate Gate
 	var ifs, unlesses, features []string
 	for _, condition := range field.Conditions {
-		text := condition.Text
-		if text == "" {
-			text = condition.Hash
-		}
+		text := condition.Describe()
 		if condition.Inverse {
 			unlesses = append(unlesses, text)
 		} else {
@@ -216,21 +225,8 @@ func (d Document) GateOf(field Field) Gate {
 			gate.Edition = "ee"
 		}
 	}
-	gate.If = strings.Join(nonEmpty(ifs), " && ")
-	gate.Unless = strings.Join(nonEmpty(unlesses), " && ")
+	gate.If = strings.Join(ifs, " && ")
+	gate.Unless = strings.Join(unlesses, " && ")
 	gate.Tier = d.Tier(features...)
 	return gate
-}
-
-// nonEmpty drops the conditions that carry no text, which a hash condition
-// with no data does. Joining them would produce a leading or doubled
-// separator that reads as a condition somebody forgot to write down.
-func nonEmpty(texts []string) []string {
-	out := texts[:0:0]
-	for _, text := range texts {
-		if strings.TrimSpace(text) != "" {
-			out = append(out, text)
-		}
-	}
-	return out
 }

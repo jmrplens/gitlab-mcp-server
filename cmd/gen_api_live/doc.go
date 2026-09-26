@@ -24,9 +24,21 @@
 // "expose the loop variable" and the names exist only after the class loads.
 //
 // The same holds for conditions. The instance carries 914 where the scan finds
-// 388, and for 873 of them the text can be read back. And for the licensed
-// feature table, where the scan's own source concedes it cannot read the lists
-// the table builds by concatenation.
+// 388, and every one of them is recorded as what it tests: 873 block
+// conditions with their text read back from the image, 32 symbol conditions
+// with the option they name, and 9 hash conditions with their data. And for the
+// licensed feature table, where the scan's own source concedes it cannot read
+// the lists the table builds by concatenation.
+//
+// Until schema version 3 the 41 hash and symbol conditions arrived as their
+// kind alone. The script asked for an instance variable grape-entity never
+// sets and had no key for a symbol, and an unreadable condition was then
+// dropped by the reader, so the 41 fields they gate, custom_attributes on
+// seventeen entities among them, read downstream as sent on every response.
+// The script now goes through each condition class's public reader, which
+// raises rather than reads nil if grape-entity renames it, and this command
+// refuses to write or to pass a record holding a condition that carries
+// neither text, hash nor symbol.
 //
 // # What it cannot give
 //

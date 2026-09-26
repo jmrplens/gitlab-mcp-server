@@ -201,7 +201,7 @@ func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t 
 		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
 			Entity:     "API::Entities::Approvals",
 			Response:   []string{"approved", "approvers"},
-			Conditions: map[string][]apilive.Condition{"approvers": {{Kind: "HashCondition", Hash: ":with_approvers"}}},
+			Conditions: map[string][]apilive.Condition{"approvers": {{Kind: "SymbolCondition", Symbol: "with_approvers"}}},
 		},
 		"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve": {
 			Entity: "API::Entities::Approved", Response: []string{"approved", "approved_at"},
@@ -216,9 +216,9 @@ func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t 
 	searched := []string{"GET /projects/:/merge_requests/:/approvals", "POST /projects/:/merge_requests/:/approve"}
 	want := []UnsurfacedField{
 		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", SDKType: "MergeRequestApprovals", SDKModels: true, Sent: sentAlways},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", SDKType: "MergeRequestApprovals", Sent: sentWhen, If: ":with_approvers"},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", SDKType: "MergeRequestApprovals", Sent: sentWhen, If: "if: :with_approvers"},
 		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", SDKType: "MergeRequestApprovals", SDKModels: true, Sent: sentAlways},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", SDKType: "MergeRequestApprovals", Sent: sentWhen, If: ":with_approvers"},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", SDKType: "MergeRequestApprovals", Sent: sentWhen, If: "if: :with_approvers"},
 	}
 	if !reflect.DeepEqual(check.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Unsurfaced, want)

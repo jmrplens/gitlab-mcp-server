@@ -426,6 +426,101 @@ func TestFloorProblems_EntitiesThatRefused_AreCountedAndNamedInOrder(t *testing.
 	}
 }
 
+// TestConditionProblems_AConditionThatSaysNothing_IsCountedAndNamedInOrder
+// verifies the line that keeps issue 973 from coming back: a condition
+// carrying neither text, hash nor symbol is named by entity, field and kind,
+// in the order a reader would look them up, and every readable one is passed.
+//
+// The unreadable ones are planted out of order across two entities, two on
+// one field, beside a readable condition of each kind, so a line that listed
+// them as the map yields them, stopped at the first one on a field, or counted
+// a readable condition, reads differently from the one asserted.
+func TestConditionProblems_AConditionThatSaysNothing_IsCountedAndNamedInOrder(t *testing.T) {
+	doc := atEveryFloor()
+	doc.Entities["API::Entities::Zulu"] = apilive.Entity{Fields: []apilive.Field{
+		{Name: "statistics", Conditions: []apilive.Condition{{Kind: "SymbolCondition"}}},
+		{Name: "stats", Conditions: []apilive.Condition{{Kind: "SymbolCondition", Symbol: "include_stats"}}},
+	}}
+	doc.Entities["API::Entities::Alpha"] = apilive.Entity{Fields: []apilive.Field{
+		{Name: "reference", Conditions: []apilive.Condition{
+			{Kind: "HashCondition", Hash: "{:with_reference=>true}"},
+			{Kind: "HashCondition", Hash: "  "},
+			{Kind: "ProcCondition", Inverse: true},
+		}},
+		{Name: "public", Conditions: []apilive.Condition{{Kind: "BlockCondition", Text: "->(p, _) { p.public? }"}}},
+	}}
+
+	want := []string{"3 conditions carry neither text, hash nor symbol " +
+		"(API::Entities::Alpha.reference HashCondition, API::Entities::Alpha.reference ProcCondition, API::Entities::Zulu.statistics SymbolCondition): " +
+		"introspect.rb met a condition it does not read, and an audit can report the field it gates as gated but never by what"}
+	if got := conditionProblems(doc); !slices.Equal(got, want) {
+		t.Errorf("conditionProblems() = %q, want %q", got, want)
+	}
+
+	t.Run("a record whose every condition is readable has none", func(t *testing.T) {
+		delete(doc.Entities, "API::Entities::Zulu")
+		doc.Entities["API::Entities::Alpha"] = apilive.Entity{Fields: []apilive.Field{
+			{Name: "reference", Conditions: []apilive.Condition{{Kind: "HashCondition", Hash: "{:with_reference=>true}"}}},
+		}}
+		if got := conditionProblems(doc); got != nil {
+			t.Errorf("conditionProblems() = %q, want nil", got)
+		}
+	})
+}
+
+// TestRunGenerate_AConditionNothingCanRead_IsRefusedAfterTheFloors verifies
+// that a regeneration cannot write back the record issue 973 was filed on.
+//
+// The record is a GitLab and says less than the script could have read, so it
+// is refused with a sentence of its own rather than the floors'. The floors
+// still come first: a record that is not a GitLab is reported as that, since
+// its conditions are the least of what is wrong with it.
+func TestRunGenerate_AConditionNothingCanRead_IsRefusedAfterTheFloors(t *testing.T) {
+	unreadable := func(d *dumped) {
+		d.Entities[entityName(3)] = apilive.Entity{Fields: []apilive.Field{
+			{Name: "custom_attributes", Conditions: []apilive.Condition{{Kind: "SymbolCondition"}}},
+		}}
+	}
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*dumped)
+		want   string
+	}{
+		{
+			name:   "a whole record with one unreadable condition",
+			mutate: unreadable,
+			want: "refusing to write a record whose conditions cannot be read:\n  " +
+				"1 conditions carry neither text, hash nor symbol (API::Entities::Fixture3.custom_attributes SymbolCondition): " +
+				"introspect.rb met a condition it does not read, and an audit can report the field it gates as gated but never by what",
+		},
+		{
+			name: "a short record with one unreadable condition",
+			mutate: func(d *dumped) {
+				unreadable(d)
+				d.Routes = d.Routes[:3]
+			},
+			want: "refusing to write a record that is not a GitLab:\n  " + floorProblem(3, "routes", minRoutes),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			payload := wholeEnough()
+			testCase.mutate(&payload)
+
+			err := runGenerate(dir, dumpFrom{path: writeDump(t, payload)}, "gitlab/gitlab-ee:latest", false)
+			if err == nil {
+				t.Fatal("the record was written, want a refusal")
+			}
+			if err.Error() != testCase.want {
+				t.Errorf("error = %q, want %q", err, testCase.want)
+			}
+			if _, statErr := os.Stat(apilive.Path(dir)); statErr == nil {
+				t.Error("a refused record was written anyway")
+			}
+		})
+	}
+}
+
 // TestRunCheck_AStaleOrTruncatedRecord_IsRefused verifies the gate every audit
 // rests on: it reads one file, asks nothing of Docker or the network, and
 // fails on a record that cannot answer for a current GitLab.
@@ -456,6 +551,17 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 			name: "a record that lost its routes", retrievedAt: "2026-09-09", now: fresh,
 			mutate:  func(d *dumped) { d.Routes = nil },
 			wantsIn: "routes",
+		},
+		{
+			// The shape of the record issue 973 was filed on: whole, current,
+			// and holding a condition that says nothing about what it tests.
+			name: "a record holding a condition nothing can read", retrievedAt: "2026-09-09", now: fresh,
+			mutate: func(d *dumped) {
+				d.Entities[entityName(5)] = apilive.Entity{Fields: []apilive.Field{
+					{Name: "license", Conditions: []apilive.Condition{{Kind: "SymbolCondition"}}},
+				}}
+			},
+			wantsIn: "1 conditions carry neither text, hash nor symbol (API::Entities::Fixture5.license SymbolCondition)",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
