@@ -103,9 +103,9 @@ JSON. A single-scope run produces that auditor's native shape. The structs one c
 
 The `sdk` scope enumerates the services from client-go's `Client` struct instead, and holds each one to a decision:
 
-- **covered** — a handler calls it, or hands one of its methods to a helper that does;
-- **declared** — `declaredServices` in `cmd/audit_1to1/internal/sdk/decisions.go` names it, with a category (`COVERED_RAW`, `COVERED_GRAPHQL`, `SUPERSEDED_UPSTREAM`, `UNWRAPPED_TRACKED`) and the evidence behind it;
-- **undeclared** — a finding.
+- **covered**: a handler calls it, or hands one of its methods to a helper that does;
+- **declared**: `declaredServices` in `cmd/audit_1to1/internal/sdk/decisions.go` names it, with a category (`COVERED_RAW`, `COVERED_GRAPHQL`, `SUPERSEDED_UPSTREAM`, `UNWRAPPED_TRACKED`) and the evidence behind it;
+- **undeclared**: a finding.
 
 It carries a second rule for the same reason. [ADR-0006](adr/adr-0006-raw-graphql-for-uncovered-domains.md) admits raw `GraphQL.Do()` for domains **without** a client-go service wrapper; the wrapper appearing later is what retires that exemption, and nothing was checking. Every raw-GraphQL operation whose package maps to a client-go service is therefore held to a decision too, `KEEP` or `MIGRATE`, in `graphqlDecisions`. The unit is the **operation**, not the package: several packages use GraphQL for one operation and the SDK for the rest, so a package-level verdict would be mostly noise.
 
