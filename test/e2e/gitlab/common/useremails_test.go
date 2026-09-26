@@ -18,6 +18,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/useremails"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -74,6 +75,16 @@ func TestUserEmails_OwnAccount_AddListDelete(t *testing.T) {
 			e.T.Errorf("the run user's emails do not hold the added address %d: %+v", added.ID, listed.Emails)
 		}
 
+		// A second address makes the listing two pages long at one address
+		// per page. GitLab leaves the primary address out of this listing, so
+		// the added one alone would not. No other scenario adds to or removes
+		// from the run user's addresses, which is what lets the two pages be
+		// held to holding different ones.
+		addOwnEmail(e, uniqueAddress("page"))
+		assertPagesOneAtATime(e, s, actionUserEmails, nil, func(out users.EmailListOutput) ([]string, toolutil.PaginationOutput) {
+			return idKeys(ownEmailIDs(out.Emails)), out.Pagination
+		})
+
 		deleted := harness.Do[useremails.DeleteOutput](s, actionUserDeleteEmail, map[string]any{"email_id": added.ID})
 		if !deleted.Deleted || deleted.EmailID != added.ID {
 			e.T.Errorf("delete_email answered %+v, want deleted=true for email %d", deleted, added.ID)
@@ -123,6 +134,48 @@ func TestUserEmails_ForUser_AddListRefuseOwnReadDelete(t *testing.T) {
 		if containsID(emailIDs(after.Emails), added.ID) {
 			e.T.Errorf("email %d of user %d is still listed after its delete", added.ID, user.ID)
 		}
+	})
+}
+
+// TestUserEmails_ForUser_PagesOneAddressAtATime gives one fixture user two
+// confirmed addresses and pages through the user's addresses one at a time
+// on every surface. The fixture user owns the whole list, so nothing another
+// scenario does can move an address between the two pages.
+func TestUserEmails_ForUser_PagesOneAddressAtATime(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.User {
+		user := fixture.NewUser(e, "mailpage")
+		for _, address := range []string{uniqueAddress("page-a"), uniqueAddress("page-b")} {
+			if _, _, err := e.Client().GL().Users.AddEmailForUser(user.ID, &gl.AddEmailOptions{
+				Email: new(address), SkipConfirmation: new(true),
+			}, gl.WithContext(e.Ctx)); err != nil {
+				e.T.Fatalf("adding %q to user %d: %v", address, user.ID, err)
+			}
+		}
+		return user
+	}, func(e *harness.Env, surface harness.Surface, user fixture.User) {
+		assertPagesOneAtATime(e, e.On(surface), actionUserEmailsForUser, map[string]any{"user_id": user.ID},
+			func(out useremails.ListOutput) ([]string, toolutil.PaginationOutput) {
+				return idKeys(emailIDs(out.Emails)), out.Pagination
+			})
+	})
+}
+
+// addOwnEmail adds an address to the run user through client-go and
+// registers its removal at the end of the scenario.
+func addOwnEmail(e *harness.Env, address string) {
+	e.T.Helper()
+	added, _, err := e.Client().GL().Users.AddEmail(&gl.AddEmailOptions{Email: new(address)}, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("adding %q to the run user: %v", address, err)
+	}
+	e.Defer("email "+address, func(ctx context.Context) error {
+		_, deleteErr := e.Client().GL().Users.DeleteEmail(added.ID, gl.WithContext(ctx))
+		if deleteErr != nil && !fixture.IsStatus(deleteErr, http.StatusNotFound) {
+			return deleteErr
+		}
+		return nil
 	})
 }
 

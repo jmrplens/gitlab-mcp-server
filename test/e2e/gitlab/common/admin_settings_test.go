@@ -327,7 +327,8 @@ func adminFeatureName(e *harness.Env) string {
 	return b.String()
 }
 
-// TestAdmin_SystemHooks registers an instance system hook, edits it, sets and
+// TestAdmin_SystemHooks registers an instance system hook, registers a second
+// and pages through the hooks one at a time, edits the first, sets and
 // removes a URL variable, fires a test event and deletes it.
 //
 // Replaces: TestMeta_AdminSystemHooks, TestMeta_AdminSystemHookEditURLVariables
@@ -346,6 +347,22 @@ func TestAdmin_SystemHooks(t *testing.T) {
 	}
 	hookID := added.Hook.ID
 	adminDeferDelete(e, s, "system hook", actionAdminSystemHookDelete, map[string]any{"id": hookID})
+
+	// A second hook makes the listing at least two pages long at one hook per
+	// page. This scenario is the only one that adds a system hook, and it
+	// holds the instance-global lock, so the two pages cannot be shifted by
+	// anyone else between the reads.
+	second := harness.Do[systemhooks.AddOutput](s, actionAdminSystemHookAdd, map[string]any{
+		"url": "https://e2e-test.example.com/hook-page", "name": "e2e-adm-hook-page",
+	})
+	adminDeferDelete(e, s, "second system hook", actionAdminSystemHookDelete, map[string]any{"id": second.Hook.ID})
+	assertPagesOneAtATime(e, s, actionAdminSystemHookList, nil, func(out systemhooks.ListOutput) ([]string, toolutil.PaginationOutput) {
+		ids := make([]int64, 0, len(out.Hooks))
+		for _, hook := range out.Hooks {
+			ids = append(ids, hook.ID)
+		}
+		return idKeys(ids), out.Pagination
+	})
 
 	edited := harness.Do[systemhooks.EditOutput](s, actionAdminSystemHookEdit, map[string]any{
 		"id": hookID, "name": "e2e-adm-hook-edited", "push_events": true,

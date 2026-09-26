@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupsshcerts"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -25,7 +26,8 @@ func sshCertIDs(certificates []groupsshcerts.Output) []int64 {
 
 // TestGroupSSHCerts_Lifecycle_CreateListDelete creates one certificate per
 // surface in a group of the surface's own, so the empty listing before and
-// the one-entry listing after are exact, and deletes it.
+// the one-entry listing after are exact, adds a second and pages through the
+// two one at a time, and deletes the first.
 //
 // Replaces: TestMeta_GroupSSHCerts, TestEE_MetaGroupEnterpriseOperations
 func TestGroupSSHCerts_Lifecycle_CreateListDelete(t *testing.T) {
@@ -55,6 +57,21 @@ func TestGroupSSHCerts_Lifecycle_CreateListDelete(t *testing.T) {
 		if ids := sshCertIDs(listed.Certificates); len(ids) != 1 || ids[0] != created.ID {
 			e.T.Errorf("the group lists the certificates %v, want exactly the created %d", ids, created.ID)
 		}
+
+		// A second certificate makes the group's listing two pages long at
+		// one certificate per page; the group is this surface's own, so
+		// nothing else writes to it between the two reads.
+		secondKey, err := fixture.SSHPublicKey()
+		if err != nil {
+			e.T.Fatal(err)
+		}
+		secondCert := harness.Do[groupsshcerts.Output](s, actionGroupSSHCertCreate, withParams(params, map[string]any{"key": secondKey, "title": e.Name("cert-page")}))
+		if secondCert.ID == 0 || secondCert.ID == created.ID {
+			e.T.Fatalf("the second ssh_cert_create answered %+v, want a certificate of its own", secondCert)
+		}
+		assertPagesOneAtATime(e, s, actionGroupSSHCertList, params, func(out groupsshcerts.ListOutput) ([]string, toolutil.PaginationOutput) {
+			return idKeys(sshCertIDs(out.Certificates)), out.Pagination
+		})
 
 		harness.DoVoid(s, actionGroupSSHCertDelete, withParams(params, map[string]any{"certificate_id": created.ID}))
 		after := harness.Do[groupsshcerts.ListOutput](s, actionGroupSSHCertList, params)
