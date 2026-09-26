@@ -26,3 +26,16 @@ type orphanActionSpecsDeclaration struct {
 // A declaration that stops describing the tree is itself a finding, on the
 // same terms as the state it excuses. See staleOrphanDeclarations.
 var declaredOrphanActionSpecs = map[string]orphanActionSpecsDeclaration{}
+
+// metaOnlyProjectionActions answers the projection rule: an action listed here
+// may carry no individual tool name, because the individual surface reaches
+// what it does under another tool, which the value names.
+//
+// A declaration the projection walk does not consume is itself a finding, on
+// the same terms as the state it excuses. An ID no catalog action carries, or
+// one whose action now projects a tool of its own, excuses nothing today and
+// would silently excuse the next action given that ID. See
+// staleMetaOnlyProjections.
+var metaOnlyProjectionActions = map[string]string{
+	"server.health_check": "meta-only alias for gitlab_server status; the individual surface uses gitlab_server_status",
+}

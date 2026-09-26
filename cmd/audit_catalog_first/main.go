@@ -44,10 +44,6 @@ const (
 	testGoSuffix      = "_test.go"
 )
 
-var metaOnlyProjectionActions = map[string]string{
-	"server.health_check": "meta-only alias for gitlab_server status; the individual surface uses gitlab_server_status",
-}
-
 // coverageReport is the JSON document written to dist/action-spec-coverage.json.
 //
 // SchemaVersion lets downstream consumers detect breaking changes to the file
@@ -361,40 +357,87 @@ func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Cli
 
 // projectionPolicyError is the verdict half of the projection rule: the
 // finding it emits when a catalog carries an action no individual tool name
-// projects, and nil when none does.
+// projects, or when a declaration excusing one excuses nothing, and nil when
+// neither holds.
 //
 // It is separate from the build half above because the catalog that half
 // assembles is the one compiled into this binary, where nothing is missing, so
 // the line that decides whether a finding is emitted at all was reachable from
 // no test: the rule could have stopped reporting and stayed green.
 func projectionPolicyError(catalog *actioncatalog.Catalog) error {
-	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
-	if len(missing) > 0 {
-		return fmt.Errorf("catalog actions missing individual projection policy: %s", strings.Join(missing, ", "))
+	projections := projectionIndex(catalog)
+	var findings []string
+	if missing := catalogActionsMissingIndividualProjectionPolicy(projections); len(missing) > 0 {
+		findings = append(findings, "catalog actions missing individual projection policy: "+strings.Join(missing, ", "))
+	}
+	findings = append(findings, staleMetaOnlyProjections(projections)...)
+	if len(findings) > 0 {
+		return errors.New(strings.Join(findings, "; "))
 	}
 	return nil
 }
 
-func catalogActionsMissingIndividualProjectionPolicy(catalog *actioncatalog.Catalog) []string {
+// projectionIndex is the projection walk: every action ID the catalog carries,
+// mapped to the individual tool name that action projects, empty where it
+// projects none.
+//
+// The catalog refuses an ID a second group repeats, so an ID names one action
+// and the index loses nothing by keying on it. Nor is an ID ever empty: the
+// catalog derives one for every action it stores that declares none, and
+// Groups hands back only those.
+func projectionIndex(catalog *actioncatalog.Catalog) map[string]string {
+	projections := map[string]string{}
 	if catalog == nil {
-		return nil
+		return projections
 	}
-	var missing []string
 	for _, group := range catalog.Groups() {
 		for _, action := range group.ActionsInOrder() {
-			if strings.TrimSpace(action.IndividualTool.Name) == "" {
-				// Never empty: the catalog derives an ID for every action it
-				// stores that declares none, and Groups hands back only those.
-				actionID := string(action.ID)
-				if _, ok := metaOnlyProjectionActions[actionID]; ok {
-					continue
-				}
-				missing = append(missing, actionID)
-			}
+			projections[string(action.ID)] = strings.TrimSpace(action.IndividualTool.Name)
 		}
+	}
+	return projections
+}
+
+// catalogActionsMissingIndividualProjectionPolicy returns, sorted, every action
+// of the walk that projects no individual tool and that no
+// metaOnlyProjectionActions declaration answers.
+func catalogActionsMissingIndividualProjectionPolicy(projections map[string]string) []string {
+	var missing []string
+	for actionID, toolName := range projections {
+		if toolName != "" {
+			continue
+		}
+		if _, declared := metaOnlyProjectionActions[actionID]; declared {
+			continue
+		}
+		missing = append(missing, actionID)
 	}
 	sort.Strings(missing)
 	return missing
+}
+
+// staleMetaOnlyProjections names, sorted, every metaOnlyProjectionActions
+// declaration the walk did not consume, which is a finding on the same terms
+// as the state it excuses: a declaration is consumed only by an action the
+// catalog carries that projects no tool, so one naming an ID no action carries,
+// or an action that projects a tool of its own, excuses nothing and would
+// silently excuse the next action given that ID.
+//
+// The two shapes are worded apart because they are fixed apart: the first is
+// a declaration to delete, the second one a new projection made unnecessary.
+func staleMetaOnlyProjections(projections map[string]string) []string {
+	var stale []string
+	for actionID, reason := range metaOnlyProjectionActions {
+		toolName, carried := projections[actionID]
+		switch {
+		case !carried:
+			stale = append(stale, fmt.Sprintf("meta-only projection declaration for %s (%s) matches nothing: no catalog action has that ID", actionID, reason))
+		case toolName != "":
+			stale = append(stale, fmt.Sprintf("meta-only projection declaration for %s (%s) matches nothing: the action projects the individual tool %s", actionID, reason, toolName))
+		}
+	}
+	sort.Strings(stale)
+	return stale
 }
 
 func auditCatalogFirstSource(root string) error {

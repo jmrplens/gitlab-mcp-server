@@ -303,7 +303,7 @@ func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
 
-	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
+	missing := catalogActionsMissingIndividualProjectionPolicy(projectionIndex(catalog))
 	if len(missing) != 1 || missing[0] != "example.get" {
 		t.Fatalf("catalogActionsMissingIndividualProjectionPolicy() = %+v, want example.get", missing)
 	}
@@ -350,7 +350,7 @@ func TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted(
 					t.Fatalf("AddGroup() error = %v", err)
 				}
 			}
-			got := catalogActionsMissingIndividualProjectionPolicy(catalog)
+			got := catalogActionsMissingIndividualProjectionPolicy(projectionIndex(catalog))
 			if len(got) != len(tt.want) {
 				t.Fatalf("catalogActionsMissingIndividualProjectionPolicy() = %v, want %v", got, tt.want)
 			}
@@ -1911,29 +1911,118 @@ func TestSurfaceKinds_Scenarios_DropsTheEmptyKind(t *testing.T) {
 // this binary, where nothing is missing, so this is the only place the
 // emitting branch is taken at all: without it the rule could stop reporting
 // and stay green.
+//
+// The declaration table is emptied for the length of the test, since a fixture
+// catalog carries none of the actions the real one declares, and each of those
+// declarations would otherwise be reported as matching nothing.
 func TestProjectionPolicyError_Scenarios_NamesTheUnprojectedActions(t *testing.T) {
-	catalogWith := func(action actioncatalog.Action) *actioncatalog.Catalog {
-		t.Helper()
-		catalog := actioncatalog.NewCatalog()
-		group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_example"})
-		group.SetAction(action)
-		if err := catalog.AddGroup(group); err != nil {
-			t.Fatalf("AddGroup() error = %v", err)
-		}
-		return catalog
-	}
+	declareMetaOnlyProjections(t, map[string]string{})
 
-	projected := catalogWith(actioncatalog.Action{ID: "example.get", Name: "get", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_example_get"}})
+	projected := projectionCatalog(t, actioncatalog.Action{ID: "example.get", Name: "get", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_example_get"}})
 	if err := projectionPolicyError(projected); err != nil {
 		t.Errorf("projectionPolicyError(projected) = %v, want nil", err)
 	}
 
-	err := projectionPolicyError(catalogWith(actioncatalog.Action{ID: "example.get", Name: "get"}))
+	err := projectionPolicyError(projectionCatalog(t, actioncatalog.Action{ID: "example.get", Name: "get"}))
 	if err == nil {
 		t.Fatal("projectionPolicyError(unprojected) = nil, want the action named")
 	}
 	if !strings.Contains(err.Error(), "example.get") {
 		t.Errorf("projectionPolicyError() = %v, want it to name example.get", err)
+	}
+}
+
+// declareMetaOnlyProjections replaces the meta-only projection declarations
+// with table for the length of a test, so the rule can be held to fixtures
+// whatever the real table carries.
+func declareMetaOnlyProjections(t *testing.T, table map[string]string) {
+	t.Helper()
+	original := metaOnlyProjectionActions
+	metaOnlyProjectionActions = table
+	t.Cleanup(func() { metaOnlyProjectionActions = original })
+}
+
+// projectionCatalog builds a catalog holding each action in a group named after
+// the action's domain, which is what a real catalog does and what lets two
+// domains sit in one fixture.
+func projectionCatalog(t *testing.T, actions ...actioncatalog.Action) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	for _, action := range actions {
+		domain, _, _ := strings.Cut(string(action.ID), ".")
+		group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_" + domain})
+		group.SetAction(action)
+		if err := catalog.AddGroup(group); err != nil {
+			t.Fatalf("AddGroup(%s) error = %v", action.ID, err)
+		}
+	}
+	return catalog
+}
+
+// TestStaleMetaOnlyProjections_BothShapes_AreReportedAndTheLiveOneIsNot
+// verifies the declaration table is held in the direction it used to escape:
+// a declaration is consumed only by an action the catalog carries that
+// projects no tool, and every other one is a finding.
+//
+// The two stale shapes are the two ways a declaration stops describing the
+// tree, and each is worded for the fix it needs: an ID no action carries is a
+// declaration to delete, while an action that now projects a tool of its own
+// made its declaration unnecessary. The live exemption sits beside them so a
+// rule that reported every declaration would fail here too, and it carries the
+// real table's own reason, since server.health_check is the entry the real
+// catalog consumes.
+func TestStaleMetaOnlyProjections_BothShapes_AreReportedAndTheLiveOneIsNot(t *testing.T) {
+	const liveReason = "meta-only alias for gitlab_server status; the individual surface uses gitlab_server_status"
+	declareMetaOnlyProjections(t, map[string]string{
+		"server.health_check": liveReason,
+		"issue.list":          "fixture: an action that projects a tool of its own",
+		"gone.nowhere":        "fixture: an ID no catalog action carries",
+	})
+	catalog := projectionCatalog(t,
+		actioncatalog.Action{ID: "server.health_check", Name: "health_check"},
+		actioncatalog.Action{ID: "issue.list", Name: "list", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list"}},
+	)
+
+	want := []string{
+		"meta-only projection declaration for gone.nowhere (fixture: an ID no catalog action carries) matches nothing: no catalog action has that ID",
+		"meta-only projection declaration for issue.list (fixture: an action that projects a tool of its own) matches nothing: the action projects the individual tool gitlab_issue_list",
+	}
+	if got := staleMetaOnlyProjections(projectionIndex(catalog)); !slices.Equal(got, want) {
+		t.Errorf("staleMetaOnlyProjections() = %q, want %q", got, want)
+	}
+
+	err := projectionPolicyError(catalog)
+	if err == nil || err.Error() != strings.Join(want, "; ") {
+		t.Errorf("projectionPolicyError() = %v, want the two stale declarations and nothing about the live one", err)
+	}
+}
+
+// TestProjectionPolicyError_AMissingActionAndAStaleDeclaration_AreBothReported
+// verifies the verdict carries both findings of one walk rather than stopping at
+// the first: a catalog can hold an unprojected action and a declaration that
+// excuses nothing at once, and a verdict naming only one would send the reader
+// back for a second run to learn about the other.
+func TestProjectionPolicyError_AMissingActionAndAStaleDeclaration_AreBothReported(t *testing.T) {
+	declareMetaOnlyProjections(t, map[string]string{"gone.nowhere": "fixture"})
+	catalog := projectionCatalog(t, actioncatalog.Action{ID: "example.get", Name: "get"})
+
+	err := projectionPolicyError(catalog)
+
+	want := "catalog actions missing individual projection policy: example.get; " +
+		"meta-only projection declaration for gone.nowhere (fixture) matches nothing: no catalog action has that ID"
+	if err == nil || err.Error() != want {
+		t.Errorf("projectionPolicyError() = %v, want %q", err, want)
+	}
+}
+
+// TestProjectionPolicy_RealCatalog_ConsumesEveryDeclaration verifies the real
+// table against the catalog this binary builds, which is the run the gate
+// makes: every declaration must be consumed there, and no action may be left
+// unprojected. It is the test that fails the day an action named in the table
+// gains a tool of its own or leaves the catalog.
+func TestProjectionPolicy_RealCatalog_ConsumesEveryDeclaration(t *testing.T) {
+	if err := assertCatalogActionsHaveIndividualProjectionPolicy(clientForAudit()); err != nil {
+		t.Errorf("projection policy on the real catalog: %v", err)
 	}
 }
 
