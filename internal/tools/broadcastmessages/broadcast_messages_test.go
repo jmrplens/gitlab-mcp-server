@@ -453,8 +453,9 @@ func TestGet_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts that the 400 hint lists every theme GitLab's enum accepts,
+// dark and light included, since a model avoids any value the hint leaves out.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -462,6 +463,10 @@ func TestCreate_APIError(t *testing.T) {
 	_, err := Create(context.Background(), client, CreateInput{Message: "test"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+	const themes = "theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red, dark, light;"
+	if !strings.Contains(err.Error(), themes) {
+		t.Errorf("Create() 400 error = %q, want it to contain %q", err.Error(), themes)
 	}
 }
 

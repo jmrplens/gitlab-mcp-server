@@ -199,7 +199,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	m, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_create", err, http.StatusBadRequest,
-			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; color and font must be hex color codes such as #E75E40; starts_at < ends_at; access levels: 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner)")
+			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red, dark, light; color and font must be hex color codes such as #E75E40; starts_at < ends_at; access levels: 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner)")
 	}
 	return CreateOutput{Message: toItem(m)}, nil
 }
