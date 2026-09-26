@@ -315,7 +315,13 @@ func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 // verifies the projection check on the cases around a plain gap: a nil
 // catalog reports nothing, an action whose ID is a documented meta-only alias
 // is exempt, and an action carrying an individual tool name passes.
+//
+// The meta-only declaration is the fixture's own. The real table is held to
+// staleness, so an entry of it is retired the day its action gains a tool or
+// leaves the catalog, and this rule should not fail with it; the real entries
+// are TestProjectionPolicy_RealCatalog_ConsumesEveryDeclaration's to judge.
 func TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted(t *testing.T) {
+	declareMetaOnlyProjections(t, map[string]string{"fixture.meta_only": "fixture"})
 	tests := []struct {
 		name    string
 		group   string
@@ -324,7 +330,7 @@ func TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted(
 		want    []string
 	}{
 		{name: "nil catalog", nilCase: true},
-		{name: "meta-only alias is exempt", group: "gitlab_server", action: actioncatalog.Action{ID: "server.health_check", Name: "health_check"}},
+		{name: "meta-only alias is exempt", group: "gitlab_fixture", action: actioncatalog.Action{ID: "fixture.meta_only", Name: "meta_only"}},
 		// An action added with no ID of its own is still named in the finding,
 		// by the ID the catalog derived for it when the group was added. That
 		// is also why the rule reads the ID without a fallback of its own: no
@@ -2405,15 +2411,15 @@ func TestDomainCoverageFor_SurfaceOnlyPackage_ClaimsNoSpecsAndNoCatalogEntries(t
 	}
 }
 
-// TestBuildCoverageReport_Domains_AreSortedByPackage states the property the
-// report's sort holds, and which is also what makes its comparator
-// unobservable: os.ReadDir hands the domain walk its entries already in
-// filename order and a domain's package name is its directory name, so the
-// rows arrive sorted and the comparator never reorders a pair.
+// TestBuildCoverageReport_Domains_AreSortedByPackage holds the report to its
+// contract that the domain rows are in package order.
 //
-// The sort stays because ordered rows are the report's contract rather than an
-// accident of how the walk happens to read a directory, and this is the
-// assertion a reader can check that contract against.
+// Nothing sorts them any more, because nothing could: os.ReadDir hands the
+// domain walk its entries in filename order and a domain's package name is its
+// directory name, so the rows arrive sorted, and the sort that used to follow
+// was a comparator no input could make reorder a pair. This is the assertion
+// that fails if the walk ever stops reading them in that order; the planted
+// names are listed out of order, so the order checked is the walk's.
 func TestBuildCoverageReport_Domains_AreSortedByPackage(t *testing.T) {
 	files := catalogFirstFixtureFiles()
 	for _, name := range []string{"zeta", "kappa", "beta"} {

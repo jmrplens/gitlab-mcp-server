@@ -267,14 +267,15 @@ func buildCoverageReport(root string) (coverageReport, error) {
 		return coverageReport{}, err
 	}
 
+	// The rows are the report's in package order, and they arrive in it:
+	// discoverDomainSources reads the domains with os.ReadDir, which returns
+	// them sorted by name, and a domain's package is its directory's name. A
+	// sort here could reorder nothing, so there is none.
 	domains := make([]domainCoverage, 0, len(sources))
 	for _, source := range sources {
 		domains = append(domains, domainCoverageFor(source, actionCoverage, registeredPackages, delegatedMetaPackages))
 	}
 
-	sort.Slice(domains, func(first, second int) bool {
-		return domains[first].Package < domains[second].Package
-	})
 	if invariantErr := assertCoverageInvariants(domains); invariantErr != nil {
 		return coverageReport{}, invariantErr
 	}
@@ -818,6 +819,9 @@ func manifestBuilderNames(function *ast.FuncDecl) []string {
 	return names
 }
 
+// discoverDomainSources reads every domain directory under internal/tools, in
+// the name order os.ReadDir returns them, which is the order the coverage
+// report lists its domains in.
 func discoverDomainSources(root string) ([]domainSource, error) {
 	toolsDir := filepath.Join(root, "internal", "tools")
 	entries, err := os.ReadDir(toolsDir)
