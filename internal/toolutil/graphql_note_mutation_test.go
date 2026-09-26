@@ -258,6 +258,33 @@ func TestExecGraphQLNoteMutation_PayloadErrors_AreRefusals(t *testing.T) {
 	}
 }
 
+// TestExecGraphQLNoteMutation_CommandsOnlyBodyWhoseUpdateFailed_IsARefusal
+// verifies the one payload error the kept-note exception must not reach
+// although every other condition of it holds, which is a real GitLab answer:
+// a body of commands alone whose update fails. Notes::CreateService
+// #do_commands adds the failure to the note's errors under :validation and to
+// the status, and the note, holding only commands, is never saved, so
+// createNote answers with no note, the error, and a status reporting the same
+// failure. Only the missing note tells it apart from a kept note whose command
+// failed. GitLab ran nothing and kept nothing, which is a refusal; reading it
+// as a result would publish the status's messages, which GitLab writes before
+// it tries the update, as commands that applied.
+func TestExecGraphQLNoteMutation_CommandsOnlyBodyWhoseUpdateFailed_IsARefusal(t *testing.T) {
+	body := `{"data":{"createNote":{"note":null,"errors":["Validation X"],` +
+		`"quickActionsStatus":{"commandNames":["label"],"commandsOnly":true,"messages":["Added ~bug label."],"errorMessages":["X"]}}}}`
+
+	result, err := ExecGraphQLNoteMutation[testNote](context.Background(), fakeGraphQL{body: body}, GraphQLNoteMutation{
+		Op: "epicNoteCreate", PayloadKey: "createNote",
+	})
+
+	if err == nil || err.Error() != "epicNoteCreate: Validation X" {
+		t.Errorf("err = %v, want the refusal %q", err, "epicNoteCreate: Validation X")
+	}
+	if result.Note != nil || result.QuickActions != nil {
+		t.Errorf("result = %+v, want nothing beside the refusal", result)
+	}
+}
+
 // TestQuickActionFailuresOnly_EveryErrorMustBeAFailureTheStatusReports
 // verifies the test the kept-note exception rests on, one condition at a
 // time: an empty status message is no evidence (containment of the empty

@@ -133,7 +133,9 @@ type GraphQLNoteMutationResult[N any] struct {
 // every error is a quick action failure the status reports too. createNote
 // saves the note before it applies the commands and adds a command's failure
 // to the note's errors afterwards, so reporting that as a refusal would hide
-// a note that exists and invite the caller to post it twice.
+// a note that exists and invite the caller to post it twice. A body of
+// commands alone whose update failed answers the same error and status with
+// no note, and stays a refusal: GitLab ran nothing and kept nothing.
 func ExecGraphQLNoteMutation[N any](ctx context.Context, gql gl.GraphQLInterface, m GraphQLNoteMutation) (GraphQLNoteMutationResult[N], error) {
 	var resp struct {
 		Data   map[string]*graphQLNotePayload[N] `json:"data"`
