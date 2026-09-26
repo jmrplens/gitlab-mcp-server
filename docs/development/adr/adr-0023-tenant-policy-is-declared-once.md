@@ -73,11 +73,22 @@ the code; the layers keep enforcing.**
   a channel its method cannot carry, a second in-band code for one class of next action,
   a zero that does not mean off, a reason whose unit differs from its key, a structure
   keyed on a mintable value with no capacity, a configurable value that bypasses the
-  configuration package, and a charged failure the caller did not cause. Some of these
-  refuse with no exception (a share on a mintable key, a charge to what is not a budget
-  before admission, a channel its method cannot carry); a holding taken across keys passes
-  with a recorded decision; the rest pass only through a finding recorded for the
-  invariant, which the specification lists rule by rule.
+  configuration package, and a charged failure the caller did not cause. They refuse in
+  three ways, which the specification lists rule by rule. With no exception: a share on a
+  mintable key (`INV-003`); a charge to what is not a budget before admission, and a
+  charged failure the caller did not cause (`INV-007`, the second through
+  `ValidateFailures`); a refusal on a channel its method cannot carry, or with a status, a
+  code, a `Retry-After` or a challenge the channel forbids (`INV-011`); a process partner
+  that is configurable or not keyed on the process, and a reason about the process on a
+  row that does not say it protects one (`INV-004`); a valued row that does not say what
+  zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
+  configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
+  recorded decision: a holding taken across keys (`INV-005`). Only through a finding
+  recorded for the invariant: a per-caller number protecting a process resource with no
+  partner, a structure keyed on a mintable value with no capacity, a code in the legacy
+  `-32000` range, a second in-band code for one class of next action, a zero that does not
+  mean off, a reason whose unit differs from its key or misstates its own, a value only an
+  environment variable or a Go option reaches, and a ceiling nothing bounds.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its
@@ -108,10 +119,17 @@ twice), and the gate holds the pinned literal equal to the register's.
   its pin in `TestValues_HoldTheirPins`. A change of value that rides in on a refactor
   fails that test.
 - **POS-003**: A new limit the gate can read is refused until the row that declares it
-  exists: one built with a listed constructor or options type, one refused with a policy
-  code or a 429 or 503, or one named with a limit word at package level in a package the
-  register names. The row then answers the specification's validation checklist, all of it
-  but VAL-010 and VAL-012, which stay in the pull request because a declaration cannot hold
+  exists: one built with a listed constructor or options type outside every declared
+  Enforce site, or from a literal or a package value no row declares; one whose refusal
+  is a literal with a policy code or a 429 or 503, or such a status written with
+  `http.Error` or `WriteHeader`, in a function that declares no refusal of that code or
+  status; or one named with a limit word at package level in a package the register
+  names. A limit built with none of the listed constructors, such as a counter guarded by
+  a mutex, is not among them when it refuses by calling a function that already builds a
+  declared refusal, or through a literal in a function that already declares one of that
+  code or status: the gate's documentation states that escape, and review is what sees
+  it. The row then answers the specification's validation checklist, all of it but
+  VAL-010 and VAL-012, which stay in the pull request because a declaration cannot hold
   them.
 - **POS-004**: Moving a value into the register changes no code. The binary a value layer
   builds is byte-identical to the one its parent builds once the parent imports the

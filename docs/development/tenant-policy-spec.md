@@ -365,10 +365,14 @@ is fixed by the register. They are filed, grouped where one change would answer 
 | [961](https://github.com/jmrplens/gitlab-mcp-server/issues/961) | The refusal and ending behaviors of go-sdk that decide what a refused caller sees                                                |
 
 Two findings grew after they were filed, when the register was read against the code as a
-whole. F-29 ([issue 950](https://github.com/jmrplens/gitlab-mcp-server/issues/950)) also
-records the transport-source budget's map of charged (source, key) pairs, which only the
-sweep bounds, since a source the full failure table never tracks is never blocked
-(`AUB-002`). F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958))
-also records the tool-call bucket's burst, whose zero beside a positive rate refuses
-startup rather than meaning off (`RTC-001`). The dated record's amendment of version 1.3
-carries both.
+whole. F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)) also
+records the idle session timeout's variable, which refuses a zero its flag accepts
+(`END-005`, the dated record's version 1.2), and the tool-call bucket's burst, whose zero
+beside a positive rate refuses startup rather than meaning off (`RTC-001`, version 1.3);
+both are departures from `INV-015` of the kind the issue is about. F-29
+([issue 950](https://github.com/jmrplens/gitlab-mcp-server/issues/950)) also records the
+transport-source budget's map of charged (source, key) pairs, which only the sweep bounds,
+since a source the full failure table never tracks is never blocked (`AUB-002`, version
+1.3). That map belongs to a finding of its own rather than to issue 950, which is about
+OAuth verification while the map is kept in both authentication modes; until that
+finding is filed, `AUB-002` carries F-29.

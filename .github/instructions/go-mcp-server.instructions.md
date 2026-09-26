@@ -367,9 +367,13 @@ A number that bounds what a caller may hold or spend (a rate, a ceiling, a
 window, a lifetime) is a decision of the tenant policy register,
 `internal/tenancy`, and so is a refusal that reads as one: JSON-RPC `-42900`
 or `-32000`, or a 429 or 503 at the HTTP gate. `make check-tenancy`
-(`cmd/audit_tenancy`) fails on such a refusal outside every declared site, on
-a limit constructor fed a literal, and on a package-level name in a policy
-package that reads as a limit and that no row declares.
+(`cmd/audit_tenancy`) fails on such a refusal literal, or such a status
+written with `http.Error` or `WriteHeader`, in a function that declares no
+refusal of that code or status; on a limit constructor outside a declared
+Enforce site or fed a literal; and on a package-level name in a policy package
+that reads as a limit and that no row declares. It does not see a refusal
+obtained by calling a function whose refusal a row already declares, so a new
+counter that refuses through one is for review to catch.
 
 ## Server Options
 
