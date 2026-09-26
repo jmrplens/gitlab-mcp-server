@@ -274,6 +274,7 @@ func TestLists_PageAndPerPage_ReachTheRequest(t *testing.T) {
 			path: "/api/v4/projects/1/resource_groups",
 			body: `[` + fixtureGroupJSON + `]`,
 			list: func(t *testing.T, client *gitlabclient.Client) (int, error) {
+				t.Helper()
 				out, err := ListAll(t.Context(), client, ListInput{ProjectID: "1", PaginationInput: page})
 				return len(out.Groups), err
 			},
@@ -283,6 +284,7 @@ func TestLists_PageAndPerPage_ReachTheRequest(t *testing.T) {
 			path: "/api/v4/projects/1/resource_groups/production/upcoming_jobs",
 			body: `[{"id":10,"name":"deploy-to-prod","status":"pending","stage":"release"}]`,
 			list: func(t *testing.T, client *gitlabclient.Client) (int, error) {
+				t.Helper()
 				out, err := ListUpcomingJobs(t.Context(), client, ListUpcomingJobsInput{ProjectID: "1", Key: "production", PaginationInput: page})
 				return len(out.Jobs), err
 			},

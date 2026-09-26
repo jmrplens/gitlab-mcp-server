@@ -1880,7 +1880,7 @@ func TestRules_PageAndPerPage_ReachTheRequest(t *testing.T) {
 
 	out, err := Rules(context.Background(), client, RulesInput{
 		ProjectID: "42", MRIID: 1,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		Page: 2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

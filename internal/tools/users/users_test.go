@@ -821,9 +821,7 @@ func TestListEmails_PageAndPerPage_ReachTheRequest(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"email":"secondary@example.com"}]`)
 	}))
 
-	out, err := ListEmails(context.Background(), client, ListEmailsInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
-	})
+	out, err := ListEmails(context.Background(), client, ListEmailsInput{Page: 2, PerPage: 1})
 	if err != nil {
 		t.Fatalf("ListEmails() unexpected error: %v", err)
 	}

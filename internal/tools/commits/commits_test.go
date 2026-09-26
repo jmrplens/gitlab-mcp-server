@@ -834,7 +834,7 @@ func TestListMRsByCommit_PageAndPerPage_ReachTheRequest(t *testing.T) {
 
 	out, err := ListMRsByCommit(context.Background(), client, MRsByCommitInput{
 		ProjectID: "42", SHA: testSHA,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		Page: 2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf("ListMRsByCommit() unexpected error: %v", err)

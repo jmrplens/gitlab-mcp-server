@@ -2919,7 +2919,7 @@ func TestGetDependencies_PageAndPerPage_ReachTheRequest(t *testing.T) {
 
 	out, err := GetDependencies(context.Background(), client, GetDependenciesInput{
 		ProjectID: testProjectID, MRIID: 1,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		Page: 2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf("GetDependencies() unexpected error: %v", err)

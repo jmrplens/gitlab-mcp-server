@@ -58,7 +58,7 @@ func TestList_PageAndPerPage_ReachTheRequest(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"project_id":200,"name":"alias-two"}]`)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1}})
+	out, err := List(context.Background(), client, ListInput{Page: 2, PerPage: 1})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
 	}

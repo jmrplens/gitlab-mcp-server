@@ -190,9 +190,7 @@ func TestListAllDomains_PageAndPerPage_ReachTheRequest(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"domain":"test.io","url":"https://test.io","project_id":2}]`)
 	}))
 
-	out, err := ListAllDomains(context.Background(), client, ListAllDomainsInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
-	})
+	out, err := ListAllDomains(context.Background(), client, ListAllDomainsInput{Page: 2, PerPage: 1})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
