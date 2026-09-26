@@ -1527,6 +1527,26 @@ func TestGetGPGSignature_APIError(t *testing.T) {
 	}
 }
 
+// TestGetGPGSignature_RequestNotBuilt verifies that GetGPGSignature returns
+// the error client-go reports when it cannot build the signature request,
+// and sends nothing. Both path segments are escaped before the path is
+// joined, so the path itself cannot make the request fail; a default request
+// option of the client can, since client-go applies those to every request
+// it builds and stops at the first that refuses.
+func TestGetGPGSignature_RequestNotBuilt(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	errRefused := errors.New("request option refused")
+	refuse := func(*retryablehttp.Request) error { return errRefused }
+	if err := gl.WithRequestOptions(refuse)(client.GL()); err != nil {
+		t.Fatalf("installing the refusing request option: %v", err)
+	}
+
+	_, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if !errors.Is(err, errRefused) {
+		t.Fatalf("GetGPGSignature() error = %v, want it to wrap %v", err, errRefused)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Handler Edge Cases (optional fields, filters)
 // ---------------------------------------------------------------------------.
