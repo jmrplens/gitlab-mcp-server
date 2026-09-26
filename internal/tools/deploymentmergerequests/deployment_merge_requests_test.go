@@ -506,6 +506,31 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 	}
 }
 
+// TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset verifies an
+// input naming no approver username leaves the option nil rather than
+// pointing it at the empty list. Both encode to the same query today, so the
+// options themselves are what can tell a filter the caller gave from one the
+// handler invented.
+func TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		usernames []string
+	}{
+		{name: "nil", usernames: nil},
+		{name: "empty", usernames: []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := buildListOptions(ListInput{ProjectID: "1", DeploymentID: 2, ApprovedByUsernames: tc.usernames})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if opts.ApprovedByUsernames != nil {
+				t.Errorf("ApprovedByUsernames = %v, want nil for an input naming no username", *opts.ApprovedByUsernames)
+			}
+		})
+	}
+}
+
 // TestList_EveryBoolFilter_ReachesItsOwnQueryKey drives one of the two *bool
 // filters at a time and holds the query to that filter's key alone, the other
 // absent. A filter written onto its sibling's option leaves its own key unsent
