@@ -134,7 +134,13 @@
 // with the same import lines added as blank imports at the same positions,
 // passed as BASE_TREE; each value layer of issue 565 was byte-identical to
 // that base as a whole file, while every one of them failed against its
-// parent.
+// parent. A change to the register itself is the third case: rows, text and
+// code the server never reaches still change the package's object, and the
+// linker lays out content-addressed data and duplicated closures differently,
+// so the comparison against the parent fails with every symbol the same size.
+// Such a change is compared against its parent with the register replaced by
+// its own, which proves nothing outside the register moved; that the linked
+// code of the register did not change is its oracle tests' and value pins'.
 //
 // A rule promoted into the register is not proved by the binary at all: a
 // layer calls it, and the compiler may lay its callers out differently. Its

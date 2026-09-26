@@ -3,12 +3,11 @@ package tenancy
 // Holdings is what a pool entry holds that the pool cannot see: the work that
 // keeps a credential busy while it sends no request (register row POL-003).
 //
-// The server's per-credential state implements it. The counters themselves,
-// the watcher manager and the pool's idle sweep stay where they are; what
-// lives here is which holdings make an entry busy. No longer counting one is
-// an edit to the register and to the oracle test beside it; counting a third
-// one is that edit plus a method here, which the server's per-credential state
-// then has to implement, so the layer gains an accessor and never a predicate.
+// The server's per-credential state implements it; the counters, the manager
+// and the idle sweep stay where they are. What lives here is which holdings
+// make an entry busy: no longer counting one is an edit to the register and to
+// its oracle test, and counting a third is that plus a method here, which the
+// server's state then implements (an accessor in the layer, never a predicate).
 type Holdings interface {
 	// OpenListenStreams is how many subscriptions/listen streams the entry
 	// holds open, the count the per-credential listen ceiling draws on
