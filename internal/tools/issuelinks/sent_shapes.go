@@ -11,11 +11,11 @@ import (
 // RelationEpicOutput is the epic a related issue belongs to, as
 // ee/app/serializers/epic_base_entity.rb renders it.
 //
-// It is deliberately not [EpicOutput]. That type mirrors gl.Epic, the whole
-// epic the epics API answers with; the object beside `epic_iid` on a related
-// issue comes from EpicBaseEntity, which is five keys and two more when the
-// epic has dates. Reusing the large shape here would advertise twenty keys
-// this endpoint has never sent.
+// It is deliberately not a mirror of gl.Epic, the whole epic the epics API
+// answers with; the object beside `epic_iid` on a related issue comes from
+// EpicBaseEntity, which is five keys and two more when the epic has dates.
+// Reusing the large shape here would advertise twenty keys this endpoint has
+// never sent.
 //
 // The two human-readable keys are rendered only when the epic carries the
 // dates behind them, so both are omitted rather than published empty.
@@ -33,9 +33,9 @@ type RelationEpicOutput struct {
 // renders on an issue: the four API URLs and, for an issue closed as a
 // duplicate, the URL of the issue it duplicates.
 //
-// It is not [LinksOutput], which mirrors gl.IssueLinks and stops at four keys
-// because client-go's struct does. The fifth is rendered by the same nested
-// block as the others and is empty on an issue that duplicates nothing.
+// It is not a mirror of gl.IssueLinks, which stops at four keys because
+// client-go's struct does. The fifth is rendered by the same nested block as
+// the others and is empty on an issue that duplicates nothing.
 type RelationLinksOutput struct {
 	Self                string `json:"self,omitempty"`
 	Notes               string `json:"notes,omitempty"`
@@ -84,6 +84,23 @@ type relationExtra struct {
 	TimeStats            *TimeStatsOutput            `json:"time_stats"`
 	Type                 string                      `json:"type"`
 	Upvotes              int64                       `json:"upvotes"`
+}
+
+// linkExtra is what lib/api/entities/issue_link.rb sends on the two issues of
+// a link that client-go's Issue does not model, one [toolutil.IssueBasicExtra]
+// per position, read from the captured response (ADR-0021).
+type linkExtra struct {
+	SourceIssue toolutil.IssueBasicExtra `json:"source_issue"`
+	TargetIssue toolutil.IssueBasicExtra `json:"target_issue"`
+}
+
+// capturedLink reads [linkExtra] off the answer to a request for one link.
+func capturedLink(capture *gitlabclient.ResponseCapture) (linkExtra, error) {
+	var extra linkExtra
+	if err := capture.Decode(&extra); err != nil {
+		return linkExtra{}, err
+	}
+	return extra, nil
 }
 
 // capturedRelations reads the keys client-go's IssueRelation does not model

@@ -749,6 +749,17 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"issuelinks.RelationOutput.type":                   docIssueLinksRelation,
 	"issuelinks.RelationOutput.upvotes":                docIssueLinksRelation,
 
+	// issuelinks: what API::Entities::IssueBasic sends on either issue of a
+	// link that client-go's Issue declares on no field of its own, read from
+	// the captured response of the get and create calls (ADR-0021,
+	// issuelinks.capturedLink). lib/api/entities/issue_link.rb renders both
+	// positions using IssueBasic, and doc/api/issue_links.md abbreviates the
+	// two objects, so the citation is the page that prints the basic issue's
+	// keys in full. Recorded in docs/development/upstream-bugs.md.
+	"issuelinks.IssueRefOutput.blocking_issues_count": docIssuesList,
+	"issuelinks.IssueRefOutput.start_date":            docIssuesList,
+	"issuelinks.IssueRefOutput.type":                  docIssuesList,
+
 	// memberroles: the twenty-five customizable permissions
 	// API::Entities::MemberRole sends that client-go's MemberRole declares no
 	// field for, read from the captured response (ADR-0021,
