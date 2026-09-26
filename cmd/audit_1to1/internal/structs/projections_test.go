@@ -268,6 +268,54 @@ func recursive(n int) int {
 	}
 }
 
+// TestCollectProjections_ACallerAboveAMatchedHandler_IsNotClimbedTo verifies
+// where the walk stops on a branch. The rows are built in a helper that makes
+// no request, the handler calling it references the method the rows are read
+// from, and a dispatcher above that handler references another method
+// answering with the same struct before calling it. The rows were never read
+// from the dispatcher's answer, so once the handler matched, its branch is
+// done and the dispatcher's method is not credited to them.
+func TestCollectProjections_ACallerAboveAMatchedHandler_IsNotClimbedTo(t *testing.T) {
+	pkg := checkedPackage(t, "example.com/x/internal/tools/groups", `package groups
+
+import gl "`+fixtureSDKPath+`"
+
+type ProjectItem struct {
+	ID   int64  `+"`json:\"id\"`"+`
+	Name string `+"`json:\"name\"`"+`
+}
+
+func rows(projects []*gl.Project) []ProjectItem {
+	out := make([]ProjectItem, len(projects))
+	for i, p := range projects {
+		out[i] = ProjectItem{ID: p.ID, Name: p.Name}
+	}
+	return out
+}
+
+func Handler(client *gl.Client) []ProjectItem {
+	projects, _, _ := client.Groups.ListGroupProjects("g")
+	return rows(projects)
+}
+
+func Dispatch(client *gl.Client) []ProjectItem {
+	_, _, _ = client.Groups.SearchProjects("g")
+	return Handler(client)
+}
+`)
+
+	got := CollectProjections(pkg)
+
+	want := []ProjectionPairing{{
+		Package: "groups", MCPType: "ProjectItem", SDKType: "Project",
+		SDKFields: []string{"id", "name"},
+		Methods:   []string{"Groups.ListGroupProjects"},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("CollectProjections() = %+v, want the handler's method alone, %+v", got, want)
+	}
+}
+
 // TestCollectProjections_WhatIsNotAProjection_IsNotPaired verifies every shape
 // a literal can take that names no endpoint's answer: a struct read off two
 // structs equally, one read off nothing, one read off the pagination wrapper
