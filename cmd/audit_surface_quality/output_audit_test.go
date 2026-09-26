@@ -294,19 +294,25 @@ func TestCollectToolQualityStats_EmptyInput(t *testing.T) {
 // prints the success message when no findings are present, and that the
 // summary's two columns carry their own surface: the individual tools are
 // scored on the left and the meta tools on the right, each dimension from its
-// own population, with populations chosen so that no two cells agree.
+// own population. The populations are chosen so that the four counts of the
+// individual column (1, 3, 4, 2 of 5) differ from one another, the three of
+// the meta column (0, 2, 1 of 3) differ from one another, and the two counts
+// of each row differ, so a count handed to another row or to the other
+// column changes the table.
 func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
 	// Not t.Parallel: captureOutputStdout rebinds os.Stdout and parallel tests would
 	// race for the global writer.
 	individual := []*mcp.Tool{
-		{Name: "ok", Title: "OK", Description: "Returns: it. See also: other.", OutputSchema: map[string]any{"type": "object"}},
+		{Name: "full", Title: "Full", Description: "Returns: it. See also: other.", OutputSchema: map[string]any{"type": "object"}},
+		{Name: "linked", Title: "Linked", Description: "Returns: it. See also: other."},
+		{Name: "returning", Title: "Returning", Description: "Returns: it."},
 		{Name: "titled", Title: "Titled"},
-		{Name: "returning", Description: "Returns: it."},
 		{Name: "bare"},
 	}
 	meta := []*mcp.Tool{
-		{Name: "gitlab_a", Title: "A", OutputSchema: map[string]any{"type": "object"}},
-		{Name: "gitlab_b"},
+		{Name: "gitlab_a", Title: "A", Description: "Returns: it."},
+		{Name: "gitlab_b", Description: "Returns: it."},
+		{Name: "gitlab_c"},
 	}
 
 	output := captureOutputStdout(t, func() {
@@ -315,11 +321,11 @@ func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
 
 	for _, want := range []string{
 		"# MCP Output Quality Audit Report",
-		"| Total tools | 4 | 2 |",
-		"| OutputSchema present | 1/4 (25%) | 1/2 (50%) |",
-		"| Description has 'Returns' | 2/4 (50%) | 0/2 (0%) |",
-		"| Title field set | 2/4 (50%) | 1/2 (50%) |",
-		"| Description has 'See also' | 1/4 (25%) |. |",
+		"| Total tools | 5 | 3 |",
+		"| OutputSchema present | 1/5 (20%) | 0/3 (0%) |",
+		"| Description has 'Returns' | 3/5 (60%) | 2/3 (66%) |",
+		"| Title field set | 4/5 (80%) | 1/3 (33%) |",
+		"| Description has 'See also' | 2/5 (40%) |. |",
 		"**No findings. All quality checks pass.**",
 	} {
 		t.Run(want, func(t *testing.T) {
