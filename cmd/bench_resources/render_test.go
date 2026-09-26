@@ -394,7 +394,9 @@ func TestRenderAll_SaysWhetherItChangedAnything(t *testing.T) {
 			t.Errorf("renderAll: %v", err)
 		}
 	})
-	if !strings.Contains(first, "updated ") || !strings.Contains(first, "- "+filepath.FromSlash(opts.docPage)+"\n") || strings.Contains(first, "already current") {
+	// The report names each file relative to the root with forward slashes on
+	// every platform (rel), so the page is expected as opts spells it.
+	if !strings.Contains(first, "updated ") || !strings.Contains(first, "- "+opts.docPage+"\n") || strings.Contains(first, "already current") {
 		t.Errorf("the first redraw printed %q, want the files it updated, the page among them", first)
 	}
 
