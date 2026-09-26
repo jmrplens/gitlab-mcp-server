@@ -403,6 +403,32 @@ func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T
 	}
 }
 
+// TestMergeActionSpecGroupOverrides_MoreOverridesThanBaseGroups_AddsEachInToolOrder
+// verifies overrides naming groups the collection does not have are added as
+// groups of their own, in tool-name order rather than the order they arrived
+// in, even when they outnumber the base.
+//
+// Every other test hands this function one override, so the order of several
+// new groups was never observed; it is the catalog's order, which every
+// surface lists in.
+func TestMergeActionSpecGroupOverrides_MoreOverridesThanBaseGroups_AddsEachInToolOrder(t *testing.T) {
+	spec := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{})
+	overrides := []ActionSpecGroup{
+		{ToolName: "gitlab_zeta_probe", Actions: []toolutil.ActionSpec{spec}},
+		{ToolName: "gitlab_alpha_probe", Actions: []toolutil.ActionSpec{spec}},
+	}
+
+	merged := mergeActionSpecGroupOverrides(nil, overrides)
+
+	names := make([]string, 0, len(merged))
+	for _, group := range merged {
+		names = append(names, group.ToolName)
+	}
+	if want := []string{"gitlab_alpha_probe", "gitlab_zeta_probe"}; !slices.Equal(names, want) {
+		t.Fatalf("merged groups = %q, want %q", names, want)
+	}
+}
+
 // TestMergeActionSpecGroupOverrides_PreservesInvalidBaseGroup verifies base
 // groups without a tool name are carried through for downstream validation.
 func TestMergeActionSpecGroupOverrides_PreservesInvalidBaseGroup(t *testing.T) {
@@ -625,9 +651,10 @@ func TestGroupFromActionSpecGroup_DefaultsSurfaceKindToMetaGroup(t *testing.T) {
 }
 
 // TestGroupFromActionSpecGroup_FillsMissingMetadataAndKeepsDeclared covers the
-// two defaults materialization applies to a group's presentation, from both
-// sides: what a group that declares nothing is given, and what a group that
-// declares something keeps.
+// defaults materialization applies to a group's presentation, from both sides:
+// what a group that declares nothing is given, and what a group that declares
+// something keeps. The icons and the formatter are two of them; the read-only
+// mark derived from the actions and the description are the other two.
 //
 // Both sides are asserted because each default is one `if` away from the
 // opposite behavior, and each direction is silent in its own way. A group left
@@ -665,6 +692,44 @@ func TestGroupFromActionSpecGroup_FillsMissingMetadataAndKeepsDeclared(t *testin
 		}
 		if group.FormatResult(nil) != sentinel {
 			t.Error("the group formats with some other function than the one it declared")
+		}
+	})
+
+	// ReadOnly is the third default, and the one a client acts on: the meta
+	// surface registers a marked group through AddReadOnlyMetaTool and every
+	// other group as a tool that may write, so a group of reads that was never
+	// derived read-only is announced as one that writes.
+	t.Run("a group of reads that declares nothing is read-only", func(t *testing.T) {
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_zzz_metadata_probe", Actions: []toolutil.ActionSpec{spec}})
+		if !group.ReadOnly {
+			t.Error("ReadOnly = false, want it derived from actions that are all reads")
+		}
+	})
+
+	t.Run("a group carrying a write is not read-only", func(t *testing.T) {
+		write := toolutil.NewActionSpec("create", testCatalogActionRoute(), toolutil.ActionSpecOptions{})
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_zzz_metadata_probe", Actions: []toolutil.ActionSpec{spec, write}})
+		if group.ReadOnly {
+			t.Error("ReadOnly = true, want false for a group with a write among its actions")
+		}
+	})
+
+	// The description is the fourth, and what a model reads to choose the
+	// group: a declared one written over by the curated text would lose what
+	// the domain says about itself, and an undeclared one left empty would
+	// register a group that says nothing.
+	t.Run("a group that declares no description gets the one its name maps to", func(t *testing.T) {
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_zzz_metadata_probe", Actions: []toolutil.ActionSpec{spec}})
+		if want := "GitLab zzz metadata probe actions."; group.Description != want {
+			t.Errorf("Description = %q, want %q", group.Description, want)
+		}
+	})
+
+	t.Run("a declared description is kept", func(t *testing.T) {
+		const declared = "Declared probe description."
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_zzz_metadata_probe", Description: declared, Actions: []toolutil.ActionSpec{spec}})
+		if group.Description != declared {
+			t.Errorf("Description = %q, want the declared %q", group.Description, declared)
 		}
 	})
 }
