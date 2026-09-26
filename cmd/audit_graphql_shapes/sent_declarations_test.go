@@ -159,6 +159,7 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 		categoryViewer:             true,
 		categoryNeverSentHere:      true,
 		categoryOutsideSurface:     true,
+		categoryRestated:           true,
 	}
 	seen := map[string]bool{}
 

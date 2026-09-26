@@ -105,28 +105,20 @@ type setting struct {
 	value string
 }
 
-// ruleSettings lists the settings of one rule that say something: the squash
-// option when GitLab sent one, and each flag that is on. A flag that is off
-// is the default every rule starts from, so a row for it would only repeat
-// the absence of a restriction.
+// ruleSettings lists the security-policy flags of one rule that are on. A
+// flag that is off is the default every rule starts from, so a row for it
+// would only repeat the absence of a restriction.
 func ruleSettings(r BranchRuleItem) []setting {
-	var settings []setting
-	if r.SquashOption != nil {
-		settings = append(settings, setting{"Squash option", toolutil.EscapeMdTableCell(r.SquashOption.Option)})
-	}
-	on := toolutil.BoolEmoji(true)
-	if r.IsGroupLevel != nil && *r.IsGroupLevel {
-		settings = append(settings, setting{"Created at the group level", on})
-	}
 	p := r.BranchProtection
 	if p == nil {
-		return settings
+		return nil
 	}
+	var settings []setting
+	on := toolutil.BoolEmoji(true)
 	for _, flag := range []struct {
 		label string
 		value *bool
 	}{
-		{"Protection created at the group level", p.IsGroupLevel},
 		{"Modification blocked by a security policy", p.ModificationBlockedByPolicy},
 		{"Push blocked by a security policy", p.ProtectedFromPushBySecurityPolicy},
 		{"Modification would be blocked by a warn-mode policy", p.WarnModificationBlockedByPolicy},
@@ -198,8 +190,8 @@ func writeProtectionSection(b *strings.Builder, r BranchRuleItem) {
 }
 
 // grantDetail names who or what a grant is for beyond its role: the user or
-// group linked to its page, the deploy key, or the custom role. A grant of a
-// role alone has no detail.
+// group linked to its page, or the deploy key. A grant of a role alone has no
+// detail.
 func grantDetail(g grant) string {
 	var details []string
 	if u := g.access.User; u != nil {
@@ -207,9 +199,6 @@ func grantDetail(g grant) string {
 	}
 	if grp := g.access.Group; grp != nil {
 		details = append(details, "group "+toolutil.MdTitleLink(grp.Name, grp.WebURL))
-	}
-	if role := g.access.MemberRole; role != nil {
-		details = append(details, "custom role "+toolutil.EscapeMdTableCell(role.Name))
 	}
 	if g.key != nil {
 		details = append(details, deployKeyCell(*g.key))
@@ -277,25 +266,15 @@ func writeApprovalRuleSection(b *strings.Builder, r BranchRuleItem) {
 		return
 	}
 	fmt.Fprintf(b, "\n### Approval Rules for %s\n\n", toolutil.EscapeMdHeading(r.Name))
-	b.WriteString(toolutil.MarkdownTableHeader("Name", "Approvals Required", "Type", "Coverage Threshold", "Eligible Approvers"))
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Approvals Required", "Type", "Eligible Approvers"))
 	for _, ar := range r.ApprovalRules {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(ar.Name),
 			strconv.Itoa(ar.ApprovalsRequired),
 			toolutil.EscapeMdTableCell(ar.Type),
-			coverageCell(ar.CoverageMinimumThreshold),
 			approversCell(ar.EligibleApprovers),
 		))
 	}
-}
-
-// coverageCell renders the coverage an approval rule requires, a percentage
-// GitLab sends only for a coverage-check rule.
-func coverageCell(threshold *float64) string {
-	if threshold == nil {
-		return absentCell
-	}
-	return strconv.FormatFloat(*threshold, 'f', -1, 64) + "%"
 }
 
 // approversCell lists the users an approval rule allows to approve, each

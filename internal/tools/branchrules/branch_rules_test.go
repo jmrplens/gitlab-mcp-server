@@ -35,44 +35,39 @@ const sampleBranchRuleNode = `{
 	"name": "main",
 	"isDefault": true,
 	"isProtected": true,
-	"isGroupLevel": false,
 	"matchingBranchesCount": 1,
 	"createdAt": "2026-01-15T10:00:00Z",
 	"updatedAt": "2026-06-20T14:30:00Z",
-	"squashOption": {"option": "Encourage", "helpText": "Checkbox is visible and selected by default."},
 	"branchProtection": {
 		"allowForcePush": false,
 		"codeOwnerApprovalRequired": true,
-		"isGroupLevel": true,
 		"modificationBlockedByPolicy": true,
 		"protectedFromPushBySecurityPolicy": false,
 		"warnModificationBlockedByPolicy": true,
 		"warnProtectedFromPushBySecurityPolicy": false,
 		"pushAccessLevels": {"nodes": [
-			{"accessLevel": 40, "accessLevelDescription": "Maintainers", "user": null, "group": null, "memberRole": null, "deployKey": null},
-			{"accessLevel": 40, "accessLevelDescription": "Jane Doe", "user": ` + janeJSON + `, "group": null, "memberRole": null, "deployKey": null},
-			{"accessLevel": 40, "accessLevelDescription": "Deploy key", "user": null, "group": null, "memberRole": null,
+			{"accessLevel": 40, "accessLevelDescription": "Maintainers", "user": null, "group": null, "deployKey": null},
+			{"accessLevel": 40, "accessLevelDescription": "Jane Doe", "user": ` + janeJSON + `, "group": null, "deployKey": null},
+			{"accessLevel": 40, "accessLevelDescription": "Deploy key", "user": null, "group": null,
 				"deployKey": {"id": "12", "title": "Release key", "expiresAt": "2027-01-01", "user": ` + deployBotJSON + `}}
 		]},
 		"mergeAccessLevels": {"nodes": [
-			{"accessLevel": 30, "accessLevelDescription": "Developers + Maintainers", "user": null, "group": null, "memberRole": null},
-			{"accessLevel": 30, "accessLevelDescription": "Platform", "user": null, "memberRole": null,
-				"group": {"id": "9", "name": "Platform", "webUrl": "https://gitlab.example.com/groups/acme/platform", "avatarUrl": null,
-					"parent": {"id": "3", "name": "Acme", "webUrl": "https://gitlab.example.com/groups/acme", "avatarUrl": "https://gitlab.example.com/uploads/acme.png"}}}
+			{"accessLevel": 30, "accessLevelDescription": "Developers + Maintainers", "user": null, "group": null},
+			{"accessLevel": 30, "accessLevelDescription": "Platform", "user": null,
+				"group": {"id": "9", "name": "Platform", "webUrl": "https://gitlab.example.com/groups/acme/platform", "avatarUrl": null}}
 		]},
 		"unprotectAccessLevels": {"nodes": [
-			{"accessLevel": 40, "accessLevelDescription": "Release managers", "user": null, "group": null,
-				"memberRole": {"id": "gid://gitlab/MemberRole/5", "name": "Release managers"}},
-			{"accessLevel": 40, "accessLevelDescription": "Acme", "user": null, "memberRole": null,
-				"group": {"id": "3", "name": "Acme", "webUrl": "https://gitlab.example.com/groups/acme", "avatarUrl": null, "parent": null}}
+			{"accessLevel": 40, "accessLevelDescription": "Jane Doe", "user": ` + janeJSON + `, "group": null},
+			{"accessLevel": 40, "accessLevelDescription": "Acme", "user": null,
+				"group": {"id": "3", "name": "Acme", "webUrl": "https://gitlab.example.com/groups/acme", "avatarUrl": "https://gitlab.example.com/uploads/acme.png"}}
 		]}
 	},
 	"approvalRules": {
 		"nodes": [
 			{"id": "gid://gitlab/ApprovalProjectRule/1", "name": "Security Review", "approvalsRequired": 2, "type": "REGULAR",
-				"coverageMinimumThreshold": null, "eligibleApprovers": {"nodes": [` + janeJSON + `]}},
+				"eligibleApprovers": {"nodes": [` + janeJSON + `]}},
 			{"id": "gid://gitlab/ApprovalProjectRule/2", "name": "Coverage-Check", "approvalsRequired": 1, "type": "REPORT_APPROVER",
-				"coverageMinimumThreshold": 80.5, "eligibleApprovers": {"nodes": []}}
+				"eligibleApprovers": {"nodes": []}}
 		]
 	},
 	"externalStatusChecks": {
@@ -88,11 +83,9 @@ const sampleUnprotectedRuleNode = `{
 	"name": "feature/*",
 	"isDefault": false,
 	"isProtected": false,
-	"isGroupLevel": false,
 	"matchingBranchesCount": 5,
 	"createdAt": "2026-03-01T08:00:00Z",
 	"updatedAt": null,
-	"squashOption": null,
 	"branchProtection": null,
 	"approvalRules": {"nodes": []},
 	"externalStatusChecks": {"nodes": []}
@@ -109,21 +102,17 @@ var (
 
 // wantProtectedRule is sampleBranchRuleNode as the output publishes it.
 func wantProtectedRule() BranchRuleItem {
-	threshold := 80.5
 	return BranchRuleItem{
 		ID:                    "gid://gitlab/Projects::BranchRule/7",
 		Name:                  "main",
 		IsDefault:             true,
 		IsProtected:           true,
-		IsGroupLevel:          new(false),
 		MatchingBranchesCount: 1,
 		CreatedAt:             "2026-01-15T10:00:00Z",
 		UpdatedAt:             "2026-06-20T14:30:00Z",
-		SquashOption:          &SquashOption{Option: "Encourage", HelpText: "Checkbox is visible and selected by default."},
 		BranchProtection: &BranchProtection{
 			AllowForcePush:                        false,
 			CodeOwnerApprovalRequired:             new(true),
-			IsGroupLevel:                          new(true),
 			ModificationBlockedByPolicy:           new(true),
 			ProtectedFromPushBySecurityPolicy:     new(false),
 			WarnModificationBlockedByPolicy:       new(true),
@@ -140,18 +129,13 @@ func wantProtectedRule() BranchRuleItem {
 				{AccessLevel: 30, AccessLevelDescription: "Developers + Maintainers"},
 				{AccessLevel: 30, AccessLevelDescription: "Platform", Group: &AccessGroup{
 					ID: "9", Name: "Platform", WebURL: "https://gitlab.example.com/groups/acme/platform",
-					Parent: &AccessGroupRef{
-						ID: "3", Name: "Acme", WebURL: "https://gitlab.example.com/groups/acme",
-						AvatarURL: "https://gitlab.example.com/uploads/acme.png",
-					},
 				}},
 			},
 			UnprotectAccessLevels: []Access{
-				{AccessLevel: 40, AccessLevelDescription: "Release managers", MemberRole: &AccessMemberRole{
-					ID: "gid://gitlab/MemberRole/5", Name: "Release managers",
-				}},
+				{AccessLevel: 40, AccessLevelDescription: "Jane Doe", User: &jane},
 				{AccessLevel: 40, AccessLevelDescription: "Acme", Group: &AccessGroup{
 					ID: "3", Name: "Acme", WebURL: "https://gitlab.example.com/groups/acme",
+					AvatarURL: "https://gitlab.example.com/uploads/acme.png",
 				}},
 			},
 		},
@@ -162,7 +146,7 @@ func wantProtectedRule() BranchRuleItem {
 			},
 			{
 				ID: "gid://gitlab/ApprovalProjectRule/2", Name: "Coverage-Check", ApprovalsRequired: 1, Type: "REPORT_APPROVER",
-				CoverageMinimumThreshold: &threshold, EligibleApprovers: []UserRef{},
+				EligibleApprovers: []UserRef{},
 			},
 		},
 		ExternalStatusChecks: []ExternalStatusCheck{
@@ -175,7 +159,6 @@ func wantProtectedRule() BranchRuleItem {
 func wantUnprotectedRule() BranchRuleItem {
 	return BranchRuleItem{
 		Name:                  "feature/*",
-		IsGroupLevel:          new(false),
 		MatchingBranchesCount: 5,
 		CreatedAt:             "2026-03-01T08:00:00Z",
 		ApprovalRules:         []ApprovalRule{},
@@ -231,9 +214,9 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 // Handler tests.
 
 // TestList_Success verifies that an Enterprise listing publishes every field
-// its document selects: the grants of each kind with the user, group, deploy
-// key or custom role they name, every flag, the squash option, and the
-// approval rules and status checks with the fields they gained.
+// its document selects: the grants of each kind with the user, group or
+// deploy key they name, every flag, and the approval rules and status checks
+// with the fields they gained.
 func TestList_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -423,7 +406,6 @@ func TestList_CE(t *testing.T) {
 							"matchingBranchesCount": 1,
 							"createdAt": "2026-01-15T10:00:00Z",
 							"updatedAt": null,
-							"squashOption": null,
 							"branchProtection": {
 								"allowForcePush": false,
 								"pushAccessLevels": {"nodes": [
@@ -553,11 +535,9 @@ func TestQueryListBranchRulesCE_AsksNoEnterpriseField(t *testing.T) {
 		protection = rule + ".branchProtection"
 	)
 	enterpriseOnly := []string{
-		rule + ".isGroupLevel",                                // ee/app/graphql/ee/types/projects/branch_rule_type.rb
 		rule + ".approvalRules",                               // ee/app/graphql/ee/types/projects/branch_rule_type.rb
 		rule + ".externalStatusChecks",                        // ee/app/graphql/ee/types/projects/branch_rule_type.rb
 		protection + ".codeOwnerApprovalRequired",             // ee/app/graphql/ee/types/branch_rules/branch_protection_type.rb
-		protection + ".isGroupLevel",                          // ee/app/graphql/ee/types/branch_rules/branch_protection_type.rb
 		protection + ".modificationBlockedByPolicy",           // ee/app/graphql/ee/types/branch_rules/branch_protection_type.rb
 		protection + ".protectedFromPushBySecurityPolicy",     // ee/app/graphql/ee/types/branch_rules/branch_protection_type.rb
 		protection + ".warnModificationBlockedByPolicy",       // ee/app/graphql/ee/types/branch_rules/branch_protection_type.rb
@@ -565,10 +545,8 @@ func TestQueryListBranchRulesCE_AsksNoEnterpriseField(t *testing.T) {
 		protection + ".unprotectAccessLevels",                 // ee/app/graphql/ee/types/branch_rules/branch_protection_type.rb
 		protection + ".pushAccessLevels.nodes.user",           // ee/app/graphql/ee/types/branch_protections/base_access_level_type.rb
 		protection + ".pushAccessLevels.nodes.group",          // ee/app/graphql/ee/types/branch_protections/base_access_level_type.rb
-		protection + ".pushAccessLevels.nodes.memberRole",     // ee/app/graphql/ee/types/branch_protections/base_access_level_type.rb
 		protection + ".mergeAccessLevels.nodes.user",          // ee/app/graphql/ee/types/branch_protections/base_access_level_type.rb
 		protection + ".mergeAccessLevels.nodes.group",         // ee/app/graphql/ee/types/branch_protections/base_access_level_type.rb
-		protection + ".mergeAccessLevels.nodes.memberRole",    // ee/app/graphql/ee/types/branch_protections/base_access_level_type.rb
 	}
 	community := selectionPaths(t, queryListBranchRulesCE)
 	enterprise := selectionPaths(t, queryListBranchRulesEE)
@@ -579,6 +557,45 @@ func TestQueryListBranchRulesCE_AsksNoEnterpriseField(t *testing.T) {
 		if _, found := slices.BinarySearch(enterprise, path); !found {
 			t.Errorf("the Enterprise document does not ask for %s, so the entry above guards nothing", path)
 		}
+	}
+}
+
+// TestQueryListBranchRules_AsksNoExperimentOrLaterField holds both documents
+// to the releases they are measured to work on and to the complexity GitLab
+// accepts. GitLab refuses a whole document naming a field it does not have, so
+// one experiment GitLab renames or one field newer than the instance stops
+// every call, and the pinned schema cannot catch either, being one release of
+// GitLab.com. Each path below is answered in cmd/audit_graphql_shapes instead,
+// with the reason its comment gives: an experiment as GitLab's GraphQL
+// reference marks it, a field past the floor with the first versioned
+// reference that lists it, and a group's parent with the complexity GitLab.com
+// charged the document that selected it.
+func TestQueryListBranchRules_AsksNoExperimentOrLaterField(t *testing.T) {
+	const (
+		rule       = ".project.branchRules.nodes"
+		protection = rule + ".branchProtection"
+	)
+	leftOut := []string{
+		rule + ".isGroupLevel",                                 // experiment, 19.3
+		rule + ".squashOption",                                 // experiment, 17.9
+		protection + ".isGroupLevel",                           // experiment, 18.3
+		protection + ".pushAccessLevels.nodes.memberRole",      // experiment, 19.2
+		protection + ".mergeAccessLevels.nodes.memberRole",     // experiment, 19.2
+		protection + ".unprotectAccessLevels.nodes.memberRole", // experiment, 19.2
+		rule + ".approvalRules.nodes.coverageMinimumThreshold", // 19.2, past the 18.8 floor
+		protection + ".pushAccessLevels.nodes.group.parent",    // 256 of the 250 complexity GitLab allows at first: 100
+		protection + ".mergeAccessLevels.nodes.group.parent",
+		protection + ".unprotectAccessLevels.nodes.group.parent",
+	}
+	for name, document := range map[string]string{"Community": queryListBranchRulesCE, "Enterprise": queryListBranchRulesEE} {
+		t.Run(name, func(t *testing.T) {
+			selected := selectionPaths(t, document)
+			for _, path := range leftOut {
+				if _, found := slices.BinarySearch(selected, path); found {
+					t.Errorf("the %s document asks for %s", name, path)
+				}
+			}
+		})
 	}
 }
 
@@ -656,8 +673,7 @@ func TestList_Pagination(t *testing.T) {
 
 // TestList_NullOptionalFields verifies that an Enterprise rule whose nullable
 // fields GitLab sent as null publishes each as absent: the timestamps, the
-// squash option, the three grant lists, the approval rules, the status checks
-// and an approval rule's threshold and approvers.
+// three grant lists, the approval rules and the status checks.
 func TestList_NullOptionalFields(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -669,15 +685,12 @@ func TestList_NullOptionalFields(t *testing.T) {
 							"name": "release/*",
 							"isDefault": false,
 							"isProtected": true,
-							"isGroupLevel": true,
 							"matchingBranchesCount": 3,
 							"createdAt": null,
 							"updatedAt": null,
-							"squashOption": null,
 							"branchProtection": {
 								"allowForcePush": true,
 								"codeOwnerApprovalRequired": false,
-								"isGroupLevel": false,
 								"modificationBlockedByPolicy": false,
 								"protectedFromPushBySecurityPolicy": true,
 								"warnModificationBlockedByPolicy": false,
@@ -709,12 +722,10 @@ func TestList_NullOptionalFields(t *testing.T) {
 		ID:                    "gid://gitlab/Projects::BranchRule/9",
 		Name:                  "release/*",
 		IsProtected:           true,
-		IsGroupLevel:          new(true),
 		MatchingBranchesCount: 3,
 		BranchProtection: &BranchProtection{
 			AllowForcePush:                        true,
 			CodeOwnerApprovalRequired:             new(false),
-			IsGroupLevel:                          new(false),
 			ModificationBlockedByPolicy:           new(false),
 			ProtectedFromPushBySecurityPolicy:     new(true),
 			WarnModificationBlockedByPolicy:       new(false),
@@ -822,7 +833,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // TestFormatListMarkdown_WithRules pins the whole response of an Enterprise
 // listing: the grant summaries in the table, then per rule the settings that
 // are on and every grant with who it names, the approval rules with their
-// threshold and approvers, and the status checks with their HMAC flag.
+// approvers, and the status checks with their HMAC flag.
 func TestFormatListMarkdown_WithRules(t *testing.T) {
 	out := ListOutput{
 		Rules:      []BranchRuleItem{wantProtectedRule(), wantUnprotectedRule()},
@@ -838,8 +849,6 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		"\n### Protection for main\n\n" +
 		"| Setting | Value |\n" +
 		"| --- | --- |\n" +
-		"| Squash option | Encourage |\n" +
-		"| Protection created at the group level | ✅ |\n" +
 		"| Modification blocked by a security policy | ✅ |\n" +
 		"| Modification would be blocked by a warn-mode policy | ✅ |\n" +
 		"\n| Grant | Allowed | Detail |\n" +
@@ -849,13 +858,13 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		"| Push | Deploy key | deploy key Release key of [@deploy-bot](https://gitlab.example.com/deploy-bot), expires 2027-01-01 |\n" +
 		"| Merge | Developers + Maintainers | - |\n" +
 		"| Merge | Platform | group [Platform](https://gitlab.example.com/groups/acme/platform) |\n" +
-		"| Unprotect | Release managers | custom role Release managers |\n" +
+		"| Unprotect | Jane Doe | user [@jane](https://gitlab.example.com/jane) |\n" +
 		"| Unprotect | Acme | group [Acme](https://gitlab.example.com/groups/acme) |\n" +
 		"\n### Approval Rules for main\n\n" +
-		"| Name | Approvals Required | Type | Coverage Threshold | Eligible Approvers |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| Security Review | 2 | REGULAR | - | [@jane](https://gitlab.example.com/jane) |\n" +
-		"| Coverage-Check | 1 | REPORT_APPROVER | 80.5% | - |\n" +
+		"| Name | Approvals Required | Type | Eligible Approvers |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| Security Review | 2 | REGULAR | [@jane](https://gitlab.example.com/jane) |\n" +
+		"| Coverage-Check | 1 | REPORT_APPROVER | - |\n" +
 		"\n### External Status Checks for main\n\n" +
 		"| Name | URL | HMAC |\n" +
 		"| --- | --- | --- |\n" +
@@ -877,7 +886,6 @@ func TestFormatListMarkdown_CommunityRule(t *testing.T) {
 		IsDefault:             true,
 		IsProtected:           true,
 		MatchingBranchesCount: 1,
-		SquashOption:          &SquashOption{Option: "Do not allow", HelpText: "Squashing is never performed."},
 		BranchProtection: &BranchProtection{
 			AllowForcePush:    true,
 			PushAccessLevels:  []PushAccess{{AccessLevel: 40, AccessLevelDescription: "Maintainers"}},
@@ -889,10 +897,7 @@ func TestFormatListMarkdown_CommunityRule(t *testing.T) {
 		branchRuleTableHeader +
 		"| main | ✅ | ✅ | 1 | Maintainers | No one | ✅ | - | None | None |\n" +
 		"\n### Protection for main\n\n" +
-		"| Setting | Value |\n" +
-		"| --- | --- |\n" +
-		"| Squash option | Do not allow |\n" +
-		"\n| Grant | Allowed | Detail |\n" +
+		"| Grant | Allowed | Detail |\n" +
 		"| --- | --- | --- |\n" +
 		"| Push | Maintainers | - |\n" +
 		"| Merge | No one | - |\n" +
@@ -906,11 +911,10 @@ func TestFormatListMarkdown_CommunityRule(t *testing.T) {
 
 // TestFormatListMarkdown_SettingsWithoutGrants pins a rule whose only content
 // below the table is its settings: the grants table is not opened for nothing,
-// and a rule-level group flag and a push-blocking policy both read as on.
+// and a push-blocking policy and its warn-mode twin both read as on.
 func TestFormatListMarkdown_SettingsWithoutGrants(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{Rules: []BranchRuleItem{{
-		Name:         "main",
-		IsGroupLevel: new(true),
+		Name: "main",
 		BranchProtection: &BranchProtection{
 			CodeOwnerApprovalRequired:             new(false),
 			ProtectedFromPushBySecurityPolicy:     new(true),
@@ -924,7 +928,6 @@ func TestFormatListMarkdown_SettingsWithoutGrants(t *testing.T) {
 		"\n### Protection for main\n\n" +
 		"| Setting | Value |\n" +
 		"| --- | --- |\n" +
-		"| Created at the group level | ✅ |\n" +
 		"| Push blocked by a security policy | ✅ |\n" +
 		"| Push would be blocked by a warn-mode policy | ✅ |\n" +
 		"\nShowing 1 items | no more pages\n" +
@@ -940,8 +943,7 @@ func TestFormatListMarkdown_SettingsWithoutGrants(t *testing.T) {
 // settings table and no stray line above it.
 func TestFormatListMarkdown_GrantsWithoutSettings(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{Rules: []BranchRuleItem{{
-		Name:         "main",
-		IsGroupLevel: new(false),
+		Name: "main",
 		BranchProtection: &BranchProtection{
 			MergeAccessLevels: []Access{{AccessLevel: 40, AccessLevelDescription: "Jane Doe", User: &jane}},
 		},
@@ -1031,16 +1033,15 @@ func TestGrantDetail(t *testing.T) {
 		{"a group", grant{access: Access{Group: &AccessGroup{
 			Name: "Plat|form", WebURL: "https://gitlab.example.com/groups/platform",
 		}}}, "group [Plat&#124;form](https://gitlab.example.com/groups/platform)"},
-		{"a custom role", grant{access: Access{MemberRole: &AccessMemberRole{Name: "Release|managers"}}}, "custom role Release&#124;managers"},
 		{
 			"a deploy key without expiry",
 			grant{key: &AccessDeployKey{Title: "Key", User: deployBot}},
 			"deploy key Key of [@deploy-bot](https://gitlab.example.com/deploy-bot)",
 		},
 		{"every grantee at once", grant{
-			access: Access{User: &jane, Group: &AccessGroup{Name: "G", WebURL: "https://g"}, MemberRole: &AccessMemberRole{Name: "R"}},
+			access: Access{User: &jane, Group: &AccessGroup{Name: "G", WebURL: "https://g"}},
 			key:    &AccessDeployKey{Title: "K", ExpiresAt: "2027-01-01", User: deployBot},
-		}, "user [@jane](https://gitlab.example.com/jane); group [G](https://g); custom role R; " +
+		}, "user [@jane](https://gitlab.example.com/jane); group [G](https://g); " +
 			"deploy key K of [@deploy-bot](https://gitlab.example.com/deploy-bot), expires 2027-01-01"},
 	}
 	for _, tt := range tests {
@@ -1068,28 +1069,6 @@ func TestFormatAccessSummary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := formatAccessSummary(tt.grants); got != tt.want {
 				t.Errorf("formatAccessSummary() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestCoverageCell pins the threshold of a coverage-check rule and the dash of
-// every other rule, fractions kept as GitLab sent them.
-func TestCoverageCell(t *testing.T) {
-	whole, fraction := 80.0, 72.25
-	tests := []struct {
-		name      string
-		threshold *float64
-		want      string
-	}{
-		{"not a coverage rule", nil, "-"},
-		{"whole", &whole, "80%"},
-		{"fraction", &fraction, "72.25%"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := coverageCell(tt.threshold); got != tt.want {
-				t.Errorf("coverageCell() = %q, want %q", got, tt.want)
 			}
 		})
 	}

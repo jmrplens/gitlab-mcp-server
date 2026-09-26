@@ -1,0 +1,116 @@
+package main
+
+// The answers for five GraphQL domains: branch rules, the CI/CD catalog,
+// custom emoji, and security attributes and categories.
+//
+// Each field the pinned schema offered at an object these packages decode, and
+// no document of theirs selected, was triaged. The ones a caller needs are
+// selected and published: who may push, merge and unprotect a branch, the
+// security-policy flags of a protection, an approval rule's eligible approvers,
+// a catalog version's README, author and commit, an input's options, pattern
+// and conditional rules, and the attributes a category takes with it when it
+// is deleted. What is left is answered below, each with the reason a reviewer
+// can check against GitLab's own GraphQL reference or resolvers.
+
+// Where the findings answered here are filed.
+const (
+	branchRulesPackage = toolsDir + "/branchrules"
+)
+
+// userReferenceReason is why a user named by something other than a note is
+// named with its identity and nothing more. role says what the user is to the
+// response, and selection what the document selects of it.
+func userReferenceReason(role, selection string) string {
+	return "The object is " + role + ", named so a reader knows who it is, and the document selects " +
+		selection + " of it. Its own fields are the users domain's surface, which publishes them through " +
+		"gitlab_user, and answering them here would be that domain a second time through a document nobody " +
+		"maintains against it."
+}
+
+// branchRuleExperimentReason is why a branch rule field GitLab still marks as
+// an experiment is left out of both branch rule documents.
+func branchRuleExperimentReason(field, introduced, meaning string) string {
+	return "GitLab's GraphQL API reference marks " + field + " (" + meaning + ") \"Introduced in GitLab " +
+		introduced + ". Status: Experiment.\" GitLab may change or remove an experiment without notice and " +
+		"refuses a whole document naming a field it no longer has, so selecting it would stake every branch " +
+		"rule listing on the experiment. It is selected once GitLab declares it generally available."
+}
+
+// domainSentDeclarations answers the sent findings of the five domains.
+func domainSentDeclarations() []sentDeclaration {
+	return branchRuleDeclarations()
+}
+
+// branchRuleDeclarations answers what the two branch rule documents leave out:
+// the experiments, the one field newer than the release they are held to, the
+// recursive parent of a granted group, and the users an approval rule names.
+func branchRuleDeclarations() []sentDeclaration {
+	declarations := []sentDeclaration{
+		{
+			Package:    branchRulesPackage,
+			SchemaType: "UserCore",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason: userReferenceReason("a user an approval rule lets approve",
+				"the identity GitLab's own access-level user carries (id, username, name, public email, avatar and "+
+					"web URL and path), which is the shape every user a branch rule names is published in"),
+		},
+		{
+			Package:    branchRulesPackage,
+			SchemaType: "ApprovalProjectRule",
+			Field:      "coverageMinimumThreshold",
+			Category:   categoryNewerThanFloor,
+			Reason: "coverageMinimumThreshold (the coverage below which a coverage-check rule requires approval) was " +
+				"added in GitLab 19.2: GitLab's versioned GraphQL reference lists ApprovalProjectRule." +
+				"coverageMinimumThreshold from 19.2 and not in 19.1. GitLab refuses a whole document that names a " +
+				"field it does not have, and every other field the Enterprise branch rule document selects is served " +
+				"from 18.8 (the two warn-mode policy flags are the newest), so selecting it would stop the listing on " +
+				"every Premium and Ultimate instance from 18.8 to 19.1 for one number.",
+		},
+		{
+			Package:    branchRulesPackage,
+			SchemaType: "AccessLevelGroup",
+			Field:      "parent",
+			Category:   categoryRecursiveShape,
+			Reason: "parent is an AccessLevelGroup itself, so the chain above a granted group can only be selected to " +
+				"a depth fixed in advance, and the group's web_url, which is published, already spells its whole " +
+				"path. Selecting one level of it under the three grant lists also took the Enterprise document to a " +
+				"complexity of 256 at a page of 100 on GitLab.com (2026-09-26), past the 250 GitLab allows an " +
+				"authenticated caller, where without it the document scores 226.",
+		},
+		{
+			Package:    branchRulesPackage,
+			SchemaType: "BranchRule",
+			Field:      "isGroupLevel",
+			Category:   categoryExperiment,
+			Reason:     branchRuleExperimentReason("BranchRule.isGroupLevel", "19.3", "whether the rule was created at the group level"),
+		},
+		{
+			Package:    branchRulesPackage,
+			SchemaType: "BranchRule",
+			Field:      "squashOption",
+			Category:   categoryExperiment,
+			Reason: branchRuleExperimentReason("BranchRule.squashOption", "17.9",
+				"the default squash behavior of merge requests into the matched branches"),
+		},
+		{
+			Package:    branchRulesPackage,
+			SchemaType: "BranchProtection",
+			Field:      "isGroupLevel",
+			Category:   categoryExperiment,
+			Reason: branchRuleExperimentReason("BranchProtection.isGroupLevel", "18.3",
+				"whether the protection was created at the group level"),
+		},
+	}
+	for _, grant := range []string{"PushAccessLevel", "MergeAccessLevel", "UnprotectAccessLevel"} {
+		declarations = append(declarations, sentDeclaration{
+			Package:    branchRulesPackage,
+			SchemaType: grant,
+			Field:      "memberRole",
+			Category:   categoryExperiment,
+			Reason: branchRuleExperimentReason(grant+".memberRole", "19.2",
+				"the custom role a grant names, resolved only while custom roles for protected branches are enabled"),
+		})
+	}
+	return declarations
+}

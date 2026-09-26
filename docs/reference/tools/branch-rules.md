@@ -61,11 +61,9 @@ Each branch rule includes the fields below. The server sends one of two GraphQL 
 | `name`                    | string | Free     | Branch name or pattern (e.g. `main`, `release/*`)                                 |
 | `is_default`              | bool   | Free     | Whether this is the default branch                                                |
 | `is_protected`            | bool   | Free     | Whether the branch is protected                                                   |
-| `is_group_level`          | bool   | Premium  | Whether the rule was created at the group level                                   |
 | `matching_branches_count` | int    | Free     | Number of branches matching this rule                                             |
 | `created_at`              | string | Free     | Rule creation timestamp                                                           |
 | `updated_at`              | string | Free     | Rule last update timestamp                                                        |
-| `squash_option`           | object | Premium  | How merge requests into the matched branches are squashed (`option`, `help_text`) |
 | `branch_protection`       | object | Free     | Protection settings (see below)                                                   |
 | `approval_rules`          | array  | Premium  | Associated approval rules (see below)                                             |
 | `external_status_checks`  | array  | Ultimate | External status checks (see below)                                                |
@@ -79,7 +77,6 @@ Each branch rule includes the fields below. The server sends one of two GraphQL 
 | `merge_access_levels`                         | array | Free     | Who may merge                                                           |
 | `unprotect_access_levels`                     | array | Premium  | Who may unprotect the branch                                            |
 | `code_owner_approval_required`                | bool  | Premium  | Whether code owner approval is required                                 |
-| `is_group_level`                              | bool  | Premium  | Whether the protection was created at the group level                   |
 | `modification_blocked_by_policy`              | bool  | Ultimate | Whether a security policy prevents changing the protection              |
 | `protected_from_push_by_security_policy`      | bool  | Ultimate | Whether a security policy prevents push and force push                  |
 | `warn_modification_blocked_by_policy`         | bool  | Ultimate | Whether a warn-mode security policy would prevent changing it           |
@@ -89,25 +86,23 @@ Each branch rule includes the fields below. The server sends one of two GraphQL 
 
 Each entry of `push_access_levels`, `merge_access_levels` and `unprotect_access_levels` is one grant:
 
-| Field                      | Type   | Tier     | Description                                                                                              |
-| -------------------------- | ------ | -------- | -------------------------------------------------------------------------------------------------------- |
-| `access_level`             | int    | Free     | GitLab access level of the grant (`0` no one, `30` developer, `40` maintainer, `60` admin)               |
-| `access_level_description` | string | Free     | GitLab's own reading of the grant: the role's name, or the user's or group's                             |
-| `user`                     | object | Premium  | The user granted (`id`, `username`, `name`, `public_email`, `avatar_url`, `web_url`, `web_path`)         |
-| `group`                    | object | Premium  | The group granted (`id`, `name`, `web_url`, `avatar_url`, and its immediate `parent`)                    |
-| `member_role`              | object | Ultimate | The custom role granted (`id`, `name`)                                                                   |
-| `deploy_key`               | object | Free     | Push grants only: the deploy key granted (`id`, `title`, `expires_at`, and the `user` it is assigned to) |
+| Field                      | Type   | Tier    | Description                                                                                              |
+| -------------------------- | ------ | ------- | -------------------------------------------------------------------------------------------------------- |
+| `access_level`             | int    | Free    | GitLab access level of the grant (`0` no one, `30` developer, `40` maintainer, `60` admin)               |
+| `access_level_description` | string | Free    | GitLab's own reading of the grant: the role's name, or the user's or group's                             |
+| `user`                     | object | Premium | The user granted (`id`, `username`, `name`, `public_email`, `avatar_url`, `web_url`, `web_path`)         |
+| `group`                    | object | Premium | The group granted (`id`, `name`, `web_url`, `avatar_url`); its web URL spells its whole path             |
+| `deploy_key`               | object | Free    | Push grants only: the deploy key granted (`id`, `title`, `expires_at`, and the `user` it is assigned to) |
 
 ### Approval rules
 
-| Field                        | Type   | Description                                                           |
-| ---------------------------- | ------ | --------------------------------------------------------------------- |
-| `id`                         | string | Global ID of the approval rule                                        |
-| `name`                       | string | Approval rule name                                                    |
-| `approvals_required`         | int    | Number of required approvals                                          |
-| `type`                       | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`)                              |
-| `coverage_minimum_threshold` | number | Coverage below which approval is required (coverage-check rules only) |
-| `eligible_approvers`         | array  | Users eligible to approve, in the same user shape as a grant          |
+| Field                | Type   | Description                                                  |
+| -------------------- | ------ | ------------------------------------------------------------ |
+| `id`                 | string | Global ID of the approval rule                               |
+| `name`               | string | Approval rule name                                           |
+| `approvals_required` | int    | Number of required approvals                                 |
+| `type`               | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`)                     |
+| `eligible_approvers` | array  | Users eligible to approve, in the same user shape as a grant |
 
 ### External status checks
 
@@ -130,10 +125,12 @@ Each entry of `push_access_levels`, `merge_access_levels` and `unprotect_access_
 
 ## Notes
 
-- Branch rules are read-only via GraphQL — to modify branch protections, use the REST-based `gitlab_branch_protect` and `gitlab_protected_branch_update` tools
+- Branch rules are read-only via GraphQL: to modify branch protections, use the REST-based `gitlab_branch_protect` and `gitlab_protected_branch_update` tools
 - The `matching_branches_count` field shows how many actual branches match wildcard patterns (e.g. `release/*`)
-- Approval rules, unprotect grants, user and group grants and the squash option are only available on GitLab Premium/Ultimate; external status checks, custom-role grants and the security-policy flags on Ultimate
+- Approval rules, unprotect grants and user and group grants are only available on GitLab Premium/Ultimate; external status checks and the security-policy flags on Ultimate
 - The grant lists, an approval rule's eligible approvers and the lists under a rule are read from their first page, which GitLab sizes at up to 100 entries
+- GitLab refuses a whole GraphQL document that names a field it does not have, so the newest field a document selects is the oldest release it works on: on a Premium or Ultimate instance the listing needs GitLab 18.8 (the two warn-mode policy flags), and on a Community or Free one nothing newer than 16.11
+- Left out on purpose: the fields GitLab still marks as experiments (a rule's and a protection's group-level flag, a rule's squash option, the custom role a grant names), an approval rule's coverage threshold, which GitLab added in 19.2, and a granted group's parent, which took the Premium and Ultimate document past the complexity GitLab accepts at a page of 100 (it scores 226 of 250 without it, measured on GitLab.com)
 
 ## Related
 

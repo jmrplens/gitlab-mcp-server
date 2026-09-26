@@ -108,6 +108,11 @@ const (
 	// serves no tool for, so surfacing it inside another domain's response
 	// would start that domain in the wrong place.
 	categoryOutsideSurface = "outside-this-servers-surface"
+	// categoryRestated is a field whose value the caller already holds: a
+	// mutation payload handing back the argument that named its target, or an
+	// object reached again by walking from a child back to the parent the
+	// same response carries. Selecting it would publish the same value twice.
+	categoryRestated = "restates-a-known-value"
 )
 
 // One more category is wanted and is not written down until the first finding
@@ -171,16 +176,6 @@ func referenceStub(object, tools string) string {
 		"own fields are that domain's surface, published by " + tools + ". Answering them here would be that " +
 		"domain a second time, through a document nobody maintains against it, and the sent question is " +
 		"already asked of it where the tier is known."
-}
-
-// userReferenceReason is why a user named by something other than a note is
-// named with its identity and nothing more. role says what the user is to the
-// response, and selection what the document selects of it.
-func userReferenceReason(role, selection string) string {
-	return "The object is " + role + ", named so a reader knows who it is, and the document selects " +
-		selection + " of it. Its own fields are the users domain's surface, which publishes them through " +
-		"gitlab_user, and answering them here would be that domain a second time through a document nobody " +
-		"maintains against it."
 }
 
 // htmlRenderingReason is why the HTML renderings of a Markdown field are
@@ -320,27 +315,9 @@ func epicIssueDeclarations() []sentDeclaration {
 // on purpose, each with the reason. It is what [auditRun.declarations] carries
 // on a real run. The two GraphQL-only security domains and the shapes they
 // share keep their answers in [securitySentDeclarations], which is most of the
-// table.
-var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), []sentDeclaration{ //nolint:gochecknoglobals // the adjudication table this repository answers with
-	{
-		Package:    toolsDir + "/branchrules",
-		SchemaType: "UserCore",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason: userReferenceReason("a user an approval rule lets approve",
-			"the identity GitLab's own access-level user carries (id, username, name, public email, avatar and "+
-				"web URL and path), which is the shape every user a branch rule names is published in"),
-	},
-	{
-		Package:    toolsDir + "/branchrules",
-		SchemaType: "MemberRole",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason: referenceStub("custom role a protected-branch grant names", "gitlab_member_role") +
-			" The grant carries the role's id and name, which is what identifies it; its permissions, base " +
-			"access level and member counts are the role's own answer.",
-	},
-})
+// table. The branch rules, CI catalog, custom emoji and security attribute and
+// category domains keep theirs in [domainSentDeclarations].
+var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), domainSentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
 
 // epicSentDeclarations answers the epic domains' findings, and those of the
 // shared note wrapper every epic note and discussion mutation goes through.
