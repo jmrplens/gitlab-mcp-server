@@ -173,6 +173,16 @@ func referenceStub(object, tools string) string {
 		"already asked of it where the tier is known."
 }
 
+// userReferenceReason is why a user named by something other than a note is
+// named with its identity and nothing more. role says what the user is to the
+// response, and selection what the document selects of it.
+func userReferenceReason(role, selection string) string {
+	return "The object is " + role + ", named so a reader knows who it is, and the document selects " +
+		selection + " of it. Its own fields are the users domain's surface, which publishes them through " +
+		"gitlab_user, and answering them here would be that domain a second time through a document nobody " +
+		"maintains against it."
+}
+
 // htmlRenderingReason is why the HTML renderings of a Markdown field are
 // left out wherever the field itself is published.
 const htmlRenderingReason = "The field is GitLab's HTML rendering of Markdown this response publishes in its source form " +
@@ -311,7 +321,26 @@ func epicIssueDeclarations() []sentDeclaration {
 // on a real run. The two GraphQL-only security domains and the shapes they
 // share keep their answers in [securitySentDeclarations], which is most of the
 // table.
-var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
+var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), []sentDeclaration{ //nolint:gochecknoglobals // the adjudication table this repository answers with
+	{
+		Package:    toolsDir + "/branchrules",
+		SchemaType: "UserCore",
+		Field:      declaredSegment,
+		Category:   categoryNotThisResponse,
+		Reason: userReferenceReason("a user an approval rule lets approve",
+			"the identity GitLab's own access-level user carries (id, username, name, public email, avatar and "+
+				"web URL and path), which is the shape every user a branch rule names is published in"),
+	},
+	{
+		Package:    toolsDir + "/branchrules",
+		SchemaType: "MemberRole",
+		Field:      declaredSegment,
+		Category:   categoryNotThisResponse,
+		Reason: referenceStub("custom role a protected-branch grant names", "gitlab_member_role") +
+			" The grant carries the role's id and name, which is what identifies it; its permissions, base " +
+			"access level and member counts are the role's own answer.",
+	},
+})
 
 // epicSentDeclarations answers the epic domains' findings, and those of the
 // shared note wrapper every epic note and discussion mutation goes through.

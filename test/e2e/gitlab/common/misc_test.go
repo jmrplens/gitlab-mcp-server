@@ -119,8 +119,23 @@ func TestBranchRules_List(t *testing.T) {
 		}
 
 		rules := harness.Do[branchrules.ListOutput](s, actionBranchRuleList, map[string]any{"project_path": project.Path})
-		if !slices.ContainsFunc(rules.Rules, func(r branchrules.BranchRuleItem) bool { return r.Name == ruleBranch }) {
+		at := slices.IndexFunc(rules.Rules, func(r branchrules.BranchRuleItem) bool { return r.Name == ruleBranch })
+		if at < 0 {
 			e.T.Errorf("the branch rules do not name the protected %q: %+v", ruleBranch, rules.Rules)
+			return
+		}
+		// The grants are what the rule was protected with, read back through
+		// GraphQL: both editions select them, so this holds on CE and EE alike.
+		protection := rules.Rules[at].BranchProtection
+		if protection == nil {
+			e.T.Errorf("the rule for %q carries no protection", ruleBranch)
+			return
+		}
+		if !slices.ContainsFunc(protection.PushAccessLevels, func(a branchrules.PushAccess) bool { return a.AccessLevel == 40 }) {
+			e.T.Errorf("the rule for %q does not grant push to access level 40: %+v", ruleBranch, protection.PushAccessLevels)
+		}
+		if !slices.ContainsFunc(protection.MergeAccessLevels, func(a branchrules.Access) bool { return a.AccessLevel == 30 }) {
+			e.T.Errorf("the rule for %q does not grant merge to access level 30: %+v", ruleBranch, protection.MergeAccessLevels)
 		}
 	})
 }

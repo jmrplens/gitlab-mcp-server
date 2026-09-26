@@ -12,38 +12,187 @@ import (
 )
 
 // BranchRuleItem represents a branch rule summary.
+//
+// A field the Community document cannot select is a pointer or a slice that
+// stays empty on a Community instance, so a caller told nothing about code
+// owners or group level reads the field as absent rather than as false. The
+// tier tags name the licensed feature each field reports on; GitLab's schema
+// declares none, so they come from the feature table the GitLab release
+// licenses (ee/app/models/gitlab_subscriptions/features.rb).
 type BranchRuleItem struct {
+	ID                    string                `json:"id,omitempty"`
 	Name                  string                `json:"name"`
 	IsDefault             bool                  `json:"is_default"`
 	IsProtected           bool                  `json:"is_protected"`
+	IsGroupLevel          *bool                 `json:"is_group_level,omitempty" tier:"premium"`
 	MatchingBranchesCount int                   `json:"matching_branches_count"`
 	CreatedAt             string                `json:"created_at,omitempty"`
 	UpdatedAt             string                `json:"updated_at,omitempty"`
+	SquashOption          *SquashOption         `json:"squash_option,omitempty" tier:"premium"`
 	BranchProtection      *BranchProtection     `json:"branch_protection,omitempty"`
-	ApprovalRules         []ApprovalRule        `json:"approval_rules,omitempty"`
-	ExternalStatusChecks  []ExternalStatusCheck `json:"external_status_checks,omitempty"`
+	ApprovalRules         []ApprovalRule        `json:"approval_rules,omitempty" tier:"premium"`
+	ExternalStatusChecks  []ExternalStatusCheck `json:"external_status_checks,omitempty" tier:"ultimate"`
 }
 
-// BranchProtection holds protection settings for a branch rule.
+// SquashOption is how merge requests into the branches a rule matches are
+// squashed: GitLab's own label for the setting and the sentence it shows
+// beside it.
+type SquashOption struct {
+	Option   string `json:"option"`
+	HelpText string `json:"help_text"`
+}
+
+// BranchProtection holds protection settings for a branch rule: who may push,
+// merge and unprotect, and the flags that decide what a push may do.
 type BranchProtection struct {
-	AllowForcePush            bool `json:"allow_force_push"`
-	CodeOwnerApprovalRequired bool `json:"code_owner_approval_required"`
+	AllowForcePush                        bool         `json:"allow_force_push"`
+	CodeOwnerApprovalRequired             *bool        `json:"code_owner_approval_required,omitempty" tier:"premium"`
+	IsGroupLevel                          *bool        `json:"is_group_level,omitempty" tier:"premium"`
+	ModificationBlockedByPolicy           *bool        `json:"modification_blocked_by_policy,omitempty" tier:"ultimate"`
+	ProtectedFromPushBySecurityPolicy     *bool        `json:"protected_from_push_by_security_policy,omitempty" tier:"ultimate"`
+	WarnModificationBlockedByPolicy       *bool        `json:"warn_modification_blocked_by_policy,omitempty" tier:"ultimate"`
+	WarnProtectedFromPushBySecurityPolicy *bool        `json:"warn_protected_from_push_by_security_policy,omitempty" tier:"ultimate"`
+	PushAccessLevels                      []PushAccess `json:"push_access_levels,omitempty"`
+	MergeAccessLevels                     []Access     `json:"merge_access_levels,omitempty"`
+	UnprotectAccessLevels                 []Access     `json:"unprotect_access_levels,omitempty" tier:"premium"`
+}
+
+// Access is one grant on a protected branch: a role, and on Premium and above
+// a specific user, group or custom role, allowed to merge into, push to or
+// unprotect the branches the rule matches. The description is GitLab's own
+// reading of the grant: the role's name, or the user's or the group's.
+type Access struct {
+	AccessLevel            int               `json:"access_level"`
+	AccessLevelDescription string            `json:"access_level_description"`
+	User                   *UserRef          `json:"user,omitempty" tier:"premium"`
+	Group                  *AccessGroup      `json:"group,omitempty" tier:"premium"`
+	MemberRole             *AccessMemberRole `json:"member_role,omitempty" tier:"ultimate"`
+}
+
+// PushAccess is a push grant, the one kind that may name a deploy key.
+type PushAccess struct {
+	Access
+	DeployKey *AccessDeployKey `json:"deploy_key,omitempty"`
+}
+
+// UserRef identifies a user a grant or an approval rule names. The id is the
+// one GitLab sends, which for these objects is the numeric id as a string.
+type UserRef struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	PublicEmail string `json:"public_email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	WebURL      string `json:"web_url"`
+	WebPath     string `json:"web_path"`
+}
+
+// AccessGroupRef identifies a group a grant names.
+type AccessGroupRef struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	WebURL    string `json:"web_url"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
+// AccessGroup is a group a grant names, with its immediate parent group. The
+// parent carries no parent of its own: the chain is recursive, a document can
+// only select it to a depth fixed in advance, and the group's web URL already
+// spells its whole path.
+type AccessGroup struct {
+	AccessGroupRef
+	Parent *AccessGroupRef `json:"parent,omitempty"`
+}
+
+// AccessMemberRole identifies the custom role a grant names. Its permissions
+// are the member role domain's surface.
+type AccessMemberRole struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
+// AccessDeployKey is the deploy key a push grant names, with the user it is
+// assigned to.
+type AccessDeployKey struct {
+	ID        string  `json:"id"`
+	Title     string  `json:"title"`
+	ExpiresAt string  `json:"expires_at,omitempty"`
+	User      UserRef `json:"user"`
 }
 
 // ApprovalRule represents an approval rule associated with a branch rule.
 type ApprovalRule struct {
-	Name              string `json:"name"`
-	ApprovalsRequired int    `json:"approvals_required"`
-	Type              string `json:"type,omitempty"`
+	ID                       string    `json:"id"`
+	Name                     string    `json:"name"`
+	ApprovalsRequired        int       `json:"approvals_required"`
+	Type                     string    `json:"type,omitempty"`
+	CoverageMinimumThreshold *float64  `json:"coverage_minimum_threshold,omitempty"`
+	EligibleApprovers        []UserRef `json:"eligible_approvers,omitempty"`
 }
 
 // ExternalStatusCheck represents an external status check on a branch rule.
 type ExternalStatusCheck struct {
+	ID          string `json:"id"`
 	Name        string `json:"name"`
 	ExternalURL string `json:"external_url"`
+	HMAC        bool   `json:"hmac"`
 }
 
 // GraphQL query.
+//
+// The selections a document repeats are spelled once below and concatenated,
+// so the three grant lists and the two user positions cannot drift apart.
+// Every Enterprise field is one GitLab adds in ee/, so on a Community instance
+// the whole document would be refused rather than the field answered empty:
+// that is why there are two documents and not one.
+
+// userRefSelection is every field AccessLevelUser offers, which is also what a
+// user reference is published as wherever this package names one.
+const userRefSelection = `id
+            username
+            name
+            publicEmail
+            avatarUrl
+            webUrl
+            webPath`
+
+// accessGroupRefSelection is every field AccessLevelGroup offers except its
+// parent, which is selected one level deep where the group itself is.
+const accessGroupRefSelection = `id
+              name
+              webUrl
+              avatarUrl`
+
+// accessLevelSelectionCE is what every edition reports about a grant.
+const accessLevelSelectionCE = `accessLevel
+              accessLevelDescription`
+
+// accessLevelSelection is a grant as the Enterprise document selects it,
+// with the user, group or custom role it names.
+const accessLevelSelection = accessLevelSelectionCE + `
+              user {
+                ` + userRefSelection + `
+              }
+              group {
+                ` + accessGroupRefSelection + `
+                parent {
+                  ` + accessGroupRefSelection + `
+                }
+              }
+              memberRole {
+                id
+                name
+              }`
+
+// deployKeySelection is the deploy key a push grant may name.
+const deployKeySelection = `deployKey {
+                id
+                title
+                expiresAt
+                user {
+                  ` + userRefSelection + `
+                }
+              }`
 
 // queryListBranchRulesEE includes Enterprise-only fields (codeOwnerApprovalRequired,
 // approvalRules, externalStatusChecks). Used when the resolved tier is
@@ -53,27 +202,63 @@ query($projectPath: ID!, $first: Int!, $after: String) {
   project(fullPath: $projectPath) {
     branchRules(first: $first, after: $after) {
       nodes {
+        id
         name
         isDefault
         isProtected
+        isGroupLevel
         matchingBranchesCount
         createdAt
         updatedAt
+        squashOption {
+          option
+          helpText
+        }
         branchProtection {
           allowForcePush
           codeOwnerApprovalRequired
+          isGroupLevel
+          modificationBlockedByPolicy
+          protectedFromPushBySecurityPolicy
+          warnModificationBlockedByPolicy
+          warnProtectedFromPushBySecurityPolicy
+          pushAccessLevels {
+            nodes {
+              ` + accessLevelSelection + `
+              ` + deployKeySelection + `
+            }
+          }
+          mergeAccessLevels {
+            nodes {
+              ` + accessLevelSelection + `
+            }
+          }
+          unprotectAccessLevels {
+            nodes {
+              ` + accessLevelSelection + `
+            }
+          }
         }
         approvalRules {
           nodes {
+            id
             name
             approvalsRequired
             type
+            coverageMinimumThreshold
+            eligibleApprovers {
+              nodes {
+                ` + userRefSelection + `
+              }
+            }
           }
         }
         externalStatusChecks {
           nodes {
+            id
             name
             externalUrl
+            hmac
           }
         }
       }
@@ -92,14 +277,30 @@ query($projectPath: ID!, $first: Int!, $after: String) {
   project(fullPath: $projectPath) {
     branchRules(first: $first, after: $after) {
       nodes {
+        id
         name
         isDefault
         isProtected
         matchingBranchesCount
         createdAt
         updatedAt
+        squashOption {
+          option
+          helpText
+        }
         branchProtection {
           allowForcePush
+          pushAccessLevels {
+            nodes {
+              ` + accessLevelSelectionCE + `
+              ` + deployKeySelection + `
+            }
+          }
+          mergeAccessLevels {
+            nodes {
+              ` + accessLevelSelectionCE + `
+            }
+          }
         }
       }
       pageInfo {
@@ -116,38 +317,135 @@ query($projectPath: ID!, $first: Int!, $after: String) {
 // The two documents select two shapes, so there are two node types, one per
 // document, rather than one node carrying fields the Community document can
 // never fill: a decoder declaring a field its document does not select holds
-// a value that is always empty, which make check-graphql-shapes refuses.
+// a value that is always empty, which make check-graphql-shapes refuses. The
+// same holds one level down, which is why a grant has a Community and an
+// Enterprise decoder too.
+
+// gqlNodes is a connection read through its nodes alone: the lists a branch
+// rule carries are short, and none of them is paged by this action.
+type gqlNodes[T any] struct {
+	Nodes []T `json:"nodes"`
+}
+
+// gqlUserRef decodes a user reference: an AccessLevelUser, or an approval
+// rule's eligible approver, which is a UserCore selected for the same fields.
+type gqlUserRef struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	PublicEmail string `json:"publicEmail"`
+	AvatarURL   string `json:"avatarUrl"`
+	WebURL      string `json:"webUrl"`
+	WebPath     string `json:"webPath"`
+}
+
+// gqlAccessGroupRef decodes a group a grant names, without its parent.
+type gqlAccessGroupRef struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	WebURL    string `json:"webUrl"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+// gqlAccessGroup decodes a group a grant names, with its immediate parent.
+type gqlAccessGroup struct {
+	gqlAccessGroupRef
+	Parent *gqlAccessGroupRef `json:"parent"`
+}
+
+// gqlMemberRoleRef decodes the custom role a grant names.
+type gqlMemberRoleRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// gqlDeployKey decodes the deploy key a push grant names.
+type gqlDeployKey struct {
+	ID        string     `json:"id"`
+	Title     string     `json:"title"`
+	ExpiresAt string     `json:"expiresAt"`
+	User      gqlUserRef `json:"user"`
+}
+
+// gqlAccessLevelCE is a grant as every edition reports it.
+type gqlAccessLevelCE struct {
+	AccessLevel            int    `json:"accessLevel"`
+	AccessLevelDescription string `json:"accessLevelDescription"`
+}
+
+// gqlPushAccessLevelCE is a Community push grant, which may name a deploy key.
+type gqlPushAccessLevelCE struct {
+	gqlAccessLevelCE
+	DeployKey *gqlDeployKey `json:"deployKey"`
+}
+
+// gqlAccessLevel is a grant as the Enterprise document selects it.
+type gqlAccessLevel struct {
+	gqlAccessLevelCE
+	User       *gqlUserRef       `json:"user"`
+	Group      *gqlAccessGroup   `json:"group"`
+	MemberRole *gqlMemberRoleRef `json:"memberRole"`
+}
+
+// gqlPushAccessLevel is an Enterprise push grant.
+type gqlPushAccessLevel struct {
+	gqlAccessLevel
+	DeployKey *gqlDeployKey `json:"deployKey"`
+}
 
 // gqlBranchProtectionCE is the protection every edition reports.
 type gqlBranchProtectionCE struct {
-	AllowForcePush bool `json:"allowForcePush"`
+	AllowForcePush    bool                            `json:"allowForcePush"`
+	PushAccessLevels  *gqlNodes[gqlPushAccessLevelCE] `json:"pushAccessLevels"`
+	MergeAccessLevels *gqlNodes[gqlAccessLevelCE]     `json:"mergeAccessLevels"`
 }
 
 // gqlBranchProtection is the protection the Enterprise document selects.
 type gqlBranchProtection struct {
-	gqlBranchProtectionCE
-	CodeOwnerApprovalRequired bool `json:"codeOwnerApprovalRequired"`
+	AllowForcePush                        bool                          `json:"allowForcePush"`
+	CodeOwnerApprovalRequired             bool                          `json:"codeOwnerApprovalRequired"`
+	IsGroupLevel                          bool                          `json:"isGroupLevel"`
+	ModificationBlockedByPolicy           bool                          `json:"modificationBlockedByPolicy"`
+	ProtectedFromPushBySecurityPolicy     bool                          `json:"protectedFromPushBySecurityPolicy"`
+	WarnModificationBlockedByPolicy       bool                          `json:"warnModificationBlockedByPolicy"`
+	WarnProtectedFromPushBySecurityPolicy bool                          `json:"warnProtectedFromPushBySecurityPolicy"`
+	PushAccessLevels                      *gqlNodes[gqlPushAccessLevel] `json:"pushAccessLevels"`
+	MergeAccessLevels                     *gqlNodes[gqlAccessLevel]     `json:"mergeAccessLevels"`
+	UnprotectAccessLevels                 *gqlNodes[gqlAccessLevel]     `json:"unprotectAccessLevels"`
+}
+
+// gqlSquashOption decodes a branch rule's squash option.
+type gqlSquashOption struct {
+	Option   string `json:"option"`
+	HelpText string `json:"helpText"`
 }
 
 type gqlApprovalRule struct {
-	Name              string  `json:"name"`
-	ApprovalsRequired int     `json:"approvalsRequired"`
-	Type              *string `json:"type"`
+	ID                       string                `json:"id"`
+	Name                     string                `json:"name"`
+	ApprovalsRequired        int                   `json:"approvalsRequired"`
+	Type                     *string               `json:"type"`
+	CoverageMinimumThreshold *float64              `json:"coverageMinimumThreshold"`
+	EligibleApprovers        *gqlNodes[gqlUserRef] `json:"eligibleApprovers"`
 }
 
 type gqlExternalStatusCheck struct {
+	ID          string `json:"id"`
 	Name        string `json:"name"`
 	ExternalURL string `json:"externalUrl"`
+	HMAC        bool   `json:"hmac"`
 }
 
 // gqlBranchRuleFields are the fields both documents select.
 type gqlBranchRuleFields struct {
-	Name                  string  `json:"name"`
-	IsDefault             bool    `json:"isDefault"`
-	IsProtected           bool    `json:"isProtected"`
-	MatchingBranchesCount int     `json:"matchingBranchesCount"`
-	CreatedAt             *string `json:"createdAt"`
-	UpdatedAt             *string `json:"updatedAt"`
+	ID                    string           `json:"id"`
+	Name                  string           `json:"name"`
+	IsDefault             bool             `json:"isDefault"`
+	IsProtected           bool             `json:"isProtected"`
+	MatchingBranchesCount int              `json:"matchingBranchesCount"`
+	CreatedAt             *string          `json:"createdAt"`
+	UpdatedAt             *string          `json:"updatedAt"`
+	SquashOption          *gqlSquashOption `json:"squashOption"`
 }
 
 // gqlBranchRuleNodeCE is a branch rule as the Community document selects it.
@@ -159,13 +457,10 @@ type gqlBranchRuleNodeCE struct {
 // gqlBranchRuleNode is a branch rule as the Enterprise document selects it.
 type gqlBranchRuleNode struct {
 	gqlBranchRuleFields
-	BranchProtection *gqlBranchProtection `json:"branchProtection"`
-	ApprovalRules    *struct {
-		Nodes []gqlApprovalRule `json:"nodes"`
-	} `json:"approvalRules"`
-	ExternalStatusChecks *struct {
-		Nodes []gqlExternalStatusCheck `json:"nodes"`
-	} `json:"externalStatusChecks"`
+	IsGroupLevel         bool                              `json:"isGroupLevel"`
+	BranchProtection     *gqlBranchProtection              `json:"branchProtection"`
+	ApprovalRules        *gqlNodes[gqlApprovalRule]        `json:"approvalRules"`
+	ExternalStatusChecks *gqlNodes[gqlExternalStatusCheck] `json:"externalStatusChecks"`
 }
 
 // branchRuleConverter is what the list decodes a node as: either edition's
@@ -179,10 +474,134 @@ type branchRuleConverter interface {
 	item() BranchRuleItem
 }
 
+// convertNodes converts the nodes of a connection, answering nil for one
+// GitLab sent as null. An empty connection converts to an empty list, which
+// every list field of the output omits just as it omits nil.
+func convertNodes[T, R any](connection *gqlNodes[T], convert func(T) R) []R {
+	if connection == nil {
+		return nil
+	}
+	out := make([]R, 0, len(connection.Nodes))
+	for _, node := range connection.Nodes {
+		out = append(out, convert(node))
+	}
+	return out
+}
+
+// userRef converts a decoded user reference.
+func (u gqlUserRef) userRef() UserRef {
+	return UserRef(u)
+}
+
+// groupRef converts a decoded group reference.
+func (g gqlAccessGroupRef) groupRef() AccessGroupRef {
+	return AccessGroupRef(g)
+}
+
+// access converts a grant as every edition reports it.
+func (a gqlAccessLevelCE) access() Access {
+	return Access{
+		AccessLevel:            a.AccessLevel,
+		AccessLevelDescription: a.AccessLevelDescription,
+	}
+}
+
+// deployKey converts the deploy key a push grant names, or nil for one that
+// names none.
+func deployKey(key *gqlDeployKey) *AccessDeployKey {
+	if key == nil {
+		return nil
+	}
+	return &AccessDeployKey{
+		ID:        key.ID,
+		Title:     key.Title,
+		ExpiresAt: key.ExpiresAt,
+		User:      key.User.userRef(),
+	}
+}
+
+// pushAccess converts a Community push grant.
+func (a gqlPushAccessLevelCE) pushAccess() PushAccess {
+	return PushAccess{Access: a.access(), DeployKey: deployKey(a.DeployKey)}
+}
+
+// access converts an Enterprise grant with the user, group or custom role it
+// names.
+func (a gqlAccessLevel) access() Access {
+	out := a.gqlAccessLevelCE.access()
+	if a.User != nil {
+		user := a.User.userRef()
+		out.User = &user
+	}
+	if a.Group != nil {
+		group := &AccessGroup{AccessGroupRef: a.Group.groupRef()}
+		if a.Group.Parent != nil {
+			parent := a.Group.Parent.groupRef()
+			group.Parent = &parent
+		}
+		out.Group = group
+	}
+	if a.MemberRole != nil {
+		out.MemberRole = &AccessMemberRole{ID: a.MemberRole.ID, Name: a.MemberRole.Name}
+	}
+	return out
+}
+
+// pushAccess converts an Enterprise push grant.
+func (a gqlPushAccessLevel) pushAccess() PushAccess {
+	return PushAccess{Access: a.access(), DeployKey: deployKey(a.DeployKey)}
+}
+
+// protection converts the protection every edition reports.
+func (p gqlBranchProtectionCE) protection() *BranchProtection {
+	return &BranchProtection{
+		AllowForcePush:    p.AllowForcePush,
+		PushAccessLevels:  convertNodes(p.PushAccessLevels, gqlPushAccessLevelCE.pushAccess),
+		MergeAccessLevels: convertNodes(p.MergeAccessLevels, gqlAccessLevelCE.access),
+	}
+}
+
+// protection converts the protection the Enterprise document selects.
+func (p gqlBranchProtection) protection() *BranchProtection {
+	return &BranchProtection{
+		AllowForcePush:                        p.AllowForcePush,
+		CodeOwnerApprovalRequired:             new(p.CodeOwnerApprovalRequired),
+		IsGroupLevel:                          new(p.IsGroupLevel),
+		ModificationBlockedByPolicy:           new(p.ModificationBlockedByPolicy),
+		ProtectedFromPushBySecurityPolicy:     new(p.ProtectedFromPushBySecurityPolicy),
+		WarnModificationBlockedByPolicy:       new(p.WarnModificationBlockedByPolicy),
+		WarnProtectedFromPushBySecurityPolicy: new(p.WarnProtectedFromPushBySecurityPolicy),
+		PushAccessLevels:                      convertNodes(p.PushAccessLevels, gqlPushAccessLevel.pushAccess),
+		MergeAccessLevels:                     convertNodes(p.MergeAccessLevels, gqlAccessLevel.access),
+		UnprotectAccessLevels:                 convertNodes(p.UnprotectAccessLevels, gqlAccessLevel.access),
+	}
+}
+
+// approvalRule converts an approval rule with its eligible approvers.
+func (ar gqlApprovalRule) approvalRule() ApprovalRule {
+	rule := ApprovalRule{
+		ID:                       ar.ID,
+		Name:                     ar.Name,
+		ApprovalsRequired:        ar.ApprovalsRequired,
+		CoverageMinimumThreshold: ar.CoverageMinimumThreshold,
+		EligibleApprovers:        convertNodes(ar.EligibleApprovers, gqlUserRef.userRef),
+	}
+	if ar.Type != nil {
+		rule.Type = *ar.Type
+	}
+	return rule
+}
+
+// statusCheck converts an external status check.
+func (esc gqlExternalStatusCheck) statusCheck() ExternalStatusCheck {
+	return ExternalStatusCheck(esc)
+}
+
 // item converts the fields both editions select into a [BranchRuleItem],
-// extracting the timestamps.
+// extracting the timestamps and the squash option.
 func (n gqlBranchRuleFields) item() BranchRuleItem {
 	item := BranchRuleItem{
+		ID:                    n.ID,
 		Name:                  n.Name,
 		IsDefault:             n.IsDefault,
 		IsProtected:           n.IsProtected,
@@ -194,6 +613,9 @@ func (n gqlBranchRuleFields) item() BranchRuleItem {
 	if n.UpdatedAt != nil {
 		item.UpdatedAt = *n.UpdatedAt
 	}
+	if n.SquashOption != nil {
+		item.SquashOption = &SquashOption{Option: n.SquashOption.Option, HelpText: n.SquashOption.HelpText}
+	}
 	return item
 }
 
@@ -201,7 +623,7 @@ func (n gqlBranchRuleFields) item() BranchRuleItem {
 func (n gqlBranchRuleNodeCE) item() BranchRuleItem {
 	item := n.gqlBranchRuleFields.item()
 	if n.BranchProtection != nil {
-		item.BranchProtection = &BranchProtection{AllowForcePush: n.BranchProtection.AllowForcePush}
+		item.BranchProtection = n.BranchProtection.protection()
 	}
 	return item
 }
@@ -210,29 +632,12 @@ func (n gqlBranchRuleNodeCE) item() BranchRuleItem {
 // rules and external status checks.
 func (n gqlBranchRuleNode) item() BranchRuleItem {
 	item := n.gqlBranchRuleFields.item()
+	item.IsGroupLevel = new(n.IsGroupLevel)
 	if n.BranchProtection != nil {
-		item.BranchProtection = &BranchProtection{
-			AllowForcePush:            n.BranchProtection.AllowForcePush,
-			CodeOwnerApprovalRequired: n.BranchProtection.CodeOwnerApprovalRequired,
-		}
+		item.BranchProtection = n.BranchProtection.protection()
 	}
-	if n.ApprovalRules != nil {
-		for _, ar := range n.ApprovalRules.Nodes {
-			rule := ApprovalRule{
-				Name:              ar.Name,
-				ApprovalsRequired: ar.ApprovalsRequired,
-			}
-			if ar.Type != nil {
-				rule.Type = *ar.Type
-			}
-			item.ApprovalRules = append(item.ApprovalRules, rule)
-		}
-	}
-	if n.ExternalStatusChecks != nil {
-		for _, esc := range n.ExternalStatusChecks.Nodes {
-			item.ExternalStatusChecks = append(item.ExternalStatusChecks, ExternalStatusCheck(esc))
-		}
-	}
+	item.ApprovalRules = convertNodes(n.ApprovalRules, gqlApprovalRule.approvalRule)
+	item.ExternalStatusChecks = convertNodes(n.ExternalStatusChecks, gqlExternalStatusCheck.statusCheck)
 	return item
 }
 
