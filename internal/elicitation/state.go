@@ -16,6 +16,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // stateTTL is how long a request state stays usable.
@@ -23,7 +25,7 @@ import (
 // It bounds replay without getting in the way of a person answering a prompt:
 // the flows this carries are a handful of questions, and a client that takes
 // longer re-prompts rather than failing.
-const stateTTL = 10 * time.Minute
+const stateTTL = tenancy.RequestStateTTL // register row IDN-011
 
 // stateKey signs request state for the life of this process.
 //

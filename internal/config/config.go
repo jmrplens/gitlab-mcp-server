@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // DefaultMaxFileSize and MaxFileSize define the default and upper bound for
@@ -23,10 +24,10 @@ const (
 
 // HTTP pool defaults.
 const (
-	DefaultMaxHTTPClients     = 100
-	DefaultSessionTimeout     = 30 * time.Minute
-	DefaultRevalidateInterval = 15 * time.Minute
-	DefaultPoolIdleTimeout    = 1 * time.Hour
+	DefaultMaxHTTPClients     = tenancy.PoolSize           // register row POL-001
+	DefaultSessionTimeout     = tenancy.SessionIdleTimeout // register row END-005
+	DefaultRevalidateInterval = tenancy.RevalidateInterval // register row ADM-009
+	DefaultPoolIdleTimeout    = tenancy.PoolIdleTimeout    // register row POL-004
 	// DefaultActionTimeout bounds one action's handler: it ends one that would
 	// otherwise park until its client gave up, and never cuts a legitimate
 	// wait; a file transfer still running at the limit ends with its action.
@@ -42,10 +43,10 @@ const (
 	// it to at least one probe interval, so the 503 the endpoint answers
 	// while draining is seen before the close is.
 	DefaultDrainDelay     = 0 * time.Second
-	MaxHTTPClients        = 10000
-	MaxSessionTimeout     = 24 * time.Hour
-	MaxRevalidateInterval = 24 * time.Hour
-	MaxPoolIdleTimeout    = 24 * time.Hour
+	MaxHTTPClients        = tenancy.PoolSizeMax           // register row POL-001
+	MaxSessionTimeout     = tenancy.SessionIdleTimeoutMax // register row END-005
+	MaxRevalidateInterval = tenancy.RevalidateIntervalMax // register row ADM-009
+	MaxPoolIdleTimeout    = tenancy.PoolIdleTimeoutMax    // register row POL-004
 	MaxActionTimeout      = 24 * time.Hour
 	// MaxDrainDelay caps the announcement: a delay longer than this holds a
 	// stopping process open past what any supervisor waits.
@@ -54,9 +55,9 @@ const (
 
 // OAuth defaults.
 const (
-	DefaultOAuthCacheTTL = 15 * time.Minute
-	MinOAuthCacheTTL     = 1 * time.Minute
-	MaxOAuthCacheTTL     = 2 * time.Hour
+	DefaultOAuthCacheTTL = tenancy.OAuthCacheTTL      // register row ADM-005
+	MinOAuthCacheTTL     = tenancy.OAuthCacheTTLFloor // register row ADM-005
+	MaxOAuthCacheTTL     = tenancy.OAuthCacheTTLMax   // register row ADM-005
 )
 
 // DefaultRateLimitBurst is the bucket size used when rps > 0 and the operator
