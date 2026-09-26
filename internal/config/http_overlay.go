@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // HTTPEnvOverlay holds the HTTP-relevant settings found in the environment.
@@ -241,7 +242,7 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 		o.OAuthClientUID = &value
 	}
 	if envPresent("RATE_LIMIT_RPS") {
-		value, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), 0)
+		value, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), tenancy.ToolCallRateEnvDefault) // register row RTC-001
 		if err != nil {
 			return fmt.Errorf("invalid RATE_LIMIT_RPS value: %w", err)
 		}
