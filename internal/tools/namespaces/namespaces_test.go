@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -766,6 +767,28 @@ func TestGet_ArrayFallback_DoError(t *testing.T) {
 	}
 }
 
+// TestGet_ArrayFallback_RequestError verifies the fallback lookup reports a
+// request it could not build rather than sending nothing and answering
+// empty. client-go's NewRequest has no input it refuses for the fixed GET and
+// an escaped path, so the refusal is planted through the seam, and the first
+// answer is an array so Get reaches the fallback at all.
+func TestGet_ArrayFallback_RequestError(t *testing.T) {
+	original := newRequest
+	t.Cleanup(func() { newRequest = original })
+	refused := errors.New("request refused")
+	newRequest = func(*gl.Client, string, string, any, []gl.RequestOptionFunc) (*retryablehttp.Request, error) {
+		return nil, refused
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1}]`)
+	}))
+
+	_, err := Get(context.Background(), client, GetInput{ID: "group1"})
+	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "namespace_get") {
+		t.Fatalf("Get() error = %v, want the refused request under namespace_get", err)
+	}
+}
+
 // TestNamespaceReadSpec_WithoutMetadataKeepsTheSharedUsage verifies the spec
 // builder falls back to the shared usage and to the tool name alone when the
 // metadata table names no entry for the tool. No action reaches that fallback
@@ -1014,6 +1037,26 @@ func TestNamespaces_UnreadableFields(t *testing.T) {
 		}})
 	}
 	testutil.AssertUnreadableBodyRefused(t, cases)
+}
+
+// TestNamespaces_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the capture adds on its own: GitLab's answer decodes for the SDK,
+// which models no compute-minute usage, and not for the usage object read
+// beside it. Every handler answering with a namespace reports it rather than
+// returning a namespace without the usage. Until the usage was read, no body
+// could fail the capture alone, since client-go models the three limits too
+// and refuses a poisoned one first.
+func TestNamespaces_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	const poisoned = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
+		`"ci_minutes_usage":"lots"}`
+	cases := make([]testutil.CapturedCase, 0, len(namespaceCalls))
+	for _, namespaceCall := range namespaceCalls {
+		cases = append(cases, testutil.CapturedCase{Name: namespaceCall.name, Call: func() error {
+			_, err := namespaceCall.call(namespaceClient(t, namespaceBodyFor(namespaceCall.list, poisoned)))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
 }
 
 // TestFormatMarkdownString_SentFields verifies the namespace Markdown names

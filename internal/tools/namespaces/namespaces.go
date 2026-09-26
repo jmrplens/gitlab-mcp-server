@@ -161,15 +161,19 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return toOutput(ns, extra), nil
 }
 
+// newRequest builds the fallback lookup's request. It is a test seam: for the
+// fixed GET and a path gl.PathEscape built, client-go's NewRequest has no input
+// it can refuse.
+var newRequest = (*gl.Client).NewRequest
+
 // getFromArray asks for the namespace again and reads the answer as the array
 // some GitLab versions send for a path lookup, taking the first entry.
 func getFromArray(ctx context.Context, client *gitlabclient.Client, id string) (Output, error) {
-	req, reqErr := client.GL().NewRequest("GET", "namespaces/"+gl.PathEscape(id), nil, nil)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	req, reqErr := newRequest(client.GL(), http.MethodGet, "namespaces/"+gl.PathEscape(id), nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if reqErr != nil {
 		return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	req = req.WithContext(ctx)
 
 	var nsList []*gl.Namespace
 	if _, doErr := client.GL().Do(req, &nsList); doErr != nil {
