@@ -1,6 +1,7 @@
 package apilive
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -234,6 +235,18 @@ func TestFieldCount_SpansEveryEntity(t *testing.T) {
 	}
 }
 
+// assertVersionRefusal holds Read's refusal to both version numbers, each in
+// its place. They are the one sentence that tells a maintainer whether to
+// regenerate the record or upgrade the build, and a check that the message
+// merely says "schema version" passes with the two traded.
+func assertVersionRefusal(t *testing.T, err error, recorded int) {
+	t.Helper()
+	wantText := fmt.Sprintf("the live API record is schema version %d and this build reads version %d", recorded, SchemaVersion)
+	if !strings.Contains(err.Error(), wantText) {
+		t.Errorf("error = %q, want it to contain %q", err, wantText)
+	}
+}
+
 // TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads verifies that the record
 // survives the trip to disk with the parts an audit joins on intact, and that
 // a record from another schema version is refused rather than decoded.
@@ -268,9 +281,7 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 		if readErr == nil {
 			t.Fatal("a record from another schema version was read")
 		}
-		if !strings.Contains(readErr.Error(), "schema version") {
-			t.Errorf("error = %q, want it to name the schema version", readErr)
-		}
+		assertVersionRefusal(t, readErr, other.SchemaVersion)
 	})
 
 	t.Run("a record from the version before this one is refused too", func(t *testing.T) {
@@ -282,9 +293,11 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 		if writeErr := Write(dir, other); writeErr != nil {
 			t.Fatalf("Write: %v", writeErr)
 		}
-		if _, readErr := Read(dir); readErr == nil || !strings.Contains(readErr.Error(), "schema version") {
-			t.Errorf("error = %v, want a refusal naming the schema version", readErr)
+		_, readErr := Read(dir)
+		if readErr == nil {
+			t.Fatal("a record from the version before this one was read")
 		}
+		assertVersionRefusal(t, readErr, other.SchemaVersion)
 	})
 
 	t.Run("a missing record says so rather than reading as empty", func(t *testing.T) {
