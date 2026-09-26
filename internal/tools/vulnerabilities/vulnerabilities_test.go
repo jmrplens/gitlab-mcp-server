@@ -1097,9 +1097,11 @@ func TestFormatMutationMarkdown_UnnamedPersonAndUntitledReference(t *testing.T) 
 		"- **Confirmed By**: [@alice](https://gitlab.example.com/alice)\n",
 		"- **Merge Request**: [!7](https://gitlab.example.com/g/p/-/merge_requests/7)\n",
 	} {
-		if !strings.Contains(got, row) {
-			t.Errorf("card is missing %q:\n%s", row, got)
-		}
+		t.Run(row, func(t *testing.T) {
+			if !strings.Contains(got, row) {
+				t.Errorf("card is missing %q:\n%s", row, got)
+			}
+		})
 	}
 }
 
