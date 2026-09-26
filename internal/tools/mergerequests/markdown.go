@@ -409,17 +409,29 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 
 // writeIssueRows writes the issue table the two issue listings share: the same
 // columns, the same escaping and the same state glyph, so the two cannot drift.
-func writeIssueRows(b *strings.Builder, list []issues.BasicOutput) {
+func writeIssueRows(b *strings.Builder, list []issues.ReferencedOutput) {
 	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Labels"))
 	for _, issue := range list {
 		b.WriteString(toolutil.MarkdownTableRow(
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
+			referencedIssueCell(issue),
 			toolutil.EscapeMdTableCell(issue.Title),
 			issueStateCell(issue.State),
-			toolutil.MdUserHandle(issues.AuthorName(issue)),
+			toolutil.MdUserHandle(issues.AuthorName(issue.BasicOutput)),
 			toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")),
 		))
 	}
+}
+
+// referencedIssueCell names the issue a row is, linked to it where the row
+// carries an address: an issue of this instance by its IID, and an external
+// tracker's issue by the identifier the tracker gave it, since GitLab sends
+// such a row no IID and "#0" would name an issue that does not exist.
+func referencedIssueCell(issue issues.ReferencedOutput) string {
+	name := fmt.Sprintf("#%d", issue.IID)
+	if issue.ExternalID != "" {
+		name = issue.ExternalID
+	}
+	return toolutil.MdTitleLink(name, issue.WebURL)
 }
 
 // issueStateCell renders an issue state with its emoji, and nothing when GitLab

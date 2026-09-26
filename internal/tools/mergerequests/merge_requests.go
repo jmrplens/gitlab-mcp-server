@@ -1590,11 +1590,13 @@ type IssuesClosedInput struct {
 
 // IssuesClosedOutput holds the list of issues that would be closed by merging an MR.
 //
-// The route renders API::Entities::IssueBasic, so the rows are the basic issue
-// and not the full one: what only the issues API adds is not sent here.
+// The route renders an issue of this instance as API::Entities::IssueBasic, so
+// the rows are the basic issue and not the full one: what only the issues API
+// adds is not sent here. See [issues.ReferencedOutput] for the other kind of
+// row.
 type IssuesClosedOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.BasicOutput      `json:"issues"`
+	Issues     []issues.ReferencedOutput `json:"issues"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -1620,9 +1622,9 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	return listMergeRequestItems(ctx, args, list,
-		func(items []*gl.Issue) ([]issues.BasicOutput, error) {
-			return issues.ToBasicOutputs(items, captured)
-		}, func(out []issues.BasicOutput, pagination toolutil.PaginationOutput) IssuesClosedOutput {
+		func(items []*gl.Issue) ([]issues.ReferencedOutput, error) {
+			return issues.ToReferencedOutputs(items, captured)
+		}, func(out []issues.ReferencedOutput, pagination toolutil.PaginationOutput) IssuesClosedOutput {
 			return IssuesClosedOutput{Issues: out, Pagination: pagination}
 		})
 }
@@ -1904,11 +1906,13 @@ type RelatedIssuesInput struct {
 
 // RelatedIssuesOutput holds the list of issues related to a merge request.
 //
-// The route renders API::Entities::IssueBasic, so the rows are the basic issue
-// and not the full one: what only the issues API adds is not sent here.
+// The route renders an issue of this instance as API::Entities::IssueBasic, so
+// the rows are the basic issue and not the full one: what only the issues API
+// adds is not sent here. See [issues.ReferencedOutput] for the other kind of
+// row.
 type RelatedIssuesOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.BasicOutput      `json:"issues"`
+	Issues     []issues.ReferencedOutput `json:"issues"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -1933,9 +1937,9 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 func listMergeRequestRelatedIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	return listMergeRequestItems(ctx, args, list,
-		func(items []*gl.Issue) ([]issues.BasicOutput, error) {
-			return issues.ToBasicOutputs(items, captured)
-		}, func(out []issues.BasicOutput, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
+		func(items []*gl.Issue) ([]issues.ReferencedOutput, error) {
+			return issues.ToReferencedOutputs(items, captured)
+		}, func(out []issues.ReferencedOutput, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
 			return RelatedIssuesOutput{Issues: out, Pagination: pagination}
 		})
 }

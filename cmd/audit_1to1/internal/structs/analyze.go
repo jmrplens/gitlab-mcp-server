@@ -41,6 +41,9 @@ const (
 	docNotesIssueList    = "notes.md#list-all-issue-notes"
 	docNotesWikiRetrieve = "notes.md#retrieve-a-wiki-page-note"
 	docDiscussionsMRList = "discussions.md#list-all-merge-request-discussion-items"
+	// The closes_issues section prints the IssueBasic row in its attribute
+	// table and example body, and the ExternalIssue row beside it.
+	docMergeRequestClosesIssues = "merge_requests.md#list-issues-that-close-on-merge"
 	// The member pages print two_factor_enabled in their example bodies and
 	// name the SAML and SCIM identities under their known issues; locked,
 	// public_email, membership_state and override are exposed by
@@ -555,15 +558,21 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"issues.BasicOutput.blocking_issues_count": docIssuesList,
 	"issues.BasicOutput.start_date":            docIssuesList,
 	"issues.BasicOutput.type":                  docIssuesList,
-	"issues.Output.blocking_issues_count":      docIssuesList,
-	"issues.Output.epic_iid":                   docIssuesList,
-	"issues.Output.has_tasks":                  docIssuesList,
-	"issues.Output.imported":                   docIssuesList,
-	"issues.Output.imported_from":              docIssuesList,
-	"issues.Output.severity":                   docIssuesList,
-	"issues.Output.start_date":                 docIssuesList,
-	"issues.Output.task_status":                docIssuesList,
-	"issues.Output.type":                       docIssuesList,
+	// The same three keys on a row of the issues a merge request closes or
+	// relates to, which doc/api/merge_requests.md prints in the closes_issues
+	// example body.
+	"issues.ReferencedOutput.blocking_issues_count": docMergeRequestClosesIssues,
+	"issues.ReferencedOutput.start_date":            docMergeRequestClosesIssues,
+	"issues.ReferencedOutput.type":                  docMergeRequestClosesIssues,
+	"issues.Output.blocking_issues_count":           docIssuesList,
+	"issues.Output.epic_iid":                        docIssuesList,
+	"issues.Output.has_tasks":                       docIssuesList,
+	"issues.Output.imported":                        docIssuesList,
+	"issues.Output.imported_from":                   docIssuesList,
+	"issues.Output.severity":                        docIssuesList,
+	"issues.Output.start_date":                      docIssuesList,
+	"issues.Output.task_status":                     docIssuesList,
+	"issues.Output.type":                            docIssuesList,
 
 	"projects.Output.description_html":                             docProjectsGet,
 	"projects.Output.duo_dependency_bump_breaking_changes_enabled": docProjectsGet,

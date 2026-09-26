@@ -1107,6 +1107,80 @@ func TestMRIssuesClosed_Success(t *testing.T) {
 	}
 }
 
+// externalIssueRows is a page of the two referenced-issue listings on a
+// project that uses an external tracker: lib/api/merge_requests.rb renders an
+// issue of this instance as IssueBasic and the tracker's issue as
+// API::Entities::ExternalIssue, a title and an id holding the tracker's
+// identifier as a string, both in one array.
+const externalIssueRows = `[` +
+	`{"id":10,"iid":5,"title":"Bug fix","state":"opened","web_url":"http://issue/5","project_id":42,"type":"ISSUE"},` +
+	`{"title":"External Issue PROJ-7","id":"PROJ-7"}` +
+	`]`
+
+// TestMRReferencedIssues_ExternalTrackerRowKeepsItsIdentifier drives both
+// listings with a page carrying an issue of this instance and an issue of an
+// external tracker, and checks that the tracker's identifier reaches the row
+// that sent it and no other. client-go's Issue moves the string id into
+// ExternalID, which is the only place the identifier survives the decode; the
+// row type carries it because no other issue route renders such a row.
+func TestMRReferencedIssues_ExternalTrackerRowKeepsItsIdentifier(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		call func(*gitlabclient.Client) ([]issues.ReferencedOutput, error)
+	}{
+		{"issues closed", pathMR1 + "/closes_issues", func(client *gitlabclient.Client) ([]issues.ReferencedOutput, error) {
+			out, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1})
+			return out.Issues, err
+		}},
+		{"related issues", pathMR1 + "/related_issues", func(client *gitlabclient.Client) ([]issues.ReferencedOutput, error) {
+			out, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1})
+			return out.Issues, err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == tc.path {
+					testutil.RespondJSON(w, http.StatusOK, externalIssueRows)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			rows, err := tc.call(client)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(rows) != 2 {
+				t.Fatalf("got %d rows, want 2", len(rows))
+			}
+			if rows[0].IID != 5 || rows[0].ExternalID != "" || rows[0].Type != "ISSUE" {
+				t.Errorf("internal row = IID %d, external_id %q, type %q; want 5, empty, ISSUE",
+					rows[0].IID, rows[0].ExternalID, rows[0].Type)
+			}
+			if rows[1].ExternalID != "PROJ-7" || rows[1].IID != 0 || rows[1].Title != "External Issue PROJ-7" {
+				t.Errorf("external row = external_id %q, IID %d, title %q; want PROJ-7, 0, External Issue PROJ-7",
+					rows[1].ExternalID, rows[1].IID, rows[1].Title)
+			}
+		})
+	}
+}
+
+// TestMRReferencedIssues_CaptureUnreadable verifies both referenced-issue
+// listings report an answer the IssueBasic reader cannot hold rather than
+// publishing rows with its keys silently missing.
+func TestMRReferencedIssues_CaptureUnreadable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"iid":5,"start_date":7}]`)
+	}))
+	if _, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1}); err == nil {
+		t.Error("IssuesClosed() succeeded on a captured answer its reader cannot hold")
+	}
+	if _, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1}); err == nil {
+		t.Error("RelatedIssues() succeeded on a captured answer its reader cannot hold")
+	}
+}
+
 // TestMRIssuesClosed_Error verifies MRIssuesClosed when error.
 func TestMRIssuesClosed_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -2218,16 +2292,18 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 // issues a merge would close, through the issue table both issue listings share.
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	got := FormatIssuesClosedMarkdown(IssuesClosedOutput{
-		Issues: []issues.BasicOutput{
+		Issues: []issues.ReferencedOutput{
 			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
+			{Title: "External Issue PROJ-7", ExternalID: "PROJ-7"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
-	want := "## Issues Closed on Merge (1)\n\n" +
+	want := "## Issues Closed on Merge (2)\n\n" +
 		"| IID | Title | State | Author | Labels |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
 		"| #5 | Bug fix | 🟢 opened | @alice | bug |\n" +
-		"\n1 items total\n" +
+		"| PROJ-7 | External Issue PROJ-7 |  |  |  |\n" +
+		"\n2 items total\n" +
 		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
 		"- Use action 'issue.get' to view one of these issues\n" +
 		"- Use action 'merge_request.merge' to merge and close them\n"
@@ -2320,7 +2396,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 // issues a merge request references.
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	got := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
-		Issues: []issues.BasicOutput{
+		Issues: []issues.ReferencedOutput{
 			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},

@@ -76,7 +76,7 @@ func TestMergeRequestRelations_ClosedIssuesAndReviewers(t *testing.T) {
 }
 
 // closedIssueListed reports whether a closes-issues answer holds the issue.
-func closedIssueListed(listed []issues.BasicOutput, iid int64) bool {
+func closedIssueListed(listed []issues.ReferencedOutput, iid int64) bool {
 	for _, issue := range listed {
 		if issue.IID == iid {
 			return true

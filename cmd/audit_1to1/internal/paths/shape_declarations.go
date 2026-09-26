@@ -152,6 +152,18 @@ var declaredShapeFields = []shapeDeclaration{
 			"GET at the same path answers with, so every field of the real response reads as unpublished.",
 	},
 	{
+		Package:  toolsDir + "/issues",
+		Type:     "ReferencedOutput",
+		Field:    "external_id",
+		Category: categoryServerShape,
+		Reason: "merge_requests.md prints the answer of both closes_issues and related_issues on a project that uses " +
+			"an external issue tracker such as Jira: `[{\"id\": \"PROJECT-123\", \"title\": \"...\"}]`, rendered by " +
+			"API::Entities::ExternalIssue (lib/api/merge_requests.rb represents those rows with it and the rest with " +
+			"IssueBasic, in one array). client-go's Issue.UnmarshalJSON moves a string id into external_id, and this " +
+			"row publishes it under that name. The record annotates closes_issues with MRNote and related_issues " +
+			"with nothing, so neither the entity nor its string id is visible to the join.",
+	},
+	{
 		Package:  toolsDir + "/geo",
 		Type:     "StatusOutput",
 		Field:    "replicables",
