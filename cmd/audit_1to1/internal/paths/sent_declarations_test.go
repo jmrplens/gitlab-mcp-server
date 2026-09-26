@@ -300,7 +300,8 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 				declaration.Category == categorySDKRouteFillsAnotherType ||
 				declaration.Category == categorySubclassCannotSatisfy ||
 				declaration.Category == categoryAbilityNoRoleGrants ||
-				declaration.Category == categoryConstantEmpty
+				declaration.Category == categoryConstantEmpty ||
+				declaration.Category == categoryCompactRow
 			if !known || declaration.Reason == "" || declaration.Field == "" {
 				t.Errorf("declaration %+v is missing its category, reason or field", declaration)
 			}

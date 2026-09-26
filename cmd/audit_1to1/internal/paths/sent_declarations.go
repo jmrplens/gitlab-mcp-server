@@ -121,6 +121,76 @@ const (
 	// point: it can hold and the value is still empty, and only a GitLab
 	// release that removes the block retires the declaration.
 	categoryConstantEmpty = "entity-renders-a-constant-empty-value"
+	// categoryCompactRow is a key the endpoint does send, which a compact row
+	// leaves out on purpose. It is the one category here that answers a
+	// finding true of GitLab: the row keeps what tells the objects of a list
+	// apart and lets a caller pick one, and repeating the rest of the entity
+	// on every row is a token cost the list does not pay, since one action
+	// returns the whole object. The reason names that action, so a caller
+	// told the key is missing knows where it is. A key the row's caller needs
+	// is published instead, and a declaration of this category is a decision
+	// about the surface that a later need can overturn rather than a fact
+	// about GitLab's record.
+	categoryCompactRow = "compact-row-leaves-it-to-the-detail-action"
+)
+
+// The packages and entities the compact-row declarations name. The two
+// milestone packages share one reason per entity, since a project milestone and
+// a group milestone list the same two entities through routes of the same
+// shape; the commits package lists the merge request entity again.
+const (
+	milestonesPkg      = toolsDir + "/milestones"
+	groupMilestonesPkg = toolsDir + "/groupmilestones"
+	commitsPkg         = toolsDir + "/commits"
+	issueBasicEntity   = "API::Entities::IssueBasic"
+	mrBasicEntity      = "API::Entities::MergeRequestBasic"
+)
+
+// The milestone rows' answers: what the row keeps, and why the rest is the
+// detail action's.
+const (
+	reasonMilestoneIssueRow = "the milestone issue lists (GET /projects/:id/milestones/:milestone_id/issues and " +
+		"GET /groups/:id/milestones/:milestone_id/issues) present Entities::IssueBasic through milestone_issuables_for in " +
+		"lib/api/milestone_responses.rb. " +
+		"The row keeps the identifiers and the project, title, state, labels, author, assignees, confidentiality, weight, " +
+		"due date, web URL and the created, updated and closed instants, which is what tells the issues of a milestone " +
+		"apart; the milestone is the one being listed, and the description, the deprecated single assignee, time " +
+		"tracking, task counts and the counters are issue.get's, which returns the whole issue for the one a caller picks."
+	reasonMilestoneMergeRequestRow = "the milestone merge request lists (GET /projects/:id/milestones/:milestone_id/merge_requests " +
+		"and GET /groups/:id/milestones/:milestone_id/merge_requests) present Entities::MergeRequestBasic through " +
+		"milestone_issuables_for in lib/api/milestone_responses.rb. The row keeps the identifiers and the project, title, state, draft flag, detailed " +
+		"merge status, both branches, labels, author, assignees, reviewers, web URL and the created, updated, merged and " +
+		"closed instants; the milestone is the one being listed, and the SHAs, the merge and squash options, the " +
+		"description, references, time tracking and the counters are merge_request.get's, which returns the whole merge " +
+		"request for the one a caller picks."
+	reasonMilestoneRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exposes title_html and description_html only " +
+		"when the presenter is given render_html, and the milestone merge request lists declare no parameter but the " +
+		"milestone, its parent and the page, so Grape passes the option on neither and the keys are never on their responses."
+	reasonCommitMergeRequestRow = "GET /projects/:id/repository/commits/:sha/merge_requests presents Entities::MergeRequestBasic " +
+		"(lib/api/commits.rb). The row keeps the identifiers and the project, title, state, draft flag, both branches, the " +
+		"merge commit SHA, labels, author, web URL and the created, updated, merged and closed instants, which is what says " +
+		"which merge request carried the commit and where it landed; the description, the source SHA, the merge and squash " +
+		"options, the assignees and reviewers, references, time tracking and the counters are merge_request.get's, which " +
+		"returns the whole merge request."
+	reasonCommitRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exposes title_html and description_html only " +
+		"when the presenter is given render_html, and GET /projects/:id/repository/commits/:sha/merge_requests declares " +
+		"no such parameter (only sha, state and the page), so the keys are never on its response."
+	reasonGroupProjectRow = "GET /groups/:id/projects and GET /groups/:id/projects/shared present Entities::Project, or " +
+		"Entities::BasicProjectDetails when the caller passes simple, through present_projects in lib/api/groups.rb. The row " +
+		"keeps the names and paths, the web and clone URLs, visibility, default branch, topics, the star and fork counts, " +
+		"the archived flag and the created and last-activity instants, which is what tells the projects of a group apart and " +
+		"lets a caller open or clone one; the namespace, the avatar, license and readme links, the deprecated tag_list, and " +
+		"the settings, permissions, statistics and links of the full entity are project.get's, which returns the whole project."
+	reasonTransferLocationsPresented = "lib/api/groups.rb describes GET /groups/:id/transfer_locations with `success Entities::Group` " +
+		"and presents `present_groups params, groups, serializer: Entities::PublicGroupDetails`: BasicGroupDetails (id, web_url, " +
+		"name) plus avatar_url, full_name and full_path, the six keys this type publishes. The record holds the route under the " +
+		"annotated entity, so every other key of a group is reported against a response that carries none of them."
+	reasonUpcomingJobRow = "GET /projects/:id/resource_groups/:key/upcoming_jobs presents Entities::Ci::JobBasic " +
+		"(lib/api/ci/resource_groups.rb). The row keeps the ID, name, status, stage, ref, the tag and allow-failure flags, " +
+		"the pipeline, web URL and creation time, which is what tells the jobs waiting on the group apart and where each " +
+		"comes from. The user, commit and project are job.get's, which returns the whole job, and the fields of a run " +
+		"(started_at, finished_at, erased_at, duration, queued_duration, coverage and failure_reason) describe a job that " +
+		"has run, which a job waiting on the resource group has not."
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -745,6 +815,32 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 			"gl.GeoSite, and the four that do answer with a site send none of these keys, so publishing them on " +
 			"the site type would invent them. Both halves are recorded in docs/development/upstream-bugs.md.",
 	},
+
+	// The milestone rows. The two rendered-markup keys come first, since they
+	// are not sent at all and the rows' splats would otherwise answer them
+	// with a reason about a key that is.
+	{Package: milestonesPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: milestonesPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: groupMilestonesPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: groupMilestonesPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: milestonesPkg, Entity: issueBasicEntity, Field: declaredSegment, Category: categoryCompactRow, Reason: reasonMilestoneIssueRow},
+	{Package: milestonesPkg, Entity: mrBasicEntity, Field: declaredSegment, Category: categoryCompactRow, Reason: reasonMilestoneMergeRequestRow},
+	{Package: groupMilestonesPkg, Entity: issueBasicEntity, Field: declaredSegment, Category: categoryCompactRow, Reason: reasonMilestoneIssueRow},
+	{Package: groupMilestonesPkg, Entity: mrBasicEntity, Field: declaredSegment, Category: categoryCompactRow, Reason: reasonMilestoneMergeRequestRow},
+
+	// The jobs waiting on a resource group.
+	{Package: toolsDir + "/resourcegroups", Entity: "API::Entities::Ci::JobBasic", Field: declaredSegment, Category: categoryCompactRow, Reason: reasonUpcomingJobRow},
+
+	// The merge requests a commit belongs to, the rendered markup first for
+	// the reason the milestone rows give.
+	{Package: commitsPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonCommitRenderHTMLNeverPassed},
+	{Package: commitsPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonCommitRenderHTMLNeverPassed},
+	{Package: commitsPkg, Entity: mrBasicEntity, Field: declaredSegment, Category: categoryCompactRow, Reason: reasonCommitMergeRequestRow},
+
+	// A group's projects, and the groups it can be transferred to, whose route
+	// annotates a whole group and presents six keys of one.
+	{Package: groupsPkg, Entity: "API::Entities::Project", Field: declaredSegment, Category: categoryCompactRow, Reason: reasonGroupProjectRow},
+	{Package: groupsPkg, Type: "TransferLocationOutput", Entity: "API::Entities::Group", Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: reasonTransferLocationsPresented},
 }
 
 // covers reports whether this declaration accounts for one finding.
