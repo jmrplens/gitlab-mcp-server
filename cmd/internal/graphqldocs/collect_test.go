@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
@@ -200,8 +202,9 @@ func TestCollect_EveryShapeADocumentIsWrittenIn_IsFoundExactlyOnce(t *testing.T)
 		}
 	})
 	t.Run("the position points at the declaration", func(t *testing.T) {
-		if byLabel["listQuery"].Position.Line == 0 {
-			t.Error("the collected document has no position")
+		want := fixturePosition(t, "docs", docsFixture, "listQuery")
+		if got := byLabel["listQuery"].Position; got != want {
+			t.Errorf("position = %v, want the name listQuery is declared under, %v", got, want)
 		}
 	})
 }
@@ -344,6 +347,193 @@ func TestCollect_AConstantAGroupedDeclarationRepeats_IsInTheInventory(t *testing
 			t.Error("a repeated integer constant was collected as a GraphQL document")
 		}
 	})
+}
+
+// wrappedFixture declares documents whose value is an expression around the
+// literal rather than the literal itself: parentheses, a conversion, and both
+// around a concatenation. The type checker folds each to one constant, so each
+// is one named document, and the literal inside it starts at a position of its
+// own rather than at the one the declaration's value starts at.
+const wrappedFixture = `package wrapped
+
+type document string
+
+const parenthesized = (@@query { currentUser { id } }@@)
+
+const converted = document(@@query { currentUser { username } }@@)
+
+const parenthesizedConcatenation = (@@query { currentUser {@@ + @@ name } }@@)
+`
+
+// TestCollect_ADocumentWrappedInAnExpression_IsReportedOnceUnderItsName
+// verifies that a named document is not reported a second time as an inline
+// one when its value is written inside parentheses or a conversion.
+//
+// The declared value is what gets claimed, and the literal inside it starts one
+// token later, so a walk that descended into the value used to find the
+// literal unclaimed and record it again with no name. That second entry has no
+// object either, so cmd/audit_readonly_graphql reports it as a document it can
+// tie to no handler, and cmd/audit_graphql_documents reports a refusal of it
+// twice: a false finding in one gate and a doubled one in the other.
+func TestCollect_ADocumentWrappedInAnExpression_IsReportedOnceUnderItsName(t *testing.T) {
+	found := loadFixture(t, map[string]string{"wrapped": wrappedFixture})
+
+	want := []string{"converted", "parenthesized", "parenthesizedConcatenation"}
+	if got := names(found); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("collected %v, want each wrapped document once, under its name: %v", got, want)
+	}
+}
+
+// recordsFixture and ledgerFixture give every document a value no other one
+// shares: its own package, its own name, its own line and column, and its own
+// text. The two names declared in one spec are the case that matters most,
+// since the declaration, its first name and its first value all start at the
+// same place, and only the second name tells the three apart. The inline
+// concatenation in revision is the other: its leading piece is a document on
+// its own, so a walk that recorded the whole and then descended into it would
+// report the same query again at the same position.
+const recordsFixture = `package records
+
+const firstQuery, secondQuery = @@query { currentUser { id } }@@, @@query { currentUser { username } }@@
+
+func touch() string {
+	return @@mutation { touch { errors } }@@
+}
+`
+
+const ledgerFixture = `package ledger
+
+var ledgerQuery = @@query { metadata { version } }@@
+
+const ledgerFragment = @@fragment LedgerBits on Metadata { revision }@@
+
+func revision() string {
+	return @@query { metadata { ...LedgerBits } }@@ + "\n" + ledgerFragment
+}
+`
+
+// fixturePosition is where needle first occurs in a fixture package's source,
+// computed the way go/token counts it: a byte offset, a 1-based line, and a
+// 1-based byte column.
+func fixturePosition(t *testing.T, pkg, source, needle string) token.Position {
+	t.Helper()
+	text := strings.ReplaceAll(source, backtickPlaceholder, "`")
+	offset := strings.Index(text, needle)
+	if offset < 0 {
+		t.Fatalf("the %s fixture no longer contains %q", pkg, needle)
+	}
+	lineStart := strings.LastIndex(text[:offset], "\n") + 1
+	return token.Position{
+		Filename: filepath.Join(repoRoot(t), filepath.FromSlash(fixtureDir), pkg, pkg+".go"),
+		Offset:   offset,
+		Line:     strings.Count(text[:offset], "\n") + 1,
+		Column:   offset - lineStart + 1,
+	}
+}
+
+// TestCollect_EveryDocument_CarriesItsOwnPackageNamePositionAndText verifies
+// each field of every document against the source it came from.
+//
+// The position is the key both callers join on: cmd/audit_graphql_documents
+// finds a refusal by it, and cmd/audit_readonly_graphql places an inline
+// document by the literal's own position. A position taken from the start of
+// the declaration or the end of the literal still names a line, which is all
+// the older assertions asked for, and joins nothing. The whole record is
+// compared rather than one field, because the fields of a document are filled
+// side by side and a wrong neighbor is invisible to a check of any single one.
+func TestCollect_EveryDocument_CarriesItsOwnPackageNamePositionAndText(t *testing.T) {
+	found := loadFixture(t, map[string]string{"records": recordsFixture, "ledger": ledgerFixture})
+
+	pkgPath := func(name string) string { return goprogram.ModulePath + "/" + fixtureDir + "/" + name }
+	want := []Document{
+		{
+			Package:  pkgPath("ledger"),
+			Name:     "ledgerQuery",
+			Position: fixturePosition(t, "ledger", ledgerFixture, "ledgerQuery"),
+			Text:     "query { metadata { version } }",
+		},
+		{
+			Package:  pkgPath("ledger"),
+			Name:     "ledgerFragment",
+			Position: fixturePosition(t, "ledger", ledgerFixture, "ledgerFragment"),
+			Text:     "fragment LedgerBits on Metadata { revision }",
+		},
+		{
+			Package:  pkgPath("ledger"),
+			Position: fixturePosition(t, "ledger", ledgerFixture, "`query { metadata { ...LedgerBits"),
+			Text:     "query { metadata { ...LedgerBits } }\nfragment LedgerBits on Metadata { revision }",
+		},
+		{
+			Package:  pkgPath("records"),
+			Name:     "firstQuery",
+			Position: fixturePosition(t, "records", recordsFixture, "firstQuery"),
+			Text:     "query { currentUser { id } }",
+		},
+		{
+			Package:  pkgPath("records"),
+			Name:     "secondQuery",
+			Position: fixturePosition(t, "records", recordsFixture, "secondQuery"),
+			Text:     "query { currentUser { username } }",
+		},
+		{
+			Package:  pkgPath("records"),
+			Position: fixturePosition(t, "records", recordsFixture, "`mutation"),
+			Text:     "mutation { touch { errors } }",
+		},
+	}
+
+	// The object is compared by the name it declares, which is what a caller
+	// joining on it relies on; an inline document declares none.
+	got := make([]Document, 0, len(found))
+	objects := make([]string, 0, len(found))
+	for _, document := range found {
+		objects = append(objects, objectName(document))
+		document.Object = nil
+		got = append(got, document)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("collected\n%+v\nwant\n%+v", got, want)
+	}
+	if wantObjects := []string{"ledgerQuery", "ledgerFragment", "", "firstQuery", "secondQuery", ""}; !slices.Equal(objects, wantObjects) {
+		t.Errorf("objects = %q, want %q", objects, wantObjects)
+	}
+}
+
+// objectName is the name of the object a document is declared as, or "" when
+// nothing declares it.
+func objectName(document Document) string {
+	if document.Object == nil {
+		return ""
+	}
+	return document.Object.Name()
+}
+
+// TestFromPackages_PackagesInAnyOrder_ComeBackInReaderOrder verifies that the
+// in-source half orders its own answer rather than inheriting the caller's.
+//
+// cmd/audit_readonly_graphql loads the tree itself and hands the packages over
+// in whatever order its load produced, then reports the documents it cannot
+// attribute in the order it was given them. [Collect] sorts again after adding
+// the standalone half, so a test through it cannot tell whether this sort
+// happens at all.
+func TestFromPackages_PackagesInAnyOrder_ComeBackInReaderOrder(t *testing.T) {
+	loaded, err := goprogram.Load(repoRoot(t), []string{fixturePattern},
+		fixtureOverlay(t, map[string]string{"records": recordsFixture, "ledger": ledgerFixture}))
+	if err != nil {
+		t.Fatalf("load the fixture: %v", err)
+	}
+	sort.Slice(loaded, func(i, j int) bool { return loaded[i].PkgPath > loaded[j].PkgPath })
+
+	found := FromPackages(loaded)
+
+	got := make([]string, 0, len(found))
+	for _, document := range found {
+		got = append(got, document.Label())
+	}
+	want := []string{"ledgerQuery", "ledgerFragment", "an inline document", "firstQuery", "secondQuery", "an inline document"}
+	if !slices.Equal(got, want) {
+		t.Errorf("FromPackages() = %v, want %v", got, want)
+	}
 }
 
 // TestFromPackages_NoPackages_CollectsNothing verifies the in-source half

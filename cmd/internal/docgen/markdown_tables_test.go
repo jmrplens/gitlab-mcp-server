@@ -4,7 +4,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
+
+// formatDeadline bounds one FormatMarkdownTables call on these fixtures, each
+// of which takes microseconds. The cell walk advances by the length of every
+// backtick run it meets, so a run counted as zero or less stalls it on one byte
+// for ever, and without a bound that is reported only by go test's own timeout,
+// minutes later and without naming the document.
+const formatDeadline = 10 * time.Second
 
 // formatTableCase is one Markdown document put to FormatMarkdownTables, with
 // the text it has to produce and whether it has to report a change.
@@ -15,15 +23,42 @@ type formatTableCase struct {
 	wantChanged bool
 }
 
+// formatWithin calls FormatMarkdownTables on a goroutine of its own and fails
+// the test when it has not returned within formatDeadline. A call that never
+// returns is left spinning until the test binary exits, which is the price of
+// a failure that names its input.
+func formatWithin(t *testing.T, input string) (string, bool) {
+	t.Helper()
+	type result struct {
+		formatted string
+		changed   bool
+	}
+	done := make(chan result, 1)
+	go func() {
+		text, touched := FormatMarkdownTables(input)
+		done <- result{formatted: text, changed: touched}
+	}()
+	timer := time.NewTimer(formatDeadline)
+	defer timer.Stop()
+	select {
+	case r := <-done:
+		return r.formatted, r.changed
+	case <-timer.C:
+		t.Fatalf("FormatMarkdownTables(%q) did not return within %v", input, formatDeadline)
+		return "", false
+	}
+}
+
 // runFormatTableCases drives each case as its own subtest, asserting the
 // rendered document and the reported change together: a formatter that
 // produces the right text and lies about having touched it leaves a generator
-// believing its artifact is fresh.
+// believing its artifact is fresh. Every case is also held to returning at
+// all, through formatWithin.
 func runFormatTableCases(t *testing.T, tests []formatTableCase) {
 	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, changed := FormatMarkdownTables(tt.input)
+			got, changed := formatWithin(t, tt.input)
 			if changed != tt.wantChanged {
 				t.Fatalf("FormatMarkdownTables changed = %v, want %v", changed, tt.wantChanged)
 			}
@@ -235,8 +270,9 @@ func TestFormatMarkdownTables_TableDriven(t *testing.T) {
 // fixture here settles the same way: a row that ends in something other than a
 // pipe, a pipe or a backtick the author escaped, a code span that runs to the
 // very end of a line, a separator that is not one, an explicit left alignment,
-// a second table after the first, and a CRLF document whose last line carries
-// no line ending at all.
+// a second table after the first, an already formatted table after one that is
+// not, an already formatted table whose first data row would parse as a
+// separator, and a CRLF document whose last line carries no line ending at all.
 func TestFormatMarkdownTables_EdgeCases_TableDriven(t *testing.T) {
 	runFormatTableCases(t, []formatTableCase{
 		{
@@ -444,6 +480,57 @@ func TestFormatMarkdownTables_EdgeCases_TableDriven(t *testing.T) {
 			wantChanged: true,
 		},
 		{
+			// The change is the document's, not the last table's: reported
+			// from the last table alone, this document would read as fresh to
+			// format_md_tables --check and be left unwritten by its write mode.
+			name: "a change in the first table is reported when the last is already formatted",
+			input: strings.Join([]string{
+				"| A | B |",
+				"| --- | --- |",
+				"| one | two |",
+				"",
+				"| C   | D   |",
+				"| --- | --- |",
+				"| six | ten |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A   | B   |",
+				"| --- | --- |",
+				"| one | two |",
+				"",
+				"| C   | D   |",
+				"| --- | --- |",
+				"| six | ten |",
+				"",
+			}, "\n"),
+			wantChanged: true,
+		},
+		{
+			// An already formatted table is still a table the formatter
+			// takes whole: read as "not a table" because nothing in it
+			// changed, the walk resumes at its separator, reads that as a
+			// header and the dash row under it as a separator, and rewrites
+			// the dash row as the separator it is taken for. Only a data row
+			// that parses as a separator shows it, which is why every other
+			// formatted fixture here passes either way.
+			name: "an already formatted table whose first row is all dashes is left whole",
+			input: strings.Join([]string{
+				"| Long header | B   |",
+				"| ----------- | --- |",
+				"| ---         | --- |",
+				"| z           | y   |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| Long header | B   |",
+				"| ----------- | --- |",
+				"| ---         | --- |",
+				"| z           | y   |",
+				"",
+			}, "\n"),
+		},
+		{
 			name:        "crlf table without a final newline",
 			input:       "| A | B |\r\n| --- | ---: |\r\n| one | 2 |",
 			want:        "| A   |    B |\r\n| --- | ---: |\r\n| one |    2 |",
@@ -495,5 +582,25 @@ func TestNormalizeMarkdownTableRow_RaggedRows_MatchTheColumnCount(t *testing.T) 
 				t.Errorf("normalizeMarkdownTableRow(%q, %d) = %q, want %q", tt.row, tt.columns, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSplitMarkdownLines_MixedEndings_KeepTextAndEndingApart verifies each line
+// record holds the line as read, its text without the ending, and the ending
+// itself, for a CRLF line, an LF line and a last line that has none.
+//
+// It is asserted here rather than through the formatter because every reader of
+// Text trims it before looking, so a Text that kept its carriage return renders
+// the same table today and would not for the first reader that compares it as
+// it stands.
+func TestSplitMarkdownLines_MixedEndings_KeepTextAndEndingApart(t *testing.T) {
+	got := splitMarkdownLines("| crlf |\r\n| lf |\n| last |")
+	want := []markdownLine{
+		{Raw: "| crlf |\r\n", Text: "| crlf |", EOL: "\r\n"},
+		{Raw: "| lf |\n", Text: "| lf |", EOL: "\n"},
+		{Raw: "| last |", Text: "| last |", EOL: ""},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("splitMarkdownLines() = %q, want %q", got, want)
 	}
 }

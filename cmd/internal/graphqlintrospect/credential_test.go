@@ -17,7 +17,13 @@ import (
 // string, since GitLab answers introspection to anyone. Each case below is one
 // way an endpoint can fail to be the instance the token belongs to, and every
 // refusal must also say why, because the version then comes back unknown and
-// the two causes are not equally interesting.
+// the two causes are not equally interesting. A value that is not a URL is
+// quoted as the operator wrote it, and it is that value rather than the other
+// one beside it, since it is the one they have to correct.
+//
+// A GITLAB_URL padded with whitespace is still the instance it names: the
+// padding is what an env file or a quoted shell line leaves behind, and
+// refusing it would withhold the token from the one instance it belongs to.
 //
 // The last two cases hold the two halves of "names no scheme and host" apart.
 // A string missing both reads the same whichever way that test is written, so
@@ -79,11 +85,18 @@ func TestCredentialFor_DecidesByInstance(t *testing.T) {
 			reason:   "GITLAB_URL is not",
 		},
 		{
+			name:     "an instance written with the whitespace a dotenv file leaves around it",
+			endpoint: "https://gitlab.example.com/api/graphql",
+			instance: " https://gitlab.example.com\n",
+			token:    token,
+			want:     token,
+		},
+		{
 			name:     "an endpoint that is not a URL",
 			endpoint: "gitlab.example.com/api/graphql",
 			instance: "https://gitlab.example.com",
 			token:    token,
-			reason:   "is not a URL, so GITLAB_TOKEN was not sent",
+			reason:   `the endpoint "gitlab.example.com/api/graphql" is not a URL, so GITLAB_TOKEN was not sent`,
 		},
 		{
 			name:     "an instance that is not a URL",

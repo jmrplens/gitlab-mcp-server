@@ -1,6 +1,7 @@
 package apilive
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -234,6 +235,18 @@ func TestFieldCount_SpansEveryEntity(t *testing.T) {
 	}
 }
 
+// assertVersionRefusal holds Read's refusal to both version numbers, each in
+// its place. They are the one sentence that tells a maintainer whether to
+// regenerate the record or upgrade the build, and a check that the message
+// merely says "schema version" passes with the two traded.
+func assertVersionRefusal(t *testing.T, err error, recorded int) {
+	t.Helper()
+	wantText := fmt.Sprintf("the live API record is schema version %d and this build reads version %d", recorded, SchemaVersion)
+	if !strings.Contains(err.Error(), wantText) {
+		t.Errorf("error = %q, want it to contain %q", err, wantText)
+	}
+}
+
 // TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads verifies that the record
 // survives the trip to disk with the parts an audit joins on intact, and that
 // a record from another schema version is refused rather than decoded.
@@ -268,9 +281,23 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 		if readErr == nil {
 			t.Fatal("a record from another schema version was read")
 		}
-		if !strings.Contains(readErr.Error(), "schema version") {
-			t.Errorf("error = %q, want it to name the schema version", readErr)
+		assertVersionRefusal(t, readErr, other.SchemaVersion)
+	})
+
+	t.Run("a record from the version before this one is refused too", func(t *testing.T) {
+		// The older direction is the one the guard was written for: version 1
+		// spelled a merged exposure like a nested one, so a reader that let it
+		// through would resolve it into the wrong keys without a word.
+		other := want
+		other.SchemaVersion = SchemaVersion - 1
+		if writeErr := Write(dir, other); writeErr != nil {
+			t.Fatalf("Write: %v", writeErr)
 		}
+		_, readErr := Read(dir)
+		if readErr == nil {
+			t.Fatal("a record from the version before this one was read")
+		}
+		assertVersionRefusal(t, readErr, other.SchemaVersion)
 	})
 
 	t.Run("a missing record says so rather than reading as empty", func(t *testing.T) {
@@ -285,6 +312,27 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 			t.Errorf("error = %q, want it to name the reading step", readErr)
 		}
 	})
+}
+
+// TestPath_TheDefaultLocation_IsTheRecordTheRepositoryCommits verifies that
+// DefaultDir and FileName name the file this repository commits, which every
+// other test here reaches only through [Path] and so could not tell moved.
+//
+// The generator writes where they point and every audit reads from there, so
+// the two would move together and stay green while the committed record, which
+// scripts/check-em-dash.sh also names by its path, went unread.
+func TestPath_TheDefaultLocation_IsTheRecordTheRepositoryCommits(t *testing.T) {
+	t.Parallel()
+	// The package sits three levels below the repository root.
+	committed := filepath.Join("..", "..", "..", Path(DefaultDir))
+
+	info, err := os.Stat(committed)
+	if err != nil {
+		t.Fatalf("Path(DefaultDir) names %s, which the repository does not hold: %v", Path(DefaultDir), err)
+	}
+	if !info.Mode().IsRegular() {
+		t.Errorf("Path(DefaultDir) names %s, which is not a file", Path(DefaultDir))
+	}
 }
 
 // TestWrite_TheRecordIsDiffable verifies that a re-pin reads as a diff rather

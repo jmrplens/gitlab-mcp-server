@@ -137,6 +137,31 @@ func TestWriteOrCheck_CheckMode_AppliesTheSameTrailingNewlineRule(t *testing.T) 
 	}
 }
 
+// TestWriteOrCheck_ContentWithSpareCapacity_LeavesTheCallersArrayAlone
+// verifies the newline WriteOrCheck supplies is appended to a copy: content
+// cut from a larger buffer has room after it, and a byte written there lands
+// in whatever the caller keeps in that buffer next.
+func TestWriteOrCheck_ContentWithSpareCapacity_LeavesTheCallersArrayAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stats.json")
+	buffer := []byte("{}X")
+	content := buffer[:2:3]
+
+	if err := WriteOrCheck(path, content, false, "make gen"); err != nil {
+		t.Fatalf("WriteOrCheck() error = %v", err)
+	}
+
+	if string(buffer) != "{}X" {
+		t.Errorf("caller's buffer = %q, want %q untouched", buffer, "{}X")
+	}
+	got, err := os.ReadFile(path) //#nosec G304 -- a path this test built
+	if err != nil {
+		t.Fatalf("read written file: %v", err)
+	}
+	if string(got) != "{}\n" {
+		t.Errorf("written file = %q, want %q", got, "{}\n")
+	}
+}
+
 // TestWriteOrCheck_WriteMode_UsesTheGeneratedFileAndDirectoryModes verifies the
 // artifact is created private to its owner and its parent directory usable,
 // which is the decision GeneratedFileMode and generatedDirMode record.
@@ -162,7 +187,8 @@ func TestWriteOrCheck_WriteMode_UsesTheGeneratedFileAndDirectoryModes(t *testing
 // reports an artifact that is not there with an error that keeps
 // fs.ErrNotExist, and a stale one with the sentence naming the file and the
 // command that refreshes it. The two want different fixes, so a caller has to
-// be able to tell them apart.
+// be able to tell them apart. A missing directory is named as the directory,
+// not as the file the check was going to read, since that is what is absent.
 func TestWriteOrCheck_CheckMode_MissingAndStaleFilesDiffer(t *testing.T) {
 	dir := t.TempDir()
 	stale := filepath.Join(dir, "stale.json")
@@ -170,17 +196,18 @@ func TestWriteOrCheck_CheckMode_MissingAndStaleFilesDiffer(t *testing.T) {
 		t.Fatalf("write stale file: %v", err)
 	}
 	missing := filepath.Join(dir, "missing.json")
-	absentDir := filepath.Join(dir, "absent", "missing.json")
+	absentDir := filepath.Join(dir, "absent", "never-read.json")
 
 	tests := []struct {
 		name         string
 		path         string
 		wantErr      string
+		notNamed     string
 		wantNotExist bool
 	}{
 		{name: "stale file", path: stale, wantErr: stale + " is stale; run make gen"},
 		{name: "missing file", path: missing, wantErr: "read " + missing, wantNotExist: true},
-		{name: "missing directory", path: absentDir, wantErr: "open " + filepath.Dir(absentDir), wantNotExist: true},
+		{name: "missing directory", path: absentDir, wantErr: "open " + filepath.Dir(absentDir), notNamed: "never-read.json", wantNotExist: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -191,6 +218,9 @@ func TestWriteOrCheck_CheckMode_MissingAndStaleFilesDiffer(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("WriteOrCheck(check) error = %q, want it to contain %q", err, tt.wantErr)
 			}
+			if tt.notNamed != "" && strings.Contains(err.Error(), tt.notNamed) {
+				t.Errorf("WriteOrCheck(check) error = %q, want it not to name %q", err, tt.notNamed)
+			}
 			if errors.Is(err, fs.ErrNotExist) != tt.wantNotExist {
 				t.Errorf("errors.Is(err, fs.ErrNotExist) = %v, want %v (err %v)", !tt.wantNotExist, tt.wantNotExist, err)
 			}
@@ -198,11 +228,12 @@ func TestWriteOrCheck_CheckMode_MissingAndStaleFilesDiffer(t *testing.T) {
 	}
 }
 
-// TestWriteOrCheck_UnusableTargets_NameTheStageThatFailed verifies each way a
-// target can refuse the write is reported by the stage that hit it: a parent
-// that is a regular file cannot be created, a parent that disappears between
-// the two calls cannot be opened, and a target that is a directory cannot be
-// written.
+// TestWriteOrCheck_UnusableTargets_NameTheStageThatFailed verifies a parent
+// that is a regular file and a target that is a directory are each reported by
+// the stage that hit it, naming the artifact whole: the parent is already in the
+// error wrapped beneath. The stage between them, opening the parent, is held by
+// the missing-directory case above, since in write mode nothing a test can
+// arrange removes a parent created a moment earlier.
 func TestWriteOrCheck_UnusableTargets_NameTheStageThatFailed(t *testing.T) {
 	root := t.TempDir()
 	blocker := filepath.Join(root, "blocker")
@@ -213,13 +244,14 @@ func TestWriteOrCheck_UnusableTargets_NameTheStageThatFailed(t *testing.T) {
 	if err := os.Mkdir(directory, 0o750); err != nil {
 		t.Fatalf("mkdir target: %v", err)
 	}
+	blocked := filepath.Join(blocker, "out.json")
 
 	tests := []struct {
 		name    string
 		path    string
 		wantErr string
 	}{
-		{name: "parent is a file", path: filepath.Join(blocker, "out.json"), wantErr: "create directory for "},
+		{name: "parent is a file", path: blocked, wantErr: "create directory for " + blocked + ": "},
 		{name: "target is a directory", path: directory, wantErr: "write " + directory},
 	}
 	for _, tt := range tests {

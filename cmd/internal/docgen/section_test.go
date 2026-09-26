@@ -1,6 +1,8 @@
 package docgen
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,10 +121,22 @@ func TestReplaceSection_RewritesFile(t *testing.T) {
 	}
 }
 
-// TestReplaceSection_MissingFileErrors verifies a read failure is wrapped.
+// TestReplaceSection_MissingFileErrors verifies a read failure is wrapped: the
+// error names the document and still answers errors.Is for fs.ErrNotExist, so
+// a generator can tell a document that is not there from one it could not
+// splice.
 func TestReplaceSection_MissingFileErrors(t *testing.T) {
-	if err := ReplaceSection(filepath.Join(t.TempDir(), "nope.md"), "<!-- S -->", "<!-- E -->", "x"); err == nil {
+	path := filepath.Join(t.TempDir(), "nope.md")
+
+	err := ReplaceSection(path, "<!-- S -->", "<!-- E -->", "x")
+	if err == nil {
 		t.Fatal("ReplaceSection on missing file: error = nil, want read error")
+	}
+	if !strings.HasPrefix(err.Error(), "reading "+path+": ") {
+		t.Errorf("ReplaceSection() error = %q, want it to begin with %q", err, "reading "+path+": ")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("errors.Is(%v, fs.ErrNotExist) = false, want the read failure wrapped", err)
 	}
 }
 

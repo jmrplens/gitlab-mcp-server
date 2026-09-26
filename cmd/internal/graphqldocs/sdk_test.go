@@ -1,6 +1,7 @@
 package graphqldocs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,10 @@ import (
 // working directory happens to be — this repository, during an audit. The
 // documents of the wrong module reported as the SDK's is the class of silent
 // wrongness the whole audit exists to remove.
+//
+// The refusal is asserted by identity rather than by there being an error:
+// whitespace is not a directory either, so a guard that stopped trimming would
+// hand it to the loader, fail there instead, and still return an error.
 func TestSDKDocuments_NoDirectory_IsRefusedRatherThanSearched(t *testing.T) {
 	t.Parallel()
 
@@ -22,8 +27,8 @@ func TestSDKDocuments_NoDirectory_IsRefusedRatherThanSearched(t *testing.T) {
 		t.Run("dir="+dir, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := SDKDocuments(dir); err == nil {
-				t.Error("SDKDocuments() accepted a directory that names nothing")
+			if _, err := SDKDocuments(dir); !errors.Is(err, errNoSDKDirectory) {
+				t.Errorf("SDKDocuments() error = %v, want the refusal of a directory that names nothing", err)
 			}
 		})
 	}
@@ -39,13 +44,18 @@ func TestSDKDocuments_NoDirectory_IsRefusedRatherThanSearched(t *testing.T) {
 func TestSDKDocuments_DirectoryItCannotLoad_Fails(t *testing.T) {
 	t.Parallel()
 
-	_, err := SDKDocuments(filepath.Join(t.TempDir(), "nowhere"))
+	dir := filepath.Join(t.TempDir(), "nowhere")
+
+	_, err := SDKDocuments(dir)
 
 	if err == nil {
 		t.Fatal("SDKDocuments() reported no error for a directory that is not a module")
 	}
-	if !strings.Contains(err.Error(), "client-go") {
-		t.Errorf("SDKDocuments() error = %v, want it to name what it was reading", err)
+	// The directory is part of what is asserted, because the module cache is a
+	// place with many versions in it and the one that would not load is the
+	// one a reader has to go and look at.
+	if want := "load the client-go source in " + dir + ": "; !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("SDKDocuments() error = %v, want it to open with %q", err, want)
 	}
 }
 
@@ -253,6 +263,17 @@ func TestIsTemplate_TellsAShellFromSendableText(t *testing.T) {
 			text: `query { project(fullPath: %q) { terraformStates { nodes { name } } } }`,
 			want: true,
 		},
+		// The verbs a format string is most often written with, and each flag
+		// the hole allows in front of one, since a class narrowed to the one
+		// verb client-go uses today would put the next shell it writes on the
+		// refusal list for good.
+		{name: "a string verb", text: `query { project(fullPath: "%s") { id } }`, want: true},
+		{name: "an integer verb", text: `query { issue(iid: %d) { id } }`, want: true},
+		{name: "a value verb", text: `query { issue(iid: %v) { id } }`, want: true},
+		{name: "a left-justified width", text: `query { project(fullPath: "%-12s") { id } }`, want: true},
+		{name: "an alternate form", text: `query { issue(iid: %#v) { id } }`, want: true},
+		{name: "a sign", text: `query { issue(iid: %+d) { id } }`, want: true},
+		{name: "a precision", text: `query { issues(weight: %.3f) { id } }`, want: true},
 		{
 			name: "an ordinary document",
 			text: `query ListAchievements($fullPath: ID!) { group(fullPath: $fullPath) { id } }`,

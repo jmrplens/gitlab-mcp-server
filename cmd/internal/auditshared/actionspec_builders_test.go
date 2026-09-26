@@ -6,6 +6,7 @@ package auditshared
 import (
 	"errors"
 	"fmt"
+	"go/scanner"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -75,12 +76,15 @@ func assertDiscoveryError(t *testing.T, dir string, err error, wantErr string, w
 // TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources verifies
 // the scan reads only the top-level non-test, non-generated Go files of the
 // directory, counts function declarations alone, returns builder names sorted,
-// and fails on a duplicate builder, on a directory without builders, on a file
-// that does not parse, and on a directory that does not exist.
+// and fails on a duplicate builder, on a directory without builders, and on a
+// directory that does not exist.
 //
-// The happy case plants three builders rather than two so that dropping the
-// sort cannot pass on a coin toss, and a package-level var named like a
-// builder so the declaration-kind test is exercised in both directions.
+// The happy case fills the scan's map in the reverse of the order it must
+// return: the walk reads a.go, b.go and c.go, which declare Zulu, Mike and
+// Alpha. A small Go map iterates as a rotation of its insertion order, so the
+// fixture this replaced, filled already sorted, passed with the sort deleted
+// in 30 of 40 runs; no rotation of a reversed fill is sorted. A package-level
+// var named like a builder exercises the declaration-kind test both ways.
 // wantErrFiles pins the pair of paths the duplicate message names, in the
 // order it must name them: the file that already held the builder, then the
 // one that redeclared it. Crossing those two reads as the same message.
@@ -97,16 +101,16 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 		{
 			name: "sorted names from top-level sources only",
 			files: map[string]string{
-				"zeta.go":             "package tools\n\nfunc buildZetaActionSpecs() {}\nfunc (x T) buildMethodActionSpecs() {}\n",
-				"middle.go":           "package tools\n\nfunc buildMiddleActionSpecs() {}\n",
-				"alpha.go":            "package tools\n\nvar buildVarActionSpecs = \"a var is not a builder\"\n\nfunc buildAlphaActionSpecs() {}\nfunc helper() {}\n",
-				"alpha_test.go":       "package tools\n\nfunc buildTestActionSpecs() {}\n",
+				"a.go":                "package tools\n\nvar buildVarActionSpecs = \"a var is not a builder\"\n\nfunc buildZuluActionSpecs() {}\nfunc helper() {}\n",
+				"a_test.go":           "package tools\n\nfunc buildTestActionSpecs() {}\n",
+				"b.go":                "package tools\n\nfunc buildMikeActionSpecs() {}\n",
+				"c.go":                "package tools\n\nfunc buildAlphaActionSpecs() {}\nfunc (x T) buildMethodActionSpecs() {}\n",
 				"manifest_gen.go":     "package tools\n\nfunc buildGenActionSpecs() {}\n",
 				"notes.txt":           "func buildTextActionSpecs() {}\n",
 				"nested/nested.go":    "package nested\n\nfunc buildNestedActionSpecs() {}\n",
 				"nested/deep/deep.go": "package deep\n\nfunc buildDeepActionSpecs() {}\n",
 			},
-			want: []string{"buildAlphaActionSpecs", "buildMiddleActionSpecs", "buildZetaActionSpecs"},
+			want: []string{"buildAlphaActionSpecs", "buildMikeActionSpecs", "buildZuluActionSpecs"},
 		},
 		{
 			name: "duplicate builder across files",
@@ -121,11 +125,6 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 			name:    "no builders",
 			files:   map[string]string{"a.go": "package tools\n\nfunc helper() {}\n"},
 			wantErr: "no action spec group builders found",
-		},
-		{
-			name:    "unparsable source",
-			files:   map[string]string{"broken.go": "package tools\n\nfunc {\n"},
-			wantErr: "parse ",
 		},
 		{
 			name:    "missing directory",
@@ -161,5 +160,26 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 				t.Errorf("builders = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestDiscoverActionSpecGroupBuilders_UnparsableSource_NamesFileAndWrapsParserError
+// verifies a file that does not parse stops the scan with an error naming that
+// file, not the directory being scanned, and wrapping the parser's own
+// positioned errors so a caller can unwrap them. The builder planted beside it
+// shows a scan that already found one does not swallow the failure.
+func TestDiscoverActionSpecGroupBuilders_UnparsableSource_NamesFileAndWrapsParserError(t *testing.T) {
+	dir := writeBuilderFixture(t, map[string]string{
+		"a.go":      "package tools\n\nfunc buildAlphaActionSpecs() {}\n",
+		"broken.go": "package tools\n\nfunc {\n",
+	})
+
+	_, err := DiscoverActionSpecGroupBuilders(dir)
+	if want := "parse " + filepath.Join(dir, "broken.go") + ": "; err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Fatalf("DiscoverActionSpecGroupBuilders() error = %v, want it to start with %q", err, want)
+	}
+	var parserErrors scanner.ErrorList
+	if !errors.As(err, &parserErrors) || len(parserErrors) == 0 {
+		t.Errorf("DiscoverActionSpecGroupBuilders() error = %v, want it to wrap the parser's scanner.ErrorList", err)
 	}
 }

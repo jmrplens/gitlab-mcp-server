@@ -2,9 +2,13 @@ package requestinventory
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -25,25 +29,25 @@ func writeInventory(t *testing.T, content []byte) string {
 }
 
 // TestRead_TheCommittedArtifact_ComesBackAsRows verifies the round trip both
-// callers depend on, through the renderer that writes the file.
+// callers depend on, through the renderer that writes the file: every row comes
+// back whole and in order, under the header the renderer wrote. The whole
+// inventory is compared because a row that loses one field reads as a row.
 func TestRead_TheCommittedArtifact_ComesBackAsRows(t *testing.T) {
-	root := writeInventory(t, Render([]Row{
-		{Package: "internal/tools/issues", Kind: KindREST, Method: "GET", Path: "/projects/:id/issues", Query: []string{"state"}},
-		{Package: "internal/tools/epics", Kind: KindGraphQL, Method: "POST", Path: "/graphql", Operation: "query epicList", Variables: []string{"path"}},
-	}))
+	rows := []Row{
+		{
+			Package: "internal/tools/issues", Kind: KindREST, Method: "POST", Path: "/projects/:project_id/issues",
+			Query: []string{"state"}, Body: []string{"title"}, Identifiers: map[string]int{":project_id": 2},
+		},
+		{Package: "internal/tools/epics", Kind: KindGraphQL, Method: "GET", Path: "/graphql", Operation: "query epicList", Variables: []string{"path"}},
+	}
+	root := writeInventory(t, Render(rows))
 
 	inventory, err := Read(root)
 	if err != nil {
 		t.Fatalf("Read() error = %v, want nil", err)
 	}
-	if len(inventory.Requests) != 2 {
-		t.Fatalf("Read() returned %d row(s), want 2", len(inventory.Requests))
-	}
-	if inventory.Requests[0].Query[0] != "state" || inventory.Requests[1].Operation != "query epicList" {
-		t.Errorf("Read() returned %+v, want both rows whole", inventory.Requests)
-	}
-	if inventory.Note == "" {
-		t.Error("Read() returned an inventory with no note saying where it comes from")
+	if want := (Inventory{Note: Note, Requests: rows}); !reflect.DeepEqual(inventory, want) {
+		t.Errorf("Read() = %+v, want %+v", inventory, want)
 	}
 }
 
@@ -51,16 +55,33 @@ func TestRead_TheCommittedArtifact_ComesBackAsRows(t *testing.T) {
 // answer at all. An empty one is the dangerous case: every caller asks "which
 // of these did the suite never issue", and an empty file answers all of them
 // with "none of them".
+//
+// Each refusal hands back the zero inventory, so a caller that reads past the
+// error finds no header and no rows rather than half an answer, and carries
+// the failure underneath it where there is one: the message is the wrapper's,
+// so only errors.Is and errors.As can tell a missing file from a broken one.
 func TestRead_AnArtifactItCannotUse_Fails(t *testing.T) {
 	cases := []struct {
 		name    string
 		content []byte
 		absent  bool
 		want    string
+		// cause reports whether the error carries the failure beneath Read's
+		// own message; nil where Read is the one refusing.
+		cause func(error) bool
 	}{
-		{name: "no artifact at all", absent: true, want: "read the request inventory"},
-		{name: "an artifact that is not JSON", content: []byte("not json"), want: "parse "},
-		{name: "an artifact with no rows", content: []byte(`{"note":"x","requests":[]}`), want: "holds no request"},
+		{
+			name: "no artifact at all", absent: true, want: "read the request inventory",
+			cause: func(err error) bool { return errors.Is(err, fs.ErrNotExist) },
+		},
+		{
+			name: "an artifact that is not JSON", content: []byte("not json"), want: "parse " + Path,
+			cause: func(err error) bool {
+				var syntax *json.SyntaxError
+				return errors.As(err, &syntax)
+			},
+		},
+		{name: "an artifact with no rows", content: []byte(`{"note":"x","requests":[]}`), want: Path + " holds no request"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -69,7 +90,7 @@ func TestRead_AnArtifactItCannotUse_Fails(t *testing.T) {
 				root = writeInventory(t, testCase.content)
 			}
 
-			_, err := Read(root)
+			inventory, err := Read(root)
 
 			if err == nil {
 				t.Fatalf("Read() error = nil, want one naming %q", testCase.want)
@@ -77,8 +98,89 @@ func TestRead_AnArtifactItCannotUse_Fails(t *testing.T) {
 			if !strings.Contains(err.Error(), testCase.want) {
 				t.Errorf("Read() error = %q, want it to name %q", err, testCase.want)
 			}
+			if testCase.cause != nil && !testCase.cause(err) {
+				t.Errorf("Read() error = %q does not carry the failure beneath it", err)
+			}
+			if !reflect.DeepEqual(inventory, Inventory{}) {
+				t.Errorf("Read() = %+v beside the error, want the zero inventory", inventory)
+			}
 		})
 	}
+}
+
+// TestInventory_EveryField_CarriesTheNameTheArtifactSpellsIt verifies the two
+// top-level names against a document written by hand, in both directions, for
+// the reason the row test below gives: [Render] and [Read] share the tags, so a
+// renamed `note` survives their round trip whole while the committed artifact
+// reads back with no header and a regenerated one writes it under a name no
+// reader of the file looks for.
+func TestInventory_EveryField_CarriesTheNameTheArtifactSpellsIt(t *testing.T) {
+	row := Row{Package: "internal/tools/issues", Kind: KindREST, Method: "GET", Path: "/projects"}
+
+	t.Run("a document names the field it fills", func(t *testing.T) {
+		const document = `{
+			"note": "a header written by hand",
+			"requests": [{"package": "internal/tools/issues", "kind": "rest", "method": "GET", "path": "/projects"}]
+		}`
+		var decoded Inventory
+		if err := json.Unmarshal([]byte(document), &decoded); err != nil {
+			t.Fatalf("Unmarshal error = %v", err)
+		}
+		if want := (Inventory{Note: "a header written by hand", Requests: []Row{row}}); !reflect.DeepEqual(decoded, want) {
+			t.Errorf("decoded %+v, want %+v", decoded, want)
+		}
+	})
+
+	t.Run("a rendered inventory writes each value under that same name", func(t *testing.T) {
+		var rendered map[string]json.RawMessage
+		if err := json.Unmarshal(Render([]Row{row}), &rendered); err != nil {
+			t.Fatalf("Unmarshal error = %v", err)
+		}
+		keys := slices.Sorted(maps.Keys(rendered))
+		if want := []string{"note", "requests"}; !slices.Equal(keys, want) {
+			t.Fatalf("rendered keys = %v, want %v", keys, want)
+		}
+		var note string
+		if err := json.Unmarshal(rendered["note"], &note); err != nil || note != Note {
+			t.Errorf("rendered note = %q (error %v), want the generated-file header", note, err)
+		}
+	})
+}
+
+// TestNote_EveryPlaceItSendsAReaderTo_Exists verifies the header's pointers
+// against the tree: the target that regenerates the file and the two places the
+// rules behind a row are written down.
+//
+// Nothing else reads the note. Every gate over the artifact compares it with
+// what the generator writes, and both carry the same sentence, so a rename that
+// leaves it pointing at nothing is invisible to all of them while it is the one
+// piece of prose a reader meets before the first row.
+func TestNote_EveryPlaceItSendsAReaderTo_Exists(t *testing.T) {
+	root := repoRoot(t)
+
+	for _, reference := range []string{"internal/testutil/request_shape.go", "cmd/internal/requestinventory"} {
+		t.Run(reference, func(t *testing.T) {
+			if !strings.Contains(Note, reference) {
+				t.Fatalf("the note no longer names %s; update this list with it", reference)
+			}
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(reference))); err != nil {
+				t.Errorf("the note sends a reader to %s, which is not in the tree: %v", reference, err)
+			}
+		})
+	}
+
+	t.Run("make gen-request-inventory", func(t *testing.T) {
+		if !strings.Contains(Note, "`make gen-request-inventory`") {
+			t.Fatal("the note no longer names the target that regenerates the file; update this test with it")
+		}
+		makefile, err := os.ReadFile(filepath.Join(root, "Makefile"))
+		if err != nil {
+			t.Fatalf("read the Makefile: %v", err)
+		}
+		if !strings.Contains(string(makefile), "\ngen-request-inventory:") {
+			t.Error("the note names `make gen-request-inventory`, and the Makefile declares no such target")
+		}
+	})
 }
 
 // TestRender_Inventory_IsIndentedJSONEndingInANewline verifies the artifact is

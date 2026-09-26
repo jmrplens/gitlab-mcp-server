@@ -1,6 +1,7 @@
 package apilive
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -156,9 +157,11 @@ func TestNestedNames_TheEdgeAGeneratedDocumentFlattens(t *testing.T) {
 			{Name: "author", Using: "API::Entities::UserBasic"},
 			{Name: "resolver", Using: "API::Entities::Unloaded"},
 			{Name: "project", Using: "API::Entities::ProjectIdentity"},
+			{Name: "pipeline", Using: "API::Entities::Broken"},
 		}},
 		"API::Entities::UserBasic":       {Fields: []Field{{Name: "id"}, {Name: "username"}}},
 		"API::Entities::ProjectIdentity": {Fields: []Field{{Name: "path_with_namespace"}}},
+		"API::Entities::Broken":          {Error: "NoMethodError"},
 	}}
 
 	t.Run("every field rendering an entity names that entity's keys", func(t *testing.T) {
@@ -181,6 +184,14 @@ func TestNestedNames_TheEdgeAGeneratedDocumentFlattens(t *testing.T) {
 		// would read as GitLab sending an object with no fields.
 		if _, named := doc.NestedNames("API::Entities::Note")["resolver"]; named {
 			t.Error("a field whose entity the record does not hold was given a key")
+		}
+	})
+	t.Run("a field rendering an entity that refused to describe itself is left out", func(t *testing.T) {
+		t.Parallel()
+		// The record holds it and knows none of its keys, which says no more
+		// about the object under that key than an entity never loaded does.
+		if names, named := doc.NestedNames("API::Entities::Note")["pipeline"]; named {
+			t.Errorf("a field whose entity describes nothing was given the keys %v", names)
 		}
 	})
 	t.Run("an entity the record does not hold nests nothing", func(t *testing.T) {
@@ -296,6 +307,131 @@ func TestResolve_AMergedExposureContributesItsChildsKeys(t *testing.T) {
 	})
 }
 
+// TestResolve_PromotedFieldsTakeTheMergesPlace verifies the whole list Resolve
+// returns: a merge's fields stand where the merge was declared, each carrying
+// the merge's conditions ahead of its own, between the parent's fields before
+// and after it.
+//
+// The position is what [Document.Fields] reads a repeated key by, since the last
+// declaration of a name wins as Grape's render does: the child's id overrides
+// the parent's earlier one and the parent's later name overrides the child's,
+// and promoting the child anywhere else turns both round.
+func TestResolve_PromotedFieldsTakeTheMergesPlace(t *testing.T) {
+	t.Parallel()
+	merged := Condition{Kind: "BlockCondition", Text: "if: ->(_, options) { options[:with_detail] }"}
+	own := Condition{Kind: "HashCondition", Hash: "{scope: :admin}"}
+	doc := Document{Entities: map[string]Entity{
+		"API::Entities::Parent": {Fields: []Field{
+			{Name: "id", Attribute: "parent_id"},
+			{Name: "detail", Using: "API::Entities::Detail", Merge: true, Conditions: []Condition{merged}},
+			{Name: "name", Attribute: "parent_name"},
+		}},
+		"API::Entities::Detail": {Fields: []Field{
+			{Name: "name", Attribute: "detail_name"},
+			{Name: "id", Attribute: "detail_id", Conditions: []Condition{own}},
+		}},
+	}}
+
+	t.Run("the merge is expanded in place, in declaration order", func(t *testing.T) {
+		t.Parallel()
+		want := []Field{
+			{Name: "id", Attribute: "parent_id"},
+			{Name: "name", Attribute: "detail_name", Conditions: []Condition{merged}},
+			{Name: "id", Attribute: "detail_id", Conditions: []Condition{merged, own}},
+			{Name: "name", Attribute: "parent_name"},
+		}
+		got, ok := doc.Resolve("API::Entities::Parent")
+		if !ok || !reflect.DeepEqual(got, want) {
+			t.Errorf("Resolve = %+v, %v; want %+v, true", got, ok, want)
+		}
+	})
+	t.Run("a repeated key reads the declaration rendered last", func(t *testing.T) {
+		t.Parallel()
+		fields, _ := doc.Fields("API::Entities::Parent")
+		if fields["id"].Attribute != "detail_id" || fields["name"].Attribute != "parent_name" {
+			t.Errorf("id reads %q and name reads %q, want detail_id and parent_name",
+				fields["id"].Attribute, fields["name"].Attribute)
+		}
+	})
+}
+
+// TestResolve_AnEntityMergedAlongTwoPaths_ContributesAlongBoth verifies that
+// the cycle guard stops only a merge back into an entity still being resolved,
+// and not a second merge of one already finished.
+//
+// An entity two siblings both merge is not a cycle, and each path gates its copy
+// with its own merge's condition. A guard that remembered every entity it had
+// ever visited would drop the second copy, and the condition with it.
+func TestResolve_AnEntityMergedAlongTwoPaths_ContributesAlongBoth(t *testing.T) {
+	t.Parallel()
+	viaFirst := Condition{Kind: "BlockCondition", Text: "if: ->(_, options) { options[:first] }"}
+	viaSecond := Condition{Kind: "BlockCondition", Text: "if: ->(_, options) { options[:second] }"}
+	doc := Document{Entities: map[string]Entity{
+		"API::Entities::Parent": {Fields: []Field{
+			{Name: "first", Using: "API::Entities::First", Merge: true, Conditions: []Condition{viaFirst}},
+			{Name: "second", Using: "API::Entities::Second", Merge: true, Conditions: []Condition{viaSecond}},
+		}},
+		"API::Entities::First":  {Fields: []Field{{Name: "shared", Using: "API::Entities::Shared", Merge: true}}},
+		"API::Entities::Second": {Fields: []Field{{Name: "shared", Using: "API::Entities::Shared", Merge: true}}},
+		"API::Entities::Shared": {Fields: []Field{{Name: "web_url"}}},
+	}}
+
+	want := []Field{
+		{Name: "web_url", Conditions: []Condition{viaFirst}},
+		{Name: "web_url", Conditions: []Condition{viaSecond}},
+	}
+	if got, ok := doc.Resolve("API::Entities::Parent"); !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("Resolve = %+v, %v; want %+v, true", got, ok, want)
+	}
+}
+
+// TestResolve_EachFieldAMergePromotes_CarriesItsOwnConditions verifies that
+// the fields one merge contributes do not share the slice their conditions are
+// built in.
+//
+// A decoded record hands a merge's conditions over with room to spare (three
+// decode into room for four), and appending each promoted field's own
+// condition into that room would leave every one of them reporting the last
+// field's. That is why the fixture is decoded rather than written as a literal.
+func TestResolve_EachFieldAMergePromotes_CarriesItsOwnConditions(t *testing.T) {
+	t.Parallel()
+	var doc Document
+	if err := json.Unmarshal([]byte(`{"entities": {
+		"API::Entities::Parent": {"fields": [{"name": "detail", "using": "API::Entities::Detail", "merge": true,
+			"conditions": [{"kind": "BlockCondition", "text": "one"}, {"kind": "BlockCondition", "text": "two"},
+				{"kind": "BlockCondition", "text": "three"}]}]},
+		"API::Entities::Detail": {"fields": [
+			{"name": "first", "conditions": [{"kind": "HashCondition", "hash": "first_own"}]},
+			{"name": "second", "conditions": [{"kind": "HashCondition", "hash": "second_own"}]}]}}}`), &doc); err != nil {
+		t.Fatalf("decoding the fixture: %v", err)
+	}
+	if merge := doc.Entities["API::Entities::Parent"].Fields[0].Conditions; cap(merge) == len(merge) {
+		t.Fatalf("the merge's conditions decoded with no room to spare (len %d, cap %d), so this case tests nothing", len(merge), cap(merge))
+	}
+	fields, ok := doc.Fields("API::Entities::Parent")
+	if !ok {
+		t.Fatal("the entity is in the record and was reported absent")
+	}
+
+	for _, testCase := range []struct{ field, own string }{
+		{field: "first", own: "first_own"},
+		{field: "second", own: "second_own"},
+	} {
+		t.Run(testCase.field, func(t *testing.T) {
+			t.Parallel()
+			want := []Condition{
+				{Kind: "BlockCondition", Text: "one"},
+				{Kind: "BlockCondition", Text: "two"},
+				{Kind: "BlockCondition", Text: "three"},
+				{Kind: "HashCondition", Hash: testCase.own},
+			}
+			if got := fields[testCase.field].Conditions; !reflect.DeepEqual(got, want) {
+				t.Errorf("%s carries %+v, want %+v", testCase.field, got, want)
+			}
+		})
+	}
+}
+
 // TestLicensedFeatures_TheThreeSpellingsAConditionUses verifies what is read
 // out of a condition's text, which is what a tier is then resolved from.
 //
@@ -323,6 +459,14 @@ func TestLicensedFeatures_TheThreeSpellingsAConditionUses(t *testing.T) {
 			name:      "License.feature_available? at the top level",
 			condition: "->(_, _) { ::License.feature_available?(:security_orchestration_policies) }",
 			want:      []string{"security_orchestration_policies"},
+		},
+		{
+			// dora4_analytics is in the recorded feature table, and a symbol
+			// cut at its digit reads as dora, which the table does not list, so
+			// the field it gates would lose its tier without a word.
+			name:      "a symbol carrying a digit is read whole",
+			condition: "->(group, _) { group.licensed_feature_available?(:dora4_analytics) }",
+			want:      []string{"dora4_analytics"},
 		},
 		{
 			name:      "several symbols keep their order and repeat once",
@@ -388,6 +532,48 @@ func TestGateOf_WhatAConditionAmountsTo(t *testing.T) {
 				{Kind: "BlockCondition", Text: "->(p, _) { p.public? }"},
 			},
 			want: Gate{If: "->(p, _) { p.public? }"},
+		},
+		{
+			name: "a condition whose text is only blank contributes none",
+			conditions: []Condition{
+				{Kind: "HashCondition", Hash: " \t "},
+				{Kind: "BlockCondition", Text: "->(p, _) { p.public? }"},
+			},
+			want: Gate{If: "->(p, _) { p.public? }"},
+		},
+		{
+			// The text is the condition as written and the hash only a hash
+			// condition's data, so a condition carrying both is quoted by what it
+			// says rather than by what it holds.
+			name: "a condition carrying a text and a hash is quoted by its text",
+			conditions: []Condition{{
+				Kind: "BlockCondition",
+				Text: "->(p, _) { p.public? }",
+				Hash: "{scope: :all}",
+			}},
+			want: Gate{If: "->(p, _) { p.public? }"},
+		},
+		{
+			// Edition says whether any condition was written under ee/, so a CE
+			// condition read after an Enterprise one must not take it back.
+			name: "an Enterprise condition beside a CE one keeps the field Enterprise",
+			conditions: []Condition{
+				{
+					Kind: "BlockCondition",
+					File: "ee/lib/ee/api/entities/project.rb", Line: 9,
+					Text: "->(p, _) { p.feature_available?(:repository_mirrors) }",
+				},
+				{
+					Kind: "BlockCondition",
+					File: "lib/api/entities/project.rb", Line: 40,
+					Text: "->(_, o) { o[:with_stats] }",
+				},
+			},
+			want: Gate{
+				If:      "->(p, _) { p.feature_available?(:repository_mirrors) } && ->(_, o) { o[:with_stats] }",
+				Tier:    TierPremium,
+				Edition: "ee",
+			},
 		},
 		{
 			// The unless side of every rule below, which is not the same code

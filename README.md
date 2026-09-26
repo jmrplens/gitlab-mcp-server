@@ -474,10 +474,10 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,311 |     295,300 |
-| Unit tests (`_test.go`)  |       892 |     584,528 |
+| Source (`.go`, non-test) |     1,311 |     295,420 |
+| Unit tests (`_test.go`)  |       893 |     592,814 |
 | End-to-end tests         |       497 |     103,199 |
-| **Total**                | **2,700** | **983,027** |
+| **Total**                | **2,701** | **991,433** |
 
 ### Functions
 
@@ -486,27 +486,27 @@ and the workaround this server carries until it ships.
 | Source functions                | 10,298 |
 | . Exported (public)             |  3,205 |
 | . Unexported (private)          |  7,093 |
-| Unit test functions (`TestXxx`) | 17,586 |
-| Subtests (`t.Run(...)`)         |  6,345 |
+| Unit test functions (`TestXxx`) | 17,730 |
+| Subtests (`t.Run(...)`)         |  6,372 |
 | End-to-end test functions       |  1,345 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.98× more tests than code |
+| Test lines vs source lines         | 2.01× more tests than code |
 | Average source file length         |                 ~225 lines |
-| Average test file length           |                 ~655 lines |
-| Comment lines in source            |  69,643 (~23.6% of source) |
+| Average test file length           |                 ~664 lines |
+| Comment lines in source            |  69,760 (~23.6% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,377 |
-| `defer` statements                 | 1,150 |
-| `struct` types defined             | 3,328 |
+| `if err != nil` checks             | 9,407 |
+| `defer` statements                 | 1,160 |
+| `struct` types defined             | 3,329 |
 | `//nolint` suppressions            |   234 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
@@ -529,8 +529,8 @@ and the workaround this server carries until it ships.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,369 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,905 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,371 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,908 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination` (87 chars) |
 

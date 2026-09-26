@@ -257,13 +257,17 @@ func TestAudit_ASuppliedSchemaThatCannotBeUsed_Fails(t *testing.T) {
 		t.Fatalf("prepare the fixture: %v", err)
 	}
 
+	// The prefix rather than a substring, and for the unparseable file the path
+	// in front of it: "parse the schema" is graphqlschema's own wording, so the
+	// path is the one part of that message this package writes, and it is the
+	// part that tells a reader which of their files was not a schema.
 	cases := []struct {
 		name string
 		path string
 		want string
 	}{
-		{name: "no such file", path: filepath.Join(t.TempDir(), "absent.graphql"), want: "read the schema to judge against"},
-		{name: "not a schema", path: unparseable, want: "parse the schema"},
+		{name: "no such file", path: filepath.Join(t.TempDir(), "absent.graphql"), want: "read the schema to judge against: "},
+		{name: "not a schema", path: unparseable, want: unparseable + ": parse the schema"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -272,8 +276,102 @@ func TestAudit_ASuppliedSchemaThatCannotBeUsed_Fails(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Audit() error = nil, want one naming %q", testCase.want)
 			}
-			if !strings.Contains(err.Error(), testCase.want) {
-				t.Errorf("Audit() error = %q, want it to name %q", err, testCase.want)
+			if !strings.HasPrefix(err.Error(), testCase.want) {
+				t.Errorf("Audit() error = %q, want it to open with %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestAudit_AnUnusableSchemaOverAnUnloadableTree_ReportsTheSchema verifies the
+// order the two halves of an audit fail in.
+//
+// The schema is resolved before the tree is type-checked, so a mistyped
+// -schema fails in milliseconds rather than after the seconds a load costs.
+// Every other test of either failure passes the other half in working order,
+// which leaves that order unobserved: the refusal a reader gets would be the
+// same whichever ran first.
+func TestAudit_AnUnusableSchemaOverAnUnloadableTree_ReportsTheSchema(t *testing.T) {
+	_, err := Audit(Options{
+		Dir:        filepath.Join(t.TempDir(), "nowhere"),
+		Patterns:   []string{"./..."},
+		SchemaPath: filepath.Join(t.TempDir(), "absent.graphql"),
+	})
+
+	if err == nil {
+		t.Fatal("Audit() error = nil, want the unreadable schema")
+	}
+	if !strings.HasPrefix(err.Error(), "read the schema to judge against: ") {
+		t.Errorf("Audit() error = %q, want the schema's failure rather than the load's", err)
+	}
+}
+
+// TestJudge_WhichSchemaJudges_FollowsTheDocumentedPrecedence verifies the three
+// sources a schema can come from and the one line that says which of them
+// judged.
+//
+// A schema value wins over a path, and a path wins over the pin; a provenance
+// is the caller's to write only beside a value, since only the caller knows
+// what it introspected, and without one it would put a caller's words under
+// the pin's judgement. The document is one the pin accepts and the narrowed
+// schema refuses, so the refusal count says which schema judged as well as the
+// provenance does, and each case is compared as that pair.
+func TestJudge_WhichSchemaJudges_FollowsTheDocumentedPrecedence(t *testing.T) {
+	const sdl = "type Query {\n  ok: Boolean\n}\n"
+	narrowedPath := filepath.Join(t.TempDir(), "narrow.graphql")
+	if err := os.WriteFile(narrowedPath, []byte(sdl), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	narrowed, err := graphqlschema.Load([]byte(sdl))
+	if err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	pin, err := graphqlschema.SourceInfo()
+	if err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	const callerLine = "3 types from a probe this test ran"
+	documents := []Document{{Package: "sdk", Name: "currentUser", Text: "query { currentUser { id } }"}}
+
+	type verdict struct {
+		provenance string
+		refusals   int
+	}
+	cases := []struct {
+		name string
+		opts Options
+		want verdict
+	}{
+		{name: "nothing named", opts: Options{}, want: verdict{provenance: pin.String()}},
+		{
+			name: "a provenance with no schema beside it",
+			opts: Options{Provenance: callerLine},
+			want: verdict{provenance: pin.String()},
+		},
+		{
+			name: "a path",
+			opts: Options{SchemaPath: narrowedPath},
+			want: verdict{provenance: fmt.Sprintf("%d types from %s, not the pinned schema", len(narrowed.Types), narrowedPath), refusals: 1},
+		},
+		{
+			name: "a value",
+			opts: Options{Schema: narrowed, Provenance: callerLine},
+			want: verdict{provenance: callerLine, refusals: 1},
+		},
+		{
+			name: "a value beside a path that cannot be read",
+			opts: Options{Schema: narrowed, Provenance: callerLine, SchemaPath: filepath.Join(t.TempDir(), "absent.graphql")},
+			want: verdict{provenance: callerLine, refusals: 1},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, judgeErr := Judge(documents, testCase.opts)
+			if judgeErr != nil {
+				t.Fatalf("Judge() error = %v, want nil", judgeErr)
+			}
+			if got := (verdict{provenance: result.Provenance, refusals: len(result.Refusals)}); got != testCase.want {
+				t.Errorf("Judge() = %+v, want %+v", got, testCase.want)
 			}
 		})
 	}

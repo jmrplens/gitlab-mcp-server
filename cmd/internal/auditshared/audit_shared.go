@@ -13,8 +13,10 @@ import (
 )
 
 // genericUsageRe matches the placeholder Usage template ("Use to execute …
-// action.") that indicates the action has no curated usage text.
-var genericUsageRe = regexp.MustCompile(`(?i)^use to execute\b.*\baction\.?\s*$`)
+// action.") that indicates the action has no curated usage text. It is only
+// matched against text IsGenericUsage has already trimmed, so it allows no
+// surrounding whitespace of its own.
+var genericUsageRe = regexp.MustCompile(`(?i)^use to execute\b.*\baction\.?$`)
 
 // IsGenericUsage reports whether the Usage string is the placeholder template
 // or empty.
