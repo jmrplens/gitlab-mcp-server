@@ -136,16 +136,24 @@ func TestClassifySent_NothingStale_ReportsNilRatherThanAnEmptyList(t *testing.T)
 // main.
 //
 // The bar is the one the type's own comment sets. Every entry names a package,
-// an object and a field or the star; the category comes from the closed set,
+// an object and a field or the star; the package is a domain under
+// internal/tools or internal/toolutil itself, which declares the shapes two
+// domains decode through one struct; the category comes from the closed set,
 // since a category invented at the call site is a vocabulary rather than a
 // decision; the reason is prose a reviewer can judge rather than a word; and
 // no two entries share a key, because the second would be reported stale
 // forever while answering exactly what the first answers.
 func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 	categories := map[string]bool{
-		categoryNotThisResponse: true,
-		categoryLookup:          true,
-		categoryDeprecated:      true,
+		categoryNotThisResponse:    true,
+		categoryLookup:             true,
+		categoryDeprecated:         true,
+		categoryExperiment:         true,
+		categorySeparateAction:     true,
+		categoryPublishedElsewhere: true,
+		categoryAffordance:         true,
+		categoryUnusedIdentifier:   true,
+		categoryRecursiveShape:     true,
 	}
 	seen := map[string]bool{}
 
@@ -154,11 +162,11 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 			if declaration.Package == "" || declaration.SchemaType == "" || declaration.Field == "" {
 				t.Errorf("the declaration leaves part of its key empty: %+v", declaration)
 			}
-			if !strings.HasPrefix(declaration.Package, toolsDir+"/") {
-				t.Errorf("package = %q, want a package under %s", declaration.Package, toolsDir)
+			if !strings.HasPrefix(declaration.Package, toolsDir+"/") && declaration.Package != toolutilDir {
+				t.Errorf("package = %q, want a package under %s or %s itself", declaration.Package, toolsDir, toolutilDir)
 			}
 			if !categories[declaration.Category] {
-				t.Errorf("category = %q, want one of the three this table defines", declaration.Category)
+				t.Errorf("category = %q, want one of the %d this table defines", declaration.Category, len(categories))
 			}
 			if len(declaration.Reason) < 80 {
 				t.Errorf("reason = %q, which is too short to judge whether it still holds", declaration.Reason)
