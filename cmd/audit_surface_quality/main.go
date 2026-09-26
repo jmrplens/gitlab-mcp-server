@@ -112,22 +112,34 @@ func auditViews(view string) int {
 	return failed
 }
 
-// listTools returns the tool list one surface advertises at the widest tier,
-// from [mcpsurface], which registers what cmd/server registers and applies the
-// served-schema chain, so the audit judges the schemas clients actually see.
+// listSurface is where both views and the edition-tier rule read a surface
+// from: the meta surface when meta is true and the individual one otherwise,
+// as tier is served it, from [mcpsurface], which registers what cmd/server
+// registers and applies the served-schema chain, so the audit judges the
+// schemas clients actually see.
+//
+// It is a variable so a test can hand the views a listing that carries a
+// violation of every rule, which the served surface, carrying none, cannot.
+// Until it was, a rule dropped from either view, or handed the other
+// surface or the other surface's label, failed no test.
+var listSurface = func(client *gitlabclient.Client, tier edition.Tier, meta bool) []*mcp.Tool {
+	if meta {
+		return mcpsurface.MetaTools(client, tier)
+	}
+	return mcpsurface.IndividualTools(client, tier)
+}
+
+// listTools returns the tool list one surface advertises at the widest tier.
 // When meta is true the meta surface is listed instead of the individual one.
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	if meta {
-		return mcpsurface.MetaTools(client, edition.Ultimate)
-	}
-	return listIndividualTools(client, edition.Ultimate)
+	return listSurface(client, edition.Ultimate, meta)
 }
 
 // listIndividualTools returns the individual surface as one tier is served
 // it. The listing is memoized per tier, so the edition-tier rule reading all
 // three costs three registrations and no more.
 func listIndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
-	return mcpsurface.IndividualTools(client, tier)
+	return listSurface(client, tier, false)
 }
 
 // reportGate prints the violations one view gates on, and returns how many
