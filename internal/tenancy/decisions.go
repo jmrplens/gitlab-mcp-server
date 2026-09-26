@@ -75,6 +75,7 @@ const (
 	pkgElicitation   = "internal/elicitation"
 	pkgCacheHints    = "internal/cachehints"
 	pkgClientCompat  = "internal/clientcompat"
+	pkgCompletions   = "internal/completions"
 	pkgTools         = "internal/tools"
 	pkgVisibility    = "internal/tools/toolvisibility"
 	pkgDynamic       = "internal/tools/dynamic"

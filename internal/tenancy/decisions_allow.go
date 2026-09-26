@@ -44,9 +44,12 @@ func allowDecisions() []Decision {
 			// Which methods draw on the bucket is MeterFor's answer.
 			Functions: []string{"MeterFor"},
 			Source:    Configurable, Flags: []string{"--rate-limit-rps", "--rate-limit-burst"},
-			Envs:   []string{"GITLAB_MCP_RATE_LIMIT_RPS", "GITLAB_MCP_RATE_LIMIT_BURST"},
+			Envs: []string{"GITLAB_MCP_RATE_LIMIT_RPS", "GITLAB_MCP_RATE_LIMIT_BURST"},
+			// A zero rate switches the bucket off. A zero burst beside a positive
+			// rate is refused at startup by both validators rather than meaning
+			// off, the INV-015 departure F-34 records (issue 958).
 			Config: []string{"RateLimitRPS", "RateLimitBurst"}, Malformed: RefuseStartup, Zero: ZeroOff,
-			Findings: []string{"F-01", "F-02", "F-19", "F-20", "F-21", "F-32"},
+			Findings: []string{"F-01", "F-02", "F-19", "F-20", "F-21", "F-32", "F-34"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Prefix: "rate limit exceeded for ",
@@ -67,6 +70,8 @@ func allowDecisions() []Decision {
 				alias(pkgToolutil, "rateLimitedErrorCode", "CodeTooManyRequests"),
 				enforce(pkgToolutil, "NewRateLimiter"),
 				enforce(pkgToolutil, "AttachRateLimitFunc"),
+				enforce(pkgToolutil, "ValidateRateLimit"),
+				enforce(pkgConfig, "Config.validateDurationsAndRates"),
 				enforce(pkgServer, "serverShell.newCredentialState"),
 				refuse(pkgToolutil, "RateLimitRefusalPrefix"),
 				refuse(pkgToolutil, "rateLimitRetrySuffix"),
@@ -240,11 +245,20 @@ func allowDecisions() []Decision {
 			Values:   []string{"WatchersPerCredential"}, Source: Constant, Zero: ZeroSelectsDefault,
 			AtCapacity: ReclaimOwnThenRefuse,
 			Findings:   []string{"F-05", "F-07", "F-21", "F-34"},
-			Refusals:   []Refusal{watcherRefusal},
+			// Reclaiming ends the longest-demoted watch of the same manager,
+			// whose listens are told so.
+			Refusals: []Refusal{
+				watcherRefusal,
+				listenEnd("watcher_evicted", StartOver, refuse(pkgServer, "endOfWatcherEviction")),
+			},
+			// The manager is built per credential in newRuntime, which is what
+			// keys the ceiling on the entry.
 			Sites: []Site{
 				alias(pkgSubscriptions, "DefaultMaxWatchers", "WatchersPerCredential"),
 				enforce(pkgSubscriptions, "Manager.Subscribe"),
+				enforce(pkgSubscriptions, "Manager.evictDemotedLocked"),
 				enforce(pkgSubscriptions, "Options.withDefaults"),
+				enforce(pkgServer, "subscriptionShape.newRuntime"),
 				tooMany, wire,
 			},
 		},

@@ -35,7 +35,8 @@ type Carriage struct {
 
 // Carriages returns the carried-channel matrix.
 //
-// Three rows record narrowing rather than refusal: a listing may leave out
+// Three channels record narrowing rather than refusal, on the tools/list and
+// tools/call rows: a listing may leave out
 // what the authorization on the request does not reach (Absent), and a call
 // for such an action is answered with its cause (Withheld) or, for the tier,
 // as unknown (Unknown). The listing may vary with the authorization and never

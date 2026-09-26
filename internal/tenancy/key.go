@@ -29,8 +29,9 @@ const (
 	// KeyTenant is the pair (canonical instance URL, GitLab user id)
 	// (TEN-001).
 	KeyTenant
-	// KeyVerified is the (instance, token) pair the OAuth identity cache and
-	// the rejected-token cache are keyed on (ADM-002, ADM-005).
+	// KeyVerified is the (instance, token) pair the OAuth identity cache is
+	// keyed on (ADM-002, ADM-003, ADM-005). The rejected-token cache hashes
+	// the same pair, and is [KeyRefused]'s (ADM-006).
 	KeyVerified
 	// KeyApplication is the OAuth application uid a token was issued to
 	// (TEN-004).
@@ -173,7 +174,10 @@ func (k Key) info() keyInfo {
 			name: "entry", axis: AxisRequester, mint: MintCredential, unit: UnitCredential,
 			evidence: "As a credential: one entry per credential per instance. The instance half is the " +
 				"operator's published list, and several published instances do not multiply keys, " +
-				"because the credential is verified against the one the request selected (issue 540).",
+				"because the credential is verified against the one the request selected (issue 540). " +
+				"Under --allow-any-gitlab-url (DST-002, loopback only) nothing is published and the " +
+				"caller names the instance, so one credential mints one entry per instance it names " +
+				"that the pool builds an entry for.",
 			derivation: []Site{
 				derive(pkgPool, "sessionKey"),
 				derive(pkgPool, "canonicalHost"),

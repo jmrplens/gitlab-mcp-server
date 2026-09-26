@@ -34,33 +34,46 @@
 //     Enforce sites.
 //   - G6 orphans. Every exported constant of the register's value and code
 //     files is read by a declared Alias or Arg site and by something outside
-//     the register; every exported function of its rule files is named by a
-//     row.
+//     the register; every declared Alias is read by code other than an alias
+//     initializer, directly or through a chain of aliases, so an enforcing
+//     site that goes back to a literal leaves its alias unread and fails;
+//     every exported function of its rule files is named by a row.
 //   - G7 charges. Every refusal the authentication failure table's functions
 //     return is matched to one row by its status and text, and is charged
-//     exactly when a call of the charge helper precedes it in its own block;
-//     the calls that spend a budget are made only from the charge helpers.
+//     exactly when a call of the charge helper precedes it in its own block or
+//     in a block enclosing it; the calls that spend a budget are made only
+//     from the charge helpers; and each failure agrees with its row's gate
+//     refusal of the same status and prefix, which names a budget exactly when
+//     the failure is charged.
 //   - G8 refusal. Every refusal's stable text begins a string its code folds
 //     (a format read up to its first verb), and the literal that carries it
 //     has the row's status, code, Retry-After source and challenge; a JSON-RPC
-//     refusal carries the row's code, and a tool-error refusal's result is
-//     flagged as an error.
+//     refusal carries the row's code, read from the case that names its
+//     sentinel where its holder switches on one, and a tool-error refusal's
+//     result is flagged as an error. Every gate literal of a function that
+//     holds a declared gate refusal is carried exactly by one of them, so a
+//     sibling of the same status cannot stand in for a literal that drifted.
 //   - G9 reason. Every quoted reason still appears in the doc comment of the
 //     declaration it names, or of the block around it.
-//   - G10 tripwire. A limit constructor, a refusal literal that reads as a
-//     limit's, and a package-level name that reads as a limit (in every
-//     package the register's value and enforcing sites are in) each sit in a
-//     declared site or are answered by the exemption table.
+//   - G10 tripwire. A limit constructor or a literal of a limit's options
+//     type sits in a declared Enforce site, with no literal or undeclared
+//     package value among its inputs; a refusal literal that reads as a
+//     limit's, and a 429 or 503 written with http.Error or WriteHeader, is
+//     the refusal a row declares in its function, by code or by status; and a
+//     package-level name that reads as a limit (in every package the
+//     register's value and enforcing sites are in) is a declared site. Each
+//     is otherwise answered by the exemption table.
 //   - G11 validate. The register's own validators accept it.
 //   - G12 leaf. The register imports only the packages the server already
-//     imports and declares no package-level variable, the conditions the
-//     code-identity proof rests on.
+//     imports and declares no package-level variable and no init function,
+//     the conditions the code-identity proof rests on.
 //   - G13 share words. A number on a key a caller can mint is not described
 //     as fair, a quota or an entitlement, unless its row carries the finding
 //     that records it.
 //   - G14 config. Every variable a row names is on the configuration
-//     package's list of prefixed names and read by nothing else, unless its
-//     row carries the finding that records it.
+//     package's list of prefixed names and read by nothing else (os.Getenv,
+//     os.LookupEnv, their syscall twins, and a template os.ExpandEnv
+//     expands), unless its row carries the finding that records it.
 //
 // Where a finding excuses a rule (G13, G14), a row carrying that finding
 // while the rule would pass has a finding that no longer describes the tree,
@@ -84,18 +97,23 @@
 // ./cmd/server and ./internal/..., loaded through cmd/internal/goprogram
 // without test files, with the test-support packages the server never links
 // left out. A refusal-shaped literal in those answers no caller of the
-// server.
+// server. The load names linux/amd64 whatever the host is, so the verdict is
+// the same on every machine that runs it; a file constrained to another
+// platform is not read.
 //
-// It is a gate, not a proof. A new limit that uses none of the listed
-// constructors, refuses with a code outside the policy set or not at all,
-// has no lexicon word in its name, and lives in a package no row names,
-// escapes G10, and only review sees it. G14 cannot trace a variable read
-// through a name that does not fold. G7 binds a charge to a return by
-// position, so a charge moved into a helper the table does not name fails
-// rather than passing, and the finding names the position rather than the
-// policy. A rule row's logic is declared by symbol, so G1 fails when the
-// symbol disappears and nothing fails when its logic changes; that is what
-// promoting a rule into the register exists for.
+// It is a gate, not a proof. A new limit escapes G10, and only review sees it,
+// when it uses none of the listed constructors or options types, refuses
+// through none of the three literal types and no 429 or 503 status write (or
+// not at all), and is named in a way part (c) does not read: with no lexicon
+// word, in a package no row names, or as a value local to a function, which
+// part (c) never reads (revalidateAll's ten seconds a probe is one, stated in
+// ADM-009 and bound by no row value). G14 cannot trace a variable read through
+// a name that does not fold. G7 binds a charge to a return by position, so a
+// charge moved into a helper the table does not name fails rather than
+// passing, and the finding names the position rather than the policy. A rule
+// row's logic is declared by symbol, so G1 fails when the symbol disappears
+// and nothing fails when its logic changes; that is what promoting a rule
+// into the register exists for.
 //
 // # Code identity
 //

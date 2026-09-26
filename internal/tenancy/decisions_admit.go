@@ -6,10 +6,13 @@ package tenancy
 // Origin and Host guards, the authentication failure budgets that run before a
 // tenant exists, and the destination rules at the door.
 //
-// Every refusal here is written by the gate or the bearer guard in front of
-// the SDK, which is the only place a status other than 400 or 404 can be
+// Every gate refusal here is written by the gate or the bearer guard in front
+// of the SDK, which is the only place a status other than 400 or 404 can be
 // chosen (PAT-004). Which of them charge the failure budgets is [Failures]'s
-// to say, one row per return.
+// to say, one row per return. The admission rows also end the listens of an
+// entry they evict or revoke (ADM-008 to ADM-010), refuse to start a
+// deployment whose escape hatch is reachable (DST-002), and stop counting a
+// new address silently once a tracking table is full (AUB-004).
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func admitDecisions() []Decision {
@@ -77,6 +80,7 @@ func admitDecisions() []Decision {
 			Sites: []Site{
 				alias(pkgServer, "upstreamRetryAfter", "UpstreamRetryAfter"),
 				enforce(pkgOAuth, "NewGitLabVerifierFor"),
+				enforce(pkgOAuth, "NewGitLabVerifier"),
 				classify, invalidToken, check,
 			},
 		},
@@ -171,10 +175,16 @@ func admitDecisions() []Decision {
 			Key:      KeyEntry, StdioKey: KeyNone,
 			Values: []string{"CredentialMaxAge", "CredentialMaxAgeCeiling"}, Source: OptionOnly, Zero: ZeroSelectsDefault,
 			Findings: []string{"F-16", "F-34"},
+			// An entry past the age is evicted on its next request, and its
+			// open listens are told the credential was reset.
+			Refusals: []Refusal{
+				listenEnd("credential_reset", StartOver, refuse(pkgServer, "endOfCredentialReset")),
+			},
 			Sites: []Site{
 				alias(pkgPool, "DefaultMaxCredentialAge", "CredentialMaxAge"),
 				alias(pkgPool, "maxCredentialAgeCeiling", "CredentialMaxAgeCeiling"),
 				enforce(pkgPool, "WithMaxCredentialAge"),
+				enforce(pkgPool, "ServerPool.evictStaleCredential"),
 			},
 		},
 		{
@@ -263,7 +273,6 @@ func admitDecisions() []Decision {
 				alias(pkgConfig, "DefaultAuthFailureWindow", "AuthFailureWindow"),
 				alias(pkgConfig, "MaxAuthFailureLimit", "AuthFailureLimitMax"),
 				alias(pkgConfig, "MaxAuthFailureWindow", "AuthFailureWindowMax"),
-				alias(pkgServer, "authFailureLimit", "AuthFailureLimit"),
 				alias(pkgServer, "authFailureWindow", "AuthFailureWindow"),
 				alias(pkgServer, "errCodeUnauthorized", "CodeUnauthorized"),
 				alias(pkgServer, "errCodeForbidden", "CodeForbidden"),
@@ -277,10 +286,16 @@ func admitDecisions() []Decision {
 			ID: "AUB-002", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
 			Resource: "distinct failing primary keys one transport source may produce in a window",
 			Key:      KeySource, StdioKey: KeyNone,
+			// The pairs already charged are remembered in a map keyed on the
+			// source and the primary key, both of which a caller mints. A
+			// source stops adding pairs once it is blocked, but a source that
+			// arrives after the limiter's table is full is never blocked, so
+			// nothing but the sweep bounds the map (F-29, issue 950).
+			Table:  true,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
 			// Whether the budget exists is TransportSourceBudgetOn's answer.
 			Functions: []string{"TransportSourceBudgetOn"},
-			Findings:  []string{"F-16"},
+			Findings:  []string{"F-16", "F-29"},
 			Refusals:  blockedRefusals,
 			// The window falls back to the default when AUB-001's is zero, in
 			// three places kept in step by hand (issue 958). It is declared by
@@ -290,6 +305,7 @@ func admitDecisions() []Decision {
 				enforce(pkgServer, "transportFailureBudget"),
 				enforce(pkgServer, "newTransportBudget"),
 				enforce(pkgServer, "transportBudget.window"),
+				enforce(pkgServer, "transportBudget.charge"),
 				resolve, check,
 			},
 		},
@@ -326,18 +342,23 @@ func admitDecisions() []Decision {
 		},
 		{
 			ID: "AUB-004", Question: Admit, Kind: Ceiling, Class: ClassP, Disposition: Valued,
-			Resource: "addresses the authentication failure table tracks",
+			Resource: "addresses the authentication failure table and the distinct-credential address table each track",
 			Key:      KeyProcess, StdioKey: KeyNone,
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"AuthTrackedSources"}, Source: Constant, Zero: ZeroNotApplicable,
 			AtCapacity: StopCounting,
 			Findings:   []string{"F-11"},
+			// The one value caps both tables, and each stops counting a new
+			// address once it is full.
 			Refusals: []Refusal{
 				{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer, At: refuse(pkgPool, "AuthRateLimiter.RecordFailure")},
+				{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer, At: refuse(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked")},
 			},
 			Sites: []Site{
 				alias(pkgPool, "maxTrackedAuthSources", "AuthTrackedSources"),
+				enforce(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked"),
 				refuse(pkgPool, "AuthRateLimiter.RecordFailure"),
+				refuse(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked"),
 			},
 		},
 		{

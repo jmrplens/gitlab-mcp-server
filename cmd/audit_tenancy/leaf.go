@@ -10,7 +10,8 @@ import (
 
 // checkLeaf is G12: the register stays a leaf the server can import for free.
 // Its non-test files import only the packages the rules allow, each of which
-// the server already imports, and they declare no package-level variable.
+// the server already imports, and they declare no package-level variable and
+// no init function.
 //
 // Those are the conditions the code-identity proof rests on. A change that
 // replaces a literal with one of the register's constants claims that its
@@ -46,6 +47,12 @@ func (g *gate) checkLeaf() []Finding {
 				found = append(found, Finding{
 					Rule: "G12", Subject: g.reg.leaf, Position: g.p.position(gen.Pos()),
 					Message: "declares a package-level variable, which is initialization work in every binary that imports the register",
+				})
+			}
+			if fn, isFunc := decl.(*ast.FuncDecl); isFunc && fn.Recv == nil && fn.Name.Name == "init" {
+				found = append(found, Finding{
+					Rule: "G12", Subject: g.reg.leaf, Position: g.p.position(fn.Pos()),
+					Message: "declares an init function, which is initialization work in every binary that imports the register",
 				})
 			}
 		}

@@ -111,6 +111,49 @@ func TestCheckCharges_AChargeMovedBetweenBranches_FailsTwice(t *testing.T) {
 	)
 }
 
+// TestCheckCharges_AChargeHoistedAboveTheBranches_ChargesEveryRefusalBelowIt:
+// a charge made before a branch runs on every path into it, so each refusal
+// returned from a block after it is charged, however deeply nested. The three
+// the table calls uncharged fail; this is the shape of the charge the bearer
+// guard makes after its unaccepted-recipient branch, moved above it.
+func TestCheckCharges_AChargeHoistedAboveTheBranches_ChargesEveryRefusalBelowIt(t *testing.T) {
+	hoisted := strings.Replace(resolveBody, "\tif n == 1 {\n", "\tg.charge(token)\n\tif n == 1 {\n", 1)
+	report := fixture{files: map[string]string{"site/site.go": gateSource + hoisted}, fails: resolveFailures()}.run(t)
+	assertFindings(t, report, "G7",
+		siteDir+":gate.resolve blocked: is charged here, and the failure table says uncharged",
+		siteDir+":gate.resolve invalid: is charged here, and the failure table says uncharged",
+		siteDir+":gate.resolve upstream: is charged here, and the failure table says uncharged",
+	)
+}
+
+// TestCheckCharges_TheTableAndItsRowsAgreeOnWhatIsCharged: each failure is
+// held to its row's gate refusal of the same status and prefix. One the table
+// charges whose refusal names no budget, the reverse, and one whose row
+// declares no such gate refusal (a JSON-RPC refusal of that status is not one)
+// fail; a failure naming no row is left to ValidateFailures.
+func TestCheckCharges_TheTableAndItsRowsAgreeOnWhatIsCharged(t *testing.T) {
+	d := row("ROW-001")
+	d.Refusals = []tenancy.Refusal{
+		{Channel: tenancy.Gate, Status: 429, Prefix: "Too many attempts.", Charged: []string{"AUB-001"}},
+		{Channel: tenancy.Gate, Status: 401, Prefix: "Authentication required.", Charged: []string{"AUB-001"}},
+		{Channel: tenancy.Gate, Status: 400},
+		{Channel: tenancy.Gate, Status: 401, Prefix: "Rejected token."},
+		{Channel: tenancy.RPC, Status: 503, Prefix: "Upstream down."},
+	}
+	fails := resolveFailures()
+	for i := range fails {
+		fails[i].Decision = d.ID
+	}
+	fails[2].Decision = "ROW-404"
+	report := fixture{files: map[string]string{"site/site.go": gateSource + resolveBody}, rows: []tenancy.Decision{d}, fails: fails}.run(t)
+	key := siteDir + ":gate.resolve"
+	assertFindings(t, report, "G7",
+		key+" blocked: is uncharged in the failure table, and ROW-001's 429 refusal beginning \"Too many attempts.\" is charged",
+		key+" rejected: is charged in the failure table, and ROW-001's 401 refusal beginning \"Rejected token.\" is uncharged",
+		key+" upstream: names ROW-001, which declares no gate refusal of status 503 beginning \"Upstream down.\"",
+	)
+}
+
 // TestCheckCharges_WhatTheTableAndTheCodeDoNotShare_IsAFinding: a return no
 // row matches, a row no return matches, and a charge in a block no refusal
 // return follows (inside a loop, and inside a function literal) each fail.

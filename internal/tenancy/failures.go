@@ -15,8 +15,11 @@ type Failure struct {
 	// Attributable says the failure is the caller's doing: no credential, or a
 	// credential GitLab refused.
 	Attributable bool
-	// Charged says it is charged to AUB-001, AUB-003 and, behind a trusted
-	// proxy header, AUB-002.
+	// Charged says it is charged to the authentication budgets. Which of them
+	// is its row's refusal's to say ([Refusal.Charged]): a missing credential
+	// spends AUB-001 and AUB-002 and not AUB-003, which counts nothing for an
+	// empty credential, and a rejected one spends all three. The gate holds the
+	// two statements to each other (G7).
 	Charged bool
 	// Decision is the row whose refusal it is.
 	Decision string

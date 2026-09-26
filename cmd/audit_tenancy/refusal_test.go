@@ -107,6 +107,16 @@ func (g *gate) codeNotConstant(code int) *gateFailure {
 	return &gateFailure{status: 404, code: code, message: "Gone."}
 }
 
+func (g *gate) resolveMany(n int) *gateFailure {
+	switch n {
+	case 1:
+		return &gateFailure{status: 400, code: -32600, message: describe(n)}
+	case 2:
+		return &gateFailure{status: 400, code: -32600, message: describe(n)}
+	}
+	return &gateFailure{status: 400, code: -40300, message: describe(n), header: newHeader("Retry-After", itoa(upstreamRetryAfter))}
+}
+
 type holder struct{}
 `
 
@@ -320,6 +330,37 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 	)
 }
 
+// TestCheckRefusals_AGateLiteralNoRefusalCarries_IsAFinding: a function that
+// returns three refusals of one status with no stable text satisfies a row
+// with any one of them, so the literals are also read the other way. The one
+// whose code and headers no refusal declared there carries is a finding; once
+// a refusal carries it there is none; and a function one of whose refusals
+// already drifted is left to that refusal's finding.
+func TestCheckRefusals_AGateLiteralNoRefusalCarries_IsAFinding(t *testing.T) {
+	plain := gateAt("gate.resolveMany", 400, -32600, "")
+	retried := gateAt("gate.resolveMany", 400, -40300, "")
+	retried.RetryAfter = tenancy.RetryAfterFixed
+	drifted := gateAt("gate.resolveMany", 400, -32000, "")
+	key := siteDir + ":gate.resolveMany"
+	unaccounted := key + ": builds a 400 gate refusal that no refusal declared at this function carries exactly: its status, text, code or headers differ from every row's"
+	cases := []struct {
+		name     string
+		refusals []tenancy.Refusal
+		want     []string
+	}{
+		{"the sibling no row carries", []tenancy.Refusal{plain}, []string{unaccounted}},
+		{"every literal carried", []tenancy.Refusal{plain, retried}, nil},
+		{"a refusal that drifted", []tenancy.Refusal{plain, drifted}, []string{
+			"ROW-001 refusal 2 (http gate): " + key + " its code is -32600, and the register says -32000",
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertFindings(t, refusalFixture(t, tc.refusals...), "G8", tc.want...)
+		})
+	}
+}
+
 // TestCheckRefusals_RPCRefusals: a code that folds, a code held in a variable
 // and counted as every constant the function assigns it, and a holder that
 // is a variable, pass; a holder with no JSON-RPC literal, one whose literals
@@ -348,8 +389,16 @@ func TestCheckRefusals_RPCRefusals(t *testing.T) {
 		rpc("gate.missing", -40100, "", ""),
 		rpc("callCode", -32000, "", ""),
 		rpc("otherLiteral", -32000, "", ""),
+		// A holder that switches on the sentinel is judged by the case that
+		// names it: a sibling case's code does not carry it, and a sentinel
+		// no case names falls back to every code the holder assigns.
+		rpc("ErrTooMany", -32603, "", "wire"),
+		rpc("errPicked", -32000, "", "wire"),
+		rpc("errUnbound", -32603, "", "wire"),
 	)
 	assertFindings(t, report, "G8",
+		"ROW-001 refusal 12 (resources/read rpc): "+siteDir+":wire builds no JSON-RPC error carrying code -32603 (it carries [-32000])",
+		"ROW-001 refusal 13 (resources/read rpc): "+siteDir+":wire builds no JSON-RPC error carrying code -32000 (it carries [])",
 		"ROW-001 refusal 4 (resources/read rpc): no string "+siteDir+":busy folds begins with \"too many open streams (%s\"",
 		"ROW-001 refusal 5 (resources/read rpc): "+siteDir+":noLiteral builds no JSON-RPC error",
 		"ROW-001 refusal 6 (resources/read rpc): "+siteDir+":busy builds no JSON-RPC error carrying code -32602 (it carries [-32000])",

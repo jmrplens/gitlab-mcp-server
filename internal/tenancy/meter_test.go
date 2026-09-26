@@ -94,7 +94,7 @@ func spellings(method string) []string {
 // replaced on every method of both protocol revisions, requests and
 // notifications alike, on the empty method, and on each of them spelled in
 // another case or with whitespace around it. The mapping being identical is
-// the whole of why promoting it changed nothing (issue 565, plan L8).
+// the whole of why promoting it changed nothing (issue 565).
 func TestMeterFor_AgreesWithTheReplacedSwitch(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

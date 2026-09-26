@@ -7,11 +7,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
-// tripwireRules lists the fixture's own constructor beside the production
-// ones, so part (a) has something of the site package's to find.
+// tripwireRules lists the fixture's own constructor and options type beside
+// the production ones, so part (a) has something of the site package's to
+// find.
 func tripwireRules() *rules {
 	r := fixtureRules()
 	r.constructors = append(r.constructors, sitePath+".NewLimiter")
+	r.limitTypes = append(r.limitTypes, sitePath+".Options")
 	return &r
 }
 
@@ -28,6 +30,11 @@ type limiter struct{}
 func (limiter) Size() int { return 1 }
 
 func NewLimiter(rate, burst int, strict bool) *limiter { return &limiter{} }
+
+type Options struct {
+	Max   int
+	Lease time.Duration
+}
 
 const declared = 10
 
@@ -47,10 +54,12 @@ func Build(cfg config, l limiter) {
 	_ = make(chan struct{}, undeclared)
 	_ = make(chan struct{}, 5)
 	_ = NewLimiter(int(time.Nanosecond), n, false)
+	_ = Options{Max: cfg.Rate, Lease: time.Duration(n)}
 }
 
 func Loose(n int) {
 	_ = NewLimiter(n, n, false)
+	_ = Options{Max: 7}
 }
 
 func semaphores(n int) any {
@@ -78,15 +87,18 @@ func Use() chan struct{} {
 }
 `
 
-// TestCheckTripwire_Constructors: a limit built inside a declared site from
-// declared inputs, a configuration field (of a package variable too) and
-// locals passes; one built outside every site, a literal argument and an
-// undeclared package-level argument, a package variable's undeclared field
-// among them, fail; a make of a channel of empty structs with a capacity
-// other than 0 or 1 is a semaphore, and a function the program declares
-// called make is not the builtin.
+// TestCheckTripwire_Constructors: a limit built inside a declared Enforce site
+// from declared inputs, a configuration field (of a package variable too) and
+// locals passes, and so does a literal of a limit's options type built the
+// same way; one built outside every Enforce site (a site declared in another
+// role among them), a literal argument or field and an undeclared
+// package-level argument, a package variable's undeclared field among them,
+// fail; a make of a channel of empty structs with a capacity other than 0 or 1
+// is a semaphore, and a function the program declares called make is not the
+// builtin.
 func TestCheckTripwire_Constructors(t *testing.T) {
-	d := row("ROW-001", site("declared", tenancy.Enforce), site("declaredLimiter", tenancy.Enforce), site("Build", tenancy.Enforce))
+	d := row("ROW-001", site("declared", tenancy.Enforce), site("declaredLimiter", tenancy.Enforce), site("Build", tenancy.Enforce),
+		site("Loose", tenancy.Refuse))
 	d.Config = []string{"Rate"}
 	report := fixture{
 		files: map[string]string{"site/site.go": constructorSource, "other/other.go": shadowSource},
@@ -99,9 +111,11 @@ func TestCheckTripwire_Constructors(t *testing.T) {
 		siteDir+":Build: passes the literal 2 to "+sitePath+".NewLimiter",
 		siteDir+":Build: passes the literal 5 to make",
 		siteDir+":Build: passes "+siteDir+":settings, which no row declares to "+sitePath+".NewLimiter",
-		siteDir+":Loose: builds a limit with "+sitePath+".NewLimiter outside every declared site",
+		siteDir+":Loose: builds a limit with "+sitePath+".NewLimiter outside every declared Enforce site",
+		siteDir+":Loose: builds a limit with "+sitePath+".Options outside every declared Enforce site",
+		siteDir+":Loose: passes the literal 7 to "+sitePath+".Options",
 		siteDir+":declaredLimiter: passes the literal 1 to "+sitePath+".NewLimiter",
-		siteDir+":semaphores: builds a limit with make outside every declared site",
+		siteDir+":semaphores: builds a limit with make outside every declared Enforce site",
 	)
 }
 
@@ -149,25 +163,87 @@ func (g *gate) exempted() *gateFailure {
 }
 `
 
+// literalMessage is what part (b) says of a refusal literal no row declares.
+const literalMessage = "builds a refusal that reads as a limit's (a policy code, a code that is not constant, or a 429 or 503) that no refusal a row declares there carries"
+
 // TestCheckTripwire_RefusalLiterals: a policy code, a code that is not
 // constant and a 503 outside every site fail; a protocol code under a 400 and
-// a literal that sets no code pass; a literal in a declared site or an
-// exemption is answered.
+// a literal that sets no code pass; a literal the refusal a row declares
+// there carries, or an exemption, is answered.
 func TestCheckTripwire_RefusalLiterals(t *testing.T) {
+	d := row("ROW-001", site("gate.declared", tenancy.Refuse))
+	d.Refusals = []tenancy.Refusal{{Channel: tenancy.Gate, Status: 429, At: site("gate.declared", tenancy.Refuse)}}
 	report := fixture{
 		files:  map[string]string{"site/site.go": literalSource},
-		rows:   []tenancy.Decision{row("ROW-001", site("gate.declared", tenancy.Refuse))},
+		rows:   []tenancy.Decision{d},
 		exempt: map[string]exemption{siteDir + ":gate.exempted": {categoryServerState, "a fixture"}},
 	}.run(t)
 	// The shared gate's two constructors build a 401 and a 503 outside any
 	// site of this fixture's register, and are held to it like the rest.
-	message := "builds a refusal that reads as a limit's (a policy code, a code that is not constant, or a 429 or 503) outside every declared site"
 	assertFindings(t, report, "G10",
-		siteDir+":gate.outside: "+message, siteDir+":gate.outside: "+message, siteDir+":gate.outside: "+message,
-		siteDir+":gate.rejected: "+message, siteDir+":gate.upstream: "+message)
+		siteDir+":gate.outside: "+literalMessage, siteDir+":gate.outside: "+literalMessage, siteDir+":gate.outside: "+literalMessage,
+		siteDir+":gate.rejected: "+literalMessage, siteDir+":gate.upstream: "+literalMessage)
 	if len(report.Excused) != 1 || report.Excused[0].Part != partLiterals {
 		t.Fatalf("excused = %+v, want the one literal exemption", report.Excused)
 	}
+}
+
+// writerSource writes statuses outside a gate literal, and builds a JSON-RPC
+// refusal in a function a row declares a refusal of another code in.
+const writerSource = `package site
+
+import (
+	"net/http"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+)
+
+func tooMany(w http.ResponseWriter) { http.Error(w, "slow down", http.StatusTooManyRequests) }
+
+func draining(w http.ResponseWriter) { w.WriteHeader(http.StatusServiceUnavailable) }
+
+func fine(w http.ResponseWriter) { w.WriteHeader(http.StatusOK) }
+
+func echoed(w http.ResponseWriter, status int) { w.WriteHeader(status) }
+
+func overLimit() error { return &jsonrpc.Error{Code: -42900, Message: "over"} }
+`
+
+// TestCheckTripwire_ARefusalInADeclaredFunction_MustBeTheOneItDeclares: part
+// (b) asks whether the refusal a row declares in a function is the one its
+// literal builds, not whether the function is declared at all. A policy code
+// no refusal there carries fails even in a declared function, and so does a
+// code that is not constant beside a refusal that is no JSON-RPC one; the code
+// and the variable code a declared JSON-RPC refusal carries pass. A 429 or 503
+// written with http.Error or WriteHeader is held to a gate refusal of that
+// status the same way; another status, or one that is not constant, is not
+// read.
+func TestCheckTripwire_ARefusalInADeclaredFunction_MustBeTheOneItDeclares(t *testing.T) {
+	rpc := func(at, via string, channel tenancy.Channel, code int) tenancy.Refusal {
+		r := tenancy.Refusal{Channel: channel, Code: code, At: site(at, tenancy.Refuse)}
+		if via != "" {
+			r.Via = site(via, tenancy.Refuse)
+		}
+		return r
+	}
+	d := row("ROW-001", site("overLimit", tenancy.Enforce))
+	d.Refusals = []tenancy.Refusal{
+		rpc("busy", "", tenancy.RPC, -32000),
+		rpc("ErrTooMany", "wire", tenancy.RPC, -32000),
+		rpc("callCode", "", tenancy.ToolError, 0),
+		rpc("overLimit", "", tenancy.RPC, -32000),
+		{Channel: tenancy.Gate, Status: 503, At: site("draining", tenancy.Refuse)},
+	}
+	report := fixture{
+		files: map[string]string{"site/site.go": siteHeader, "site/rpc.go": rpcSource, "site/writers.go": writerSource},
+		rows:  []tenancy.Decision{d},
+	}.run(t)
+	assertFindings(t, report, "G10",
+		siteDir+":callCode: "+literalMessage,
+		siteDir+":globalCode: "+literalMessage,
+		siteDir+":overLimit: "+literalMessage,
+		siteDir+":tooMany: writes a 429 response that no refusal a row declares there carries",
+	)
 }
 
 // nameSource declares package-level names, some reading as a limit.

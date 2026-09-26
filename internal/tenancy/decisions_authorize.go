@@ -90,6 +90,12 @@ func authorizeDecisions() []Decision {
 			},
 		},
 		{
+			// AUTOPILOT sets it too, as the alias IsYOLOMode consults only when
+			// GITLAB_MCP_YOLO_MODE is unset. It is left out of Envs on purpose:
+			// it is a convention other agent tooling sets, one of the three
+			// groups deliberately kept bare, and Envs holds the variables this
+			// project defines, which carry the prefix and are read through
+			// internal/config (INV-017, G14).
 			ID: "AUT-005", Question: Authorize, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "whether a destructive action asks for confirmation",
 			Key:      KeyProcess, StdioKey: KeyProcess,

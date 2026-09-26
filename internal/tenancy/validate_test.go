@@ -414,7 +414,7 @@ func TestValidate_RefusesAShareOnTheTenantWithItsEvidence(t *testing.T) {
 func TestValidate_ReportsEverySetRule(t *testing.T) {
 	ds := append(Decisions(), Decisions()[0])
 	err := Validate(ds)
-	if err == nil || !strings.Contains(err.Error(), "IDN-001: unique (spec 3.2): declared twice") {
+	if err == nil || !strings.Contains(err.Error(), "IDN-001: unique (one row per requirement): declared twice") {
 		t.Errorf("Validate with a duplicate row = %v", err)
 	}
 }

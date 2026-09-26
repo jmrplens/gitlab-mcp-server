@@ -9,20 +9,23 @@ import (
 	"time"
 )
 
-// frozenValue is one policy value as it stood at cb6379f53, the commit the
-// specification is dated to, with the dynamic type it takes when assigned to
-// an interface: int for an untyped integer, float64 for an untyped float and
-// time.Duration where the site multiplied by a time unit.
+// frozenValue is one policy value pinned: the number the register holds it to,
+// with the dynamic type it takes when assigned to an interface: int for an
+// untyped integer, float64 for an untyped float and time.Duration where the
+// site multiplied by a time unit.
 type frozenValue struct {
 	name string
 	got  any
 	want any
 }
 
-// frozenValues is the table a deliberate change of value edits: the constant
-// in values.go and its line here, two lines in one package (INV-021). Each
-// literal is copied from spec section 3.2, with END-005 and HLD-007's polling
-// cadence from the amendment that answered the plan's question Q7.
+// frozenValues is the table of current pins, and the table a deliberate change
+// of value edits: the constant in values.go and its line here, two lines in
+// one package (INV-021). The pins taken when the register landed are the
+// values as they stood at cb6379f53, the commit the dated record
+// (plan/issue-565/spec.md) is dated to, each copied from its section 3.2, with
+// END-005 and HLD-007's polling cadence from its amendment G-18. A limit added
+// later brings its own pin in the change that adds it.
 func frozenValues() []frozenValue {
 	return []frozenValue{
 		{"ListenStreamsPerCredential", ListenStreamsPerCredential, 64},
@@ -90,11 +93,11 @@ func frozenValues() []frozenValue {
 	}
 }
 
-// TestValues_AtCB6379F53 holds every policy value to the number, and the type,
-// it had when the specification was written. A value that changes here without
-// its own pull request is a change of policy riding in on something else,
-// which is what issue 565 exists to stop.
-func TestValues_AtCB6379F53(t *testing.T) {
+// TestValues_HoldTheirPins holds every policy value to the number, and the
+// type, its pin says. A value that changes here without its own pull request
+// is a change of policy riding in on something else, which is what issue 565
+// exists to stop.
+func TestValues_HoldTheirPins(t *testing.T) {
 	for _, v := range frozenValues() {
 		t.Run(v.name, func(t *testing.T) {
 			if v.got != v.want {

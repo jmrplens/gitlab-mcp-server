@@ -103,6 +103,12 @@ func identifyDecisions() []Decision {
 					Prefix: "this subscription could not be attributed to a credential", Answer: RetryLater,
 					At: refuse(pkgServer, "errUnboundSubscribe"),
 				},
+				// Autocomplete is never blocked, so the unattributed completion
+				// is answered empty and said only in the log.
+				{
+					Methods: []string{"completion/complete"}, Channel: EmptyCompletion, Answer: RetryLater,
+					At: refuse(pkgCompletions, "Handler.Complete"),
+				},
 			},
 			Sites: []Site{
 				enforce(pkgServer, "serverShell.defaultCredentialState"),
@@ -110,6 +116,7 @@ func identifyDecisions() []Decision {
 				refuse(pkgToolutil, "UnattributedRequestMessage"),
 				refuse(pkgToolutil, "UnattributedRequestError"),
 				refuse(pkgServer, "errUnboundSubscribe"),
+				refuse(pkgCompletions, "Handler.Complete"),
 			},
 		},
 		{

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"os"
 	"slices"
 	"strings"
 
@@ -13,10 +14,11 @@ import (
 // checkConfig is G14, INV-017's central clause: a setting a row names is read
 // the way the configuration package reads one. Its name, without the prefix,
 // is on the configuration package's list of prefixed names, and nothing in the
-// program hands that name to os.Getenv or os.LookupEnv. A row with a variable
-// that fails either carries the finding that records it; a row carrying that
-// finding while every variable passes has a finding that no longer describes
-// the tree.
+// program hands that name to a direct reader (os.Getenv, os.LookupEnv and
+// their syscall twins) or names it in a template os.ExpandEnv reads. A row
+// with a variable that fails either carries the finding that records it; a row
+// carrying that finding while every variable passes has a finding that no
+// longer describes the tree.
 //
 // Validate cannot hold this, because the register imports nothing and so
 // cannot see the list or the calls. A register no row of which names a
@@ -90,18 +92,40 @@ func (g *gate) prefixedNames() ([]string, bool) {
 }
 
 // directEnvReads maps each variable name an environment read's argument folds
-// to onto the places it is read.
+// to onto the places it is read. An expander's argument is a template, and
+// every variable it names in $NAME or ${NAME} form is read.
 func (g *gate) directEnvReads() map[string][]string {
 	reads := map[string][]string{}
 	g.p.forEachCall(func(_ string, info *types.Info, call *ast.CallExpr) {
-		// Every reader takes the variable's name as its first argument.
-		callee := calleeOf(info, call)
-		if callee == nil || !slices.Contains(g.rules.envReaders, calleeName(callee)) {
+		// Every reader takes the variable's name, and every expander its
+		// template, as its first argument.
+		name := calleeName(calleeOf(info, call))
+		expands := slices.Contains(g.rules.envExpanders, name)
+		if !expands && !slices.Contains(g.rules.envReaders, name) {
 			return
 		}
-		if name, folds := constString(info, call.Args[0]); folds {
-			reads[name] = append(reads[name], g.p.position(call.Pos()))
+		arg, folds := constString(info, call.Args[0])
+		if !folds {
+			return
+		}
+		names := []string{arg}
+		if expands {
+			names = expandedNames(arg)
+		}
+		for _, env := range names {
+			reads[env] = append(reads[env], g.p.position(call.Pos()))
 		}
 	})
 	return reads
+}
+
+// expandedNames are the variables a template names, parsed the way os.Expand
+// parses it.
+func expandedNames(template string) []string {
+	var names []string
+	os.Expand(template, func(name string) string {
+		names = append(names, name)
+		return ""
+	})
+	return names
 }

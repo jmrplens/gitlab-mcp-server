@@ -17,7 +17,8 @@ import (
 // In each function the table names, every return of a refusal is matched to
 // one row by its status and, where its text folds, by the row's prefix, and it
 // is charged exactly when a call of the function's charge helper precedes it
-// in the same block. A return whose charged state differs from its row's, a
+// in the same block or in a block enclosing it. A return whose charged state
+// differs from its row's, a
 // return no row matches, a row no return matches, and a charge that no return
 // follows in its own block all fail. So a charge moved from one branch to its
 // sibling fails twice: the branch it left is charged in the table and not in
@@ -26,6 +27,11 @@ import (
 // The plumbing half holds the lower charges, the calls that actually spend a
 // budget, to the charge helpers: a charge made through anything else would not
 // be seen by the per-return half at all.
+//
+// The pairing half holds the table to the rows: the register states what a
+// refusal is charged twice, once as a failure's Charged and once as the
+// budgets its row's refusal names, and nothing else holds the two to each
+// other.
 func (g *gate) checkCharges() []Finding {
 	var order []string
 	byAt := map[string][]tenancy.Failure{}
@@ -40,7 +46,47 @@ func (g *gate) checkCharges() []Finding {
 	for _, key := range order {
 		found = append(found, g.chargeFindings(byAt[key], byAt)...)
 	}
+	found = append(found, g.pairingFindings()...)
 	return append(found, g.plumbingFindings()...)
+}
+
+// pairingFindings holds each failure whose row the register holds to that
+// row's refusals: one of them is a gate refusal with the failure's status and
+// prefix, and each such refusal names a budget exactly when the failure is
+// charged. A failure naming no row is ValidateFailures' finding, not this one.
+func (g *gate) pairingFindings() []Finding {
+	rows := map[string]tenancy.Decision{}
+	for _, d := range g.reg.decisions {
+		rows[d.ID] = d
+	}
+	var found []Finding
+	for _, f := range g.reg.failures {
+		d, isRow := rows[f.Decision]
+		if !isRow {
+			continue
+		}
+		subject := keyOf(f.At) + " " + f.Kind
+		paired := false
+		for _, r := range d.Refusals {
+			if r.Channel != tenancy.Gate || r.Status != f.Status || r.Prefix != f.Prefix {
+				continue
+			}
+			paired = true
+			if charged := len(r.Charged) > 0; charged != f.Charged {
+				found = append(found, Finding{
+					Rule: "G7", Subject: subject,
+					Message: fmt.Sprintf("is %s in the failure table, and %s's %d refusal beginning %q is %s", chargedWord(f.Charged), d.ID, f.Status, f.Prefix, chargedWord(charged)),
+				})
+			}
+		}
+		if !paired {
+			found = append(found, Finding{
+				Rule: "G7", Subject: subject,
+				Message: fmt.Sprintf("names %s, which declares no gate refusal of status %d beginning %q", d.ID, f.Status, f.Prefix),
+			})
+		}
+	}
+	return found
 }
 
 // refusalReturn is one return of a refusal, as G7 reads it.
@@ -92,7 +138,7 @@ func (g *gate) chargeFindings(rows []tenancy.Failure, delegates map[string][]ten
 		}
 		return true
 	})
-	w.block(decl.fn.Body.List)
+	w.block(decl.fn.Body.List, nil)
 	found := w.problems
 	for _, call := range w.charges {
 		if !w.placed[call] {
@@ -112,9 +158,12 @@ func (w *chargeWalk) isCharge(call *ast.CallExpr) bool {
 }
 
 // block walks one statement list: a charge call at this level marks every
-// refusal returned later in the same list as charged.
-func (w *chargeWalk) block(stmts []ast.Stmt) {
-	var charges []*ast.CallExpr
+// refusal returned later in the same list as charged, and so does a charge
+// made before it in an enclosing list, which runs on every path that reaches
+// a nested block. inherited holds those enclosing charges, so a charge hoisted
+// above a branch charges the refusal the branch returns.
+func (w *chargeWalk) block(stmts []ast.Stmt, inherited []*ast.CallExpr) {
+	charges := slices.Clone(inherited)
 	for _, st := range stmts {
 		if expr, isExpr := st.(*ast.ExprStmt); isExpr {
 			if call, isCall := ast.Unparen(expr.X).(*ast.CallExpr); isCall && w.isCharge(call) {
@@ -130,46 +179,47 @@ func (w *chargeWalk) block(stmts []ast.Stmt) {
 			}
 			continue
 		}
-		w.nested(st)
+		w.nested(st, charges)
 	}
 }
 
-// nested walks the blocks inside one statement. The body of a function
-// literal is another function's, and is not read.
-func (w *chargeWalk) nested(st ast.Stmt) {
+// nested walks the blocks inside one statement, handing each the charges made
+// before the statement. The body of a function literal is another function's,
+// and is not read.
+func (w *chargeWalk) nested(st ast.Stmt, charges []*ast.CallExpr) {
 	switch s := st.(type) {
 	case *ast.BlockStmt:
-		w.block(s.List)
+		w.block(s.List, charges)
 	case *ast.IfStmt:
-		w.block(s.Body.List)
+		w.block(s.Body.List, charges)
 		if s.Else != nil {
-			w.nested(s.Else)
+			w.nested(s.Else, charges)
 		}
 	case *ast.ForStmt:
-		w.block(s.Body.List)
+		w.block(s.Body.List, charges)
 	case *ast.RangeStmt:
-		w.block(s.Body.List)
+		w.block(s.Body.List, charges)
 	case *ast.SwitchStmt:
-		w.clauses(s.Body)
+		w.clauses(s.Body, charges)
 	case *ast.TypeSwitchStmt:
-		w.clauses(s.Body)
+		w.clauses(s.Body, charges)
 	case *ast.SelectStmt:
-		w.clauses(s.Body)
+		w.clauses(s.Body, charges)
 	case *ast.LabeledStmt:
-		w.nested(s.Stmt)
+		w.nested(s.Stmt, charges)
 	}
 }
 
 // clauses walks the case bodies of a switch or a select: a switch's are case
 // clauses, and a select's are communication clauses.
-func (w *chargeWalk) clauses(body *ast.BlockStmt) {
+func (w *chargeWalk) clauses(body *ast.BlockStmt, charges []*ast.CallExpr) {
 	for _, clause := range body.List {
 		if cc, isCase := clause.(*ast.CaseClause); isCase {
-			w.block(cc.Body)
+			w.block(cc.Body, charges)
 			continue
 		}
 		comm, _ := clause.(*ast.CommClause)
-		w.block(comm.Body)
+		w.block(comm.Body, charges)
 	}
 }
 

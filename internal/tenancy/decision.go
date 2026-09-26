@@ -465,7 +465,7 @@ type Decision struct {
 	// Zero is what a value of zero means.
 	Zero Zero
 	// OffWith is the ID of another row whose zero also switches this one off
-	// (AUB-003's step is AUB-001's window, F-34).
+	// (AUB-003's step is AUB-001's window, F-34, issue 958).
 	OffWith string
 	// AtCapacity is what happens when it is full.
 	AtCapacity Capacity

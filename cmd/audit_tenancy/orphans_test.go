@@ -31,7 +31,8 @@ var _ = 1
 `
 
 // orphanSource reads Limit and Ratio, and holds an Alias of Window that reads
-// something else, so Window is declared and still unread.
+// something else, so Window is declared and still unread. Enforce reads both
+// aliases, so neither is only an alias initializer's.
 const orphanSource = siteHeader + `
 const limit = leaf.Limit
 
@@ -42,6 +43,8 @@ const window = 30 * time.Second
 func Parse(fallback float64) float64 { return fallback }
 
 func Load() { _ = Parse(leaf.Ratio) }
+
+func Enforce() (int, time.Duration) { return limit, window }
 `
 
 // TestCheckOrphans_EveryRegisterValueHasAReader: a constant an Alias reads,
@@ -52,7 +55,7 @@ func TestCheckOrphans_EveryRegisterValueHasAReader(t *testing.T) {
 	d.Functions = []string{"Busy"}
 	report := fixture{
 		files: map[string]string{
-			"site/site.go":  orphanSource + "\nconst busy = leaf.CodeBusy\n",
+			"site/site.go":  orphanSource + "\nconst busy = leaf.CodeBusy\n\nfunc Refuse() int { return busy }\n",
 			"leaf/rules.go": orphanLeafRules,
 		},
 		rows:  []tenancy.Decision{d, row("ROW-002", aliasSite("busy", "CodeBusy"))},
@@ -86,6 +89,40 @@ func TestCheckOrphans_ARegisterValueNothingReads_IsAFinding(t *testing.T) {
 		leafDir+":CodeBusy: is a register value no Alias or Arg site reads",
 		leafDir+":Ratio: is a register value no Alias or Arg site reads",
 		leafDir+":Window: is a register value no Alias or Arg site reads",
+	)
+}
+
+// chainSource aliases two register values twice over. Limit's pair is read
+// only by each other's initializer, which is what a layer leaves when the
+// enforcing code goes back to a literal; Window's second alias is read by the
+// function that enforces it, which reads the first through it.
+const chainSource = siteHeader + `
+const limit = leaf.Limit
+
+const limitCopy = limit
+
+const window = leaf.Window
+
+const windowCopy = window
+
+func Enforce() time.Duration { return windowCopy }
+`
+
+// TestCheckOrphans_AnAliasOnlyAliasesRead_IsAFinding: an alias nothing but
+// another alias reads is unread however long the chain, and an alias read
+// through a chain that ends in code is read.
+func TestCheckOrphans_AnAliasOnlyAliasesRead_IsAFinding(t *testing.T) {
+	report := fixture{
+		files: map[string]string{"site/site.go": chainSource},
+		rows: []tenancy.Decision{row("ROW-001",
+			aliasSite("limit", "Limit"), aliasSite("limitCopy", "Limit"),
+			aliasSite("window", "Window"), aliasSite("windowCopy", "Window"),
+		)},
+	}.run(t)
+	unread := ", and nothing but an alias initializer reads it, so the code that enforces the decision no longer takes its value from the register"
+	assertFindings(t, report, "G6",
+		"ROW-001: "+siteDir+":limit aliases Limit"+unread,
+		"ROW-001: "+siteDir+":limitCopy aliases Limit"+unread,
 	)
 }
 

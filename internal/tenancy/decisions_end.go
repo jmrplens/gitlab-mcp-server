@@ -56,7 +56,7 @@ func endDecisions() []Decision {
 		},
 		{
 			// Surfaced by the gate rather than the inventory, and made a row by
-			// the answer to the plan's question Q7. Through the flag a zero
+			// the dated record's amendment G-18. Through the flag a zero
 			// leaves the SDK with no idle timeout; the environment variable is
 			// read by the parser every positive duration shares, which refuses
 			// a zero at startup. That second half is an INV-015 departure of

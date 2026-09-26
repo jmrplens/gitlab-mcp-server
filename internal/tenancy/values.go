@@ -33,10 +33,10 @@ const (
 	WatchSlowInterval = 10 * time.Minute
 	// WatchMaxLifetime is when a watch stops however it is used (HLD-007).
 	WatchMaxLifetime = 24 * time.Hour
-	// WatchBaseInterval is the poll a watch starts at (HLD-007; the cadence
-	// HLD-003's own reason is about).
+	// WatchBaseInterval is the poll a watch starts at (HLD-007).
 	WatchBaseInterval = 15 * time.Second
-	// WatchMinInterval is the fastest poll a watch may run at (HLD-007).
+	// WatchMinInterval is the fastest poll a watch may run at (HLD-007; the
+	// five-second floor HLD-003's own reason is sized against).
 	WatchMinInterval = 5 * time.Second
 	// WatchRateLimitPause is the first pause of every watcher of a manager
 	// that saw a GitLab 429 (RTC-005).
@@ -52,9 +52,11 @@ const (
 	// ToolCallRateHTTP is the tool-call bucket's refill, in requests a second,
 	// an HTTP deployment gets unless it says otherwise (RTC-001).
 	ToolCallRateHTTP = 10
-	// ToolCallRateEnvDefault is the refill stdio and the HTTP environment
-	// overlay get when nothing is set: zero, which switches the limiter off
-	// (RTC-001, CON-010).
+	// ToolCallRateEnvDefault is the refill stdio gets when nothing is set:
+	// zero, which switches the limiter off (RTC-001, CON-010). The HTTP
+	// environment overlay passes it too, but only as its parser's default for
+	// an empty value, which the overlay's presence check never lets through,
+	// so HTTP with nothing set keeps ToolCallRateHTTP.
 	ToolCallRateEnvDefault = 0
 	// ToolCallBurst is the tool-call bucket's size (RTC-001).
 	ToolCallBurst = 40
