@@ -786,6 +786,200 @@ func TestCompareMethod_FallsBackToP50WhenAP99WouldBeTheMaximum(t *testing.T) {
 	})
 }
 
+// TestComparabilityFailure_NamesTheRepetitionAndItsFigures verifies each reason
+// the arms cannot be compared names the repetition it was found in, counted
+// from one, and the figures behind it.
+//
+// The defect is put in the second repetition, behind a first that passes every
+// gate, so the number in the sentence is one no off-by-one reaches by accident;
+// and the whole sentence is compared, because the figures in it are what an
+// operator reruns the scenario with.
+func TestComparabilityFailure_NamesTheRepetitionAndItsFigures(t *testing.T) {
+	clean := []armFixture{saturated(armOn, 10), saturated(armOff, 20)}
+	withQuiet := func(arm string, quiet, noisy methodFixture) armFixture {
+		return armFixture{arm: arm, coresBusy: 6, quiet: []methodFixture{quiet}, noisy: []methodFixture{noisy}}
+	}
+	cases := []struct {
+		name   string
+		second []armFixture
+		want   string
+	}{
+		{
+			name: "one arm", second: []armFixture{saturated(armOff, 20)},
+			want: "repetition 2 did not run both arms",
+		},
+		{
+			name:   "a control the arm failed",
+			second: []armFixture{{arm: armOff, notes: []string{"a first note", "a second"}}, saturated(armOn, 10)},
+			want:   "repetition 2, the off arm: a first note; a second",
+		},
+		{
+			name: "a schedule the driver could not send",
+			second: []armFixture{
+				withQuiet(armOff, methodFixture{method: methodToolsCall, intended: 200, dropped: 40, served: 160, p99: 20}, noisyAt(1000, 0)),
+				saturated(armOn, 10),
+			},
+			want: "repetition 2, the off arm: the driver could not send 40 of the quiet population's tools/call requests, " +
+				"so its distribution is over what the driver managed rather than what it intended",
+		},
+		{
+			name: "a population that mostly never completed",
+			second: []armFixture{
+				withQuiet(armOff, methodFixture{method: methodToolsCall, intended: 160, served: 3, timedOut: 157, p99: 1900}, noisyAt(1000, 0)),
+				saturated(armOn, 10),
+			},
+			want: "repetition 2, the off arm: 3 of the quiet population's 160 dispatched tools/call requests completed (2%), " +
+				"below the 75% a comparison of served percentiles needs; what survived a phase that lost most of the population " +
+				"is not that population's experience",
+		},
+		{
+			name:   "a population one arm did not drive",
+			second: []armFixture{saturated(armOff, 20), {arm: armOn, coresBusy: 6, dropQuiet: true, noisy: []methodFixture{noisyAt(1000, 0)}}},
+			want:   "repetition 2: the arms did not drive the same populations",
+		},
+		{
+			name:   "a method one arm did not drive",
+			second: []armFixture{withQuiet(armOff, quietAt(methodToolsList, 20), noisyAt(1000, 0)), saturated(armOn, 10)},
+			want:   "repetition 2: the arms did not drive tools/list for the quiet population",
+		},
+		{
+			name: "different work in front of the server",
+			second: []armFixture{
+				withQuiet(armOff, quietAt(methodToolsCall, 20), noisyAt(1000, 0)),
+				withQuiet(armOn, quietAt(methodToolsCall, 10), noisyAt(400, 0)),
+			},
+			want: "repetition 2: the noisy population dispatched 1000 tools/call requests with the bound off and 400 with it on, " +
+				"more than the 10% the arms may differ by; the two arms did not offer the server the same work",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := comparabilityFailure(fairnessDocOf(8, clean, tc.second)); got != tc.want {
+				t.Errorf("comparabilityFailure = %q\nwant %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("a refused quiet tenant", func(t *testing.T) {
+		refused := methodFixture{method: methodToolsCall, intended: 200, served: 195, refused: 5, p50: 5, p99: 10, latenessP99: 0.1}
+		doc := fairnessDocOf(8, clean, []armFixture{saturated(armOff, 20), withQuiet(armOn, refused, noisyAt(1000, 0))})
+		want := "repetition 2: the bound refused 5 of the quiet population's 200 tools/call requests. " +
+			"The tenant this bound exists to protect was the one it turned away"
+		if got := quietRegression(doc); got != want {
+			t.Errorf("quietRegression = %q\nwant %q", got, want)
+		}
+	})
+}
+
+// TestFairnessGates_AdmitWhatSitsExactlyOnTheirLimit verifies each gate that
+// compares a figure with a limit admits the figure equal to it: a quiet
+// population whose served share is exactly the survivorship floor, a host
+// kept busy exactly as far as the saturation floor asks, a claim exactly as
+// large as the driver's own lateness shift or the spread between repetitions
+// read as the refusal each limit states, and a sample count exactly at the
+// p99 minimum compared on the p99.
+func TestFairnessGates_AdmitWhatSitsExactlyOnTheirLimit(t *testing.T) {
+	t.Run("the survivorship floor", func(t *testing.T) {
+		atFloor := armFixture{arm: armOn, quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 150, timedOut: 50}}}.build()
+		if got := quietSurvived(0, atFloor); got != "" {
+			t.Errorf("quietSurvived = %q at 150 of 200 served, want the 75%% floor itself admitted", got)
+		}
+	})
+	t.Run("the saturation floor", func(t *testing.T) {
+		doc := fairnessDocOf(8, []armFixture{atLoad(armOff, saturationFloor*8, 20), atLoad(armOn, 3, 10)})
+		if got := saturationFailure(doc); got != "" {
+			t.Errorf("saturationFailure = %q with the off arm at exactly the floor, want it admitted", got)
+		}
+	})
+	t.Run("a claim no larger than the spread is not a direction", func(t *testing.T) {
+		direction, reason := decide(FairnessComparison{DeltasMs: []float64{2, 2}, MedianDeltaMs: 2, SpreadMs: 2})
+		if direction != directionIndistinguishable {
+			t.Errorf("decide = %q (%s), want a claim equal to the spread indistinguishable", direction, reason)
+		}
+	})
+	t.Run("a claim no larger than the driver's shift is not the server's", func(t *testing.T) {
+		direction, reason := decide(FairnessComparison{DeltasMs: []float64{3, 3}, MedianDeltaMs: 3, SpreadMs: 1, LatenessShiftMs: 3})
+		if direction != directionNotComparable {
+			t.Errorf("decide = %q (%s), want a claim equal to the driver's shift not comparable", direction, reason)
+		}
+	})
+	counted := func(arm string, served int) armFixture {
+		return armFixture{
+			arm: arm, coresBusy: 6,
+			quiet: []methodFixture{{method: methodToolsCall, intended: served, served: served, p50: 5, p99: 10, latenessP99: 0.1}},
+			noisy: []methodFixture{noisyAt(1000, 0)},
+		}
+	}
+	for _, tc := range []struct {
+		name     string
+		off, on  int
+		wantKind string
+	}{
+		{name: "the off arm exactly at the p99 minimum", off: p99MinSamples, on: 2 * p99MinSamples, wantKind: metricP99},
+		{name: "the on arm exactly at the p99 minimum", off: 2 * p99MinSamples, on: p99MinSamples, wantKind: metricP99},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := fairnessDocOf(8, []armFixture{counted(armOff, tc.off), counted(armOn, tc.on)})
+			if got := compareMethod(doc, methodToolsCall); got.Metric != tc.wantKind {
+				t.Errorf("metric = %q at %d and %d served, want %q", got.Metric, tc.off, tc.on, tc.wantKind)
+			}
+		})
+	}
+}
+
+// TestCompareMethod_LatenessShiftIsTheDifferenceBetweenTheArms verifies the
+// driver's lateness shift is how far its dispatch lateness moved between the
+// arms, not what the two came to together.
+func TestCompareMethod_LatenessShiftIsTheDifferenceBetweenTheArms(t *testing.T) {
+	late := func(arm string, lateness, p99 float64) armFixture {
+		return armFixture{
+			arm: arm, coresBusy: 6,
+			quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 200, p50: p99 / 2, p99: p99, latenessP99: lateness}},
+			noisy: []methodFixture{noisyAt(1000, 0)},
+		}
+	}
+	doc := fairnessDocOf(8,
+		[]armFixture{late(armOff, 3, 20), late(armOn, 1, 10)},
+		[]armFixture{late(armOn, 1, 10), late(armOff, 3, 20)})
+	if got := compareMethod(doc, methodToolsCall); got.LatenessShiftMs != 2 {
+		t.Errorf("LatenessShiftMs = %v with the lateness at 3 ms off and 1 ms on, want the 2 ms it moved", got.LatenessShiftMs)
+	}
+}
+
+// TestMethodPairs_ARepetitionMissingTheMethodInOneArm_IsNoPair verifies a
+// repetition that issued a method in one arm only contributes no pair, rather
+// than a pair whose other half is a record of nothing.
+func TestMethodPairs_ARepetitionMissingTheMethodInOneArm_IsNoPair(t *testing.T) {
+	doc := fairnessDocOf(8, []armFixture{
+		{arm: armOff, coresBusy: 6, quiet: []methodFixture{quietAt(methodToolsCall, 20)}},
+		{arm: armOn, coresBusy: 6, quiet: []methodFixture{quietAt(methodToolsList, 10)}},
+	})
+	if pairs := methodPairs(doc, methodToolsCall); len(pairs) != 0 {
+		t.Errorf("methodPairs = %+v, want none from a repetition whose on arm never issued the method", pairs)
+	}
+}
+
+// TestDriverConfound_QuotesWhatEachProcessHandedBack verifies the sentence
+// names the cores the driver and the server each freed between the arms, and
+// that a lone arm is never read as the other having freed everything.
+func TestDriverConfound_QuotesWhatEachProcessHandedBack(t *testing.T) {
+	doc := fairnessDocOf(8,
+		[]armFixture{atProcess(armOff, 5, 3, 20), atProcess(armOn, 3, 1, 10)},
+		[]armFixture{atProcess(armOn, 3, 1, 10), atProcess(armOff, 5, 3, 20)})
+	want := "the driver handed back 2.00 of the host's cores with the bound in force against the 2.00 the server itself handed back"
+	if got := driverConfound(doc); !strings.HasPrefix(got, want) {
+		t.Errorf("driverConfound = %q, want it to begin %q", got, want)
+	}
+
+	// Alone, this arm's driver would read as having freed its two cores
+	// against the one core of its server, which is the confound's sentence
+	// about an arm that has no counterpart to have freed anything against.
+	lone := fairnessDocOf(8, []armFixture{atProcess(armOff, 1, 2, 20)})
+	if got := driverConfound(lone); got != "" {
+		t.Errorf("driverConfound = %q over a lone arm, want nothing", got)
+	}
+}
+
 // TestDecide_RefusesToJudgeASingleRepetition verifies the direct guard, which
 // the assembled verdict reaches only through a document that lost an arm.
 func TestDecide_RefusesToJudgeASingleRepetition(t *testing.T) {
@@ -822,6 +1016,9 @@ func TestDiverged_IsSymmetricAndAnswersForTwoEmptyCounts(t *testing.T) {
 	}{
 		{name: "nothing either way", a: 0, b: 0, want: false},
 		{name: "within the tolerance", a: 100, b: 95, want: false},
+		// The tolerance is how far the counts may differ, so a difference of
+		// exactly that much is still one experiment.
+		{name: "exactly the tolerance", a: 100, b: 90, want: false},
 		{name: "beyond it", a: 100, b: 80, want: true},
 		{name: "beyond it, the other way round", a: 80, b: 100, want: true},
 	}
@@ -1020,14 +1217,19 @@ func TestWriteFairness_ReportsWhatItCouldNotWrite(t *testing.T) {
 // TestSettingsFor_AndBoundRecord_RecordWhatWasActuallyInForce verifies the
 // document carries the switches rather than only the bound's name, so a reader
 // can see what the two arms really differed by.
+//
+// The settings are compared whole: the fixture's phase, lead-in and deadline
+// are two seconds, four seconds and one second, so a figure taken from its
+// neighbor, or a deadline written in seconds where milliseconds belong, shows.
 func TestSettingsFor_AndBoundRecord_RecordWhatWasActuallyInForce(t *testing.T) {
 	plan, err := fairnessPlanFor(fairnessOptions())
 	if err != nil {
 		t.Fatalf("fairnessPlanFor: %v", err)
 	}
 	settings := settingsFor(plan)
-	if settings.Surface != surfaceDynamic || settings.PhaseSeconds != 2 || settings.Repeats != 2 {
-		t.Errorf("settings = %+v, want the plan's own knobs", settings)
+	want := FairnessSettings{Surface: surfaceDynamic, PhaseSeconds: 2, LeadInSeconds: 4, DeadlineMs: 1000, Repeats: 2}
+	if settings != want {
+		t.Errorf("settings = %+v, want the plan's own knobs %+v", settings, want)
 	}
 	record := boundRecord(plan)
 	if record.ID != "tools-call-rps" || len(record.ArgsOn) == 0 || len(record.ArgsOff) == 0 {

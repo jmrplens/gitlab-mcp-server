@@ -203,6 +203,13 @@ func TestQuickMatrix_IsSmallerAndStillTwoTransports(t *testing.T) {
 	if seriesCount != 1 {
 		t.Errorf("the quick matrix holds %d series, want one", seriesCount)
 	}
+	// Compared above against the constant it reads, which says nothing about
+	// the constant: a smoke step still runs beside a CPU profile, and
+	// net/http/pprof samples whole seconds, so a step of less than one would
+	// end before the profile it started.
+	if quickStepDuration < time.Second {
+		t.Errorf("the smoke series steps for %s, want at least the one whole second a profile samples", quickStepDuration)
+	}
 }
 
 // TestParseSteps_AcceptsAscendingCountsOnly verifies the -clients list is

@@ -377,6 +377,37 @@ func TestRenderAll_WritesEveryArtifactAndThenAgreesWithItself(t *testing.T) {
 	})
 }
 
+// TestRenderAll_SaysWhetherItChangedAnything verifies a redraw reports the
+// files it rewrote, and a second redraw over its own output says there was
+// nothing to rewrite.
+//
+// The report is the only account a maintainer gets of what a regeneration
+// touched, and it is read to decide whether there is anything to commit: a
+// run that rewrote the pages and said they were already current would send a
+// stale set to review as though nothing had moved.
+func TestRenderAll_SaysWhetherItChangedAnything(t *testing.T) {
+	root, opts := renderTree(t)
+	run := sampleRun()
+
+	first := captureStdout(t, func() {
+		if err := renderAll(opts, root, run); err != nil {
+			t.Errorf("renderAll: %v", err)
+		}
+	})
+	if !strings.Contains(first, "updated ") || !strings.Contains(first, "- "+filepath.FromSlash(opts.docPage)+"\n") || strings.Contains(first, "already current") {
+		t.Errorf("the first redraw printed %q, want the files it updated, the page among them", first)
+	}
+
+	second := captureStdout(t, func() {
+		if err := renderAll(opts, root, run); err != nil {
+			t.Errorf("renderAll again: %v", err)
+		}
+	})
+	if !strings.Contains(second, "already current") || strings.Contains(second, "updated ") {
+		t.Errorf("a redraw over its own output printed %q, want it to say everything was already current", second)
+	}
+}
+
 // TestRenderAll_MissingStylesheet_NamesWhatItCouldNotRead verifies the failure
 // says which input was missing, since renderAll reads several and an
 // unqualified "no such file" would not say which.
@@ -637,7 +668,11 @@ func TestMibFine_KeepsWhatWholeNumbersWouldRoundAway(t *testing.T) {
 		{name: "not taken", value: 0, want: "n/a"},
 		{name: "a small heap", value: 0.384, want: "0.38"},
 		{name: "under ten", value: 9.5, want: "9.50"},
+		// Each band starts at its own figure: ten is already a two-digit
+		// figure and a hundred a three-digit one.
+		{name: "exactly ten", value: 10, want: "10.0"},
 		{name: "under a hundred", value: 40.53, want: "40.5"},
+		{name: "exactly a hundred", value: 100, want: "100"},
 		{name: "a resident set", value: 2104.6, want: "2105"},
 	}
 	for _, tc := range cases {

@@ -31,11 +31,102 @@ func setArgs(t *testing.T, args ...string) {
 	os.Args = append([]string{"bench_resources"}, args...)
 }
 
+// captureStdout runs fn with the process's standard output pointed at a pipe
+// and returns what it printed. The package's tests run one at a time, so the
+// global can be swapped here, and os.Stdout is the stream the test binary does
+// not reassign after start-up.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create a pipe for standard output: %v", err)
+	}
+	previous := os.Stdout
+	t.Cleanup(func() { os.Stdout = previous })
+	printed := make(chan string, 1)
+	go func() {
+		data, _ := io.ReadAll(reader)
+		_ = reader.Close()
+		printed <- string(data)
+	}()
+	func() {
+		os.Stdout = writer
+		defer func() {
+			os.Stdout = previous
+			_ = writer.Close()
+		}()
+		fn()
+	}()
+	return <-printed
+}
+
+// finishWithin runs fn on a goroutine of its own and fails the test if it has
+// not returned within limit.
+//
+// For the phases of this harness that end by construction: one that stops
+// advancing hangs rather than fails, and a hang is reported by the test
+// binary's own timeout minutes later with no test named. fn only computes; the
+// assertions stay on the test goroutine, after it returns.
+func finishWithin(t *testing.T, limit time.Duration, what string, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+	case <-time.After(limit):
+		t.Fatalf("%s did not finish within %s", what, limit)
+	}
+}
+
 // withArgs runs parseFlags against a command line installed by setArgs.
 func withArgs(t *testing.T, args ...string) options {
 	t.Helper()
 	setArgs(t, args...)
 	return parseFlags()
+}
+
+// TestExecute_RenderAndCheck_NeverMeasure verifies a redraw and a check read
+// the record they are given and start nothing.
+//
+// The binary named here does not exist, so a mode that measured would fail at
+// once rather than overwrite the record with a run nobody asked for: -check is
+// the CI gate, and a gate that measured would take the host's own figures for
+// the committed ones. First in the file on purpose, so it answers before the
+// test below drives main with -render and would spend minutes measuring.
+func TestExecute_RenderAndCheck_NeverMeasure(t *testing.T) {
+	root, tree := renderTree(t)
+	record := filepath.Join(root, "record.json")
+	if err := writeRun(record, sampleRun()); err != nil {
+		t.Fatalf("write the record: %v", err)
+	}
+	before := readFileForTest(t, record)
+	opts := options{
+		record:     record,
+		recordSet:  true,
+		binary:     filepath.Join(t.TempDir(), "no-such-server"),
+		docCharts:  filepath.Join(root, filepath.FromSlash(tree.docCharts)),
+		siteCharts: filepath.Join(root, filepath.FromSlash(tree.siteCharts)),
+		docPage:    filepath.Join(root, filepath.FromSlash(tree.docPage)),
+		sitePageEN: filepath.Join(root, filepath.FromSlash(tree.sitePageEN)),
+		sitePageES: filepath.Join(root, filepath.FromSlash(tree.sitePageES)),
+	}
+
+	redraw := opts
+	redraw.render = true
+	if err := execute(redraw); err != nil {
+		t.Errorf("execute (render): %v", err)
+	}
+	check := opts
+	check.check = true
+	if err := execute(check); err != nil {
+		t.Errorf("execute (check) over what the redraw wrote: %v", err)
+	}
+	if after := readFileForTest(t, record); after != before {
+		t.Error("the record changed under a redraw and a check, which read it and nothing else")
+	}
 }
 
 // TestParseFlags_RecordsWhetherTheOutputPathWasChosen verifies -json is
@@ -500,9 +591,20 @@ func TestMeasure_QuickMatrix_ProducesOneScenarioPerPlan(t *testing.T) {
 	opts := quickOptions(t, root)
 	opts.rounds = 7 // the smoke matrix pins one round, and the record must say so
 
-	run, err := measure(opts, root)
+	var run *Run
+	var err error
+	// Every phase of the smoke matrix is bounded, so a measurement that has
+	// not ended in two minutes is one that stopped advancing.
+	printed := captureStdout(t, func() {
+		finishWithin(t, 2*time.Minute, "the smoke measurement", func() { run, err = measure(opts, root) })
+	})
 	if err != nil {
 		t.Fatalf("measure: %v", err)
+	}
+	// The progress lines count the plans from one, so the last reads n of n
+	// and a reader can tell how far a run that takes minutes has got.
+	if !strings.Contains(printed, "[1/") || strings.Contains(printed, "[0/") {
+		t.Errorf("measure printed %q, want its progress counted from [1/", printed)
 	}
 	if got, want := len(run.Scenarios), len(pointPlans(quickMatrix(testSettings(1)))); got != want {
 		t.Fatalf("recorded %d scenarios, want %d", got, want)

@@ -75,6 +75,10 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("boundByID: %v", err)
 	}
+	listen, err := boundByID("listen-streams")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
 
 	cases := []struct {
 		name     string
@@ -100,11 +104,24 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 			refusals: bucket.Refusals, want: outcomeFailed,
 		},
 		{
+			// The code as the server writes it (internal/toolutil's
+			// rateLimitedErrorCode), not this package's name for it, so the
+			// name is held to the wire rather than to itself.
 			name: "a refused listing carries the code instead", method: methodToolsList,
 			err: fmt.Errorf("tools/list: %w", rpcError{
-				Code: rateLimitCode, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
+				Code: -42900, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
 			}),
 			refusals: listing.Refusals, want: outcomeRefused,
+		},
+		{
+			// cmd/server's codeServerBusy, which the listen ceiling refuses
+			// with: a different number from the buckets', written literally
+			// for the same reason as the case above.
+			name: "a refused stream carries the server-busy code", method: methodSubscriptionsListen,
+			err: fmt.Errorf("subscriptions/listen: %w", rpcError{
+				Code: -32000, Message: "too many open subscriptions/listen streams for this credential",
+			}),
+			refusals: listen.Refusals, want: outcomeRefused,
 		},
 		{
 			name: "the address lockout carries the same code at another status", method: methodToolsList,
@@ -232,6 +249,11 @@ func TestFairnessPlanFor_BuildsTheComparisonTheFlagsAskFor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fairnessPlanFor: %v", err)
 	}
+	// The surface first and the bound after it, the order the run's progress
+	// line and its scenario are named in.
+	if plan.ID != "fairness-dynamic-tools-call-rps" {
+		t.Errorf("plan ID = %q, want fairness-dynamic-tools-call-rps", plan.ID)
+	}
 	if plan.Quiet.Credentials != 2 || plan.Noisy.Credentials != 1 {
 		t.Errorf("populations = %d quiet and %d noisy, want 2 and 1", plan.Quiet.Credentials, plan.Noisy.Credentials)
 	}
@@ -293,6 +315,86 @@ func TestFairnessPlan_Validate_RefusesAPlanThatWouldMeasureSomethingElse(t *test
 				t.Errorf("fairnessPlanFor = %v, want an error about %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestFairnessPlan_Validate_AcceptsAPlanOnEachBoundary verifies each limit the
+// plan is held to admits the value that sits exactly on it: a lead-in exactly
+// as long as the burst takes to drain, a quiet population offering exactly the
+// share of the bound it may take, and no lead-in at all where there is no
+// burst to drain.
+//
+// These are the values an operator reaches by working the arithmetic out, so
+// refusing them would refuse the one plan that followed the rule precisely.
+func TestFairnessPlan_Validate_AcceptsAPlanOnEachBoundary(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(*options)
+	}{
+		// Forty requests of burst against the twenty a second offered above
+		// the bucket's ten drain in exactly two seconds.
+		{name: "a lead-in exactly as long as the drain", edit: func(o *options) { o.fairnessLeadIn = 2 * time.Second }},
+		// Half of the quiet verbs are metered, so ten a second offers five,
+		// which is half the bucket's ten: the most a quiet tenant may take.
+		{name: "a quiet population exactly at its share", edit: func(o *options) { o.fairnessQuietRate = 10 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := fairnessOptions()
+			opts.fairnessNoisyRate = 30
+			tc.edit(&opts)
+			if _, err := fairnessPlanFor(opts); err != nil {
+				t.Errorf("fairnessPlanFor = %v, want a plan on the boundary accepted", err)
+			}
+		})
+	}
+
+	t.Run("no lead-in where there is no burst", func(t *testing.T) {
+		plan := fairnessPlan{
+			Surface: surfaceDynamic,
+			Bound: boundSpec{
+				Refusals:   []refusalSpec{{Status: httpOK, TextPrefix: "quota reached", Method: methodToolsCall}},
+				QuietVerbs: []string{verbCall}, NoisyVerbs: []string{verbCall},
+			},
+			Quiet:    populationSpec{Name: populationQuiet, Credentials: 1, Rate: 4, Verbs: []string{verbCall}},
+			Noisy:    populationSpec{Name: populationNoisy, Credentials: 1, Rate: 40, Verbs: []string{verbCall}},
+			Phase:    2 * time.Second,
+			LeadIn:   0,
+			Deadline: time.Second,
+			Repeats:  1,
+		}
+		if err := plan.validate(); err != nil {
+			t.Errorf("validate = %v, want a bound with no bucket to need no lead-in", err)
+		}
+	})
+}
+
+// TestParseFlags_FairnessDefaults_MakeAPlanThatValidates verifies a fairness
+// run started with nothing but the bound's name is one the plan accepts.
+//
+// The defaults are compared against themselves everywhere else; what makes
+// them right is that together they describe a run that measures something: a
+// lead-in that outlasts the shipped bucket's burst at the default noisy rate,
+// and a deadline a request can be answered inside.
+func TestParseFlags_FairnessDefaults_MakeAPlanThatValidates(t *testing.T) {
+	opts := withArgs(t, "-fairness=tools-call-rps")
+	if _, err := fairnessPlanFor(opts); err != nil {
+		t.Errorf("fairnessPlanFor over the flag defaults = %v, want a plan the defaults can run", err)
+	}
+}
+
+// TestPopulationSpec_Schedule_SpacesAndBoundsTheRequests verifies the two
+// numbers a credential's schedule is built from: the interval between its
+// requests is a second over its rate, and the requests it may hold in flight
+// are twice what that rate accumulates inside one deadline.
+func TestPopulationSpec_Schedule_SpacesAndBoundsTheRequests(t *testing.T) {
+	pop := populationSpec{Rate: 5}
+	if got := pop.period(); got != 200*time.Millisecond {
+		t.Errorf("period = %s at five a second, want 200ms", got)
+	}
+	plan := fairnessPlan{Deadline: 2 * time.Second}
+	if got := plan.inFlight(pop); got != 20 {
+		t.Errorf("inFlight = %d at five a second over a two-second deadline, want twice the ten it can accumulate", got)
 	}
 }
 
@@ -417,6 +519,19 @@ func TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant(t *testing.T) 
 		plan := fairnessPlan{Bound: boundSpec{}, Quiet: populationSpec{Rate: 1000, Verbs: []string{verbCall}}}
 		if err := plan.quietIsQuiet(); err != nil {
 			t.Errorf("quietIsQuiet = %v, want no ceiling where the bound meters no rate", err)
+		}
+	})
+	// Under the cap the rate is a quarter of what the bound meters, spread over
+	// the share of the quiet verbs it meters: a bound metering four a second,
+	// every quiet verb of it, leaves a quiet tenant one.
+	t.Run("a quarter of what the bound meters", func(t *testing.T) {
+		bound := boundSpec{
+			Bucket:     &bucketSpec{Rate: 4, Burst: 40},
+			Refusals:   []refusalSpec{{Status: httpOK, TextPrefix: "x", Method: methodToolsCall}},
+			QuietVerbs: []string{verbCall},
+		}
+		if got := bound.quietRate(); got != 1 {
+			t.Errorf("quietRate = %g, want a quarter of the 4 a second the bound meters", got)
 		}
 	})
 	t.Run("a bound whose quiet verbs it never meters", func(t *testing.T) {

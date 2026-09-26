@@ -378,7 +378,7 @@ func renderBars(p palette, spec barSpec) string {
 	// is a legitimate state: a filtered run measures some surfaces and not
 	// others. Both scales need a floor and a ceiling that exist, or the log
 	// axis walks decades from 1e308 forever.
-	if minValue == math.MaxFloat64 || minValue <= 0 {
+	if minValue == math.MaxFloat64 {
 		minValue = 1
 	}
 	if maxValue <= 0 {

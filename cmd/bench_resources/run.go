@@ -330,8 +330,7 @@ func settledRSS(s *sampler) uint64 {
 	for time.Now().Before(deadline) {
 		time.Sleep(step)
 		current := sampleRSS(s)
-		if previous > 0 && current > 0 &&
-			math.Abs(float64(current)-float64(previous)) <= tolerance*float64(previous) {
+		if previous > 0 && math.Abs(float64(current)-float64(previous)) <= tolerance*float64(previous) {
 			return current
 		}
 		previous = current

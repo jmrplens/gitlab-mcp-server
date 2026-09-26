@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -87,7 +89,12 @@ func TestDrive_KeepsServedAndRefusedApartPerPopulation(t *testing.T) {
 		return nil
 	}}
 	tally := newFairTally(call, plan.Bound.Refusals)
-	drive(t.Context(), plan, []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}, call, plan.ticks, tally)
+	// A 40 ms phase at a hundred requests a second is four ticks a credential;
+	// a schedule that has not landed them in ten seconds is not spacing them
+	// by the population's period.
+	finishWithin(t, 10*time.Second, "a 40 ms phase", func() {
+		drive(t.Context(), plan, []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}, call, plan.ticks, tally)
+	})
 
 	populations := tally.populations(plan)
 	if len(populations) != 2 || populations[0].Name != populationQuiet {
@@ -136,7 +143,9 @@ func TestDrive_MeasuresLatencyFromTheIntendedInstant(t *testing.T) {
 	}
 	tally := newFairTally(call, nil)
 	verb := verbs[verbCall]
-	conn := &scriptedConn{}
+	// The call itself takes forty milliseconds, which belongs to the latency
+	// and not to the lateness.
+	conn := &scriptedConn{delay: 40 * time.Millisecond}
 	// An instant already thirty milliseconds in the past, which is what a
 	// driver that fell behind hands to its own request.
 	intended := time.Now().Add(-30 * time.Millisecond)
@@ -152,6 +161,12 @@ func TestDrive_MeasuresLatencyFromTheIntendedInstant(t *testing.T) {
 	}
 	if len(entry.lateness) != 1 || entry.lateness[0] < 30*time.Millisecond {
 		t.Errorf("lateness %v, want the driver's own delay recorded beside it", entry.lateness)
+	}
+	// The lateness ends where the send happened, so the call's own forty
+	// milliseconds are the difference between the two figures.
+	if len(entry.lateness) == 1 && entry.served[0]-entry.lateness[0] < 40*time.Millisecond {
+		t.Errorf("latency %s against lateness %s, want the call's %s in the one and not in the other",
+			entry.served[0], entry.lateness[0], 40*time.Millisecond)
 	}
 }
 
@@ -391,6 +406,151 @@ func TestFairnessProcess_PublishesProcessorTimePerServedRequestOnly(t *testing.T
 	}
 }
 
+// TestFairnessProcess_EveryFigureFromItsOwnSamples verifies the whole process
+// record of an arm, each figure computed from the samples it names: the
+// server's processor time and how busy it kept the host, the same two for the
+// driver, the cost per served request and the resident sets, every one a
+// different number so that none can be taken from its neighbor. With no wall
+// time behind the phase neither process is said to have kept the host busy.
+func TestFairnessProcess_EveryFigureFromItsOwnSamples(t *testing.T) {
+	ok := func(seconds float64) cpuSample { return cpuSample{seconds: seconds, ok: true} }
+	in := processInput{
+		serverStart: ok(1), serverEnd: ok(4), driverStart: ok(0), driverEnd: ok(1),
+		wall: 2 * time.Second, served: 10, peakRSS: 3 * 1024 * 1024, meanRSS: 2 * 1024 * 1024,
+	}
+	got, notes := fairnessProcess(in)
+	want := FairnessProcess{
+		PhaseSeconds: 2, RSSPeakMiB: 3, RSSMeanMiB: 2,
+		CPUSeconds: 3, CoresBusy: 1.5, CPUMsPerServed: 300,
+		DriverCPUSeconds: 1, DriverCoresBusy: 0.5,
+	}
+	if got != want || len(notes) != 0 {
+		t.Errorf("fairnessProcess = %+v, %v\nwant %+v and no notes", got, notes, want)
+	}
+
+	in.wall = 0
+	if still, _ := fairnessProcess(in); still.DriverCPUSeconds != 0 || still.DriverCoresBusy != 0 || still.CoresBusy != 0 {
+		t.Errorf("fairnessProcess over no wall time = %+v, want no processor figures from a phase that did not last", still)
+	}
+}
+
+// TestConsumed_NoTimeBetweenTwoAnsweredSamples_IsAMeasuredZero verifies two
+// answered samples reading the same time are a process that consumed nothing,
+// which is a figure, and not a platform that failed to answer.
+func TestConsumed_NoTimeBetweenTwoAnsweredSamples_IsAMeasuredZero(t *testing.T) {
+	delta, notes := consumed("server", cpuSample{seconds: 2, ok: true}, cpuSample{seconds: 2, ok: true})
+	if !delta.ok || delta.seconds != 0 || len(notes) != 0 {
+		t.Errorf("consumed = %+v, %v, want a measured zero and no note", delta, notes)
+	}
+}
+
+// TestMethodTally_Render_DispatchedIsEveryOutcome verifies the dispatched
+// count a method publishes is its four outcomes together, each a different
+// number here so that any one left out or taken away shows, and that each of
+// the three distributions is drawn from its own durations.
+func TestMethodTally_Render_DispatchedIsEveryOutcome(t *testing.T) {
+	tally := &methodTally{
+		detail: "d", intended: 12, dropped: 1,
+		counts:   map[string]int{outcomeServed: 5, outcomeRefused: 3, outcomeFailed: 2, outcomeTimedOut: 1},
+		served:   []time.Duration{50 * time.Millisecond},
+		refused:  []time.Duration{2 * time.Millisecond},
+		lateness: []time.Duration{5 * time.Millisecond},
+	}
+	got := tally.render(verbs[verbCall])
+	if got.Dispatched != 11 || got.Served != 5 || got.Refused != 3 || got.Failed != 2 || got.TimedOut != 1 ||
+		got.Intended != 12 || got.Dropped != 1 {
+		t.Errorf("render = %+v, want 11 dispatched from 5 served, 3 refused, 2 failed and 1 timed out, of 12 offered and 1 dropped", got)
+	}
+	if got.ServedLatency.P99 != 50 || got.RefusedLatency.P99 != 2 || got.Lateness.P99 != 5 {
+		t.Errorf("served, refused and lateness p99 = %v, %v and %v ms, want 50, 2 and 5 from their own durations",
+			got.ServedLatency.P99, got.RefusedLatency.P99, got.Lateness.P99)
+	}
+}
+
+// timedConn records when each of its calls arrived and answers at once.
+type timedConn struct {
+	mu    sync.Mutex
+	times []time.Time
+}
+
+func (c *timedConn) call(context.Context, string, map[string]any) ([]byte, error) {
+	c.mu.Lock()
+	c.times = append(c.times, time.Now())
+	c.mu.Unlock()
+	return []byte(`{"jsonrpc":"2.0","id":1,"result":{}}`), nil
+}
+
+func (c *timedConn) close() {}
+
+// arrivals is a copy of what the connection recorded.
+func (c *timedConn) arrivals() []time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.times)
+}
+
+// TestDrive_SpreadsEachPopulationAcrossOnePeriod verifies the schedule the
+// driver keeps: each credential's requests one period apart, the credentials
+// of a population spread evenly across one period, and each population's first
+// credential starting when the window does.
+//
+// A population whose credentials fired together would offer a burst per period
+// rather than a rate, and one whose ticks bunched up would offer the bound
+// something other than what the plan says it offers. The period is 400 ms so
+// that every wrong schedule is off by far more than a loaded host's jitter.
+func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
+	bound, err := boundByID("tools-call-rps")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
+	plan := fairnessPlan{
+		ID: "spread", Surface: surfaceDynamic, Bound: bound,
+		Quiet:    populationSpec{Name: populationQuiet, Credentials: 2, Rate: 2.5, Verbs: []string{verbCall}},
+		Noisy:    populationSpec{Name: populationNoisy, Credentials: 2, Rate: 2.5, Verbs: []string{verbCall}},
+		Phase:    1250 * time.Millisecond,
+		Deadline: time.Second,
+	}
+	call, err := callFor(plan.Surface)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	timed := []*timedConn{{}, {}, {}, {}}
+	conns := make([]*clientConn, 0, len(timed))
+	for i, conn := range timed {
+		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
+	}
+	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
+		drive(t.Context(), plan, conns, call, plan.ticks, newFairTally(call, plan.Bound.Refusals))
+	})
+
+	const period, half, slack = 400 * time.Millisecond, 200 * time.Millisecond, 80 * time.Millisecond
+	arrivals := make([][]time.Time, len(timed))
+	for i, conn := range timed {
+		arrivals[i] = conn.arrivals()
+	}
+	if len(arrivals[0]) == 0 {
+		t.Fatal("the first quiet credential made no request, so the window has no start to measure from")
+	}
+	start := arrivals[0][0]
+	// Credentials 0 and 1 are the quiet population, 2 and 3 the noisy one.
+	offsets := []time.Duration{0, half, 0, half}
+	for i, got := range arrivals {
+		t.Run("credential "+strconv.Itoa(i), func(t *testing.T) {
+			if len(got) != 3 {
+				t.Fatalf("made %d requests, want the 3 a 1.25 s phase at 2.5 a second holds", len(got))
+			}
+			for tick := 1; tick < len(got); tick++ {
+				if gap := got[tick].Sub(got[tick-1]); gap < period-slack || gap > period+slack {
+					t.Errorf("requests %d and %d were %s apart, want one period of %s", tick-1, tick, gap, period)
+				}
+			}
+			if offset := got[0].Sub(start); offset < offsets[i]-slack || offset > offsets[i]+slack {
+				t.Errorf("began %s into the window, want %s", offset, offsets[i])
+			}
+		})
+	}
+}
+
 // TestCheckArm_RefusesAnArmThatWasNotWhatItClaimed verifies the two controls.
 //
 // The positive control is the important one: a bound absent from the build, a
@@ -425,6 +585,24 @@ func TestCheckArm_RefusesAnArmThatWasNotWhatItClaimed(t *testing.T) {
 		_, err := checkArm(plan, withNoisy(armOn, token))
 		if !errors.Is(err, errBoundDidNotFire) {
 			t.Errorf("checkArm = %v, want a single refusal in a thousand refused as a bound that did not fire", err)
+		}
+		// The sentence says what share of the expected refusals the control
+		// asked for, which is the number a reader checks the verdict against.
+		if err == nil || !strings.Contains(err.Error(), "which is 50% of the") {
+			t.Errorf("checkArm = %v, want it to say the control asks for half of what the bound should refuse", err)
+		}
+	})
+	t.Run("the bound refused exactly what the control asks for", func(t *testing.T) {
+		floor := int(refusalFloor(plan))
+		atFloor := FairnessMethod{Method: methodToolsCall, Intended: 10, Dispatched: 10, Served: 10 - floor, Refused: floor}
+		if notes, err := checkArm(plan, withNoisy(armOn, atFloor)); err != nil || len(notes) != 0 {
+			t.Errorf("checkArm = %v, %v with %d refusals against a floor of %d, want the floor itself to pass", notes, err, floor, floor)
+		}
+	})
+	t.Run("a schedule whose drops account for what was not dispatched", func(t *testing.T) {
+		dropped := FairnessMethod{Method: methodToolsCall, Intended: 10, Dropped: 2, Dispatched: 8, Served: 8}
+		if notes, _ := checkArm(plan, withNoisy(armOff, dropped)); len(notes) != 0 {
+			t.Errorf("notes = %v, want none: eight dispatched of ten offered less two dropped ran to its end", notes)
 		}
 	})
 	t.Run("the bound was off and something refused anyway", func(t *testing.T) {
@@ -557,8 +735,12 @@ func TestRunFairness_MeasuresBothArmsAndWritesItsOwnDocument(t *testing.T) {
 	root := t.TempDir()
 	opts := smallFairnessOptions(binary, filepath.Join(root, "out", "fairness.json"))
 
-	if err := runFairness(opts, root); err != nil {
-		t.Fatalf("runFairness: %v", err)
+	// Both arms start a server and stop it; a stop that never returns would
+	// otherwise hold the package until the binary's own timeout.
+	var runErr error
+	finishWithin(t, 2*time.Minute, "a two-arm fairness run", func() { runErr = runFairness(opts, root) })
+	if runErr != nil {
+		t.Fatalf("runFairness: %v", runErr)
 	}
 	doc, err := readFairness(opts.fairnessJSON)
 	if err != nil {
@@ -685,8 +867,23 @@ func TestRunFairness_CounterbalancesTheArmsAcrossRepetitions(t *testing.T) {
 	opts := smallFairnessOptions(binary, filepath.Join(root, "two.json"))
 	opts.fairnessRepeats = 2
 
-	if err := runFairness(opts, root); err != nil {
-		t.Fatalf("runFairness: %v", err)
+	var runErr error
+	printed := captureStdout(t, func() { runErr = runFairness(opts, root) })
+	if runErr != nil {
+		t.Fatalf("runFairness: %v", runErr)
+	}
+	// The line each arm prints is what a reader watching a half-hour run has
+	// to go on, so it counts the repetitions and the arms from one and in the
+	// order they ran.
+	for _, want := range []string{
+		"  repeat 1, off arm (1 of 2)\n", "  repeat 1, on arm (2 of 2)\n",
+		"  repeat 2, on arm (1 of 2)\n", "  repeat 2, off arm (2 of 2)\n",
+	} {
+		t.Run(strings.TrimSpace(want), func(t *testing.T) {
+			if !strings.Contains(printed, want) {
+				t.Errorf("the run printed %q, want a line %q", printed, want)
+			}
+		})
 	}
 	doc, err := readFairness(opts.fairnessJSON)
 	if err != nil {

@@ -145,6 +145,10 @@ func TestLinearXTicks_ThinnedToWhatTheWidthCarries(t *testing.T) {
 		{name: "a short ramp keeps every point", extent: lineExtent{minX: 1, maxX: 8}, wantSome: []float64{1, 2, 3, 4, 5, 6, 7, 8}},
 		{name: "the published ramp is thinned", extent: lineExtent{minX: 1, maxX: 64}, wantSome: []float64{1, 5, 60, 64}},
 		{name: "a thousand points still reads", extent: lineExtent{minX: 1, maxX: 1000}, wantSome: []float64{1, 1000}},
+		// Far from zero the width is still what decides: eleven counts across
+		// the whole plot have room for every label, which an axis measured as
+		// though it ran from zero would thin to its two ends.
+		{name: "a short ramp far from zero keeps every point", extent: lineExtent{minX: 100, maxX: 110}, wantSome: []float64{100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110}},
 		{name: "one point", extent: lineExtent{minX: 3, maxX: 3}, wantSome: []float64{3}},
 	}
 	for _, tc := range tests {
@@ -159,18 +163,29 @@ func TestLinearXTicks_ThinnedToWhatTheWidthCarries(t *testing.T) {
 				}
 			}
 			if tc.extent.maxX == tc.extent.minX {
+				// One point is labeled once: its first and last are the same
+				// count, and printing it twice stacks two labels in one place.
+				if len(ticks) != 1 {
+					t.Errorf("ticks = %v, want the one point labeled once", ticks)
+				}
 				return
 			}
-			perUnit := float64(plotW) / (tc.extent.maxX - tc.extent.minX)
-			for i := 1; i < len(ticks); i++ {
-				gap := (ticks[i] - ticks[i-1]) * perUnit
-				widest := textWidth(fmt.Sprintf("%.0f", tc.extent.maxX), xTickFontSize)
-				if gap < widest {
-					t.Errorf("labels %v and %v are %.1f px apart, closer than the %.1f px a label takes",
-						ticks[i-1], ticks[i], gap, widest)
-				}
-			}
+			assertTicksApart(t, ticks, tc.extent)
 		})
+	}
+}
+
+// assertTicksApart checks every pair of adjacent labels on a linear axis
+// sits at least one label's width apart, the widest label being the last.
+func assertTicksApart(t *testing.T, ticks []float64, extent lineExtent) {
+	t.Helper()
+	perUnit := float64(plotW) / (extent.maxX - extent.minX)
+	widest := textWidth(fmt.Sprintf("%.0f", extent.maxX), xTickFontSize)
+	for i := 1; i < len(ticks); i++ {
+		if gap := (ticks[i] - ticks[i-1]) * perUnit; gap < widest {
+			t.Errorf("labels %v and %v are %.1f px apart, closer than the %.1f px a label takes",
+				ticks[i-1], ticks[i], gap, widest)
+		}
 	}
 }
 
@@ -318,6 +333,11 @@ func TestNiceStep_RoundsToOneTwoOrFive(t *testing.T) {
 		{raw: 23, want: 50},
 		{raw: 100, want: 100},
 		{raw: 120, want: 200},
+		// The upper ends of the one and two bands belong to them: a raw step
+		// of exactly two or five is already round and must not be rounded up.
+		{raw: 2, want: 2},
+		{raw: 5, want: 5},
+		{raw: 500, want: 500},
 	}
 	for _, tc := range tests {
 		t.Run(msLabel(tc.raw), func(t *testing.T) {
@@ -601,4 +621,271 @@ func TestRenderLines_ASeriesWithNoPoints_CarriesNoEndLabel(t *testing.T) {
 	if got := strings.Count(one, marker); got != 1 {
 		t.Errorf("a series with no points drew %d end labels, want the one measured series' own", got)
 	}
+
+	// A series that stopped after its first step has a last point too, and it
+	// is the only value that series has to show.
+	single := renderLines(p, lineSpec{Title: "one step", Series: []lineSeries{
+		{Label: "stopped at once", X: []float64{1}, Y: []float64{10}},
+	}})
+	if got := strings.Count(single, marker); got != 1 {
+		t.Errorf("a series of one point drew %d end labels, want its one value", got)
+	}
+}
+
+// TestScale_Pos_MapsTheEndsAndTheMiddle verifies a scale puts its floor on the
+// plot's bottom edge, its ceiling on the top edge and the value halfway between
+// them in the middle, on a linear axis whose floor is not zero and on a
+// logarithmic one.
+//
+// Every linear axis a figure builds starts at zero, where a value and its
+// distance from the floor are the same number, so this is the one place the
+// floor's part in the arithmetic is held to anything.
+func TestScale_Pos_MapsTheEndsAndTheMiddle(t *testing.T) {
+	const bottom, top, middle = float64(padT + plotH), float64(padT), padT + plotH/2.0
+	cases := []struct {
+		name  string
+		scale scale
+		value float64
+		want  float64
+	}{
+		{name: "linear floor", scale: scale{lo: 10, hi: 20}, value: 10, want: bottom},
+		{name: "linear middle", scale: scale{lo: 10, hi: 20}, value: 15, want: middle},
+		{name: "linear ceiling", scale: scale{lo: 10, hi: 20}, value: 20, want: top},
+		{name: "log floor", scale: scale{lo: 1, hi: 100, log: true}, value: 1, want: bottom},
+		{name: "log middle decade", scale: scale{lo: 1, hi: 100, log: true}, value: 10, want: middle},
+		{name: "log ceiling", scale: scale{lo: 1, hi: 100, log: true}, value: 100, want: top},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.scale.pos(tc.value); math.Abs(got-tc.want) > 1e-9 {
+				t.Errorf("pos(%v) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLogScale_FloorsAndCeilings_CoverWhatTheyAreGiven verifies the decades a
+// log axis spans for the inputs its guards rewrite: a floor that is not a
+// positive finite number becomes a tenth, a ceiling that is not above the
+// floor becomes a decade above it, and a ceiling a hair above a power of ten
+// still opens a decade of its own.
+//
+// Termination is held by the test above; this one holds the answers, because
+// a guard that rewrote its input to the wrong value would terminate just as
+// promptly and draw the data off the axis.
+func TestLogScale_FloorsAndCeilings_CoverWhatTheyAreGiven(t *testing.T) {
+	cases := []struct {
+		name             string
+		minimum, maximum float64
+		wantLo, wantHi   float64
+	}{
+		{name: "a zero floor is a tenth", minimum: 0, maximum: 10, wantLo: 0.1, wantHi: 10},
+		{name: "an infinite floor is a tenth", minimum: math.Inf(1), maximum: math.Inf(1), wantLo: 0.1, wantHi: 1},
+		{name: "one value spans the decade above it", minimum: 5, maximum: 5, wantLo: 1, wantHi: 100},
+		{name: "an infinite ceiling is a decade above the floor", minimum: 1, maximum: math.Inf(1), wantLo: 1, wantHi: 10},
+		// log10 of the float just above ten rounds to exactly one, so the
+		// ceiling's own decade is the floor's, and only the one-decade minimum
+		// keeps the axis from being a single line.
+		{name: "a ceiling a hair above a decade", minimum: 10, maximum: math.Nextafter(10, 11), wantLo: 10, wantHi: 100},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			axis, _ := logScale(tc.minimum, tc.maximum)
+			if !closeTo(axis.lo, tc.wantLo) || !closeTo(axis.hi, tc.wantHi) {
+				t.Errorf("logScale(%v, %v) = [%v, %v], want [%v, %v]", tc.minimum, tc.maximum, axis.lo, axis.hi, tc.wantLo, tc.wantHi)
+			}
+		})
+	}
+}
+
+// closeTo compares two axis values relative to their size, since a decade
+// computed with math.Pow need not be the literal a test spells.
+func closeTo(got, want float64) bool {
+	return math.Abs(got-want) <= 1e-12*math.Abs(want)
+}
+
+// TestRenderBars_AxisFromTheData verifies the three ways a bar chart's axis is
+// decided by its values rather than by a default: a zero among positive bars
+// does not drag a log axis a decade lower, a chart of nothing but zeros is
+// drawn on the axis a chart whose tallest bar is one gets, and a p99 equal to
+// its p50 draws no extension.
+func TestRenderBars_AxisFromTheData(t *testing.T) {
+	p := testPalette()
+	t.Run("a zero bar is not the floor of a log axis", func(t *testing.T) {
+		svg := renderBars(p, barSpec{
+			Title: "log", Log: true, Format: msLabel, Categories: []string{"a", "b", "c"},
+			Series: []barSeries{{Label: "s", Values: []float64{0, 5, 100}}},
+		})
+		labels := gridLabels(svg)
+		if slices.Contains(labels, "0.10") || !slices.Contains(labels, "1.0") {
+			t.Errorf("grid labels %v, want the axis to start at the decade of the smallest positive bar", labels)
+		}
+	})
+	t.Run("all zeros share the axis of a tallest bar of one", func(t *testing.T) {
+		tenths := func(v float64) string { return fmt.Sprintf("%.1f", v) }
+		zeros := renderBars(p, barSpec{Title: "z", Format: tenths, Categories: []string{"a"}, Series: []barSeries{{Label: "s", Values: []float64{0}}}})
+		one := renderBars(p, barSpec{Title: "o", Format: tenths, Categories: []string{"a"}, Series: []barSeries{{Label: "s", Values: []float64{1}}}})
+		if got, want := gridLabels(zeros), gridLabels(one); !slices.Equal(got, want) {
+			t.Errorf("an all-zero chart is labeled %v, want the %v of a chart whose tallest bar is one", got, want)
+		}
+	})
+	t.Run("a p99 equal to its p50 draws no extension", func(t *testing.T) {
+		const extension = `fill-opacity="0.3"`
+		equal := renderBars(p, barSpec{Title: "e", Categories: []string{"a"}, Series: []barSeries{{Label: "s", Values: []float64{40}, High: []float64{40}}}})
+		if got := strings.Count(equal, extension); got != 0 {
+			t.Errorf("a p99 equal to its p50 drew %d extensions, want none", got)
+		}
+		above := renderBars(p, barSpec{Title: "a", Categories: []string{"a"}, Series: []barSeries{{Label: "s", Values: []float64{40}, High: []float64{41}}}})
+		if got := strings.Count(above, extension); got != 1 {
+			t.Errorf("a p99 above its p50 drew %d extensions, want one", got)
+		}
+	})
+}
+
+// gridLabels lists the value labels of a figure's horizontal grid, top to
+// bottom, which are the only text drawn right-aligned against the plot's left
+// edge.
+func gridLabels(svg string) []string {
+	prefix := fmt.Sprintf(`<text x="%d" y="`, padL-8)
+	var out []string
+	for line := range strings.SplitSeq(svg, "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		start := strings.Index(line, ">") + 1
+		end := strings.LastIndex(line, "</text>")
+		out = append(out, line[start:end])
+	}
+	return out
+}
+
+// TestExtentOf_ASmallestPositiveY_IsTheLogFloor verifies a zero among a line's
+// values is not taken for its smallest, since a log axis cannot place zero and
+// a floor pulled down to it would squeeze every real value into the top of the
+// plot.
+func TestExtentOf_ASmallestPositiveY_IsTheLogFloor(t *testing.T) {
+	e := extentOf(lineSpec{Series: []lineSeries{{Label: "a", X: []float64{1, 2, 3}, Y: []float64{0, 5, 50}}}})
+	if e.minY != 5 || e.maxY != 50 || e.minX != 1 || e.maxX != 3 {
+		t.Errorf("extent = %+v, want Y from the smallest positive value 5 to 50 over X 1 to 3", e)
+	}
+}
+
+// TestXMapper_PlacesTheEndsAndTheMiddle verifies the horizontal mapping puts
+// the first count on the plot's left edge, the last on its right, a single
+// count in the middle, and on a log axis the geometric middle halfway, from a
+// first count that is not one.
+//
+// A log axis whose first count is one has a floor of zero decades, where the
+// floor's part in the arithmetic cannot be seen; the series start there, so
+// only a test starting elsewhere can hold it.
+func TestXMapper_PlacesTheEndsAndTheMiddle(t *testing.T) {
+	const left, right, middle = float64(padL), float64(padL + plotW), float64(padL) + float64(plotW)/2
+	cases := []struct {
+		name   string
+		logX   bool
+		extent lineExtent
+		value  float64
+		want   float64
+	}{
+		{name: "one count sits in the middle", extent: lineExtent{minX: 7, maxX: 7}, value: 7, want: middle},
+		{name: "one count on a log axis sits in the middle", logX: true, extent: lineExtent{minX: 7, maxX: 7}, value: 7, want: middle},
+		{name: "log first count", logX: true, extent: lineExtent{minX: 10, maxX: 1000}, value: 10, want: left},
+		{name: "log middle decade", logX: true, extent: lineExtent{minX: 10, maxX: 1000}, value: 100, want: middle},
+		{name: "log last count", logX: true, extent: lineExtent{minX: 10, maxX: 1000}, value: 1000, want: right},
+		{name: "linear first count", extent: lineExtent{minX: 10, maxX: 30}, value: 10, want: left},
+		{name: "linear middle", extent: lineExtent{minX: 10, maxX: 30}, value: 20, want: middle},
+		{name: "linear last count", extent: lineExtent{minX: 10, maxX: 30}, value: 30, want: right},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := xMapper(lineSpec{LogX: tc.logX}, tc.extent)(tc.value); math.Abs(got-tc.want) > 1e-9 {
+				t.Errorf("x(%v) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderLines_Markers_SpanThePlotAndStackTheirLabels verifies a marker is
+// a rule from the plot's top edge to its bottom edge at its count, and that
+// the labels of two markers are stacked down their rules a line apart, just
+// left of each, so two series stopping near one count do not write over each
+// other.
+func TestRenderLines_Markers_SpanThePlotAndStackTheirLabels(t *testing.T) {
+	spec := lineSpec{
+		Title:   "markers",
+		Series:  []lineSeries{{Label: "a", X: []float64{1, 4}, Y: []float64{10, 20}}},
+		Markers: []lineMarker{{X: 2, Label: "first stop"}, {X: 3, Label: "second stop"}},
+	}
+	svg := renderLines(testPalette(), spec)
+	xPos := xMapper(spec, extentOf(spec))
+	for i, marker := range spec.Markers {
+		x := xPos(marker.X)
+		rule := fmt.Sprintf(`<line x1="%.1f" y1="%d" x2="%.1f" y2="%d"`, x, padT, x, padT+plotH)
+		label := fmt.Sprintf(`<text x="%.1f" y="%d" %s font-size="11" text-anchor="end" fill="%s">%s</text>`,
+			x-4, padT+14*(i+1), fontStack, testPalette().Threshold, marker.Label)
+		t.Run(marker.Label, func(t *testing.T) {
+			if !strings.Contains(svg, rule) {
+				t.Errorf("no rule %q from the top of the plot to its bottom", rule)
+			}
+			if !strings.Contains(svg, label) {
+				t.Errorf("no label %q stacked down the rule", label)
+			}
+		})
+	}
+}
+
+// TestPlaceEndLabels_GroupsByOverlapWhateverTheOrder verifies which labels are
+// spread is decided by where they sit rather than by the order the series
+// came in: two that overlap are separated, labels that touch count as
+// overlapping, and labels at three distinct counts are all left where they
+// were.
+//
+// The first case is laid out so that sorting the labels by anything but their
+// left edges groups a label with the wrong neighbors and leaves the one pair
+// that overlaps drawn on top of each other.
+func TestPlaceEndLabels_GroupsByOverlapWhateverTheOrder(t *testing.T) {
+	cases := []struct {
+		name   string
+		labels []endLabel
+	}{
+		{name: "an overlapping pair among labels given out of order", labels: []endLabel{
+			{x: 200, width: 70, y: 200, text: "a"},
+			{x: 350, width: 40, y: 150, text: "b"},
+			{x: 300, width: 70, y: 300, text: "c"},
+			{x: 220, width: 60, y: 200, text: "d"},
+		}},
+		{name: "two labels that touch", labels: []endLabel{
+			{x: 300, width: 30, y: 200, text: "left"},
+			{x: 330, width: 30, y: 200, text: "right"},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			placed := placeEndLabels(slices.Clone(tc.labels))
+			if len(placed) != len(tc.labels) {
+				t.Fatalf("placed %d of %d labels, want all of them", len(placed), len(tc.labels))
+			}
+			for i, a := range placed {
+				for _, b := range placed[i+1:] {
+					overlap := max(a.x-a.width, b.x-b.width) <= min(a.x, b.x)
+					if overlap && math.Abs(a.y-b.y) < endLabelPitch {
+						t.Errorf("%q and %q overlap across and are %.1f apart, want at least %v", a.text, b.text, math.Abs(a.y-b.y), endLabelPitch)
+					}
+				}
+			}
+		})
+	}
+
+	t.Run("three labels at three counts stay where they were", func(t *testing.T) {
+		apart := []endLabel{
+			{x: 200, width: 26, y: 200, text: "one"},
+			{x: 500, width: 26, y: 200, text: "two"},
+			{x: 800, width: 26, y: 200, text: "three"},
+		}
+		for _, label := range placeEndLabels(slices.Clone(apart)) {
+			if label.y != 200 {
+				t.Errorf("%q moved to %.1f, want it left at 200: nothing overlaps it", label.text, label.y)
+			}
+		}
+	})
 }

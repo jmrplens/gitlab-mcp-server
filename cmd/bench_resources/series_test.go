@@ -7,7 +7,10 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,6 +44,12 @@ func TestEstimateRSS_FitsALineThroughThePeaks(t *testing.T) {
 		{
 			name: "one step extrapolates in proportion", steps: []SeriesStep{step(1, 200)},
 			next: 5, want: 1000, wantOK: true,
+		},
+		// In proportion per credential: a first step of two is divided by
+		// two before it is multiplied out.
+		{
+			name: "one step of several credentials extrapolates per credential", steps: []SeriesStep{step(2, 300)},
+			next: 5, want: 750, wantOK: true,
 		},
 		{
 			name: "two steps fix slope and intercept", steps: []SeriesStep{step(1, 220), step(2, 290)},
@@ -163,6 +172,9 @@ func TestCPUPerCall_PublishesOnlyWhatWasMeasured(t *testing.T) {
 		{name: "start unanswered", start: cpuSample{}, end: cpuSample{seconds: 3, ok: true}, calls: 400, wantNote: "did not answer"},
 		{name: "end unanswered", start: cpuSample{seconds: 1, ok: true}, end: cpuSample{}, calls: 400, wantNote: "did not answer"},
 		{name: "fell between samples", start: cpuSample{seconds: 3, ok: true}, end: cpuSample{seconds: 1, ok: true}, calls: 400, wantNote: "fell between"},
+		// A phase that consumed no processor time between two answered
+		// samples measured zero, which is a figure and not a missing one.
+		{name: "no time consumed", start: cpuSample{seconds: 3, ok: true}, end: cpuSample{seconds: 3, ok: true}, calls: 400, want: 0},
 		{name: "no calls", start: cpuSample{seconds: 1, ok: true}, end: cpuSample{seconds: 3, ok: true}, calls: 0, wantNote: "no call completed"},
 	}
 	for _, tc := range cases {
@@ -258,7 +270,12 @@ func TestSteadyLoad_AlternatesMethodsAndTimesEveryCall(t *testing.T) {
 			broken := &methodConn{fail: methodToolsList}
 			conns := []*clientConn{{rpc: healthy, label: "a"}, {rpc: broken, label: "b"}}
 
-			out := steadyLoad(t.Context(), conns, tc.parallel, forTurns(tc.turns), call)
+			// A bound of a few turns ends the phase on its own; one that never
+			// does is a worker no longer counting its turns.
+			var out loadOutcome
+			finishWithin(t, 10*time.Second, "a phase of a few turns", func() {
+				out = steadyLoad(t.Context(), conns, tc.parallel, forTurns(tc.turns), call)
+			})
 
 			// Both connections are driven the same way, whatever they answer:
 			// a failing method is retried on its turn and does not cost the
@@ -281,7 +298,9 @@ func TestSteadyLoad_AlternatesMethodsAndTimesEveryCall(t *testing.T) {
 			if got := len(out.samples[methodToolsList]); got != tc.wantLists {
 				t.Errorf("%d tools/list durations recorded, want %d from the healthy connection alone", got, tc.wantLists)
 			}
-			wantNote := strconv.Itoa(tc.wantLists) + " tools/list calls failed"
+			// The note carries the reason as well as the count, since the
+			// reason is what a reader acts on.
+			wantNote := strconv.Itoa(tc.wantLists) + " tools/list calls failed: refused " + methodToolsList
 			if len(out.notes) != 1 || !strings.Contains(out.notes[0], wantNote) {
 				t.Errorf("notes = %v, want one saying %q", out.notes, wantNote)
 			}
@@ -358,6 +377,16 @@ func TestAdmit_WarmsEveryCredentialAndReportsTheFirstFailure(t *testing.T) {
 		}
 		if len(conns) != 3 {
 			t.Errorf("admit returned %d connections, want all three so they can be closed", len(conns))
+		}
+	})
+
+	// Two failures, and the one returned is the lower index whatever order the
+	// warm-ups finished in: the first failure is the one that explains the rest.
+	t.Run("two cold lists fail", func(t *testing.T) {
+		tgt := &fakeTarget{callErr: map[int]error{1: errors.New("first refusal"), 2: errors.New("second refusal")}}
+		_, err := r.admit(t.Context(), tgt, 0, 3)
+		if err == nil || !strings.Contains(err.Error(), "cold tools/list for client 1: first refusal") {
+			t.Errorf("admit = %v, want client 1's failure, the first of the two", err)
 		}
 	})
 
@@ -469,6 +498,42 @@ func TestWalkSteps_EveryStepRuns_FillsEachOne(t *testing.T) {
 	assertAskedForACPUProfilePerStep(t, f, len(got.Steps))
 	if len(f.conns) != 4 {
 		t.Errorf("%d connections held at the end, want one per credential", len(f.conns))
+	}
+}
+
+// TestWalkSteps_TheCPUProfileTakesItsShareOfTheStep verifies a step long
+// enough for the share to matter asks the listener for the whole seconds
+// inside its profiled share of the step.
+//
+// The fixture's own steps are under the whole-second floor, where any
+// arithmetic arrives at one second; 1.6 seconds is the shortest step at which
+// taking the share and dividing by it disagree, one second against two, and a
+// profile running past the steady phase would sample the settle rather than
+// the load.
+func TestWalkSteps_TheCPUProfileTakesItsShareOfTheStep(t *testing.T) {
+	r := &runner{progress: progressFunc(false), profilesDir: t.TempDir()}
+	f := newSeriesFixture(t, []int{1}, 0)
+	f.plan.StepDuration = 1600 * time.Millisecond
+
+	f.walk(t, r, &fakeTarget{})
+
+	var asked []string
+	for _, uri := range f.listener.asked() {
+		if strings.HasPrefix(uri, "/debug/pprof/profile") {
+			asked = append(asked, uri)
+		}
+	}
+	if len(asked) != 1 || asked[0] != "/debug/pprof/profile?seconds=1" {
+		t.Errorf("the driver asked for %v, want one profile of the 1 whole second inside 80%% of 1.6 s", asked)
+	}
+}
+
+// TestSettleDelay_IsAPauseNotAnImmediateRead verifies a step's process is left
+// alone for a real interval before its settled reading, which is the whole of
+// what separates a tenancy figure from the tail of the load.
+func TestSettleDelay_IsAPauseNotAnImmediateRead(t *testing.T) {
+	if settleDelay <= 0 {
+		t.Errorf("settleDelay = %s, want a pause before the settled reading", settleDelay)
 	}
 }
 
@@ -688,6 +753,107 @@ func TestRunStep_SettledReading_IsAFractionOfThePeakUnderLoad(t *testing.T) {
 	}
 }
 
+// patternConn answers tools/call at once but for every tenth call, which takes
+// forty milliseconds, and tools/list in ten but for every tenth, which takes
+// sixty, and refuses every third tools/list; it counts what it answered.
+type patternConn struct {
+	mu                     sync.Mutex
+	calls, lists, answered int
+}
+
+func (c *patternConn) call(_ context.Context, method string, _ map[string]any) ([]byte, error) {
+	c.mu.Lock()
+	var n int
+	if method == methodToolsList {
+		c.lists++
+		n = c.lists
+	} else {
+		c.calls++
+		n = c.calls
+	}
+	c.mu.Unlock()
+	var delay time.Duration
+	switch {
+	case method == methodToolsList && n%3 == 0:
+		return nil, errors.New("refused " + method)
+	case method == methodToolsList && n%10 == 0:
+		delay = 60 * time.Millisecond
+	case method == methodToolsList:
+		delay = 10 * time.Millisecond
+	case n%10 == 0:
+		delay = 40 * time.Millisecond
+	}
+	time.Sleep(delay)
+	c.mu.Lock()
+	c.answered++
+	c.mu.Unlock()
+	return []byte(`{}`), nil
+}
+
+func (c *patternConn) close() {}
+
+// answeredCount reports how many calls the connection answered.
+func (c *patternConn) answeredCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.answered
+}
+
+// TestRunStep_EachPercentileFromItsOwnMethod verifies a step's four latency
+// figures are each its own method's own percentile, and that the calls it
+// counts are the ones that were answered.
+//
+// tools/call is fast with a slow tenth and tools/list slower with a slower
+// tenth, so the median and the tail of each differ and the two methods'
+// medians differ too; and a third of the listings are refused, so the calls
+// answered are not twice either method's count.
+func TestRunStep_EachPercentileFromItsOwnMethod(t *testing.T) {
+	r := &runner{progress: progressFunc(false)}
+	f := newSeriesFixture(t, []int{1}, 0)
+	f.plan.StepDuration = 600 * time.Millisecond
+	conn := &patternConn{}
+
+	step := r.runStep(t.Context(), stepInput{
+		plan: f.plan, call: f.call, conns: []*clientConn{{rpc: conn}},
+		sampler: f.sampler, profiler: f.profiler, capacity: 1,
+	})
+
+	if got := conn.answeredCount(); step.Calls != got {
+		t.Errorf("Calls = %d, want the %d the connection answered", step.Calls, got)
+	}
+	if step.CallP50Ms >= step.CallP99Ms || step.ListP50Ms >= step.ListP99Ms {
+		t.Errorf("call p50 %v p99 %v, list p50 %v p99 %v, want each median under its own tail",
+			step.CallP50Ms, step.CallP99Ms, step.ListP50Ms, step.ListP99Ms)
+	}
+	if step.CallP50Ms >= step.ListP50Ms {
+		t.Errorf("call p50 %v against list p50 %v, want the fast method's median under the slow one's", step.CallP50Ms, step.ListP50Ms)
+	}
+}
+
+// TestSettle_ReadsEachFigureFromItsOwnSource verifies the settled heap is the
+// HeapAlloc the profile listener reports and the settled resident set is the
+// kernel's figure for the process, each converted to MiB and neither taken
+// for the other.
+//
+// Both sources are the test's own, holding four MiB of heap and three of
+// resident set, which no real process could be asked to hold still.
+func TestSettle_ReadsEachFigureFromItsOwnSource(t *testing.T) {
+	quickSettle(t)
+	heap := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "heap profile: 1: 2 [3: 4] @ heap/1048576\n\n# runtime.MemStats\n# HeapAlloc = 4194304\n")
+	}))
+	t.Cleanup(heap.Close)
+	const pid = 13
+	fakeProcess(t, pid)(3 * 1024)
+
+	var step SeriesStep
+	settle(t.Context(), newSampler(t.Context(), time.Hour, func() []int { return []int{pid} }), newPprofClient(heap.URL), &step)
+	if step.SettledHeapMiB != 4 || step.SettledRSSMiB != 3 || len(step.Notes) != 0 {
+		t.Errorf("settled heap %v MiB and resident set %v MiB, notes %v, want 4 and 3 and none",
+			step.SettledHeapMiB, step.SettledRSSMiB, step.Notes)
+	}
+}
+
 // TestSettle_NotesWhatItCouldNotRead covers the three ways a settled reading
 // is not taken: a cancelled run, a listener that does not answer, and a
 // platform or process the resident set cannot be read from. None of them is
@@ -880,6 +1046,11 @@ func TestRunSeries_Standin_StepsThroughTheCountsAndProfiles(t *testing.T) {
 	}
 	if series.ID != plan.ID || !reflect.DeepEqual(series.Clients, plan.Steps) || series.StepSeconds != 1 || series.Parallel != 2 {
 		t.Errorf("series header %+v does not describe the plan", series)
+	}
+	// Both are short words from the same plan, and a record naming the surface
+	// where the transport belongs is a series nobody ran.
+	if series.Transport != transportHTTP || series.Surface != surfaceDynamic {
+		t.Errorf("series transport %q and surface %q, want %q and %q", series.Transport, series.Surface, transportHTTP, surfaceDynamic)
 	}
 	if len(series.Steps) != 3 || series.StoppedAt != 3 || series.Stop != nil {
 		t.Fatalf("series %+v, want every step run", series)

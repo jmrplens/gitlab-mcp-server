@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // getStub issues a GET against a stand-in server and returns what it answered,
@@ -33,6 +34,38 @@ func getStub(t *testing.T, url string) (status int, contentType string, body []b
 		t.Fatalf("read the response from %s: %v", url, err)
 	}
 	return resp.StatusCode, resp.Header.Get(headerContentType), body
+}
+
+// TestDrain_ABodyLongerThanOneRead_IsCountedWhole verifies a body several
+// reads long is read to its end and counted whole, and that the read ends.
+//
+// An export batch runs to hundreds of kilobytes, so the sink's byte count is
+// the sum of many reads; the watchdog is there because a read loop that can
+// stop advancing is one that holds the sink's handler, and with it the
+// exporter, for the rest of the run. First in the file so that a loop that
+// stopped advancing is reported here, by name, rather than as a hang in the
+// sink's own test below.
+func TestDrain_ABodyLongerThanOneRead_IsCountedWhole(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "a body of many reads", body: strings.Repeat("z", 100_000)},
+		{name: "an empty body", body: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://sink.invalid/", strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatalf("build the request: %v", err)
+			}
+			var got int64
+			finishWithin(t, 10*time.Second, "draining the body", func() { got = drain(req) })
+			if got != int64(len(tc.body)) {
+				t.Errorf("drain = %d, want the body's %d bytes", got, len(tc.body))
+			}
+		})
+	}
 }
 
 // TestStubGitLab_AnswersTheProbesTheServerMakesAtStartup verifies the stand-in

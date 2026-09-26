@@ -381,7 +381,21 @@ func standinRunner(t *testing.T) *runner {
 	stub := startStubGitLab()
 	t.Cleanup(stub.close)
 	sink := startOTLPSink()
-	t.Cleanup(sink.close)
+	// Closing waits for every export the sink accepted, so a sink that never
+	// finished reading one would hold this test, and the package after it,
+	// until the binary's own timeout; bounded, it fails here instead.
+	t.Cleanup(func() {
+		closed := make(chan struct{})
+		go func() {
+			sink.close()
+			close(closed)
+		}()
+		select {
+		case <-closed:
+		case <-time.After(30 * time.Second):
+			t.Error("the OTLP sink did not close within 30 s: an export it accepted was never read to its end")
+		}
+	})
 	return &runner{
 		binary:         binary,
 		stub:           stub,
@@ -405,17 +419,30 @@ func httpPlan(rounds int) scenarioPlan {
 // is there: the startup milestones, the idle and per-client resident sets, a
 // ramp point per credential, one distribution per method with every call
 // counted, and the goroutine count that ends the process.
+//
+// The plan's three counts differ, two clients, three in flight and four
+// rounds, so a header that took one count from another's field cannot come
+// out right, and the header is compared whole, transport and surface included.
 func TestRunScenario_HTTP_FillsEveryPublishedFigure(t *testing.T) {
 	r := standinRunner(t)
-	plan := httpPlan(2)
+	plan := httpPlan(4)
+	plan.Parallel = 3
 
 	scenario, err := r.runScenario(t.Context(), plan)
 	if err != nil {
 		t.Fatalf("runScenario: %v", err)
 	}
 
-	if scenario.ID != plan.ID || scenario.Clients != 2 || scenario.Parallel != 2 || scenario.Rounds != 2 || !scenario.Telemetry {
-		t.Errorf("scenario header %+v does not describe the plan %+v", scenario, plan)
+	header := Scenario{
+		ID: scenario.ID, Transport: scenario.Transport, Surface: scenario.Surface, Telemetry: scenario.Telemetry,
+		Clients: scenario.Clients, Parallel: scenario.Parallel, Rounds: scenario.Rounds,
+	}
+	want := Scenario{
+		ID: "http-dynamic-telemetry", Transport: transportHTTP, Surface: surfaceDynamic, Telemetry: true,
+		Clients: 2, Parallel: 3, Rounds: 4,
+	}
+	if !reflect.DeepEqual(header, want) {
+		t.Errorf("scenario header %+v, want %+v from the plan", header, want)
 	}
 	assertStartupMeasured(t, scenario)
 	assertMemoryMeasured(t, scenario)
@@ -582,7 +609,9 @@ func TestSettledRSS_NeverSettles_ReturnsAtTheCeiling(t *testing.T) {
 
 	self := os.Getpid()
 	var toggle atomic.Bool
+	var reads atomic.Int64
 	s := newSampler(t.Context(), 5*time.Millisecond, func() []int {
+		reads.Add(1)
 		// One process, then the same process counted twice: the sum doubles
 		// on every other sample.
 		if toggle.Load() {
@@ -603,6 +632,12 @@ func TestSettledRSS_NeverSettles_ReturnsAtTheCeiling(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed < settleCeiling {
 		t.Errorf("settled in %s on a process that never settles", elapsed)
+	}
+	// Sampled at a pace of one read per 50 ms step: a loop that read as fast
+	// as it could would spend the ceiling on reads of a process that has not
+	// had time to change.
+	if got := reads.Load(); got > 10 {
+		t.Errorf("the process was read %d times within a %s ceiling, want one read per 50 ms step", got, settleCeiling)
 	}
 }
 
@@ -745,5 +780,135 @@ func TestLoad_SeveralRounds_NamesTheFirstFailureNotTheLast(t *testing.T) {
 				t.Errorf("note %q names %q, which is the last failure rather than the first", tc.note, tc.last)
 			}
 		})
+	}
+}
+
+// rampTarget is a target whose every admission changes what there is to
+// measure: the Nth client leaves the process holding N hundred MiB, answers
+// tools/list with N thousand bytes and took N times ten milliseconds to spawn,
+// so every figure the ramp takes from one client says which client it came
+// from.
+type rampTarget struct {
+	fakeTarget
+	setRSS func(kib int)
+}
+
+func (r *rampTarget) addClient(_ context.Context, index int) (*clientConn, time.Duration, error) {
+	n := index + 1
+	r.setRSS(n * 100 * 1024)
+	return &clientConn{rpc: &sizedConn{size: n * 1000}, label: "client " + strconv.Itoa(index)}, time.Duration(n) * 10 * time.Millisecond, nil
+}
+
+// sizedConn answers every call at once with a body of the given length.
+type sizedConn struct{ size int }
+
+func (c *sizedConn) call(context.Context, string, map[string]any) ([]byte, error) {
+	return make([]byte, c.size), nil
+}
+
+func (c *sizedConn) close() {}
+
+// recordedLines keeps what a reporter was asked to print, for a test that
+// asserts the wording rather than only that nothing panicked.
+type recordedLines struct{ lines []string }
+
+func (r *recordedLines) printf(format string, args ...any) {
+	r.lines = append(r.lines, fmt.Sprintf(format, args...))
+}
+
+// TestRamp_EachFigureComesFromTheClientItNames verifies the one-client figures
+// are the first client's, the all-client figure is the last client's, the cost
+// of each extra credential is the difference between the two over the clients
+// in between, and the progress line counts clients from one.
+//
+// Every client leaves a different resident set, answers with a different size
+// and took a different time to spawn, so a figure taken from the wrong client,
+// or divided by the wrong count, cannot come out right by coincidence.
+func TestRamp_EachFigureComesFromTheClientItNames(t *testing.T) {
+	const pid = 11
+	tgt := &rampTarget{setRSS: fakeProcess(t, pid)}
+	progress := &recordedLines{}
+	r := &runner{progress: progress.printf}
+	s := newSampler(t.Context(), time.Hour, func() []int { return []int{pid} })
+	plan := scenarioPlan{
+		ID: "stdio-dynamic", Transport: transportStdio, Surface: surfaceDynamic,
+		Clients: 3, Parallel: 1, Rounds: 1,
+	}
+
+	var result Scenario
+	if _, err := r.ramp(t.Context(), tgt, s, plan, &result); err != nil {
+		t.Fatalf("ramp: %v", err)
+	}
+
+	if result.Startup.ProcessReadyMs != 10 {
+		t.Errorf("ProcessReadyMs = %v, want the first client's 10 ms spawn", result.Startup.ProcessReadyMs)
+	}
+	if result.ListBytes != 1000 {
+		t.Errorf("ListBytes = %d, want the first client's 1000-byte listing", result.ListBytes)
+	}
+	if result.Memory.OneClientMiB != 100 || result.Memory.AllClientsMiB != 300 {
+		t.Errorf("one client %v MiB, all clients %v MiB, want 100 after the first and 300 after the last",
+			result.Memory.OneClientMiB, result.Memory.AllClientsMiB)
+	}
+	if result.Memory.PerExtraClientMiB != 100 {
+		t.Errorf("PerExtraClientMiB = %v, want (300 - 100) / 2 extra clients = 100", result.Memory.PerExtraClientMiB)
+	}
+	for i, point := range result.Ramp {
+		if point.Client != i+1 || point.RSSMiB != float64(100*(i+1)) {
+			t.Errorf("ramp point %d = %+v, want client %d at %d MiB", i, point, i+1, 100*(i+1))
+		}
+	}
+	if len(progress.lines) != 3 || !strings.Contains(progress.lines[0], "client 1/3 admitted") {
+		t.Errorf("progress = %q, want one line per client counted from 1/3", progress.lines)
+	}
+}
+
+// methodDelayConn answers every method at once except the one it is told to
+// take its time over.
+type methodDelayConn struct {
+	slow  string
+	delay time.Duration
+}
+
+func (c *methodDelayConn) call(_ context.Context, method string, _ map[string]any) ([]byte, error) {
+	if method == c.slow {
+		time.Sleep(c.delay)
+	}
+	return []byte(`{}`), nil
+}
+
+func (c *methodDelayConn) close() {}
+
+// TestLoad_TheWarmListingIsTheToolsListMedian verifies the warm tools/list
+// figure a scenario publishes beside its cold one is the median of the
+// tools/list distribution, and that the per-round progress counts rounds from
+// one.
+//
+// Only tools/list is slow here, so the median of any other method would be a
+// figure nobody could mistake for it.
+func TestLoad_TheWarmListingIsTheToolsListMedian(t *testing.T) {
+	progress := &recordedLines{}
+	r := &runner{progress: progress.printf}
+	call, err := callFor(surfaceDynamic)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	conns := []*clientConn{{rpc: &methodDelayConn{slow: methodToolsList, delay: 30 * time.Millisecond}, label: "client 0"}}
+	plan := scenarioPlan{
+		ID: "http-dynamic", Transport: transportHTTP, Surface: surfaceDynamic,
+		Clients: 1, Parallel: 1, Rounds: 2,
+	}
+
+	var result Scenario
+	if notes := r.load(t.Context(), conns, plan, call, &result); len(notes) != 0 {
+		t.Fatalf("notes = %v, want none from a connection that answers everything", notes)
+	}
+	list, ok := result.latency(methodToolsList)
+	if !ok || list.P50 < 20 || result.Startup.WarmListMs != list.P50 {
+		t.Errorf("WarmListMs = %v against a tools/list median of %v, want the one to be the other", result.Startup.WarmListMs, list.P50)
+	}
+	joined := strings.Join(progress.lines, "\n")
+	if !strings.Contains(joined, methodToolsList+" round 1/2") || !strings.Contains(joined, methodToolsList+" round 2/2") || strings.Contains(joined, "round 0/") {
+		t.Errorf("progress = %q, want each method's rounds counted 1/2 and 2/2", progress.lines)
 	}
 }
