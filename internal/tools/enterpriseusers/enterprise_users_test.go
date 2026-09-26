@@ -4,6 +4,7 @@ package enterpriseusers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -345,9 +346,10 @@ func TestList_KeysetPaginationAndSort(t *testing.T) {
 	}
 }
 
-// TestToOutput_FullUser verifies that toOutput mirrors every top-level gl.User
-// field and the nested identities, SCIM identities, custom attributes, and
-// created_by sub-objects, including ISOTime, RFC3339, and net.IP formatting.
+// TestToOutput_FullUser verifies that toOutput carries every top-level key
+// UserPublic renders and the nested identities, SCIM identities, custom
+// attributes, and created_by sub-objects, including ISOTime and RFC3339
+// formatting, and publishes none of the keys the entity never renders.
 func TestToOutput_FullUser(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -393,26 +395,20 @@ func TestToOutput_FullUser(t *testing.T) {
 		{"bio", out.Bio, "hi"},
 		{"location", out.Location, "NYC"},
 		{"public_email", out.PublicEmail, "pub@example.com"},
-		{"skype", out.Skype, "sk"},
 		{"linkedin", out.Linkedin, "li"},
 		{"twitter", out.Twitter, "tw"},
 		{"website_url", out.WebsiteURL, "https://alice.dev"},
 		{"organization", out.Organization, "ACME"},
 		{"job_title", out.JobTitle, "Eng"},
-		{"extern_uid", out.ExternUID, "ext-1"},
-		{"provider", out.Provider, "ldap"},
 		{"theme_id", out.ThemeID, int64(2)},
 		{"last_activity_on", out.LastActivityOn, "2026-06-01"},
 		{"color_scheme_id", out.ColorSchemeID, int64(3)},
 		{"is_auditor", out.IsAuditor, true},
 		{"can_create_group", out.CanCreateGroup, true},
 		{"can_create_project", out.CanCreateProject, true},
-		{"can_create_organization", out.CanCreateOrganization, true},
 		{"projects_limit", out.ProjectsLimit, int64(100)},
 		{"current_sign_in_at", out.CurrentSignInAt, "2026-06-02T08:00:00Z"},
-		{"current_sign_in_ip", out.CurrentSignInIP, "10.0.0.1"},
 		{"last_sign_in_at", out.LastSignInAt, "2026-05-01T08:00:00Z"},
-		{"last_sign_in_ip", out.LastSignInIP, "10.0.0.2"},
 		{"confirmed_at", out.ConfirmedAt, "2026-01-02T00:00:00Z"},
 		{"note", out.Note, "vip"},
 		{"private_profile", out.PrivateProfile, true},
@@ -440,6 +436,33 @@ func TestToOutput_FullUser(t *testing.T) {
 	}
 	if out.CreatedBy == nil || out.CreatedBy.Username != "admin" || out.CreatedBy.CreatedAt != "2025-01-01T00:00:00Z" {
 		t.Errorf("created_by mismatch: %+v", out.CreatedBy)
+	}
+	assertNoKeyUserPublicNeverSends(t, out)
+}
+
+// assertNoKeyUserPublicNeverSends checks that the six keys client-go's User
+// models and API::Entities::UserPublic never renders are absent from the
+// published JSON, although the fixture carries all of them and the SDK
+// decodes them. can_create_organization carried no omitempty, so before they
+// were removed every enterprise user answer said false.
+func assertNoKeyUserPublicNeverSends(t *testing.T, out Output) {
+	t.Helper()
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal output: %v", err)
+	}
+	var published map[string]any
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	for _, key := range []string{
+		"skype", "extern_uid", "provider", "can_create_organization", "current_sign_in_ip", "last_sign_in_ip",
+	} {
+		t.Run("not published/"+key, func(t *testing.T) {
+			if value, ok := published[key]; ok {
+				t.Errorf("published %s = %v, a key UserPublic never renders", key, value)
+			}
+		})
 	}
 }
 

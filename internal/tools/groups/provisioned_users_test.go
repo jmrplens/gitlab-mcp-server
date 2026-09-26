@@ -158,10 +158,11 @@ func TestProvisionedUserToOutput_NilSliceElements(t *testing.T) {
 }
 
 // TestProvisionedUserToOutput_AllFields sets every scalar and timestamp of the
-// gl.User -> ProvisionedUserOutput mapping and reads back the seven times and
-// addresses, the creator's date, five scalars and the three list lengths. It
-// asserts nothing about the other scalars; [TestListProvisionedUsers_PublishesEachFieldGitLabSent]
-// holds each of those to its value.
+// gl.User -> ProvisionedUserOutput mapping and reads back the five times, the
+// creator's date, five scalars and the three list lengths. It asserts nothing
+// about the other scalars; [TestListProvisionedUsers_PublishesEachFieldGitLabSent]
+// holds each of those to its value. The two sign-in addresses are set on the
+// SDK user and have nowhere to go: UserPublic never renders them.
 func TestProvisionedUserToOutput_AllFields(t *testing.T) {
 	ts := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
 	iso := gl.ISOTime(ts)
@@ -185,9 +186,8 @@ func TestProvisionedUserToOutput_AllFields(t *testing.T) {
 	}
 	out := ProvisionedUserToOutput(u, toolutil.UserExtra{})
 	if out.CreatedAt == "" || out.LastActivityOn == "" || out.CurrentSignInAt == "" ||
-		out.CurrentSignInIP != "10.0.0.1" || out.LastSignInAt == "" || out.LastSignInIP != "10.0.0.2" ||
-		out.ConfirmedAt == "" {
-		t.Fatalf("timestamp/IP fields not fully mapped: %#v", out)
+		out.LastSignInAt == "" || out.ConfirmedAt == "" {
+		t.Fatalf("timestamp fields not fully mapped: %#v", out)
 	}
 	if out.CreatedBy == nil || out.CreatedBy.CreatedAt == "" {
 		t.Fatalf("created_by.created_at not mapped: %#v", out.CreatedBy)
@@ -227,8 +227,9 @@ func TestProvisionedUserToOutput_CopiesEveryCapturedKey(t *testing.T) {
 // the corresponding string fields empty.
 func TestProvisionedUserToOutput_NilTimes(t *testing.T) {
 	out := ProvisionedUserToOutput(&gl.User{ID: 1, Username: "u"}, toolutil.UserExtra{})
-	if out.CreatedAt != "" || out.LastActivityOn != "" || out.CurrentSignInIP != "" || out.ConfirmedAt != "" {
-		t.Fatalf("expected empty timestamp/IP fields, got %#v", out)
+	if out.CreatedAt != "" || out.LastActivityOn != "" || out.CurrentSignInAt != "" ||
+		out.LastSignInAt != "" || out.ConfirmedAt != "" {
+		t.Fatalf("expected empty timestamp fields, got %#v", out)
 	}
 	// A caller who may not read the profile is sent no count at all, which the
 	// pointers keep distinct from a user nobody follows.
@@ -330,12 +331,12 @@ func listDistinctProvisionedUsers(t *testing.T, body string) ProvisionedUserOutp
 func TestListProvisionedUsers_PublishesEachFieldGitLabSent(t *testing.T) {
 	out := listDistinctProvisionedUsers(t, `[{"id":7,"username":"scim-user","email":"scim@acme.example","name":"SCIM User",`+
 		`"state":"active","web_url":"https://gl.example.com/scim-user","created_at":"2026-02-03T04:05:06Z",`+
-		`"bio":"a bio","location":"Madrid","public_email":"public@acme.example","skype":"scim.skype",`+
+		`"bio":"a bio","location":"Madrid","public_email":"public@acme.example",`+
 		`"linkedin":"scim-linkedin","twitter":"scim_twitter","website_url":"https://scim.example",`+
-		`"organization":"Acme","job_title":"Engineer","extern_uid":"uid-7","provider":"group_saml",`+
+		`"organization":"Acme","job_title":"Engineer",`+
 		`"theme_id":2,"last_activity_on":"2026-03-04","color_scheme_id":3,"avatar_url":"https://gl.example.com/uploads/7.png",`+
-		`"projects_limit":50,"current_sign_in_at":"2026-04-05T06:07:08Z","current_sign_in_ip":"10.0.0.1",`+
-		`"last_sign_in_at":"2026-04-04T06:07:08Z","last_sign_in_ip":"10.0.0.2","confirmed_at":"2026-02-04T04:05:06Z",`+
+		`"projects_limit":50,"current_sign_in_at":"2026-04-05T06:07:08Z",`+
+		`"last_sign_in_at":"2026-04-04T06:07:08Z","confirmed_at":"2026-02-04T04:05:06Z",`+
 		`"note":"a note","identities":[{"provider":"group_saml","extern_uid":"uid-7"}],`+
 		`"scim_identities":[{"extern_uid":"scim-7","group_id":42,"active":true}],`+
 		`"shared_runners_minutes_limit":1500,"extra_shared_runners_minutes_limit":250,`+
@@ -348,12 +349,12 @@ func TestListProvisionedUsers_PublishesEachFieldGitLabSent(t *testing.T) {
 	want := ProvisionedUserOutput{
 		ID: 7, Username: "scim-user", Email: "scim@acme.example", Name: "SCIM User", State: "active",
 		WebURL: "https://gl.example.com/scim-user", CreatedAt: "2026-02-03T04:05:06Z", Bio: "a bio",
-		Location: "Madrid", PublicEmail: "public@acme.example", Skype: "scim.skype", Linkedin: "scim-linkedin",
+		Location: "Madrid", PublicEmail: "public@acme.example", Linkedin: "scim-linkedin",
 		Twitter: "scim_twitter", WebsiteURL: "https://scim.example", Organization: "Acme", JobTitle: "Engineer",
-		ExternUID: "uid-7", Provider: "group_saml", ThemeID: 2, LastActivityOn: "2026-03-04", ColorSchemeID: 3,
+		ThemeID: 2, LastActivityOn: "2026-03-04", ColorSchemeID: 3,
 		AvatarURL: "https://gl.example.com/uploads/7.png", ProjectsLimit: 50,
-		CurrentSignInAt: "2026-04-05T06:07:08Z", CurrentSignInIP: "10.0.0.1",
-		LastSignInAt: "2026-04-04T06:07:08Z", LastSignInIP: "10.0.0.2", ConfirmedAt: "2026-02-04T04:05:06Z",
+		CurrentSignInAt: "2026-04-05T06:07:08Z",
+		LastSignInAt:    "2026-04-04T06:07:08Z", ConfirmedAt: "2026-02-04T04:05:06Z",
 		Note:                      "a note",
 		Identities:                []ProvisionedUserIdentity{{Provider: "group_saml", ExternUID: "uid-7"}},
 		SCIMIdentities:            []ProvisionedUserSCIMIdentity{{ExternUID: "scim-7", GroupID: 42, Active: true}},
@@ -373,9 +374,11 @@ func TestListProvisionedUsers_PublishesEachFieldGitLabSent(t *testing.T) {
 	}
 }
 
-// TestListProvisionedUsers_PublishesEachFlagOnItsOwn verifies each of the
-// eleven booleans a user carries lands on its own field when sent alone; the
-// all-fields test sets ten of them true together.
+// TestListProvisionedUsers_PublishesEachFlagOnItsOwn verifies each of the ten
+// booleans a user carries lands on its own field when sent alone; the
+// all-fields test sets them true together. can_create_organization is
+// driven too and lands nowhere: client-go models it and UserPublic never
+// renders it, so it is not published.
 func TestListProvisionedUsers_PublishesEachFlagOnItsOwn(t *testing.T) {
 	for _, tc := range []struct {
 		key  string
@@ -386,7 +389,7 @@ func TestListProvisionedUsers_PublishesEachFlagOnItsOwn(t *testing.T) {
 		{key: "is_auditor", want: ProvisionedUserOutput{ID: 7, IsAuditor: true}},
 		{key: "can_create_group", want: ProvisionedUserOutput{ID: 7, CanCreateGroup: true}},
 		{key: "can_create_project", want: ProvisionedUserOutput{ID: 7, CanCreateProject: true}},
-		{key: "can_create_organization", want: ProvisionedUserOutput{ID: 7, CanCreateOrganization: true}},
+		{key: "can_create_organization", want: ProvisionedUserOutput{ID: 7}},
 		{key: "two_factor_enabled", want: ProvisionedUserOutput{ID: 7, TwoFactorEnabled: true}},
 		{key: "external", want: ProvisionedUserOutput{ID: 7, External: true}},
 		{key: "private_profile", want: ProvisionedUserOutput{ID: 7, PrivateProfile: true}},

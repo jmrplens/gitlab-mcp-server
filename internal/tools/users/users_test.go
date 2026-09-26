@@ -3,6 +3,7 @@ package users
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -421,47 +422,47 @@ func TestGet_UserWithCustomAttributesReachesTheQuery(t *testing.T) {
 	}
 }
 
-// userFlags is the block of eleven booleans the user converter copies across
+// userFlags is the block of ten booleans the user converter copies across
 // in a row. A flag has only two values, so a fixture that sets more than one
 // cannot tell them apart and a converter reading the wrong neighbor looks
 // correct: measured here, swapping can_create_project with can_create_group
 // left the whole suite green. Reading the block into one comparable value is
-// what lets a case drive one flag and assert the other ten stayed false.
+// what lets a case drive one flag and assert the other nine stayed false.
 type userFlags struct {
-	IsAdmin               bool
-	IsAuditor             bool
-	Bot                   bool
-	TwoFactorEnabled      bool
-	External              bool
-	Locked                bool
-	PrivateProfile        bool
-	CanCreateProject      bool
-	CanCreateGroup        bool
-	CanCreateOrganization bool
-	UsingLicenseSeat      bool
+	IsAdmin          bool
+	IsAuditor        bool
+	Bot              bool
+	TwoFactorEnabled bool
+	External         bool
+	Locked           bool
+	PrivateProfile   bool
+	CanCreateProject bool
+	CanCreateGroup   bool
+	UsingLicenseSeat bool
 }
 
 func flagsOf(out Output) userFlags {
 	return userFlags{
-		IsAdmin:               out.IsAdmin,
-		IsAuditor:             out.IsAuditor,
-		Bot:                   out.Bot,
-		TwoFactorEnabled:      out.TwoFactorEnabled,
-		External:              out.External,
-		Locked:                out.Locked,
-		PrivateProfile:        out.PrivateProfile,
-		CanCreateProject:      out.CanCreateProject,
-		CanCreateGroup:        out.CanCreateGroup,
-		CanCreateOrganization: out.CanCreateOrganization,
-		UsingLicenseSeat:      out.UsingLicenseSeat,
+		IsAdmin:          out.IsAdmin,
+		IsAuditor:        out.IsAuditor,
+		Bot:              out.Bot,
+		TwoFactorEnabled: out.TwoFactorEnabled,
+		External:         out.External,
+		Locked:           out.Locked,
+		PrivateProfile:   out.PrivateProfile,
+		CanCreateProject: out.CanCreateProject,
+		CanCreateGroup:   out.CanCreateGroup,
+		UsingLicenseSeat: out.UsingLicenseSeat,
 	}
 }
 
 // TestGet_UserEachFlagIsReadFromItsOwnKey drives one flag at a time, which is
 // also what GitLab really answers for most users, and compares the whole block
 // against one with only that field set. Every other flag staying false is the
-// assertion that matters: it is what distinguishes eleven fields that all
-// carry the same two values.
+// assertion that matters: it is what distinguishes ten fields that all carry
+// the same two values. can_create_organization is driven too and sets none of
+// them: client-go models it and no user entity sends it, so it is not
+// published, and a converter reading it into a neighbor would show here.
 func TestGet_UserEachFlagIsReadFromItsOwnKey(t *testing.T) {
 	tests := []struct {
 		key  string
@@ -476,7 +477,7 @@ func TestGet_UserEachFlagIsReadFromItsOwnKey(t *testing.T) {
 		{"private_profile", userFlags{PrivateProfile: true}},
 		{"can_create_project", userFlags{CanCreateProject: true}},
 		{"can_create_group", userFlags{CanCreateGroup: true}},
-		{"can_create_organization", userFlags{CanCreateOrganization: true}},
+		{"can_create_organization", userFlags{}},
 		{"using_license_seat", userFlags{UsingLicenseSeat: true}},
 	}
 
@@ -2318,11 +2319,42 @@ func TestGet_FullUserShape(t *testing.T) {
 	assertFullUserSubObjects(t, out)
 }
 
+// TestGet_PublishesNoKeyAUserEntityNeverSends feeds the handler a user
+// carrying the four keys client-go's User models and no user entity renders
+// (skype, extern_uid and provider at the top level, can_create_organization),
+// which the SDK decodes when they are present, and checks that none of them
+// reaches the published JSON. can_create_organization carried no omitempty,
+// so before this every user answer said false.
+func TestGet_PublishesNoKeyAUserEntityNeverSends(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, fullUserJSON)
+	}))
+	out, err := Get(context.Background(), client, GetInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal Get() output: %v", err)
+	}
+	var published map[string]any
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("unmarshal Get() output: %v", err)
+	}
+	for _, key := range []string{"skype", "extern_uid", "provider", "can_create_organization"} {
+		t.Run(key, func(t *testing.T) {
+			if value, ok := published[key]; ok {
+				t.Errorf("Get() published %s = %v, a key no user entity sends", key, value)
+			}
+		})
+	}
+}
+
 // assertFullUserScalars verifies the additive scalar fields toOutput maps.
 func assertFullUserScalars(t *testing.T, out Output) {
 	t.Helper()
-	if !out.IsAuditor || !out.CanCreateOrganization {
-		t.Errorf("auditor/can_create_organization not mapped: %+v", out)
+	if !out.IsAuditor {
+		t.Errorf("auditor not mapped: %+v", out)
 	}
 	if out.CurrentSignInIP != "10.0.0.1" || out.LastSignInIP != "10.0.0.2" {
 		t.Errorf("sign-in IPs = %q/%q", out.CurrentSignInIP, out.LastSignInIP)
@@ -2330,8 +2362,8 @@ func assertFullUserScalars(t *testing.T, out Output) {
 	if out.ConfirmedAt == "" || out.LastSignInAt == "" || out.CurrentSignInAt == "" {
 		t.Errorf("timestamps not mapped: %+v", out)
 	}
-	if out.ExternUID != "euid" || out.Provider != "ldap" || out.Skype != "sk" || out.Linkedin != "li" || out.Twitter != "tw" {
-		t.Errorf("social/identity scalars not mapped: %+v", out)
+	if out.Linkedin != "li" || out.Twitter != "tw" {
+		t.Errorf("social scalars not mapped: %+v", out)
 	}
 	if out.SharedRunnersMinutesLimit != 100 || out.ExtraSharedRunnersMinutesLimit != 200 || out.NamespaceID != 7 {
 		t.Errorf("runner/namespace fields not mapped: %+v", out)

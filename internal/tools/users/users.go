@@ -37,12 +37,9 @@ type Output struct {
 	CreatedAt                      string                  `json:"created_at,omitempty"`
 	ConfirmedAt                    string                  `json:"confirmed_at,omitempty"`
 	PublicEmail                    string                  `json:"public_email,omitempty"`
-	Skype                          string                  `json:"skype,omitempty"`
 	Linkedin                       string                  `json:"linkedin,omitempty"`
 	Twitter                        string                  `json:"twitter,omitempty"`
 	WebsiteURL                     string                  `json:"website_url,omitempty"`
-	ExternUID                      string                  `json:"extern_uid,omitempty"`
-	Provider                       string                  `json:"provider,omitempty"`
 	LastActivityOn                 string                  `json:"last_activity_on,omitempty"`
 	TwoFactorEnabled               bool                    `json:"two_factor_enabled"`
 	External                       bool                    `json:"external"`
@@ -55,7 +52,6 @@ type Output struct {
 	ProjectsLimit                  int64                   `json:"projects_limit"`
 	CanCreateProject               bool                    `json:"can_create_project"`
 	CanCreateGroup                 bool                    `json:"can_create_group"`
-	CanCreateOrganization          bool                    `json:"can_create_organization"`
 	Note                           string                  `json:"note,omitempty"`
 	UsingLicenseSeat               bool                    `json:"using_license_seat" tier:"premium"`
 	ThemeID                        int64                   `json:"theme_id,omitempty"`
@@ -646,12 +642,9 @@ func toOutput(u *gl.User, extra toolutil.InstanceUserExtra) Output {
 		JobTitle:                       u.JobTitle,
 		Organization:                   u.Organization,
 		PublicEmail:                    u.PublicEmail,
-		Skype:                          u.Skype,
 		Linkedin:                       u.Linkedin,
 		Twitter:                        u.Twitter,
 		WebsiteURL:                     u.WebsiteURL,
-		ExternUID:                      u.ExternUID,
-		Provider:                       u.Provider,
 		TwoFactorEnabled:               u.TwoFactorEnabled,
 		External:                       u.External,
 		Locked:                         u.Locked,
@@ -659,7 +652,6 @@ func toOutput(u *gl.User, extra toolutil.InstanceUserExtra) Output {
 		ProjectsLimit:                  u.ProjectsLimit,
 		CanCreateProject:               u.CanCreateProject,
 		CanCreateGroup:                 u.CanCreateGroup,
-		CanCreateOrganization:          u.CanCreateOrganization,
 		Note:                           u.Note,
 		UsingLicenseSeat:               u.UsingLicenseSeat,
 		ThemeID:                        u.ThemeID,
