@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -190,28 +191,108 @@ func selections(document *ast.QueryDocument) map[string][]string {
 	return found
 }
 
-// decodedMembers returns every JSON member name the decoder rooted at decoded
-// reads, following pointers, slices and nested structs down to the scalars.
-func decodedMembers(decoded reflect.Type) []string {
-	var members []string
-	seen := map[reflect.Type]bool{}
-	var walk func(reflect.Type)
-	walk = func(current reflect.Type) {
-		for current.Kind() == reflect.Pointer || current.Kind() == reflect.Slice {
-			current = current.Elem()
-		}
-		if current.Kind() != reflect.Struct || seen[current] {
-			return
-		}
-		seen[current] = true
-		for field := range current.Fields() {
-			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-			members = append(members, name)
-			walk(field.Type)
+// elementOf is the type a decoder member holds one of, looking through the
+// pointers and slices encoding/json looks through.
+func elementOf(decoded reflect.Type) reflect.Type {
+	for decoded.Kind() == reflect.Pointer || decoded.Kind() == reflect.Slice {
+		decoded = decoded.Elem()
+	}
+	return decoded
+}
+
+// selectedByKey gathers the fields set selects, keyed by the JSON member each
+// is answered under: its alias, which gqlparser sets to the field's name when
+// none is written. Inline fragments and fragment spreads are followed into the
+// set they contribute to, and a key selected more than once keeps every
+// occurrence, since GraphQL merges their sub-selections into one member.
+func selectedByKey(set ast.SelectionSet, into map[string][]*ast.Field) {
+	for _, selection := range set {
+		switch node := selection.(type) {
+		case *ast.Field:
+			into[node.Alias] = append(into[node.Alias], node)
+		case *ast.InlineFragment:
+			selectedByKey(node.SelectionSet, into)
+		case *ast.FragmentSpread:
+			selectedByKey(node.Definition.SelectionSet, into)
 		}
 	}
-	walk(decoded)
-	return members
+}
+
+// unselectedMembers walks the decoder rooted at decoded and the selection set
+// of operation side by side, and returns the path of every member the decoder
+// reads that the document does not select at that position.
+//
+// A decoder that nests itself, as TypeRef does through ofType, reads deeper
+// than any document can select, so the recursive member is excused once the
+// chain already holds floors[type] nodes of that type. A recursive type with
+// no floor is held like any other member.
+func unselectedMembers(operation *ast.OperationDefinition, decoded reflect.Type, floors map[reflect.Type]int) []string {
+	var missing []string
+	onPath := map[reflect.Type]int{}
+	var walk func(current reflect.Type, sets []ast.SelectionSet, path string)
+	walk = func(current reflect.Type, sets []ast.SelectionSet, path string) {
+		current = elementOf(current)
+		if current.Kind() != reflect.Struct {
+			return
+		}
+		onPath[current]++
+		defer func() { onPath[current]-- }()
+
+		selected := map[string][]*ast.Field{}
+		for _, set := range sets {
+			selectedByKey(set, selected)
+		}
+		for member := range current.Fields() {
+			key, _, _ := strings.Cut(member.Tag.Get("json"), ",")
+			at := strings.TrimPrefix(path+"."+key, ".")
+			fields, ok := selected[key]
+			if !ok {
+				nested := elementOf(member.Type)
+				if floor, recursive := floors[nested]; recursive && onPath[nested] >= floor {
+					continue
+				}
+				missing = append(missing, at)
+				continue
+			}
+			nestedSets := make([]ast.SelectionSet, 0, len(fields))
+			for _, field := range fields {
+				nestedSets = append(nestedSets, field.SelectionSet)
+			}
+			walk(member.Type, nestedSets, at)
+		}
+	}
+	walk(decoded, []ast.SelectionSet{operation.SelectionSet}, "")
+	return missing
+}
+
+// typeReferenceNodes is how many TypeRef nodes an introspection answer takes
+// to spell reference: one per NON_NULL and LIST wrapper, and one for the named
+// type inside them.
+func typeReferenceNodes(reference *ast.Type) int {
+	nodes := 1
+	if reference.NonNull {
+		nodes++
+	}
+	if reference.Elem != nil {
+		return nodes + typeReferenceNodes(reference.Elem)
+	}
+	return nodes
+}
+
+// deepestTypeReference is the most TypeRef nodes any field, argument or input
+// field type in schema takes to spell, which is how deep the ofType chain has
+// to reach for the pin to carry every one of them whole.
+func deepestTypeReference(schema *ast.Schema) int {
+	deepest := 0
+	for _, definition := range schema.Types {
+		for _, field := range definition.Fields {
+			deepest = max(deepest, typeReferenceNodes(field.Type))
+			for _, argument := range field.Arguments {
+				deepest = max(deepest, typeReferenceNodes(argument.Type))
+			}
+		}
+	}
+	return deepest
 }
 
 // TestQueries_EachDocument_IsAcceptedAndSelectsWhatItsDecoderReads holds the
@@ -222,12 +303,24 @@ func decodedMembers(decoded reflect.Type) []string {
 //
 // Accepted is half of it. A member the decoder reads that the document never
 // selects is empty on every answer from an instance that honors the selection
-// set; GitLab does not today, which is exactly why no run would notice.
+// set; GitLab does not today, which is exactly why no run would notice. The
+// question is asked where the decoder reads the member, walking the decoder and
+// the selection set together, because the introspection query selects kind,
+// name and type at several depths: one of them dropped is still selected
+// somewhere else, and a comparison of names across the whole document cannot
+// see that it went.
+//
+// The ofType chain is the one place a decoder reads deeper than a document can
+// select, since TypeRef nests itself and the document has to stop. It is held
+// to the deepest type reference the pinned schema spells instead: a chain
+// shorter than that loses the innermost type of the deepest references GitLab
+// serves.
 func TestQueries_EachDocument_IsAcceptedAndSelectsWhatItsDecoderReads(t *testing.T) {
 	schema, err := graphqlschema.Schema()
 	if err != nil {
 		t.Fatalf("load the pinned schema: %v", err)
 	}
+	floors := map[reflect.Type]int{reflect.TypeFor[TypeRef](): deepestTypeReference(schema)}
 	cases := []struct {
 		name     string
 		document string
@@ -242,11 +335,11 @@ func TestQueries_EachDocument_IsAcceptedAndSelectsWhatItsDecoderReads(t *testing
 			if parseErr != nil {
 				t.Fatalf("the pinned schema refuses %s: %v", testCase.name, parseErr)
 			}
-			selected := selections(parsed)
-			for _, member := range decodedMembers(testCase.decoder) {
-				if _, ok := selected[member]; !ok {
-					t.Errorf("the decoder reads %q and %s never selects it", member, testCase.name)
-				}
+			if len(parsed.Operations) != 1 {
+				t.Fatalf("%s holds %d operations, want the one its decoder reads", testCase.name, len(parsed.Operations))
+			}
+			for _, path := range unselectedMembers(parsed.Operations[0], testCase.decoder, floors) {
+				t.Errorf("the decoder reads %s and %s does not select it there", path, testCase.name)
 			}
 		})
 	}
@@ -521,6 +614,14 @@ func (refusingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 // status that is not 200 also carries the start of the body beside it, which
 // is the only part of the answer that tells a gateway page from a refusal.
 //
+// Each want is the beginning of the message as this package writes it, with %s
+// where it names the endpoint, rather than a phrase plus a search for the
+// endpoint anywhere in the message. Two of these refusals wrap an error from
+// net/url or net/http, and both of those quote the URL on their own account
+// (`parse "://not a url": ...`, `Post "http://gitlab.invalid/api/graphql":
+// ...`), so a search of the whole message finds the endpoint whether or not
+// this package named it.
+//
 // Nothing listening is a transport that refuses every round trip rather than a
 // closed httptest server: the port a closed listener frees can be handed to
 // the next server this test opens, or to a parallel mutation run's, and the
@@ -537,54 +638,54 @@ func TestPost_TransportAndProtocolFailures_AreNamed(t *testing.T) {
 	cases := []struct {
 		name   string
 		target Target
-		want   string
+		// want is a prefix of the error, with %s standing for the endpoint.
+		want string
 	}{
 		{
 			name:   "an endpoint that is not a URL",
 			target: Target{Endpoint: "://not a url", Client: http.DefaultClient},
-			want:   "build the request",
+			want:   "build the request for %s: ",
 		},
 		{
 			name:   "nothing listening",
 			target: Target{Endpoint: "http://gitlab.invalid/api/graphql", Client: &http.Client{Transport: refusingTransport{}}},
-			want:   "ask ",
+			want:   "ask %s: ",
 		},
 		{
 			name:   "a body that ends early",
 			target: Target{Endpoint: truncating.URL, Client: truncating.Client()},
-			want:   "read the answer",
+			want:   "read the answer from %s: ",
 		},
 		{
 			name:   "a status that is not 200",
 			target: answering(t, http.StatusBadGateway, "<html>gateway</html>"),
-			want:   "answered 502 Bad Gateway: <html>gateway</html>",
+			want:   "%s answered 502 Bad Gateway: <html>gateway</html>",
 		},
 		{
 			name:   "a body that is not JSON",
 			target: answering(t, http.StatusOK, "definitely not json"),
-			want:   "decode the answer",
+			want:   "decode the answer from %s: ",
 		},
 		{
 			name:   "an errors array",
 			target: answering(t, http.StatusOK, `{"errors":[{"message":"field not found"},{"message":"and another"}]}`),
-			want:   "refused the query: field not found; and another",
+			want:   "%s refused the query: field not found; and another",
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
+			want := fmt.Sprintf(testCase.want, testCase.target.Endpoint)
+
 			raw, err := post(context.Background(), testCase.target, "query { ok }")
 
 			if err == nil {
-				t.Fatalf("post() error = nil, want one naming %q", testCase.want)
+				t.Fatalf("post() error = nil, want one beginning %q", want)
 			}
 			if raw != nil {
 				t.Errorf("post() data = %s, want nil on failure", raw)
 			}
-			if !strings.Contains(err.Error(), testCase.want) {
-				t.Errorf("post() error = %q, want it to name %q", err, testCase.want)
-			}
-			if !strings.Contains(err.Error(), testCase.target.Endpoint) {
-				t.Errorf("post() error = %q, want it to name the endpoint %s", err, testCase.target.Endpoint)
+			if !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("post() error = %q, want it to begin %q", err, want)
 			}
 		})
 	}
