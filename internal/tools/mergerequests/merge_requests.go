@@ -1591,13 +1591,63 @@ type IssuesClosedInput struct {
 // IssuesClosedOutput holds the list of issues that would be closed by merging an MR.
 //
 // The route renders an issue of this instance as API::Entities::IssueBasic, so
-// the rows are the basic issue and not the full one: what only the issues API
-// adds is not sent here. See [issues.ReferencedOutput] for the other kind of
-// row.
+// those rows are the basic issue and not the full one: what only the issues API
+// adds is not sent here. An external tracker's issue is the other entity the
+// route renders, and is listed apart; see [ExternalIssueOutput].
 type IssuesClosedOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.ReferencedOutput `json:"issues"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	Issues         []issues.BasicOutput      `json:"issues"`
+	ExternalIssues []ExternalIssueOutput     `json:"external_issues,omitempty"`
+	Pagination     toolutil.PaginationOutput `json:"pagination"`
+}
+
+// ExternalIssueOutput is an issue of the external tracker a project can use
+// instead of GitLab's own (Jira and its peers), as the two merge request
+// listings that can return one render it: API::Entities::ExternalIssue, a
+// title and an `id` holding the tracker's own identifier as a string. No other
+// route renders that entity.
+//
+// lib/api/merge_requests.rb answers both listings with one array, the
+// IssueBasic rows first and these after them. They are published as a list of
+// their own because the two entities share nothing but a title: in one list,
+// every key the basic issue carries without omitempty would have been
+// published on this row too, with the zero value standing for a number, a
+// state and flags the tracker never sent. The list is omitted when a page
+// carries none.
+//
+// client-go has no type for the entity. Its Issue.UnmarshalJSON moves a
+// string id into ExternalID, which is where [splitReferencedIssues] reads it
+// back, so this type mirrors the entity rather than a client-go struct.
+type ExternalIssueOutput struct {
+	Title string `json:"title"`
+	ID    string `json:"id"`
+}
+
+// splitReferencedIssues converts a page of the closes-issues or
+// related-issues listing into the two entities it holds: the basic issue for
+// an issue of this instance, with the keys client-go does not model read off
+// the captured answer the way every IssueBasic listing reads them, and the
+// tracker's title and identifier for an external one. client-go decodes an
+// ExternalIssue row into an Issue with a zero ID and the tracker's identifier
+// in ExternalID, which is the only mark telling the two apart after the
+// decode.
+//
+// The whole page is converted before it is split because the captured keys
+// are read by position in the array GitLab sent.
+func splitReferencedIssues(list []*gl.Issue, captured *gitlabclient.ResponseCapture) (instance []issues.BasicOutput, external []ExternalIssueOutput, err error) {
+	basics, err := issues.ToBasicOutputs(list, captured)
+	if err != nil {
+		return nil, nil, err
+	}
+	instance = make([]issues.BasicOutput, 0, len(list))
+	for i, issue := range list {
+		if issue.ExternalID != "" {
+			external = append(external, ExternalIssueOutput{Title: issue.Title, ID: issue.ExternalID})
+			continue
+		}
+		instance = append(instance, basics[i])
+	}
+	return instance, external, nil
 }
 
 // IssuesClosed retrieves the list of issues that would be closed when
@@ -1621,11 +1671,13 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 
 func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	var external []ExternalIssueOutput
 	return listMergeRequestItems(ctx, args, list,
-		func(items []*gl.Issue) ([]issues.ReferencedOutput, error) {
-			return issues.ToReferencedOutputs(items, captured)
-		}, func(out []issues.ReferencedOutput, pagination toolutil.PaginationOutput) IssuesClosedOutput {
-			return IssuesClosedOutput{Issues: out, Pagination: pagination}
+		func(items []*gl.Issue) (instance []issues.BasicOutput, err error) {
+			instance, external, err = splitReferencedIssues(items, captured)
+			return instance, err
+		}, func(out []issues.BasicOutput, pagination toolutil.PaginationOutput) IssuesClosedOutput {
+			return IssuesClosedOutput{Issues: out, ExternalIssues: external, Pagination: pagination}
 		})
 }
 
@@ -1907,13 +1959,14 @@ type RelatedIssuesInput struct {
 // RelatedIssuesOutput holds the list of issues related to a merge request.
 //
 // The route renders an issue of this instance as API::Entities::IssueBasic, so
-// the rows are the basic issue and not the full one: what only the issues API
-// adds is not sent here. See [issues.ReferencedOutput] for the other kind of
-// row.
+// those rows are the basic issue and not the full one: what only the issues API
+// adds is not sent here. An external tracker's issue is the other entity the
+// route renders, and is listed apart; see [ExternalIssueOutput].
 type RelatedIssuesOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.ReferencedOutput `json:"issues"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	Issues         []issues.BasicOutput      `json:"issues"`
+	ExternalIssues []ExternalIssueOutput     `json:"external_issues,omitempty"`
+	Pagination     toolutil.PaginationOutput `json:"pagination"`
 }
 
 // RelatedIssues retrieves the list of issues related to a merge request.
@@ -1936,11 +1989,13 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 
 func listMergeRequestRelatedIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	var external []ExternalIssueOutput
 	return listMergeRequestItems(ctx, args, list,
-		func(items []*gl.Issue) ([]issues.ReferencedOutput, error) {
-			return issues.ToReferencedOutputs(items, captured)
-		}, func(out []issues.ReferencedOutput, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
-			return RelatedIssuesOutput{Issues: out, Pagination: pagination}
+		func(items []*gl.Issue) (instance []issues.BasicOutput, err error) {
+			instance, external, err = splitReferencedIssues(items, captured)
+			return instance, err
+		}, func(out []issues.BasicOutput, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
+			return RelatedIssuesOutput{Issues: out, ExternalIssues: external, Pagination: pagination}
 		})
 }
 

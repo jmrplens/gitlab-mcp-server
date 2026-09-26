@@ -378,12 +378,13 @@ func FormatReviewersMarkdown(out ReviewersOutput) string {
 // FormatIssuesClosedMarkdown renders the issues a merge would close as a
 // Markdown table.
 func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
-	if len(out.Issues) == 0 {
+	count := len(out.Issues) + len(out.ExternalIssues)
+	if count == 0 {
 		return toolutil.EmptyMessage("issues that would be closed on merge")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Issues Closed on Merge", len(out.Issues), out.Pagination)
-	writeIssueRows(&b, out.Issues)
+	toolutil.WriteListHeading(&b, "Issues Closed on Merge", count, out.Pagination)
+	writeIssueRows(&b, out.Issues, out.ExternalIssues)
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionIssueGet, "view one of these issues"),
 		toolutil.HintAction(actionMRMerge, "merge and close them"),
@@ -394,12 +395,13 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 // FormatRelatedIssuesMarkdown renders the issues a merge request references as
 // a Markdown table.
 func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
-	if len(out.Issues) == 0 {
+	count := len(out.Issues) + len(out.ExternalIssues)
+	if count == 0 {
 		return toolutil.EmptyMessage("related issues")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Related Issues", len(out.Issues), out.Pagination)
-	writeIssueRows(&b, out.Issues)
+	toolutil.WriteListHeading(&b, "Related Issues", count, out.Pagination)
+	writeIssueRows(&b, out.Issues, out.ExternalIssues)
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionIssueGet, "view one issue's details"),
 		toolutil.HintAction(actionMRRelatedIssues, "list them again after the merge request changes"),
@@ -409,29 +411,27 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 
 // writeIssueRows writes the issue table the two issue listings share: the same
 // columns, the same escaping and the same state glyph, so the two cannot drift.
-func writeIssueRows(b *strings.Builder, list []issues.ReferencedOutput) {
+// An external tracker's issue follows the issues of this instance, in the
+// order GitLab sends them, named by the tracker's identifier: GitLab sends
+// such a row no IID, and a title is all it carries besides.
+func writeIssueRows(b *strings.Builder, list []issues.BasicOutput, external []ExternalIssueOutput) {
 	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Labels"))
 	for _, issue := range list {
 		b.WriteString(toolutil.MarkdownTableRow(
-			referencedIssueCell(issue),
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
 			toolutil.EscapeMdTableCell(issue.Title),
 			issueStateCell(issue.State),
-			toolutil.MdUserHandle(issues.AuthorName(issue.BasicOutput)),
+			toolutil.MdUserHandle(issues.AuthorName(issue)),
 			toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")),
 		))
 	}
-}
-
-// referencedIssueCell names the issue a row is, linked to it where the row
-// carries an address: an issue of this instance by its IID, and an external
-// tracker's issue by the identifier the tracker gave it, since GitLab sends
-// such a row no IID and "#0" would name an issue that does not exist.
-func referencedIssueCell(issue issues.ReferencedOutput) string {
-	name := fmt.Sprintf("#%d", issue.IID)
-	if issue.ExternalID != "" {
-		name = issue.ExternalID
+	for _, issue := range external {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(issue.ID),
+			toolutil.EscapeMdTableCell(issue.Title),
+			"", "", "",
+		))
 	}
-	return toolutil.MdTitleLink(name, issue.WebURL)
 }
 
 // issueStateCell renders an issue state with its emoji, and nothing when GitLab

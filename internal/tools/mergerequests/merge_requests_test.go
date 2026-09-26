@@ -1117,52 +1117,113 @@ const externalIssueRows = `[` +
 	`{"title":"External Issue PROJ-7","id":"PROJ-7"}` +
 	`]`
 
-// TestMRReferencedIssues_ExternalTrackerRowKeepsItsIdentifier drives both
-// listings with a page carrying an issue of this instance and an issue of an
-// external tracker, and checks that the tracker's identifier reaches the row
-// that sent it and no other. client-go's Issue moves the string id into
-// ExternalID, which is the only place the identifier survives the decode; the
-// row type carries it because no other issue route renders such a row.
-func TestMRReferencedIssues_ExternalTrackerRowKeepsItsIdentifier(t *testing.T) {
-	cases := []struct {
-		name string
-		path string
-		call func(*gitlabclient.Client) ([]issues.ReferencedOutput, error)
-	}{
-		{"issues closed", pathMR1 + "/closes_issues", func(client *gitlabclient.Client) ([]issues.ReferencedOutput, error) {
-			out, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1})
-			return out.Issues, err
-		}},
-		{"related issues", pathMR1 + "/related_issues", func(client *gitlabclient.Client) ([]issues.ReferencedOutput, error) {
-			out, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1})
-			return out.Issues, err
-		}},
-	}
-	for _, tc := range cases {
+// referencedIssuesCall runs one of the two referenced-issue listings and
+// returns its two lists and its published JSON, so a test holds both
+// listings to the same assertions.
+type referencedIssuesCall func(*gitlabclient.Client) (instance []issues.BasicOutput, external []ExternalIssueOutput, published []byte, err error)
+
+// referencedIssuesCalls are the two listings that can return an external
+// tracker's issue, with the path each one asks GitLab.
+var referencedIssuesCalls = []struct {
+	name string
+	path string
+	call referencedIssuesCall
+}{
+	{"issues closed", pathMR1 + "/closes_issues", func(client *gitlabclient.Client) ([]issues.BasicOutput, []ExternalIssueOutput, []byte, error) {
+		out, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1})
+		raw, marshalErr := json.Marshal(out)
+		return out.Issues, out.ExternalIssues, raw, errors.Join(err, marshalErr)
+	}},
+	{"related issues", pathMR1 + "/related_issues", func(client *gitlabclient.Client) ([]issues.BasicOutput, []ExternalIssueOutput, []byte, error) {
+		out, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1})
+		raw, marshalErr := json.Marshal(out)
+		return out.Issues, out.ExternalIssues, raw, errors.Join(err, marshalErr)
+	}},
+}
+
+// serveReferencedIssues answers the listing at path with body and refuses
+// anything else.
+func serveReferencedIssues(t *testing.T, path, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == path {
+			testutil.RespondJSON(w, http.StatusOK, body)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+}
+
+// TestMRReferencedIssues_ExternalTrackerRowsListedApart drives both listings
+// with a page carrying an issue of this instance and an issue of an external
+// tracker, and checks that each lands in the list of its own entity: the
+// basic issue with the keys the capture read, and the tracker's title and
+// identifier with nothing of the basic issue's, since GitLab sends such a row
+// a title and a string id and nothing else. client-go moves the string id
+// into ExternalID, which is the only mark telling the two apart after the
+// decode.
+func TestMRReferencedIssues_ExternalTrackerRowsListedApart(t *testing.T) {
+	for _, tc := range referencedIssuesCalls {
 		t.Run(tc.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodGet && r.URL.Path == tc.path {
-					testutil.RespondJSON(w, http.StatusOK, externalIssueRows)
-					return
-				}
-				http.NotFound(w, r)
-			}))
-			rows, err := tc.call(client)
+			instance, external, published, err := tc.call(serveReferencedIssues(t, tc.path, externalIssueRows))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(rows) != 2 {
-				t.Fatalf("got %d rows, want 2", len(rows))
+			if len(instance) != 1 || instance[0].IID != 5 || instance[0].Type != "ISSUE" {
+				t.Errorf("issues = %+v, want the one issue of this instance, IID 5 and type ISSUE", instance)
 			}
-			if rows[0].IID != 5 || rows[0].ExternalID != "" || rows[0].Type != "ISSUE" {
-				t.Errorf("internal row = IID %d, external_id %q, type %q; want 5, empty, ISSUE",
-					rows[0].IID, rows[0].ExternalID, rows[0].Type)
+			wantExternal := []ExternalIssueOutput{{Title: "External Issue PROJ-7", ID: "PROJ-7"}}
+			if !reflect.DeepEqual(external, wantExternal) {
+				t.Errorf("external_issues = %+v, want %+v", external, wantExternal)
 			}
-			if rows[1].ExternalID != "PROJ-7" || rows[1].IID != 0 || rows[1].Title != "External Issue PROJ-7" {
-				t.Errorf("external row = external_id %q, IID %d, title %q; want PROJ-7, 0, External Issue PROJ-7",
-					rows[1].ExternalID, rows[1].IID, rows[1].Title)
+			var answer struct {
+				ExternalIssues []map[string]any `json:"external_issues"`
+			}
+			if err = json.Unmarshal(published, &answer); err != nil {
+				t.Fatalf("decode the published answer: %v", err)
+			}
+			wantRow := map[string]any{"title": "External Issue PROJ-7", "id": "PROJ-7"}
+			if len(answer.ExternalIssues) != 1 || !reflect.DeepEqual(answer.ExternalIssues[0], wantRow) {
+				t.Errorf("published external_issues = %v, want exactly [%v]", answer.ExternalIssues, wantRow)
 			}
 		})
+	}
+}
+
+// TestMRReferencedIssues_ListsKeepTheirShapeWhenOneIsEmpty checks the two
+// edges of the split: a page of the tracker's issues alone still publishes an
+// empty issues list rather than a null one, and a page with no tracker issue
+// publishes no external_issues key at all, which is what every project that
+// uses GitLab's own issues answers.
+func TestMRReferencedIssues_ListsKeepTheirShapeWhenOneIsEmpty(t *testing.T) {
+	pages := []struct {
+		name         string
+		body         string
+		wantIssues   string
+		wantExternal bool
+	}{
+		{"tracker issues only", `[{"title":"External Issue PROJ-7","id":"PROJ-7"}]`, `[]`, true},
+		{"instance issues only", `[{"id":10,"iid":5,"title":"Bug fix","state":"opened"}]`, ``, false},
+	}
+	for _, tc := range referencedIssuesCalls {
+		for _, page := range pages {
+			t.Run(tc.name+"/"+page.name, func(t *testing.T) {
+				_, _, published, err := tc.call(serveReferencedIssues(t, tc.path, page.body))
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				var answer map[string]json.RawMessage
+				if err = json.Unmarshal(published, &answer); err != nil {
+					t.Fatalf("decode the published answer: %v", err)
+				}
+				if page.wantIssues != "" && string(answer["issues"]) != page.wantIssues {
+					t.Errorf("issues = %s, want %s", answer["issues"], page.wantIssues)
+				}
+				if _, ok := answer["external_issues"]; ok != page.wantExternal {
+					t.Errorf("external_issues present = %t, want %t (%s)", ok, page.wantExternal, published)
+				}
+			})
+		}
 	}
 }
 
@@ -2292,11 +2353,11 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 // issues a merge would close, through the issue table both issue listings share.
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	got := FormatIssuesClosedMarkdown(IssuesClosedOutput{
-		Issues: []issues.ReferencedOutput{
+		Issues: []issues.BasicOutput{
 			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
-			{Title: "External Issue PROJ-7", ExternalID: "PROJ-7"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+		ExternalIssues: []ExternalIssueOutput{{Title: "External Issue PROJ-7", ID: "PROJ-7"}},
+		Pagination:     toolutil.PaginationOutput{TotalItems: 2},
 	})
 	want := "## Issues Closed on Merge (2)\n\n" +
 		"| IID | Title | State | Author | Labels |\n" +
@@ -2396,7 +2457,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 // issues a merge request references.
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	got := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
-		Issues: []issues.ReferencedOutput{
+		Issues: []issues.BasicOutput{
 			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
@@ -2406,6 +2467,26 @@ func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 		"| --- | --- | --- | --- | --- |\n" +
 		"| #10 | Related bug | 🟢 opened | @alice | bug, critical |\n" +
 		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'issue.get' to view one issue's details\n" +
+		"- Use action 'merge_request.related_issues' to list them again after the merge request changes\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatRelatedIssuesMarkdown_TrackerIssuesOnly verifies that a merge
+// request whose only related issues are in an external tracker is rendered as
+// a table of them rather than as an empty answer, each named by the tracker's
+// identifier.
+func TestFormatRelatedIssuesMarkdown_TrackerIssuesOnly(t *testing.T) {
+	got := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
+		ExternalIssues: []ExternalIssueOutput{{Title: "External Issue PROJ-7", ID: "PROJ-7"}},
+	})
+	want := "## Related Issues (1)\n\n" +
+		"| IID | Title | State | Author | Labels |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| PROJ-7 | External Issue PROJ-7 |  |  |  |\n" +
 		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
 		"- Use action 'issue.get' to view one issue's details\n" +
 		"- Use action 'merge_request.related_issues' to list them again after the merge request changes\n"

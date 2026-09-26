@@ -18,6 +18,12 @@ import (
 const createUserForbiddenHint = "creating users requires admin token; email and username must be unique; password must meet instance complexity policy or use reset_password=true; required fields: email, name, username" // NOSONAR
 
 // CreateInput holds parameters for creating a new GitLab user (admin only).
+//
+// There is deliberately no skype field, though client-go's CreateUserOptions
+// and ModifyUserOptions still carry one. GitLab ignores the users.skype column
+// since 18.4 (app/models/user.rb) and neither POST /users nor PUT /users/:id
+// declares the parameter, so Grape drops the key before anything reads it: a
+// caller who set it was answered with a user carrying no Skype account at all.
 type CreateInput struct {
 	Email                          string `json:"email" jsonschema:"The user email address,required"`
 	Name                           string `json:"name" jsonschema:"The user display name,required"`
@@ -42,7 +48,6 @@ type CreateInput struct {
 	WebsiteURL                     string `json:"website_url,omitempty" jsonschema:"User website URL"`
 	Linkedin                       string `json:"linkedin,omitempty" jsonschema:"LinkedIn account"`
 	Twitter                        string `json:"twitter,omitempty" jsonschema:"Twitter/X account"`
-	Skype                          string `json:"skype,omitempty" jsonschema:"Skype account"`
 	Discord                        string `json:"discord,omitempty" jsonschema:"Discord account"`
 	Github                         string `json:"github,omitempty" jsonschema:"GitHub account"`
 	Provider                       string `json:"provider,omitempty" jsonschema:"External provider name (use with extern_uid)"`
@@ -107,7 +112,6 @@ type ModifyInput struct {
 	WebsiteURL          string `json:"website_url,omitempty" jsonschema:"User website URL"`
 	Linkedin            string `json:"linkedin,omitempty" jsonschema:"LinkedIn account"`
 	Twitter             string `json:"twitter,omitempty" jsonschema:"Twitter/X account"`
-	Skype               string `json:"skype,omitempty" jsonschema:"Skype account"`
 	Provider            string `json:"provider,omitempty" jsonschema:"External provider name (use with extern_uid)"`
 	ExternUID           string `json:"extern_uid,omitempty" jsonschema:"External UID for the provider"`
 	ThemeID             *int64 `json:"theme_id,omitempty" jsonschema:"GitLab theme ID for the user's UI"`
@@ -116,6 +120,8 @@ type ModifyInput struct {
 	// at all, so the one this input used to offer reached neither the SDK
 	// options nor the wire: a caller who set it was answered with a user whose
 	// lock state had not moved.
+	//
+	// Nor is there a skype field, for the reason CreateInput gives.
 }
 
 // Modify modifies an existing GitLab user (admin only).
@@ -213,7 +219,6 @@ func buildCreateUserOptions(input CreateInput) *gl.CreateUserOptions {
 		WebsiteURL:                     strPtr(input.WebsiteURL),
 		Linkedin:                       strPtr(input.Linkedin),
 		Twitter:                        strPtr(input.Twitter),
-		Skype:                          strPtr(input.Skype),
 		Discord:                        strPtr(input.Discord),
 		Github:                         strPtr(input.Github),
 		Provider:                       strPtr(input.Provider),
@@ -255,7 +260,6 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		WebsiteURL:          strPtr(input.WebsiteURL),
 		Linkedin:            strPtr(input.Linkedin),
 		Twitter:             strPtr(input.Twitter),
-		Skype:               strPtr(input.Skype),
 		Provider:            strPtr(input.Provider),
 		ExternUID:           strPtr(input.ExternUID),
 		ThemeID:             input.ThemeID,

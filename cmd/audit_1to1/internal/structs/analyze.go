@@ -41,9 +41,6 @@ const (
 	docNotesIssueList    = "notes.md#list-all-issue-notes"
 	docNotesWikiRetrieve = "notes.md#retrieve-a-wiki-page-note"
 	docDiscussionsMRList = "discussions.md#list-all-merge-request-discussion-items"
-	// The closes_issues section prints the IssueBasic row in its attribute
-	// table and example body, and the ExternalIssue row beside it.
-	docMergeRequestClosesIssues = "merge_requests.md#list-issues-that-close-on-merge"
 	// The member pages print two_factor_enabled in their example bodies and
 	// name the SAML and SCIM identities under their known issues; locked,
 	// public_email, membership_state and override are exposed by
@@ -178,6 +175,10 @@ const (
 		"merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic " +
 		"with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option " +
 		"into a presenter option; exposed on the merge request list inputs, where it takes effect"
+	// skypeDiscarded is the reason the user create and modify inputs offer no
+	// skype, which client-go's options still carry.
+	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither " +
+		"POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
 	tagKeyJSON = "json"
 	// tagKeyURL is the tag go-querystring names a query parameter by, which
 	// client-go's Options structs carry beside their json tags.
@@ -558,21 +559,15 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"issues.BasicOutput.blocking_issues_count": docIssuesList,
 	"issues.BasicOutput.start_date":            docIssuesList,
 	"issues.BasicOutput.type":                  docIssuesList,
-	// The same three keys on a row of the issues a merge request closes or
-	// relates to, which doc/api/merge_requests.md prints in the closes_issues
-	// example body.
-	"issues.ReferencedOutput.blocking_issues_count": docMergeRequestClosesIssues,
-	"issues.ReferencedOutput.start_date":            docMergeRequestClosesIssues,
-	"issues.ReferencedOutput.type":                  docMergeRequestClosesIssues,
-	"issues.Output.blocking_issues_count":           docIssuesList,
-	"issues.Output.epic_iid":                        docIssuesList,
-	"issues.Output.has_tasks":                       docIssuesList,
-	"issues.Output.imported":                        docIssuesList,
-	"issues.Output.imported_from":                   docIssuesList,
-	"issues.Output.severity":                        docIssuesList,
-	"issues.Output.start_date":                      docIssuesList,
-	"issues.Output.task_status":                     docIssuesList,
-	"issues.Output.type":                            docIssuesList,
+	"issues.Output.blocking_issues_count":      docIssuesList,
+	"issues.Output.epic_iid":                   docIssuesList,
+	"issues.Output.has_tasks":                  docIssuesList,
+	"issues.Output.imported":                   docIssuesList,
+	"issues.Output.imported_from":              docIssuesList,
+	"issues.Output.severity":                   docIssuesList,
+	"issues.Output.start_date":                 docIssuesList,
+	"issues.Output.task_status":                docIssuesList,
+	"issues.Output.type":                       docIssuesList,
 
 	"projects.Output.description_html":                             docProjectsGet,
 	"projects.Output.duo_dependency_bump_breaking_changes_enabled": docProjectsGet,
@@ -980,6 +975,12 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"deploymentmergerequests.ListInput.view":                      deploymentMergeRequestsInert,
 	"deploymentmergerequests.ListInput.with_labels_details":       deploymentMergeRequestsInert,
 	"deploymentmergerequests.ListInput.with_merge_status_recheck": deploymentMergeRequestsInert,
+	// An SDK options field GitLab discards: app/models/user.rb ignores the
+	// users.skype column since 18.4 and lib/api/users.rb declares no skype
+	// param on POST /users or PUT /users/:id, so Grape drops the key. Recorded
+	// in docs/development/upstream-bugs.md.
+	"users.CreateInput.skype": skypeDiscarded,
+	"users.ModifyInput.skype": skypeDiscarded,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

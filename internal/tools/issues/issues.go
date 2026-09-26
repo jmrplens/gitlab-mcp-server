@@ -86,15 +86,18 @@ type BasicOutput struct {
 	// scalars not previously exposed). Two of client-go's keys are not among
 	// them. external_id is filled only from the string id of an external
 	// tracker's issue, which no issues route and no search renders; the two
-	// merge request listings that can return one carry it on their own row
-	// type. label_details is filled only where a route takes
-	// with_labels_details, which search and those two listings do not, so it
-	// sits on Output, whose routes do.
+	// merge request listings that can return one list such an issue apart,
+	// as the entity GitLab renders it. label_details is filled only where a
+	// route takes with_labels_details, which search and those two listings
+	// do not, so it sits on Output, whose routes do.
 	TimeStats            *TimeStatsOutput                     `json:"time_stats,omitempty"`
 	TaskCompletionStatus *toolutil.TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 	// What lib/api/entities/issue_basic.rb sends that client-go's Issue does
 	// not model, read from the captured response (ADR-0021).
-	BlockingIssuesCount *int64 `json:"blocking_issues_count,omitempty" tier:"premium"`
+	// blocking_issues_count carries no tier: ee/lib/ee/api/entities/
+	// issue_basic.rb exposes it under no licensed feature, so an Enterprise
+	// build sends it licensed or not, and a Community one sends nothing.
+	BlockingIssuesCount *int64 `json:"blocking_issues_count,omitempty"`
 	StartDate           string `json:"start_date,omitempty"`
 	Type                string `json:"type,omitempty"`
 }
@@ -344,8 +347,8 @@ func issueListOutput(op string, issues []*gl.Issue, resp *gl.Response, captured 
 // ToBasicOutputs converts a page of issues as API::Entities::IssueBasic
 // renders them, one extra per issue in order. It is what a package outside
 // this one calls when its own route presents the basic entity rather than the
-// full issue, which is search; the merge request's closed and related issues
-// come through [ToReferencedOutputs], which builds on it.
+// full issue: search, and the merge request's closed and related issues,
+// which convert a whole page before setting an external tracker's rows apart.
 func ToBasicOutputs(list []*gl.Issue, captured *gitlabclient.ResponseCapture) ([]BasicOutput, error) {
 	extras, err := toolutil.CapturedIssueBasics(captured, len(list))
 	if err != nil {
