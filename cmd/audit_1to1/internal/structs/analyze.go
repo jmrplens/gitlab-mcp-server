@@ -346,12 +346,13 @@ var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[
 	// null on every epic response. parent is exposed flattened, as the
 	// parent_iid and parent_path pair the widget carries.
 	//
-	// The REST epic's own omissions (user_notes_count, url, subscribed,
-	// reference, and label_details on a child epic) are not declared here: no
-	// converter pairs an epic output with gl.Epic, so a key for one would answer
-	// nothing. Why each is absent, and what to declare if a converter takes
-	// gl.Epic again, is recorded beside the converters in
-	// internal/tools/epics (toLinkItem).
+	// The REST epic's own omissions (user_notes_count and url, which gl.Epic
+	// declares and no epic endpoint sends) are not declared here: no converter
+	// pairs an epic output with gl.Epic, so a key for either would answer
+	// nothing. subscribed, reference and label_details would need no key even
+	// then, since gl.Epic declares none of them. Why each is absent, and what to
+	// declare if a converter takes gl.Epic again, is recorded beside the
+	// converters in internal/tools/epics (toLinkItem).
 	"epics.Output.status":       epicPhantomWidget,
 	"epics.Output.iteration_id": epicPhantomWidget,
 	"epics.Output.parent":       "exposed flattened as parent_iid + parent_path (the two fields of gl.WorkItemIID)",
@@ -1667,9 +1668,14 @@ const (
 // Options struct read the way its query is built, anything else is json.
 //
 // An Options struct a request sends as a JSON body is written by encoding/json
-// instead. The two differ only on a tie at the shallowest depth, where this
-// keeps a key the JSON body would leave out, which reports a candidate for a
-// person to adjudicate rather than hiding one.
+// instead. The two differ in two places: a tie at the shallowest depth, which
+// encoding/json drops and this keeps as the first declared, and a shallower
+// untagged field of the name, which hides a deeper tagged one from
+// encoding/json and hides nothing from a query. Both come to the same thing:
+// the query reading keeps a key the JSON body might leave out, never the
+// reverse, and labels a key both keep with the same field. The difference
+// therefore reports a candidate for a person to adjudicate rather than hiding
+// one.
 func encoderFor(tagKeys []string) encoder {
 	if len(tagKeys) > 0 && tagKeys[0] == tagKeyURL {
 		return encodingQuery
