@@ -36,15 +36,28 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String, $last: Int, $b
             nodes {
               id
               iid
+              reference(full: true)
+              workItemType { name }
               title
+              description
               state
+              confidential
+              hidden
+              archived
+              imported
+              externalAuthor
+              userDiscussionsCount
               webUrl
               createdAt
               updatedAt
+              closedAt
+              movedToWorkItemUrl
+              duplicatedToWorkItemUrl
+              promotedToEpicUrl
               author { username }
               widgets {
                 ... on WorkItemWidgetLabels {
-                  labels { nodes { title } }
+                  labels { nodes { id title color description descriptionHtml textColor } }
                 }
               }
             }
@@ -109,15 +122,34 @@ mutation($id: WorkItemID!, $parentId: WorkItemID!, $adjacentWorkItemId: WorkItem
 
 // gqlChildNode represents a child work item from the GraphQL hierarchy widget.
 type gqlChildNode struct {
-	ID        string           `json:"id"`
-	IID       string           `json:"iid"`
-	Title     string           `json:"title"`
-	State     string           `json:"state"`
-	WebURL    string           `json:"webUrl"`
-	CreatedAt string           `json:"createdAt"`
-	UpdatedAt string           `json:"updatedAt"`
-	Author    gqlAuthor        `json:"author"`
-	Widgets   []gqlLabelWidget `json:"widgets"`
+	ID                      string           `json:"id"`
+	IID                     string           `json:"iid"`
+	Reference               string           `json:"reference"`
+	WorkItemType            gqlWorkItemType  `json:"workItemType"`
+	Title                   string           `json:"title"`
+	Description             string           `json:"description"`
+	State                   string           `json:"state"`
+	Confidential            bool             `json:"confidential"`
+	Hidden                  bool             `json:"hidden"`
+	Archived                bool             `json:"archived"`
+	Imported                bool             `json:"imported"`
+	ExternalAuthor          string           `json:"externalAuthor"`
+	UserDiscussionsCount    int64            `json:"userDiscussionsCount"`
+	WebURL                  string           `json:"webUrl"`
+	CreatedAt               string           `json:"createdAt"`
+	UpdatedAt               string           `json:"updatedAt"`
+	ClosedAt                string           `json:"closedAt"`
+	MovedToWorkItemURL      string           `json:"movedToWorkItemUrl"`
+	DuplicatedToWorkItemURL string           `json:"duplicatedToWorkItemUrl"`
+	PromotedToEpicURL       string           `json:"promotedToEpicUrl"`
+	Author                  gqlAuthor        `json:"author"`
+	Widgets                 []gqlLabelWidget `json:"widgets"`
+}
+
+// gqlWorkItemType names the type of a child: an issue, a task, or a child
+// epic, all of which the hierarchy widget lists.
+type gqlWorkItemType struct {
+	Name string `json:"name"`
 }
 
 // gqlAuthor represents a user author in GraphQL responses.
@@ -125,14 +157,20 @@ type gqlAuthor struct {
 	Username string `json:"username"`
 }
 
-// gqlLabelTitle represents a single label title.
-type gqlLabelTitle struct {
-	Title string `json:"title"`
+// gqlLabel represents a label on a child, with the fields the shared label
+// details object publishes.
+type gqlLabel struct {
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Color           string `json:"color"`
+	Description     string `json:"description"`
+	DescriptionHTML string `json:"descriptionHtml"`
+	TextColor       string `json:"textColor"`
 }
 
-// gqlLabelsConnection holds a list of label titles.
+// gqlLabelsConnection holds the labels of a child.
 type gqlLabelsConnection struct {
-	Nodes []gqlLabelTitle `json:"nodes"`
+	Nodes []gqlLabel `json:"nodes"`
 }
 
 // gqlLabelWidget is a work item widget containing label data.
@@ -206,13 +244,26 @@ func normalizeState(state string) string {
 // nodeToChildOutput converts a GraphQL child node to the MCP output format.
 func nodeToChildOutput(n gqlChildNode) ChildOutput {
 	out := ChildOutput{
-		ID:        n.ID,
-		Title:     n.Title,
-		State:     normalizeState(n.State),
-		WebURL:    n.WebURL,
-		Author:    n.Author.Username,
-		CreatedAt: n.CreatedAt,
-		UpdatedAt: n.UpdatedAt,
+		ID:                      n.ID,
+		Reference:               n.Reference,
+		Type:                    n.WorkItemType.Name,
+		Title:                   n.Title,
+		Description:             n.Description,
+		State:                   normalizeState(n.State),
+		Confidential:            n.Confidential,
+		Hidden:                  n.Hidden,
+		Archived:                n.Archived,
+		Imported:                n.Imported,
+		ExternalAuthor:          n.ExternalAuthor,
+		UserDiscussionsCount:    n.UserDiscussionsCount,
+		WebURL:                  n.WebURL,
+		Author:                  n.Author.Username,
+		CreatedAt:               n.CreatedAt,
+		UpdatedAt:               n.UpdatedAt,
+		ClosedAt:                n.ClosedAt,
+		MovedToWorkItemURL:      n.MovedToWorkItemURL,
+		DuplicatedToWorkItemURL: n.DuplicatedToWorkItemURL,
+		PromotedToEpicURL:       n.PromotedToEpicURL,
 	}
 	if iid, err := strconv.ParseInt(n.IID, 10, 64); err == nil {
 		out.IID = iid
@@ -221,10 +272,27 @@ func nodeToChildOutput(n gqlChildNode) ChildOutput {
 		if w.Labels != nil {
 			for _, l := range w.Labels.Nodes {
 				out.Labels = append(out.Labels, l.Title)
+				out.LabelDetails = append(out.LabelDetails, labelDetails(l))
 			}
 		}
 	}
 	return out
+}
+
+// labelDetails converts a label into the shared label details object, the
+// numeric id read from the label's global ID.
+func labelDetails(l gqlLabel) *toolutil.LabelDetailsOutput {
+	details := &toolutil.LabelDetailsOutput{
+		Name:            l.Title,
+		Color:           l.Color,
+		Description:     l.Description,
+		DescriptionHTML: l.DescriptionHTML,
+		TextColor:       l.TextColor,
+	}
+	if _, id, err := toolutil.ParseGID(l.ID); err == nil {
+		details.ID = id
+	}
+	return details
 }
 
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
@@ -265,16 +333,39 @@ type UpdateInput struct {
 }
 
 // ChildOutput represents a child work item (issue) within an epic.
+//
+// reference is the child's full reference (group/project#iid for an issue),
+// which names the project child_project_path takes without the caller parsing
+// web_url.
+// type is the work item type's name, since the hierarchy lists tasks and
+// child epics beside issues. labels keeps the names every issue output
+// carries and label_details the rest of each label, as the epic output does.
+// The three URL keys say where the item went when it was moved, closed as a
+// duplicate or promoted to an epic, and are absent otherwise.
 type ChildOutput struct {
-	ID        string   `json:"id"`
-	IID       int64    `json:"iid"`
-	Title     string   `json:"title"`
-	State     string   `json:"state"`
-	WebURL    string   `json:"web_url,omitempty"`
-	Author    string   `json:"author,omitempty"`
-	Labels    []string `json:"labels,omitempty"`
-	CreatedAt string   `json:"created_at,omitempty"`
-	UpdatedAt string   `json:"updated_at,omitempty"`
+	ID                      string                         `json:"id"`
+	IID                     int64                          `json:"iid"`
+	Reference               string                         `json:"reference,omitempty"`
+	Type                    string                         `json:"type,omitempty"`
+	Title                   string                         `json:"title"`
+	Description             string                         `json:"description,omitempty"`
+	State                   string                         `json:"state"`
+	Confidential            bool                           `json:"confidential,omitempty"`
+	Hidden                  bool                           `json:"hidden,omitempty"`
+	Archived                bool                           `json:"archived,omitempty"`
+	Imported                bool                           `json:"imported,omitempty"`
+	ExternalAuthor          string                         `json:"external_author,omitempty"`
+	UserDiscussionsCount    int64                          `json:"user_discussions_count"`
+	WebURL                  string                         `json:"web_url,omitempty"`
+	Author                  string                         `json:"author,omitempty"`
+	Labels                  []string                       `json:"labels,omitempty"`
+	LabelDetails            []*toolutil.LabelDetailsOutput `json:"label_details,omitempty"`
+	CreatedAt               string                         `json:"created_at,omitempty"`
+	UpdatedAt               string                         `json:"updated_at,omitempty"`
+	ClosedAt                string                         `json:"closed_at,omitempty"`
+	MovedToWorkItemURL      string                         `json:"moved_to_work_item_url,omitempty"`
+	DuplicatedToWorkItemURL string                         `json:"duplicated_to_work_item_url,omitempty"`
+	PromotedToEpicURL       string                         `json:"promoted_to_epic_url,omitempty"`
 }
 
 // ListOutput holds a paginated list of child issues in an epic.

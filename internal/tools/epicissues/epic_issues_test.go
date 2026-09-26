@@ -6,7 +6,9 @@ package epicissues
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -44,13 +46,29 @@ const gqlChildrenData = `{
           "nodes": [{
             "id": "gid://gitlab/WorkItem/10",
             "iid": "10",
+            "reference": "my-group/my-project#10",
+            "workItemType": {"name": "Issue"},
             "title": "Fix login bug",
+            "description": "Users cannot sign in",
             "state": "OPEN",
+            "confidential": true,
+            "hidden": true,
+            "archived": true,
+            "imported": true,
+            "externalAuthor": "reporter@example.com",
+            "userDiscussionsCount": 3,
             "webUrl": "https://gitlab.example.com/my-group/my-project/-/issues/10",
             "createdAt": "2026-01-15T10:00:00Z",
             "updatedAt": "2026-01-16T10:00:00Z",
+            "closedAt": "2026-01-17T10:00:00Z",
+            "movedToWorkItemUrl": "https://gitlab.example.com/my-group/other/-/issues/1",
+            "duplicatedToWorkItemUrl": "https://gitlab.example.com/my-group/other/-/issues/2",
+            "promotedToEpicUrl": "https://gitlab.example.com/groups/my-group/-/epics/3",
             "author": {"username": "alice"},
-            "widgets": [{"labels": {"nodes": [{"title": "bug"}, {"title": "critical"}]}}]
+            "widgets": [{"labels": {"nodes": [
+              {"id": "gid://gitlab/ProjectLabel/51", "title": "bug", "color": "#ff0000", "description": "A defect", "descriptionHtml": "<p>A defect</p>", "textColor": "#FFFFFF"},
+              {"id": "not-a-global-id", "title": "critical", "color": "#00ff00", "description": null, "descriptionHtml": null, "textColor": "#000000"}
+            ]}}]
           }]
         }
       }]
@@ -451,14 +469,56 @@ func assertListCaseResult(t *testing.T, out ListOutput, err error, tt listCase) 
 	}
 }
 
+// assertChildIssueFields compares the child gqlChildrenData converts to with
+// the whole value it should be. The fixture sets every field the children
+// query selects to a value no other field holds, so a key read into the wrong
+// field, or two assignments swapped, fails here; its second label carries an
+// id that is not a global ID, which is the other side of the parse.
 func assertChildIssueFields(t *testing.T, issue ChildOutput) {
 	t.Helper()
-	if issue.ID != "gid://gitlab/WorkItem/10" || issue.IID != 10 || issue.Title != "Fix login bug" || issue.State != "opened" || issue.Author != "alice" {
-		t.Fatalf("child issue = %+v, want full issue fields", issue)
+	want := ChildOutput{
+		ID:                      "gid://gitlab/WorkItem/10",
+		IID:                     10,
+		Reference:               "my-group/my-project#10",
+		Type:                    "Issue",
+		Title:                   "Fix login bug",
+		Description:             "Users cannot sign in",
+		State:                   "opened",
+		Confidential:            true,
+		Hidden:                  true,
+		Archived:                true,
+		Imported:                true,
+		ExternalAuthor:          "reporter@example.com",
+		UserDiscussionsCount:    3,
+		WebURL:                  "https://gitlab.example.com/my-group/my-project/-/issues/10",
+		Author:                  "alice",
+		Labels:                  []string{"bug", "critical"},
+		CreatedAt:               "2026-01-15T10:00:00Z",
+		UpdatedAt:               "2026-01-16T10:00:00Z",
+		ClosedAt:                "2026-01-17T10:00:00Z",
+		MovedToWorkItemURL:      "https://gitlab.example.com/my-group/other/-/issues/1",
+		DuplicatedToWorkItemURL: "https://gitlab.example.com/my-group/other/-/issues/2",
+		PromotedToEpicURL:       "https://gitlab.example.com/groups/my-group/-/epics/3",
+		LabelDetails: []*toolutil.LabelDetailsOutput{
+			{ID: 51, Name: "bug", Color: "#ff0000", Description: "A defect", DescriptionHTML: "<p>A defect</p>", TextColor: "#FFFFFF"},
+			{Name: "critical", Color: "#00ff00", TextColor: "#000000"},
+		},
 	}
-	if len(issue.Labels) != 2 || issue.Labels[0] != "bug" {
-		t.Errorf("Labels = %v, want [bug critical]", issue.Labels)
+	if !reflect.DeepEqual(issue, want) {
+		t.Errorf("child issue =\n %s\nwant\n %s", jsonText(t, issue), jsonText(t, want))
 	}
+}
+
+// jsonText renders a value the way the tool publishes it, which is the form a
+// whole-value mismatch reads best in: every pointer shows what it points at.
+func jsonText(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Errorf("marshal %T: %v", value, err)
+		return ""
+	}
+	return string(data)
 }
 
 // TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
@@ -1326,22 +1386,23 @@ func TestFormatListMarkdown(t *testing.T) {
 			input: ListOutput{
 				Issues: []ChildOutput{
 					{
-						ID: "gid://gitlab/Issue/1", IID: 10, Title: "Fix login bug", State: "opened",
+						ID: "gid://gitlab/Issue/1", IID: 10, Reference: "g/p#10", Type: "Issue", Title: "Fix login bug", State: "opened",
 						Author: "alice", Labels: []string{"bug", "critical"}, CreatedAt: "2026-01-15T10:00:00Z",
 						WebURL: "https://gitlab.example.com/g/p/-/issues/10",
 					},
 					{
-						ID: "gid://gitlab/Issue/2", IID: 20, Title: "Add feature", State: "closed",
+						// No reference: the row falls back to the IID.
+						ID: "gid://gitlab/Issue/2", IID: 20, Type: "Task", Title: "Add feature", State: "closed",
 						Author: "bob", CreatedAt: "2026-02-01T12:00:00Z",
 					},
 				},
 				Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor1"},
 			},
 			want: "## Epic Issues (2)\n\n" +
-				"| ID | IID | Title | State | Author | Labels | Created |\n" +
-				"| --- | --- | --- | --- | --- | --- | --- |\n" +
-				"| `gid://gitlab/Issue/1` | [#10](https://gitlab.example.com/g/p/-/issues/10) | Fix login bug | 🟢 opened | @alice | bug, critical | 15 Jan 2026 10:00 UTC |\n" +
-				"| `gid://gitlab/Issue/2` | #20 | Add feature | 🔴 closed | @bob |  | 1 Feb 2026 12:00 UTC |\n" +
+				"| ID | Reference | Type | Title | State | Author | Labels | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| `gid://gitlab/Issue/1` | [g/p#10](https://gitlab.example.com/g/p/-/issues/10) | Issue | Fix login bug | 🟢 opened | @alice | bug, critical | 15 Jan 2026 10:00 UTC |\n" +
+				"| `gid://gitlab/Issue/2` | #20 | Task | Add feature | 🔴 closed | @bob |  | 1 Feb 2026 12:00 UTC |\n" +
 				"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor1"}, 2) + "\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- " + toolutil.HintPreserveLinks + "\n" +
@@ -1361,9 +1422,9 @@ func TestFormatListMarkdown(t *testing.T) {
 				}},
 			},
 			want: "## Epic Issues (1)\n\n" +
-				"| ID | IID | Title | State | Author | Labels | Created |\n" +
-				"| --- | --- | --- | --- | --- | --- | --- |\n" +
-				"| `gid://gitlab/Issue/3` | #30 | No state |  | @carol |  | 1 Mar 2026 09:00 UTC |\n" +
+				"| ID | Reference | Type | Title | State | Author | Labels | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| `gid://gitlab/Issue/3` | #30 |  | No state |  | @carol |  | 1 Mar 2026 09:00 UTC |\n" +
 				"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{}, 1) + "\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- " + toolutil.HintPreserveLinks + "\n" +

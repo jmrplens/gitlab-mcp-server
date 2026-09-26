@@ -46,7 +46,7 @@ func epicIssueListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			ExampleBinding: `params.epic_iid:5`,
 		},
 	}
-	options.IndividualTool.Description = "List the issues linked to a group epic via the Work Items hierarchy. Returns: child issues with IID, title, state, author, labels, web URL, timestamps, and cursor pagination metadata. See also: gitlab_epic_issue_assign, gitlab_epic_issue_remove, gitlab_epic_get."
+	options.IndividualTool.Description = "List the issues linked to a group epic via the Work Items hierarchy. Returns: child issues with IID, full reference, type, title, description, state, confidentiality, author, labels with their details, web URL, timestamps, and cursor pagination metadata. See also: gitlab_epic_issue_assign, gitlab_epic_issue_remove, gitlab_epic_get."
 	return toolutil.NewReadActionSpec("epic_issue_list", toolutil.RouteAction(client, List), options)
 }
 
