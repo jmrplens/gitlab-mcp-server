@@ -9,5 +9,7 @@
 // backlog type is the contract downstream tooling (plan/1to1-backlog.json
 // consumers, CI dashboards) depends on; the enum stream was added as new keys
 // beside the existing ones, so a reader of the older shape still finds
-// everything it read before.
+// everything it read before. The struct stream's stale declarations were added
+// the same way: a summary count and, when there are any, a top-level list,
+// since the package a stale key names may be the thing that is gone.
 package merge

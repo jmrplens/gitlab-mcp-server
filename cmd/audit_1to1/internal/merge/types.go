@@ -6,7 +6,12 @@ import "encoding/json"
 
 // structReport mirrors the fields consumed from audit_struct_completeness.
 type structReport struct {
-	Packages []struct {
+	// StaleDeclarations is the struct stream's other kind of finding: a key of
+	// one of its declaration tables that answered no candidate. It belongs to
+	// no package the report lists, since the package a key names may be the
+	// very thing that is gone, so it is carried beside the packages.
+	StaleDeclarations []json.RawMessage `json:"stale_declarations"`
+	Packages          []struct {
 		Package            string          `json:"package"`
 		MissingInputCount  int             `json:"missing_input_count"`
 		MissingOutputCount int             `json:"missing_output_count"`
@@ -56,10 +61,13 @@ type enumReport struct {
 
 // backlog is the merged per-package 1:1 audit backlog.
 type backlog struct {
-	SchemaVersion int              `json:"schema_version"`
-	Note          string           `json:"note"`
-	Summary       backlogSummary   `json:"summary"`
-	Packages      []backlogPackage `json:"packages"`
+	SchemaVersion int            `json:"schema_version"`
+	Note          string         `json:"note"`
+	Summary       backlogSummary `json:"summary"`
+	// StructStaleDeclarations passes the struct stream's stale declarations
+	// through verbatim, absent when there are none.
+	StructStaleDeclarations []json.RawMessage `json:"struct_stale_declarations,omitempty"`
+	Packages                []backlogPackage  `json:"packages"`
 }
 
 type backlogSummary struct {
@@ -67,6 +75,7 @@ type backlogSummary struct {
 	StructMissingInput            int `json:"struct_missing_input"`
 	StructMissingOutput           int `json:"struct_missing_output"`
 	StructExtraOutput             int `json:"struct_extra_output"`
+	StructStaleDeclarations       int `json:"struct_stale_declarations"`
 	ActionMissingMethods          int `json:"action_missing_methods"`
 	MetaGenericUsage              int `json:"meta_generic_usage"`
 	MetaAliasesOnlyToolname       int `json:"meta_aliases_only_toolname"`

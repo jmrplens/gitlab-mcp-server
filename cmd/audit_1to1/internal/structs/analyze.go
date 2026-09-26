@@ -29,7 +29,6 @@ const (
 	docDeployments      = "deployments.md"
 	docBoards           = "boards.md"
 	docPipelineSched    = "pipeline_schedules.md"
-	docCommitSignature  = "commits.md#get-the-signature-of-a-commit"
 	docPipelineTriggers = "pipeline_triggers.md"
 	docMRApprovals      = "merge_request_approvals.md"
 	docEpics            = "epics.md#list-all-group-epics"
@@ -185,25 +184,22 @@ const (
 // true scalar renames belong here, never flattened-duplication tags (those are
 // genuine findings, e.g. branches `commit_id` flattening `commit.id`).
 //
-// Two forms are supported:
-//   - "MCPType.tag": the rename is suppressed only for that MCP output type.
-//   - "tag":         the rename is suppressed for any MCP output type (global).
+// Key = "<package>.<MCP output type>.<tag>", the form the other five tables
+// take, with a one-line rationale as the value. There is deliberately no form
+// without a package: a key naming only a type and a tag excuses that tag on
+// every package's type of that name, which is how a rename adjudicated for one
+// package would silence an invented field in another.
 //
-// Add accepted renames here (with a one-line rationale) as the per-package
-// audit adjudicates them.
-var acceptedOutputRenames = map[string]bool{
-	// branches Output renames the SDK `name` scalar to `branch_name` to match the
-	// `branch_name` input parameter naming used across the branches tools.
-	"Output.branch_name": true,
-}
+// It is empty, and that is a healthy state rather than an unfinished one. Its
+// one entry declared branches.Output's branch_name, which that type stopped
+// publishing when it came to mirror gl.Branch under the SDK's own name key,
+// and the entry excused nothing from then on.
+var acceptedOutputRenames = &declarationTable{name: "acceptedOutputRenames", entries: map[string]string{}}
 
-// isAcceptedRename reports whether (mcpType, tag) is an allowlisted deliberate
-// rename, checking the type-scoped key first then the global tag key.
-func isAcceptedRename(mcpType, tag string) bool {
-	if acceptedOutputRenames[mcpType+"."+tag] {
-		return true
-	}
-	return acceptedOutputRenames[tag]
+// isAcceptedRename reports whether the tag of an MCP output type is an
+// allowlisted deliberate rename in that package.
+func (r *diffRun) isAcceptedRename(pkg, mcpType, tag string) bool {
+	return r.answer(acceptedOutputRenames, pkg+"."+mcpType+"."+tag)
 }
 
 // curatedRefSubsets marks MCP output types that are DOCUMENTED REFERENCE SUBSETS
@@ -219,53 +215,40 @@ func isAcceptedRename(mcpType, tag string) bool {
 // is criterion-based (what the endpoint documents) rather than arbitrary. The
 // type also carries a `// Documented reference subset per doc/api/<file>` comment
 // at its definition for inline traceability. Key = "<package>.<MCP output type>".
-var curatedRefSubsets = map[string]string{
+var curatedRefSubsets = &declarationTable{name: "curatedRefSubsets", entries: map[string]string{
 	// Populated per package as outputs are reconciled to the official API docs
 	// (https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/<file>).
 	//
 	// environments — nested objects of the "Retrieve an environment" response
 	// (doc/api/environments.md#retrieve-an-environment).
-	"environments.ClusterAgentOutput":       docEnvRetrieve,
-	"environments.ConfigProjectOutput":      docEnvRetrieve,
-	"environments.DeploymentOutput":         docEnvRetrieve,
-	"environments.DeploymentUserOutput":     docEnvRetrieve,
-	"environments.DeployableOutput":         docEnvRetrieve,
-	"environments.DeployableUserOutput":     docEnvRetrieve,
-	"environments.DeployableCommitOutput":   docEnvRetrieve,
-	"environments.DeployablePipelineOutput": docEnvRetrieve,
-	"environments.DeployableRunnerOutput":   docEnvRetrieve,
+	"environments.ClusterAgentOutput":     docEnvRetrieve,
+	"environments.DeploymentOutput":       docEnvRetrieve,
+	"environments.DeployableUserOutput":   docEnvRetrieve,
+	"environments.DeployableCommitOutput": docEnvRetrieve,
+	"environments.DeployableRunnerOutput": docEnvRetrieve,
 
 	// jobs — nested objects of the job response (doc/api/jobs.md#get-a-single-job).
 	"jobs.CommitObject":       docJobsSingle,
-	"jobs.RunnerObject":       docJobsSingle,
 	"jobs.UserObject":         docJobsSingle,
 	"jobs.ProjectObject":      docJobsSingle,
-	"jobs.PipelineObject":     docJobsSingle,
 	"jobs.PipelineInfoObject": "jobs.md#list-pipeline-trigger-jobs",
 
 	// boards — nested objects of the board / board-list responses (doc/api/boards.md).
-	"boards.ProjectOutput":           docBoards,
-	"boards.MilestoneOutput":         docBoards,
-	"boards.BasicUserOutput":         docBoards,
-	"boards.LabelOutput":             docBoards,
-	"boards.LabelDetailsOutput":      docBoards,
-	"boards.BoardListAssigneeOutput": docBoards,
-	"boards.IterationOutput":         docBoards,
+	"boards.ProjectOutput":   docBoards,
+	"boards.MilestoneOutput": docBoards,
+	"boards.BasicUserOutput": docBoards,
+	"boards.LabelOutput":     docBoards,
 
 	// deployments — nested objects of the deployment response (doc/api/deployments.md).
-	"deployments.UserOutput":               docDeployments,
-	"deployments.EnvironmentOutput":        docDeployments,
-	"deployments.DeployableOutput":         docDeployments,
-	"deployments.DeployableUserOutput":     docDeployments,
-	"deployments.DeployableCommitOutput":   docDeployments,
-	"deployments.DeployablePipelineOutput": docDeployments,
-	"deployments.DeployableRunnerOutput":   docDeployments,
+	"deployments.EnvironmentOutput":      docDeployments,
+	"deployments.DeployableOutput":       docDeployments,
+	"deployments.DeployableUserOutput":   docDeployments,
+	"deployments.DeployableCommitOutput": docDeployments,
+	"deployments.DeployableRunnerOutput": docDeployments,
 
 	// pipelineschedules — nested objects of the schedule response (doc/api/pipeline_schedules.md).
-	"pipelineschedules.OwnerOutput":             docPipelineSched,
-	"pipelineschedules.LastPipelineOutput":      docPipelineSched,
-	"pipelineschedules.VariableObject":          docPipelineSched,
-	"pipelineschedules.TriggeredPipelineOutput": docPipelineSched,
+	"pipelineschedules.OwnerOutput":        docPipelineSched,
+	"pipelineschedules.LastPipelineOutput": docPipelineSched,
 
 	// mrapprovals — nested user/group reference objects of the approval-rule /
 	// approval-state responses (doc/api/merge_request_approvals.md).
@@ -282,40 +265,31 @@ var curatedRefSubsets = map[string]string{
 	"groupmarkdownuploads.UploadedByOutput": "group_markdown_uploads.md",
 
 	// groupboards — nested refs of the group-board responses (doc/api/group_boards.md).
-	"groupboards.GroupRefOutput":     docGroupBoards,
-	"groupboards.MilestoneOutput":    docGroupBoards,
-	"groupboards.BasicUserOutput":    docGroupBoards,
-	"groupboards.LabelDetailsOutput": docGroupBoards,
-	"groupboards.LabelOutput":        docGroupBoards,
+	"groupboards.GroupRefOutput":  docGroupBoards,
+	"groupboards.MilestoneOutput": docGroupBoards,
+	"groupboards.BasicUserOutput": docGroupBoards,
+	"groupboards.LabelOutput":     docGroupBoards,
 
 	// groupepicboards — nested refs of the epic-board responses (doc/api/group_epic_boards.md).
-	"groupepicboards.GroupRefOutput":     docGroupEpicBoards,
-	"groupepicboards.ListLabelOutput":    docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput": docGroupEpicBoards,
-	"groupepicboards.BoardListOutput":    docGroupEpicBoards,
+	"groupepicboards.GroupRefOutput":  docGroupEpicBoards,
+	"groupepicboards.ListLabelOutput": docGroupEpicBoards,
 
 	// pipelinetriggers — owner/user are documented identity subsets of gl.User
 	// (doc/api/pipeline_triggers.md).
-	"pipelinetriggers.UserOutput":           docPipelineTriggers,
-	"pipelinetriggers.BasicUserOutput":      docPipelineTriggers,
-	"pipelinetriggers.DetailedStatusOutput": docPipelineTriggers,
+	"pipelinetriggers.UserOutput":      docPipelineTriggers,
+	"pipelinetriggers.BasicUserOutput": docPipelineTriggers,
 
-	// releases / groupreleases — author and commit are documented subsets
-	// (doc/api/releases/_index.md, doc/api/group_releases.md).
-	"releases.AuthorOutput":      "releases/_index.md",
-	"releases.CommitOutput":      "releases/_index.md",
-	"groupreleases.AuthorOutput": "group_releases.md",
+	// groupreleases: the commit is a documented subset (doc/api/group_releases.md).
 	"groupreleases.CommitOutput": "group_releases.md",
 
 	// tags — the tag's nested commit is a documented identity subset (doc/api/tags.md).
 	"tags.CommitOutput": "tags.md",
-}
+}}
 
 // isCuratedRefSubset reports whether the MCP output type (scoped by package) is a
 // doc-justified reference subset whose omitted-vs-full-SDK fields are not flagged.
-func isCuratedRefSubset(pkg, mcpType string) bool {
-	_, ok := curatedRefSubsets[pkg+"."+mcpType]
-	return ok
+func (r *diffRun) isCuratedRefSubset(pkg, mcpType string) bool {
+	return r.answer(curatedRefSubsets, pkg+"."+mcpType)
 }
 
 // docOmittedFields lists individual top-level SDK result fields the official API
@@ -324,14 +298,7 @@ func isCuratedRefSubset(pkg, mcpType string) bool {
 // the endpoint returns, not every field of the SDK struct). Unlike
 // curatedRefSubsets (a whole nested reference type), this is per-field on a primary
 // output type. Each entry cites the doc/api/<file>. Key = "<pkg>.<MCP type>.<tag>".
-var docOmittedFields = map[string]string{
-	// environments: the environment response documents no nested `project` object
-	// (environments are queried within a project, so it would be redundant);
-	// gl.Environment.Project is never populated in the documented response.
-	"environments.Output.project": "environments.md (list/get/create/update response)",
-	// jobs: the job response nests pipeline.id; there is no top-level pipeline_id
-	// (the old MCP pipeline_id was a flattened convenience scalar, now removed).
-	"jobs.Output.pipeline_id": docJobsSingle,
+var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[string]string{
 	// mrapprovals: gl.MergeRequestApprovals models the response of
 	// POST /projects/:id/merge_requests/:iid/approvals, deprecated in GitLab
 	// 16.0. gitlab_mr_approval_config calls the GET at that path, which answers
@@ -369,56 +336,21 @@ var docOmittedFields = map[string]string{
 	// authentication token once, at registration. The runner details response
 	// never carries it, so the field was the zero value on every call.
 	"runners.DetailsOutput.token": docRunnerDetailsGET,
-	// projects: gl.MergeRequestApproverUser is one struct for two responses.
-	// approved_at is a field of the merge request's approved_by elements; the
-	// project-level approvers array carries the user alone, and has been
-	// documented as always empty since GitLab 12.3.
-	"projects.ApproverUserOutput.approved_at": docProjectApprovals,
-	// epics: gl.Epic declares user_notes_count and url, and no epic endpoint
-	// sends either. Both were the zero value on every response the two
-	// REST-backed epic actions ever returned. The epic converters now take the
-	// epicAPI superset rather than gl.Epic, so these keys record the decision
-	// for whoever pairs the two types again rather than suppressing a finding
-	// the auditor currently reaches.
-	"epics.Output.user_notes_count":    docEpicsGET,
-	"epics.Output.url":                 docEpicsGET,
-	"epics.LinksItem.user_notes_count": docEpicsGET,
-	"epics.LinksItem.url":              docEpicsGET,
 	// epics: gl.WorkItem is the struct of every work item type, and an Epic
 	// carries neither the STATUS nor the ITERATION widget, so both keys were
 	// null on every epic response. parent is exposed flattened, as the
 	// parent_iid and parent_path pair the widget carries.
+	//
+	// The REST epic's own omissions (user_notes_count, url, subscribed,
+	// reference, and label_details on a child epic) are not declared here: no
+	// converter pairs an epic output with gl.Epic, so a key for one would answer
+	// nothing. Why each is absent, and what to declare if a converter takes
+	// gl.Epic again, is recorded beside the converters in
+	// internal/tools/epics (toLinkItem).
 	"epics.Output.status":       epicPhantomWidget,
 	"epics.Output.iteration_id": epicPhantomWidget,
 	"epics.Output.parent":       "exposed flattened as parent_iid + parent_path (the two fields of gl.WorkItemIID)",
-	// epics: the OpenAPI record lists subscribed and reference on every epic
-	// GET, and both were still the zero value on each response the two
-	// REST-backed epic actions returned. The record says what the entity can
-	// render; the entity says under which condition, and neither condition
-	// holds on the routes this package calls.
-	"epics.Output.subscribed":       docEpicSubscribed,
-	"epics.LinksItem.subscribed":    docEpicSubscribed,
-	"epics.Output.reference":        docEpicReference,
-	"epics.LinksItem.reference":     docEpicReference,
-	"epics.LinksItem.label_details": docEpicChildrenNoOptions,
-}
-
-// docEpicSubscribed, docEpicReference and docEpicChildrenNoOptions cite the
-// entity and the route rather than the OpenAPI record, which lists all three
-// fields: Grape renders a conditional expose only when the option its `if:`
-// names is passed, and the generator that writes the record cannot see the
-// condition, so the record is the upper bound of what an entity can render and
-// says nothing about a given route.
-const (
-	docEpicSubscribed = "ee/lib/api/entities/epic.rb exposes subscribed under " +
-		"options.fetch(:include_subscribed, false); ee/lib/api/epics.rb passes it on " +
-		"GET :id/epics/:epic_iid alone, which this package never calls (get takes the Work Items path)"
-	docEpicReference = "ee/lib/api/entities/epic.rb exposes reference under with_reference, which no epic " +
-		"endpoint sets, and which GitLab has retired in favor of references"
-	docEpicChildrenNoOptions = "ee/lib/api/epic_links.rb declares GET /groups/:id/-/epics/:epic_iid/epics with " +
-		"id and epic_iid alone and presents the entity with no options, so its labels array is always titles; " +
-		"with_labels_details is a parameter of the list endpoint, which fills epics.Output.label_details"
-)
+}}
 
 // docAPIShapesRecord names where the citations below were read.
 //
@@ -428,12 +360,6 @@ const (
 // evidence about what was read and when, not a path a reader is invited to
 // open here. GitLab publishes the document, so the citation names it there.
 const docAPIShapesRecord = "GitLab's generated OpenAPI document (doc/api/openapi/openapi_v2.yaml) "
-
-// docEpicsGET cites the three oracles that agree the two fields are not sent,
-// since gl.Epic declaring them is the only reason to think they are.
-const docEpicsGET = docAPIShapesRecord +
-	"(GET /api/v4/groups/{id}/-/epics and the four sibling epic GETs declare neither user_notes_count nor url); " +
-	"doc/api/epics.md prints neither in any example body, and a live gitlab.com response carries neither"
 
 // docMRApprovalsGET cites the record that separates the two endpoints sharing
 // the approvals path, since GitLab's own prose page does not.
@@ -449,17 +375,10 @@ const docRunnerDetailsGET = docAPIShapesRecord +
 	"(GET /api/v4/runners/{id} and PUT /api/v4/runners/{id} declare no token; POST /api/v4/runners, the " +
 	"registration endpoint, answers with id, token and token_expires_at, which runners.Output carries)"
 
-// docProjectApprovals cites the page and the line on it that says what the
-// project-level approvers array holds.
-const docProjectApprovals = "merge_request_approvals.md#retrieve-approval-configuration-for-a-project " +
-	"(`\"approvers\": []  // Deprecated in GitLab 12.3, always returns empty`, and the record gives that " +
-	"element the single property `user` while approved_at appears only on the merge request's approved_by)"
-
 // isDocOmittedField reports whether an SDK field is a doc-justified intentional
 // omission on a primary MCP output type.
-func isDocOmittedField(pkg, mcpType, tag string) bool {
-	_, ok := docOmittedFields[pkg+"."+mcpType+"."+tag]
-	return ok
+func (r *diffRun) isDocOmittedField(pkg, mcpType, tag string) bool {
+	return r.answer(docOmittedFields, pkg+"."+mcpType+"."+tag)
 }
 
 // docAddedFields is the symmetric carve-out to docOmittedFields: documented API
@@ -470,11 +389,10 @@ func isDocOmittedField(pkg, mcpType, tag string) bool {
 // them. Each entry cites the doc/api/<file>. Key = "<pkg>.<MCPType>.<tag>". These
 // fields carry `omitempty` so they degrade gracefully on older GitLab versions that
 // don't return them.
-var docAddedFields = map[string]string{
+var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[string]string{
 	// jobs — documented in doc/api/jobs.md but absent from gl.Job / gl.JobRunner;
 	// fetched via raw REST (rawGetJob/rawListJobs into the jobAPI superset).
 	"jobs.Output.archived":          docJobsSingle,
-	"jobs.Output.source":            docJobsSingle,
 	"jobs.Output.runner_manager":    docJobsSingle,
 	"jobs.RunnerObject.ip_address":  docJobsSingle,
 	"jobs.RunnerObject.online":      docJobsSingle,
@@ -493,11 +411,6 @@ var docAddedFields = map[string]string{
 	// REST (rawGetDeployment/rawListDeployments into the deploymentAPI superset).
 	"deployments.DeployableOutput.project": docDeployments,
 
-	// pipelineschedules — variables[].raw is documented on the single-schedule
-	// response but absent from gl.PipelineVariable; fetched via raw REST
-	// (rawGetSchedule into the rawScheduleAPI superset).
-	"pipelineschedules.VariableObject.raw": docPipelineSched,
-
 	// mrapprovals — approval rule `overridden` is documented (approval_state/list/
 	// create/update rule responses) but absent from gl.MergeRequestApprovalRule;
 	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
@@ -511,65 +424,14 @@ var docAddedFields = map[string]string{
 	// values carry only the bare file name, which docCitationRE does not match.
 	"invites.InviteResultOutput.queued_users": "invitations.md#add-a-member-to-a-group-or-project",
 
-	// groupboards — documented in doc/api/group_boards.md but absent from
-	// gl.GroupIssueBoard; fetched via raw REST (rawListGroupBoards/rawGetGroupBoard/
-	// rawCreateGroupBoard/rawUpdateGroupBoard into the groupIssueBoardAPI superset).
-	"groupboards.GroupBoardOutput.hide_backlog_list": docGroupBoards,
-	"groupboards.GroupBoardOutput.hide_closed_list":  docGroupBoards,
-	"groupboards.GroupBoardOutput.assignee":          docGroupBoards,
-	"groupboards.GroupBoardOutput.weight":            docGroupBoards,
-
-	// groupepicboards — documented in doc/api/group_epic_boards.md but absent from
-	// gl.GroupEpicBoard / gl.BoardList / gl.LabelDetails; fetched via raw REST superset.
-	"groupepicboards.Output.hide_backlog_list":      docGroupEpicBoards,
-	"groupepicboards.Output.hide_closed_list":       docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput.title":      docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput.group_id":   docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput.project_id": docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput.template":   docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput.created_at": docGroupEpicBoards,
-	"groupepicboards.LabelDetailsOutput.updated_at": docGroupEpicBoards,
-	"groupepicboards.BoardListOutput.list_type":     docGroupEpicBoards,
-	"groupepicboards.BoardListOutput.collapsed":     docGroupEpicBoards,
-
-	// commits — the commit signature endpoint documents SSH/X.509 signature fields
-	// absent from gl.GPGSignature; fetched via raw REST (rawGetGPGSignature into the
-	// gpgSignatureAPI superset). Citation: commits.md#get-the-signature-of-a-commit.
-	"commits.GPGSignatureOutput.signature_type":   docCommitSignature,
-	"commits.GPGSignatureOutput.commit_source":    docCommitSignature,
-	"commits.GPGSignatureOutput.key":              docCommitSignature,
-	"commits.GPGSignatureOutput.x509_certificate": docCommitSignature,
-
-	// epics: twelve fields the epic response documents and gl.Epic does not
-	// declare; fetched via raw REST (rawListEpics into the epicAPI superset) on
-	// the list and child-epic paths. Like the omissions above, these keys record
-	// which fields are doc-justified rather than invented; the converters take
-	// the superset, so the gl.Epic diff that would consult them is not currently
-	// run. subscribed and reference were here and are now omissions: the record
-	// lists them, and the entity renders neither on these routes.
-	"epics.LinksItem.parent_iid":                       docEpics,
-	"epics.LinksItem.work_item_id":                     docEpics,
-	"epics.LinksItem.color":                            docEpics,
-	"epics.LinksItem.text_color":                       docEpics,
-	"epics.LinksItem.web_edit_url":                     docEpics,
-	"epics.LinksItem.references":                       docEpics,
-	"epics.LinksItem.imported":                         docEpics,
-	"epics.LinksItem.imported_from":                    docEpics,
-	"epics.LinksItem._links":                           docEpics,
-	"epics.LinksItem.end_date":                         docEpics,
-	"epics.LinksItem.start_date_from_inherited_source": docEpics,
-	"epics.LinksItem.due_date_from_inherited_source":   docEpics,
-	// The object half of the dual-shape labels array belongs to the endpoint
-	// whose parameter asks for it. This entry named LinksItem, whose endpoint
-	// takes no such parameter and never renders it.
+	// epics: the object half of the dual-shape labels array belongs to the
+	// endpoint whose parameter asks for it, and the author carries two keys
+	// neither client-go author struct declares. The twelve fields the REST epic
+	// adds to gl.Epic are not declared here, for the reason the omissions above
+	// give: no converter pairs an epic output with gl.Epic.
 	"epics.Output.label_details":         docEpicsLabelDetails,
 	"epics.BasicUserOutput.locked":       docEpicsAuthor,
 	"epics.BasicUserOutput.public_email": docEpicsAuthor,
-
-	// projectimportexport — the import-status response documents `created_at`, but the
-	// SDK gl.ImportStatus tags its timestamp `create_at` (upstream typo); we surface the
-	// documented `created_at` via a raw-decode superset (importStatusAPI).
-	"projectimportexport.ImportStatusOutput.created_at": "project_import_export.md",
 
 	// notes and discussions — four fields lib/api/entities/note.rb exposes that
 	// gl.Note does not declare, and the two resolution flags
@@ -623,7 +485,6 @@ var docAddedFields = map[string]string{
 	"members.Output.locked":                   docProjectMembersList,
 	"members.Output.public_email":             docProjectMembersList,
 	"members.Output.membership_state":         docProjectMembersList,
-	"members.Output.two_factor_enabled":       docProjectMembersList,
 	"members.Output.group_saml_identity":      docProjectMembersList,
 	"members.Output.group_scim_identity":      docProjectMembersList,
 	"members.Output.override":                 docProjectMembersList,
@@ -962,13 +823,12 @@ var docAddedFields = map[string]string{
 	"planlimits.PlanLimitItem.web_hook_calls_low":                    docPlanLimits,
 	"planlimits.PlanLimitItem.web_hook_calls_mid":                    docPlanLimits,
 	"planlimits.PlanLimitItem.limits_history":                        docPlanLimits,
-}
+}}
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we
 // surface via raw-API fetch despite the SDK struct lacking it.
-func isDocAddedField(pkg, mcpType, tag string) bool {
-	_, ok := docAddedFields[pkg+"."+mcpType+"."+tag]
-	return ok
+func (r *diffRun) isDocAddedField(pkg, mcpType, tag string) bool {
+	return r.answer(docAddedFields, pkg+"."+mcpType+"."+tag)
 }
 
 // acceptedExtraOutputs adjudicates the remaining R-OUTPUT-EXTRA fields that are
@@ -982,20 +842,12 @@ func isDocAddedField(pkg, mcpType, tag string) bool {
 //
 // This makes the auditor's extra-output total fully explained: every accepted extra
 // is here with a reason, so any NEW extra surfaces as a genuine finding.
-var acceptedExtraOutputs = map[string]string{
-	// Dual-shape deprecation window: GroupDatadogItem mirrors client-go's own
-	// dual shape (nested Properties + deprecated flat copies, both retiring in
-	// client-go v3). The SDK never had a flat datadog_ci_visibility — GitLab
-	// added the field after the flat era — so our flat copy has no SDK
-	// counterpart to pair with. It is removed together with the other flat
-	// copies at the client-go v3 bump.
-	"integrations.GroupDatadogItem.datadog_ci_visibility": "deprecated flat convenience copy of properties.datadog_ci_visibility; the SDK has no flat counterpart (field postdates the flat era); retires with the client-go v3 bump",
-	// GraphQL-sourced output types: workitems/epics map GraphQL response structs
-	// (gl.WorkItem/gl.Epic) that carry no REST json tags, so the REST-tag diff flags
-	// every documented GraphQL field as extra. The fields are real and documented by
-	// the GraphQL schema (https://docs.gitlab.com/api/graphql/reference/).
-	"workitems.WorkItemItem": "GraphQL-sourced work item fields (gl.WorkItem GraphQL struct has no REST json tags); documented by the GraphQL schema",
-	"epics.Output":           "GraphQL work-item-era epic fields (gl.Epic/gl.WorkItem GraphQL structs); documented by the GraphQL schema",
+var acceptedExtraOutputs = &declarationTable{name: "acceptedExtraOutputs", entries: map[string]string{
+	// GraphQL-sourced output type: epics maps a GraphQL response struct
+	// (gl.WorkItem) that carries no REST json tags, so the REST-tag diff flags
+	// every documented GraphQL field as extra. The fields are real and documented
+	// by the GraphQL schema (https://docs.gitlab.com/api/graphql/reference/).
+	"epics.Output": "GraphQL work-item-era epic fields (gl.Epic/gl.WorkItem GraphQL structs); documented by the GraphQL schema",
 
 	// Server-composed convenience fields (not API fields): we derive these for the
 	// model, they are additive and intentional.
@@ -1013,17 +865,19 @@ var acceptedExtraOutputs = map[string]string{
 	// mutations address the view by, so the model needs it even though the
 	// field diff has nothing to pair it with.
 	"workitemsavedviews.Item.gid": "GraphQL global ID from gl.WorkItemSavedView.GID(); the SDK exposes it as a method, so there is no field to pair with",
-}
+}}
 
 // isAcceptedExtraOutput reports whether an extra MCP output field/type is an
 // adjudicated legitimate extra (GraphQL-sourced, server-derived, or SDK-untagged),
 // checking the whole-type key first then the per-field key.
-func isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
-	if _, ok := acceptedExtraOutputs[pkg+"."+mcpType]; ok {
-		return true
-	}
-	_, ok := acceptedExtraOutputs[pkg+"."+mcpType+"."+tag]
-	return ok
+//
+// The order is also what decides which key a finding uses up: a per-field key
+// beside a whole-type key for the same type is never reached, so it answers
+// nothing and is reported stale rather than kept as a second copy of a
+// decision the whole-type key already made.
+func (r *diffRun) isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
+	return r.answer(acceptedExtraOutputs, pkg+"."+mcpType) ||
+		r.answer(acceptedExtraOutputs, pkg+"."+mcpType+"."+tag)
 }
 
 // acceptedMissingInputs adjudicates R-INPUT "missing" fields that are legitimate
@@ -1037,17 +891,16 @@ func isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
 //
 // This makes the auditor's missing-input total fully explained: every accepted
 // miss is here with a reason, so any NEW genuine gap still surfaces.
-var acceptedMissingInputs = map[string]string{
+var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", entries: map[string]string{
 	// Deliberate json-key renames: the SDK param is exposed under a clearer/doc-correct
 	// MCP key and wired to the SDK field.
-	"branches.CreateInput.branch":                    "exposed as branch_name (wired to opts.Branch)",
-	"branches.ProtectInput.name":                     "exposed as branch_name (wired to opts.Name)",
-	"tags.ProtectTagInput.name":                      "exposed as tag_name (wired to opts.Name)",
-	"epics.ListInput.include_ancestor_groups":        "exposed as include_ancestors (wired to opts.IncludeAncestorGroups)",
-	"epics.ListInput.include_descendant_groups":      "exposed as include_descendants (wired to opts.IncludeDescendantGroups)",
-	"epics.ListInput.labels":                         "exposed as label_name []string (wired to opts.Labels)",
-	"workitems.ListWorkItemTypesInput.onlyAvailable": "exposed as only_available (snake_case of the SDK camelCase tag)",
-	"groupmilestones.ListInput.include_descendents":  "exposed as the doc-correct include_descendants (the SDK url tag has the include_descendents typo); wired to opts.IncludeDescendents",
+	"branches.CreateInput.branch":                   "exposed as branch_name (wired to opts.Branch)",
+	"branches.ProtectInput.name":                    "exposed as branch_name (wired to opts.Name)",
+	"tags.ProtectTagInput.name":                     "exposed as tag_name (wired to opts.Name)",
+	"epics.ListInput.include_ancestor_groups":       "exposed as include_ancestors (wired to opts.IncludeAncestorGroups)",
+	"epics.ListInput.include_descendant_groups":     "exposed as include_descendants (wired to opts.IncludeDescendantGroups)",
+	"epics.ListInput.labels":                        "exposed as label_name []string (wired to opts.Labels)",
+	"groupmilestones.ListInput.include_descendents": "exposed as the doc-correct include_descendants (the SDK url tag has the include_descendents typo); wired to opts.IncludeDescendents",
 
 	// Phantom widget inputs: gl.*WorkItemOptions is the options struct of every
 	// work item type, and an Epic carries neither the STATUS, ITERATION nor
@@ -1114,25 +967,20 @@ var acceptedMissingInputs = map[string]string{
 	"releaselinks.CreateBatchInput.filepath":          "modeled on the links[] slice element (LinkEntry.FilePath, deprecated alias)",
 	"releaselinks.CreateBatchInput.link_type":         "modeled on the links[] slice element (LinkEntry.LinkType)",
 
-	// Param present on all public create inputs; the auditor flagged it on an
-	// unexported helper struct the &gl.Options{} literal is attributed to.
-	"awardemoji.noteEmojiRequest.name": "name is exposed + wired on every public create input; flagged on an unexported helper struct",
-
 	// Whole-type curated subset: override_params accepts the full CreateProjectOptions
 	// set (~79 fields); the import tool exposes the commonly-overridden subset — full
 	// project configuration is available via the dedicated gitlab_project create/update
 	// tools. (topics/tag_list are also excluded due to an SDK multipart []string bug.)
 	"projectimportexport.ImportOverrideParamsInput": "override_params curated subset; full project config via gitlab_project create/update tools",
-}
+}}
 
 // isAcceptedMissingInput reports whether an input pair's missing field is an
-// adjudicated legitimate omission, checking the whole-type key first then per-field.
-func isAcceptedMissingInput(pkg, mcpType, tag string) bool {
-	if _, ok := acceptedMissingInputs[pkg+"."+mcpType]; ok {
-		return true
-	}
-	_, ok := acceptedMissingInputs[pkg+"."+mcpType+"."+tag]
-	return ok
+// adjudicated legitimate omission, checking the whole-type key first then
+// per-field, with the same consequence for a shadowed per-field key that
+// isAcceptedExtraOutput describes.
+func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string) bool {
+	return r.answer(acceptedMissingInputs, pkg+"."+mcpType) ||
+		r.answer(acceptedMissingInputs, pkg+"."+mcpType+"."+tag)
 }
 
 // gap is one diffed MCP↔SDK struct pair under a package.
@@ -1193,10 +1041,14 @@ type packageReport struct {
 
 // report is the JSON document written to the output path.
 type report struct {
-	SchemaVersion int             `json:"schema_version"`
-	ClientGoPath  string          `json:"client_go_path"`
-	Summary       reportSummary   `json:"summary"`
-	Packages      []packageReport `json:"packages"`
+	SchemaVersion int           `json:"schema_version"`
+	ClientGoPath  string        `json:"client_go_path"`
+	Summary       reportSummary `json:"summary"`
+	// StaleDeclarations lists every declaration table key that answered no
+	// candidate finding of the run. It is reported whatever -gaps-only says,
+	// since it is a finding rather than a package with none.
+	StaleDeclarations []staleDeclaration `json:"stale_declarations,omitempty"`
+	Packages          []packageReport    `json:"packages"`
 }
 
 type reportSummary struct {
@@ -1208,6 +1060,7 @@ type reportSummary struct {
 	MissingOutputFields int `json:"missing_output_fields"`
 	ExtraOutputFields   int `json:"extra_output_fields"`
 	TypeMismatches      int `json:"type_mismatches"`
+	StaleDeclarations   int `json:"stale_declarations"`
 }
 
 // marshalIndent is the JSON encoder, a variable so a test can reach the
@@ -1234,9 +1087,10 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	if err != nil {
 		return report{}, err
 	}
+	run := newDiffRun()
 	reports := make([]packageReport, 0, len(pkgs))
 	for _, pkg := range pkgs {
-		pr, ok := analyzePackage(pkg)
+		pr, ok := run.analyzePackage(pkg)
 		if !ok {
 			continue
 		}
@@ -1246,11 +1100,18 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		reports = append(reports, pr)
 	}
 	sort.Slice(reports, func(i, j int) bool { return reports[i].Package < reports[j].Package })
+	// Judged after the loop and over every package, including the clean ones
+	// -gaps-only is about to drop from the report: a declaration that answers a
+	// candidate in a package with no finding left is doing its job.
+	stale := run.staleDeclarations(declarationTables)
+	summary := summarize(reports)
+	summary.StaleDeclarations = len(stale)
 	return report{
-		SchemaVersion: shared.SchemaVersion,
-		ClientGoPath:  shared.ClientGoPkgPath,
-		Summary:       summarize(reports),
-		Packages:      reports,
+		SchemaVersion:     shared.SchemaVersion,
+		ClientGoPath:      shared.ClientGoPkgPath,
+		Summary:           summary,
+		StaleDeclarations: stale,
+		Packages:          reports,
 	}, nil
 }
 
@@ -1316,7 +1177,7 @@ func discoverPairs(pkg *packages.Package) (inputPairs, outputPairs map[[2]string
 	return inputPairs, outputPairs
 }
 
-func analyzePackage(pkg *packages.Package) (packageReport, bool) {
+func (r *diffRun) analyzePackage(pkg *packages.Package) (packageReport, bool) {
 	inputPairs, outputPairs := discoverPairs(pkg)
 	if len(inputPairs) == 0 && len(outputPairs) == 0 {
 		return packageReport{}, false
@@ -1332,7 +1193,7 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 			continue
 		}
 		pr.InputPairs++
-		g := diffPair(pr.Package, "input", pair)
+		g := r.diffPair(pr.Package, "input", pair)
 		pr.MissingInputCount += len(g.MissingFields)
 		appendGapIfAny(&pr, g)
 	}
@@ -1345,7 +1206,7 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 	// structs so a field is MISSING/EXTRA only when absent from EVERY pairing.
 	for _, group := range outputGroups(outputPairs) {
 		pr.OutputPairs += len(group.pairs)
-		g := diffOutputGroup(pr.Package, group)
+		g := r.diffOutputGroup(pr.Package, group)
 		pr.MissingOutputCount += len(g.MissingFields)
 		pr.ExtraOutputCount += len(g.ExtraFields)
 		appendGapIfAny(&pr, g)
@@ -1391,7 +1252,7 @@ func outputGroups(pairs map[[2]string]structPair) []outputGroup {
 // TypeMismatch is reported for a tag only when the MCP type is incompatible with
 // the SDK type in EVERY pairing that carries that tag, so a field that is
 // compatible in at least one pairing is not double-flagged.
-func diffOutputGroup(pkg string, group outputGroup) gap {
+func (r *diffRun) diffOutputGroup(pkg string, group outputGroup) gap {
 	mcpFields := flattenFields(group.mcpType, []string{tagKeyJSON})
 
 	// unionSDK maps each SDK json tag to one representative SDK type string (used
@@ -1428,7 +1289,7 @@ func diffOutputGroup(pkg string, group outputGroup) gap {
 			// Doc-grounded omissions intentionally drop SDK fields the endpoint does
 			// not return (the cited API doc is the 1:1 ground truth): whole nested
 			// reference subsets, and individual top-level fields.
-			if !isCuratedRefSubset(pkg, group.mcpName) && !isDocOmittedField(pkg, group.mcpName, tag) {
+			if !r.isCuratedRefSubset(pkg, group.mcpName) && !r.isDocOmittedField(pkg, group.mcpName, tag) {
 				g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: unionSDK[tag]})
 			}
 			continue
@@ -1439,7 +1300,7 @@ func diffOutputGroup(pkg string, group outputGroup) gap {
 			g.TypeMismatches = append(g.TypeMismatches, typeMismatch{Tag: tag, MCPType: mcpType, SDKType: sdk})
 		}
 	}
-	g.ExtraFields = extraOutputFields(pkg, group.mcpName, mcpFields, unionSDK)
+	g.ExtraFields = r.extraOutputFields(pkg, group.mcpName, mcpFields, unionSDK)
 	return g
 }
 
@@ -1605,7 +1466,7 @@ func handlerInputStruct(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, 
 // diffOutputGroup against the union of their SDK structs (FIX A); diffPair is
 // input-only. SDK fields absent from the MCP struct are MISSING (R-INPUT);
 // fields present but type-divergent are advisory TypeMismatches.
-func diffPair(pkg, kind string, pair structPair) gap {
+func (r *diffRun) diffPair(pkg, kind string, pair structPair) gap {
 	mcpFields := flattenFields(pair.mcpType, []string{tagKeyJSON})
 	sdkTagKeys := []string{tagKeyJSON}
 	if pair.sdkURLTags {
@@ -1633,7 +1494,7 @@ func diffPair(pkg, kind string, pair structPair) gap {
 			// Adjudicated legitimate input omission (deliberate rename, nested-object
 			// modeling, deprecated/non-accepted param, or curated subset) — each
 			// carries a rationale in acceptedMissingInputs.
-			if kind == "input" && isAcceptedMissingInput(pkg, pair.mcpName, tag) {
+			if kind == "input" && r.isAcceptedMissingInput(pkg, pair.mcpName, tag) {
 				continue
 			}
 			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: sdkType})
@@ -1727,7 +1588,7 @@ func disjointPhantomInput(pair structPair, all map[[2]string]structPair) bool {
 // extra when it is neither a key of sdkFields nor the shared.NormalizeSDKTag image of
 // any SDK key, is not the MCP-envelope carve-out, is not the "-" sentinel, and
 // is not an allowlisted deliberate rename (per the 1:1 data-fidelity policy).
-func extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]string) []extraField {
+func (r *diffRun) extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]string) []extraField {
 	sdkNorm := make(map[string]struct{}, len(sdkFields))
 	for sdkTag := range sdkFields {
 		sdkNorm[shared.NormalizeSDKTag(sdkTag)] = struct{}{}
@@ -1751,17 +1612,17 @@ func extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]stri
 		if _, ok := sdkNorm[tag]; ok {
 			continue
 		}
-		if isAcceptedRename(mcpType, tag) {
+		if r.isAcceptedRename(pkg, mcpType, tag) {
 			continue
 		}
 		// Documented field surfaced via raw-API fetch (SDK struct lacks it): not
 		// invented — the official API doc returns it.
-		if isDocAddedField(pkg, mcpType, tag) {
+		if r.isDocAddedField(pkg, mcpType, tag) {
 			continue
 		}
 		// Adjudicated legitimate extra (GraphQL-sourced type, server-derived field,
 		// or SDK-untagged field) — each carries a rationale in acceptedExtraOutputs.
-		if isAcceptedExtraOutput(pkg, mcpType, tag) {
+		if r.isAcceptedExtraOutput(pkg, mcpType, tag) {
 			continue
 		}
 		extras = append(extras, extraField{Tag: tag, MCPType: mcpFields[tag]})

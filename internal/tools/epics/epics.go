@@ -779,6 +779,30 @@ func formatISODate(t *gl.ISOTime) string {
 }
 
 // toLinkItem converts a raw-fetched REST epic to the LinksItem format.
+//
+// It and [epicToOutput] take [epicAPI] rather than gl.Epic, and that is also
+// what keeps the 1:1 struct audit (cmd/audit_1to1 -scope=structs) from pairing
+// either output with gl.Epic, since the audit pairs a converter's result with
+// the client-go struct it takes. Whoever makes a converter take *gl.Epic again
+// will see that audit report findings this package has already answered, and
+// should declare them in its tables with the evidence recorded here rather
+// than change either output:
+//
+//   - missing from both outputs: user_notes_count and url, which gl.Epic
+//     declares and no epic endpoint sends ([Output]), and subscribed and
+//     reference, which the entity renders only under options no route here
+//     passes ([epicAPI]). Those are docOmittedFields entries.
+//   - missing from LinksItem alone: label_details, which the child-epic
+//     endpoint never renders ([LinksItem]). A docOmittedFields entry too.
+//   - extra on LinksItem: the twelve fields [epicAPI] adds to gl.Epic, which
+//     GitLab sends and gl.Epic does not declare. Those are docAddedFields
+//     entries; [Output]'s are already answered by the whole-type entry its
+//     GraphQL pairing needs.
+//
+// The tables carry none of them today on purpose. A declaration that answers
+// no finding is reported as stale, so one kept for a pairing that does not
+// exist is the state that rule forbids, and this comment is where the decision
+// waits instead.
 func toLinkItem(e *epicAPI) LinksItem {
 	item := LinksItem{
 		ID:           e.ID,

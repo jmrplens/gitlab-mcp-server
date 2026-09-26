@@ -353,7 +353,7 @@ func TestCollectPairs_Repository_ListsThePairsTheDiffRunsOver(t *testing.T) {
 	}
 	checked := 0
 	for _, pkg := range pkgs {
-		pr, ok := analyzePackage(pkg)
+		pr, ok := newDiffRun().analyzePackage(pkg)
 		if !ok {
 			continue
 		}
@@ -429,7 +429,7 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 		"-":               "string",   // sentinel → not extra
 	}
 
-	extras := extraOutputFields("testpkg", "SomeOutput", mcpFields, sdkFields)
+	extras := newDiffRun().extraOutputFields("testpkg", "SomeOutput", mcpFields, sdkFields)
 
 	gotTags := map[string]bool{}
 	for _, e := range extras {
@@ -507,46 +507,50 @@ func TestNonResultStructName_ExcludesWrapperOptionsAndTime(t *testing.T) {
 // entries the tree carries today. A fixture key that already exists is refused
 // rather than overwritten, since removing it afterwards would delete a real
 // declaration for every test that runs later.
-func declare[V any](t *testing.T, table map[string]V, key string, value V) {
+func declare(t *testing.T, table *declarationTable, key, reason string) {
 	t.Helper()
-	if _, exists := table[key]; exists {
-		t.Fatalf("fixture declaration %q already exists in the table", key)
+	if _, exists := table.entries[key]; exists {
+		t.Fatalf("fixture declaration %q already exists in %s", key, table.name)
 	}
-	table[key] = value
-	t.Cleanup(func() { delete(table, key) })
+	table.entries[key] = reason
+	t.Cleanup(func() { delete(table.entries, key) })
 }
 
-// TestIsAcceptedRename_AllowsScopedAndGlobalTags verifies both forms of the
-// accepted-rename allowlist: a type-scoped entry suppresses only that MCP
-// type's tag, a global entry suppresses its tag on every type, and a genuinely
-// invented scalar (in neither form) is still reported.
+// TestIsAcceptedRename_AKey_AnswersOnlyItsOwnPackageAndType verifies the one
+// key form the accepted-rename table takes: package, type and tag together,
+// so a rename answers that tag on that type in that package and nowhere else,
+// and a genuinely invented scalar is still reported.
 //
-// Both forms are declared by the fixture rather than read from the table. No
-// entry uses the global form today, and the table's one scoped entry,
-// Output.branch_name, answers nothing: branches.Output no longer publishes
-// branch_name. A test reading that entry would fail the day it is deleted, for
-// a reason that has nothing to do with the rule.
-func TestIsAcceptedRename_AllowsScopedAndGlobalTags(t *testing.T) {
-	declare(t, acceptedOutputRenames, "fixture_global_rename", true)
-	declare(t, acceptedOutputRenames, "FixtureOutput.fixture_scoped_rename", true)
-	for _, mcpType := range []string{"FixtureOutput", "OtherOutput"} {
-		t.Run(mcpType, func(t *testing.T) {
-			if !isAcceptedRename(mcpType, "fixture_global_rename") {
-				t.Errorf("isAcceptedRename(%s, fixture_global_rename) = false, want true (global entry)", mcpType)
+// There used to be a second form naming no package, and the table's one entry
+// took the type-only form, which excused its tag on every package's type of
+// that name. Both are gone, and each case below is one of the ways a key
+// missing a part used to answer for somebody else.
+//
+// The entry is the fixture's own, since the real table is empty: a test
+// reading a real entry fails the day it is deleted, for a reason that has
+// nothing to do with the rule.
+func TestIsAcceptedRename_AKey_AnswersOnlyItsOwnPackageAndType(t *testing.T) {
+	declare(t, acceptedOutputRenames, "fixturepkg.FixtureOutput.fixture_rename", "rename fixture")
+	// The form the table used to accept for its one entry, declared here to
+	// show it no longer answers anything, in fixturepkg or elsewhere.
+	declare(t, acceptedOutputRenames, "FixtureOutput.typeonly_rename", "type-only fixture")
+
+	cases := []struct {
+		name, pkg, mcpType, tag string
+		want                    bool
+	}{
+		{name: "the declared tag of the declared type", pkg: "fixturepkg", mcpType: "FixtureOutput", tag: "fixture_rename", want: true},
+		{name: "the same tag on another type", pkg: "fixturepkg", mcpType: "OtherOutput", tag: "fixture_rename"},
+		{name: "the same type and tag in another package", pkg: "otherpkg", mcpType: "FixtureOutput", tag: "fixture_rename"},
+		{name: "an invented scalar on the declared type", pkg: "fixturepkg", mcpType: "FixtureOutput", tag: "invented_field"},
+		{name: "a key naming no package", pkg: "fixturepkg", mcpType: "FixtureOutput", tag: "typeonly_rename"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := newDiffRun().isAcceptedRename(tc.pkg, tc.mcpType, tc.tag); got != tc.want {
+				t.Errorf("isAcceptedRename(%q, %q, %q) = %v, want %v", tc.pkg, tc.mcpType, tc.tag, got, tc.want)
 			}
 		})
-	}
-
-	if !isAcceptedRename("FixtureOutput", "fixture_scoped_rename") {
-		t.Errorf("isAcceptedRename(FixtureOutput, fixture_scoped_rename) = false, want true (scoped entry)")
-	}
-	// Same tag on a different MCP type is NOT suppressed by the scoped entry.
-	if isAcceptedRename("OtherOutput", "fixture_scoped_rename") {
-		t.Errorf("isAcceptedRename(OtherOutput, fixture_scoped_rename) = true, want false (scoped to FixtureOutput)")
-	}
-	// A genuine invented scalar is never accepted.
-	if isAcceptedRename("FixtureOutput", "invented_field") {
-		t.Errorf("isAcceptedRename(FixtureOutput, invented_field) = true, want false")
 	}
 }
 
@@ -555,10 +559,9 @@ func TestIsAcceptedRename_AllowsScopedAndGlobalTags(t *testing.T) {
 // extra, while a genuinely invented scalar in the same struct still is.
 //
 // The rename is the fixture's own declaration, for the reason
-// TestIsAcceptedRename_AllowsScopedAndGlobalTags gives: the table's scoped
-// entry describes no field of today's tree.
+// TestIsAcceptedRename_AKey_AnswersOnlyItsOwnPackageAndType gives.
 func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
-	declare(t, acceptedOutputRenames, "FixtureOutput.renamed_name", true)
+	declare(t, acceptedOutputRenames, "fixturepkg.FixtureOutput.renamed_name", "rename fixture")
 	sdkFields := map[string]string{
 		"name": "string", // SDK scalar that the MCP renames to renamed_name
 		"id":   "int",
@@ -570,7 +573,7 @@ func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
 	}
 
 	// Scoped to "FixtureOutput": renamed_name is suppressed.
-	extras := extraOutputFields("fixturepkg", "FixtureOutput", mcpFields, sdkFields)
+	extras := newDiffRun().extraOutputFields("fixturepkg", "FixtureOutput", mcpFields, sdkFields)
 	gotTags := map[string]bool{}
 	for _, e := range extras {
 		gotTags[e.Tag] = true
@@ -587,7 +590,7 @@ func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
 
 	// On a non-allowlisted MCP type, renamed_name IS reported (proves it is the
 	// allowlist, not a generic suppression, that hides it above).
-	other := extraOutputFields("fixturepkg", "UnlistedOutput", mcpFields, sdkFields)
+	other := newDiffRun().extraOutputFields("fixturepkg", "UnlistedOutput", mcpFields, sdkFields)
 	otherTags := map[string]bool{}
 	for _, e := range other {
 		otherTags[e.Tag] = true
@@ -677,7 +680,7 @@ func TestDiffOutputGroup_UnionMultiConverter(t *testing.T) {
 			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Full", sdkType: full},
 		},
 	}
-	g := diffOutputGroup("testpkg", group)
+	g := newDiffRun().diffOutputGroup("testpkg", group)
 
 	if g.SDKType != "v2.Full|v2.Lean" {
 		t.Errorf("group SDKType = %q, want joined union %q", g.SDKType, "v2.Full|v2.Lean")
@@ -897,23 +900,24 @@ func findPackage(t *testing.T, rep report, name string) packageReport {
 func TestDocGroundedSuppression(t *testing.T) {
 	declare(t, curatedRefSubsets, "fixturepkg.CuratedOutput", "curated subset fixture")
 	declare(t, docOmittedFields, "fixturepkg.Output.omitted_field", "doc-omitted fixture")
+	run := newDiffRun()
 
-	if !isCuratedRefSubset("fixturepkg", "CuratedOutput") {
+	if !run.isCuratedRefSubset("fixturepkg", "CuratedOutput") {
 		t.Error("CuratedOutput should be a curated ref subset in fixturepkg")
 	}
-	if isCuratedRefSubset("otherpkg", "CuratedOutput") {
+	if run.isCuratedRefSubset("otherpkg", "CuratedOutput") {
 		t.Error("curated ref subset must be package-scoped, not global")
 	}
-	if !isDocOmittedField("fixturepkg", "Output", "omitted_field") {
+	if !run.isDocOmittedField("fixturepkg", "Output", "omitted_field") {
 		t.Error("fixturepkg.Output.omitted_field should be a doc-omitted field")
 	}
-	if isDocOmittedField("fixturepkg", "Output", "name") {
+	if run.isDocOmittedField("fixturepkg", "Output", "name") {
 		t.Error("name is documented and must not be treated as doc-omitted")
 	}
-	if isDocOmittedField("otherpkg", "Output", "omitted_field") {
+	if run.isDocOmittedField("otherpkg", "Output", "omitted_field") {
 		t.Error("a doc-omitted field must be package-scoped, not global")
 	}
-	if isDocOmittedField("fixturepkg", "OtherOutput", "omitted_field") {
+	if run.isDocOmittedField("fixturepkg", "OtherOutput", "omitted_field") {
 		t.Error("a doc-omitted field must be scoped to its own type")
 	}
 }
@@ -1367,7 +1371,7 @@ func TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName(t *testing.T) {
 		taggedField{name: "Scope", tag: `url:"scope"`, goType: tString},
 	)
 
-	g := diffPair("issues", "input", structPair{
+	g := newDiffRun().diffPair("issues", "input", structPair{
 		mcpName: "ListInput", mcpType: mcp,
 		sdkName: "v2.ListIssuesOptions", sdkType: sdk, sdkURLTags: true,
 	})
@@ -1568,7 +1572,7 @@ func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testi
 			structField{"Weight", "weight", sdkNamedStruct(t, "Weight")},
 		)
 
-		g := diffOutputGroup("fixturepkg", outputGroup{
+		g := newDiffRun().diffOutputGroup("fixturepkg", outputGroup{
 			mcpName: "Output", mcpType: mcp,
 			pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.Environment", sdkType: sdk}},
 		})
@@ -1592,7 +1596,7 @@ func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testi
 			structField{"Project", "project", sdkNamedStruct(t, "Project")},
 		)
 
-		g := diffOutputGroup("fixturepkg", outputGroup{
+		g := newDiffRun().diffOutputGroup("fixturepkg", outputGroup{
 			mcpName: "CuratedOutput", mcpType: mcp,
 			pairs: []structPair{{mcpName: "CuratedOutput", mcpType: mcp, sdkName: "v2.Deployable", sdkType: sdk}},
 		})
@@ -1613,7 +1617,7 @@ func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testi
 
 		for _, mcpName := range []string{"Output", "CuratedOutput"} {
 			t.Run(mcpName, func(t *testing.T) {
-				g := diffOutputGroup("otherpkg", outputGroup{
+				g := newDiffRun().diffOutputGroup("otherpkg", outputGroup{
 					mcpName: mcpName, mcpType: mcp,
 					pairs: []structPair{{mcpName: mcpName, mcpType: mcp, sdkName: "v2.Deployment", sdkType: sdk}},
 				})
@@ -1645,7 +1649,7 @@ func TestDiffPair_Kind_DecidesWhetherTheInputAllowlistApplies(t *testing.T) {
 	)
 
 	t.Run("an input pair honors the allowlist", func(t *testing.T) {
-		g := diffPair("branches", "input", structPair{
+		g := newDiffRun().diffPair("branches", "input", structPair{
 			mcpName: "CreateInput", mcpType: mcp,
 			sdkName: "v2.CreateBranchOptions", sdkType: sdk, sdkURLTags: true,
 		})
@@ -1660,7 +1664,7 @@ func TestDiffPair_Kind_DecidesWhetherTheInputAllowlistApplies(t *testing.T) {
 	})
 
 	t.Run("any other kind reports the same field", func(t *testing.T) {
-		g := diffPair("branches", "output", structPair{
+		g := newDiffRun().diffPair("branches", "output", structPair{
 			mcpName: "CreateInput", mcpType: mcp,
 			sdkName: "v2.CreateBranchOptions", sdkType: sdk, sdkURLTags: true,
 		})
@@ -1677,7 +1681,7 @@ func TestDiffPair_Kind_DecidesWhetherTheInputAllowlistApplies(t *testing.T) {
 			taggedField{name: "Branch", tag: `url:"branch"`, goType: tString},
 		)
 
-		g := diffPair("branches", "input", structPair{
+		g := newDiffRun().diffPair("branches", "input", structPair{
 			mcpName: "CreateInput", mcpType: mcp,
 			sdkName: "v2.Branch", sdkType: jsonOnly, sdkURLTags: false,
 		})
@@ -1998,7 +2002,7 @@ func TestDiffPair_ATypeMismatch_KeepsEachTypeOnItsOwnSide(t *testing.T) {
 		taggedField{name: "ExpiresAt", tag: `url:"expires_at"`, goType: types.NewPointer(namedStruct(sdkPkg, "ISOTime", makeStruct()))},
 	)
 
-	g := diffPair("members", "input", structPair{
+	g := newDiffRun().diffPair("members", "input", structPair{
 		mcpName: "AddInput", mcpType: mcp,
 		sdkName: "v2.AddGroupMemberOptions", sdkType: sdk, sdkURLTags: true,
 	})
@@ -2029,7 +2033,7 @@ func TestDiffPair_AnOptionsField_IsNamedByItsURLTagFirst(t *testing.T) {
 		taggedField{name: "Avatar", tag: `url:"-" json:"avatar"`, goType: tString},
 	)
 
-	g := diffPair("groups", "input", structPair{
+	g := newDiffRun().diffPair("groups", "input", structPair{
 		mcpName: "ListInput", mcpType: mcp,
 		sdkName: "v2.ListGroupsOptions", sdkType: sdk, sdkURLTags: true,
 	})
@@ -2069,7 +2073,7 @@ func TestDiffPair_ACuratedInput_AnswersEveryFieldOfItsOwnTypeOnly(t *testing.T) 
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			g := diffPair(tc.pkg, "input", structPair{
+			g := newDiffRun().diffPair(tc.pkg, "input", structPair{
 				mcpName: tc.mcpType, mcpType: mcp,
 				sdkName: "v2.ImportOptions", sdkType: sdk, sdkURLTags: true,
 			})
@@ -2108,7 +2112,7 @@ func TestExtraOutputFields_AnAdjudicatedExtra_AnswersOnlyItsOwnKey(t *testing.T)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := extraOutputFields(tc.pkg, tc.mcpType, mcp, map[string]string{})
+			got := newDiffRun().extraOutputFields(tc.pkg, tc.mcpType, mcp, map[string]string{})
 
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("extraOutputFields(%s, %s) = %+v, want %+v", tc.pkg, tc.mcpType, got, tc.want)
@@ -2137,7 +2141,7 @@ func TestDiffOutputGroup_ASpelledDifferentSDKTag_IsComparedUnderOurName(t *testi
 		structField{"AuthorID", "authorId", types.NewPointer(sdkNamedStruct(t, "Author"))},
 	)
 
-	g := diffOutputGroup("workitems", outputGroup{
+	g := newDiffRun().diffOutputGroup("workitems", outputGroup{
 		mcpName: "Output", mcpType: mcp,
 		pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.WorkItem", sdkType: sdk}},
 	})
@@ -2172,7 +2176,7 @@ func TestDiffOutputGroup_PairingsThatDisagreeOnAType_AreNamedByTheFirst(t *testi
 		structField{"Weight", "weight", sdkNamedStruct(t, "ZetaWeight")},
 	)
 
-	g := diffOutputGroup("environments", outputGroup{
+	g := newDiffRun().diffOutputGroup("environments", outputGroup{
 		mcpName: "Output", mcpType: mcp,
 		pairs: []structPair{
 			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Alpha", sdkType: alpha},
