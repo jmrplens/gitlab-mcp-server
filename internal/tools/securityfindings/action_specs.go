@@ -53,7 +53,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        "gitlab_list_security_findings",
 				Title:       toolutil.TitleFromName("gitlab_list_security_findings"),
-				Description: "List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
+				Description: "List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity and original severity, report type, scanner, identifiers (CVE, CWE, OWASP), location, state, who dismissed it and why, evidence with the recorded HTTP exchange, proposed remediations, report links, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
 			},
 		}),
 	}
