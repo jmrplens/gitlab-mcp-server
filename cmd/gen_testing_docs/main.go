@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -13,7 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -214,10 +215,14 @@ type recordedCoverageValues struct {
 	AveragePackage coverageValue
 }
 
+// osExit is os.Exit behind a variable, so a test can drive main and read the
+// code it asks the process to exit with.
+var osExit = os.Exit
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		osExit(1)
 	}
 }
 
@@ -347,7 +352,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 	}
 	metrics.OverallCoverage = recorded.Overall
 	metrics.InternalCoverage = recorded.Internal
-	toolCounts := actionSpecToolCounts()
+	toolCounts := actionSpecToolCounts(tools.CollectActionSpecs(nil))
 
 	for _, info := range infos {
 		pkg := packageMetrics{
@@ -394,7 +399,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 		// -p 1 because the runtime packages share one GitLab instance: run in
 		// parallel they provision against each other and fail for reasons that
 		// have nothing to do with the server.
-		if _, e2eErr := runGo(ctx, []string{"test", "-tags", "e2e", "-p", "1", "-timeout", opts.timeout.String(), e2eSuiteRun}); e2eErr != nil {
+		if _, e2eErr := goCommand(ctx, []string{"test", "-tags", "e2e", "-p", "1", "-timeout", opts.timeout.String(), e2eSuiteRun}); e2eErr != nil {
 			return repositoryMetrics{}, fmt.Errorf("run e2e tests: %w", e2eErr)
 		}
 		metrics.E2ENote = "E2E tests were executed with -tags e2e during this generation run. Coverage tables still report unit-test coverage for ./internal/... and ./cmd/...."
@@ -409,18 +414,15 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 // can each under-count a package the other two see, so the highest wins;
 // relPath names the package in an error, which is how the failures read.
 func packageToolCount(dir, relPath, key string, catalog map[string]int) (int, error) {
-	legacyCount, err := countMCPTools(dir)
+	files, err := parseSourceFiles(dir)
 	if err != nil {
 		return 0, fmt.Errorf("count MCP tools in %s: %w", relPath, err)
 	}
-	localSpecCount, err := countLocalActionSpecTools(dir)
-	if err != nil {
-		return 0, fmt.Errorf("count ActionSpec tools in %s: %w", relPath, err)
-	}
+	legacyCount := countMCPTools(files)
 	if catalogCount := catalog[key]; catalogCount > 0 {
 		return max(catalogCount, legacyCount), nil
 	}
-	return max(legacyCount, localSpecCount), nil
+	return max(legacyCount, countLocalActionSpecTools(files)), nil
 }
 
 // collectCoverage resolves where this run's coverage numbers come from: a
@@ -560,7 +562,7 @@ func coverageTableKey(pkg packageMetrics) string {
 // arrives in the same stream as the rows and is refused by the row parser
 // rather than counted as a package.
 func listPackages(ctx context.Context) ([]golist.PackageInfo, error) {
-	output, err := runGo(ctx, []string{"list", "-tags", e2eTags, "-f", golist.Format, cmdPattern, internalPattern, e2ePattern})
+	output, err := goCommand(ctx, []string{"list", "-tags", e2eTags, "-f", golist.Format, cmdPattern, internalPattern, e2ePattern})
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
@@ -583,7 +585,7 @@ func runUnitCoverage(ctx context.Context, opts options) (packageCoverages map[st
 	args = append(args, patterns...)
 	args = append(args, "-count=1")
 
-	output, err := runGo(ctx, args)
+	output, err := goCommand(ctx, args)
 	if err != nil {
 		return nil, coverageValue{}, coverageValue{}, fmt.Errorf("run coverage for %s: %w", strings.Join(patterns, " "), err)
 	}
@@ -593,7 +595,7 @@ func runUnitCoverage(ctx context.Context, opts options) (packageCoverages map[st
 		return nil, coverageValue{}, coverageValue{}, err
 	}
 
-	coverOutput, err := runGo(ctx, []string{"tool", "cover", "-func=" + profilePath})
+	coverOutput, err := goCommand(ctx, []string{"tool", "cover", "-func=" + profilePath})
 	if err != nil {
 		return nil, coverageValue{}, coverageValue{}, fmt.Errorf("summarize coverage for %s: %w", strings.Join(patterns, " "), err)
 	}
@@ -663,14 +665,17 @@ func countTests(dir string) (testFunctions, testFiles int, namingCounts map[stri
 	return testFunctions, testFiles, namingCounts, nil
 }
 
-// countMCPTools counts individual MCP tool registrations in a package directory.
-func countMCPTools(dir string) (int, error) {
-	count := 0
-	fset := token.NewFileSet()
+// parseSourceFiles parses the non-test Go files directly in dir. Both tool
+// counts read the same files, so they are parsed once: the second count used
+// to walk and parse the directory again, and its own error branch could only
+// be reached by a directory that changed between the two walks.
+func parseSourceFiles(dir string) ([]*ast.File, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
+	fset := token.NewFileSet()
+	var files []*ast.File
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -678,11 +683,20 @@ func countMCPTools(dir string) (int, error) {
 		if !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
 			continue
 		}
-		path := filepath.Join(dir, entry.Name())
-		node, parseErr := parser.ParseFile(fset, path, nil, 0)
+		node, parseErr := parser.ParseFile(fset, filepath.Join(dir, entry.Name()), nil, 0)
 		if parseErr != nil {
-			return 0, parseErr
+			return nil, parseErr
 		}
+		files = append(files, node)
+	}
+	return files, nil
+}
+
+// countMCPTools counts individual MCP tool registrations, the mcp.AddTool
+// calls, in a package's parsed source files.
+func countMCPTools(files []*ast.File) int {
+	count := 0
+	for _, node := range files {
 		ast.Inspect(node, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -699,28 +713,14 @@ func countMCPTools(dir string) (int, error) {
 			return true
 		})
 	}
-	return count, nil
+	return count
 }
 
-func countLocalActionSpecTools(dir string) (int, error) {
+// countLocalActionSpecTools counts the specs a package's own ActionSpecs
+// builders return, read statically from its parsed source files.
+func countLocalActionSpecTools(files []*ast.File) int {
 	count := 0
-	fset := token.NewFileSet()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0, err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		node, parseErr := parser.ParseFile(fset, path, nil, 0)
-		if parseErr != nil {
-			return 0, parseErr
-		}
+	for _, node := range files {
 		for _, decl := range node.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Body == nil || !isActionSpecBuilderName(fn.Name.Name) {
@@ -729,7 +729,7 @@ func countLocalActionSpecTools(dir string) (int, error) {
 			count += countActionSpecStatements(fn.Body.List, map[string]int{})
 		}
 	}
-	return count, nil
+	return count
 }
 
 // isActionSpecBuilderName reports whether a function name follows the
@@ -793,17 +793,17 @@ func countActionSpecReturns(stmt *ast.ReturnStmt, vars map[string]int) int {
 	return count
 }
 
+// countActionSpecElse counts the specs an if statement's else branch adds. The
+// parser gives an else one of two shapes, a block or another if, so the only
+// statement left over is the nil of an if without one, which adds nothing.
 func countActionSpecElse(statement ast.Stmt, vars map[string]int) int {
 	switch stmt := statement.(type) {
-	case nil:
-		return 0
 	case *ast.BlockStmt:
 		return countActionSpecStatements(stmt.List, vars)
 	case *ast.IfStmt:
 		return countActionSpecStatements([]ast.Stmt{stmt}, vars)
-	default:
-		return 0
 	}
+	return 0
 }
 
 func actionSpecReturnCount(expr ast.Expr, vars map[string]int) int {
@@ -868,9 +868,12 @@ func isActionSpecType(expr ast.Expr) bool {
 	}
 }
 
-func actionSpecToolCounts() map[string]int {
+// actionSpecToolCounts counts the distinct individual tools each owning
+// package contributes to groups, which is the collected catalog in a real
+// run. An action naming no owner or no tool counts towards nobody.
+func actionSpecToolCounts(groups []tools.ActionSpecGroup) map[string]int {
 	toolsByPackage := map[string]map[string]struct{}{}
-	for _, group := range tools.CollectActionSpecs(nil) {
+	for _, group := range groups {
 		for _, spec := range group.Actions {
 			owner := strings.TrimSpace(spec.OwnerPackage)
 			toolName := strings.TrimSpace(spec.IndividualTool.Name)
@@ -1076,7 +1079,7 @@ func renderDistribution(metrics repositoryMetrics) string {
 // renderCorePackages renders counts and coverage for non-tool internal packages.
 func renderCorePackages(metrics repositoryMetrics) string {
 	packages := packagesByLayer(metrics.Packages, layerCore)
-	sort.Slice(packages, func(i, j int) bool { return packages[i].Key < packages[j].Key })
+	slices.SortFunc(packages, comparePackageKeys)
 
 	var b strings.Builder
 	b.WriteString("### Core Packages\n\n")
@@ -1102,15 +1105,10 @@ func renderCorePackages(metrics repositoryMetrics) string {
 // renderTopToolPackages renders the most-tested tool sub-packages.
 func renderTopToolPackages(metrics repositoryMetrics, topToolRows int) string {
 	packages := packagesByLayer(metrics.Packages, layerToolSubpackage)
-	sort.Slice(packages, func(i, j int) bool {
-		if packages[i].TestFunctions != packages[j].TestFunctions {
-			return packages[i].TestFunctions > packages[j].TestFunctions
-		}
-		return packages[i].Key < packages[j].Key
+	slices.SortFunc(packages, func(a, b packageMetrics) int {
+		return cmp.Or(cmp.Compare(b.TestFunctions, a.TestFunctions), comparePackageKeys(a, b))
 	})
-	if len(packages) > topToolRows {
-		packages = packages[:topToolRows]
-	}
+	packages = packages[:min(len(packages), topToolRows)]
 
 	var b strings.Builder
 	b.WriteString("### Tool Sub-Packages (Top Domains by Test Count)\n\n")
@@ -1130,7 +1128,7 @@ func renderTopToolPackages(metrics repositoryMetrics, topToolRows int) string {
 // renderCompleteToolPackages renders the full tool sub-package table.
 func renderCompleteToolPackages(metrics repositoryMetrics) string {
 	packages := packagesByLayer(metrics.Packages, layerToolSubpackage)
-	sort.Slice(packages, func(i, j int) bool { return packages[i].Key < packages[j].Key })
+	slices.SortFunc(packages, comparePackageKeys)
 
 	tested := countTestedPackages(packages)
 	var b strings.Builder
@@ -1226,7 +1224,9 @@ func packageSummary(dir string) string {
 
 	fset := token.NewFileSet()
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
+		// A directory named like a Go file needs no case of its own: it does
+		// not parse, and a file that does not parse is passed over below.
+		if !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
 			continue
 		}
 		node, parseErr := parser.ParseFile(fset, filepath.Join(dir, entry.Name()), nil, parser.ParseComments)
@@ -1245,8 +1245,8 @@ func packageSummary(dir string) string {
 func firstSentence(s string) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.Join(strings.Fields(s), " ")
-	if idx := strings.Index(s, ". "); idx >= 0 {
-		s = s[:idx+1]
+	if sentence, _, found := strings.Cut(s, ". "); found {
+		return sentence + "."
 	}
 	return s
 }
@@ -1280,7 +1280,7 @@ func updateManagedSection(path, content string, check bool) (changed bool, repor
 	if check {
 		return true, lineDifferenceReport(text, updated, maxReportedDifferences), nil
 	}
-	if writeErr := os.WriteFile(docPath, []byte(updated), docgen.GeneratedFileMode); writeErr != nil { //#nosec G304,G703 -- path constrained to repository root by resolveRepositoryPath.
+	if writeErr := writeDocument(docPath, []byte(updated), docgen.GeneratedFileMode); writeErr != nil { //#nosec G304,G703 -- path constrained to repository root by resolveRepositoryPath.
 		return false, "", fmt.Errorf("write %s: %w", path, writeErr)
 	}
 	return true, "", nil
@@ -1357,25 +1357,38 @@ func lineAt(lines []string, index int) string {
 	return lines[index]
 }
 
+// writeDocument writes the regenerated document, os.WriteFile behind a
+// variable: a document that can be read and not written is made with file
+// permissions, which do not restrict root, so a test stands in for the write
+// to reach that failure wherever it runs.
+var writeDocument = os.WriteFile
+
+// relativePathOf is filepath.Rel behind a variable. Given two absolute paths
+// it fails only on Windows, for paths on two volumes, and a test stands in for
+// it to reach that failure on any platform.
+var relativePathOf = filepath.Rel
+
 // resolveRepositoryPath returns an absolute path that stays inside the repository.
+//
+// The path is absolute once joined to the absolute root, and filepath.Join
+// cleans it, so nothing is left for a second filepath.Abs to do: the one that
+// was here could not fail on an absolute path and is gone. filepath.Rel never
+// answers with an absolute path, so the verdict reads its result for a climb
+// out of the root and nothing else.
 func resolveRepositoryPath(path string) (string, error) {
 	root, err := filepath.Abs(repositoryRoot())
 	if err != nil {
 		return "", fmt.Errorf("resolve repository root: %w", err)
 	}
-	cleaned := filepath.Clean(path)
-	if !filepath.IsAbs(cleaned) {
-		cleaned = filepath.Join(root, cleaned)
+	absPath := filepath.Clean(path)
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(root, absPath)
 	}
-	absPath, err := filepath.Abs(cleaned)
-	if err != nil {
-		return "", fmt.Errorf("resolve %s: %w", path, err)
-	}
-	rel, err := filepath.Rel(root, absPath)
+	rel, err := relativePathOf(root, absPath)
 	if err != nil {
 		return "", fmt.Errorf("compare %s with repository root: %w", path, err)
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("%s is outside repository root", path)
 	}
 	return absPath, nil
@@ -1387,37 +1400,40 @@ func replaceGeneratedBlock(text, content string) (string, error) {
 		return replaceBetweenMarkers(text, content)
 	}
 
-	startIdx := strings.Index(text, fallbackStart)
-	if startIdx < 0 {
+	before, rest, found := strings.Cut(text, fallbackStart)
+	if !found {
 		return "", fmt.Errorf("fallback start heading %q not found", fallbackStart)
 	}
-	endIdx := strings.Index(text[startIdx:], fallbackEnd)
-	if endIdx < 0 {
+	_, after, found := strings.Cut(rest, fallbackEnd)
+	if !found {
 		return "", fmt.Errorf("fallback end heading %q not found after %q", fallbackEnd, fallbackStart)
 	}
-	endIdx += startIdx
 
-	before := strings.TrimRight(text[:startIdx], "\n")
-	after := strings.TrimLeft(text[endIdx:], "\n")
-	return before + "\n\n" + startMarker + "\n\n" + content + "\n" + endMarker + "\n\n" + after, nil
+	// The legacy section runs from the start heading to the end heading; the
+	// end heading and everything after it are kept.
+	before = strings.TrimRight(before, "\n")
+	return before + "\n\n" + startMarker + "\n\n" + content + "\n" + endMarker + "\n\n" + fallbackEnd + after, nil
 }
 
 // replaceBetweenMarkers replaces content between startMarker and endMarker.
 func replaceBetweenMarkers(text, content string) (string, error) {
-	startIdx := strings.Index(text, startMarker)
-	if startIdx < 0 {
+	before, rest, found := strings.Cut(text, startMarker)
+	if !found {
 		return "", fmt.Errorf("start marker %s not found", startMarker)
 	}
-	searchFrom := startIdx + len(startMarker)
-	endRel := strings.Index(text[searchFrom:], endMarker)
-	if endRel < 0 {
+	_, after, found := strings.Cut(rest, endMarker)
+	if !found {
 		return "", fmt.Errorf("end marker %s not found after start marker", endMarker)
 	}
-	endIdx := searchFrom + endRel
-	before := text[:searchFrom]
-	after := text[endIdx:]
-	return before + "\n\n" + content + "\n" + after, nil
+	return before + startMarker + "\n\n" + content + "\n" + endMarker + after, nil
 }
+
+// goCommand is how the generator runs the Go toolchain, runGo behind a
+// variable: the coverage pass reads three things off real commands (the test
+// output, the coverage summary and the profile), and a test can stand in for
+// the toolchain to hand it each of the answers a real run never gives, such
+// as a summary with no total line.
+var goCommand = runGo
 
 // runGo executes a Go command with the module toolchain version pinned.
 func runGo(ctx context.Context, args []string) ([]byte, error) {
@@ -1574,8 +1590,14 @@ func sortedCoveragePackages(packages []packageMetrics) []packageMetrics {
 			filtered = append(filtered, pkg)
 		}
 	}
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Key < filtered[j].Key })
+	slices.SortFunc(filtered, comparePackageKeys)
 	return filtered
+}
+
+// comparePackageKeys orders two packages by their table key. A key is unique
+// within a layer, so this is a total order on any table's rows.
+func comparePackageKeys(a, b packageMetrics) int {
+	return strings.Compare(a.Key, b.Key)
 }
 
 // lowCoveragePackages returns packages below target, sorted by coverage then name.
@@ -1586,11 +1608,8 @@ func lowCoveragePackages(packages []packageMetrics, target float64) []packageMet
 			low = append(low, pkg)
 		}
 	}
-	sort.Slice(low, func(i, j int) bool {
-		if low[i].Coverage.Percent != low[j].Coverage.Percent {
-			return low[i].Coverage.Percent < low[j].Coverage.Percent
-		}
-		return low[i].Key < low[j].Key
+	slices.SortFunc(low, func(a, b packageMetrics) int {
+		return cmp.Or(cmp.Compare(a.Coverage.Percent, b.Coverage.Percent), comparePackageKeys(a, b))
 	})
 	return low
 }
@@ -1686,9 +1705,7 @@ func fmtInt(n int) string {
 		s = s[:len(s)-3]
 	}
 	parts = append(parts, s)
-	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
-		parts[i], parts[j] = parts[j], parts[i]
-	}
+	slices.Reverse(parts)
 	return strings.Join(parts, ",")
 }
 
@@ -1716,8 +1733,5 @@ func escapeTable(s string) string {
 // tailLines returns the last n lines of text for command error messages.
 func tailLines(text string, n int) string {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
-	if len(lines) <= n {
-		return strings.Join(lines, "\n")
-	}
-	return strings.Join(lines[len(lines)-n:], "\n")
+	return strings.Join(lines[max(len(lines)-n, 0):], "\n")
 }

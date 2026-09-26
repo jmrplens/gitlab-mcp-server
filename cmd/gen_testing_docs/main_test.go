@@ -11,9 +11,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"go/ast"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
@@ -22,6 +25,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // goReleaseVersionRE matches the numeric part of a released Go toolchain
@@ -196,22 +200,17 @@ func RegisterTools() {
 }
 `)
 
-	got, err := countMCPTools(dir)
-	if err != nil {
-		t.Fatalf("countMCPTools() error = %v", err)
-	}
-	if got != 2 {
+	if got := countMCPTools(mustParseSourceFiles(t, dir)); got != 2 {
 		t.Fatalf("countMCPTools() = %d, want 2", got)
 	}
 }
 
-// TestCountMCPTools_MissingDirOrBrokenFile_ReturnsError verifies the AddTool
-// scanner reports an unreadable directory and a source file the parser
-// rejects, while ignoring test files and other extensions.
-func TestCountMCPTools_MissingDirOrBrokenFile_ReturnsError(t *testing.T) {
+// TestParseSourceFiles_MissingDirOrBrokenFile_ReturnsError verifies the parse
+// both tool counts read from reports an unreadable directory and a source
+// file the parser rejects.
+func TestParseSourceFiles_MissingDirOrBrokenFile_ReturnsError(t *testing.T) {
 	broken := t.TempDir()
 	writeFixture(t, broken, "register.go", "package sample\n\nfunc RegisterTools() {\n")
-	writeFixture(t, broken, "notes.txt", "not go")
 	tests := []struct {
 		name string
 		dir  string
@@ -221,11 +220,46 @@ func TestCountMCPTools_MissingDirOrBrokenFile_ReturnsError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := countMCPTools(tt.dir); err == nil {
-				t.Fatal("countMCPTools() error = nil, want error")
+			if _, err := parseSourceFiles(tt.dir); err == nil {
+				t.Fatal("parseSourceFiles() error = nil, want error")
 			}
 		})
 	}
+}
+
+// TestParseSourceFiles_MixedDirectory_ParsesOnlyPackageSource verifies which
+// entries of a package directory are read as its source: every Go file that
+// is not a test, and nothing else. The fixture holds one of each thing the
+// walk has to pass over, each able to fail the parse or skew a count if it
+// were read: a test file registering a tool, a file with another extension
+// that is not Go, and a directory whose name ends in .go.
+func TestParseSourceFiles_MixedDirectory_ParsesOnlyPackageSource(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "register.go", "package sample\n\nfunc RegisterTools() {\n\tmcp.AddTool(server, tool, handler)\n}\n")
+	writeFixture(t, dir, "register_test.go", "package sample\n\nfunc TestRegister() {\n\tmcp.AddTool(server, tool, handler)\n}\n")
+	writeFixture(t, dir, "notes.txt", "not go source\n")
+	if err := os.Mkdir(filepath.Join(dir, "vendored.go"), 0o750); err != nil {
+		t.Fatalf("create the directory named like a Go file: %v", err)
+	}
+
+	files := mustParseSourceFiles(t, dir)
+	if len(files) != 1 || files[0].Name.Name != "sample" {
+		t.Fatalf("parseSourceFiles() = %d files, want register.go alone", len(files))
+	}
+	if got := countMCPTools(files); got != 1 {
+		t.Errorf("countMCPTools() = %d, want 1: the test file's registration is not the package's", got)
+	}
+}
+
+// mustParseSourceFiles parses dir's package source for a test that is about
+// what is counted in it rather than about the parse.
+func mustParseSourceFiles(t *testing.T, dir string) []*ast.File {
+	t.Helper()
+	files, err := parseSourceFiles(dir)
+	if err != nil {
+		t.Fatalf("parseSourceFiles() error = %v", err)
+	}
+	return files
 }
 
 // TestCountLocalActionSpecTools_CountsPackageOwnedSpecs verifies catalog-backed
@@ -256,11 +290,7 @@ func GroupActionSpecs(client *Client) []toolutil.ActionSpec {
 }
 `)
 
-	got, err := countLocalActionSpecTools(dir)
-	if err != nil {
-		t.Fatalf("countLocalActionSpecTools() error = %v", err)
-	}
-	if got != 5 {
+	if got := countLocalActionSpecTools(mustParseSourceFiles(t, dir)); got != 5 {
 		t.Fatalf("countLocalActionSpecTools() = %d, want 5", got)
 	}
 }
@@ -323,10 +353,7 @@ func Helper() []ActionSpec {
 `)
 	writeFixture(t, filepath.Join(dir, "nested"), "nested.go", "package nested\n\nfunc NestedActionSpecs() []ActionSpec {\n\treturn []ActionSpec{spec(\"ignored\")}\n}\n")
 
-	got, err := countLocalActionSpecTools(dir)
-	if err != nil {
-		t.Fatalf("countLocalActionSpecTools() error = %v", err)
-	}
+	got := countLocalActionSpecTools(mustParseSourceFiles(t, dir))
 	// In BranchActionSpecs, specs starts at 1 and grows by 3 (b, c, d)
 	// before the if chain, whose first branch returns it at 4 and whose
 	// else-if returns a literal of 1; the else and the loop then add f and
@@ -334,28 +361,6 @@ func Helper() []ActionSpec {
 	// two, and the nested directory is not this package.
 	if got != 13 {
 		t.Fatalf("countLocalActionSpecTools() = %d, want 13", got)
-	}
-}
-
-// TestCountLocalActionSpecTools_MissingDirOrBrokenFile_ReturnsError verifies
-// the ActionSpecs scanner reports an unreadable directory and a source file
-// the parser rejects.
-func TestCountLocalActionSpecTools_MissingDirOrBrokenFile_ReturnsError(t *testing.T) {
-	broken := t.TempDir()
-	writeFixture(t, broken, "action_specs.go", "package sample\n\nfunc ActionSpecs() []ActionSpec {\n")
-	tests := []struct {
-		name string
-		dir  string
-	}{
-		{name: "missing directory", dir: filepath.Join(t.TempDir(), "absent")},
-		{name: "unparseable source file", dir: broken},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := countLocalActionSpecTools(tt.dir); err == nil {
-				t.Fatal("countLocalActionSpecTools() error = nil, want error")
-			}
-		})
 	}
 }
 
@@ -400,13 +405,15 @@ func TestPackageToolCount_ScanAndCatalog_TakeTheHighestOfTheThree(t *testing.T) 
 // runtime catalog projection yields a positive distinct-tool count for every
 // owning package, including a well-known domain.
 //
-// It also states what makes the projection's own guard unobservable: every
-// action the catalog publishes names an owning package and an individual tool,
-// so the skip for a nameless one decides nothing. That is a property of the
-// catalog rather than of this command, and an action that stopped carrying
-// either name would silently drop out of these counts instead of failing here.
+// It also states why the projection's skip for a nameless action decides
+// nothing on the real catalog: every action it publishes names an owning
+// package and an individual tool. That is a property of the catalog rather
+// than of this command, and an action that stopped carrying either name would
+// silently drop out of these counts instead of failing here. The skip itself
+// is held by TestActionSpecToolCounts_NamelessActions_CountTowardsNobody.
 func TestActionSpecToolCounts_RealCatalog_CountsDistinctToolsPerOwner(t *testing.T) {
-	for _, group := range tools.CollectActionSpecs(nil) {
+	groups := tools.CollectActionSpecs(nil)
+	for _, group := range groups {
 		for _, spec := range group.Actions {
 			if strings.TrimSpace(spec.OwnerPackage) == "" || strings.TrimSpace(spec.IndividualTool.Name) == "" {
 				t.Fatalf("action %s.%s names owner %q and tool %q, want both", group.ToolName, spec.Name, spec.OwnerPackage, spec.IndividualTool.Name)
@@ -414,7 +421,7 @@ func TestActionSpecToolCounts_RealCatalog_CountsDistinctToolsPerOwner(t *testing
 		}
 	}
 
-	counts := actionSpecToolCounts()
+	counts := actionSpecToolCounts(groups)
 	if len(counts) == 0 {
 		t.Fatal("actionSpecToolCounts() returned no owners")
 	}
@@ -427,6 +434,30 @@ func TestActionSpecToolCounts_RealCatalog_CountsDistinctToolsPerOwner(t *testing
 				t.Fatalf("owner %s count = %d, want > 0", owner, count)
 			}
 		})
+	}
+}
+
+// TestActionSpecToolCounts_NamelessActions_CountTowardsNobody verifies an
+// action with no owning package, or with no individual tool, is left out of
+// the counts, each on its own, while a tool registered twice by one owner
+// counts once. The owner and the tool are two separate reasons to skip, so
+// each is the only thing missing from one fixture action.
+func TestActionSpecToolCounts_NamelessActions_CountTowardsNobody(t *testing.T) {
+	spec := func(owner, tool string) toolutil.ActionSpec {
+		return toolutil.ActionSpec{OwnerPackage: owner, IndividualTool: toolutil.IndividualToolSpec{Name: tool}}
+	}
+	groups := []tools.ActionSpecGroup{{Actions: []toolutil.ActionSpec{
+		spec("widgets", "gitlab_widget_get"),
+		spec("widgets", "gitlab_widget_get"),
+		spec("widgets", "gitlab_widget_list"),
+		spec("  ", "gitlab_orphan_get"),
+		spec("gadgets", " "),
+	}}}
+
+	got := actionSpecToolCounts(groups)
+
+	if want := map[string]int{"widgets": 2}; !reflect.DeepEqual(got, want) {
+		t.Errorf("actionSpecToolCounts() = %v, want %v", got, want)
 	}
 }
 
@@ -593,6 +624,29 @@ func TestRepositoryRoot_NoGoMod_FallsBackToDot(t *testing.T) {
 	}
 }
 
+// TestRepositoryRoot_FromASubdirectory_ClimbsToTheModule verifies the root is
+// found above the working directory and not only in it: every other root test
+// starts where go.mod is, or where no go.mod is above at all, so a walk that
+// gave up after the first directory it looked in passed them all.
+func TestRepositoryRoot_FromASubdirectory_ClimbsToTheModule(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "go.mod", "module example.com/docs\n")
+	nested := filepath.Join(root, "docs", "development")
+	if err := os.MkdirAll(nested, 0o750); err != nil {
+		t.Fatalf("create the nested directory: %v", err)
+	}
+	t.Chdir(root)
+	want, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Chdir(nested)
+
+	if got := repositoryRoot(); got != want {
+		t.Fatalf("repositoryRoot() = %q, want %q", got, want)
+	}
+}
+
 // TestGoEnvironment_ModuleVersion_PinsToolchain verifies the go directive of
 // the nearest go.mod becomes the single GOTOOLCHAIN entry handed to child Go
 // commands, replacing whatever the parent process had, and that a go.mod
@@ -738,7 +792,7 @@ func TestCollectMetrics_FakeModule_CountsEveryLayer(t *testing.T) {
 	if len(byKey) != 6 {
 		t.Fatalf("collectMetrics() found %d packages, want 6: %v", len(byKey), byKey)
 	}
-	catalogIssues := actionSpecToolCounts()["issues"]
+	catalogIssues := actionSpecToolCounts(tools.CollectActionSpecs(nil))["issues"]
 	tests := []struct {
 		key     string
 		layer   string
@@ -1019,6 +1073,76 @@ func TestRunUnitCoverage_UnconfiguredDirectory_TakesItsProfileAway(t *testing.T)
 	}
 }
 
+// TestRunUnitCoverage_ToolchainAnswers_EachFailureReported verifies each of
+// the three things the coverage pass reads off the toolchain is checked before
+// it is used, and that a failure names which one it was: the test run's
+// per-package lines, the coverage summary (its command and its total line),
+// and the profile the test run wrote. A real toolchain gives none of these
+// answers to a run that succeeded, so goCommand stands in for it, scripted
+// per case with everything but the answer under test left sound.
+func TestRunUnitCoverage_ToolchainAnswers_EachFailureReported(t *testing.T) {
+	const (
+		soundTest    = "ok  \texample.com/m/internal/core\t0.1s\tcoverage: 50.0% of statements\n"
+		soundCover   = "total:\t(statements)\t50.0%\n"
+		soundProfile = "mode: count\nexample.com/m/internal/core/core.go:1.1,2.1 1 1\n"
+	)
+	tests := []struct {
+		name      string
+		test      string
+		cover     string
+		coverErr  error
+		profile   string
+		noProfile bool
+		wantErr   string
+	}{
+		{
+			name: "a package line that does not parse", test: "ok  \texample.com/m/internal/core\t0.1s\tcoverage: 1.2.3% of statements\n",
+			cover: soundCover, profile: soundProfile, wantErr: "parse coverage line",
+		},
+		{
+			name: "a summary command that fails", test: soundTest,
+			coverErr: errors.New("cover exploded"), profile: soundProfile, wantErr: "summarize coverage for ./internal/... ./cmd/...",
+		},
+		{
+			name: "a summary with no total", test: soundTest,
+			cover: "example.com/m/internal/core/core.go:1:\tAdd\t100.0%\n", profile: soundProfile, wantErr: "total coverage line not found",
+		},
+		{
+			name: "a profile the test run never wrote", test: soundTest,
+			cover: soundCover, noProfile: true, wantErr: "read coverage profile",
+		},
+		{
+			name: "a profile that does not parse", test: soundTest,
+			cover: soundCover, profile: "mode: count\nnot a profile line\n", wantErr: "unexpected coverage profile line",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			goCommand = func(_ context.Context, args []string) ([]byte, error) {
+				switch args[0] {
+				case "test":
+					for _, arg := range args {
+						if path, ok := strings.CutPrefix(arg, "-coverprofile="); ok && !tt.noProfile {
+							writeFixture(t, filepath.Dir(path), filepath.Base(path), tt.profile)
+						}
+					}
+					return []byte(tt.test), nil
+				case "tool":
+					return []byte(tt.cover), tt.coverErr
+				}
+				t.Errorf("unexpected go %v", args)
+				return nil, errors.New("unexpected go command")
+			}
+			t.Cleanup(func() { goCommand = runGo })
+
+			_, _, _, err := runUnitCoverage(t.Context(), options{timeout: time.Minute, coverageDir: t.TempDir()})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("runUnitCoverage() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestDefaultTestTimeout_Bound_ClearsTheToolchainDefault states what the
 // default -timeout exists for: `go test` applies ten minutes when nobody
 // passes one, and the coverage pass needs longer, which is what made it
@@ -1250,6 +1374,39 @@ func TestMainEntryPoint_ValidArguments_ReturnsWithoutExiting(t *testing.T) {
 	}
 }
 
+// TestMainEntryPoint_InvalidArguments_ExitsOneAndSaysWhy drives main with an
+// argument run refuses, and checks the two things a caller reads: the exit
+// code the process is asked for and the reason on stderr. os.Exit sits behind
+// osExit so the test process survives the request.
+func TestMainEntryPoint_InvalidArguments_ExitsOneAndSaysWhy(t *testing.T) {
+	stderrPath := filepath.Join(t.TempDir(), "stderr.txt")
+	stderrFile, err := os.Create(stderrPath)
+	if err != nil {
+		t.Fatalf("create the stderr capture: %v", err)
+	}
+	originalArgs, originalStderr := os.Args, os.Stderr
+	exited := -1
+	osExit = func(code int) { exited = code }
+	os.Args, os.Stderr = []string{"gen_testing_docs", "stray"}, stderrFile
+	t.Cleanup(func() {
+		os.Args, os.Stderr, osExit = originalArgs, originalStderr, os.Exit
+		stderrFile.Close()
+	})
+
+	main()
+
+	if exited != 1 {
+		t.Errorf("main() asked to exit %d, want 1", exited)
+	}
+	logged, err := os.ReadFile(stderrPath)
+	if err != nil {
+		t.Fatalf("read the stderr capture: %v", err)
+	}
+	if !strings.Contains(string(logged), "unexpected positional arguments: stray") {
+		t.Errorf("stderr = %q, want the refused argument named", logged)
+	}
+}
+
 // TestRun_Failures_ReturnEachError verifies the entry point surfaces flag
 // errors, collector errors, and document errors instead of a partial update.
 func TestRun_Failures_ReturnEachError(t *testing.T) {
@@ -1367,24 +1524,22 @@ func assertDifferenceReport(t *testing.T, report string, want bool, wantLines []
 	}
 }
 
-// TestUpdateManagedSection_ReadOnlyDocument_ReturnsWriteError verifies a
-// document that can be read but not written is reported as a write failure.
-// Root bypasses file permission bits on Unix, so the case is skipped there.
-func TestUpdateManagedSection_ReadOnlyDocument_ReturnsWriteError(t *testing.T) {
-	if runtime.GOOS != "windows" && os.Geteuid() == 0 {
-		t.Skip("file permission bits do not restrict root")
-	}
+// TestUpdateManagedSection_UnwritableDocument_ReturnsWriteError verifies a
+// document that can be read but not written is reported as a write failure,
+// naming the path as the caller gave it. File permissions would make such a
+// document everywhere but as root, where they restrict nothing, so the write
+// is refused through writeDocument instead and the case runs on every host.
+func TestUpdateManagedSection_UnwritableDocument_ReturnsWriteError(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.com/docs\n")
 	writeFixture(t, root, "readonly.md", legacyDoc)
-	if err := os.Chmod(filepath.Join(root, "readonly.md"), 0o400); err != nil {
-		t.Fatalf("chmod: %v", err)
-	}
 	t.Chdir(root)
+	writeDocument = func(string, []byte, os.FileMode) error { return os.ErrPermission }
+	t.Cleanup(func() { writeDocument = os.WriteFile })
 
 	_, _, err := updateManagedSection("readonly.md", "new\n", false)
-	if err == nil || !strings.Contains(err.Error(), "write readonly.md") {
-		t.Fatalf("updateManagedSection() error = %v, want write error", err)
+	if err == nil || !strings.Contains(err.Error(), "write readonly.md") || !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("updateManagedSection() error = %v, want the write failure", err)
 	}
 }
 
@@ -1778,19 +1933,42 @@ func TestResolveRepositoryPath_RelativeAndAbsolute_StayInsideRoot(t *testing.T) 
 	}
 }
 
+// TestResolveRepositoryPath_PathOnAnotherVolume_RefusedWithTheComparison
+// verifies a path the root cannot be compared with is refused rather than
+// resolved. Relating two absolute paths fails only on Windows, for paths on
+// two volumes, so relativePathOf stands in for that answer on every platform.
+func TestResolveRepositoryPath_PathOnAnotherVolume_RefusedWithTheComparison(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "go.mod", "module example.com/docs\n")
+	t.Chdir(root)
+	relErr := errors.New("Rel: can't make D:\\other.md relative to C:\\repo")
+	relativePathOf = func(string, string) (string, error) { return "", relErr }
+	t.Cleanup(func() { relativePathOf = filepath.Rel })
+
+	got, err := resolveRepositoryPath("other.md")
+	if !errors.Is(err, relErr) || !strings.Contains(err.Error(), "compare other.md with repository root") {
+		t.Fatalf("resolveRepositoryPath() = %q, %v; want the comparison refused", got, err)
+	}
+}
+
 // TestPackageSummary_DocShapes_FirstSentenceOrFallback verifies the summary
 // comes from the first documented non-test file, skips files without a doc
 // comment or with parse errors, and falls back for an unreadable directory.
 //
-// Two of the fixture files are there for the files the scan must walk past
-// before it reaches the documented one: a file that is not Go source, and a
-// Go file whose comment block holds no words, which is attached to the
-// package clause and still says nothing. Both sort ahead of the documented
-// file, so a scan that stopped declining either would answer with the wrong
-// summary rather than with none.
+// Four of the fixture entries are there for the ones the scan must walk past
+// before it reaches the documented file: a file that is not Go source, a Go
+// file whose comment block holds no words, which is attached to the package
+// clause and still says nothing, a file that does not parse although the part
+// before its error carries a package comment, and a directory named like a Go
+// file. All sort ahead of the documented file, so a scan that stopped
+// declining any of them would answer with the wrong summary rather than with
+// none.
 func TestPackageSummary_DocShapes_FirstSentenceOrFallback(t *testing.T) {
 	documented := t.TempDir()
-	writeFixture(t, documented, "a_broken.go", "package p\n\nfunc (")
+	writeFixture(t, documented, "a_broken.go", "// Package p is broken and must be skipped.\npackage p\n\nfunc (")
+	if err := os.Mkdir(filepath.Join(documented, "a_dir.go"), 0o750); err != nil {
+		t.Fatalf("create the directory named like a Go file: %v", err)
+	}
 	writeFixture(t, documented, "a_notes.txt", "// Package p is not Go source.\n")
 	writeFixture(t, documented, "b_plain.go", "package p\n")
 	writeFixture(t, documented, "c_doc_test.go", "// Package p test doc must be ignored.\npackage p\n")
@@ -2041,6 +2219,29 @@ func TestRenderCorePackages_UnorderedInput_OrdersByKey(t *testing.T) {
 	}
 }
 
+// TestRenderPackageTables_NoTestedPackages_RenderTheirTotalsAlone verifies the
+// two tables that end in a total row render one for a tree with nothing to
+// list: the total is appended after the package rows, so the table is built
+// for one row more than it lists, and a tree with no tested package is where
+// that row is the only one.
+func TestRenderPackageTables_NoTestedPackages_RenderTheirTotalsAlone(t *testing.T) {
+	tests := []struct {
+		name   string
+		render func(repositoryMetrics) string
+		want   string
+	}{
+		{name: "core packages", render: renderCorePackages, want: "**Subtotal**"},
+		{name: "complete tool packages", render: renderCompleteToolPackages, want: "**Total**"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tableKeys(tt.render(repositoryMetrics{})); !slices.Equal(got, []string{tt.want}) {
+				t.Errorf("rows = %v, want the %s row alone", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestRenderTopToolPackages_RowCap_OrdersByTestsThenKey verifies the top
 // table sorts by test count descending with the key as tie-break, and that
 // the cap truncates the list.
@@ -2208,6 +2409,9 @@ func TestFmtInt_Magnitudes_InsertsSeparators(t *testing.T) {
 		{in: 0, want: "0"},
 		{in: 999, want: "999"},
 		{in: 1000, want: "1,000"},
+		// A leading group of exactly three digits is where the loop has to
+		// stop: taking it as one more trailing group leaves an empty head.
+		{in: 100000, want: "100,000"},
 		{in: 1234567, want: "1,234,567"},
 	}
 	for _, tt := range tests {
