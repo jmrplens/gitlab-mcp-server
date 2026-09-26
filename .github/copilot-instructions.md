@@ -59,6 +59,7 @@ gitlab-mcp-server/
 │   ├── oauth/              # OAuth HTTP mode: token cache, GitLab verifier, RFC 9728 metadata
 │   ├── serverpool/         # HTTP mode: per-token+URL server pool & LRU cache
 │   ├── subscriptions/      # resources/subscribe: polled watchers, leases (ADR-0015)
+│   ├── tenancy/            # Tenant policy register (ADR-0023): keys and mint costs, one row per decision, values, Validate; decides, never enforces
 │   ├── telemetry/, mcpotel/ # OpenTelemetry export and MCP instrumentation
 │   ├── clientcompat/, gatewaycompat/, cachehints/, capguard/ # Per-client and gateway compatibility, cache hints, capability guard
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
