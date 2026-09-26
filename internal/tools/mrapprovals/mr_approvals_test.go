@@ -1569,7 +1569,7 @@ const configHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'merge_request.approve' to approve this merge request\n" +
 	"- Use action 'merge_request.unapprove' to withdraw your approval\n" +
 	"- Use action 'merge_request.approval_state' to see how many approvals are required and left\n" +
-	"- Use action 'merge_request.approval_rules' to see every configured rule\n"
+	"- Use action 'merge_request.approval_rules' to list the configured rules\n"
 
 // TestFormatConfigMarkdown_Full verifies the whole rendering of the approvals
 // card: four rows and the guidance. The rows that used to print here read

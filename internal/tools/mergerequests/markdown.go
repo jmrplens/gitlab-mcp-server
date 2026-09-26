@@ -497,7 +497,7 @@ func FormatDependencyMarkdown(d DependencyOutput) string {
 	writeBlockingMR(c, "Blocked MR", d.BlockedMergeRequest)
 	c.End(
 		toolutil.HintAction(actionMRGet, "view either merge request in full"),
-		toolutil.HintAction(actionMRDependencies, "list every dependency of this merge request"),
+		toolutil.HintAction(actionMRDependencies, "list the dependencies of this merge request"),
 	)
 	return b.String()
 }

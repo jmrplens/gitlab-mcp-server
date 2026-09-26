@@ -20,7 +20,7 @@ func FormatOutputMarkdown(out Output) string {
 	c.Int("Project ID", out.ProjectID)
 	c.End(
 		toolutil.HintAction("project_alias.delete", "remove this alias"),
-		toolutil.HintAction("project_alias.list", "view all aliases"),
+		toolutil.HintAction("project_alias.list", "list the aliases"),
 	)
 	return b.String()
 }

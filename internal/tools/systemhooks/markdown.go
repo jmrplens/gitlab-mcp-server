@@ -156,7 +156,7 @@ func FormatTestMarkdown(output TestOutput) *mcp.CallToolResult {
 	c.Note("GitLab sent its own fixed sample payload to the hook URL. This response carries that payload, not the receiver's status code, so it does not say whether the delivery arrived.")
 	c.End(
 		toolutil.HintAction(actionGet, "read the hook's alert status, which does record repeated delivery failures"),
-		toolutil.HintAction(actionList, "see every system hook on the instance"),
+		toolutil.HintAction(actionList, "list the system hooks on the instance"),
 	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }

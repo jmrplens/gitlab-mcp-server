@@ -299,7 +299,7 @@ func TestFormatTestMarkdown(t *testing.T) {
 			"GitLab sent its own fixed sample payload to the hook URL. This response carries that payload, not the receiver's status code, so it does not say whether the delivery arrived.\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'admin.system_hook_get' to read the hook's alert status, which does record repeated delivery failures\n"+
-			"- Use action 'admin.system_hook_list' to see every system hook on the instance\n")
+			"- Use action 'admin.system_hook_list' to list the system hooks on the instance\n")
 }
 
 // TestSystemHookFormattersAreRegistered verifies every output type resolves

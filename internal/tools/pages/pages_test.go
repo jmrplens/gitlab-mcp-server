@@ -1085,7 +1085,7 @@ func TestFormatAllDomainsMarkdown_NonEmpty(t *testing.T) {
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'project.pages_domain_get' to read one domain in full\n"+
-		"- Use action 'project.pages_domain_list_all' to list every Pages domain on the instance again\n")
+		"- Use action 'project.pages_domain_list_all' to list the Pages domains on the instance again\n")
 }
 
 // TestFormatAllDomainsMarkdown_APageOfALongerList verifies that a page which
@@ -1105,7 +1105,7 @@ func TestFormatAllDomainsMarkdown_APageOfALongerList(t *testing.T) {
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'project.pages_domain_get' to read one domain in full\n"+
-		"- Use action 'project.pages_domain_list_all' to list every Pages domain on the instance again\n")
+		"- Use action 'project.pages_domain_list_all' to list the Pages domains on the instance again\n")
 }
 
 // ---------------------------------------------------------------------------

@@ -96,7 +96,7 @@ func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
 	}
 	return domainTable("All Pages Domains", out.Domains, out.Pagination,
 		toolutil.HintAction(actionDomainGet, "read one domain in full"),
-		toolutil.HintAction(actionDomainListAll, "list every Pages domain on the instance again"),
+		toolutil.HintAction(actionDomainListAll, "list the Pages domains on the instance again"),
 	)
 }
 

@@ -172,7 +172,7 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 		toolutil.HintAction(actionMRApprove, "approve this merge request"),
 		toolutil.HintAction(actionMRUnapprove, "withdraw your approval"),
 		toolutil.HintAction(actionApprovalState, "see how many approvals are required and left"),
-		toolutil.HintAction(actionApprovalRules, "see every configured rule"),
+		toolutil.HintAction(actionApprovalRules, "list the configured rules"),
 	)
 	return b.String()
 }

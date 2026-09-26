@@ -482,7 +482,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		"- **Project ID**: 42\n\n" +
 		"---\n💡 **Next steps:**\n" +
 		"- Use action 'project_alias.delete' to remove this alias\n" +
-		"- Use action 'project_alias.list' to view all aliases\n"
+		"- Use action 'project_alias.list' to list the aliases\n"
 	if md != want {
 		t.Errorf("FormatOutputMarkdown()\n got: %q\nwant: %q", md, want)
 	}
@@ -501,7 +501,7 @@ func TestFormatOutputMarkdown_NameHoldingAPipe(t *testing.T) {
 		"- **Project ID**: 42\n\n" +
 		"---\n💡 **Next steps:**\n" +
 		"- Use action 'project_alias.delete' to remove this alias\n" +
-		"- Use action 'project_alias.list' to view all aliases\n"
+		"- Use action 'project_alias.list' to list the aliases\n"
 	if md != want {
 		t.Errorf("FormatOutputMarkdown()\n got: %q\nwant: %q", md, want)
 	}
@@ -521,7 +521,7 @@ func TestFormatOutputMarkdown_NameHoldingATag(t *testing.T) {
 		"- **Project ID**: 42\n\n" +
 		"---\n💡 **Next steps:**\n" +
 		"- Use action 'project_alias.delete' to remove this alias\n" +
-		"- Use action 'project_alias.list' to view all aliases\n"
+		"- Use action 'project_alias.list' to list the aliases\n"
 	if md != want {
 		t.Errorf("FormatOutputMarkdown()\n got: %q\nwant: %q", md, want)
 	}

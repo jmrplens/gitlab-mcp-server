@@ -2437,7 +2437,7 @@ func TestFormatCreateTodoMarkdown_ClickableURL(t *testing.T) {
 // dependencyHints is the guidance section a dependency card closes with.
 const dependencyHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'merge_request.get' to view either merge request in full\n" +
-	"- Use action 'merge_request.dependencies_list' to list every dependency of this merge request\n"
+	"- Use action 'merge_request.dependencies_list' to list the dependencies of this merge request\n"
 
 // TestFormatDependencyMarkdown_Populated verifies the whole rendering of one
 // dependency, with the blocking merge request as a nested object under its
