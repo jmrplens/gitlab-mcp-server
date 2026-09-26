@@ -118,7 +118,7 @@ func securityAndEmojiDeclarations() []sentDeclaration {
 
 // ciCatalogDeclarations answers what the two catalog documents leave out: the
 // user and the commit a version names, a rule's parsed condition, and the
-// experiment that lists the projects using a resource.
+// Enterprise field that lists the projects using a resource.
 func ciCatalogDeclarations() []sentDeclaration {
 	return []sentDeclaration{
 		{
@@ -152,19 +152,22 @@ func ciCatalogDeclarations() []sentDeclaration {
 			Package:    ciCatalogPackage,
 			SchemaType: "CiCatalogResource",
 			Field:      "projectComponentUsages",
-			Category:   categoryExperiment,
-			Reason: "GitLab's GraphQL API reference marks CiCatalogResource.projectComponentUsages (the projects " +
-				"using the resource's components) \"Introduced in GitLab 18.11. Status: Experiment.\", and GitLab " +
-				"resolves it for one resource per request, only for a maintainer of the resource project, under the " +
-				"Premium feature ci_component_usages_in_projects (ee/app/graphql/ee/types/ci/catalog/" +
-				"resource_type.rb). Selecting it would stake the catalog get on the experiment, and no listing can " +
-				"ask it of a page of resources at all.",
+			Category:   categoryTierAboveDomain,
+			Reason: "CiCatalogResource.projectComponentUsages (the projects using the resource's components) is " +
+				"defined in GitLab's Enterprise edition alone (ee/app/graphql/ee/types/ci/catalog/resource_type.rb " +
+				"prepends it), and the catalog get is served on every tier, so a Community instance would refuse the " +
+				"whole get document for naming it. On an Enterprise one its resolver " +
+				"(ee/app/graphql/resolvers/ci/catalog/resources/project_component_usages_resolver.rb) raises a " +
+				"resource-not-available error unless the resource's top-level namespace holds the Premium feature " +
+				"ci_component_usages_in_projects, and answers null to anyone but a maintainer of the resource " +
+				"project. It was also added in 18.11, past the get's 18.10 floor, and carries FieldCallCount limit 1, " +
+				"so no listing can ask it of a page of resources.",
 		},
 	}
 }
 
-// branchRuleDeclarations answers what the two branch rule documents leave out:
-// the experiments, the one field newer than the release they are held to, the
+// branchRuleDeclarations answers what the branch rule documents leave out: the
+// experiments, the one field newer than the Enterprise document's release, the
 // recursive parent of a granted group, and the users an approval rule names.
 func branchRuleDeclarations() []sentDeclaration {
 	declarations := []sentDeclaration{
@@ -185,9 +188,11 @@ func branchRuleDeclarations() []sentDeclaration {
 			Reason: "coverageMinimumThreshold (the coverage below which a coverage-check rule requires approval) was " +
 				"added in GitLab 19.2: GitLab's versioned GraphQL reference lists ApprovalProjectRule." +
 				"coverageMinimumThreshold from 19.2 and not in 19.1. GitLab refuses a whole document that names a " +
-				"field it does not have, and every other field the Enterprise branch rule document selects is served " +
-				"from 18.8 (the two warn-mode policy flags are the newest), so selecting it would stop the listing on " +
-				"every Premium and Ultimate instance from 18.8 to 19.1 for one number.",
+				"field it does not have. Every other field the Enterprise branch rule document selects is served from " +
+				"18.8 (the two warn-mode policy flags are the newest), and a release that refuses it is asked again " +
+				"with the base document, which is served from 16.11 and asks for none of the security-policy flags. " +
+				"Selecting the threshold would send every Premium and Ultimate instance from 18.8 to 19.1 to the base " +
+				"document, losing the four flags there for one number.",
 		},
 		{
 			Package:    branchRulesPackage,

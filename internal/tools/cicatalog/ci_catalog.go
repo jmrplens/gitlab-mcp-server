@@ -117,6 +117,19 @@ type InputRule struct {
 // source, the author, the commit and an input's rules (18.6 the newest of
 // them), and the listing now needs 18.1 (a resource's archived flag) where it
 // needed 18.10 for the components it read and dropped.
+//
+// Both documents select five fields GitLab's GraphQL reference still marks
+// Status: Experiment, knowingly: a resource's webPath (16.1), latestReleasedAt
+// (16.5), fullPath (16.11) and last30DayUsageCount (17.0), and a version's
+// releasedAt (16.7), the last in the get alone. The rule the branch rules
+// package states, that an experiment is left out because GitLab refuses a
+// whole document once one is removed, is a rule for a field a document starts
+// to select. These five were published before it was written, each is listed
+// in every versioned reference from 16.11 (17.0 for last30DayUsageCount) to
+// 19.4, and fullPath is the value the get action finds a resource by, so
+// leaving them out would take published fields away to guard against a
+// removal nothing in the releases since has pointed to. A catalog field that
+// is an experiment and not yet selected is still left out.
 
 // resourceSelection is what both documents select of a catalog resource
 // itself.

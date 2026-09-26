@@ -149,7 +149,8 @@ Each component includes:
 - Resource versions correspond to GitLab releases on the underlying project
 - Component `include_path` values can be used directly in `.gitlab-ci.yml` `include:` directives
 - Up to 10 most recent versions are returned in the detail view
-- The projects using a resource's components (`projectComponentUsages`) are not part of the detail view: GitLab marks the field as an experiment, answers it only to maintainers of the resource project on Premium and above, and resolves it for one resource per request
+- The projects using a resource's components (`projectComponentUsages`) are not part of the detail view: GitLab defines the field in its Enterprise edition alone, so a Community instance would refuse the whole detail query for naming it, and it answers the field only on Premium and above, only to maintainers of the resource project and for one resource per request; it was also added in 18.11 as an experiment
+- Five fields both tools read are ones GitLab's GraphQL reference still marks as experiments: a resource's `full_path`, `web_path`, `latest_released_at` and `last_30_day_usage_count`, and a version's `released_at`. They are read on purpose: each is listed unchanged in every GitLab release from 16.11 (17.0 for the usage count) to 19.4, and `full_path` is what the detail view finds a resource by. A catalog field GitLab adds as an experiment is not read until GitLab declares it generally available
 - GitLab refuses a whole GraphQL document that names a field it does not have, so the newest field a document selects is the oldest release it works on: the detail view needs GitLab 18.10 (a component's description) and the listing 18.1 (a resource's archived flag)
 
 ## Related
