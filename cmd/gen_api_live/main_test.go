@@ -590,6 +590,21 @@ func recordedCalls(t *testing.T, log string) [][]string {
 	return calls
 }
 
+// boundTheWait shortens the wait far below what ships for the length of the
+// test, and puts it back afterwards.
+//
+// A case about a container that died returns on its first attempt when the
+// wait reads docker correctly, so the bound changes nothing it asserts. What it
+// changes is the failure: a wait that misreads a dead container as running
+// fails in milliseconds with what it did instead, rather than sleeping out a
+// twenty-minute deadline and reading as a timeout that says nothing.
+func boundTheWait(t *testing.T) {
+	t.Helper()
+	previousTimeout, previousInterval := bootTimeout, pollInterval
+	t.Cleanup(func() { bootTimeout, pollInterval = previousTimeout, previousInterval })
+	bootTimeout, pollInterval = 100*time.Millisecond, time.Millisecond
+}
+
 // withDockerFirstOnPATH puts the stand-in ahead of everything else on PATH,
 // where lookUpDocker finds it, and keeps the rest so a stand-in can still run
 // the ordinary tools it needs.
@@ -602,19 +617,12 @@ func withDockerFirstOnPATH(t *testing.T, docker dockerPath) {
 // question this command puts to docker names what it is about, argument by
 // argument.
 //
-// Every stand-in elsewhere answers whatever it is asked, so a readiness check
-// that inspected the image, a digest read off the container, or a probe that
-// sent the answer it waits for would each still pass there. Here the whole
+// Most stand-ins in this file answer whatever they are asked, so a readiness
+// check that inspected the image, a digest read off the container, or a probe
+// that sent the answer it waits for would each still pass them. Here the whole
 // argument vector of every call is the assertion.
-//
-// The wait is bounded far below what ships, so a readiness check that misreads
-// a dead container as running fails here in milliseconds, with the calls it
-// repeated, rather than sleeping out a twenty-minute deadline.
 func TestDockerQueries_AsWritten_NameTheSubjectEachIsAbout(t *testing.T) {
-	previousTimeout, previousInterval := bootTimeout, pollInterval
-	t.Cleanup(func() { bootTimeout, pollInterval = previousTimeout, previousInterval })
-	bootTimeout, pollInterval = 100*time.Millisecond, time.Millisecond
-
+	boundTheWait(t)
 	const image = "gitlab/gitlab-ee:19.3.1-ee.0"
 	for _, testCase := range []struct {
 		name   string
@@ -825,6 +833,7 @@ esac
 // died is reported with what docker said rather than waited out for twenty
 // minutes, which is the difference between a diagnosis and a timeout.
 func TestWaitForRails_WhenTheContainerDied_ReportsItsLogs(t *testing.T) {
+	boundTheWait(t)
 	docker := stubDocker(t, `case "$1" in
   exec) exit 1 ;;
   inspect) echo false ;;
@@ -1287,6 +1296,7 @@ func TestIntrospection_WithADumpThatIsNotThere_NeverFallsBackToABoot(t *testing.
 // introspection is exactly the shape that would leave three gigabytes running
 // if the defer were ever moved below the wait.
 func TestDockerRun_WhenTheApplicationNeverComesUp_ReportsTheWaitAndStillTearsDown(t *testing.T) {
+	boundTheWait(t)
 	log := filepath.Join(t.TempDir(), "calls.log")
 	docker := stubDocker(t, `echo "$@" >> `+log+`
 case "$1" in
