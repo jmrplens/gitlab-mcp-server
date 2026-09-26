@@ -36,6 +36,10 @@ func TestClassify_NamingPatterns(t *testing.T) {
 		{name: "two part", input: "TestCreateIssue_ReturnsIssue", wantPattern: Pattern2Part, wantSuggested: "TestCreateIssue_ReturnsIssue"},
 		{name: "no underscore", input: "TestCreateIssueReturnsIssue", wantPattern: PatternNoUnderscore, wantSuggested: "TestCreate_IssueReturnsIssue"},
 		{name: "coverage prefix", input: "TestCovBuildCatalogError", wantPattern: PatternTestCov, wantSuggested: "TestBuild_Catalog_Error"},
+		// Two words whose last is a result word have no scenario between them,
+		// so the suggestion joins them once; the three-segment rule would leave
+		// an empty middle, TestBuild__Error, which no reader wants.
+		{name: "two words ending in a result word", input: "TestBuildError", wantPattern: PatternNoUnderscore, wantSuggested: "TestBuild_Error"},
 	}
 
 	for _, testCase := range testCases {
@@ -80,7 +84,10 @@ func TestSplitCamelCase_HandlesAcronymsAndShortNames(t *testing.T) {
 		{name: "empty test", input: "Test", want: "Test"},
 		{name: "acronym boundary", input: "TestHTTPHandlerReturnsError", want: "TestHTTP_HandlerReturns_Error"},
 		{name: "no result suffix", input: "TestBuildCatalogFromSpecs", want: "TestBuild_CatalogFromSpecs"},
-		{name: "two words unchanged", input: "TestCatalog", want: "TestCatalog"},
+		{name: "one word unchanged", input: "TestCatalog", want: "TestCatalog"},
+		// A lone word that is also a result word must not be read as a
+		// function followed by its expected outcome.
+		{name: "one result word unchanged", input: "TestError", want: "TestError"},
 		// The last rune being the uppercase one is the case where the word
 		// boundary has to be decided with no following rune to look at.
 		{name: "trailing uppercase", input: "TestFooB", want: "TestFoo_B"},
@@ -113,6 +120,7 @@ func TestMergeIntoSegments_GroupsResultWords(t *testing.T) {
 		want  string
 	}{
 		{name: "two words", words: []string{"Build", "Catalog"}, want: "Build_Catalog"},
+		{name: "two words ending in a result word", words: []string{"Build", "Error"}, want: "Build_Error"},
 		{name: "result suffix", words: []string{"Build", "Catalog", "Error"}, want: "Build_Catalog_Error"},
 		{name: "scenario only", words: []string{"Build", "Catalog", "From", "Specs"}, want: "Build_CatalogFromSpecs"},
 	}
@@ -167,19 +175,36 @@ func BenchmarkCreateIssue(b *testing.B) {}
 		{File: file, CurrentName: "TestCovBuildCatalogError", Pattern: PatternTestCov, SuggestedName: "TestBuild_Catalog_Error"},
 		{File: file, CurrentName: "TestMain_Flags_Parse", Pattern: Pattern3Part, SuggestedName: "TestMain_Flags_Parse"},
 	}
-	if got := scanDir(root); !reflect.DeepEqual(got, want) {
+	var stderr bytes.Buffer
+	if got := scanDir(root, &stderr); !reflect.DeepEqual(got, want) {
 		t.Fatalf("scanDir() = %+v\nwant %+v", got, want)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want nothing from a walk that read every file", stderr.String())
 	}
 }
 
-// TestScanDir_InvalidPathsReturnNoEntries verifies scanner failures are reported without panics.
+// TestScanDir_InvalidPathsReturnNoEntries verifies scanner failures return no
+// rows and are reported, each on one line naming the tree or the file, on the
+// writer the scanner was handed.
 func TestScanDir_InvalidPathsReturnNoEntries(t *testing.T) {
 	root := t.TempDir()
-	if entries := scanDir(filepath.Join(root, "missing")); entries != nil {
+	missingDir := filepath.Join(root, "missing")
+	var stderr bytes.Buffer
+	if entries := scanDir(missingDir, &stderr); entries != nil {
 		t.Fatalf("scanDir(missing) = %+v, want nil", entries)
 	}
-	if entries := scanFile(filepath.Join(root, "missing_test.go")); entries != nil {
+	if got, prefix := stderr.String(), "walk "+missingDir+": "; !strings.HasPrefix(got, prefix) || strings.Count(got, "\n") != 1 {
+		t.Errorf("scanDir stderr = %q, want one line starting %q", got, prefix)
+	}
+
+	missingFile := filepath.Join(root, "missing_test.go")
+	stderr.Reset()
+	if entries := scanFile(missingFile, &stderr); entries != nil {
 		t.Fatalf("scanFile(missing) = %+v, want nil", entries)
+	}
+	if got, prefix := stderr.String(), "parse "+missingFile+": "; !strings.HasPrefix(got, prefix) || strings.Count(got, "\n") != 1 {
+		t.Errorf("scanFile stderr = %q, want one line starting %q", got, prefix)
 	}
 }
 
@@ -252,16 +277,75 @@ func TestRun_WritesCSVAndSummary(t *testing.T) {
 		PatternTestCov:         3,
 		PatternNoUnderscore:    4,
 	}
-	if got := summaryCounts(stderr.String()); !reflect.DeepEqual(got, wantCounts) {
-		t.Errorf("summary counts = %v, want %v\nstderr:\n%s", got, wantCounts, stderr.String())
+	gotCounts, gotLabels := summaryCounts(stderr.String())
+	if !reflect.DeepEqual(gotCounts, wantCounts) {
+		t.Errorf("summary counts = %v, want %v\nstderr:\n%s", gotCounts, wantCounts, stderr.String())
+	}
+	// The buckets are printed in one fixed order, the three-part form first,
+	// so two runs' summaries compare line by line; and a walk that read every
+	// file puts nothing on stderr before the summary.
+	wantLabels := []string{"Total test functions", Pattern3Part, Pattern2Part, PatternNoUnderscore, PatternTestCov}
+	if !reflect.DeepEqual(gotLabels, wantLabels) {
+		t.Errorf("summary order = %q, want %q", gotLabels, wantLabels)
+	}
+	if !strings.HasPrefix(stderr.String(), summaryHeading) {
+		t.Errorf("stderr = %q, want it to open with the summary heading", stderr.String())
 	}
 }
 
-// summaryCounts reads the numbers back out of the audit's stderr summary, so
-// the counts can be asserted without pinning the column padding they are
-// printed with.
-func summaryCounts(stderr string) map[string]int {
-	counts := map[string]int{}
+// summaryHeading is how the audit's stderr summary opens.
+const summaryHeading = "\n=== Test Naming Audit Summary ===\n"
+
+// TestRun_UnreadableTreeAndFile_ReportedBeforeTheSummary verifies what the
+// report mode does with input it cannot read: a root that is not there and a
+// file that does not parse each cost one line on the stderr run was handed,
+// naming the tree or the file, and neither stops the rest of the report. The
+// file that parses beside the broken one is still in the CSV and the counts.
+func TestRun_UnreadableTreeAndFile_ReportedBeforeTheSummary(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "absent")
+	broken := filepath.Join(root, "a_broken_test.go")
+	good := filepath.Join(root, "b_good_test.go")
+	writeFixtureDir(t, root, nil, []fileSpec{
+		{"a_broken_test.go", "package sample\n\nfunc (\n"},
+		{"b_good_test.go", "package sample\n\nimport \"testing\"\n\nfunc TestOne_Two(t *testing.T) {}\n"},
+	})
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{missing, root}, &stdout, &stderr); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+
+	wantRecords := [][]string{
+		{"file", "current_name", "pattern", "suggested_name"},
+		{filepath.ToSlash(good), "TestOne_Two", Pattern2Part, "TestOne_Two"},
+	}
+	if got := readCSVRecords(t, stdout.Bytes()); !reflect.DeepEqual(got, wantRecords) {
+		t.Errorf("CSV = %q\nwant %q", got, wantRecords)
+	}
+
+	before, summary, found := strings.Cut(stderr.String(), summaryHeading)
+	if !found {
+		t.Fatalf("stderr = %q, want the summary heading", stderr.String())
+	}
+	// The roots are walked in the order given, so the missing one is reported
+	// before the broken file inside the root after it.
+	lines := strings.Split(strings.TrimSuffix(before, "\n"), "\n")
+	walkPrefix, parsePrefix := "walk "+missing+": ", "parse "+broken+": "
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], walkPrefix) || !strings.HasPrefix(lines[1], parsePrefix) {
+		t.Errorf("lines before the summary = %q, want one starting %q and then one starting %q", lines, walkPrefix, parsePrefix)
+	}
+	wantCounts := map[string]int{"Total test functions": 1, Pattern2Part: 1}
+	if got, _ := summaryCounts(summary); !reflect.DeepEqual(got, wantCounts) {
+		t.Errorf("summary counts = %v, want %v", got, wantCounts)
+	}
+}
+
+// summaryCounts reads the numbers back out of the audit's stderr summary, with
+// the labels in the order they were printed, so the counts and their order can
+// be asserted without pinning the column padding they are printed with.
+func summaryCounts(stderr string) (counts map[string]int, labels []string) {
+	counts = map[string]int{}
 	for line := range strings.SplitSeq(stderr, "\n") {
 		label, value, found := strings.Cut(strings.TrimSpace(line), ":")
 		if !found {
@@ -272,8 +356,9 @@ func summaryCounts(stderr string) map[string]int {
 			continue
 		}
 		counts[label] = n
+		labels = append(labels, label)
 	}
-	return counts
+	return counts, labels
 }
 
 // TestRunMain_Flags_SelectTheModeAndTheExitCode verifies the entry point's own
@@ -398,38 +483,67 @@ func TestRunMain_Flags_SelectTheModeAndTheExitCode(t *testing.T) {
 // TestMain_HandsTheExitCodeToOsExit verifies main forwards whatever code
 // runMain returned rather than a constant: a command line naming a clean tree
 // exits 0 and one naming no directory at all exits 1, through the same one
-// line.
+// line. The process's two streams are captured apart, because main is also
+// what decides which of them the report reaches: the CSV belongs on stdout,
+// where a caller redirects it to a file, and the summary and the usage line on
+// stderr.
 func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
 	root := t.TempDir()
 	testCases := []struct {
-		name     string
-		args     []string
-		wantCode int
+		name       string
+		args       []string
+		wantCode   int
+		wantStdout string
+		wantStderr string
 	}{
-		{name: "a named directory audits clean", args: []string{toolName, root}, wantCode: 0},
-		{name: "no directory is a usage failure", args: []string{toolName}, wantCode: 1},
+		{
+			name:       "a named directory audits clean",
+			args:       []string{toolName, root},
+			wantCode:   0,
+			wantStdout: "file,current_name,pattern,suggested_name\n",
+			wantStderr: summaryHeading + "Total test functions: 0\n",
+		},
+		{
+			name:       "no directory is a usage failure",
+			args:       []string{toolName},
+			wantCode:   1,
+			wantStderr: "usage: go run ./cmd/audit_test_names/ [flags] <dir>...\n",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+			streams := t.TempDir()
+			stdoutPath, stderrPath := filepath.Join(streams, "stdout"), filepath.Join(streams, "stderr")
+			stdoutFile, err := os.Create(stdoutPath)
 			if err != nil {
-				t.Fatalf("OpenFile(%s) error = %v", os.DevNull, err)
+				t.Fatalf("Create(stdout) error = %v", err)
+			}
+			stderrFile, err := os.Create(stderrPath)
+			if err != nil {
+				t.Fatalf("Create(stderr) error = %v", err)
 			}
 			oldArgs, oldStdout, oldStderr := os.Args, os.Stdout, os.Stderr
-			os.Args, os.Stdout, os.Stderr = tc.args, devNull, devNull
+			os.Args, os.Stdout, os.Stderr = tc.args, stdoutFile, stderrFile
 			got := -1
 			osExit = func(code int) { got = code }
 			t.Cleanup(func() {
 				os.Args, os.Stdout, os.Stderr = oldArgs, oldStdout, oldStderr
 				osExit = os.Exit
-				devNull.Close()
+				stdoutFile.Close()
+				stderrFile.Close()
 			})
 
 			main()
 
 			if got != tc.wantCode {
 				t.Errorf("main() handed os.Exit %d, want %d", got, tc.wantCode)
+			}
+			if out := readFile(t, stdoutPath); out != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", out, tc.wantStdout)
+			}
+			if errOut := readFile(t, stderrPath); errOut != tc.wantStderr {
+				t.Errorf("stderr = %q, want %q", errOut, tc.wantStderr)
 			}
 		})
 	}
@@ -668,13 +782,16 @@ func TestRunApply_Failures_ReturnFalse(t *testing.T) {
 // failing, the rewritten source no longer parsing, and the write being
 // refused. Each names the file on stderr, counts no rename and fails the
 // run, so -apply exits non-zero instead of reporting a rewrite it did not
-// make.
+// make. The line is compared whole, since the file and the error are two
+// strings handed to one format and a line naming them the other way round
+// would still mention both.
 func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
 	sentinel := errors.New("boom")
 	testCases := []struct {
 		name    string
 		install func(t *testing.T)
-		want    string
+		// want is the stderr line, with the file's path in place of %s.
+		want string
 	}{
 		{
 			name: "read fails",
@@ -684,7 +801,7 @@ func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
 				readSource = func(string) ([]byte, error) { return nil, sentinel }
 				t.Cleanup(func() { readSource = original })
 			},
-			want: "read ",
+			want: "read %s: boom\n",
 		},
 		{
 			name: "rewritten source does not parse",
@@ -694,7 +811,7 @@ func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
 				parseRewritten = func(string, []byte) error { return sentinel }
 				t.Cleanup(func() { parseRewritten = original })
 			},
-			want: "ABORT ",
+			want: "  ABORT %s: rename would produce invalid Go: boom\n",
 		},
 		{
 			name: "write is refused",
@@ -704,7 +821,7 @@ func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
 				writeSource = func(string, []byte, os.FileMode) error { return sentinel }
 				t.Cleanup(func() { writeSource = original })
 			},
-			want: "write ",
+			want: "write %s: boom\n",
 		},
 	}
 
@@ -722,8 +839,8 @@ func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
 			if applied != 0 || ok {
 				t.Errorf("applyFile() = (%d, %t), want (0, false)", applied, ok)
 			}
-			if got := stderr.String(); !strings.Contains(got, tc.want) || !strings.Contains(got, sentinel.Error()) {
-				t.Errorf("stderr = %q, want it to mention %q and %q", got, tc.want, sentinel.Error())
+			if got, want := stderr.String(), fmt.Sprintf(tc.want, path); got != want {
+				t.Errorf("stderr = %q, want %q", got, want)
 			}
 		})
 	}
