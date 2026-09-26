@@ -1,6 +1,9 @@
 package main
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // sentDeclaration answers a finding of the sent dimension: a field the pinned
 // schema offers at an object this server decodes, that the document leaves out
@@ -67,13 +70,13 @@ const (
 	// no history; the evidence is the first versioned GitLab GraphQL reference
 	// that lists the field, beside the last that does not.
 	categoryNewerThanFloor = "newer-than-release-floor"
-	// categorySeparateAction is a collection a caller would page through,
-	// which is an action of its own rather than a field of the object it
-	// hangs from.
+	// categorySeparateAction is a collection a caller would page through, or
+	// change through mutations of its own, which is a catalog action of its
+	// own rather than a list carried inside every object it hangs from.
 	categorySeparateAction = "separate-action-not-a-field"
 	// categoryPublishedElsewhere is a value this server does publish, under
-	// another spelling or through an action the response names, which the
-	// automatic same-name match did not find.
+	// another spelling, as part of another field or through an action the
+	// response names, which the automatic same-name match did not find.
 	categoryPublishedElsewhere = "published-elsewhere"
 	// categoryAffordance is a value the web UI reads to decide which control
 	// to draw for the viewer, which says nothing about the object a caller
@@ -87,6 +90,24 @@ const (
 	// document can select the whole of it: any selection stops at a depth
 	// chosen arbitrarily and silently drops whatever lies below.
 	categoryRecursiveShape = "recursive-shape"
+	// categoryWebRendering is a value GitLab computes for its own web
+	// interface to draw with: the HTML rendering of a Markdown field the
+	// response publishes as Markdown, an icon, the commands a comment box
+	// offers, the token an edit form sends back.
+	categoryWebRendering = "web-ui-rendering"
+	// categoryViewer is a value about the token's own user rather than about
+	// the object: what that user may do with it, or an address minted for
+	// that user alone.
+	categoryViewer = "about-the-viewer-not-the-object"
+	// categoryNeverSentHere is a field the schema offers on a type GitLab
+	// shares across several kinds of object and never fills for the kind
+	// this document reads. The evidence is GitLab's resolver or model, since
+	// the pin shares the type and cannot say which kinds fill it.
+	categoryNeverSentHere = "never-sent-for-this-object"
+	// categoryOutsideSurface is an object of a GitLab feature this server
+	// serves no tool for, so surfacing it inside another domain's response
+	// would start that domain in the wrong place.
+	categoryOutsideSurface = "outside-this-servers-surface"
 )
 
 // One more category is wanted and is not written down until the first finding
@@ -98,11 +119,14 @@ const (
 // Where the packages these findings are filed against live, spelled once. A
 // finding names the package the decoding struct is declared in, so the note
 // mutations a shared toolutil wrapper sends are answered under the domain that
-// decodes them and not under the wrapper, and a shape two domains decode
-// through one struct of toolutil's is answered under toolutil, once.
+// decodes the note and not under the wrapper; the payload around the note is
+// the wrapper's own struct, and is answered under toolutilPackage, and a shape
+// two domains decode through one struct of toolutil's is answered under
+// toolutilDir, once.
 const (
-	toolsDir    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
-	toolutilDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+	toolsDir        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	toolutilDir     = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+	toolutilPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // userCoreReason is what a user object under an author is doing there, which
@@ -144,16 +168,142 @@ func referenceStub(object, tools string) string {
 		"already asked of it where the tier is known."
 }
 
+// htmlRenderingReason is why the HTML renderings of a Markdown field are
+// left out wherever the field itself is published.
+const htmlRenderingReason = "The field is GitLab's HTML rendering of Markdown this response publishes in its source form " +
+	"(a note's body, a work item's title and description). GitLab's REST note and issue entities carry the Markdown " +
+	"alone, every note and issue tool of this server publishes that, and a caller that wants the page renders the " +
+	"Markdown it already has."
+
+// viewerPermissionsReason is why the permissions object GitLab attaches to a
+// note, a thread or a work item is left out.
+const viewerPermissionsReason = "The object says what the token's own user may do with this note, thread or work item " +
+	"(edit it, resolve it, award an emoji), which is a property of the caller and not of the object, and GitLab's REST " +
+	"entities for the same objects carry no equivalent. This server answers that question by attempting the action " +
+	"and reporting GitLab's refusal, which is authoritative where a permissions snapshot can be stale."
+
+// duoReason is why a Duo Agent Platform object under a note or a work item
+// is left out.
+const duoReason = "The object is a session or a link of the GitLab Duo Agent Platform, a feature this server serves no " +
+	"tool for. Surfacing an agent session inside an epic note or an epic's child would start a Duo domain inside a " +
+	"notes tool, with no action to act on what it names."
+
+// epicNoteDeclarations answers the fields of GitLab's Note that a package
+// decoding an epic's notes leaves out. The two packages that do so, the flat
+// notes view and the threads view, select the same note and leave out the
+// same fields for the same reasons, so the answers are written once.
+func epicNoteDeclarations(pkg string) []sentDeclaration {
+	note := func(field, category, reason string) sentDeclaration {
+		return sentDeclaration{Package: pkg, SchemaType: "Note", Field: field, Category: category, Reason: reason}
+	}
+	return []sentDeclaration{
+		note("awardEmoji", categorySeparateAction, "A note's award emoji are a collection of their own, added and "+
+			"removed through the awardEmojiAdd and awardEmojiRemove mutations. This server serves them as actions of the "+
+			"awardemoji domain for issue, merge request and snippet notes; an epic note's would be actions there too, "+
+			"not a list repeated inside every note an epic note tool answers with."),
+		note("bodyFirstLineHtml", categoryWebRendering, htmlRenderingReason),
+		note("bodyHtml", categoryWebRendering, htmlRenderingReason),
+		note("duoCreatedSession", categoryOutsideSurface, duoReason),
+		note("duoTriggeredSession", categoryOutsideSurface, duoReason),
+		note("duoWorkflowLinks", categoryOutsideSurface, duoReason),
+		note("position", categoryNeverSentHere, "A note's position is the diff line a diff note sits on: "+
+			"Types::Notes::NoteType answers it only when the note's position is a Gitlab::Diff::Position, which "+
+			"only a diff note on a merge request or a commit carries, so it is null on every note of an epic."),
+		note("project", categoryNeverSentHere, "An epic is a group-level work item, so its notes belong to the "+
+			"group's namespace and carry no project id, and Types::Notes::NoteType loads project by that id, which "+
+			"makes it null on every note of an epic."),
+		note("suggestions", categoryNeverSentHere, "Suggestions::CreateService returns at once unless "+
+			"Note#supports_suggestion?, which is false for every note but a diff note on a merge request, so no "+
+			"suggestion is ever created on a note of an epic and the connection is empty on every one."),
+		note("systemNoteIconName", categoryWebRendering, "The name of the icon GitLab's web interface draws "+
+			"beside a system note. The note's system flag and its body, GitLab's own sentence for the event, are "+
+			"published, as the REST note entity publishes them."),
+		note("systemNoteMetadata", categoryWebRendering, "The metadata GitLab's web interface uses to draw a "+
+			"system note: the kind of event for its icon and the description version its diff link opens. The REST "+
+			"note entity carries none of it, and the note's system flag and body, GitLab's own sentence for the "+
+			"event, are published."),
+		note("userPermissions", categoryViewer, viewerPermissionsReason),
+	}
+}
+
+// epicIssueDeclarations answers the fields of the objects the epic children
+// query reads that it leaves out: the child work item, its type and its
+// labels.
+func epicIssueDeclarations() []sentDeclaration {
+	pkg := toolsDir + "/epicissues"
+	workItem := func(field, category, reason string) sentDeclaration {
+		return sentDeclaration{Package: pkg, SchemaType: "WorkItem", Field: field, Category: category, Reason: reason}
+	}
+	return []sentDeclaration{
+		workItem("availableQuickActions", categoryWebRendering, "The quick action commands GitLab's comment box "+
+			"offers for the child, which is autocomplete for its own editor. A caller writes a quick action into a "+
+			"note body, where GitLab reports what it did, and needs no list of them inside every child row."),
+		workItem("commentTemplatesPaths", categoryWebRendering, "The paths of the comment templates GitLab's web "+
+			"interface offers in the child's comment box, which are a setting of the editor rather than of the child."),
+		workItem("createNoteEmail", categoryViewer, "The address the token's own user can email to comment on "+
+			"the child, which carries that user's incoming email token: it is minted per user, identifies nothing "+
+			"about the child, and is not a value to repeat in a list other readers of the output may see."),
+		workItem("descriptionHtml", categoryWebRendering, htmlRenderingReason),
+		workItem("duoWorkflowLinks", categoryOutsideSurface, duoReason),
+		workItem("features", categoryNotThisResponse, "The object is the child's widgets in a second shape, one "+
+			"field per widget. The row is a child in an epic's list and carries the child's own fields and labels; "+
+			"the child's full widget surface is the work item a caller reads with the issue.work_item_get action, "+
+			"which publishes it."),
+		workItem("lockVersion", categoryWebRendering, "The optimistic-lock counter GitLab's edit form sends back "+
+			"so that two edits cannot overwrite each other. Of every mutation the pinned schema declares, only "+
+			"WorkItemConvertTaskInput takes it, and no action of this server sends that mutation, so no caller "+
+			"could spend it."),
+		workItem("name", categoryPublishedElsewhere, "The Todoable interface's name, which Types::TodoableInterface "+
+			"resolves as the object's name or, since a work item has none, its title. The title is published on the "+
+			"row as title."),
+		workItem("namespace", categoryNotThisResponse, referenceStub("group or project a child lives in",
+			"gitlab_group and gitlab_project")+" The row names it through the child's full reference, which is "+
+			"the path child_project_path takes."),
+		workItem("project", categoryNotThisResponse, referenceStub("project a child issue lives in",
+			"gitlab_project")+" The row names it through the child's full reference, which is the path "+
+			"child_project_path takes."),
+		workItem("showPlanUpgradePromotion", categoryViewer, "Whether GitLab's web interface should show the "+
+			"token's own user a promotion for a higher plan beside the child, which is marketing addressed to the "+
+			"viewer and says nothing about the child."),
+		workItem("titleHtml", categoryWebRendering, htmlRenderingReason),
+		workItem("userPermissions", categoryViewer, viewerPermissionsReason),
+		workItem("webPath", categoryPublishedElsewhere, "The path part of the child's web URL, without the scheme "+
+			"and host, which the row already publishes whole as web_url; a second key carrying a substring of the "+
+			"first would give a caller nothing to act on that the first does not."),
+		{
+			Package:    pkg,
+			SchemaType: "WorkItemType",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason: "The row names the child's type by its name, published as type, because an epic's hierarchy " +
+				"lists tasks and child epics beside issues. The rest of the object is the type's definition (its " +
+				"widgets, its conversions, where it may be created), which is the same for every child of that type " +
+				"and belongs to the work item types a namespace defines rather than to one child.",
+		},
+		{
+			Package:    pkg,
+			SchemaType: "Label",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason: "The row carries each label as the epic output does: its name under labels, and its id, name, " +
+				"color, description and text color under label_details. What is left is the label's own lifecycle " +
+				"(created, updated, archived, locked on merge), which is the labels domain's surface, published by " +
+				"its label tools, and says nothing about the child.",
+		},
+	}
+}
+
 // declaredSent holds every field the schema offers that a document leaves out
 // on purpose, each with the reason. It is what [auditRun.declarations] carries
 // on a real run. The two GraphQL-only security domains and the shapes they
 // share keep their answers in [securitySentDeclarations], which is most of the
 // table.
-var declaredSent = append(epicSentDeclarations(), securitySentDeclarations()...) //nolint:gochecknoglobals // the adjudication table this repository answers with
+var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
 
-// epicSentDeclarations answers the epic domains' findings.
+// epicSentDeclarations answers the epic domains' findings, and those of the
+// shared note wrapper every epic note and discussion mutation goes through.
 func epicSentDeclarations() []sentDeclaration {
-	return []sentDeclaration{
+	return slices.Concat([]sentDeclaration{
 		{
 			Package:    toolsDir + "/epicworkitems",
 			SchemaType: "WorkItem",
@@ -199,7 +349,51 @@ func epicSentDeclarations() []sentDeclaration {
 			Category:   categoryNotThisResponse,
 			Reason:     notesAnchorReason("queryListWorkItemNotes", "gitlab_epic_note_list"),
 		},
-	}
+		{
+			Package:    toolsDir + "/epicnotes",
+			SchemaType: "Note",
+			Field:      "discussion",
+			Category:   categoryNotThisResponse,
+			Reason: "The thread a note sits in is the epic discussions domain's object: its list and its read answer " +
+				"each thread with its id and every note in it, and opening one answers with the id GitLab gave it. The " +
+				"note tools mirror GitLab's flat note, which carries no thread in the REST note entity either.",
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "Discussion",
+			Field:      "noteable",
+			Category:   categoryNotThisResponse,
+			Reason: "The object a thread is on is the epic the caller named by full_path and epic_iid to reach the " +
+				"thread at all. Its fields are the epic surface, which the epic tools publish, and repeating the epic " +
+				"inside every thread of its own list would answer a threads call with the epic again.",
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "Discussion",
+			Field:      "truncatedDiffLines",
+			Category:   categoryNeverSentHere,
+			Reason: "The diff lines a thread was started on: Types::Notes::DiscussionType returns nothing unless the " +
+				"thread is a diff discussion, which only a thread on a diff line of a merge request or a commit is. A " +
+				"thread on an epic never is one, so the field is null on every thread these documents read.",
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "Discussion",
+			Field:      "userPermissions",
+			Category:   categoryViewer,
+			Reason:     viewerPermissionsReason,
+		},
+		{
+			Package:    toolutilPackage,
+			SchemaType: "DestroyNotePayload",
+			Field:      declaredSegment,
+			Category:   categoryNeverSentHere,
+			Reason: "The payload type shares its note and quick actions status with the create and update payloads " +
+				"through Mutations::Notes::Base, and Mutations::Notes::Destroy answers with neither: its resolver " +
+				"returns the errors and nothing else, so both are null on every destroyNote response. The document " +
+				"selects the errors, which ExecGraphQLDestroyNote reads.",
+		},
+	}, epicNoteDeclarations(toolsDir+"/epicnotes"), epicNoteDeclarations(toolsDir+"/epicdiscussions"), epicIssueDeclarations())
 }
 
 // covers reports whether this declaration accounts for one finding.
