@@ -131,6 +131,7 @@ readable without opening the tracker:
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
 | 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | No | No | No | No | Partial |
+| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2285,6 +2286,62 @@ the record's route params for the three parameters.
 
 **Effort**: small. Four scalar members with `json` tags, one struct of three
 integers for the usage, and three option fields with `url` and `json` tags.
+
+### PlanLimit models eight of the twenty-nine limits GitLab sends and accepts
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes for the response, whose twenty-one other limits and
+  change history are read from the captured response beside the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `planlimits.capturedLimits`; it retires when the struct carries them.
+  None for the parameters: `admin.plan_limits_change` offers the eight the
+  options struct can send, and taking the other twenty-one would mean building
+  the request outside the SDK.
+
+**What**: `PlanLimit` in client-go v3.14.0's `plan_limits.go` carries the eight
+package file sizes (`conan`, `generic_packages`, `helm`, `maven`, `npm`,
+`nuget`, `pypi`, `terraform_module`), and it is what both plan limit routes
+decode into. `lib/api/entities/plan_limit.rb` at 19.4.1-ee exposes twenty-nine
+limits and `limits_history`, all with no condition, so both routes answer with
+all of them and the SDK drops twenty-two keys: `cargo_max_file_size`,
+`ci_instance_level_variables`, `ci_pipeline_size`, `ci_active_jobs`,
+`ci_project_subscriptions`, `ci_pipeline_schedules`, `ci_needs_size_limit`,
+`ci_registered_group_runners`, `ci_registered_project_runners`,
+`dotenv_variables`, `dotenv_size`, `enforcement_limit`, `notification_limit`,
+`storage_size_limit`, `pipeline_hierarchy_size`,
+`max_pipelines_per_merge_train`, `service_desk_outbound_emails_per_hour`,
+`service_desk_outbound_emails_per_day`, `web_hook_calls`,
+`web_hook_calls_low`, `web_hook_calls_mid` and `limits_history`, the last an
+object keyed by limit name whose entries carry `user_id`, `username`,
+`timestamp` and `value` (`app/validators/json_schemas/plan_limits_history.json`).
+`ChangePlanLimitOptions` has the same gap on the request side:
+`PUT /application/plan_limits` declares the twenty-nine limits as optional
+params in `lib/api/admin/plan_limits.rb`, and the options struct sends the
+eight file sizes and `plan_name`.
+
+The page is a partial oracle here.
+[doc/api/plan_limits.md](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/doc/api/plan_limits.md)
+lists every limit among the update parameters except `web_hook_calls_low` and
+`web_hook_calls_mid`, which the route describes as GitLab.com only, and neither
+of its example bodies carries the three webhook limits or `limits_history`. A
+contributor working from the page alone would model twenty-seven limits and no
+history.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`go run ./cmd/audit_1to1/ -scope=paths`), which listed the twenty-two keys at
+package grain (`shapes.sent.unsurfaced`) and, once
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971) made the
+type grain judge a wrapper that embeds its payload (`GetOutput`,
+`ChangeOutput`) through that payload, against `PlanLimit` itself
+(`shapes.typed.unsurfaced`, `sdk_models: false` on every one); and the route
+params of the live record for the options.
+
+**Effort**: small. Twenty-one `int64` fields and one map of a four-field struct
+on `PlanLimit`, and twenty-one pointer fields with `url` and `json` tags on
+`ChangePlanLimitOptions`.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

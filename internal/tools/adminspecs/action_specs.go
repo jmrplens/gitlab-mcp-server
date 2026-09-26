@@ -823,14 +823,14 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		usage:       "Get the configured plan limits for a plan (admin only). Provide plan_name (e.g. default, free, premium) to read its resource caps.",
 		aliases:     []string{"get plan limits", "show plan caps", "instance plan limits"},
 		related:     []string{"admin.plan_limits_change", actionSettingsGet},
-		description: "Get plan limits for a plan. Returns: the limit values for CI, registry, import, and other resource caps. See also: gitlab_change_plan_limits, gitlab_get_settings.",
+		description: "Get plan limits for a plan. Returns: every limit GitLab sends (package file sizes, CI/CD, dotenv, namespace storage, webhook and Service Desk rates) and the change history of the storage limits. See also: gitlab_change_plan_limits, gitlab_get_settings.",
 		guidance:    map[string]toolutil.ParameterGuidance{"plan_name": guidancePlanName},
 	},
 	"gitlab_change_plan_limits": {
-		usage:       "Change plan limits for a plan (admin only). Provide plan_name and only the limit keys to change, such as ci_pipeline_size or import file sizes.",
+		usage:       "Change plan limits for a plan (admin only). Provide plan_name and only the package file size limits to change, such as npm_max_file_size. The other limits the read returns are not accepted here.",
 		aliases:     []string{"change plan limits", "update plan caps", "set plan limits"},
 		related:     []string{"admin.plan_limits_get", actionSettingsGet},
-		description: "Change plan limits. Returns: the updated plan limit values. See also: gitlab_get_plan_limits, gitlab_get_settings.",
+		description: "Change plan limits. Returns: every limit of the plan after the change, as the read returns them. See also: gitlab_get_plan_limits, gitlab_get_settings.",
 		guidance:    map[string]toolutil.ParameterGuidance{"plan_name": guidancePlanName},
 	},
 	"gitlab_get_service_ping": {
