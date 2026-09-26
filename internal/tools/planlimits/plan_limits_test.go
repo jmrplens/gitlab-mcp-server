@@ -450,35 +450,108 @@ func TestFormatGetMarkdown_EveryLimit_RendersTheWholeCard(t *testing.T) {
 // TestFormatChangeMarkdown_SmallAndZeroLimits_RendersTheWholeCard verifies that
 // the card a change returns is the card a read returns, that a limit below a
 // kibibyte renders as a plain byte count, that a zero limit is written rather
-// than dropped because zero is an answer GitLab gave, that a rate GitLab reads
-// as unlimited at zero says so, and that a limit the instance sent no key for
-// writes no row at all.
+// than dropped because zero is an answer GitLab gave, and that a limit the
+// instance sent no key for writes no row at all.
+//
+// Every limit the instance sent is zero here, which is what a default
+// self-managed plan sends for several of them, so each row shows which of the
+// two readings GitLab gives a zero: no limit for the package file sizes and
+// every limit GitLab checks through PlanLimits#exceeded? or behind a `> 0`
+// guard, and a real bound for the needs list and the two dotenv limits, which
+// it compares against the value directly.
 func TestFormatChangeMarkdown_SmallAndZeroLimits_RendersTheWholeCard(t *testing.T) {
+	zero := func() *int64 { return new(int64(0)) }
 	out := ChangeOutput{
-		ConanMaxFileSize:                1023,
-		HelmMaxFileSize:                 1024,
-		CIPipelineSize:                  new(int64(0)),
-		WebHookCalls:                    new(int64(0)),
-		ServiceDeskOutboundEmailsPerDay: new(int64(0)),
+		ConanMaxFileSize:                 1023,
+		HelmMaxFileSize:                  1024,
+		CIInstanceLevelVariables:         zero(),
+		CIPipelineSize:                   zero(),
+		CIActiveJobs:                     zero(),
+		CIProjectSubscriptions:           zero(),
+		CIPipelineSchedules:              zero(),
+		CINeedsSizeLimit:                 zero(),
+		CIRegisteredGroupRunners:         zero(),
+		CIRegisteredProjectRunners:       zero(),
+		PipelineHierarchySize:            zero(),
+		DotenvVariables:                  zero(),
+		DotenvSize:                       zero(),
+		StorageSizeLimit:                 zero(),
+		EnforcementLimit:                 zero(),
+		NotificationLimit:                zero(),
+		WebHookCalls:                     zero(),
+		WebHookCallsLow:                  zero(),
+		WebHookCallsMid:                  zero(),
+		ServiceDeskOutboundEmailsPerHour: zero(),
+		ServiceDeskOutboundEmailsPerDay:  zero(),
 	}
 
 	want := "## Updated Plan Limits\n\n" +
 		"- **Conan Max File Size**: 1023 bytes\n" +
-		"- **Generic Packages Max File Size**: 0 bytes\n" +
+		"- **Generic Packages Max File Size**: unlimited (0)\n" +
 		"- **Helm Max File Size**: 1 KiB (1024 bytes)\n" +
-		"- **Maven Max File Size**: 0 bytes\n" +
-		"- **NPM Max File Size**: 0 bytes\n" +
-		"- **NuGet Max File Size**: 0 bytes\n" +
-		"- **PyPI Max File Size**: 0 bytes\n" +
-		"- **Terraform Module Max File Size**: 0 bytes\n" +
-		"- **CI Pipeline Size (jobs in one pipeline)**: 0\n" +
+		"- **Maven Max File Size**: unlimited (0)\n" +
+		"- **NPM Max File Size**: unlimited (0)\n" +
+		"- **NuGet Max File Size**: unlimited (0)\n" +
+		"- **PyPI Max File Size**: unlimited (0)\n" +
+		"- **Terraform Module Max File Size**: unlimited (0)\n" +
+		"- **CI Instance-Level Variables**: unlimited (0)\n" +
+		"- **CI Pipeline Size (jobs in one pipeline)**: unlimited (0)\n" +
+		"- **CI Active Jobs (jobs in active pipelines)**: unlimited (0)\n" +
+		"- **CI Project Subscriptions**: unlimited (0)\n" +
+		"- **CI Pipeline Schedules**: unlimited (0)\n" +
+		"- **CI Needs Size Limit (needs per job)**: 0\n" +
+		"- **CI Registered Group Runners (per group, past seven days)**: unlimited (0)\n" +
+		"- **CI Registered Project Runners (per project, past seven days)**: unlimited (0)\n" +
+		"- **Pipeline Hierarchy Size (downstream pipelines)**: unlimited (0)\n" +
+		"- **Dotenv Variables (per artifact)**: 0\n" +
+		"- **Dotenv Size**: 0 bytes\n" +
+		"- **Storage Size Limit (MiB)**: unlimited (0)\n" +
+		"- **Enforcement Limit (MiB)**: unlimited (0)\n" +
+		"- **Notification Limit (MiB)**: unlimited (0)\n" +
 		"- **Webhook Calls (per minute, per top-level namespace)**: unlimited (0)\n" +
+		"- **Webhook Calls Low (per minute, per top-level namespace)**: unlimited (0)\n" +
+		"- **Webhook Calls Mid (per minute, per top-level namespace)**: unlimited (0)\n" +
+		"- **Service Desk Outbound Emails per Hour (per top-level namespace)**: unlimited (0)\n" +
 		"- **Service Desk Outbound Emails per Day (per top-level namespace)**: unlimited (0)\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'admin.plan_limits_get' to read the plan's limits back\n"
 
 	if got := FormatChangeMarkdown(out); got != want {
 		t.Errorf("FormatChangeMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestLimitCells_Zero_ReadTheWayGitLabReadsIt verifies the cells on their own.
+// For a package file size zero is GitLab's "allow any file size" and says so,
+// whether the limit is one client-go models or one read from the captured
+// response, and any other value keeps the byte count the change action takes
+// back. The dotenv size is compared against its value directly, so its zero is
+// printed as the bound it is. A count GitLab reads as no limit at zero says so
+// and prints any other value bare. A captured limit the instance did not send
+// writes nothing.
+func TestLimitCells_Zero_ReadTheWayGitLabReadsIt(t *testing.T) {
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{name: "a zero modeled limit", got: sizeLimit(0), want: "unlimited (0)"},
+		{name: "a set modeled limit", got: sizeLimit(1024), want: "1 KiB (1024 bytes)"},
+		{name: "a zero captured limit", got: optionalSizeLimit(new(int64(0))), want: "unlimited (0)"},
+		{name: "a set captured limit", got: optionalSizeLimit(new(int64(1023))), want: "1023 bytes"},
+		{name: "a captured limit the instance did not send", got: optionalSizeLimit(nil), want: ""},
+		{name: "a zero dotenv size", got: optionalFileSize(new(int64(0))), want: "0 bytes"},
+		{name: "a dotenv size the instance did not send", got: optionalFileSize(nil), want: ""},
+		{name: "a zero count read as no limit", got: unlimitedAtZero(new(int64(0))), want: "unlimited (0)"},
+		{name: "a set count read as no limit at zero", got: unlimitedAtZero(new(int64(3))), want: "3"},
+		{name: "a count the instance did not send", got: unlimitedAtZero(nil), want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("got %q, want %q", tt.got, tt.want)
+			}
+		})
 	}
 }
 
