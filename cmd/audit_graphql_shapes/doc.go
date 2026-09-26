@@ -17,10 +17,10 @@
 // walks the validated selection set against that type through encoding/json's
 // own rules: a field is matched by its json tag or, failing that, its name
 // case-insensitively, embedded structs are flattened, a type that unmarshals
-// itself is trusted, and a type parameter is read as whatever the caller bound
-// it to: a generic function's by the type arguments of the call, and a
-// method's of a generic type by the type arguments of the receiver it is
-// called on.
+// itself is trusted, json.Number holds a number as it is written, and a type
+// parameter is read as whatever the caller bound it to: a generic function's
+// by the type arguments of the call, and a method's of a generic type by the
+// type arguments of the receiver it is called on.
 //
 // Three disagreements fail the gate: a field whose Go kind cannot hold what
 // the schema says GitLab sends (a String decoded into an int, an object into a

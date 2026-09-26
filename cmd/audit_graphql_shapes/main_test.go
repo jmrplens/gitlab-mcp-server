@@ -1314,6 +1314,87 @@ func TestRun_FixtureWhoseTypeParameterNothingBinds_CountsItApartAndPasses(t *tes
 	}
 }
 
+// numberFixture decodes every kind of scalar the judge distinguishes into
+// encoding/json.Number, through a pointer and through an alias too, and one
+// into a type defined from it.
+const numberFixture = `package number
+
+import (
+	"encoding/json"
+
+	"fixture/gql"
+)
+
+const getProject = @@
+query { project(fullPath: "x") { stars score runtime size archived severity counted: stars aliased: score } }
+@@
+
+type count json.Number
+
+type num = json.Number
+
+type node struct {
+	Stars    json.Number  @@json:"stars"@@
+	Score    *json.Number @@json:"score"@@
+	Runtime  json.Number  @@json:"runtime"@@
+	Size     json.Number  @@json:"size"@@
+	Archived json.Number  @@json:"archived"@@
+	Severity json.Number  @@json:"severity"@@
+	Counted  count        @@json:"counted"@@
+	Aliased  num          @@json:"aliased"@@
+}
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Project *node @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &resp)
+}
+`
+
+// TestRun_FixtureDecodingIntoJSONNumber_JudgesWhatEncodingJSONWouldDo verifies
+// that json.Number is held to what encoding/json does with it rather than to
+// its kind.
+//
+// It is a string kind, and a judge reading kinds alone refused it every
+// number GitLab sends, which is what the type exists to decode: measured on Go
+// 1.27.1, under both JSON engines, it takes a JSON integer and a JSON number
+// with a fraction as the text they were written in, and it takes a JSON
+// string only when the string's text is a number. So an Int, a Float and a
+// Duration are held, through a pointer or an alias alike, and so is a BigInt,
+// a number sent as a string; an enum value is refused, being a name, and so is
+// a boolean. A type defined from json.Number is no longer the type
+// encoding/json recognizes, and refuses a number as any string does.
+func TestRun_FixtureDecodingIntoJSONNumber_JudgesWhatEncodingJSONWouldDo(t *testing.T) {
+	status, out, errOut := runFixture(t, map[string]string{"number": numberFixture}, true)
+
+	if status != 1 {
+		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	for _, want := range []string{
+		"fixture/number getProject (number/number.go:34)\n",
+		"    - data.project.archived: Boolean! is sent as a JSON boolean and is decoded into json.Number\n",
+		"    - data.project.severity: Severity! is sent as a JSON string and is decoded into json.Number, which takes a JSON string only when its text is a number\n",
+		"    - data.project.counted: Int! is sent as a JSON integer and is decoded into number.count\n",
+		"\naudit_graphql_shapes: 3 disagreement(s) in 1 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errOut, want) {
+				t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+			}
+		})
+	}
+	for _, accepted := range []string{"data.project.stars:", "data.project.score:", "data.project.runtime:", "data.project.size:", "data.project.aliased:"} {
+		t.Run(accepted, func(t *testing.T) {
+			if strings.Contains(errOut+out, accepted) {
+				t.Errorf("run() reports %q, which encoding/json decodes into json.Number:\nstdout:\n%s\nstderr:\n%s", accepted, out, errOut)
+			}
+		})
+	}
+}
+
 // tracedFixture traces a document back to a local the function declares before
 // assigning, and holds four calls the audit must not read as sends: one named
 // Do with a single argument, one named Do whose first argument is some other

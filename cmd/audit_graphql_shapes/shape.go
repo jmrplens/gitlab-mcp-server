@@ -434,6 +434,14 @@ const stringOptionKinds = types.IsBoolean | types.IsInteger | types.IsFloat | ty
 // how [types.TypeString] writes it with no qualifier.
 const jsonNumber = "encoding/json.Number"
 
+// isJSONNumber reports whether a type is encoding/json's Number itself. An
+// alias of it is the same type and a type defined from it is not, which is
+// the line encoding/json draws too: it recognizes the one type, and a type
+// defined from it is a string kind like any other.
+func isJSONNumber(goType types.Type) bool {
+	return types.TypeString(goType, nil) == jsonNumber
+}
+
 // expectClass checks that a Go type can hold a scalar of the class. literal
 // says whether the JSON string GitLab sends may carry a number or a boolean as
 // its text: a string scalar may, since a BigInt is one, and an enum value never
@@ -448,17 +456,35 @@ const jsonNumber = "encoding/json.Number"
 // number's text out of the JSON string and refuses a bare number, exactly as
 // an integer kind does. A type defined from it keeps the string kind and none
 // of its methods, so it is an ordinary string field there.
+//
+// Without the option json.Number is a string kind that holds a number, which
+// is what it exists for: it takes a JSON integer or a JSON number with a
+// fraction as the text it was written in, so it holds an Int and a Float as a
+// float kind does. It takes a JSON string only when the string's text is a
+// number, which a string scalar may carry and an enum value never does, and it
+// refuses a boolean as any string kind does. Measured on Go 1.27.1 with the
+// default jsonv2 engine and with GOEXPERIMENT=nojsonv2 alike. It is matched by
+// its full name, as under the option, so a type defined from it is judged as
+// the plain string it is.
 func (j *judge) expectClass(goType types.Type, gqlType *ast.Type, path string, class scalarClass, asString, literal bool) {
 	if class == classAny {
 		return
 	}
 	basic, isBasic := goType.Underlying().(*types.Basic)
 	if asString && isBasic && basic.Info()&stringOptionKinds != 0 {
-		readsLiteral := basic.Info()&(types.IsBoolean|types.IsInteger|types.IsFloat) != 0 || types.TypeString(goType, nil) == jsonNumber
+		readsLiteral := basic.Info()&(types.IsBoolean|types.IsInteger|types.IsFloat) != 0 || isJSONNumber(goType)
 		if literal && readsLiteral {
 			return
 		}
 		j.fail(path, fmt.Sprintf(`%s is %s and is decoded into %s under a ",string" option, which reads only a number or a boolean written as a JSON string's text`,
+			gqlType, class, typeString(goType)))
+		return
+	}
+	if isJSONNumber(goType) && (class == classInt || class == classFloat) {
+		return
+	}
+	if isJSONNumber(goType) && class == classString && !literal {
+		j.fail(path, fmt.Sprintf("%s is %s and is decoded into %s, which takes a JSON string only when its text is a number",
 			gqlType, class, typeString(goType)))
 		return
 	}
