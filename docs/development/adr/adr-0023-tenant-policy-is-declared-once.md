@@ -123,14 +123,15 @@ twice), and the gate holds the pinned literal equal to the register's.
   Enforce site, or from a literal or a package value no row declares; one whose refusal
   is a literal with a policy code or a 429 or 503, or such a status written with
   `http.Error` or `WriteHeader`, in a function that declares no refusal of that code or
-  status; or one named with a limit word at package level in a package the register
-  names. A limit built with none of the listed constructors, such as a counter guarded by
-  a mutex, is not among them when it refuses by calling a function that already builds a
-  declared refusal, or through a literal in a function that already declares one of that
-  code or status, unless its name is the package-level limit word above: the gate's
-  documentation states that escape, and review is what sees it. The row then answers the specification's validation checklist, all of it but
-  VAL-010 and VAL-012, which stay in the pull request because a declaration cannot hold
-  them.
+  status; or one named with a limit word at package level in a package that holds an
+  Alias, Arg, Pin or Enforce site of a row that is not a request bound. A limit built with
+  none of the listed constructors, such as a counter guarded by a mutex, is not among them
+  when it refuses by calling a function that already builds a declared refusal, or through
+  a literal in a function that already declares one of that code or status, unless it is
+  such a package-level name in such a package: the gate's documentation states that
+  escape, and review is what sees it. The row then answers the specification's
+  validation checklist, all of it but VAL-010 and VAL-012, which stay in the pull request
+  because a declaration cannot hold them.
 - **POS-004**: Moving a value into the register changes no code. The binary a value layer
   builds is byte-identical to the one its parent builds once the parent imports the
   register where the layer does, which the gate's code-identity mode checks for any change

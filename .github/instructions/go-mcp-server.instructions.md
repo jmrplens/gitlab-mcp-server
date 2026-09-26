@@ -370,11 +370,12 @@ or `-32000`, or a 429 or 503 at the HTTP gate. `make check-tenancy`
 (`cmd/audit_tenancy`) fails on such a refusal literal, or such a status
 written with `http.Error` or `WriteHeader`, in a function that declares no
 refusal of that code or status; on a limit constructor outside a declared
-Enforce site or fed a literal; and on a package-level name in a policy package
-that reads as a limit and that no row declares. It does not see a refusal
+Enforce site or fed a literal; and on a package-level name that reads as a
+limit and that no row declares, in a package holding an Alias, Arg, Pin or
+Enforce site of a row that is not a request bound. It does not see a refusal
 obtained by calling a function whose refusal a row already declares, so a new
 counter that refuses through one is for review to catch, unless it is built
-with a listed constructor or is such a package-level name.
+with a listed constructor or is such a package-level name in such a package.
 `docs/development/cmd-utilities.md` lists the rest of what it cannot see.
 
 ## Server Options
