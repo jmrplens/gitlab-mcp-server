@@ -212,7 +212,7 @@ After completing all migrations:
 - [ ] `cmd/server/main.go` unchanged (it never imports a domain package)
 - [ ] Each sub-package has: `doc.go`, handler file, `action_specs.go`, markdown formatter, and test file named after the module it tests (`make check-test-file-names`)
 - [ ] `${utilPackage}` has no imports from domain sub-packages
-- [ ] Domain sub-packages don't import each other
+- [ ] Domain sub-packages import each other only for a row the imported package owns, never in a cycle, and mirror a shape they only resemble (ADR-0004, amended POS-004)
 
 ## Multi-File Domain Handling
 
