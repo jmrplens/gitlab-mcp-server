@@ -274,12 +274,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               870 | n/a                            |              1,524 |         8,835 |       10,359 |
-| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               870 | n/a                            |              1,524 |           170 |        1,694 |
-| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,024 | n/a                            |              1,524 |         8,835 |       10,359 |
-| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,024 | n/a                            |              1,524 |           170 |        1,694 |
-| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,090 | n/a                            |              1,524 |         8,835 |       10,359 |
-| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,090 | n/a                            |              1,524 |           170 |        1,694 |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               872 | n/a                            |              1,524 |         8,835 |       10,359 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               872 | n/a                            |              1,524 |           170 |        1,694 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,026 | n/a                            |              1,524 |         8,835 |       10,359 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,026 | n/a                            |              1,524 |           170 |        1,694 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,092 | n/a                            |              1,524 |         8,835 |       10,359 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,092 | n/a                            |              1,524 |           170 |        1,694 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_MCP_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -474,40 +474,40 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,348 |       303,226 |
-| Unit tests (`_test.go`)  |       923 |       599,709 |
-| End-to-end tests         |       497 |       103,199 |
-| **Total**                | **2,768** | **1,006,134** |
+| Source (`.go`, non-test) |     1,357 |       310,978 |
+| Unit tests (`_test.go`)  |       931 |       613,052 |
+| End-to-end tests         |       497 |       104,045 |
+| **Total**                | **2,785** | **1,028,075** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,541 |
-| . Exported (public)             |  3,238 |
-| . Unexported (private)          |  7,303 |
-| Unit test functions (`TestXxx`) | 17,914 |
-| Subtests (`t.Run(...)`)         |  6,437 |
-| End-to-end test functions       |  1,345 |
+| Source functions                | 10,732 |
+| . Exported (public)             |  3,255 |
+| . Unexported (private)          |  7,477 |
+| Unit test functions (`TestXxx`) | 18,173 |
+| Subtests (`t.Run(...)`)         |  6,570 |
+| End-to-end test functions       |  1,355 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.98× more tests than code |
-| Average source file length         |                 ~225 lines |
-| Average test file length           |                 ~650 lines |
-| Comment lines in source            |  71,685 (~23.6% of source) |
+| Test lines vs source lines         | 1.97× more tests than code |
+| Average source file length         |                 ~229 lines |
+| Average test file length           |                 ~658 lines |
+| Comment lines in source            |  74,334 (~23.9% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,450 |
-| `defer` statements                 | 1,161 |
-| `struct` types defined             | 3,359 |
-| `//nolint` suppressions            |   238 |
+| `if err != nil` checks             | 9,598 |
+| `defer` statements                 | 1,175 |
+| `struct` types defined             | 3,460 |
+| `//nolint` suppressions            |   241 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
@@ -527,12 +527,12 @@ and the workaround this server carries until it ships.
 
 ### Because why not
 
-| Fact                                 | Value                                                                                                |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,513 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 14,056 (impossible to avoid)                                                                         |
-| Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
-| Longest test function name           | `TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination` (87 chars) |
+| Fact                                 | Value                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Source code printed at 55 lines/page | ~5,654 pages of A4                                                                                      |
+| Source lines mentioning `"gitlab"`   | 14,504 (impossible to avoid)                                                                            |
+| Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                        |
+| Longest test function name           | `TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor` (90 chars) |
 
 <!-- END STATS -->
 

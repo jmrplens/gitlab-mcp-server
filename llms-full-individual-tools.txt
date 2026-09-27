@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 3.1.0 | up to 1092 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.1.0 | up to 1094 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1092 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1086.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1094 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1088.
 Grouped by domain:
 
 ### access (8 tools)
@@ -322,7 +322,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_epic_discussion_note
 
-Add a reply note to an existing epic discussion thread. Returns: the created note (id, author username, body, timestamps). See also: gitlab_create_epic_discussion, gitlab_get_epic_discussion, gitlab_update_epic_discussion_note.
+Add a reply note to an existing epic discussion thread. Returns: the created note (id, author username, body, timestamps), plus the status of any quick actions the body carried. See also: gitlab_create_epic_discussion, gitlab_get_epic_discussion, gitlab_update_epic_discussion_note.
 
 **Parameters:**
 
@@ -852,7 +852,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_change_plan_limits
 
-Change plan limits. Returns: the updated plan limit values. See also: gitlab_get_plan_limits, gitlab_get_settings.
+Change plan limits. Returns: every limit of the plan after the change, as the read returns them. See also: gitlab_get_plan_limits, gitlab_get_settings.
 
 **Parameters:**
 
@@ -1105,10 +1105,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_commit_merge_requests
 
-List merge requests associated with a commit. Returns: basic MR entries with IID, title, state, source/target branches, web URL, and author. See also: gitlab_commit_get, gitlab_mr_get, gitlab_mr_changes_get.
+List merge requests associated with a commit. Returns: compact MR rows with IID, project, title, state, draft flag, source/target branches, merge commit SHA, labels, author, web URL, and created, updated, merged and closed times, with pagination metadata. See also: gitlab_commit_get, gitlab_mr_get, gitlab_mr_changes_get.
 
 **Parameters:**
 
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `sha` (string) (required): Commit SHA
 
@@ -1230,6 +1232,7 @@ Create a broadcast message. Returns: the created message with id, theme, target,
 **Parameters:**
 
 - `broadcast_type` (string): Type: banner or notification
+- `color` (string): Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it
 - `dismissable` (boolean): Whether message can be dismissed
 - `ends_at` (string): End time in ISO 8601 format
 - `font` (string): Font for the message
@@ -1306,7 +1309,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_epic_discussion
 
-Create a new discussion thread on a group epic with an initial note. Returns: the created thread (discussion id) with its first note. See also: gitlab_add_epic_discussion_note, gitlab_list_epic_discussions, gitlab_epic_note_create.
+Create a new discussion thread on a group epic with an initial note. Returns: the created thread (discussion id) with its first note, plus the status of any quick actions the body carried. See also: gitlab_add_epic_discussion_note, gitlab_list_epic_discussions, gitlab_epic_note_create.
 
 **Parameters:**
 
@@ -1640,7 +1643,6 @@ Create a user account. Returns: created user identity and profile summary fields
 - `reset_password` (boolean): Send a password reset email instead of setting password
 - `shared_runners_minutes_limit` (integer): Shared runners minutes limit (admin, Premium/Ultimate)
 - `skip_confirmation` (boolean): Skip confirmation email and activate user immediately
-- `skype` (string): Skype account
 - `theme_id` (integer): GitLab theme ID for the user's UI
 - `twitter` (string): Twitter/X account
 - `username` (string) (required): The username
@@ -2165,7 +2167,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_security_category
 
-Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy
+Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation and the IDs of the security attributes deleted with the category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy
 
 **Parameters:**
 
@@ -2821,7 +2823,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_edit_resource_group
 
-Update the process mode of one CI resource group by key. Returns: the updated resource group ID, key, and new process mode that controls how queued jobs sharing the resource group are serialized. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.
+Update the process mode of one CI resource group by key. Returns: the updated resource group ID, key, new process mode that controls how queued jobs sharing the resource group are serialized, and created and updated times. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.
 
 **Parameters:**
 
@@ -3037,7 +3039,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_epic_issue_list
 
-List the issues linked to a group epic via the Work Items hierarchy. Returns: child issues with IID, title, state, author, labels, web URL, timestamps, and cursor pagination metadata. See also: gitlab_epic_issue_assign, gitlab_epic_issue_remove, gitlab_epic_get.
+List the issues linked to a group epic via the Work Items hierarchy. Returns: child issues with IID, full reference, type, title, description, state, confidentiality, author, labels with their details, web URL, timestamps, and cursor pagination metadata. See also: gitlab_epic_issue_assign, gitlab_epic_issue_remove, gitlab_epic_get.
 
 **Parameters:**
 
@@ -3130,7 +3132,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_create
 
-Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion.
+Add a comment (note) to an epic. Returns: the created note with id, author, body, internal flag and timestamps, plus the status of any quick actions the body carried (a body of quick actions alone returns the status and no note). See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion.
 
 **Parameters:**
 
@@ -3155,7 +3157,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_get
 
-Get a single epic note by its ID. Returns: the note with author, body, timestamps, and system flag. See also: gitlab_epic_note_list, gitlab_epic_note_update, gitlab_epic_note_delete.
+Get a single epic note by its ID. Returns: the note with author, body, timestamps, system and internal flags, and resolution state. See also: gitlab_epic_note_list, gitlab_epic_note_update, gitlab_epic_note_delete.
 
 **Parameters:**
 
@@ -3167,7 +3169,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_list
 
-List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.
+List all notes (comments) on an epic. Returns: notes with author, body, system and internal flags, resolution state, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.
 
 **Parameters:**
 
@@ -3180,7 +3182,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_update
 
-Update an epic note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_epic_note_get, gitlab_epic_note_list, gitlab_epic_note_delete.
+Update an epic note's body. Returns: the updated note with new body and updated_at timestamp, plus the status of any quick actions the new body carried. See also: gitlab_epic_note_get, gitlab_epic_note_list, gitlab_epic_note_delete.
 
 **Parameters:**
 
@@ -3549,7 +3551,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_catalog_resource
 
-Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.
+Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.
 
 **Parameters:**
 
@@ -3664,7 +3666,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_epic_discussion
 
-Get a single epic discussion thread by its discussion id. Returns: the thread with every note (id, author username, body, system flag, timestamps). See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note, gitlab_epic_get.
+Get a single epic discussion thread by its discussion id. Returns: the thread with its resolution state and every note (id, author username, body, system and internal flags, timestamps). See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note, gitlab_epic_get.
 
 **Parameters:**
 
@@ -4021,7 +4023,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_plan_limits
 
-Get plan limits for a plan. Returns: the limit values for CI, registry, import, and other resource caps. See also: gitlab_change_plan_limits, gitlab_get_settings.
+Get plan limits for a plan. Returns: every limit GitLab sends (package file sizes, CI/CD, dotenv, namespace storage, webhook and Service Desk rates) and the change history of the storage limits. See also: gitlab_change_plan_limits, gitlab_get_settings.
 
 **Parameters:**
 
@@ -4238,7 +4240,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_resource_group
 
-Get one CI resource group in a project by key. Returns: the resource group ID, key, and process mode (the concurrency mode that controls how jobs sharing the resource group are serialized). See also: gitlab_list_resource_groups, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.
+Get one CI resource group in a project by key. Returns: the resource group ID, key, process mode (the concurrency mode that controls how jobs sharing the resource group are serialized), and created and updated times. See also: gitlab_list_resource_groups, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.
 
 **Parameters:**
 
@@ -4450,7 +4452,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_vulnerability
 
-Get a single vulnerability by global ID. Returns: title, description, severity, state, report type, scanner, identifiers, location, solution, linked issues, and merge request. See also: gitlab_list_vulnerabilities, gitlab_dismiss_vulnerability, gitlab_confirm_vulnerability.
+Get a single vulnerability by global ID. Returns: title, description, severity, state and its comment, report type, scanner, identifiers, CVSS assessments, EPSS and known-exploit data, location, solution, report links, a leaked token's status, who confirmed, dismissed or resolved it, linked issues, and merge request. See also: gitlab_list_vulnerabilities, gitlab_dismiss_vulnerability, gitlab_confirm_vulnerability.
 
 **Parameters:**
 
@@ -4469,7 +4471,7 @@ Get a single work item by namespace path and IID. Returns: id, iid, type, state,
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### group (117 tools)
+### group (118 tools)
 
 #### gitlab_group_access_token_create
 
@@ -5471,7 +5473,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_milestone_issues
 
-List issues assigned to a group milestone. Returns: assigned issues with state, web URL, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.
+List issues assigned to a group milestone. Returns: assigned issues with IID, project, title, state, labels, author, assignees, confidentiality, weight, due date, web URL, timestamps, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.
 
 **Parameters:**
 
@@ -5517,7 +5519,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_milestone_merge_requests
 
-List merge requests assigned to a group milestone. Returns: assigned merge requests with state, source and target branches, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.
+List merge requests assigned to a group milestone. Returns: assigned merge requests with IID, project, title, state, draft flag, merge status, source and target branches, labels, author, assignees, reviewers, web URL, timestamps, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.
 
 **Parameters:**
 
@@ -5550,7 +5552,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_projects
 
-List the projects in a GitLab group. Returns: projects with path, visibility, and archived status. See also: gitlab_group_get, gitlab_subgroups_list, gitlab_group_transfer_project.
+List the projects in a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_get, gitlab_subgroups_list, gitlab_group_transfer_project.
 
 **Parameters:**
 
@@ -5855,6 +5857,17 @@ Delete a service account from a GitLab group (top-level only).
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
+#### gitlab_group_service_account_get
+
+Get one service account of a GitLab group by its user ID (GitLab 19.4 or later).
+
+**Parameters:**
+
+- `group_id` (string) (required): Group ID or URL-encoded path
+- `service_account_id` (integer) (required): Service account user ID
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_group_service_account_list
 
 List all service accounts for a GitLab group.
@@ -5984,7 +5997,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_shared_projects_list
 
-List projects shared with a GitLab group. Returns: shared projects with path, visibility, and archived status. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get.
+List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get.
 
 **Parameters:**
 
@@ -7266,11 +7279,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_job_artifacts
 
-Download the full artifact archive for a CI job (base64-encoded, truncated at 1MB). Returns: archive size, content, and truncation flag. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get.
+Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB. Returns: size, content, and truncation flag. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get.
 
 **Parameters:**
 
-- `job_id` (integer) (required): Job ID to retrieve
+- `file_type` (string): Which of the job's artifacts to download: archive (the default, the zip of the job's artifacts:paths) or a report type such as junit, cobertura, sast or dotenv. GitLab reads it from 19.4, and an older instance ignores it and answers with the archive
+- `job_id` (integer) (required): Job ID whose artifacts to download
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -7677,7 +7691,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_branch_rules
 
-List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.
+List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its id, matched pattern, default and protected flags, matching branch count, branch protection settings (who may push, merge and unprotect, allow force push, code-owner approval required, security-policy flags), approval rules with eligible approvers, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.
 
 **Parameters:**
 
@@ -7748,7 +7762,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_catalog_resources
 
-List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.
+List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.
 
 **Parameters:**
 
@@ -7891,10 +7905,7 @@ List the merge requests associated with a deployment, with merge-request filteri
 - `target_branch` (string): Filter by target branch name
 - `updated_after` (string): Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
 - `updated_before` (string): Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
-- `view` (string): Set to 'simple' to return only basic MR fields
 - `wip` (string): Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft
-- `with_labels_details` (boolean): Include full label details (color, description) in the response
-- `with_merge_status_recheck` (boolean): Asynchronously recalculate each MR's merge_status before returning
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -7915,13 +7926,18 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_emails
 
-List the current user's email addresses. Returns: email entries with ID, address, and confirmation time. See also: gitlab_user_current, gitlab_modify_user.
+List the current user's email addresses. Returns: email entries with ID, address, and confirmation time, with pagination metadata. See also: gitlab_user_current, gitlab_modify_user.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_emails_for_user
 
-List all email addresses registered to a specific user account. Returns: each email's ID, address, and confirmation timestamp, with offset/keyset pagination support. See also: gitlab_get_email, gitlab_add_email_for_user, gitlab_delete_email_for_user, gitlab_get_user.
+List the email addresses registered to a specific user account. Returns: each email's ID, address, and confirmation timestamp, with pagination metadata. See also: gitlab_get_email, gitlab_add_email_for_user, gitlab_delete_email_for_user, gitlab_get_user.
 
 **Parameters:**
 
@@ -7960,7 +7976,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_epic_discussions
 
-List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.
+List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their resolution state and notes (id, author username, body, system and internal flags, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.
 
 **Parameters:**
 
@@ -8047,16 +8063,23 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_gpg_keys
 
-List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.
+List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp, with pagination metadata. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_gpg_keys_for_user
 
-List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.
+List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp, with pagination metadata. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.
 
 **Parameters:**
 
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -8271,7 +8294,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_impersonation_tokens
 
-List all impersonation tokens for a user. Returns: each token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and last_used_at. See also: gitlab_get_impersonation_token, gitlab_create_impersonation_token, gitlab_revoke_impersonation_token.
+List the impersonation tokens of a user. Returns: each token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and last_used_at, with pagination metadata. See also: gitlab_get_impersonation_token, gitlab_create_impersonation_token, gitlab_revoke_impersonation_token.
 
 **Parameters:**
 
@@ -8427,7 +8450,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_project_aliases
 
-List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set. No pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias.
+List the project aliases the authenticated administrator can see. Returns: each alias with id, project_id, and name, with pagination metadata. See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8618,21 +8646,25 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_resource_group_upcoming_jobs
 
-List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.
+List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, ordered as they will run under the resource group's process mode, with pagination metadata. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.
 
 **Parameters:**
 
 - `key` (string) (required): Resource group key
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_resource_groups
 
-List the CI resource groups configured for a project. Returns: each resource group's ID, key, and process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency. See also: gitlab_get_resource_group, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.
+List the CI resource groups configured for a project. Returns: each resource group's ID, key, process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency, and created and updated times, with pagination metadata. See also: gitlab_get_resource_group, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.
 
 **Parameters:**
 
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -8655,7 +8687,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_security_findings
 
-List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.
+List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity and original severity, report type, scanner, identifiers (CVE, CWE, OWASP), location, state, who dismissed it and why, evidence with the recorded HTTP exchange, proposed remediations, report links, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.
 
 **Parameters:**
 
@@ -8675,7 +8707,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_service_accounts
 
-List instance-level service accounts. Returns: service account summaries with ID, username, name, and email. Requires admin token. See also: gitlab_create_service_account, gitlab_update_instance_service_account.
+List instance-level service accounts. Returns: service account summaries with ID, username, name, and email, with pagination metadata. Requires admin token. See also: gitlab_create_service_account, gitlab_update_instance_service_account.
 
 **Parameters:**
 
@@ -8753,7 +8785,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_system_hooks
 
-List instance system hooks. Returns: an array of system hooks with id, url, and event triggers. See also: gitlab_get_system_hook, gitlab_add_system_hook.
+List instance system hooks. Returns: an array of system hooks with id, url, and event triggers, with pagination metadata. See also: gitlab_get_system_hook, gitlab_add_system_hook.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8842,7 +8879,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_vulnerabilities
 
-List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination. Returns: matching vulnerabilities with title, severity, state, report type, scanner, identifiers, detection time, and web URL. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.
+List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination. Returns: matching vulnerabilities with UUID, title, severity, state, report type, scanner, identifiers, location, CVSS and EPSS data, who confirmed, dismissed or resolved each, detection time, and web URL. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.
 
 **Parameters:**
 
@@ -8997,7 +9034,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_milestone_issues
 
-List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, title, state, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list.
+List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, project, title, state, labels, author, assignees, confidentiality, weight, due date, web URL, timestamps, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list.
 
 **Parameters:**
 
@@ -9036,7 +9073,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_milestone_merge_requests
 
-List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list.
+List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, project, title, state, draft flag, merge status, source/target branches, labels, author, assignees, reviewers, web URL, timestamps, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list.
 
 **Parameters:**
 
@@ -9095,7 +9132,6 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 - `provider` (string): External provider name (use with extern_uid)
 - `public_email` (string): Publicly visible email address
 - `skip_reconfirmation` (boolean): Skip reconfirmation on email change
-- `skype` (string): Skype account
 - `theme_id` (integer): GitLab theme ID for the user's UI
 - `twitter` (string): Twitter/X account
 - `user_id` (integer) (required): The ID of the user to modify
@@ -9190,11 +9226,13 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_approval_rules
 
-List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.
+List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule, with pagination metadata. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request internal ID
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9331,11 +9369,13 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_mr_dependencies_list
 
-List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states. See also: gitlab_mr_dependency_create, gitlab_mr_dependency_delete.
+List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states, with pagination metadata. See also: gitlab_mr_dependency_create, gitlab_mr_dependency_delete.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9568,12 +9608,15 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_draft_note_publish_all
 
-Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.
+Publish all of the user's pending draft notes on a merge request, optionally with a summary note and a reviewer state. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.
 
 **Parameters:**
 
+- `internal` (boolean): Whether the summary note is internal, visible only to members who can see internal notes. Defaults to false and applies only together with note
 - `merge_request_iid` (integer) (required): Merge request internal ID
+- `note` (string): Summary comment GitLab posts on the merge request after publishing the drafts. Markdown is supported
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `reviewer_state` (string): Review state to record for the caller as a reviewer after publishing: requested_changes or reviewed. It does not record a formal approval
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -10671,7 +10714,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pages_domain_list_all
 
-List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of project.pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.
+List the GitLab Pages custom domains across the whole instance (admin only), one page at a time. Use this instead of project.pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: the page of domains with verification status, auto-SSL flag, project ID, and certificate subject, and pagination metadata. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -11086,7 +11134,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_security_summary
 
-Summarize a pipeline's security scan results. Returns: per-scanner vulnerability and scanned-resource counts for the pipeline (SAST, DAST, and other report types). See also: gitlab_vulnerability_severity_count, gitlab_list_vulnerabilities.
+Summarize a pipeline's security scan results. Returns: per-scanner vulnerability and scanned-resource counts for the pipeline (SAST, DAST, and other report types), the scans that ran with their status, errors and warnings, and the first resources a DAST scan requested. See also: gitlab_vulnerability_severity_count, gitlab_list_vulnerabilities.
 
 **Parameters:**
 
@@ -11257,7 +11305,7 @@ Preview how a project badge's link_url and image_url resolve after placeholder i
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### project (91 tools)
+### project (92 tools)
 
 #### gitlab_project_access_token_create
 
@@ -12544,6 +12592,17 @@ Delete a GitLab project service account. Returns: a success status confirming de
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
+#### gitlab_project_service_account_get
+
+Get one GitLab project service account by its user ID (GitLab 19.4 or later). Returns: the project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_update, gitlab_project_service_account_pat_list.
+
+**Parameters:**
+
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `service_account_id` (integer) (required): Service account user ID
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_project_service_account_list
 
 List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_project_get, gitlab_project_service_account_create, gitlab_project_service_account_pat_list.
@@ -12815,6 +12874,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `auto_duo_code_review_enabled` (boolean): Enable automatic GitLab Duo code review
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
+- `automatic_rebase_enabled` (boolean): Rebase the source branch automatically before merge
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
@@ -15411,6 +15471,7 @@ Update GitLab application appearance and branding settings. Returns: the updated
 - `pwa_icon` (string): Path to the PWA icon image asset
 - `pwa_name` (string): Progressive Web App name
 - `pwa_short_name` (string): PWA short name
+- `site_name` (string): Site name GitLab appends after the page title in the browser tab
 - `title` (string): Application title displayed in the header
 - `url` (string): Redirect URL for the system header/footer logo image
 
@@ -15423,6 +15484,7 @@ Update a broadcast message. Returns: the updated message. See also: gitlab_get_b
 **Parameters:**
 
 - `broadcast_type` (string): Type: banner or notification
+- `color` (string): Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it
 - `dismissable` (boolean): Whether message can be dismissed
 - `ends_at` (string): End time in ISO 8601 format
 - `font` (string): Font for the message
@@ -15462,7 +15524,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_epic_discussion_note
 
-Update the body of a note in an epic discussion thread. Returns: the updated note (id, author username, body, timestamps). See also: gitlab_add_epic_discussion_note, gitlab_delete_epic_discussion_note, gitlab_get_epic_discussion.
+Update the body of a note in an epic discussion thread. Returns: the updated note (id, author username, body, timestamps), plus the status of any quick actions the new body carried. See also: gitlab_add_epic_discussion_note, gitlab_delete_epic_discussion_note, gitlab_get_epic_discussion.
 
 **Parameters:**
 
