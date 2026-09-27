@@ -18,11 +18,20 @@ const (
 // can reach a caller through, for a set of methods in one era.
 //
 // The matrix is the refusal channel table as data (spec: Refusal channels),
-// and it is what go-sdk v1.8.0 does rather than what the protocol would permit:
-// a tools/call can be refused as a result with isError because only that
-// result has the flag, a listing only as a JSON-RPC error, and a status other
-// than the SDK's own 400 and 404 only by the gate in front of it. An SDK
-// upgrade that changes what is carried edits this table in the same change.
+// and it is what the go-sdk this module pins does rather than what the
+// protocol would permit: a tools/call can be refused as a result with isError
+// because only that result has the flag, a listing only as a JSON-RPC error,
+// and a status other than the SDK's own 400 and 404 only by the gate in front
+// of it.
+//
+// It is checked against the SDK rather than asserted by it:
+// channels_integration_test.go drives go-sdk in process through every row
+// whose method the SDK owns, in each era the row holds in, and fails, naming
+// the row, when a listed channel is not carried or a channel it can attempt
+// there is carried and not listed. The rows for [MethodGate], [MethodStartup]
+// and [MethodEviction] describe this server's own layers and are not driven.
+// An SDK upgrade that changes what is carried therefore fails its own pull
+// request, which edits this table in the same change.
 type Carriage struct {
 	// Methods are the MCP methods, or the pseudo-methods [MethodGate],
 	// [MethodStartup], [MethodEviction] and [MethodExpiry].
