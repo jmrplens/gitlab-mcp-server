@@ -457,7 +457,7 @@ List ancestor groups of a project. Supports filtering by search, shared groups, 
 
 ### `gitlab_project_share_with_group`
 
-Share a project with a group, granting the specified access level. Optionally set an expiration date (YYYY-MM-DD). Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer.
+Share a project with a group, granting the specified access level. Optionally set an expiration date (YYYY-MM-DD). Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer. Returns the link GitLab created: its ID, the project and group, the access level and its role name, the expiry, and on Ultimate the custom role assigned to the link.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
