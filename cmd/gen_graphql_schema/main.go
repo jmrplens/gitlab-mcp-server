@@ -112,7 +112,7 @@ func checkArtifacts(cfg genRun, out, errOut io.Writer) int {
 		for _, problem := range problems {
 			fmt.Fprintln(errOut, prefix, problem)
 		}
-		fmt.Fprintf(errOut, prefix+" re-pin with `make gen-graphql-schema` (GITLAB_TOKEN set, so the version is recorded)\n")
+		fmt.Fprintf(errOut, prefix+" re-pin with `make gen-graphql-schema` (GITLAB_URL=https://gitlab.com and GITLAB_TOKEN a gitlab.com credential, so the version is recorded)\n")
 		return 1
 	}
 
@@ -150,7 +150,7 @@ func pinProblems(source graphqlschema.Source, now time.Time) []string {
 	// hand would otherwise pass the one check that asks about it.
 	if source.GitLabVersion == "" || source.GitLabVersion == graphqlintrospect.UnknownVersion {
 		problems = append(problems,
-			"the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: nothing can then say which release the gate speaks for")
+			"the pin records no GitLab version, which is what an introspection without a gitlab.com credential produces (GITLAB_TOKEN, sent only when GITLAB_URL names gitlab.com): nothing can then say which release the gate speaks for")
 	}
 	return append(problems, provenance.Problems(provenance.Subject{
 		Noun:        "pin",
