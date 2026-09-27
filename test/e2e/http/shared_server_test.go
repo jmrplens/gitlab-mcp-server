@@ -858,6 +858,12 @@ func namedGitLab(t *testing.T, name string) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, `{"version":"17.0.0","revision":%q}`, name)
 	})
+	// The health check reads the revision from /metadata, which GitLab serves
+	// with the same entity as the deprecated /version.
+	mux.HandleFunc("/api/v4/metadata", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"version":"17.0.0","revision":%q,"kas":{"enabled":false},"enterprise":false}`, name)
+	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, `{"id":1,"username":%q}`, name)
