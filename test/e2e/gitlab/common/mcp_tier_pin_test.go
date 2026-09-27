@@ -70,7 +70,8 @@ func TestTierPin_ServesTheCatalogOfThePinnedTier(t *testing.T) {
 }
 
 // TestTierPin_DetectionAgreesWithTheRuntimeProbe holds the tier a detecting
-// session resolved against what the harness itself found on the instance.
+// session resolved against what the harness itself found on the instance, on
+// a licensed instance and on a Community Edition one alike.
 //
 // The two answers come from different places and have to agree: the harness
 // probes once at bootstrap with the run's own token, and the child reads GET
@@ -78,21 +79,41 @@ func TestTierPin_ServesTheCatalogOfThePinnedTier(t *testing.T) {
 // suite expects is not the catalog the binary built, and every tier assertion
 // in this package would be measuring the wrong server.
 //
-// It is asserted only where the probe was sure. That endpoint answers
-// administrators only, so a non-administrator token reads no license and falls
-// back to Free, and comparing an unconfirmed tier would be comparing two
-// guesses rather than two readings.
+// It is asserted wherever the probe's tier is a reading rather than a guess,
+// which is two cases. A license the probe read is one. A Community Edition
+// image is the other: it cannot hold a license, so Free is the only tier it
+// has whatever the token may read, and both the probe and the binary have to
+// say Free. This is the case the unlicensed Docker run is, and it used to be
+// skipped along with the next one, so the CE run held the server's tier to
+// nothing at all.
+//
+// What is left is an Enterprise image whose license the token did not read.
+// That endpoint answers administrators only, so a non-administrator token
+// reads no license and falls back to Free, and so does an administrator's on
+// an image nobody licensed; the harness cannot tell those apart, and comparing
+// the fallback would be comparing two guesses rather than two readings. No
+// Docker run is that case: the licensed one is licensed and the unlicensed one
+// is Community Edition.
 func TestTierPin_DetectionAgreesWithTheRuntimeProbe(t *testing.T) {
 	e := harness.New(t)
 	runtime := e.Runtime()
-	if !runtime.TierConfirmed {
-		t.Skipf("the run's token read no license, so the probe's tier (%s) is the fallback rather than a reading",
-			runtime.Tier)
+	want := runtime.Tier
+	switch {
+	case runtime.TierConfirmed:
+		// The license the probe read is the answer the binary must give.
+	case !runtime.Enterprise:
+		if runtime.Tier != edition.Free {
+			t.Errorf("the probe read tier %s on a Community Edition image, which can hold no license", runtime.Tier)
+		}
+		want = edition.Free
+	default:
+		e.Skipf("the run's token read no license on an Enterprise image, so the probe's tier (%s) is the fallback "+
+			"rather than a reading", runtime.Tier)
 	}
 
-	if got := e.On(harness.SurfaceDynamic).Tier(); got != runtime.Tier {
-		t.Errorf("a detecting session serves tier %s and the instance probe read %s: the suite and the binary "+
-			"disagree about which catalog this runtime has", got, runtime.Tier)
+	if got := e.On(harness.SurfaceDynamic).Tier(); got != want {
+		t.Errorf("a detecting session serves tier %s and the instance is %s: the suite and the binary "+
+			"disagree about which catalog this runtime has", got, want)
 	}
 }
 
