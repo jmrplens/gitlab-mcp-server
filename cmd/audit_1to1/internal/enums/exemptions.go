@@ -40,6 +40,11 @@ const (
 	eventActionApproved  = "approved is a documented contribution event action (doc/api/events.md links the contributions calendar page that lists it); client-go's EventTypeValue has no constant for it, see docs/development/upstream-bugs.md"
 	eventTargetEpic      = "epic is a documented target_type since GitLab 17.3 (doc/api/events.md); client-go's EventTargetTypeValue has no constant for it, see docs/development/upstream-bugs.md"
 	todoActionUndeclared = "doc/api/todos.md#get-a-list-of-to-do-items lists it as a filter value; client-go's TodoAction has no constant for it, see docs/development/upstream-bugs.md"
+	// todoActionAccepted: the route validates action against the model's set,
+	// which is wider than the page's list; transfer_failed is the item a
+	// background transfer leaves when it fails, which the transfer hints send a
+	// model to find.
+	todoActionAccepted = "lib/api/todos.rb validates action against Todo.action_names (app/models/todo.rb and ee/app/models/ee/todo.rb), which holds it although doc/api/todos.md does not list it; client-go's TodoAction has no constant for it, see docs/development/upstream-bugs.md"
 	// projectCreationOwner: the constant exists upstream, the value is documented nowhere.
 	projectCreationOwner = "doc/api/groups.md lists administrator, noone, maintainer and developer for project_creation_level; owner is declared by client-go but documented for neither create nor update"
 	reviewerStrategyDAP  = "doc/api/projects.md documents reviewer_assignment_strategy as disabled or code_owners on input; dap_powered can only be read back from projects configured before GitLab 19.4"
@@ -141,15 +146,26 @@ func buildAcceptedEnumGaps() map[string]string {
 		"projects.UpdateInput.reviewer_assignment_strategy=dap_powered":    reviewerStrategyDAP,
 
 		// --- Documented values client-go has no constant for (extras) ---
-		"events.ListContributionEventsInput.action=approved":  eventActionApproved,
-		"events.ListProjectEventsInput.action=approved":       eventActionApproved,
-		"users.ListContributionEventsInput.action=approved":   eventActionApproved,
-		"events.ListContributionEventsInput.target_type=epic": eventTargetEpic,
-		"events.ListProjectEventsInput.target_type=epic":      eventTargetEpic,
-		"users.ListContributionEventsInput.target_type=epic":  eventTargetEpic,
-		"todos.ListInput.action=member_access_requested":      todoActionUndeclared,
-		"todos.ListInput.action=merge_train_removed":          todoActionUndeclared,
-		"todos.ListInput.action=unmergeable":                  todoActionUndeclared,
+		"events.ListContributionEventsInput.action=approved":   eventActionApproved,
+		"events.ListProjectEventsInput.action=approved":        eventActionApproved,
+		"users.ListContributionEventsInput.action=approved":    eventActionApproved,
+		"events.ListContributionEventsInput.target_type=epic":  eventTargetEpic,
+		"events.ListProjectEventsInput.target_type=epic":       eventTargetEpic,
+		"users.ListContributionEventsInput.target_type=epic":   eventTargetEpic,
+		"todos.ListInput.action=member_access_requested":       todoActionUndeclared,
+		"todos.ListInput.action=merge_train_removed":           todoActionUndeclared,
+		"todos.ListInput.action=unmergeable":                   todoActionUndeclared,
+		"todos.ListInput.action=added_approver":                todoActionAccepted,
+		"todos.ListInput.action=duo_core_access_granted":       todoActionAccepted,
+		"todos.ListInput.action=duo_enterprise_access_granted": todoActionAccepted,
+		"todos.ListInput.action=duo_pro_access_granted":        todoActionAccepted,
+		"todos.ListInput.action=duo_workflow_input_required":   todoActionAccepted,
+		"todos.ListInput.action=okr_checkin_requested":         todoActionAccepted,
+		"todos.ListInput.action=review_requested":              todoActionAccepted,
+		"todos.ListInput.action=review_submitted":              todoActionAccepted,
+		"todos.ListInput.action=ssh_key_expired":               todoActionAccepted,
+		"todos.ListInput.action=ssh_key_expiring_soon":         todoActionAccepted,
+		"todos.ListInput.action=transfer_failed":               todoActionAccepted,
 	}
 	maps.Copy(table, projectFeatureAccessLevelExemptions())
 	return table
