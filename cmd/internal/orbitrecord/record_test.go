@@ -54,7 +54,7 @@ func TestExpectedCalls_AreTheTwelveInTheOrderTheGeneratorMakesThem(t *testing.T)
 	want := []string{
 		"orbit.status (raw)", "orbit.status (llm)",
 		"orbit.schema (raw)", "orbit.schema (llm)", "orbit.schema (expand)",
-		"orbit.tools (raw)",
+		"orbit.tools (default)",
 		"orbit.dsl (raw)", "orbit.dsl (llm)",
 		"orbit.query (raw)", "orbit.query (llm)",
 		"orbit.graph_status (raw)", "orbit.graph_status (llm)",
@@ -98,6 +98,23 @@ func TestRead_ACanonicalRecord_RoundTrips(t *testing.T) {
 	}
 }
 
+// TestDecode_TheBytesOfARecord_RoundTrip verifies the reader of bytes that did
+// not come from the file on disk, which is how the generator reads the record
+// a commit holds: what Encode writes, Decode returns.
+func TestDecode_TheBytesOfARecord_RoundTrip(t *testing.T) {
+	doc := Canonical(wholeRecord())
+	got, err := Decode(Encode(doc))
+	if err != nil {
+		t.Fatalf("Decode() error: %v", err)
+	}
+	if !reflect.DeepEqual(got, doc) {
+		t.Errorf("Decode() = %+v, want %+v", got, doc)
+	}
+	if _, err = Decode([]byte(`{"schema_version": 0}`)); err == nil {
+		t.Error("Decode() of another schema version = nil error, want it refused")
+	}
+}
+
 // TestRead_WhatIsNotARecordOfThisBuild_IsRefused verifies the three ways a
 // file fails to be read: it is not there, it is not JSON, and it is a schema
 // version this build was not written for, which is refused rather than decoded
@@ -134,7 +151,7 @@ func TestRead_WhatIsNotARecordOfThisBuild_IsRefused(t *testing.T) {
 func TestEncode_WritesTheCanonicalFormAndLeavesTheInputAlone(t *testing.T) {
 	doc := Document{SchemaVersion: SchemaVersion, Calls: []Call{
 		{
-			Action: "orbit.tools", Variant: "raw", Request: Request{Query: []string{"b", "a"}, Body: []string{"z", "y"}},
+			Action: "orbit.tools", Variant: "default", Request: Request{Query: []string{"b", "a"}, Body: []string{"z", "y"}},
 			Response: Response{Keys: []Key{{Path: "b", Kinds: []string{KindString, KindNull}}, {Path: Root, Kinds: []string{KindObject}}, {Path: "a", Kinds: []string{KindNumber}}}},
 		},
 		{Action: "orbit.status", Variant: "raw"},
@@ -147,7 +164,7 @@ func TestEncode_WritesTheCanonicalFormAndLeavesTheInputAlone(t *testing.T) {
 	for _, call := range canonical.Calls {
 		order = append(order, call.ID().String())
 	}
-	if want := []string{"orbit.status (llm)", "orbit.status (raw)", "orbit.tools (raw)"}; !slices.Equal(order, want) {
+	if want := []string{"orbit.status (llm)", "orbit.status (raw)", "orbit.tools (default)"}; !slices.Equal(order, want) {
 		t.Errorf("call order = %q, want %q", order, want)
 	}
 	tools := canonical.Calls[2]
@@ -179,11 +196,14 @@ func TestEncode_WritesTheCanonicalFormAndLeavesTheInputAlone(t *testing.T) {
 }
 
 // TestValidKey_IsAnIdentifier verifies which object keys may become a path
-// segment: an identifier is a name GitLab's code gave, and anything else is
-// what a map keyed by data would spell.
+// segment: an identifier, and nothing that cannot be a name. It pins the
+// check's limit too: data that happens to be shaped like an identifier (a
+// namespace, a metric name) passes, which is why a data-keyed subtree needs a
+// verbatim path rather than this check.
 func TestValidKey_IsAnIdentifier(t *testing.T) {
 	cases := map[string]bool{
 		"name": true, "_private": true, "Node2": true, "last_duration_ms": true,
+		"plens1": true, "query_latency_p99_ms": true,
 		"": false, "$defs": false, "2fa": false, "plens1/kg-fixtures": false, "a b": false, "a[]": false,
 	}
 	for key, want := range cases {
@@ -341,11 +361,11 @@ func TestDiff_NamesEveryChangeToTheKeyTree(t *testing.T) {
 			{Path: "flag", Kinds: []string{KindObject}, Verbatim: true},
 			{Path: "same", Kinds: []string{KindNull, KindString}},
 		}}},
-		{Action: "orbit.tools", Variant: "raw"},
+		{Action: "orbit.tools", Variant: "default"},
 	}}
 	want := []string{
 		"+ orbit.status (raw): new number|null",
-		"+ orbit.tools (raw): a call the previous record did not hold",
+		"+ orbit.tools (default): a call the previous record did not hold",
 		"- orbit.dsl (llm): a call this recording did not make",
 		"- orbit.status (raw): gone string",
 		"~ orbit.status (raw): flag verbatim false -> true",

@@ -97,10 +97,12 @@ func startProxy(t *testing.T, fake *fakeGitLab) (*recorder, *gitlabclient.Client
 	return proxy, client
 }
 
-// TestMakeCall_RefusesACallItCannotRecordFromOneAnswer verifies the four ways
-// one call fails to become a record entry: the handler failed, it made no
-// Orbit request or more than one, its answer does not decode, and it returned
-// a type no audit here could find.
+// TestMakeCall_RefusesACallItCannotRecordFromOneAnswer verifies the ways one
+// call fails to become a record entry: the handler failed, it made no Orbit
+// request or more than one, its answer does not decode, its answer carries a
+// data key no verbatim path covers (a status whose metric name is no
+// identifier, recorded without the path that keeps metrics verbatim), and it
+// returned a type no audit here could find.
 func TestMakeCall_RefusesACallItCannotRecordFromOneAnswer(t *testing.T) {
 	answers := orbitAnswers()
 	answers["GET /orbit/schema/dsl raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"broken"`}
@@ -109,10 +111,12 @@ func TestMakeCall_RefusesACallItCannotRecordFromOneAnswer(t *testing.T) {
 	status := func(ctx context.Context, c *gitlabclient.Client) (orbit.StatusOutput, error) {
 		return orbit.Status(ctx, c, orbit.StatusInput{ResponseFormatInput: formatted("raw")})
 	}
+	metrics := []string{"system.components[].metrics"}
 	cases := []struct {
-		name   string
-		invoke func(context.Context, *gitlabclient.Client, string) (any, error)
-		want   string
+		name     string
+		verbatim []string
+		invoke   func(context.Context, *gitlabclient.Client, string) (any, error)
+		want     string
 	}{
 		{name: "the handler failed", invoke: func(context.Context, *gitlabclient.Client, string) (any, error) {
 			return nil, errors.New("refused")
@@ -129,7 +133,10 @@ func TestMakeCall_RefusesACallItCannotRecordFromOneAnswer(t *testing.T) {
 		{name: "an answer that does not decode", invoke: func(ctx context.Context, c *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, c, orbit.DSLInput{ResponseFormatInput: formatted("raw")})
 		}, want: "orbit.test (raw): GET /orbit/schema/dsl answered 200: the answer is declared application/json and does not decode"},
-		{name: "a foreign type", invoke: func(ctx context.Context, c *gitlabclient.Client, _ string) (any, error) {
+		{name: "a data key with no verbatim path", invoke: func(ctx context.Context, c *gitlabclient.Client, _ string) (any, error) {
+			return status(ctx, c)
+		}, want: `the answer has the key "query-latency.p99_ms" under system.components[].metrics, which is not a key name`},
+		{name: "a foreign type", verbatim: metrics, invoke: func(ctx context.Context, c *gitlabclient.Client, _ string) (any, error) {
 			if _, err := status(ctx, c); err != nil {
 				return nil, err
 			}
@@ -138,9 +145,40 @@ func TestMakeCall_RefusesACallItCannotRecordFromOneAnswer(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := makeCall(context.Background(), client, proxy, callSpec{id: id, invoke: tc.invoke}, "plens1")
+			_, _, err := makeCall(context.Background(), client, proxy, callSpec{id: id, verbatim: tc.verbatim, invoke: tc.invoke}, "plens1")
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("makeCall() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestIndexedAnswer_RefusesOnlyTheRawAnswersOfAnUnindexedNamespace verifies
+// which answers stop a recording: a raw traversal with no row and a raw
+// indexing status with no project, or none, counted as indexed. The llm
+// answers carry no count to judge, and every other output passes whatever it
+// holds.
+func TestIndexedAnswer_RefusesOnlyTheRawAnswersOfAnUnindexedNamespace(t *testing.T) {
+	raw := func(action string) orbitrecord.CallID { return orbitrecord.CallID{Action: action, Variant: "raw"} }
+	cases := []struct {
+		name    string
+		id      orbitrecord.CallID
+		output  any
+		refused bool
+	}{
+		{name: "a query with rows", id: raw("orbit.query"), output: orbit.QueryOutput{RowCount: 1}},
+		{name: "a query with no row", id: raw("orbit.query"), output: orbit.QueryOutput{}, refused: true},
+		{name: "the llm query, which counts nothing", id: orbitrecord.CallID{Action: "orbit.query", Variant: "llm"}, output: orbit.QueryOutput{}},
+		{name: "an indexed namespace", id: raw("orbit.graph_status"), output: orbit.GraphStatusOutput{Projects: &orbit.GraphStatusProjects{Indexed: 2}}},
+		{name: "no project indexed", id: raw("orbit.graph_status"), output: orbit.GraphStatusOutput{Projects: &orbit.GraphStatusProjects{TotalKnown: 2}}, refused: true},
+		{name: "no project count at all", id: raw("orbit.graph_status"), output: orbit.GraphStatusOutput{}, refused: true},
+		{name: "another output", id: raw("orbit.status"), output: orbit.StatusOutput{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := indexedAnswer(tc.id, tc.output)
+			if refused := errors.Is(err, errUnindexed); refused != tc.refused {
+				t.Errorf("indexedAnswer() = %v, want refused %t", err, tc.refused)
 			}
 		})
 	}

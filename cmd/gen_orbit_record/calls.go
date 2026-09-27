@@ -58,11 +58,15 @@ func fixtureQuery(namespace string) map[string]any {
 
 // callSpecs is every call a recording makes, in [orbitrecord.ExpectedCalls]
 // order. The verbatim paths are the answers whose keys are data: a JSON
-// Schema document names its own properties, and a query row carries the
-// columns the query asked for.
+// Schema document names its own properties, a query row carries the columns
+// the query asked for, and a component's metrics are the proto map
+// `map<string, string> metrics` (crates/orbit-server/proto/orbit.proto in
+// gitlab-org/orbit/knowledge-graph), which component_to_hash in
+// ee/lib/analytics/knowledge_graph/grpc_client.rb sends as
+// `component.metrics.to_h`, so its keys are metric names.
 func callSpecs() []callSpec {
 	return []callSpec{
-		{id: orbitrecord.CallID{Action: "orbit.status", Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: "orbit.status", Variant: "raw"}, verbatim: []string{"system.components[].metrics"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Status(ctx, client, orbit.StatusInput{ResponseFormatInput: formatted("raw")})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.status", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
@@ -77,7 +81,7 @@ func callSpecs() []callSpec {
 		{id: orbitrecord.CallID{Action: "orbit.schema", Variant: "expand"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Expand: []string{"Project"}, Format: "raw"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.tools", Variant: "raw"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: "orbit.tools", Variant: "default"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Tools(ctx, client, orbit.ToolsInput{})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.dsl", Variant: "raw"}, verbatim: []string{orbitrecord.Root}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
@@ -146,6 +150,9 @@ func recordCalls(ctx context.Context, cfg genRun) (orbitrecord.Document, error) 
 		if callErr != nil {
 			return orbitrecord.Document{}, callErr
 		}
+		if indexErr := indexedAnswer(spec.id, output); indexErr != nil {
+			return orbitrecord.Document{}, indexErr
+		}
 		if status, isStatus := output.(orbit.StatusOutput); isStatus && spec.id.Variant == "raw" {
 			doc.Source.OrbitVersion = status.Version
 		}
@@ -184,6 +191,35 @@ func makeCall(ctx context.Context, client *gitlabclient.Client, proxy *recorder,
 			Keys:        keys,
 		},
 	}, output, nil
+}
+
+// errUnindexed is what a recording over a fixture namespace the Knowledge
+// Graph has not indexed ends with.
+var errUnindexed = errors.New("the fixture namespace is not indexed, so the answers lack the rows and counts whose shape the record holds; wait for the indexer (make orbit-wait-indexer) and record again")
+
+// indexedAnswer refuses the two answers a fixture namespace the indexer has not
+// reached gives: a traversal of the fixture project that finds no row, and an
+// indexing status that counts no indexed project. Either is a success, so the
+// handler does not fail, and either records a key tree without the paths an
+// indexed namespace answers with (the rows of result.nodes, the per-domain
+// counts), which the next recording would then report as keys GitLab added.
+// make orbit-wait-indexer proceeds when it times out, so this is where a
+// recording over an unindexed namespace is stopped.
+func indexedAnswer(id orbitrecord.CallID, output any) error {
+	if id.Variant != "raw" {
+		return nil
+	}
+	switch typed := output.(type) {
+	case orbit.QueryOutput:
+		if typed.RowCount == 0 {
+			return fmt.Errorf("%s found no row for the fixture project: %w", id, errUnindexed)
+		}
+	case orbit.GraphStatusOutput:
+		if typed.Projects == nil || typed.Projects.Indexed == 0 {
+			return fmt.Errorf("%s counts no indexed project: %w", id, errUnindexed)
+		}
+	}
+	return nil
 }
 
 // errForeignType is what [outputType] answers for a type declared outside this

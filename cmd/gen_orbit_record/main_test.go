@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -30,13 +32,14 @@ type fakeAnswer struct {
 // orbitAnswers are the answers of a healthy GitLab.com, keyed by route and
 // response format, shaped like the ones recorded on 2026-09-27 and carrying
 // keys a verbatim path must keep out of the record ($defs, a JSON Schema's
-// own property names) so a test sees the rule work.
+// own property names, a metric name that is no identifier) so a test sees the
+// rule work: without the verbatim path the recording would refuse the key.
 func orbitAnswers() map[string]fakeAnswer {
 	ok := func(body string) fakeAnswer {
 		return fakeAnswer{status: 200, contentType: "application/json", body: body}
 	}
 	return map[string]fakeAnswer{
-		"GET /orbit/status raw":       ok(`{"user":{"available":true},"system":{"status":"healthy","timestamp":"t","version":"0.130.0","components":[{"name":"api","status":"healthy","replicas":{"ready":1,"desired":2},"metrics":{"kind":"deployment"}}]}}`),
+		"GET /orbit/status raw":       ok(`{"user":{"available":true},"system":{"status":"healthy","timestamp":"t","version":"0.130.0","components":[{"name":"api","status":"healthy","replicas":{"ready":1,"desired":2},"metrics":{"kind":"deployment","query-latency.p99_ms":"12"}}]}}`),
 		"GET /orbit/status llm":       ok(`{"user":{"available":true},"system":{"formatted_text":"status: healthy"}}`),
 		"GET /orbit/schema raw":       ok(`{"schema_version":"1","domains":[{"name":"core","description":"d","node_names":["User"]}],"nodes":[{"name":"User","domain":"core"}],"edges":[{"name":"AUTHORED","description":"d","variants":[{"source_type":"User","target_type":"Issue"}]}]}`),
 		"GET /orbit/schema llm":       ok(`{"formatted_text":"nodes: User"}`),
@@ -110,7 +113,8 @@ func (f *fakeGitLab) tokens() []string {
 	return slices.Clone(f.token)
 }
 
-// testRun is a run that records into dir against the fake GitLab.com.
+// testRun is a run that records into dir against the fake GitLab.com, in a
+// repository whose HEAD holds no record yet.
 func testRun(dir string, fake *fakeGitLab) genRun {
 	return genRun{
 		dir:       dir,
@@ -120,6 +124,39 @@ func testRun(dir string, fake *fakeGitLab) genRun {
 		client:    &http.Client{Transport: fake},
 		now:       func() time.Time { return recordedOn },
 		timeout:   time.Minute,
+		git:       fakeHead{dir: dir + "-never-committed"}.git,
+	}
+}
+
+// fakeHead stands for the repository's HEAD: it holds what a test committed
+// into its directory, and a record nobody committed is not there, which git
+// answers the way `git show` does.
+type fakeHead struct{ dir string }
+
+// git answers the one git command a recording runs.
+func (h fakeHead) git(_ context.Context, _ string, args ...string) ([]byte, error) {
+	if !slices.Equal(args, []string{"show", committedRevision}) {
+		return nil, fmt.Errorf("unexpected git %q", args)
+	}
+	raw, err := os.ReadFile(orbitrecord.Path(h.dir))
+	if err != nil {
+		return nil, fmt.Errorf("git show %s: fatal: path does not exist in 'HEAD'", committedRevision)
+	}
+	return raw, nil
+}
+
+// commit makes HEAD hold the record written under from.
+func (h fakeHead) commit(t *testing.T, from string) {
+	t.Helper()
+	raw, err := os.ReadFile(orbitrecord.Path(from))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(h.dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(orbitrecord.Path(h.dir), raw, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -144,13 +181,16 @@ func runCapture(cfg genRun) (status int, out, errOut string) {
 // whole recording: every expected call is made through its handler, through
 // the proxy, to GitLab.com with the token; the record is stamped with the
 // version the status call reported and written in canonical form; the offline
-// check then accepts it; and a second recording of the same answers says the
-// key tree is unchanged and succeeds.
+// check then accepts it; and once it is committed, a second recording of the
+// same answers says the key tree is the committed one and succeeds.
 func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T) {
 	dir := t.TempDir()
+	head := fakeHead{dir: t.TempDir()}
 	fake := &fakeGitLab{answers: orbitAnswers()}
+	cfg := testRun(dir, fake)
+	cfg.git = head.git
 
-	status, out, errOut := runCapture(testRun(dir, fake))
+	status, out, errOut := runCapture(cfg)
 	if status != 0 {
 		t.Fatalf("record status = %d, stderr:\n%s", status, errOut)
 	}
@@ -178,8 +218,10 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 		t.Errorf("check = %d, %q, %q", checkStatus, checkOut, checkErr)
 	}
 
-	again, againOut, againErr := runCapture(testRun(dir, &fakeGitLab{answers: orbitAnswers()}))
-	if again != 0 || !strings.Contains(againOut, "the key tree is the one already committed") {
+	head.commit(t, dir)
+	cfg.client = &http.Client{Transport: &fakeGitLab{answers: orbitAnswers()}}
+	again, againOut, againErr := runCapture(cfg)
+	if again != 0 || !strings.Contains(againOut, "the key tree is the one committed at HEAD") {
 		t.Errorf("second record = %d, %q, %q", again, againOut, againErr)
 	}
 }
@@ -198,7 +240,7 @@ func TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"healthy", "deployment", "plens1/kg-fixtures", "invoke_command", "AUTHORED", "$defs", "$ref", "query := node+", "@header"} {
+	for _, value := range []string{"healthy", "deployment", "query-latency", "metrics.kind", "plens1/kg-fixtures", "invoke_command", "AUTHORED", "$defs", "$ref", "query := node+", "@header"} {
 		t.Run("no "+value, func(t *testing.T) {
 			if bytes.Contains(raw, []byte(value)) {
 				t.Errorf("the record holds %q, a value or a data key", value)
@@ -219,7 +261,12 @@ func TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue(t *testing.T) {
 		query.Response.ContentType != "text/plain" || query.Response.Keys[0].Kinds[0] != orbitrecord.KindText {
 		t.Errorf("query llm = %+v", query)
 	}
-	verbatim := map[string]string{"orbit.tools (raw)": "[].parameters", "orbit.dsl (raw)": orbitrecord.Root, "orbit.query (raw)": "result.nodes[]"}
+	verbatim := map[string]string{
+		"orbit.status (raw)":    "system.components[].metrics",
+		"orbit.tools (default)": "[].parameters",
+		"orbit.dsl (raw)":       orbitrecord.Root,
+		"orbit.query (raw)":     "result.nodes[]",
+	}
 	for id, path := range verbatim {
 		t.Run(id, func(t *testing.T) {
 			assertKeptVerbatim(t, calls[id], path)
@@ -245,49 +292,73 @@ func assertKeptVerbatim(t *testing.T, call orbitrecord.Call, path string) {
 	}
 }
 
-// TestRecord_AChangedAnswer_IsWrittenAndFailsTheRun verifies what happens when
-// GitLab.com adds and drops a key: the new record is written, every change is
-// printed, and the run fails, so it keeps failing until the record is
-// committed.
-func TestRecord_AChangedAnswer_IsWrittenAndFailsTheRun(t *testing.T) {
+// TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted verifies what
+// happens when GitLab.com adds and drops a key: the new record is written,
+// every change is printed, and the run fails. A second run of the same
+// answers fails the same way, because it compares with what HEAD holds and
+// not with the file the first run wrote; once the record is committed, the
+// next run passes.
+func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 	dir := t.TempDir()
-	if status, _, errOut := runCapture(testRun(dir, &fakeGitLab{answers: orbitAnswers()})); status != 0 {
+	head := fakeHead{dir: t.TempDir()}
+	first := testRun(dir, &fakeGitLab{answers: orbitAnswers()})
+	first.git = head.git
+	if status, _, errOut := runCapture(first); status != 0 {
 		t.Fatalf("first record failed: %s", errOut)
 	}
+	head.commit(t, dir)
 	changed := orbitAnswers()
 	changed["GET /orbit/graph_status llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"formatted_text":"indexed","region":"eu"}`}
 	changed["GET /orbit/schema llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"text":"nodes"}`}
-
-	status, _, errOut := runCapture(testRun(dir, &fakeGitLab{answers: changed}))
-	if status != 1 {
-		t.Fatalf("status = %d, want 1", status)
+	rerun := func() (int, string) {
+		cfg := testRun(dir, &fakeGitLab{answers: changed})
+		cfg.git = head.git
+		status, _, errOut := runCapture(cfg)
+		return status, errOut
 	}
-	for _, line := range []string{
-		"+ orbit.graph_status (llm): region string",
-		"+ orbit.schema (llm): text string",
-		"- orbit.schema (llm): formatted_text string",
-		"the key tree changed in 3 places",
-	} {
-		t.Run(line, func(t *testing.T) {
-			if !strings.Contains(errOut, line) {
-				t.Errorf("stderr lacks %q:\n%s", line, errOut)
+
+	for _, run := range []string{"the run that notices the change", "a run before it is committed"} {
+		t.Run(run, func(t *testing.T) {
+			status, errOut := rerun()
+			if status != 1 {
+				t.Fatalf("status = %d, want 1; stderr:\n%s", status, errOut)
+			}
+			for _, line := range []string{
+				"+ orbit.graph_status (llm): region string",
+				"+ orbit.schema (llm): text string",
+				"- orbit.schema (llm): formatted_text string",
+				"the key tree differs from the one committed at HEAD in 3 places",
+			} {
+				if !strings.Contains(errOut, line) {
+					t.Errorf("stderr lacks %q:\n%s", line, errOut)
+				}
 			}
 		})
 	}
 	doc, _ := orbitrecord.Read(dir)
-	if len(orbitrecord.Diff(orbitrecord.Document{}, doc)) == 0 || !strings.Contains(string(orbitrecord.Encode(doc)), `"region"`) {
+	if !strings.Contains(string(orbitrecord.Encode(doc)), `"region"`) {
 		t.Error("the changed record was not written")
+	}
+
+	head.commit(t, dir)
+	if status, errOut := rerun(); status != 0 {
+		t.Errorf("status after the commit = %d, want 0; stderr:\n%s", status, errOut)
 	}
 }
 
 // TestRecord_RefusesWhatItCannotRecordWhole verifies the recording's refusals:
-// no token, a handler GitLab refuses, and a recording the check would refuse,
-// none of which may replace the record already there.
+// no token, a handler GitLab refuses, a fixture namespace the indexer has not
+// reached, and a recording the check would refuse, none of which may replace
+// the record already there.
 func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 	refused := orbitAnswers()
 	delete(refused, "GET /orbit/schema llm")
 	versionless := orbitAnswers()
 	versionless["GET /orbit/status raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"user":{"available":true},"system":{"status":"unknown"}}`}
+	noRows := orbitAnswers()
+	noRows["POST /orbit/query raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"result":{"format_version":"5.0.3","nodes":[],"edges":[]},"query_type":"traversal","row_count":0}`}
+	unindexed := orbitAnswers()
+	unindexed["GET /orbit/graph_status raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"projects":{"indexed":0,"total_known":2},"domains":[],"indexing":{"state":"pending"}}`}
 	cases := []struct {
 		name  string
 		token string
@@ -296,6 +367,8 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 	}{
 		{name: "no token", fake: &fakeGitLab{answers: orbitAnswers()}, want: "GITLAB_COM_TOKEN is not set"},
 		{name: "a refused call", token: "glpat-test", fake: &fakeGitLab{answers: refused}, want: "orbit.schema (llm) failed, so its answer cannot be recorded"},
+		{name: "a query that finds no row", token: "glpat-test", fake: &fakeGitLab{answers: noRows}, want: "orbit.query (raw) found no row for the fixture project: the fixture namespace is not indexed"},
+		{name: "a namespace with no indexed project", token: "glpat-test", fake: &fakeGitLab{answers: unindexed}, want: "orbit.graph_status (raw) counts no indexed project"},
 		{name: "a record the check refuses", token: "glpat-test", fake: &fakeGitLab{answers: versionless}, want: "names no Orbit version"},
 	}
 	for _, tc := range cases {

@@ -844,19 +844,8 @@
             "path": "system.components[].metrics",
             "kinds": [
               "object"
-            ]
-          },
-          {
-            "path": "system.components[].metrics.kind",
-            "kinds": [
-              "string"
-            ]
-          },
-          {
-            "path": "system.components[].metrics.namespace",
-            "kinds": [
-              "string"
-            ]
+            ],
+            "verbatim": true
           },
           {
             "path": "system.components[].name",
@@ -923,7 +912,7 @@
     },
     {
       "action": "orbit.tools",
-      "variant": "raw",
+      "variant": "default",
       "output": "internal/tools/orbit.ToolsOutput",
       "request": {
         "method": "GET",

@@ -15,16 +15,22 @@
 //
 // Only the shape is kept: every path an answer carried and the JSON kinds
 // seen there, never a value, with a subtree whose keys are data (a JSON
-// Schema document, the rows of a query) kept as its root only. See
+// Schema document, the rows of a query, a component's metrics) kept as its
+// root only. See
 // [github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/orbitrecord].
 //
-// Recording needs GITLAB_COM_TOKEN and the network and writes only reads to
-// GitLab.com, so it is run by hand or by make test-e2e-gitlab-com and never
-// gates. It compares what it recorded with the committed record and prints
-// every key added, dropped or changed; when the key tree changed it still
-// writes the new record and exits 1, so the run that noticed a change fails
-// until somebody has read it and committed the record. -check is the offline
-// half and the gate: it holds the committed record to
+// Recording needs GITLAB_COM_TOKEN and the network, and every request it makes
+// of GitLab.com is a read, so it is run by hand or by make test-e2e-gitlab-com
+// and never gates. It refuses to record over a fixture namespace the indexer
+// has not reached, whose answers would lack the rows and counts the record
+// holds the shape of. It compares what it recorded with the record committed
+// at HEAD, read through git rather than from the file it has just replaced,
+// and prints every key added, dropped or changed; when the key tree differs it
+// still writes the new record and exits 1, and every later recording exits 1
+// too until somebody has read the change and committed the record. A -dir
+// outside the repository, a record HEAD does not hold yet, or a machine with
+// no git leaves nothing to compare with, which the run says and passes. -check
+// is the offline half and the gate: it holds the committed record to
 // [github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/orbitrecord.Problems]
 // and to the form this command writes, with no token and no network.
 //

@@ -188,8 +188,8 @@ func TestOrbitCheck_ABareArrayAnswer_IsItsWrappersOneField(t *testing.T) {
 	arrayRoot := keys("[]", "[].name", "[].parameters!")
 	arrayRoot = append([]orbitrecord.Key{{Path: orbitrecord.Root, Kinds: []string{orbitrecord.KindArray}}}, arrayRoot...)
 	stubOrbitRecord(t, orbitrecord.Document{Calls: []orbitrecord.Call{
-		orbitCall("orbit.tools", "raw", "ToolsOutput", arrayRoot),
-		orbitCall("orbit.pairs", "raw", "PairOutput", arrayRoot),
+		orbitCall("orbit.tools", "default", "ToolsOutput", arrayRoot),
+		orbitCall("orbit.pairs", "default", "PairOutput", arrayRoot),
 	}}, nil)
 
 	check := orbitCheck(orbitTree(t))

@@ -47,6 +47,10 @@ type genRun struct {
 	// timeout bounds a whole recording, every request through the proxy
 	// included: a run whose deadline passes fails and writes nothing.
 	timeout time.Duration
+	// git runs git in a directory and returns its standard output, which is
+	// how a recording reads the record committed at HEAD. A test states what
+	// HEAD holds through it without making a commit.
+	git func(ctx context.Context, dir string, args ...string) ([]byte, error)
 }
 
 // Seams over what main does that a test cannot follow it into: ending the
@@ -85,6 +89,7 @@ func runMain(args []string, getenv func(string) string, out, errOut io.Writer) i
 		client:    &http.Client{Timeout: timeout, Transport: upstreamTransport},
 		now:       time.Now,
 		timeout:   timeout,
+		git:       runGit,
 	}, out, errOut)
 }
 
@@ -132,7 +137,13 @@ func checkRecord(cfg genRun, out, errOut io.Writer) int {
 }
 
 // record is the network half: make every expected call through the handlers,
-// write the record, and say what changed since the committed one.
+// write the record, and say what changed since the one committed at HEAD.
+//
+// The comparison is with HEAD's copy and never with the file on disk, which
+// this run has just replaced: compared with the file, a second run would find
+// nothing to report and pass with the change still uncommitted. Compared with
+// HEAD, every run fails while the key tree differs from the committed one,
+// until somebody has read the change and committed the record.
 func record(cfg genRun, out, errOut io.Writer) int {
 	if cfg.token == "" {
 		fmt.Fprintln(errOut, prefix, "GITLAB_COM_TOKEN is not set: Orbit answers no anonymous caller, so nothing can be recorded")
@@ -156,24 +167,24 @@ func record(cfg genRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	previous, previousErr := orbitrecord.Read(cfg.dir)
 	if writeErr := docgen.WriteOrCheck(orbitrecord.Path(cfg.dir), orbitrecord.Encode(doc), false, regenerate); writeErr != nil {
 		fmt.Fprintln(errOut, prefix, writeErr)
 		return 1
 	}
 	fmt.Fprintf(out, "%s wrote %s: %d calls, Orbit %s\n", prefix, orbitrecord.Path(cfg.dir), len(doc.Calls), doc.Source.OrbitVersion)
-	if previousErr != nil {
-		fmt.Fprintf(out, "%s no earlier record could be read (%v), so there is nothing to compare this one with\n", prefix, previousErr)
+	committed, committedErr := committedRecord(ctx, cfg)
+	if committedErr != nil {
+		fmt.Fprintf(out, "%s no record committed at HEAD could be read (%v), so there is nothing to compare this one with\n", prefix, committedErr)
 		return 0
 	}
-	changes := orbitrecord.Diff(previous, doc)
+	changes := orbitrecord.Diff(committed, doc)
 	if len(changes) == 0 {
-		fmt.Fprintln(out, prefix, "the key tree is the one already committed")
+		fmt.Fprintln(out, prefix, "the key tree is the one committed at HEAD")
 		return 0
 	}
 	for _, change := range changes {
 		fmt.Fprintln(errOut, prefix, change)
 	}
-	fmt.Fprintf(errOut, "%s the key tree changed in %d places: read them, run make audit-1to1-paths, and commit the record\n", prefix, len(changes))
+	fmt.Fprintf(errOut, "%s the key tree differs from the one committed at HEAD in %d places: read them, run make audit-1to1-paths, and commit the record, since every recording fails until it is\n", prefix, len(changes))
 	return 1
 }

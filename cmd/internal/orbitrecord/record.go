@@ -79,7 +79,8 @@ type Call struct {
 	// Action is the canonical action ID whose handler made the call.
 	Action string `json:"action"`
 	// Variant tells two calls of one action apart: the response format it
-	// asked for, or what else it asked (an expanded node).
+	// asked for, what else it asked (an expanded node), or "default" for a
+	// route that takes no parameter and so has one answer.
 	Variant string `json:"variant"`
 	// Output is the Go type the handler returned, repository relative
 	// (internal/tools/orbit.StatusOutput). It is what the audit judges
@@ -140,7 +141,7 @@ func ExpectedCalls() []CallID {
 		{Action: "orbit.schema", Variant: "raw"},
 		{Action: "orbit.schema", Variant: "llm"},
 		{Action: "orbit.schema", Variant: "expand"},
-		{Action: "orbit.tools", Variant: "raw"},
+		{Action: "orbit.tools", Variant: "default"},
 		{Action: "orbit.dsl", Variant: "raw"},
 		{Action: "orbit.dsl", Variant: "llm"},
 		{Action: "orbit.query", Variant: "raw"},
@@ -153,15 +154,21 @@ func ExpectedCalls() []CallID {
 // Path is where the record lives under a directory.
 func Path(dir string) string { return filepath.Join(dir, FileName) }
 
-// Read loads the committed record.
-//
-// A schema version this build was not written for is refused rather than
-// decoded, for the reason [SchemaVersion] gives.
+// Read loads the record on disk under dir, through [Decode].
 func Read(dir string) (Document, error) {
 	raw, err := os.ReadFile(Path(dir))
 	if err != nil {
 		return Document{}, fmt.Errorf("reading the Orbit response record: %w", err)
 	}
+	return Decode(raw)
+}
+
+// Decode reads a record from its bytes, wherever they came from: the file on
+// disk, or the version a commit holds.
+//
+// A schema version this build was not written for is refused rather than
+// decoded, for the reason [SchemaVersion] gives.
+func Decode(raw []byte) (Document, error) {
 	var doc Document
 	if decodeErr := json.Unmarshal(raw, &doc); decodeErr != nil {
 		return Document{}, fmt.Errorf("decoding the Orbit response record: %w", decodeErr)
@@ -234,8 +241,12 @@ func sortedCopy(names []string) []string {
 }
 
 // keyPattern is what a key name may be: an identifier, which is how GitLab's
-// code names a key. It is the check that keeps a value out of the record's
-// paths: a map keyed by data would spell its keys here.
+// code names a key. It refuses a key that cannot be a name (a path, a dotted
+// or dashed string, a number), which is what most data spells, and nothing
+// more: a map keyed by identifier-shaped data (node type names, metric names,
+// a namespace such as plens1) passes it and would spell its keys as paths.
+// Such a subtree is kept out only by naming its path verbatim where the call
+// is recorded, which is a reading of GitLab's source and not a check.
 var keyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // ValidKey reports whether an object key of an answer is a key name.
