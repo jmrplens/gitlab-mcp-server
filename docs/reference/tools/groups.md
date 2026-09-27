@@ -863,7 +863,7 @@ Schedule a new group relations export.
 
 ### `gitlab_list_group_relations_export_status`
 
-List the status of group relations exports.
+List the status of group relations exports: per relation, its state, whether it was batched and into how many batches, how many objects the export holds, and any error. With `relation` set, GitLab answers with that one relation's status, or a 404 when the group holds no export of it.
 
 | Annotation | **Read** |
 | ---------- | -------- |
