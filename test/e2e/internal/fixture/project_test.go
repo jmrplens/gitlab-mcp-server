@@ -74,6 +74,238 @@ func TestDeleteProject_Gone_IsNotAnError(t *testing.T) {
 	}
 }
 
+// TestDeleteProject_TransferUnderWay_WaitsThroughTheRefusedMark checks the
+// cleanup of a project GitLab 19.4 is still moving: the mark is refused with
+// 400 "State cannot transition via ..." until the transfer lets go of it, and
+// the deletion marks it once it does rather than failing on the first refusal.
+func TestDeleteProject_TransferUnderWay_WaitsThroughTheRefusedMark(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addProject(10, "e2e-moving", "user/e2e-moving")
+	stub.configure(func() { stub.projects[10].transferMarkRefusals = 1 })
+
+	if err := DeleteProject(context.Background(), client, 10, "user/e2e-moving"); err != nil {
+		t.Fatalf("DeleteProject() error = %v, want nil once the transfer lets go", err)
+	}
+	want := []string{
+		"project 10 ",
+		"project 10 ",
+		"project 10 full_path=user%2Fe2e-moving-deletion_scheduled-10&permanently_remove=true",
+	}
+	if got := stub.recordedDeletes(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("deletes = %q, want the refused mark, the mark and the removal %q", got, want)
+	}
+	if projects, _ := stub.remaining(); len(projects) != 0 {
+		t.Errorf("projects left = %v, want none", projects)
+	}
+}
+
+// TestDeleteProject_TransferNeverLetsGo_ReportsTheLastState checks that the
+// wait through a transfer is bounded by the cleanup context, and that running
+// out of it names the transfer the deletion was waiting on.
+func TestDeleteProject_TransferNeverLetsGo_ReportsTheLastState(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addProject(11, "e2e-stuck", "user/e2e-stuck")
+	stub.configure(func() { stub.projects[11].transferMarkRefusals = 1 << 20 })
+	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	defer cancel()
+
+	err := DeleteProject(ctx, client, 11, "user/e2e-stuck")
+	if err == nil {
+		t.Fatal("DeleteProject() error = nil, want the transfer the mark waited on reported")
+	}
+	if !strings.Contains(err.Error(), "marking project 11") || !strings.Contains(err.Error(), "is in a transfer") {
+		t.Errorf("DeleteProject() error = %v, want the mark named with the transfer it waited on", err)
+	}
+	if projects, _ := stub.remaining(); len(projects) != 1 {
+		t.Errorf("projects left = %v, want the one that never let go", projects)
+	}
+}
+
+// TestDeleteProject_TransferRefusalUnderAnotherStatus_IsAnError checks the
+// wait reads the status and not only the words: GitLab refuses a mark during
+// a transfer with 400, and the same words under a 503 are not waited through.
+func TestDeleteProject_TransferRefusalUnderAnotherStatus_IsAnError(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addProject(12, "e2e-odd", "user/e2e-odd")
+	stub.configure(func() {
+		stub.projects[12].transferMarkRefusals = 1
+		stub.projects[12].transferMarkStatus = http.StatusServiceUnavailable
+	})
+
+	err := DeleteProject(context.Background(), client, 12, "user/e2e-odd")
+	if err == nil {
+		t.Fatal("DeleteProject() error = nil, want the 503 reported")
+	}
+	if !IsStatus(err, http.StatusServiceUnavailable) || !strings.Contains(err.Error(), "marking project 12") {
+		t.Errorf("DeleteProject() error = %v, want the mark's 503", err)
+	}
+	if got := stub.recordedDeletes(); len(got) != 1 {
+		t.Errorf("deletes = %q, want the one refused mark and no wait", got)
+	}
+}
+
+// scriptedDeletion is a deletion's three steps answering from lists, the last
+// answer repeating, with what each was asked recorded, for the orderings a
+// stub GitLab cannot be told to produce.
+type scriptedDeletion struct {
+	marks   []error
+	reads   []error
+	removes []error
+	paths   []string
+
+	marked, read, removed int
+	removedUnder          []string
+}
+
+// deletionAnswer answers call n from answers, repeating the last.
+func deletionAnswer(answers []error, n int) error {
+	return answers[min(n, len(answers)-1)]
+}
+
+// steps is the deletionSteps the script answers through.
+func (d *scriptedDeletion) steps() deletionSteps {
+	return deletionSteps{
+		mark: func(context.Context) error {
+			d.marked++
+			return deletionAnswer(d.marks, d.marked-1)
+		},
+		currentPath: func(context.Context) (string, error) {
+			d.read++
+			return d.paths[min(d.read, len(d.paths))-1], deletionAnswer(d.reads, d.read-1)
+		},
+		remove: func(_ context.Context, path string) error {
+			d.removed++
+			d.removedUnder = append(d.removedUnder, path)
+			return deletionAnswer(d.removes, d.removed-1)
+		},
+	}
+}
+
+// TestDeletePermanently_GoneWhenMarkedAgain_IsNotAnError checks the second
+// mark a landed transfer calls for: an object gone by then is as deleted as
+// the cleanup asked, and nothing is removed.
+func TestDeletePermanently_GoneWhenMarkedAgain_IsNotAnError(t *testing.T) {
+	d := &scriptedDeletion{
+		marks:   []error{nil, statusError(http.StatusNotFound, "404 Project Not Found")},
+		reads:   []error{nil},
+		removes: []error{statusError(http.StatusBadRequest, "Project must be marked for deletion first.")},
+		paths:   []string{"user/p-deletion_scheduled-1"},
+	}
+
+	if err := deletePermanently(context.Background(), "project", 1, "user/p", d.steps()); err != nil {
+		t.Fatalf("deletePermanently() error = %v, want nil for an object gone at the second mark", err)
+	}
+	if d.marked != 2 || d.removed != 1 {
+		t.Errorf("marks = %d, removals = %d, want 2 and 1", d.marked, d.removed)
+	}
+}
+
+// TestDeletePermanently_ReadBackGone_IsNotAnError checks that an object the
+// read after the mark no longer finds is not removed: it is gone, which is
+// what the cleanup asked for.
+func TestDeletePermanently_ReadBackGone_IsNotAnError(t *testing.T) {
+	d := &scriptedDeletion{
+		marks: []error{nil},
+		reads: []error{statusError(http.StatusNotFound, "404 Project Not Found")},
+		paths: []string{""},
+	}
+
+	if err := deletePermanently(context.Background(), "project", 1, "user/p", d.steps()); err != nil {
+		t.Fatalf("deletePermanently() error = %v, want nil", err)
+	}
+	if d.removed != 0 {
+		t.Errorf("removals = %d, want none for an object that is gone", d.removed)
+	}
+}
+
+// TestDeletePermanently_ReadBackFails_RemovesUnderThePathItKnew checks that a
+// read failing for another reason than the object being gone does not stop
+// the deletion: it removes the object under the path it was given.
+func TestDeletePermanently_ReadBackFails_RemovesUnderThePathItKnew(t *testing.T) {
+	d := &scriptedDeletion{
+		marks:   []error{nil},
+		reads:   []error{statusError(http.StatusForbidden, "403 Forbidden")},
+		removes: []error{nil},
+		paths:   []string{"ignored"},
+	}
+
+	if err := deletePermanently(context.Background(), "project", 1, "user/p", d.steps()); err != nil {
+		t.Fatalf("deletePermanently() error = %v, want nil", err)
+	}
+	if strings.Join(d.removedUnder, ",") != "user/p" {
+		t.Errorf("removed under %q, want the path it was given", d.removedUnder)
+	}
+}
+
+// TestDeletePermanently_RemovalRefusedTwice_IsAnError checks that the second
+// mark a landed transfer calls for is made once: a removal refused again for
+// the same reason is reported rather than retried without end.
+func TestDeletePermanently_RemovalRefusedTwice_IsAnError(t *testing.T) {
+	d := &scriptedDeletion{
+		marks:   []error{nil},
+		reads:   []error{nil},
+		removes: []error{statusError(http.StatusBadRequest, "Project must be marked for deletion first.")},
+		paths:   []string{"user/p-deletion_scheduled-1"},
+	}
+
+	err := deletePermanently(context.Background(), "project", 1, "user/p", d.steps())
+	if err == nil || !strings.Contains(err.Error(), "permanently deleting project 1") {
+		t.Fatalf("deletePermanently() error = %v, want the second refusal reported", err)
+	}
+	if d.marked != 2 || d.removed != 2 {
+		t.Errorf("marks = %d, removals = %d, want 2 and 2", d.marked, d.removed)
+	}
+}
+
+// TestDeletePermanently_UnmarkedRefusalUnderAnotherStatus_IsNotRetried checks
+// the status is part of the match for the removal's refusal too: the words
+// under a 409 are reported, not answered with a second mark.
+func TestDeletePermanently_UnmarkedRefusalUnderAnotherStatus_IsNotRetried(t *testing.T) {
+	d := &scriptedDeletion{
+		marks:   []error{nil},
+		reads:   []error{nil},
+		removes: []error{statusError(http.StatusConflict, "Project must be marked for deletion first.")},
+		paths:   []string{"user/p-deletion_scheduled-1"},
+	}
+
+	if err := deletePermanently(context.Background(), "project", 1, "user/p", d.steps()); err == nil {
+		t.Fatal("deletePermanently() error = nil, want the 409 reported")
+	}
+	if d.marked != 1 || d.removed != 1 {
+		t.Errorf("marks = %d, removals = %d, want 1 and 1", d.marked, d.removed)
+	}
+}
+
+// TestDeleteProject_TransferLandsAfterTheMark_MarksAgainAndRemoves checks the
+// other half of a transfer racing a cleanup: the move lands between the mark
+// and the removal, which leaves the project unmarked under its new path, and
+// the removal refused with 400 "... must be marked for deletion first" is
+// answered by marking it again and removing it under the path read back.
+func TestDeleteProject_TransferLandsAfterTheMark_MarksAgainAndRemoves(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addProject(13, "e2e-late", "user/e2e-late")
+	stub.configure(func() {
+		stub.projects[13].transferLandsAfterMark = true
+		stub.projects[13].transferredPath = "group/e2e-late"
+	})
+
+	if err := DeleteProject(context.Background(), client, 13, "user/e2e-late"); err != nil {
+		t.Fatalf("DeleteProject() error = %v, want nil", err)
+	}
+	want := []string{
+		"project 13 ",
+		"project 13 full_path=user%2Fe2e-late-deletion_scheduled-13&permanently_remove=true",
+		"project 13 ",
+		"project 13 full_path=group%2Fe2e-late-deletion_scheduled-13&permanently_remove=true",
+	}
+	if got := stub.recordedDeletes(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("deletes = %q, want mark, refused removal, mark, removal %q", got, want)
+	}
+	if projects, _ := stub.remaining(); len(projects) != 0 {
+		t.Errorf("projects left = %v, want none", projects)
+	}
+}
+
 // TestWaitForBranch_NotVisibleYet_KeepsPollingUntilItIs checks that the
 // 404 a branch answers while GitLab writes it is waited through.
 func TestWaitForBranch_NotVisibleYet_KeepsPollingUntilItIs(t *testing.T) {

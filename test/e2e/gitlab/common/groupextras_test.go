@@ -11,6 +11,7 @@ package common
 import (
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -114,6 +115,14 @@ func TestGroupReads_IssuesAndAvatar_AnswerTheGroup(t *testing.T) {
 // parent group, and moves the child group under the parent, once per
 // surface with groups of its own.
 //
+// The two moves are asserted differently because GitLab applies them
+// differently. group.transfer_project runs the transfer inline and answers
+// after it, on 19.4 as before, so the project is read back once. group.transfer
+// is applied in the background since 19.4 and the action waits for it only for
+// a bounded time, so its answer is held to what it claims, a move applied must
+// show the parent and a queued one need not, and the group is then read back
+// with group.get until GitLab holds it under the parent.
+//
 // Replaces: TestMeta_GroupExtrasLifecycle
 func TestGroupTransfers_ProjectAndSubgroup_MoveUnderTheParent(t *testing.T) {
 	e := harness.New(t)
@@ -140,9 +149,17 @@ func TestGroupTransfers_ProjectAndSubgroup_MoveUnderTheParent(t *testing.T) {
 			e.T.Errorf("GitLab holds project %d at %q after the transfer, want it under %q", project.ID, stored.PathWithNamespace, parent.Path)
 		}
 
-		nested := harness.Do[groups.DetailOutput](s, actionGroupTransfer, map[string]any{"group_id": child.IDParam(), "parent_id": parent.ID})
-		if nested.ID != child.ID || !strings.HasPrefix(nested.FullPath, parent.Path+"/") {
-			e.T.Errorf("transfer answered %+v, want group %d under %q", nested, child.ID, parent.Path)
+		nested := harness.Do[groups.TransferSubGroupOutput](s, actionGroupTransfer, map[string]any{"group_id": child.IDParam(), "parent_id": parent.ID})
+		if nested.ID != child.ID {
+			e.T.Errorf("transfer answered group %d, want %d", nested.ID, child.ID)
+		}
+		if !nested.TransferQueued && (nested.ParentID != parent.ID || !strings.HasPrefix(nested.FullPath, parent.Path+"/")) {
+			e.T.Errorf("transfer answered the move applied with group %d under %d at %q, want it under %d at %q", nested.ID, nested.ParentID, nested.FullPath, parent.ID, parent.Path)
+		}
+		stored := harness.Eventually[groups.DetailOutput](s, actionGroupGet, map[string]any{"group_id": child.IDParam()}, 2*time.Second, 90*time.Second,
+			func(out groups.DetailOutput) bool { return strings.HasPrefix(out.FullPath, parent.Path+"/") })
+		if stored.ID != child.ID || stored.ParentID != parent.ID {
+			e.T.Errorf("group.get after the transfer answered group %d under %d, want %d under %d", stored.ID, stored.ParentID, child.ID, parent.ID)
 		}
 	})
 }

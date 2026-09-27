@@ -12,6 +12,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -109,7 +110,16 @@ func TestProjectRestore_AfterDelete_ReturnsTheProject(t *testing.T) {
 
 // TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace transfers a
 // personal project of each surface's own into a group of its own and back
-// into the run user's namespace, reading the path off each answer.
+// into the run user's namespace.
+//
+// GitLab 19.4 applies a transfer in the background, and the action waits for
+// it only for a bounded time, so each answer is held to what it claims: an
+// answer that says the move landed must show the destination, and one that
+// says it is queued is allowed not to. Either way the project is then read
+// back with project.get until GitLab holds it under the destination, because
+// the transfer back is refused while the first is still being applied. On
+// 19.3 and older the answer comes after the move and the read finds it at
+// once.
 //
 // Replaces: TestMeta_ProjectTransfer
 func TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace(t *testing.T) {
@@ -119,19 +129,32 @@ func TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace(t *testing.T) {
 		s := e.On(surface)
 		project := fixture.NewProject(e, fixture.WithNamePrefix("moving"))
 		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("destination"))
-		params := map[string]any{"project_id": project.IDParam()}
-		username := e.Runtime().Username
 
-		moved := harness.Do[projects.Output](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": group.Path}))
-		if moved.ID != project.ID || !strings.HasPrefix(moved.PathWithNamespace, group.Path+"/") {
-			e.T.Errorf("transfer answered %+v, want project %d under %q", moved, project.ID, group.Path)
-		}
-
-		back := harness.Do[projects.Output](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": username}))
-		if back.ID != project.ID || !strings.HasPrefix(back.PathWithNamespace, username+"/") {
-			e.T.Errorf("the transfer back answered %+v, want project %d under %q", back, project.ID, username)
-		}
+		transferProjectAndWait(e, s, project, group.Path)
+		transferProjectAndWait(e, s, project, e.Runtime().Username)
 	})
+}
+
+// transferProjectAndWait transfers a project into a namespace, holds the
+// answer to what it claims, and waits until GitLab holds the project there.
+func transferProjectAndWait(e *harness.Env, s *harness.Session, project fixture.Project, namespace string) {
+	e.T.Helper()
+	params := map[string]any{"project_id": project.IDParam()}
+	under := namespace + "/"
+
+	moved := harness.Do[projects.TransferOutput](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": namespace}))
+	if moved.ID != project.ID {
+		e.T.Errorf("the transfer to %q answered project %d, want %d", namespace, moved.ID, project.ID)
+	}
+	if !moved.TransferQueued && !strings.HasPrefix(moved.PathWithNamespace, under) {
+		e.T.Errorf("the transfer to %q answered the move applied with the project at %q", namespace, moved.PathWithNamespace)
+	}
+
+	stored := harness.Eventually[projects.Output](s, actionProjectGet, params, 2*time.Second, 90*time.Second,
+		func(out projects.Output) bool { return strings.HasPrefix(out.PathWithNamespace, under) })
+	if stored.ID != project.ID {
+		e.T.Errorf("project.get after the transfer to %q answered project %d, want %d", namespace, stored.ID, project.ID)
+	}
 }
 
 // TestProjectCreateForUser_Admin_PlacesItInTheUsersNamespace creates a

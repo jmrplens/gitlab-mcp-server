@@ -58,6 +58,17 @@ type stubObject struct {
 	// the 400 GitLab answers with, and a test sets another to prove the
 	// tolerance reads the status and not only the words.
 	permanentRemoveStatus int
+	// transferMarkRefusals is how many plain DELETEs are refused the way
+	// GitLab 19.4 refuses to mark an object whose transfer is under way,
+	// before the mark is accepted; transferMarkStatus is the status they
+	// carry, zero meaning GitLab's 400.
+	transferMarkRefusals int
+	transferMarkStatus   int
+	// transferLandsAfterMark is a transfer that completes between the mark
+	// and the permanent removal: the first permanent DELETE finds the object
+	// moved to transferredPath and no longer marked, and is refused for it.
+	transferLandsAfterMark bool
+	transferredPath        string
 }
 
 // stubGitLab is the in-memory instance one test drives.
@@ -489,6 +500,15 @@ func (s *stubGitLab) object(w http.ResponseWriter, r *http.Request, kind string,
 		return
 	}
 	if query.Get("permanently_remove") != "true" {
+		if obj.transferMarkRefusals > 0 {
+			obj.transferMarkRefusals--
+			status := obj.transferMarkStatus
+			if status == 0 {
+				status = http.StatusBadRequest
+			}
+			writeError(w, status, `State cannot transition via "schedule deletion"`)
+			return
+		}
 		if obj.Marked {
 			writeError(w, http.StatusBadRequest, "Project has been already marked for deletion")
 			return
@@ -505,6 +525,11 @@ func (s *stubGitLab) object(w http.ResponseWriter, r *http.Request, kind string,
 		}
 		writeError(w, status, "`permanently_remove` option is only available for subgroups.")
 		return
+	}
+	if obj.transferLandsAfterMark {
+		obj.transferLandsAfterMark = false
+		obj.Marked = false
+		obj.Path = obj.transferredPath
 	}
 	if !obj.Marked {
 		writeError(w, http.StatusBadRequest, kind+" must be marked for deletion first")
