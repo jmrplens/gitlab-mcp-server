@@ -3,6 +3,7 @@
 package main
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -279,4 +280,208 @@ func TestApplyHTTPEnvOverlay_SettingsWithoutTheirOwnTest(t *testing.T) {
 			t.Errorf("rateLimitBurst = %d, want %d", hcfg.rateLimitBurst, burst)
 		}
 	})
+}
+
+// overlaySetting is one HTTP setting as the overlay sees it: the flag an
+// operator types for it, the variable that supplies it, and the field it lands
+// in.
+type overlaySetting struct {
+	flag string
+	env  func(*config.HTTPEnvOverlay)
+	want func(*httpConfig)
+}
+
+// overlaySettings lists every setting the overlay carries, each with a value
+// its default does not hold. The flag names are spelled as main registers
+// them, so an overlay consulting a misspelled or a neighboring flag is caught.
+func overlaySettings() []overlaySetting {
+	str := func(s string) *string { return &s }
+	yes := func() *bool { b := true; return &b }
+	num := func(n int) *int { return &n }
+	dur := func(d time.Duration) *time.Duration { return &d }
+	ultimate := edition.Ultimate
+	return []overlaySetting{
+		{
+			"gitlab-url", func(o *config.HTTPEnvOverlay) { o.GitLabURL = str("https://env.example.com") },
+			func(h *httpConfig) { h.gitlabURLs = repeatedFlag{"https://env.example.com"} },
+		},
+		{
+			"tool-surface", func(o *config.HTTPEnvOverlay) { o.ToolSurface = str(config.ToolSurfaceMeta) },
+			func(h *httpConfig) { h.toolSurface = config.ToolSurfaceMeta },
+		},
+		{
+			"capability-surface", func(o *config.HTTPEnvOverlay) { o.CapabilitySurface = str(config.CapabilitySurfaceMinimal) },
+			func(h *httpConfig) { h.capabilitySurface = config.CapabilitySurfaceMinimal },
+		},
+		{
+			"meta-param-schema", func(o *config.HTTPEnvOverlay) { o.MetaParamSchema = str(config.MetaParamSchemaCompact) },
+			func(h *httpConfig) { h.metaParamSchema = config.MetaParamSchemaCompact },
+		},
+		{
+			"exclude-tools", func(o *config.HTTPEnvOverlay) { o.ExcludeTools = str("gitlab_admin") },
+			func(h *httpConfig) { h.excludeTools = "gitlab_admin" },
+		},
+		{
+			"auth-mode", func(o *config.HTTPEnvOverlay) { o.AuthMode = str(config.AuthModeOAuth) },
+			func(h *httpConfig) { h.authMode = config.AuthModeOAuth },
+		},
+		{
+			"public-url", func(o *config.HTTPEnvOverlay) { o.PublicURL = str("https://env.example.com/mcp") },
+			func(h *httpConfig) { h.publicURL = "https://env.example.com/mcp" },
+		},
+		{
+			"trusted-origins", func(o *config.HTTPEnvOverlay) { o.TrustedOrigins = str("https://origin.example") },
+			func(h *httpConfig) { h.trustedOrigins = "https://origin.example" },
+		},
+		{
+			"oauth-client-uid", func(o *config.HTTPEnvOverlay) { o.OAuthClientUID = str("env-uid") },
+			func(h *httpConfig) { h.oauthClientUID = "env-uid" },
+		},
+		{
+			"skip-tls-verify", func(o *config.HTTPEnvOverlay) { o.SkipTLSVerify = yes() },
+			func(h *httpConfig) { h.skipTLSVerify = true },
+		},
+		{
+			"read-only", func(o *config.HTTPEnvOverlay) { o.ReadOnly = yes() },
+			func(h *httpConfig) { h.readOnly = true },
+		},
+		{
+			"safe-mode", func(o *config.HTTPEnvOverlay) { o.SafeMode = yes() },
+			func(h *httpConfig) { h.safeMode = true },
+		},
+		{
+			"embedded-resources", func(o *config.HTTPEnvOverlay) { o.EmbeddedResources = yes() },
+			func(h *httpConfig) { h.embeddedResources = true },
+		},
+		{
+			"ignore-scopes", func(o *config.HTTPEnvOverlay) { o.IgnoreScopes = yes() },
+			func(h *httpConfig) { h.ignoreScopes = true },
+		},
+		{
+			"max-http-clients", func(o *config.HTTPEnvOverlay) { o.MaxHTTPClients = num(250) },
+			func(h *httpConfig) { h.maxHTTPClients = 250 },
+		},
+		{
+			"rate-limit-rps", func(o *config.HTTPEnvOverlay) { rps := 42.5; o.RateLimitRPS = &rps },
+			func(h *httpConfig) { h.rateLimitRPS = 42.5 },
+		},
+		{
+			"rate-limit-burst", func(o *config.HTTPEnvOverlay) { o.RateLimitBurst = num(99) },
+			func(h *httpConfig) { h.rateLimitBurst = 99 },
+		},
+		{
+			"auth-failure-limit", func(o *config.HTTPEnvOverlay) { o.AuthFailureLimit = num(7) },
+			func(h *httpConfig) { h.authFailureLimit = 7 },
+		},
+		{
+			"auth-failure-window", func(o *config.HTTPEnvOverlay) { o.AuthFailureWindow = dur(3 * time.Minute) },
+			func(h *httpConfig) { h.authFailureWindow = 3 * time.Minute },
+		},
+		{
+			"auth-distinct-token-limit", func(o *config.HTTPEnvOverlay) { o.AuthDistinctTokenLimit = num(70) },
+			func(h *httpConfig) { h.authDistinctLimit = 70 },
+		},
+		{
+			"auth-distinct-token-window", func(o *config.HTTPEnvOverlay) { o.AuthDistinctWindow = dur(17 * time.Minute) },
+			func(h *httpConfig) { h.authDistinctWindow = 17 * time.Minute },
+		},
+		{
+			"session-timeout", func(o *config.HTTPEnvOverlay) { o.SessionTimeout = dur(2 * time.Hour) },
+			func(h *httpConfig) { h.sessionTimeout = 2 * time.Hour },
+		},
+		{
+			"pool-idle-timeout", func(o *config.HTTPEnvOverlay) { o.PoolIdleTimeout = dur(6 * time.Hour) },
+			func(h *httpConfig) { h.poolIdleTimeout = 6 * time.Hour },
+		},
+		{
+			"revalidate-interval", func(o *config.HTTPEnvOverlay) { o.RevalidateInterval = dur(45 * time.Minute) },
+			func(h *httpConfig) { h.revalidateInterval = 45 * time.Minute },
+		},
+		{
+			"oauth-cache-ttl", func(o *config.HTTPEnvOverlay) { o.OAuthCacheTTL = dur(25 * time.Minute) },
+			func(h *httpConfig) { h.oauthCacheTTL = 25 * time.Minute },
+		},
+		{
+			"action-timeout", func(o *config.HTTPEnvOverlay) { o.ActionTimeout = dur(90 * time.Minute) },
+			func(h *httpConfig) { h.actionTimeout = 90 * time.Minute },
+		},
+		{
+			"drain-delay", func(o *config.HTTPEnvOverlay) { o.DrainDelay = dur(20 * time.Second) },
+			func(h *httpConfig) { h.drainDelay = 20 * time.Second },
+		},
+		{
+			"tier", func(o *config.HTTPEnvOverlay) { o.Tier, o.TierExplicit = &ultimate, true },
+			func(h *httpConfig) { h.tier, h.tierSet = ultimate.String(), true },
+		},
+	}
+}
+
+// TestApplyHTTPEnvOverlay_EachSettingLandsInItsOwnFieldAndYieldsToItsOwnFlag
+// holds every overlay entry to the one field it names and the one flag that
+// outranks it. Each entry is a plain assignment, so a value written into a
+// neighbour's field, or held back by a neighbour's flag, is invisible to every
+// operator-flipping tool and to any test that sets two settings to one value.
+// Applied alone, a variable must change its own field and nothing else, and
+// its own flag, passed alone, must leave the configuration exactly as the flag
+// layer resolved it.
+func TestApplyHTTPEnvOverlay_EachSettingLandsInItsOwnFieldAndYieldsToItsOwnFlag(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range overlaySettings() {
+		t.Run(tc.flag, func(t *testing.T) {
+			t.Parallel()
+
+			overlay := &config.HTTPEnvOverlay{}
+			tc.env(overlay)
+
+			got := newOverlayConfig()
+			applyHTTPEnvOverlay(got, overlay)
+			want := newOverlayConfig()
+			tc.want(want)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("the environment alone changed the configuration to\n%+v\nwant only this setting changed:\n%+v", got, want)
+			}
+
+			held := newOverlayConfig(tc.flag)
+			applyHTTPEnvOverlay(held, overlay)
+			if untouched := newOverlayConfig(tc.flag); !reflect.DeepEqual(held, untouched) {
+				t.Errorf("--%s was passed, yet the environment changed the configuration to\n%+v", tc.flag, held)
+			}
+		})
+	}
+}
+
+// TestOverlaySettings_CoverEveryOverlayField keeps the table above complete:
+// a variable added to the overlay without a row there would be checked by
+// nothing, so every pointer field of the overlay must be filled by exactly one
+// row.
+func TestOverlaySettings_CoverEveryOverlayField(t *testing.T) {
+	t.Parallel()
+
+	filledBy := map[string]string{}
+	for _, tc := range overlaySettings() {
+		overlay := config.HTTPEnvOverlay{}
+		tc.env(&overlay)
+		value := reflect.ValueOf(overlay)
+		for i := range value.NumField() {
+			field := value.Type().Field(i)
+			if field.Type.Kind() != reflect.Pointer || value.Field(i).IsNil() {
+				continue
+			}
+			if previous, taken := filledBy[field.Name]; taken {
+				t.Errorf("%s is filled by the rows for --%s and --%s", field.Name, previous, tc.flag)
+			}
+			filledBy[field.Name] = tc.flag
+		}
+	}
+
+	overlayType := reflect.TypeFor[config.HTTPEnvOverlay]()
+	for field := range overlayType.Fields() {
+		if field.Type.Kind() != reflect.Pointer {
+			continue
+		}
+		if _, found := filledBy[field.Name]; !found {
+			t.Errorf("HTTPEnvOverlay.%s has no row in overlaySettings, so nothing checks where it lands", field.Name)
+		}
+	}
 }

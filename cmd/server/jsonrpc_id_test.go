@@ -30,6 +30,9 @@ func TestRequestIDFromBody_RecoversOnlyALegalRequestID(t *testing.T) {
 		want   string
 	}{
 		{"numeric id", http.MethodPost, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "1"},
+		// Zero is the lowest digit an id can start with, and the id many
+		// clients number their first request with.
+		{"zero id", http.MethodPost, `{"jsonrpc":"2.0","id":0,"method":"tools/list"}`, "0"},
 		{"large numeric id", http.MethodPost, `{"jsonrpc":"2.0","id":9007199254740993,"method":"tools/list"}`, "9007199254740993"},
 		{"negative id", http.MethodPost, `{"jsonrpc":"2.0","id":-4,"method":"tools/list"}`, "-4"},
 		{"string id", http.MethodPost, `{"jsonrpc":"2.0","id":"req-abc","method":"tools/list"}`, `"req-abc"`},

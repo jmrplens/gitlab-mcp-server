@@ -250,17 +250,24 @@ func TestResolveTransport_SelectorPrecedence(t *testing.T) {
 		wantHTTP      bool
 		wantInference bool
 		wantOverride  bool
-		wantErr       bool
+		// overrideSays is what the override must name: the selector that won
+		// and the flag it overrode, so the operator reading it knows which of
+		// the two to remove.
+		overrideSays []string
+		wantErr      bool
 	}{
 		{name: "unset defers to --http false", transport: "", useHTTP: false, wantHTTP: false},
 		{name: "unset defers to --http true", transport: "", useHTTP: true, httpSet: true, wantHTTP: true},
 		{name: "stdio is obeyed", transport: "stdio", wantHTTP: false},
 		{name: "http is obeyed", transport: "http", wantHTTP: true},
-		{name: "stdio overrides an explicit --http", transport: "stdio", useHTTP: true, httpSet: true, wantHTTP: false, wantOverride: true},
-		{name: "http overrides an explicit --http=false", transport: "http", useHTTP: false, httpSet: true, wantHTTP: true, wantOverride: true},
+		{name: "stdio overrides an explicit --http", transport: "stdio", useHTTP: true, httpSet: true, wantHTTP: false, wantOverride: true, overrideSays: []string{"--transport=stdio", "--http"}},
+		{name: "http overrides an explicit --http=false", transport: "http", useHTTP: false, httpSet: true, wantHTTP: true, wantOverride: true, overrideSays: []string{"--transport=http", "--http=false"}},
 		{name: "stdio says nothing about an --http nobody passed", transport: "stdio", useHTTP: false, wantHTTP: false},
+		// Two selectors that agree are not an override, whichever was typed.
+		{name: "stdio agrees with an explicit --http=false", transport: "stdio", useHTTP: false, httpSet: true, wantHTTP: false},
+		{name: "http agrees with an explicit --http", transport: "http", useHTTP: true, httpSet: true, wantHTTP: true},
 		{name: "auto infers, here from the null device", transport: "auto", wantHTTP: true, wantInference: true},
-		{name: "auto ignores an explicit --http and says so", transport: "auto", useHTTP: false, httpSet: true, wantHTTP: true, wantInference: true, wantOverride: true},
+		{name: "auto ignores an explicit --http and says so", transport: "auto", useHTTP: false, httpSet: true, wantHTTP: true, wantInference: true, wantOverride: true, overrideSays: []string{"--transport=auto", "--http"}},
 		{name: "case and spacing are forgiven", transport: "  AUTO ", wantHTTP: true, wantInference: true},
 		{name: "an unknown selector is refused", transport: "tcp", wantErr: true},
 	} {
@@ -285,6 +292,11 @@ func TestResolveTransport_SelectorPrecedence(t *testing.T) {
 				t.Errorf("resolveTransport(%q, http=%v, set=%v) reported override %q, want reported = %v",
 					tc.transport, tc.useHTTP, tc.httpSet, decision.Override, tc.wantOverride)
 			}
+			for _, want := range tc.overrideSays {
+				if !strings.Contains(decision.Override, want) {
+					t.Errorf("override %q does not name %q", decision.Override, want)
+				}
+			}
 		})
 	}
 }
@@ -308,7 +320,10 @@ func TestTransportDecision_Explain_SaysWhatItDecidedAndWhy(t *testing.T) {
 		{
 			name:     "an override is reported to the operator who caused it",
 			decision: transportDecision{Override: "--transport=stdio overrides --http"},
-			want:     []string{"--transport=stdio overrides --http"},
+			// At WARN: two selectors that disagree are a configuration the
+			// operator should fix, and a deployment logging at warn must
+			// still be told one of its flags was ignored.
+			want: []string{"--transport=stdio overrides --http", `"level":"WARN"`},
 		},
 		{
 			name:     "an inferred HTTP transport names what it read",

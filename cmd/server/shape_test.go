@@ -12,6 +12,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -686,18 +688,105 @@ func TestStartShapeRegistration_ForgetsThroughTheRegistry(t *testing.T) {
 }
 
 // TestServerShapeKey_NamesTheFieldsItHashes is a readability guard rather than
-// a behavioral one: the key ends up in a log line an operator reads when a
-// deployment builds more servers than expected, so it has to say which value
-// each part is.
+// a behavioral one. The key only ever groups credentials, and any arrangement
+// of the same values would group them alike; what the names add is that
+// whoever reads a key, in a debugger or a failure message, is told which value
+// each part is. So every value is held to the name in front of it, with the
+// three flags set one at a time, since a key in which two flags agree cannot
+// show that they traded places.
 func TestServerShapeKey_NamesTheFieldsItHashes(t *testing.T) {
-	key := serverShapeKey(shapeTestConfig(), false)
-
-	for _, field := range []string{"surface=", "capability=", "schema=", "tier=", "dotcom=", "stateless="} {
-		t.Run(strings.TrimSuffix(field, "="), func(t *testing.T) {
-			if !strings.Contains(key, field) {
-				t.Errorf("the shape key %q does not name %q", key, field)
+	named := []string{"surface=meta|", "capability=minimal|", "schema=compact|", "tier=premium|"}
+	for _, tc := range []struct {
+		name   string
+		set    func(*config.ServerConfig)
+		dotcom bool
+		flags  []string
+	}{
+		{
+			name:  "the tier pinned",
+			set:   func(c *config.ServerConfig) { c.TierExplicit = true },
+			flags: []string{"tierPinned=true|", "dotcom=false|", "stateless=false"},
+		},
+		{
+			name:   "gitlab.com",
+			dotcom: true,
+			flags:  []string{"tierPinned=false|", "dotcom=true|", "stateless=false"},
+		},
+		{
+			name:  "stateless",
+			set:   func(c *config.ServerConfig) { c.Stateless = true },
+			flags: []string{"tierPinned=false|", "dotcom=false|", "stateless=true"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := shapeTestConfig()
+			cfg.ToolSurface = config.ToolSurfaceMeta
+			cfg.CapabilitySurface = config.CapabilitySurfaceMinimal
+			cfg.MetaParamSchema = "compact"
+			cfg.Tier = edition.Premium
+			cfg.TierExplicit = false
+			if tc.set != nil {
+				tc.set(cfg)
+			}
+			key := serverShapeKey(cfg, tc.dotcom)
+			for _, part := range append(slices.Clone(named), tc.flags...) {
+				if !strings.Contains(key, part) {
+					t.Errorf("the shape key %q does not carry %q", key, part)
+				}
 			}
 		})
+	}
+}
+
+// TestShapeServers_Get_TheBuildLogNamesTheShapeItBuilt verifies the one line
+// an operator reads about a new shape reports each setting under its own name.
+//
+// It is how a deployment that builds more servers than expected is diagnosed,
+// and two of its settings are the safety posture: a line reporting read-only
+// for a server that is in fact only in safe mode, or the reverse, points the
+// operator at the wrong setting. The flags are set one at a time and the
+// surfaces to values no other field holds, so a value filed under a neighbour's
+// name reads wrong.
+func TestShapeServers_Get_TheBuildLogNamesTheShapeItBuilt(t *testing.T) {
+	logged := captureLogAttrs(t)
+	var builds int64
+	shapes, _ := countingShapes(&builds, &sync.Mutex{}, nil)
+
+	// sequential: the second build is the registry's second shape.
+	for _, tc := range []struct {
+		name               string
+		readOnly, safeMode bool
+		wantShapes         int64
+	}{
+		{name: "read-only", readOnly: true, wantShapes: 1},
+		{name: "safe mode", safeMode: true, wantShapes: 2},
+	} {
+		cfg := shapeTestConfig()
+		cfg.ToolSurface = config.ToolSurfaceMeta
+		cfg.CapabilitySurface = config.CapabilitySurfaceMinimal
+		cfg.Tier = edition.Premium
+		cfg.ReadOnly, cfg.SafeMode = tc.readOnly, tc.safeMode
+		if _, err := shapes.get(cfg, false); err != nil {
+			t.Fatalf("%s: get: %v", tc.name, err)
+		}
+		attrs, ok := logged("built the MCP server for a configuration shape")
+		if !ok {
+			t.Fatalf("%s: the build was not logged", tc.name)
+		}
+		for attr, want := range map[string]any{
+			"shapes":             tc.wantShapes,
+			"tool_surface":       config.ToolSurfaceMeta,
+			"capability_surface": config.CapabilitySurfaceMinimal,
+			"tier":               edition.Premium.String(),
+			"read_only":          tc.readOnly,
+			"safe_mode":          tc.safeMode,
+		} {
+			t.Run(tc.name+" "+attr, func(t *testing.T) {
+				if got := attrs[attr].Any(); got != want {
+					t.Errorf("%s = %v, want %v", attr, got, want)
+				}
+			})
+		}
 	}
 }
 
@@ -854,6 +943,248 @@ func TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned(t *test
 	}
 	if end.reason != endCredentialReset {
 		t.Errorf("reason = %q, want %q", end.reason, endCredentialReset)
+	}
+}
+
+// attrCapturingHandler records the attributes of every log record by message,
+// so a test can read back a value the code under test only ever logs.
+type attrCapturingHandler struct {
+	mu      *sync.Mutex
+	records map[string]map[string]slog.Value
+}
+
+func (h attrCapturingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h attrCapturingHandler) Handle(_ context.Context, record slog.Record) error {
+	attrs := make(map[string]slog.Value)
+	record.Attrs(func(attr slog.Attr) bool {
+		attrs[attr.Key] = attr.Value
+		return true
+	})
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records[record.Message] = attrs
+	return nil
+}
+
+func (h attrCapturingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h attrCapturingHandler) WithGroup(string) slog.Handler { return h }
+
+// captureLogAttrs installs an attrCapturingHandler as the default logger for
+// the test and returns the lookup of the attributes logged with a message.
+func captureLogAttrs(t *testing.T) func(message string) (map[string]slog.Value, bool) {
+	t.Helper()
+	handler := attrCapturingHandler{mu: &sync.Mutex{}, records: make(map[string]map[string]slog.Value)}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return func(message string) (map[string]slog.Value, bool) {
+		handler.mu.Lock()
+		defer handler.mu.Unlock()
+		attrs, ok := handler.records[message]
+		return attrs, ok
+	}
+}
+
+// TestNewShapedServerPool_HandsThePoolItsIdleTimeoutAndRevalidationIntervalApart
+// verifies each of the two pool durations reaches the knob it was named for.
+//
+// Both are durations, handed over one line apart, and no other test separates
+// them: a pool given the revalidation interval as its idle timeout keeps an
+// abandoned credential for fifteen minutes instead of an hour, or for an hour
+// instead of the operator's two minutes, and one given the idle timeout as its
+// revalidation interval asks GitLab about every credential on the wrong
+// schedule. What the sweeps announce when they start is the one reading of
+// either value the pool offers, so the two are configured to different numbers
+// and each announcement is held to its own.
+func TestNewShapedServerPool_HandsThePoolItsIdleTimeoutAndRevalidationIntervalApart(t *testing.T) {
+	const idle, revalidate = 7 * time.Minute, 13 * time.Minute
+	logged := captureLogAttrs(t)
+	_, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:          "https://gitlab.example.com",
+		Tier:               edition.Free,
+		TierExplicit:       true,
+		IgnoreScopes:       true,
+		ToolSurface:        config.ToolSurfaceDynamic,
+		CapabilitySurface:  config.CapabilitySurfaceFull,
+		PoolIdleTimeout:    idle,
+		RevalidateInterval: revalidate,
+	})
+	t.Cleanup(pool.Close)
+
+	sweeps, stopSweeps := context.WithCancel(t.Context())
+	pool.StartIdleEviction(sweeps)
+	pool.StartRevalidation(sweeps)
+	stopSweeps()
+
+	for _, tc := range []struct {
+		message, attr string
+		want          time.Duration
+	}{
+		{"server pool: starting idle eviction", "idle_timeout", idle},
+		{"server pool: starting token revalidation", "interval", revalidate},
+	} {
+		t.Run(tc.attr, func(t *testing.T) {
+			attrs, ok := logged(tc.message)
+			if !ok {
+				t.Fatalf("the pool never logged %q, so its setting cannot be read back", tc.message)
+			}
+			if got := attrs[tc.attr]; got.Kind() != slog.KindDuration || got.Duration() != tc.want {
+				t.Errorf("%s = %v, want %v", tc.attr, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNewShapedServerPool_TeachesTheSubscribeMethodStatefulHTTPServes verifies
+// the servers a pool builds know they are reached over HTTP.
+//
+// The pool is the only place an HTTP server is told its transport, and the
+// answer decides what its instructions teach a model about watching resources:
+// stateful HTTP refuses every revision from 2026-07-28, so it must name the
+// legacy method alone, where stdio names both. A pool that called its servers
+// pipes would send every model on a stateful deployment to subscriptions/listen,
+// the one method that transport cannot serve, and would file every span and
+// measurement under the wrong network.transport as well.
+func TestNewShapedServerPool_TeachesTheSubscribeMethodStatefulHTTPServes(t *testing.T) {
+	gitlab := shapedPoolGitLab(t)
+	_, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		Stateless:         false,
+	})
+	t.Cleanup(pool.Close)
+
+	entry, err := pool.GetOrCreateEntry("glpat-stateful", gitlab, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+	instructions := newInMemorySession(t, entry.Server()).InitializeResult().Instructions
+
+	if !strings.Contains(instructions, "via MCP resources/subscribe;") {
+		t.Errorf("the instructions do not teach the legacy method alone:\n%s", instructions)
+	}
+	if strings.Contains(instructions, "subscriptions/listen") {
+		t.Errorf("the instructions teach subscriptions/listen, which stateful HTTP cannot serve:\n%s", instructions)
+	}
+}
+
+// TestNewShapedServerPool_TheSessionTableFollowsTheTransport verifies the table
+// of session owners is told whether the deployment is sessionless.
+//
+// It decides two things about a session-era resources/subscribe. On the
+// sessionless transport that request is refused before it subscribes
+// anything, so recording its session costs a map entry and a parked goroutine
+// for a fact nothing reads; on a stateful one it is honored, and a session not
+// recorded has every notification for it dropped by the delivery filter. The
+// same flag decides whether an eviction terminates such a session, which on
+// the sessionless transport would race the response being written.
+func TestNewShapedServerPool_TheSessionTableFollowsTheTransport(t *testing.T) {
+	for _, stateless := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stateless=%t", stateless), func(t *testing.T) {
+			binding, pool := newShapedServerPool(t.Context(), &config.Config{
+				GitLabURL:         "https://gitlab.example.com",
+				Tier:              edition.Free,
+				TierExplicit:      true,
+				IgnoreScopes:      true,
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+				Stateless:         stateless,
+			})
+			t.Cleanup(pool.Close)
+			session, _ := connectedSessions(t)
+
+			if got := binding.sessions.worthRecording(session, methodResourcesSubscribe); got == stateless {
+				t.Errorf("a legacy subscribe's session is recorded = %t on a deployment with stateless = %t", got, stateless)
+			}
+		})
+	}
+}
+
+// TestNewShapedServerPool_SizePressure_TakesAnIdleEntryBeforeABusyOne verifies
+// the pool is told which credentials are holding work it cannot see.
+//
+// A credential holding an open listen stream refreshes nothing in the pool, so
+// by recency alone it is the oldest entry and the first taken under size
+// pressure, whatever its subscriber is still waiting on. The pool asks this
+// server which entries are busy, and an idle one must go first.
+func TestNewShapedServerPool_SizePressure_TakesAnIdleEntryBeforeABusyOne(t *testing.T) {
+	gitlab := shapedPoolGitLab(t)
+	binding, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		MaxHTTPClients:    2,
+	})
+	t.Cleanup(pool.Close)
+
+	busy, err := pool.GetOrCreateEntry("glpat-busy", gitlab, nil)
+	if err != nil {
+		t.Fatalf("the busy credential: %v", err)
+	}
+	state := binding.credentials.get(busy.Owner())
+	if state == nil {
+		t.Fatal("the pool's insert callback filed no state for the busy credential")
+	}
+	streamCtx, cancelStream := context.WithCancel(t.Context())
+	t.Cleanup(cancelStream)
+	_, release := state.streams.arm([]string{"gitlab://project/42"}, busy.Owner(), nil, cancelStream)
+	t.Cleanup(release)
+	// The open stream as the pool sees it: one slot held on the credential's
+	// listen counter, which is what makes the entry busy.
+	if !state.listen.acquire(0) {
+		t.Fatal("could not take a listen slot for the busy credential")
+	}
+	t.Cleanup(state.listen.release)
+
+	idle, err := pool.GetOrCreateEntry("glpat-idle", gitlab, nil)
+	if err != nil {
+		t.Fatalf("the idle credential: %v", err)
+	}
+	if _, err = pool.GetOrCreateEntry("glpat-arriving", gitlab, nil); err != nil {
+		t.Fatalf("the arriving credential: %v", err)
+	}
+
+	waitFor(t, func() bool { return binding.credentials.get(idle.Owner()) == nil })
+	if binding.credentials.get(busy.Owner()) == nil {
+		t.Error("size pressure took the credential holding an open stream while an idle one was pooled")
+	}
+	if streamCtx.Err() != nil {
+		t.Error("the busy credential's listen stream was ended by an eviction that should have taken the idle one")
+	}
+}
+
+// TestNewShapedServerPool_AfterShutdownBuildsNothing verifies entry
+// construction is bounded by the server's lifetime rather than the request's.
+//
+// An entry is shared, so one client leaving must not abort a build others wait
+// on, and that is why the request's context is not used; but shutdown must stop
+// it, or a credential arriving during the drain registers a whole catalog for
+// a process that is exiting.
+func TestNewShapedServerPool_AfterShutdownBuildsNothing(t *testing.T) {
+	gitlab := shapedPoolGitLab(t)
+	lifetime, shutDown := context.WithCancel(t.Context())
+	_, pool := newShapedServerPool(lifetime, &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	t.Cleanup(pool.Close)
+	shutDown()
+
+	if entry, err := pool.GetOrCreateEntry("glpat-late", gitlab, nil); err == nil {
+		t.Errorf("an entry was built after the server's lifetime ended: %v", entry)
 	}
 }
 

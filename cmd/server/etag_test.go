@@ -6,6 +6,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -57,6 +58,12 @@ func TestEntityTagFor_IsSyntacticallyAnEntityTag(t *testing.T) {
 	}
 	if strings.Count(tag, `"`) != 2 {
 		t.Errorf("tag %s quotes something inside itself, which no parser will read back whole", tag)
+	}
+	// 128 bits of the digest: enough to tell apart the documents a deployment
+	// serves, and short enough to keep the header small. A shorter cut would
+	// make two documents share a tag long before a longer one bought anything.
+	if digits := strings.Trim(tag, `"`); !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(digits) {
+		t.Errorf("tag %s is not 32 lowercase hex digits, the first 128 bits of a SHA-256", tag)
 	}
 }
 

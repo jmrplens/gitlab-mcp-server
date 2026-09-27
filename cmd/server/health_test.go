@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
 
 // TestBuildIdentifier_RendersOneComparableLabelForEveryBuildShape pins the
@@ -85,6 +86,7 @@ func TestConfigDigest_AgreesOnlyWhenTheServedSurfaceWouldAgree(t *testing.T) {
 		{name: "another capability surface", mutate: func(c *config.Config) { c.CapabilitySurface = "minimal" }, same: false},
 		{name: "another parameter schema", mutate: func(c *config.Config) { c.MetaParamSchema = "full" }, same: false},
 		{name: "a pinned tier instead of a detected one", mutate: func(c *config.Config) { c.TierExplicit = true }, same: false},
+		{name: "another tier", mutate: func(c *config.Config) { c.Tier = edition.Premium }, same: false},
 		{name: "scope detection skipped", mutate: func(c *config.Config) { c.IgnoreScopes = true }, same: false},
 		{name: "read-only", mutate: func(c *config.Config) { c.ReadOnly = true }, same: false},
 		{name: "safe mode", mutate: func(c *config.Config) { c.SafeMode = true }, same: false},
@@ -175,6 +177,92 @@ func TestNewHealthResponse_CarriesTheDrainingStatus(t *testing.T) {
 	}
 	if got.ConfigDigest != "d1" {
 		t.Errorf("config_digest = %q, want d1", got.ConfigDigest)
+	}
+}
+
+// TestNewHealthResponse_NamesThisBuildsVersionAndCommit pins which build
+// variable fills which field. Both are strings, a test elsewhere only checks
+// that neither is empty, and a monitor comparing instances reads them apart,
+// so a swap would publish the commit as the version with nothing failing.
+func TestNewHealthResponse_NamesThisBuildsVersionAndCommit(t *testing.T) {
+	t.Parallel()
+
+	if version == commit {
+		t.Fatalf("version and commit are both %q in this binary, so a swap between them cannot be seen", version)
+	}
+	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	got := newHealthResponse(now, now, "d1", false)
+	if got.Version != version {
+		t.Errorf("version = %q, want this build's version %q", got.Version, version)
+	}
+	if got.Commit != commit {
+		t.Errorf("commit = %q, want this build's commit %q", got.Commit, commit)
+	}
+}
+
+// TestHealthHandler_PublishesTheDocumentedMemberNames reads the body as JSON
+// rather than through healthResponse. Every other test here decodes into the
+// same struct that encoded the body, so a renamed tag round-trips cleanly and
+// passes, while a balancer or a monitor matching "status" or
+// "uptime_seconds" finds nothing. The names are the ones the HTTP server mode
+// and remote deployment guides give operators to match.
+func TestHealthHandler_PublishesTheDocumentedMemberNames(t *testing.T) {
+	t.Parallel()
+
+	var drain atomic.Bool
+	rec := httptest.NewRecorder()
+	healthHandler("abc123def456", &drain)(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", http.NoBody))
+
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decoding the body: %v", err)
+	}
+	for _, member := range []string{"status", "version", "commit", "build", "config_digest", "started_at", "uptime_seconds"} {
+		t.Run(member, func(t *testing.T) {
+			t.Parallel()
+			if _, found := body[member]; !found {
+				t.Errorf("the /health body has no %q member: %v", member, body)
+			}
+		})
+	}
+	if len(body) != 7 {
+		t.Errorf("the /health body carries %d members, want the 7 documented ones: %v", len(body), body)
+	}
+}
+
+// TestHealthStatuses_AreTheWordsBalancersAreConfiguredWith pins the two
+// values the status member carries. The reference and the deployment guides
+// tell operators to match "ok" and "draining", and the handler test compares
+// against the same constants that produce them, so a renamed status would
+// pass it and break every probe matching the documented word.
+func TestHealthStatuses_AreTheWordsBalancersAreConfiguredWith(t *testing.T) {
+	t.Parallel()
+
+	if healthStatusOK != "ok" {
+		t.Errorf("healthStatusOK = %q, want ok", healthStatusOK)
+	}
+	if healthStatusDraining != "draining" {
+		t.Errorf("healthStatusDraining = %q, want draining", healthStatusDraining)
+	}
+}
+
+// TestAnnounceDraining_WithoutADelay_DoesNotClaimToDrain pins what the log
+// says when no drain delay is configured, zero included: the listener closes
+// at once, and a line announcing a drain window would send an operator
+// looking for a balancer hold that never happened.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestAnnounceDraining_WithoutADelay_DoesNotClaimToDrain(t *testing.T) {
+	logged := captureLogMessages(t)
+	var draining atomic.Bool
+
+	announceDraining(t.Context(), &draining, 0)
+
+	if !logged("HTTP server shutdown requested") {
+		t.Error("the shutdown request was not logged")
+	}
+	if logged("announcing draining") {
+		t.Error("a zero delay was announced as a drain window")
 	}
 }
 

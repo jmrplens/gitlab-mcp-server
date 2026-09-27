@@ -206,9 +206,10 @@ func (s *sanitizedInput) readLine() (line string, oversize bool, err error) {
 		// ceiling is on the message, not on the framing around it, so the
 		// newline is not charged to it: counting it refused a message of
 		// exactly the ceiling, which is a byte narrower than the SDK's HTTP
-		// body cap this is meant to match.
+		// body cap this is meant to match. ReadSlice returns the delimiter
+		// whenever it returns no error, so the chunk is never empty here.
 		counted := len(chunk)
-		if readErr == nil && counted > 0 {
+		if readErr == nil {
 			counted--
 		}
 		switch {

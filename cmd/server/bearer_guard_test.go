@@ -14,12 +14,14 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 )
@@ -270,6 +272,46 @@ func TestBearerGuard_BlockedAddress_RefusesAVerifiedTokenThatIsUnderScoped(t *te
 	}
 }
 
+// TestBearerGuard_BlockedAddress_StillServesAVerifiedReadAPIToken holds the
+// exemption to the scope the door admits rather than the one the deployment
+// advertises. A deployment serving writes advertises api and still serves a
+// read_api token, on the read-only surface (ADR-0018), so such a token is one
+// it is already serving and a neighbor's spray must not take it away. Judged
+// on the advertised scope instead, the block would cover every read-only
+// credential the deployment had admitted.
+func TestBearerGuard_BlockedAddress_StillServesAVerifiedReadAPIToken(t *testing.T) {
+	t.Parallel()
+
+	const readOnly = "gloas-read-only"
+	cached := map[string]*auth.TokenInfo{
+		readOnly: {UserID: "7", Scopes: []string{oauth.ScopeReadAPI}, Expiration: time.Now().Add(time.Hour)},
+	}
+	g := newTestGuard(func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		if info, ok := cached[token]; ok {
+			return info, nil
+		}
+		return nil, auth.ErrInvalidToken
+	})
+	g.verified = func(_, token string) (*auth.TokenInfo, bool) {
+		info, ok := cached[token]
+		return info, ok
+	}
+	if g.advertisedScope == g.minimumScope {
+		t.Fatalf("the fixture advertises %q, the scope it admits at; it must advertise more for this to tell them apart", g.advertisedScope)
+	}
+
+	for i := range 4 {
+		g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i))))
+	}
+	if blocked := g.check(guardRequest(t, "gloas-invented-past-the-budget")); blocked == nil || blocked.status != http.StatusTooManyRequests {
+		t.Fatalf("the address is not blocked (%+v), so this test would show nothing", blocked)
+	}
+
+	if failure := g.check(guardRequest(t, readOnly)); failure != nil {
+		t.Errorf("a verified read_api token at a blocked address = %+v, want it served: a writing deployment serves read_api tokens", failure)
+	}
+}
+
 // TestBearerGuard_BlockedAddress_RefusesARequestCarryingNoToken keeps the
 // exemption to requests that actually present a credential.
 //
@@ -474,6 +516,69 @@ func TestBearerGuard_BlockedAddress_AdvertisesRetryAfter(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_BlockedAddress_RetryAfterIsTheBlockThatHoldsIt checks the
+// value, not the presence: Retry-After is what the block holding the request
+// has left, which for the distinct-token budget is its first rung of ten
+// minutes here, not the one-minute failure window every other fixture blocks
+// for. A client told a minute knocks for the other nine.
+func TestBearerGuard_BlockedAddress_RetryAfterIsTheBlockThatHoldsIt(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, auth.ErrInvalidToken
+	})
+	g.limiter = nil
+	g.spray = serverpool.NewDistinctTokenBudget(2, time.Hour, 10*time.Minute)
+	g.check(guardRequest(t, "gloas-refused-a"))
+	g.check(guardRequest(t, "gloas-refused-b"))
+
+	failure := g.check(guardRequest(t, "gloas-anything"))
+	if failure == nil || failure.status != http.StatusTooManyRequests {
+		t.Fatalf("want 429, got %+v", failure)
+	}
+	assertRetryAfterWithin(t, failure.header.Get("Retry-After"), 9*time.Minute, 10*time.Minute)
+}
+
+// assertRetryAfterWithin checks that a Retry-After header is a whole number of
+// seconds in (low, high]: the remaining block, rounded up, measured a moment
+// after it was raised.
+func assertRetryAfterWithin(t *testing.T, header string, low, high time.Duration) {
+	t.Helper()
+	seconds, err := strconv.Atoi(header)
+	if err != nil {
+		t.Fatalf("Retry-After = %q, want a number of seconds: %v", header, err)
+	}
+	if got := time.Duration(seconds) * time.Second; got <= low || got > high {
+		t.Errorf("Retry-After = %ds, want more than %v and at most %v", seconds, low, high)
+	}
+}
+
+// sourceBlockWindow is the window the refusal tables build a transport budget
+// with. It differs from authFailureWindow on purpose: a source block announced
+// with the failure lockout's remaining time, or the reverse, must be a
+// different number for the swap to show.
+const sourceBlockWindow = 5 * time.Minute
+
+// assertRetryAfterIsTheBlock checks a Retry-After against the block that holds
+// the request: none where block is zero, and otherwise what is left of block,
+// rounded up.
+//
+// The floor is half the block rather than a second under it. What is left is
+// measured when the refusal is written, and a subtest stalled for a second
+// under -race would fail an exact value for being slow; half still tells the
+// failure lockout (one minute) and the source block (five) apart, and both
+// from the single second a zero duration renders as.
+func assertRetryAfterIsTheBlock(t *testing.T, header string, block time.Duration) {
+	t.Helper()
+	if block == 0 {
+		if header != "" {
+			t.Errorf("Retry-After = %q, want none", header)
+		}
+		return
+	}
+	assertRetryAfterWithin(t, header, block/2, block)
+}
+
 // TestBearerGuard_UpstreamFailure_IsNotBlamedOnTheToken verifies the
 // classification that keeps a GitLab outage from looking like a credential
 // problem: 503 rather than 401, GitLab's own Retry-After when it gave one,
@@ -595,14 +700,6 @@ func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	}
 }
 
-// TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment pins the fix for
-// the case that blocked a read-only OAuth application outright: a deployment
-// serving writes advertises api, and used to refuse a read_api token at the
-// door — the rejection landed on initialize, so the client could not even
-// list the tools it was entitled to call.
-//
-// Admission now asks only for what every action needs. What the token may DO
-// is settled per action, by the read-only surface the pool builds for it.
 // TestBearerGuard_PreflightIsNotAnAuthenticationFailure pins that a CORS
 // preflight is let past untouched.
 //
@@ -632,6 +729,14 @@ func TestBearerGuard_PreflightIsNotAnAuthenticationFailure(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment pins the fix for
+// the case that blocked a read-only OAuth application outright: a deployment
+// serving writes advertises api, and used to refuse a read_api token at the
+// door: the rejection landed on initialize, so the client could not even
+// list the tools it was entitled to call.
+//
+// Admission now asks only for what every action needs. What the token may DO
+// is settled per action, by the read-only surface the pool builds for it.
 func TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment(t *testing.T) {
 	t.Parallel()
 
@@ -1266,5 +1371,434 @@ func TestRejectedTokenCacheBounds_StillRememberARejectionTheyJustRecorded(t *tes
 	}
 	if got := cache.Len(); got != 1 {
 		t.Errorf("cache holds %d entries after one rejection, want 1", got)
+	}
+}
+
+// TestBearerGuard_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt is the
+// guard's half of the telemetry the gate is held to: each refusal is counted
+// once, under the budget that made it, and under no other. The guard runs in
+// front of the gate and refuses first, so a count it files wrongly is the
+// count an operator reads.
+//
+// Every request arrives through one trusted proxy, so the client a failure is
+// charged to and the source the fleet budget is charged to are different
+// addresses, and a count filed under the wrong one of them is visible.
+func TestBearerGuard_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt(t *testing.T) {
+	t.Parallel()
+
+	refusing := func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, auth.ErrInvalidToken
+	}
+	cases := []struct {
+		name    string
+		arm     func(*bearerGuard)
+		spend   []gateSpend
+		refused string
+		want    mcpotel.AuthBlockCounts
+	}{
+		{
+			name:    "the failure lockout",
+			arm:     func(g *bearerGuard) { g.limiter = serverpool.NewAuthRateLimiter(1, authFailureWindow) },
+			spend:   []gateSpend{{"198.51.100.1", ""}},
+			refused: "198.51.100.1",
+			want:    mcpotel.AuthBlockCounts{FailureLockout: 1},
+		},
+		{
+			name: "the transport source",
+			arm: func(g *bearerGuard) {
+				g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow), authFailureWindow)
+			},
+			spend:   []gateSpend{{"198.51.100.1", ""}},
+			refused: "198.51.100.2",
+			want:    mcpotel.AuthBlockCounts{TransportSource: 1},
+		},
+		{
+			name:    "the distinct-token budget",
+			arm:     func(g *bearerGuard) { g.spray = serverpool.NewDistinctTokenBudget(2, time.Minute, time.Minute) },
+			spend:   []gateSpend{{"198.51.100.1", "gloas-refused-a"}, {"198.51.100.1", "gloas-refused-b"}},
+			refused: "198.51.100.1",
+			want:    mcpotel.AuthBlockCounts{DistinctTokens: 1},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := newProxiedGuard(refusing)
+			g.limiter = nil
+			g.sourceBudget = nil
+			g.blocks = &authBlockCounters{}
+			tc.arm(g)
+
+			for _, s := range tc.spend {
+				if failure := g.check(proxiedRequest(t, s.client, s.token)); failure == nil || failure.status != http.StatusUnauthorized {
+					t.Fatalf("spending the budget from %s got %+v, want 401", s.client, failure)
+				}
+			}
+			if got := g.blocks.counts(); got != (mcpotel.AuthBlockCounts{}) {
+				t.Fatalf("counts before any refusal = %+v, want none: a failure is not a block", got)
+			}
+			if failure := g.check(proxiedRequest(t, tc.refused, "")); failure == nil || failure.status != http.StatusTooManyRequests {
+				t.Fatalf("the request from %s got %+v, want 429", tc.refused, failure)
+			}
+			if got := g.blocks.counts(); got != tc.want {
+				t.Errorf("counts = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// guardRefusal is what one refusal of the guard must carry on the wire.
+type guardRefusal struct {
+	status int
+	code   int
+	// challenge is the exact WWW-Authenticate value, or "" where the refusal
+	// must carry none because the credential was never judged.
+	challenge string
+	// retryAfter is the exact Retry-After value, or "" where there is none or
+	// where blockedFor holds it instead.
+	retryAfter string
+	// blockedFor is the length of the block that refused the request, for a
+	// refusal whose Retry-After is what is left of that block and so depends
+	// on when it was measured; see [assertRetryAfterIsTheBlock].
+	blockedFor time.Duration
+	// says are fragments the message must carry.
+	says []string
+}
+
+// TestBearerGuard_EachRefusal_CarriesItsOwnStatusCodeAndChallenge holds every
+// refusal the guard makes to the whole of what a client reads from it.
+//
+// The refusals differ in exactly the parts a client acts on: the status and the
+// code decide whether to reauthorize, ask for more scope, wait or give up; the
+// challenge names the scope to ask for and the RFC 6750 verdict; Retry-After
+// says how long to wait. Asserting only the status, as the tests beside this one
+// do, lets any of the rest be swapped with a neighbor's and nobody notices.
+// The challenges are written out in full rather than built with the functions
+// under test, so a parameter that moved, vanished or named the wrong scope is a
+// difference in the string.
+func TestBearerGuard_EachRefusal_CarriesItsOwnStatusCodeAndChallenge(t *testing.T) {
+	t.Parallel()
+
+	const (
+		metadata     = `, resource_metadata="` + testMetadataURL + `"`
+		advertised   = `Bearer realm="gitlab-mcp-server"`
+		invalid      = advertised + `, error="invalid_token", error_description="the access token is expired, revoked, or not valid for this GitLab instance", scope="api"` + metadata
+		insufficient = advertised + `, error="insufficient_scope", error_description="the token lacks the read_api scope", scope="read_api"` + metadata
+	)
+	upstreamDefault := strconv.Itoa(int(upstreamRetryAfter.Seconds()))
+	failing := func(err error) auth.TokenVerifier {
+		return func(context.Context, string, *http.Request) (*auth.TokenInfo, error) { return nil, err }
+	}
+	unpublished := &serverpool.DisallowedGitLabURLError{Allowed: []string{"https://gitlab.com"}}
+
+	cases := []struct {
+		name  string
+		guard func() *bearerGuard
+		token string
+		want  guardRefusal
+	}{
+		{
+			name:  "no credential",
+			guard: func() *bearerGuard { return newTestGuard(okVerifier(oauth.ScopeAPI)) },
+			want: guardRefusal{
+				status: http.StatusUnauthorized, code: errCodeUnauthorized,
+				challenge: advertised + `, scope="api"` + metadata,
+				says:      []string{oauthMissingTokenMessage},
+			},
+		},
+		{
+			name: "a blocked address",
+			guard: func() *bearerGuard {
+				g := newTestGuard(okVerifier(oauth.ScopeAPI))
+				g.limiter = serverpool.NewAuthRateLimiter(1, authFailureWindow)
+				g.check(guardRequest(t, ""))
+				return g
+			},
+			token: "gloas-anything",
+			want:  guardRefusal{status: http.StatusTooManyRequests, code: errCodeTooManyRequests, blockedFor: authFailureWindow, says: []string{"Too many failed authentication attempts"}},
+		},
+		{
+			// The failure limiter stays armed and unspent, so the one budget
+			// holding the request is the source's, and a Retry-After taken
+			// from the limiter's side reads as a second.
+			name: "a blocked transport source",
+			guard: func() *bearerGuard {
+				g := newTestGuard(okVerifier(oauth.ScopeAPI))
+				g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, sourceBlockWindow), sourceBlockWindow)
+				g.sourceBudget.charge("192.0.2.10", "198.51.100.1")
+				return g
+			},
+			token: "gloas-anything",
+			want:  guardRefusal{status: http.StatusTooManyRequests, code: errCodeTooManyRequests, blockedFor: sourceBlockWindow, says: []string{"Too many failed authentication attempts"}},
+		},
+		{
+			name: "no instance selected where several are published",
+			guard: func() *bearerGuard {
+				g := newTestGuard(okVerifier(oauth.ScopeAPI))
+				g.instances = []string{"https://a.example.com", "https://b.example.com"}
+				g.resolveInstance = func(*http.Request) (string, error) { return "", errMissingGitLabURL }
+				return g
+			},
+			token: "gloas-valid",
+			want:  guardRefusal{status: http.StatusBadRequest, code: errCodeInvalidRequest, says: []string{"https://a.example.com, https://b.example.com"}},
+		},
+		{
+			name: "an instance this deployment does not publish",
+			guard: func() *bearerGuard {
+				g := newTestGuard(okVerifier(oauth.ScopeAPI))
+				g.resolveInstance = func(*http.Request) (string, error) { return "", unpublished }
+				return g
+			},
+			token: "gloas-valid",
+			want:  guardRefusal{status: http.StatusForbidden, code: errCodeForbidden, says: []string{unpublished.Error()}},
+		},
+		{
+			name:  "a token carrying no API scope",
+			guard: func() *bearerGuard { return newTestGuard(okVerifier("read_user")) },
+			token: "gloas-narrow",
+			want: guardRefusal{
+				status: http.StatusForbidden, code: errCodeForbidden, challenge: insufficient,
+				says: []string{"read_api is the least", "granting api for the full tool surface or read_api for a read-only one"},
+			},
+		},
+		{
+			name:  "GitLab reporting an insufficient scope",
+			guard: func() *bearerGuard { return newTestGuard(failing(oauth.ErrInsufficientScope)) },
+			token: "gloas-narrow",
+			want: guardRefusal{
+				status: http.StatusForbidden, code: errCodeForbidden, challenge: insufficient,
+				says: []string{"Reauthorize granting api for the full tool surface, or read_api for a read-only one"},
+			},
+		},
+		{
+			name:  "GitLab refusing the token",
+			guard: func() *bearerGuard { return newTestGuard(failing(auth.ErrInvalidToken)) },
+			token: "gloas-refused",
+			want:  guardRefusal{status: http.StatusUnauthorized, code: errCodeUnauthorized, challenge: invalid, says: []string{"GitLab rejected this token"}},
+		},
+		{
+			name:  "a token issued to an application this deployment does not admit",
+			guard: func() *bearerGuard { return newTestGuard(failing(refusedRecipient())) },
+			token: "gloas-other-app",
+			want: guardRefusal{
+				status: http.StatusUnauthorized, code: errCodeUnauthorized,
+				challenge: advertised + `, error="invalid_token", error_description="the token was not issued to an OAuth application this deployment admits", scope="api"` + metadata,
+				says:      []string{"not issued to an OAuth application this deployment admits"},
+			},
+		},
+		{
+			name: "GitLab unavailable, naming a delay",
+			guard: func() *bearerGuard {
+				return newTestGuard(failing(&oauth.UpstreamError{Status: http.StatusTooManyRequests, RetryAfter: 17 * time.Second, Err: errors.New("throttled")}))
+			},
+			token: "gloas-good",
+			want:  guardRefusal{status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: "17", says: []string{"has not been rejected"}},
+		},
+		{
+			name: "GitLab unavailable, naming none",
+			guard: func() *bearerGuard {
+				return newTestGuard(failing(&oauth.UpstreamError{Err: errors.New("connection refused")}))
+			},
+			token: "gloas-good",
+			want:  guardRefusal{status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault, says: []string{"has not been rejected"}},
+		},
+		{
+			name:  "an introspection that did not answer",
+			guard: func() *bearerGuard { return newTestGuard(failing(oauth.ErrRecipientUnverifiable)) },
+			token: "gloas-good",
+			want:  guardRefusal{status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault, says: []string{"introspection"}},
+		},
+		{
+			name:  "a verification that failed for no stated reason",
+			guard: func() *bearerGuard { return newTestGuard(failing(errors.New("decode: unexpected EOF"))) },
+			token: "gloas-good",
+			want:  guardRefusal{status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault, says: []string{"has not been rejected"}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			failure := tc.guard().check(guardRequest(t, tc.token))
+			if failure == nil {
+				t.Fatal("the request was let through, want a refusal")
+			}
+			if failure.status != tc.want.status || failure.code != tc.want.code {
+				t.Errorf("status, code = %d, %d, want %d, %d", failure.status, failure.code, tc.want.status, tc.want.code)
+			}
+			if got := failure.header.Get(headerWWWAuthenticate); got != tc.want.challenge {
+				t.Errorf("WWW-Authenticate = %q\nwant              %q", got, tc.want.challenge)
+			}
+			switch got := failure.header.Get(headerRetryAfter); {
+			case tc.want.blockedFor > 0:
+				assertRetryAfterIsTheBlock(t, got, tc.want.blockedFor)
+			case got != tc.want.retryAfter:
+				t.Errorf("Retry-After = %q, want %q", got, tc.want.retryAfter)
+			}
+			for _, fragment := range tc.want.says {
+				if !strings.Contains(failure.message, fragment) {
+					t.Errorf("message = %q, want it to carry %q", failure.message, fragment)
+				}
+			}
+		})
+	}
+}
+
+// TestBearerGuard_ARefusedToken_IsChargedToTheClientThatSentIt pins which
+// address pays for a credential GitLab refused, on both paths that refuse one:
+// the first time, when GitLab is asked, and every later time, when the answer
+// comes out of the rejected-token cache.
+//
+// Behind a trusted proxy the two addresses in play differ: the client the
+// proxy vouches for, and the proxy itself. The failure is the client's. The
+// cached path charges too, since replaying a token already refused is still an
+// authentication failure; it only costs GitLab nothing.
+func TestBearerGuard_ARefusedToken_IsChargedToTheClientThatSentIt(t *testing.T) {
+	t.Parallel()
+
+	g := newProxiedGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, auth.ErrInvalidToken
+	})
+	g.limiter = serverpool.NewAuthRateLimiter(2, authFailureWindow)
+	g.sourceBudget = nil
+
+	// sequential: the second attempt is only answered from the cache because the first put the refusal there
+	for attempt, path := range []string{"asked of GitLab", "answered from the cache"} {
+		if failure := g.check(proxiedRequest(t, "198.51.100.1", "gloas-refused")); failure == nil || failure.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d (%s) = %+v, want 401", attempt+1, path, failure)
+		}
+	}
+	if failure := g.check(proxiedRequest(t, "198.51.100.1", "")); failure == nil || failure.status != http.StatusTooManyRequests {
+		t.Errorf("the client that sent the refused token twice = %+v, want 429: both refusals are its failures", failure)
+	}
+	if failure := g.check(proxiedRequest(t, "198.51.100.2", "")); failure == nil || failure.status != http.StatusUnauthorized {
+		t.Errorf("another client behind the same proxy = %+v, want 401: it failed nothing", failure)
+	}
+}
+
+// TestBearerGuard_RejectedTokenCache_IsKeyedOnTheInstance pins that a refusal
+// is remembered against the GitLab that made it, for both kinds of refusal the
+// cache records.
+//
+// A token means nothing away from the instance that issued it, so the same
+// string refused by one published instance may be valid at another. The cache
+// must answer a repeat at the instance that refused it, which is the point of
+// having it, and must not answer for the other instance, which would refuse a
+// credential no GitLab ever judged.
+func TestBearerGuard_RejectedTokenCache_IsKeyedOnTheInstance(t *testing.T) {
+	t.Parallel()
+
+	const (
+		refusing = "https://gitlab.refusing.example"
+		other    = "https://gitlab.other.example"
+	)
+	for _, refusal := range []struct {
+		name string
+		err  error
+	}{
+		{name: "a token GitLab refused", err: auth.ErrInvalidToken},
+		{name: "a token issued to an application not admitted", err: refusedRecipient()},
+	} {
+		t.Run(refusal.name, func(t *testing.T) {
+			t.Parallel()
+
+			asked := map[string]int{}
+			var mu sync.Mutex
+			g := newTestGuard(func(_ context.Context, _ string, r *http.Request) (*auth.TokenInfo, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				asked[r.Header.Get(serverpool.RequestOptionGitLabURL)]++
+				return nil, refusal.err
+			})
+			g.limiter = nil
+			g.resolveInstance = func(r *http.Request) (string, error) {
+				return r.Header.Get(serverpool.RequestOptionGitLabURL), nil
+			}
+			at := func(instance string) *http.Request {
+				r := guardRequest(t, "gloas-same-string")
+				r.Header.Set(serverpool.RequestOptionGitLabURL, instance)
+				return r
+			}
+
+			for range 2 {
+				if failure := g.check(at(refusing)); failure == nil || failure.status != http.StatusUnauthorized {
+					t.Fatalf("the refusing instance = %+v, want 401", failure)
+				}
+			}
+			g.check(at(other))
+
+			mu.Lock()
+			defer mu.Unlock()
+			if asked[refusing] != 1 {
+				t.Errorf("the refusing instance was asked %d times for two attempts, want 1: the repeat is the cache's to answer", asked[refusing])
+			}
+			if asked[other] != 1 {
+				t.Errorf("the other instance was asked %d times, want 1: another GitLab's refusal says nothing about this one", asked[other])
+			}
+		})
+	}
+}
+
+// TestBearerGuard_Exemption_RequiresAnEntryTheCacheActuallyHolds covers the two
+// ways the verified-token lookup can answer without holding a credential: a
+// miss that still hands back an identity, and a hit that hands back nothing. A
+// block may only be lifted for an entry that is both there and complete, since
+// anything less is an exemption granted on a guess.
+func TestBearerGuard_Exemption_RequiresAnEntryTheCacheActuallyHolds(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		info   *auth.TokenInfo
+		cached bool
+	}{
+		{name: "a miss carrying an identity", info: &auth.TokenInfo{UserID: "7", Scopes: []string{oauth.ScopeAPI}}, cached: false},
+		{name: "a hit carrying nothing", info: nil, cached: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				return nil, auth.ErrInvalidToken
+			})
+			g.verified = func(string, string) (*auth.TokenInfo, bool) { return tc.info, tc.cached }
+			for i := range 3 {
+				g.check(guardRequest(t, "gloas-invented-"+strconv.Itoa(i)))
+			}
+
+			if failure := g.check(guardRequest(t, "gloas-looked-up")); failure == nil || failure.status != http.StatusTooManyRequests {
+				t.Errorf("= %+v, want 429: the lookup holds no complete entry for this credential", failure)
+			}
+		})
+	}
+}
+
+// TestIsCORSPreflight_NeedsTheRequestMethodHeader pins what makes an OPTIONS a
+// preflight. The exemption exists because a browser sends a preflight without
+// credentials; an OPTIONS that does not ask the preflight question is an
+// ordinary request with no credential, and is authenticated like one.
+func TestIsCORSPreflight_NeedsTheRequestMethodHeader(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(okVerifier(oauth.ScopeAPI))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+	req.RemoteAddr = "192.0.2.10:5555"
+
+	if failure := g.check(req); failure == nil || failure.status != http.StatusUnauthorized {
+		t.Errorf("a bare OPTIONS = %+v, want 401: only a preflight skips authentication", failure)
+	}
+}
+
+// TestOAuthChallenge_EscapesEveryQuotedValue covers the three places a value
+// is written inside quotes: a parameter, the scope and the metadata URL. Each
+// is server-controlled today, and each is escaped anyway, so a quote reaching
+// any of them later still yields a header a client can parse.
+func TestOAuthChallenge_EscapesEveryQuotedValue(t *testing.T) {
+	t.Parallel()
+
+	got := oauthChallenge(`sco"pe`, `https://x.example/m"d`, "error_description", `a "quoted" \ value`)
+	want := `Bearer realm="gitlab-mcp-server", error_description="a \"quoted\" \\ value", scope="sco\"pe", resource_metadata="https://x.example/m\"d"`
+	if got != want {
+		t.Errorf("oauthChallenge =\n%s\nwant\n%s", got, want)
 	}
 }

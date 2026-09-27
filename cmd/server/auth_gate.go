@@ -269,12 +269,7 @@ type mcpServerGate struct {
 	spray *serverpool.DistinctTokenBudget
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [bearerGuard], since the two layers share the budgets themselves.
-	blocks *authBlockCounters
-	// failureWindow is how long the two counting budgets block for, which is
-	// what their Retry-After announces. It is the configured window rather
-	// than the default: a deployment that widened it to five minutes must not
-	// tell a caller to come back in one.
-	failureWindow      time.Duration
+	blocks             *authBlockCounters
 	trustedProxyHeader string
 	// trustedProxies are the peers trustedProxyHeader is believed from; from
 	// anybody else the header is ignored and the peer is charged.

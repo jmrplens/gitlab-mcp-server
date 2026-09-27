@@ -694,6 +694,42 @@ func TestSessionOwners_Forget_DropsOneSessionAndLeavesTheRest(t *testing.T) {
 	// eviction already forgot the owner.
 	owners.forget(first)
 	owners.forget(minted.connect(t))
+
+	// The session left behind is still filed under its owner, so the owner's
+	// eviction still finds it: a disconnect that took the owner's whole index
+	// with it would leave the survivor's ID accepted by the gate after the
+	// credential was gone, and its client never told.
+	orphaned := owners.forgetOwner(owner)
+	if len(orphaned) != 1 || orphaned[0] != second {
+		t.Errorf("forgetOwner after one disconnect returned %v, want only the session still connected", orphaned)
+	}
+	if got := owners.ownerOfID(secondID); got != "" {
+		t.Errorf("ownerOfID(survivor) = %q after its credential was evicted, want it dropped", got)
+	}
+}
+
+// TestSessionOwners_Forget_TheLastSessionOfAnOwner_LeavesNoIndexBehind verifies
+// the per-owner indexes empty out with the sessions they hold.
+//
+// Owners are minted per pool entry, and every credential the pool ever saw is
+// a new one, so an index kept after its last session is gone is an entry per
+// departed credential for the life of the process.
+func TestSessionOwners_Forget_TheLastSessionOfAnOwner_LeavesNoIndexBehind(t *testing.T) {
+	const owner = "owner-departed"
+	owners := newSessionOwners(false)
+	session := newIdentifiedSessions(t).connect(t)
+	owners.record(session, owner)
+
+	owners.forget(session)
+
+	owners.mu.Lock()
+	_, sessionsKept := owners.sessionsByOwner[owner]
+	_, idsKept := owners.idsByOwner[owner]
+	owners.mu.Unlock()
+	if sessionsKept || idsKept {
+		t.Errorf("after its last session ended the owner still has a session index (%t) or an id index (%t)",
+			sessionsKept, idsKept)
+	}
 }
 
 // TestSessionOwners_Forget_ASessionMissingFromThePerOwnerIndexes_IsStillDropped

@@ -83,9 +83,6 @@ type bearerGuard struct {
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [mcpServerGate].
 	blocks *authBlockCounters
-	// failureWindow is the configured window the two counting budgets block
-	// for, and so what their Retry-After announces.
-	failureWindow time.Duration
 	// trustedProxyHeader names the header carrying the real client IP, so
 	// the limiter counts per caller rather than per reverse proxy, and
 	// trustedProxies are the peers it is believed from.

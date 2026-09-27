@@ -2116,14 +2116,12 @@ func (sh *serverShell) register(ctx context.Context) error {
 	}
 	logRegisteredToolSurface(sh.toolSurface, toolCount, metaSchemaRoutes)
 
-	if sh.toolSurface == config.ToolSurfaceMeta {
-		var routesErr error
-		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server, metaSchemaRoutes)
-		if routesErr != nil {
-			slog.Warn("failed to filter meta-schema routes to visible tools", "error", routesErr)
-		}
-	}
-
+	// The meta routes are not filtered against the tools left registered:
+	// every filter that can remove a meta dispatcher (read-only, token scope,
+	// tier, --exclude-tools) removes its group from the catalog before
+	// registration, and every group left is registered, so such a pass found
+	// nothing to drop on any configuration. What it protected is held by
+	// TestCreateServer_MetaManifest_NamesOnlyRegisteredTools instead.
 	servedPrompts := registerConfiguredCapabilities(server, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
 	// Published unconditionally, the empty list included: a completion naming
 	// a prompt this server does not serve is refused, and on the minimal
@@ -2134,7 +2132,7 @@ func (sh *serverShell) register(ctx context.Context) error {
 	// completion is a fourth request path to the same GitLab data with the
 	// same credential, and it was the last one an operator could not narrow.
 	sh.completions.PublishExcludedActions(surfaceRegistration.excludedActions)
-	publishSubscriptionIndex(sh.subs, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
+	publishSubscriptionIndex(sh.subs, client, surfaceRegistration.excludedActions)
 
 	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
 		slog.Warn("failed to build tool manifest resource", "error", listErr)
@@ -2239,8 +2237,12 @@ func registerConfiguredCapabilities(
 // One index per shape, shared by every credential's watchers: the handlers it
 // names are the shared server's own, and they read whichever client the polling
 // context carries.
-func publishSubscriptionIndex(subs *subscriptionShape, client *gitlabclient.Client, capabilitySurface string, excludedActions []string) {
-	if subs == nil || capabilitySurface != config.CapabilitySurfaceFull {
+//
+// A nil shape is the whole of the capability check. [newSubscriptionShape]
+// returns nil exactly off the full capability surface, so asking the surface
+// again here said the same thing twice.
+func publishSubscriptionIndex(subs *subscriptionShape, client *gitlabclient.Client, excludedActions []string) {
+	if subs == nil {
 		return
 	}
 	subs.setIndex(resources.NewHandlerIndex(client, resources.RegisterOptions{ExcludedActions: excludedActions}))
@@ -3344,7 +3346,6 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
 		blocks:             blockCounts,
-		failureWindow:      cfg.AuthFailureWindow,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessions:           binding.sessions,
@@ -3414,7 +3415,6 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
 		blocks:             blockCounts,
-		failureWindow:      cfg.AuthFailureWindow,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		metadataURL:        resourceMetadataURL,
@@ -3508,7 +3508,6 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
 		blocks:             blockCounts,
-		failureWindow:      cfg.AuthFailureWindow,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessions:           binding.sessions,
@@ -4541,28 +4540,6 @@ func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, er
 	return result.Tools, nil
 }
 
-// visibleMetaSchemaRoutes filters catalog-derived route maps to the tools
-// still visible after read-only or exclude-tools registration filters run.
-func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.ActionMap) (map[string]toolutil.ActionMap, error) {
-	registeredTools, err := listRegisteredToolsForInspection(server, "meta-schema-filter")
-	if err != nil {
-		return nil, err
-	}
-
-	visibleTools := make(map[string]struct{}, len(registeredTools))
-	for _, tool := range registeredTools {
-		visibleTools[tool.Name] = struct{}{}
-	}
-
-	visibleRoutes := make(map[string]toolutil.ActionMap, len(routes))
-	for toolName, actions := range routes {
-		if _, ok := visibleTools[toolName]; ok {
-			visibleRoutes[toolName] = actions
-		}
-	}
-	return visibleRoutes, nil
-}
-
 // countCatalogActions sums actions across catalog route maps for startup logs.
 func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 	total := 0
@@ -4686,13 +4663,15 @@ func matchesAllTerms(haystack string, terms []string) bool {
 // person searching for one usually types the name they saw in a client, and
 // the canonical ID because that is what they will pass to
 // gitlab_execute_action.
+//
+// The domain and the action name are not listed apart: the catalog refuses an
+// action whose ID is anything but the two joined by a dot, and a term never
+// spans a space, so a term found in either half is found in the ID.
 func actionSearchText(action actioncatalog.Action) string {
 	parts := []string{
 		string(action.ID),
 		action.IndividualTool.Name,
 		action.ToolName,
-		action.Domain,
-		action.Name,
 		actionSearchDescription(action),
 	}
 	parts = append(parts, action.Aliases...)

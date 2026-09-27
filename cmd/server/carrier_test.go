@@ -169,6 +169,14 @@ func TestRequestCarriersBind_CancelsACallWhenItsCarrierGoesAway(t *testing.T) {
 			endCarrier: true,
 		},
 		{
+			// The exemption is the protocol's notifications/ namespace, not
+			// the word: a call whose name merely begins with it still has a
+			// POST waiting on it, and one whose carrier is gone is cancelled.
+			name:   "a call whose name only begins with the word is still a call",
+			method: "notificationsettings/get", req: carrierRequest(carrierHeaderWith("stale")),
+			wantCancelled: true,
+		},
+		{
 			name:   "a request with no token is left alone",
 			method: "tools/call", req: carrierRequest(http.Header{}),
 		},

@@ -12,6 +12,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,9 +28,19 @@ const ignoreTermEnv = "PEER_IGNORE_SIGTERM"
 // the test that ends it and never a timeout that ends the test.
 const lifetime = 5 * time.Minute
 
+// readyLine is what the peer writes to stdout once its signal disposition is
+// in place, so a test about to signal it knows the signal meets the
+// disposition it asked for.
+const readyLine = "ready"
+
 func main() {
 	if os.Getenv(ignoreTermEnv) == "1" {
 		signal.Ignore(syscall.SIGTERM)
 	}
+	// Written only after the disposition above is set. A test that signaled
+	// the peer as soon as the process table showed it could reach it before
+	// signal.Ignore ran, and a peer meant to ignore SIGTERM then died of it,
+	// which let the wedged case pass without ever reaching the kill.
+	fmt.Println(readyLine)
 	time.Sleep(lifetime)
 }

@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ecdsa"
@@ -30,9 +31,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -43,6 +47,14 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	otelloggl "go.opentelemetry.io/otel/log/global"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	nooptrace "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -54,11 +66,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	healthtool "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -197,11 +211,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	t.Helper()
 	cacheable := cfg.ExcludeTools == nil && cfg.TokenScopes == nil && cfg.GitLabURL == ""
 	if !cacheable {
-		server, err := createServer(t.Context(), client, cfg)
-		if err != nil {
-			t.Fatalf("createServer() error: %v", err)
-		}
-		return server
+		return createServerWithin(t, client, cfg)
 	}
 	key := createdServerKey{
 		toolSurface:            cfg.ToolSurface,
@@ -222,12 +232,46 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	if server, ok := createdServers[key]; ok {
 		return server
 	}
-	server, err := createServer(t.Context(), sharedCreateServerClient(t), cfg)
-	if err != nil {
-		t.Fatalf("createServer() error: %v", err)
-	}
+	server := createServerWithin(t, sharedCreateServerClient(t), cfg)
 	createdServers[key] = server
 	return server
+}
+
+// serverBuildBound is how long a test waits for createServer before calling
+// the build deadlocked. An honest build takes seconds, race detector included.
+const serverBuildBound = 3 * time.Minute
+
+// createServerWithin is createServer failing the test, rather than hanging
+// it, when the build does not return within serverBuildBound.
+//
+// Registration speaks MCP to the server it is building, on contexts with no
+// deadline, so a fault in the readiness gate deadlocks the build rather than
+// failing it, and the test waits for the binary's own timeout. That hides every
+// assertion after it: a mutation run, which stops at the first failure, reads
+// the timeout as TIMED OUT, and the readiness tests that name the fault within
+// ten seconds never run because a test sorted before them never returns.
+func createServerWithin(t *testing.T, client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server {
+	t.Helper()
+	type built struct {
+		server *mcp.Server
+		err    error
+	}
+	ctx := t.Context()
+	done := make(chan built, 1)
+	go func() {
+		server, err := createServer(ctx, client, cfg)
+		done <- built{server: server, err: err}
+	}()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("createServer() error: %v", result.err)
+		}
+		return result.server
+	case <-time.After(serverBuildBound):
+		t.Fatalf("createServer() did not return within %s: registration is deadlocked", serverBuildBound)
+		return nil
+	}
 }
 
 // newTestMCPServer returns a shared MCP server with the full individual tool
@@ -745,6 +789,30 @@ func TestServeHTTPOn_TheServeLoopFails_IsReportedAsAServerError(t *testing.T) {
 
 	if serveErr == nil || !errors.Is(serveErr, listener.err) || !strings.Contains(serveErr.Error(), "mcp server error (http)") {
 		t.Errorf("serveHTTPOn() = %v, want the accept failure wrapped as a server error", serveErr)
+	}
+}
+
+// TestServeHTTPOn_AnUnloadableCertificatePair_RefusesToStart covers the load
+// of the pair --tls-cert and --tls-key name. A pair that cannot be loaded
+// stops the server before it binds, saying why, rather than leaving it to the
+// accept loop, which would serve TLS with no certificate and report the
+// missing file only as a server error once serving had begun.
+func TestServeHTTPOn_AnUnloadableCertificatePair_RefusesToStart(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	dir := t.TempDir()
+	cfg := statelessTestConfig(gitlab.URL, false)
+	cfg.TLSCertFile = filepath.Join(dir, "missing.pem")
+	cfg.TLSKeyFile = filepath.Join(dir, "missing.key")
+	ctx, cancel := context.WithTimeout(t.Context(), testHTTPLivenessTimeout)
+	defer cancel()
+
+	serveErr := serveHTTPOn(ctx, cfg, "127.0.0.1:0", nil, defaultHTTPIdleTimeout)
+
+	if !errors.Is(serveErr, os.ErrNotExist) || !strings.Contains(serveErr.Error(), "loading the TLS certificate and key") {
+		t.Errorf("serveHTTPOn() = %v, want the missing pair reported as a startup failure", serveErr)
+	}
+	if serveErr != nil && strings.Contains(serveErr.Error(), "mcp server error") {
+		t.Errorf("serveHTTPOn() = %v; the missing pair was found only after serving began", serveErr)
 	}
 }
 
@@ -1545,6 +1613,57 @@ func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(
 	}
 }
 
+// TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry holds every value the help
+// formats from a constant to the entry that describes it. They reach one
+// format string as a long list of arguments in which two of the same type can
+// trade places with nothing to notice, and the help would then document one
+// flag's default under another flag's name. The build's version and commit are
+// given values of their own for the same reason.
+func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
+	withBuildIdentity(t, "9.8.7-help", "c0mm1t-help")
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	for _, tc := range []struct{ entry, want string }{
+		{entry: "Version:", want: "Version:      9.8.7-help (commit: c0mm1t-help)"},
+		{entry: "Author:", want: "Author:       " + projectAuthor},
+		{entry: "Department:", want: strings.TrimSpace("Department:   " + projectDepartment)},
+		{entry: "Repository:", want: "Repository:   " + projectRepository},
+		{entry: "-session-timeout duration", want: fmt.Sprintf("(default %s)", config.DefaultSessionTimeout)},
+		{entry: "-oauth-cache-ttl duration", want: fmt.Sprintf("(default %s, min %s, max %s)", config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL)},
+		{entry: "-revalidate-interval dur", want: fmt.Sprintf("(default %s; 0 stops", config.DefaultRevalidateInterval)},
+		{entry: "-revalidate-interval dur", want: fmt.Sprintf("older than %s is still rebuilt", serverpool.DefaultMaxCredentialAge)},
+		{entry: "-max-http-clients int", want: fmt.Sprintf("(default %d)", config.DefaultMaxHTTPClients)},
+		{entry: "-pool-idle-timeout dur", want: fmt.Sprintf("(default %s, 0 to disable)", config.DefaultPoolIdleTimeout)},
+		{entry: "-rate-limit-burst int", want: fmt.Sprintf("(default %d)", config.DefaultRateLimitBurst)},
+		{entry: "-auth-failure-limit int", want: fmt.Sprintf("(default %d;", config.DefaultAuthFailureLimit)},
+		{entry: "-auth-failure-window dur", want: fmt.Sprintf("(default %s)", config.DefaultAuthFailureWindow)},
+		{entry: "-auth-distinct-token-limit int", want: fmt.Sprintf("(default %d;", config.DefaultAuthDistinctTokenLimit)},
+		{entry: "-auth-distinct-token-window dur", want: fmt.Sprintf("(default %s)", config.DefaultAuthDistinctWindow)},
+		{entry: "GITLAB_MCP_AUTH_FAILURE_LIMIT", want: fmt.Sprintf("(default %d;", config.DefaultAuthFailureLimit)},
+		{entry: "GITLAB_MCP_AUTH_FAILURE_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthFailureWindow)},
+		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", want: fmt.Sprintf("(default %d;", config.DefaultAuthDistinctTokenLimit)},
+		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthDistinctWindow)},
+	} {
+		t.Run(tc.entry+" "+tc.want, func(t *testing.T) {
+			got := helpEntry(help, tc.entry)
+			if strings.HasSuffix(tc.entry, ":") {
+				if got != tc.want {
+					t.Errorf("help line %q = %q, want %q", tc.entry, got, tc.want)
+				}
+				return
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("help entry %q = %q, want it to carry %q", tc.entry, got, tc.want)
+			}
+		})
+	}
+	if want := fmt.Sprintf("GitLab instance URL (default: %s;", config.DefaultGitLabURL); !strings.Contains(help, want) {
+		t.Errorf("the GITLAB_URL entry does not carry %q", want)
+	}
+}
+
 // TestPrintHelp_NoPanic verifies that printHelp can be called without panicking.
 //
 // This one had no reader at all, only a write end nothing ever emptied, which
@@ -1690,6 +1809,38 @@ func TestResolveBuildVersion_Fallbacks(t *testing.T) {
 			wantVersion: "dev",
 			wantCommit:  "none",
 		},
+		{
+			// A VCS build records several settings, and the revision is
+			// rarely the first: the commit is the revision's value, never
+			// whichever setting happens to carry one.
+			name:    "the revision is read from among the other VCS settings",
+			version: "dev",
+			commit:  "none",
+			readInfo: func() (*debug.BuildInfo, bool) {
+				info := &debug.BuildInfo{}
+				info.Settings = []debug.BuildSetting{
+					{Key: "vcs", Value: "git"},
+					{Key: "vcs.time", Value: "2026-09-27T01:00:00Z"},
+					{Key: "vcs.revision", Value: "c0ffee42"},
+					{Key: "vcs.modified", Value: "true"},
+				}
+				return info, true
+			},
+			wantVersion: "dev",
+			wantCommit:  "c0ffee42",
+		},
+		{
+			name:    "an empty revision is not a commit",
+			version: "dev",
+			commit:  "none",
+			readInfo: func() (*debug.BuildInfo, bool) {
+				info := &debug.BuildInfo{}
+				info.Settings = []debug.BuildSetting{{Key: "vcs.revision", Value: ""}}
+				return info, true
+			},
+			wantVersion: "dev",
+			wantCommit:  "none",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1711,6 +1862,361 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	serverInfo := initializeTestServer(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+}
+
+// TestCreateServer_TheHandshakeCarriesEachIdentityFieldInItsPlace covers the
+// Implementation a client renders in place of the identifier. The title, the
+// description, the website and the version are all strings, and a client or a
+// registry shows each where it belongs, so every one is compared with its own
+// constant.
+func TestCreateServer_TheHandshakeCarriesEachIdentityFieldInItsPlace(t *testing.T) {
+	session := newInMemorySession(t, mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic}))
+	info := session.InitializeResult().ServerInfo
+
+	for _, field := range []struct{ name, got, want string }{
+		{"name", info.Name, serverName},
+		{"title", info.Title, serverDisplayTitle},
+		{"description", info.Description, projectDescription},
+		{"websiteUrl", info.WebsiteURL, projectWebsite},
+		{"version", info.Version, version},
+	} {
+		t.Run(field.name, func(t *testing.T) {
+			if field.got != field.want {
+				t.Errorf("serverInfo.%s = %q, want %q", field.name, field.got, field.want)
+			}
+		})
+	}
+}
+
+// TestCreateServer_InstructionsFollowTheStatelessAndReadOnlySettings covers
+// the two switches the server shell hands the instructions builder side by
+// side: whether the HTTP transport is stateless and whether the surface is
+// read-only. Each case turns exactly one of them on, so the instructions a
+// client receives are that setting's and not its neighbor's.
+func TestCreateServer_InstructionsFollowTheStatelessAndReadOnlySettings(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		stateless, readOnly bool
+	}{
+		{name: "stateless", stateless: true},
+		{name: "read-only", readOnly: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, tc.stateless, tc.readOnly)
+			if buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, tc.readOnly, tc.stateless) == want {
+				t.Fatal("both readings of the two settings build the same instructions, so this case cannot tell them apart")
+			}
+			server, err := createServer(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+				Stateless:         tc.stateless,
+				ReadOnly:          tc.readOnly,
+			}, withTransport(mcpotel.TransportTCP))
+			if err != nil {
+				t.Fatalf("createServer() error: %v", err)
+			}
+
+			if got := newInMemorySession(t, server).InitializeResult().Instructions; got != want {
+				t.Errorf("instructions = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestCreateServer_Individual_EachTierKeepsItsOwnInputSchemas covers the key
+// the individual surface caches its compiled schemas under. Schemas are pruned
+// by tier and the cache is shared by every server in the process, so two
+// tiers filed under one key would hand a Premium server the Free schema of
+// the same tool, one that refuses the Premium fields a caller sends. The
+// issue weight is one such field: offered at Premium, pruned at Free.
+func TestCreateServer_Individual_EachTierKeepsItsOwnInputSchemas(t *testing.T) {
+	const tool, field = "gitlab_issue_create", "weight"
+	for _, tc := range []struct {
+		tier      edition.Tier
+		wantField bool
+	}{
+		{tier: edition.Free, wantField: false},
+		{tier: edition.Premium, wantField: true},
+	} {
+		t.Run(tc.tier.String(), func(t *testing.T) {
+			server := mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:  config.ToolSurfaceIndividual,
+				Tier:         tc.tier,
+				TierExplicit: true,
+			})
+			listed, err := newInMemorySession(t, server).ListTools(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("ListTools: %v", err)
+			}
+			index := slices.IndexFunc(listed.Tools, func(candidate *mcp.Tool) bool { return candidate.Name == tool })
+			if index < 0 {
+				t.Fatalf("%s is not registered on the individual surface", tool)
+			}
+			schema, _ := listed.Tools[index].InputSchema.(map[string]any)
+			properties, _ := schema["properties"].(map[string]any)
+			if _, present := properties[field]; present != tc.wantField {
+				t.Errorf("%s input schema offers %q = %t at %s, want %t", tool, field, present, tc.tier, tc.wantField)
+			}
+		})
+	}
+}
+
+// TestCreateServer_SpansNameTheSurfaceAndTheTransportApart covers the two
+// constant attributes every MCP span carries: which tool surface served the
+// call and which transport it came over. Both are short strings set side by
+// side, so the test serves the meta surface over a pipe, where neither value
+// could be mistaken for the other. A listing's span also names the protocol
+// revision the session negotiated, which the server admits by handing the
+// middleware the revisions it supports.
+func TestCreateServer_SpansNameTheSurfaceAndTheTransportApart(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previous)
+		_ = provider.Shutdown(context.Background())
+	})
+
+	server, err := createServer(t.Context(), newMockGitLabClient(t), &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta},
+		withTransport(mcpotel.TransportPipe))
+	if err != nil {
+		t.Fatalf("createServer: %v", err)
+	}
+	session := newInMemorySession(t, server)
+	if _, listErr := session.ListTools(t.Context(), nil); listErr != nil {
+		t.Fatalf("ListTools: %v", listErr)
+	}
+
+	checked, listings := 0, 0
+	for _, span := range recorder.Ended() {
+		attrs := map[attribute.Key]string{}
+		for _, kv := range span.Attributes() {
+			attrs[kv.Key] = kv.Value.String()
+		}
+		surface, ok := attrs[mcpotel.AttrToolSurface]
+		if !ok {
+			continue
+		}
+		checked++
+		if surface != config.ToolSurfaceMeta || attrs[mcpotel.AttrNetworkTransport] != mcpotel.TransportPipe {
+			t.Errorf("span %q: surface %q, transport %q; want %q over %q",
+				span.Name(), surface, attrs[mcpotel.AttrNetworkTransport], config.ToolSurfaceMeta, mcpotel.TransportPipe)
+		}
+		// The negotiated revision is recorded only when it is one this build
+		// admits, which is the list the server hands the middleware; a server
+		// that handed it none would record the revision on no span at all.
+		if strings.HasPrefix(span.Name(), "tools/list") {
+			listings++
+			if got, want := attrs[mcpotel.AttrMCPProtocolVersion], session.InitializeResult().ProtocolVersion; got != want {
+				t.Errorf("span %q: protocol version %q, want the negotiated %q", span.Name(), got, want)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no span carried the tool surface; the telemetry middleware recorded nothing")
+	}
+	if listings == 0 {
+		t.Error("no tools/list span was recorded")
+	}
+}
+
+// TestCreateServer_MetaParameterSchema_IsAppliedOnlyWhereMetaToolsAreBuilt
+// covers which surfaces set the meta-tool input-schema mode. It is process
+// state the meta dispatchers read as they register, so a meta server has to
+// set it to its own configuration first, and an individual server, which
+// registers no dispatcher, must leave whatever another server set alone.
+func TestCreateServer_MetaParameterSchema_IsAppliedOnlyWhereMetaToolsAreBuilt(t *testing.T) {
+	cases := []struct {
+		name    string
+		surface string
+		before  string
+		want    string
+	}{
+		{name: "meta sets its mode", surface: config.ToolSurfaceMeta, before: config.MetaParamSchemaOpaque, want: config.MetaParamSchemaFull},
+		{name: "individual leaves it", surface: config.ToolSurfaceIndividual, before: config.MetaParamSchemaCompact, want: config.MetaParamSchemaCompact},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(tools.SetMetaParamSchemaScoped(tc.before))
+
+			mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:     tc.surface,
+				MetaParamSchema: config.MetaParamSchemaFull,
+			})
+
+			if got := tools.MetaParamSchema(); got != tc.want {
+				t.Errorf("meta parameter schema after a %s server = %q, want %q", tc.surface, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRegister_AnExcludedResource_CannotBeSubscribedTo covers the handler index
+// registration publishes to the subscription runtime. Until it does, the
+// watchers read through an index seeded with every resource, so an operator
+// who removed pipeline.get with --exclude-tools would still find the pipeline
+// watchable, and polled on a schedule, by any client that knows the URI. The
+// served case beside it proves the backend answers that URI, so the refusal
+// is the exclusion's and not the fixture's.
+//
+// It subscribes through the credential's own manager rather than through a
+// client, as the tests in subscriptions_test.go do: on the protocol the SDK
+// negotiates a client's Subscribe never waits for the answer, so a refusal
+// would be invisible there.
+func TestRegister_AnExcludedResource_CannotBeSubscribedTo(t *testing.T) {
+	cases := []struct {
+		name        string
+		exclude     []string
+		wantRefused bool
+	}{
+		{name: "served"},
+		{name: "excluded", exclude: []string{"pipeline.get"}, wantRefused: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			backend, gitlab := newPipelineBackend(t, "running")
+			client := subscriptionGitLabClient(t, gitlab.URL)
+			shell, err := newServerShell(t.Context(), client, &config.ServerConfig{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+				GitLabURL:         gitlab.URL,
+				ExcludeTools:      tc.exclude,
+			})
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+			if regErr := shell.register(t.Context()); regErr != nil {
+				t.Fatalf("register: %v", regErr)
+			}
+			manager := shell.state.subs.manager
+			t.Cleanup(manager.Close)
+
+			subErr := manager.Subscribe(t.Context(), testSession, "gitlab://project/42/pipeline/99")
+
+			if refused := subErr != nil; refused != tc.wantRefused {
+				t.Errorf("subscribe refused = %t (%v), want %t", refused, subErr, tc.wantRefused)
+			}
+			if polled := backend.hits.Load() > 0; polled == tc.wantRefused {
+				t.Errorf("GitLab read the pipeline = %t, want %t", polled, !tc.wantRefused)
+			}
+		})
+	}
+}
+
+// TestCreateServer_TheToolManifestAdvertisesSubscriptionsOnlyWhereServed covers
+// the subscriptions block of gitlab://tools, the one resource both capability
+// surfaces serve and so the one place a client can learn the watchable set.
+// The full surface publishes the enforcement whitelist itself; the minimal
+// surface serves no subscribable resource and must not claim any.
+func TestCreateServer_TheToolManifestAdvertisesSubscriptionsOnlyWhereServed(t *testing.T) {
+	cases := []struct {
+		name    string
+		surface string
+		want    []string
+	}{
+		{name: "full", surface: config.CapabilitySurfaceFull, want: subscriptions.Templates()},
+		{name: "minimal", surface: config.CapabilitySurfaceMinimal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: tc.surface,
+			})
+			session := newInMemorySession(t, server)
+			result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+			if err != nil || len(result.Contents) == 0 {
+				t.Fatalf("read gitlab://tools: %v", err)
+			}
+			var manifest resources.ToolSurfaceManifest
+			if decodeErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); decodeErr != nil {
+				t.Fatalf("decode gitlab://tools: %v", decodeErr)
+			}
+
+			var got []string
+			if manifest.Subscriptions != nil {
+				got = manifest.Subscriptions.SubscribableURITemplates
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("subscribable templates = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCreateServer_MetaManifest_NamesOnlyRegisteredTools holds the property
+// the meta route filter in register used to be the guard for: the
+// gitlab://tools manifest of a narrowed meta server names no tool the server
+// does not register, so a model reading it is never sent to a dispatcher that
+// is not there. Read-only, an exclusion by group name and the Free tier each
+// remove dispatchers, and all three are applied to the catalog before
+// registration, which is why that filter found nothing and was removed; this
+// is what fails if a future pass removes one after registration instead.
+func TestCreateServer_MetaManifest_NamesOnlyRegisteredTools(t *testing.T) {
+	server := mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+		ToolSurface:  config.ToolSurfaceMeta,
+		Tier:         edition.Free,
+		ReadOnly:     true,
+		ExcludeTools: []string{"gitlab_issue"},
+	})
+	session := newInMemorySession(t, server)
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	registered := make(map[string]bool, len(listed.Tools))
+	for _, tool := range listed.Tools {
+		registered[tool.Name] = true
+	}
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+	if err != nil || len(result.Contents) == 0 {
+		t.Fatalf("read gitlab://tools: %v", err)
+	}
+	var manifest resources.ToolSurfaceManifest
+	if decodeErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); decodeErr != nil {
+		t.Fatalf("decode gitlab://tools: %v", decodeErr)
+	}
+
+	if registered["gitlab_issue"] || len(manifest.Entries) == 0 {
+		t.Fatalf("the fixture is not narrowed as intended: gitlab_issue registered = %t, %d entries",
+			registered["gitlab_issue"], len(manifest.Entries))
+	}
+	for _, entry := range manifest.Entries {
+		if !registered[entry.Tool] {
+			t.Errorf("manifest entry %s names tool %q, which this server does not register", entry.ID, entry.Tool)
+		}
+	}
+}
+
+// TestCreateServer_AnnouncesTheRateLimitOnlyWhenItIsOn covers the startup line
+// an operator reads to learn whether calls are limited. A rate of zero means
+// no limit, which is the stdio default, and announcing "rate limit enabled"
+// there would describe a deployment that is not running.
+func TestCreateServer_AnnouncesTheRateLimitOnlyWhenItIsOn(t *testing.T) {
+	cases := []struct {
+		name string
+		rps  float64
+		want bool
+	}{
+		{name: "no rate", rps: 0},
+		{name: "a rate", rps: 2.5, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := captureLogMessages(t)
+
+			mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:    config.ToolSurfaceDynamic,
+				RateLimitRPS:   tc.rps,
+				RateLimitBurst: 5,
+			})
+
+			if got := logged("rate limit enabled"); got != tc.want {
+				t.Errorf("rate limit announced = %t, want %t", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -2988,6 +3494,160 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	}
 }
 
+// TestRunStdio_AListingBeforeTheCatalogIsReady_WaitsForIt covers the gate on
+// the connection a stdio client speaks over. The handshake is answered at
+// once and the catalog is built behind it, so a tools/list the client sends
+// meanwhile has to wait for the catalog rather than be answered with the
+// tools registered so far, which is none. The build is held until the
+// listing has been sent, so the only way it can list tools is by waiting.
+func TestRunStdio_AListingBeforeTheCatalogIsReady_WaitsForIt(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
+	release := make(chan struct{})
+	restoreGate := stdioStartupGate
+	stdioStartupGate = func(ctx context.Context) {
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+	}
+	t.Cleanup(func() { stdioStartupGate = restoreGate })
+
+	client := pipedStdin(t)
+	responses, stopReading := stdoutLines(t)
+	done := make(chan error, 1)
+	go func() { done <- runStdio(t.Context()) }()
+
+	// sequential: one session's handshake, written in the order the protocol requires
+	for _, message := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`,
+		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`,
+	} {
+		if _, err := client.WriteString(message + "\n"); err != nil {
+			t.Fatalf("writing to the server: %v", err)
+		}
+	}
+	awaitResponse(t, responses, 1)
+	close(release)
+	listing := awaitResponse(t, responses, 2)
+
+	var result struct {
+		Result struct {
+			Tools []json.RawMessage `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(listing), &result); err != nil {
+		t.Fatalf("decode the listing %q: %v", listing, err)
+	}
+	if len(result.Result.Tools) == 0 {
+		t.Errorf("tools/list sent during startup was answered with no tools: %s", listing)
+	}
+
+	_ = client.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("runStdio() = %v, want a clean stop when the client closes its pipe", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("runStdio did not return after the client closed its pipe")
+	}
+	stopReading()
+}
+
+// stdoutLines points os.Stdout at a pipe and delivers each line written to it,
+// until the returned function restores os.Stdout and ends the reading.
+func stdoutLines(t *testing.T) (lines <-chan string, stop func()) {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	delivered := make(chan string, 64)
+	go func() {
+		defer close(delivered)
+		scanner := bufio.NewScanner(reader)
+		scanner.Buffer(make([]byte, 0, 64*1024), 16<<20)
+		for scanner.Scan() {
+			delivered <- scanner.Text()
+		}
+	}()
+	original := os.Stdout
+	os.Stdout = writer
+	var once sync.Once
+	stop = func() {
+		once.Do(func() {
+			os.Stdout = original
+			// Closing the write end is what ends the reading, which then
+			// closes the channel this drains.
+			_ = writer.Close()
+			for range delivered {
+				// Discard what was still buffered: the reading goroutine
+				// can only finish, and close the channel, once it is taken.
+			}
+			_ = reader.Close()
+		})
+	}
+	t.Cleanup(stop)
+	return delivered, stop
+}
+
+// awaitResponse returns the first JSON-RPC response carrying id, skipping
+// anything else the server writes in between.
+func awaitResponse(t *testing.T, lines <-chan string, id int) string {
+	t.Helper()
+	timeout := time.After(testHTTPLivenessTimeout)
+	for {
+		select {
+		case line := <-lines:
+			var envelope struct {
+				ID json.RawMessage `json:"id"`
+			}
+			if json.Unmarshal([]byte(line), &envelope) == nil && string(envelope.ID) == strconv.Itoa(id) {
+				return line
+			}
+		case <-timeout:
+			t.Fatalf("no response with id %d arrived", id)
+		}
+	}
+}
+
+// TestRunStdio_ASignalDuringStartup_IsAStopRatherThanAFailure covers the one
+// outcome of the startup work that is deliberately not reported. A signal
+// cancels the startup work along with serving, and the error that produces
+// describes the shutdown rather than anything wrong with the build: a stop the
+// operator asked for has to leave with a clean status, not as a failed unit.
+// The startup is held until the signal and then fails, so the only thing
+// separating the two answers is whether the signal is what ended serving.
+func TestRunStdio_ASignalDuringStartup_IsAStopRatherThanAFailure(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
+	failDynamicCatalog(t, nil)
+	heldOpenStdin(t)
+	restoreGate := stdioStartupGate
+	stdioStartupGate = func(ctx context.Context) { <-ctx.Done() }
+	t.Cleanup(func() { stdioStartupGate = restoreGate })
+
+	ctx, sendSignal := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runStdio(ctx) }()
+	sendSignal()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("runStdio() = %v, want nil: the startup failed because the signal cancelled it", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("runStdio did not return after the signal")
+	}
+}
+
 // TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted covers the same
 // failure on the wire: the request that triggered the build is answered with
 // the retry-able refusal rather than an empty catalog, and the next request
@@ -3255,11 +3915,33 @@ func TestBuildServerCard_InMemoryFailures_AreWrapped(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.arrange(t)
-			_, err := buildServerCard(t.Context(), cfg)
+			err := buildServerCardWithin(t, cfg, testHTTPLivenessTimeout)
 			if !errors.Is(err, forced) || !strings.Contains(err.Error(), tc.name) {
 				t.Errorf("buildServerCard() = %v, want the %s failure named", err, tc.name)
 			}
 		})
+	}
+}
+
+// buildServerCardWithin runs buildServerCard and fails the test if it has not
+// returned within bound. A builder that carried on past a failed server
+// connect would hand its client an in-memory pipe nobody reads, and a write
+// to that pipe waits forever whatever its context says; unbounded, the test
+// would sit there until the package timeout and report that instead of the
+// step that was not stopped at.
+func buildServerCardWithin(t *testing.T, cfg *config.Config, bound time.Duration) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := buildServerCard(t.Context(), cfg)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(bound):
+		t.Fatalf("buildServerCard did not return within %s", bound)
+		return nil
 	}
 }
 
@@ -3309,6 +3991,56 @@ func TestTransportFailureBudget_ExistsOnlyWithATrustedHeader(t *testing.T) {
 	})
 	if budget == nil || budget.rateLimiter() == nil {
 		t.Fatal("transportFailureBudget(header) = nil, want a budget with a limiter behind it")
+	}
+}
+
+// TestTransportFailureBudget_BlocksForItsOwnWindow covers the window the
+// secondary budget's limiter is built with. The fast budget may be switched
+// off with a zero window, and this one must not inherit that zero: a limiter
+// whose window is zero forgets each failure the instant it is recorded, so it
+// would never block the header rotation it exists to catch. A positive window
+// is the operator's and is used as given.
+func TestTransportFailureBudget_BlocksForItsOwnWindow(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		window     time.Duration
+		wantAtMost time.Duration
+		wantAbove  time.Duration
+	}{
+		{name: "a zero window takes the default", window: 0, wantAtMost: config.DefaultAuthFailureWindow, wantAbove: config.DefaultAuthFailureWindow - time.Minute/2},
+		{name: "a negative window takes the default", window: -time.Second, wantAtMost: config.DefaultAuthFailureWindow, wantAbove: config.DefaultAuthFailureWindow - time.Minute/2},
+		{name: "a configured window is kept", window: 3 * time.Minute, wantAtMost: 3 * time.Minute, wantAbove: 2 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			budget := transportFailureBudget(&config.Config{TrustedProxyHeader: "X-Forwarded-For", AuthFailureWindow: tc.window})
+			limiter := budget.rateLimiter()
+			for range transportFailureLimit {
+				limiter.RecordFailure("203.0.113.9")
+			}
+
+			blocked, remaining := limiter.BlockedFor("203.0.113.9")
+
+			if !blocked || remaining > tc.wantAtMost || remaining <= tc.wantAbove {
+				t.Errorf("BlockedFor = %t, %s; want blocked for more than %s and at most %s", blocked, remaining, tc.wantAbove, tc.wantAtMost)
+			}
+		})
+	}
+}
+
+// TestLoggedHeaderPrefix_KeepsAValueUpToTheBoundWhole covers the bound on a
+// caller-supplied header written to the log before anybody is authenticated:
+// a value of exactly the bound is logged as it is, and one byte more is cut
+// to the bound and marked as cut.
+func TestLoggedHeaderPrefix_KeepsAValueUpToTheBoundWhole(t *testing.T) {
+	t.Parallel()
+	atBound := strings.Repeat("a", loggedHeaderPrefixBytes)
+	if got := loggedHeaderPrefix(atBound); got != atBound {
+		t.Errorf("a %d-byte value logged as %q, want it whole", loggedHeaderPrefixBytes, got)
+	}
+	if got := loggedHeaderPrefix(atBound + "b"); got != atBound+"..." {
+		t.Errorf("a %d-byte value logged as %q, want the first %d bytes and ...", loggedHeaderPrefixBytes+1, got, loggedHeaderPrefixBytes)
 	}
 }
 
@@ -3364,6 +4096,123 @@ func TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds(t *testing.T) {
 	t.Error("cleanup kept running after its context ended")
 }
 
+// TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild covers which tables
+// of recorded failures get a sweep. A table a caller never comes back to is
+// never read again, so without its sweep it keeps every entry for good; a
+// budget the operator turned off builds no table and must start no loop,
+// since a loop over nothing is a goroutine for the life of the process. The
+// oauth mode sweeps its token cache and its rejected-token cache whatever the
+// budgets are, and says once at startup when it admits only pinned
+// applications.
+func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		oauth     bool
+		budgets   bool
+		pinned    bool
+		wantLoops int
+	}{
+		{name: "legacy with every budget off"},
+		{name: "legacy with every budget on", budgets: true, wantLoops: 3},
+		{name: "oauth with every budget off", oauth: true, wantLoops: 2},
+		{name: "oauth with every budget on and applications pinned", oauth: true, budgets: true, pinned: true, wantLoops: 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := sweepTestConfig(tc.oauth, tc.budgets, tc.pinned)
+			logged := captureLogMessages(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			self := currentGoroutineID()
+			pool := newGateTestPool(t, okFactory, cfg.GitLabURL)
+			binding := poolBinding{credentials: &credentialStates{}, sessions: newSessionOwners(false)}
+
+			if tc.oauth {
+				registerOAuthMCPHandlers(ctx, cfg, "", pool, binding, http.NewServeMux())
+			} else {
+				registerLegacyMCPHandlers(ctx, cfg, pool, binding, http.NewServeMux())
+			}
+			loops := cleanupLoopsStartedBy(self)
+			cancel()
+
+			if loops != tc.wantLoops {
+				t.Errorf("sweep loops started = %d, want %d", loops, tc.wantLoops)
+			}
+			if noted := logged("admitting only tokens issued to the pinned OAuth applications"); noted != tc.pinned {
+				t.Errorf("pinned-applications note logged = %t, want %t", noted, tc.pinned)
+			}
+			waitForCleanupLoopsToEnd(t, self)
+		})
+	}
+}
+
+// sweepTestConfig is the deployment the sweep test registers handlers for:
+// legacy or oauth, with every authentication budget off or on, and with or
+// without pinned OAuth applications.
+func sweepTestConfig(oauthMode, budgets, pinned bool) *config.Config {
+	cfg := &config.Config{
+		GitLabURL:     "https://gitlab.example.com",
+		Tier:          edition.Free,
+		TierExplicit:  true,
+		IgnoreScopes:  true,
+		Stateless:     true,
+		AuthMode:      config.AuthModeLegacy,
+		PublicURL:     "https://mcp.example.com",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
+	}
+	if oauthMode {
+		cfg.AuthMode = config.AuthModeOAuth
+	}
+	if budgets {
+		cfg.AuthFailureLimit, cfg.AuthFailureWindow = 10, time.Minute
+		cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow = 50, 10*time.Minute
+		cfg.TrustedProxyHeader, cfg.TrustedProxies = "X-Forwarded-For", []string{"127.0.0.1"}
+	}
+	if pinned {
+		cfg.OAuthClientUIDs = []string{"pinned-application-uid"}
+	}
+	return cfg
+}
+
+// waitForCleanupLoopsToEnd fails the test unless every sweep loop the given
+// goroutine started ends once its context has.
+func waitForCleanupLoopsToEnd(t *testing.T, goroutineID string) {
+	t.Helper()
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for cleanupLoopsStartedBy(goroutineID) > 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("a sweep loop outlived its context")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// currentGoroutineID returns the id the runtime prints for the calling
+// goroutine, which is how a stack dump names the goroutine that started
+// another.
+func currentGoroutineID() string {
+	buf := make([]byte, 64)
+	fields := strings.Fields(string(buf[:runtime.Stack(buf, false)]))
+	return fields[1]
+}
+
+// cleanupLoopsStartedBy counts the sweep loops startPeriodicCleanup started
+// from the given goroutine that are still running. Naming the starting
+// goroutine keeps loops another test left behind out of the count. The
+// package is matched by the function's name alone, since a test binary names
+// this package by its import path rather than as main.
+func cleanupLoopsStartedBy(goroutineID string) int {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	return strings.Count(string(buf), ".startPeriodicCleanup in goroutine "+goroutineID+"\n")
+}
+
 // TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate covers
 // the stdio startup work against a reachable GitLab, which the main-level test
 // cannot see because its client closes the pipe before the first request
@@ -3413,6 +4262,182 @@ func TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate(t *tes
 			assertStartupIdentity(t, identity.resolved.Load(), tc.wantIdentity)
 		})
 	}
+}
+
+// TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance covers
+// the other side of the tier decision: a tier the operator pinned is used
+// verbatim and the instance's license is never read, even on an instance that
+// answers every request. The license names a third tier, so the detected case
+// beside it proves the fixture's license is the one detection reads and the
+// pinned case is not passing for want of one. The tier is held in the client
+// as well as in the server configuration, since the handlers that choose an
+// Enterprise document at call time read the client's copy.
+//
+// The version endpoint reports an enterprise instance, as a real Enterprise
+// Edition does, because the connectivity check that reads it sets the
+// client's tier from that flag to Premium. Without it the client would hold
+// the pinned tier from its construction alone, and the fixture could not tell
+// a startup that restores the pin after that check from one that leaves the
+// flag's Premium in place.
+func TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance(t *testing.T) {
+	cases := []struct {
+		name       string
+		pinned     bool
+		want       edition.Tier
+		wantAsking bool
+	}{
+		{name: "pinned", pinned: true, want: edition.Ultimate},
+		{name: "detected", want: edition.Premium, wantAsking: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var licenseReads atomic.Int64
+			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v4/version":
+					testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0-ee","revision":"abc","enterprise":true}`)
+				case "/api/v4/user":
+					testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+				case "/api/v4/license":
+					licenseReads.Add(1)
+					testutil.RespondJSON(w, http.StatusOK, `{"plan":"premium"}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(gitlab.Close)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				Tier:           edition.Ultimate,
+				TierExplicit:   tc.pinned,
+				IgnoreScopes:   true,
+				DisableRetries: true,
+			}
+			client, err := gitlabclient.NewClient(cfg)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			serverCfg := cfg.ServerConfig()
+			shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			if serverCfg.Tier != tc.want {
+				t.Errorf("tier = %s, want %s", serverCfg.Tier, tc.want)
+			}
+			// The client carries the tier too, and it is the copy the
+			// handlers that pick an Enterprise document at call time read.
+			if got := client.Tier(); got != tc.want {
+				t.Errorf("client tier = %s, want %s", got, tc.want)
+			}
+			if asked := licenseReads.Load() > 0; asked != tc.wantAsking {
+				t.Errorf("license read = %t, want %t", asked, tc.wantAsking)
+			}
+		})
+	}
+}
+
+// TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot covers the
+// scope step of stdio startup. A token GitLab reports as read_api is served the
+// read-only catalog (ADR-0018); a token whose scopes cannot be read is served
+// everything and the operator is told why at debug level; and a deployment
+// that ignores scopes does not ask at all.
+func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.T) {
+	cases := []struct {
+		name         string
+		ignore       bool
+		answers      bool
+		wantScopes   []string
+		wantReadOnly bool
+		wantAsked    bool
+		wantNote     bool
+	}{
+		{name: "a read_api token", answers: true, wantScopes: []string{"read_api"}, wantReadOnly: true, wantAsked: true},
+		{name: "scopes that cannot be read", wantAsked: true, wantNote: true},
+		{name: "scopes ignored", ignore: true, answers: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var scopeReads atomic.Int64
+			gitlab := scopeReportingGitLab(t, tc.answers, &scopeReads)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				TierExplicit:   true,
+				IgnoreScopes:   tc.ignore,
+				DisableRetries: true,
+			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
+			logged := captureLogMessages(t)
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			if !slices.Equal(serverCfg.TokenScopes, tc.wantScopes) {
+				t.Errorf("token scopes = %v, want %v", serverCfg.TokenScopes, tc.wantScopes)
+			}
+			if serverCfg.ReadOnly != tc.wantReadOnly {
+				t.Errorf("read-only = %t, want %t", serverCfg.ReadOnly, tc.wantReadOnly)
+			}
+			if asked := scopeReads.Load() > 0; asked != tc.wantAsked {
+				t.Errorf("scopes asked = %t, want %t", asked, tc.wantAsked)
+			}
+			if noted := logged("PAT scope detection unavailable"); noted != tc.wantNote {
+				t.Errorf("unavailable-scopes note logged = %t, want %t", noted, tc.wantNote)
+			}
+		})
+	}
+}
+
+// scopeReportingGitLab answers what stdio startup asks, counting each read of
+// the token's own scopes into reads. When answers is false the scope lookup is
+// answered 404, which is what an instance that cannot report them sends.
+func scopeReportingGitLab(t *testing.T, answers bool, reads *atomic.Int64) *httptest.Server {
+	t.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+		case r.URL.Path == "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		case r.URL.Path == "/api/v4/personal_access_tokens/self" && answers:
+			reads.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"reader","scopes":["read_api"]}`)
+		case r.URL.Path == "/api/v4/personal_access_tokens/self":
+			reads.Add(1)
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	return gitlab
+}
+
+// newStdioStartupShell builds what prepareStdioCatalog is handed on the stdio
+// path: the client for cfg, the server configuration taken from it, and the
+// server shell over both.
+func newStdioStartupShell(t *testing.T, cfg *config.Config) (*gitlabclient.Client, *config.ServerConfig, *serverShell) {
+	t.Helper()
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	serverCfg := cfg.ServerConfig()
+	shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	return client, serverCfg, shell
 }
 
 // stdioStartupGitLab answers the two requests stdio startup makes, with the
@@ -3487,9 +4512,9 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 // mark on the hook every startup goes through.
 //
 // Registration speaks MCP to the server it is building: it counts the
-// registered tools, applies the exclusion and visibility passes, filters the
-// meta routes and builds the gitlab://tools manifest, each over an in-memory
-// session that travels the same receiving middlewares a client's requests do.
+// registered tools, applies the exclusion and visibility passes and builds the
+// gitlab://tools manifest, each over an in-memory session that travels the
+// same receiving middlewares a client's requests do.
 // Once tools/list is metered, those listings are charged to the deployment's
 // own bucket unless connectInspectionServer marks them, and on the tightest
 // configuration an operator can pass the second one is refused: the manifest
@@ -3519,7 +4544,6 @@ func TestCreateServer_StartupInspectionIsNotChargedToTheCatalogBucket(t *testing
 	for _, message := range []string{
 		"failed to build tool manifest resource",
 		"failed to count registered tools",
-		"failed to filter meta-schema routes to visible tools",
 	} {
 		t.Run(message, func(t *testing.T) {
 			if logged(message) {
@@ -3567,16 +4591,17 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_IndividualPrebuilt_ReportsExcl
 // TestDoToolSearch_NoMatches_SaysSo covers the search answering nothing: a
 // script grepping the output has to be able to tell "no tool matches" from an
 // empty listing, so the answer is a sentence naming the query rather than
-// silence.
+// silence. It names the tier and the surface searched too, each in its place,
+// so an empty answer can be told apart from a search of the wrong catalog.
 func TestDoToolSearch_NoMatches_SaysSo(t *testing.T) {
 	stdout := captureStdout(t)
 
-	if err := doToolSearch("zzzz-nothing-is-called-this", config.ToolSurfaceDynamic, edition.Free); err != nil {
+	if err := doToolSearch("zzzz-nothing-is-called-this", config.ToolSurfaceMeta, edition.Premium); err != nil {
 		t.Fatalf("doToolSearch: %v", err)
 	}
 
-	if out := stdout(); !strings.Contains(out, `No actions found matching "zzzz-nothing-is-called-this"`) {
-		t.Errorf("stdout = %q, want the no-match sentence naming the query", out)
+	if out, want := stdout(), "No actions found matching \"zzzz-nothing-is-called-this\" (tier premium, meta surface)\n"; out != want {
+		t.Errorf("stdout = %q, want %q", out, want)
 	}
 }
 
@@ -4237,6 +5262,11 @@ func TestResolveHTTPTier(t *testing.T) {
 		{name: "premium", tier: "premium", tierSet: true, wantTier: edition.Premium, wantExplicit: true},
 		{name: "ultimate", tier: "ultimate", tierSet: true, wantTier: edition.Ultimate, wantExplicit: true},
 		{name: "invalid", tier: "platinum", tierSet: true, wantErr: true},
+		// Each half of the guard decides alone: a value nobody marked as passed
+		// pins nothing, and a flag passed blank asks for detection rather than
+		// for a tier named by an empty string.
+		{name: "a tier never marked as set is detected", tier: "premium", tierSet: false, wantTier: edition.Free, wantExplicit: false},
+		{name: "a tier set blank is detected", tier: "  ", tierSet: true, wantTier: edition.Free, wantExplicit: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4274,10 +5304,12 @@ func TestDoToolSearch_AnswersTheSameOnEverySurface(t *testing.T) {
 		name        string
 		toolSurface string
 		wantCall    string
+		// wantTool is what the row's TOOL column carries for issue.list.
+		wantTool string
 	}{
-		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, wantCall: "gitlab_execute_action"},
-		{name: "meta", toolSurface: config.ToolSurfaceMeta, wantCall: "gitlab_issue action=list"},
-		{name: "individual", toolSurface: config.ToolSurfaceIndividual, wantCall: "gitlab_issue_list"},
+		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, wantCall: "gitlab_execute_action", wantTool: "gitlab_issue_list"},
+		{name: "meta", toolSurface: config.ToolSurfaceMeta, wantCall: "gitlab_issue action=list", wantTool: "gitlab_issue action=list"},
+		{name: "individual", toolSurface: config.ToolSurfaceIndividual, wantCall: "gitlab_issue_list", wantTool: "gitlab_issue_list"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4293,7 +5325,33 @@ func TestDoToolSearch_AnswersTheSameOnEverySurface(t *testing.T) {
 			if !strings.Contains(out, tt.wantCall) {
 				t.Errorf("stdout = %q, want it to name %q, which is how this surface calls that action", out, tt.wantCall)
 			}
+			// The header names the tier and the surface each in its place, and
+			// each row carries the action ID first and the call form after it.
+			if want := fmt.Sprintf(`matching "issue list" (tier free, %s surface):`, tt.toolSurface); !strings.Contains(out, want) {
+				t.Errorf("stdout = %q, want the header to carry %q", out, want)
+			}
+			if want := fmt.Sprintf("\n%-42s %s", "issue.list", tt.wantTool); !strings.Contains(out, want) {
+				t.Errorf("stdout = %q, want a row %q", out, want)
+			}
 		})
+	}
+}
+
+// TestDoToolSearch_TheServerSelfDiagnostics_AreFoundLikeAnyOtherAction covers
+// the one group the search catalog has to ask for: the server's own
+// self-diagnostics are not a domain's specs, so the catalog carries them only
+// when it is built with the maintenance group, and every surface serves them.
+// A search that could not find the action a person reaches for when a token
+// stops working would be the search failing exactly when it is needed.
+func TestDoToolSearch_TheServerSelfDiagnostics_AreFoundLikeAnyOtherAction(t *testing.T) {
+	stdout := captureStdout(t)
+
+	if searchErr := doToolSearch("server status", config.ToolSurfaceMeta, edition.Free); searchErr != nil {
+		t.Fatalf("doToolSearch() error: %v", searchErr)
+	}
+	out := stdout()
+	if want := fmt.Sprintf("\n%-42s %s", "server.status", "gitlab_server action=status"); !strings.Contains(out, want) {
+		t.Errorf("stdout = %q, want a row %q", out, want)
 	}
 }
 
@@ -4462,11 +5520,13 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list", Description: "List issues in a project."},
 		},
 		{
+			// A verb-first individual name, the legacy form, so that the meta
+			// group tool's name is found through the group tool alone.
 			ID:             "project.get",
 			ToolName:       "gitlab_project",
 			Domain:         "project",
 			Name:           "get",
-			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_get", Description: "Get one project."},
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_get_project", Description: "Get one project."},
 		},
 	}
 
@@ -4481,6 +5541,8 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 		{name: "an alias", terms: []string{"issues.search"}, want: []string{"issue.list"}},
 		{name: "a tag", terms: []string{"triage"}, want: []string{"issue.list"}},
 		{name: "words from the description", terms: []string{"list", "project"}, want: []string{"issue.list"}},
+		{name: "the domain alone, through the ID", terms: []string{"issue"}, want: []string{"issue.list"}},
+		{name: "the action name alone, through the ID", terms: []string{"get"}, want: []string{"project.get"}},
 		{name: "every term must match", terms: []string{"issue", "nothing-matches-this"}, want: nil},
 		{name: "a term matching both", terms: []string{"gitlab_"}, want: []string{"issue.list", "project.get"}},
 	}
@@ -4495,6 +5557,59 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 				t.Errorf("matchCatalogActions(%v) = %v, want %v", tt.terms, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestBuildToolSearchCatalog_EveryIDJoinsItsDomainAndName holds the premise
+// the search text rests on: the domain and the action name are searched only
+// through the canonical ID, which is right only while every action the search
+// reads carries an ID made of exactly those two halves. The catalog enforces
+// that as it is built, and this reads the catalog a search actually builds, at
+// the tier that carries the most actions, so a builder that stops enforcing it
+// fails here rather than in a search that quietly stops finding a domain.
+func TestBuildToolSearchCatalog_EveryIDJoinsItsDomainAndName(t *testing.T) {
+	catalog, err := buildToolSearchCatalog(edition.Ultimate)
+	if err != nil {
+		t.Fatalf("buildToolSearchCatalog: %v", err)
+	}
+	actions := catalog.Actions()
+	if len(actions) == 0 {
+		t.Fatal("the search catalog carries no actions")
+	}
+	for _, action := range actions {
+		if want := actioncatalog.ActionID(action.Domain + "." + action.Name); action.ID != want {
+			t.Errorf("action ID %q, want %q from its domain %q and name %q", action.ID, want, action.Domain, action.Name)
+		}
+	}
+}
+
+// TestMatchCatalogActions_EachColumnCarriesItsOwnValue covers the row a match
+// becomes rather than which actions match: the canonical ID, the way the
+// surface names the call, and the summary each sit in their own column. The
+// printed table carries all three on one line, so a test reading the output
+// for a substring cannot tell a call form printed under DESCRIPTION from one
+// printed under TOOL.
+func TestMatchCatalogActions_EachColumnCarriesItsOwnValue(t *testing.T) {
+	action := actioncatalog.Action{
+		ID:             "issue.list",
+		ToolName:       "gitlab_issue",
+		Domain:         "issue",
+		Name:           "list",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list", Description: "List issues in a project."},
+	}
+
+	matches := matchCatalogActions([]actioncatalog.Action{action}, []string{"issue"}, config.ToolSurfaceMeta)
+
+	if len(matches) != 1 {
+		t.Fatalf("matchCatalogActions() = %v, want the one action", matches)
+	}
+	want := toolSearchMatch{
+		action:      "issue.list",
+		tool:        "gitlab_issue action=list",
+		description: "List issues in a project.",
+	}
+	if matches[0] != want {
+		t.Errorf("match = %+v, want %+v", matches[0], want)
 	}
 }
 
@@ -5176,6 +6291,355 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 	}
 }
 
+// newMockGitLabServerWithUsers is newMockGitLabServerWithUser for more than
+// one credential: each token in ids is a user of its own, and any other token
+// is refused the way GitLab refuses it.
+func newMockGitLabServerWithUsers(t *testing.T, ids map[string]int) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set(hdrContentType, mimeJSON)
+			_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "test"})
+		case "/api/v4/user":
+			token := r.Header.Get("PRIVATE-TOKEN")
+			if token == "" {
+				token, _ = strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			}
+			id, ok := ids[token]
+			if !ok {
+				http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set(hdrContentType, mimeJSON)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":       id,
+				"username": fmt.Sprintf("user%d", id),
+				"name":     fmt.Sprintf("User %d", id),
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// stopOAuthServer cancels an oauthAddr server and waits for it to return,
+// for a test that registers it with defer so a failed assertion still stops
+// the listener.
+func stopOAuthServer(t *testing.T, cancel context.CancelFunc, errCh <-chan error) {
+	t.Helper()
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Errorf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Error("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_OAuthMode_APoolRefusal_ChallengesLikeTheGuard covers the
+// challenge the gate behind the bearer guard answers with, which is a second
+// copy built from the same two values. The guard admits the token on the
+// instance's first answer and the pool's own probe is refused on the second,
+// which is the one path the gate's 401 is reached by; it has to recommend the
+// same scope and point at the same metadata document as the guard does.
+func TestServeHTTP_OAuthMode_APoolRefusal_ChallengesLikeTheGuard(t *testing.T) {
+	var userLookups atomic.Int64
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+		case "/api/v4/user":
+			if userLookups.Add(1) == 1 {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+				return
+			}
+			testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	cfg := &config.Config{
+		GitLabURL:      gitlab.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		AuthMode:       "oauth",
+		PublicURL:      "http://localhost:8080",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	addr, errCh := oauthAddr(t, ctx, cfg)
+	defer stopOAuthServer(t, cancel, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	respBody := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d (%s), want 401 from the pool's refusal", resp.StatusCode, respBody)
+	}
+	challenge := resp.Header.Get("WWW-Authenticate")
+	for _, want := range []string{
+		`scope="` + oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode) + `"`,
+		`resource_metadata="` + oauth.MetadataURLFor(cfg.PublicURL) + `"`,
+		`error="invalid_token"`,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(challenge, want) {
+				t.Errorf("WWW-Authenticate = %q, want it to carry %s", challenge, want)
+			}
+		})
+	}
+}
+
+// TestServeHTTP_OAuthMode_AReadAPIToken_IsAdmittedByAWritingDeployment covers
+// the scope the door demands (ADR-0018): the minimum every action needs, not
+// the scope a writing deployment recommends. A read_api token is admitted and
+// served a read-only surface; demanding api at the door would refuse it at
+// initialize, before the per-action gating that exists for it could apply.
+func TestServeHTTP_OAuthMode_AReadAPIToken_IsAdmittedByAWritingDeployment(t *testing.T) {
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+		case "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		case "/api/v4/personal_access_tokens/self":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"reader","scopes":["read_api"],"active":true}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	cfg := &config.Config{
+		GitLabURL:      gitlab.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		AuthMode:       "oauth",
+		PublicURL:      "http://localhost:8080",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+	if oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode) == oauth.MinimumScope {
+		t.Fatal("the deployment recommends the minimum scope, so this case cannot tell the door's demand from the recommendation")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	addr, errCh := oauthAddr(t, ctx, cfg)
+	defer stopOAuthServer(t, cancel, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if respBody := readAndCloseBody(t, resp); resp.StatusCode != http.StatusOK {
+		t.Errorf("initialize with a read_api token = %d (%s, %s), want 200", resp.StatusCode, resp.Header.Get("WWW-Authenticate"), respBody)
+	}
+}
+
+// TestServeHTTP_OAuthMode_TheChallengeAndTheMetadataNameEachLinkInItsPlace
+// covers what an oauth deployment tells a client that has not authorized
+// yet: the 401 challenge, and the RFC 9728 document the challenge points at.
+// The challenge recommends the scope the whole surface needs rather than the
+// minimum the door admits, and points at the metadata document rather than at
+// the documentation page; the document publishes each page the operator named
+// under its own field. Every value differs from the others, so one read from
+// the wrong place is a mismatch.
+func TestServeHTTP_OAuthMode_TheChallengeAndTheMetadataNameEachLinkInItsPlace(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:             mockGL.URL,
+		MaxHTTPClients:        config.DefaultMaxHTTPClients,
+		SessionTimeout:        config.DefaultSessionTimeout,
+		ToolSurface:           config.ToolSurfaceDynamic,
+		AuthMode:              "oauth",
+		PublicURL:             "http://localhost:8080",
+		OAuthCacheTTL:         config.DefaultOAuthCacheTTL,
+		ResourceDocumentation: "https://docs.example.com/oauth-application",
+		ResourcePolicyURI:     "https://example.com/data-policy",
+		ResourceTermsURI:      "https://example.com/terms-of-service",
+	}
+	advertised := oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)
+	if advertised == oauth.MinimumScope {
+		t.Fatalf("a writing deployment advertises %q, the scope the door demands; the case needs the two apart", advertised)
+	}
+	metadataURL := oauth.MetadataURLFor(cfg.PublicURL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	addr, errCh := oauthAddr(t, ctx, cfg)
+	defer stopOAuthServer(t, cancel, errCh)
+
+	t.Run("the challenge", func(t *testing.T) {
+		body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		respBody := readAndCloseBody(t, resp)
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d (%s), want 401", resp.StatusCode, respBody)
+		}
+		challenge := resp.Header.Get("WWW-Authenticate")
+		for _, want := range []string{`scope="` + advertised + `"`, `resource_metadata="` + metadataURL + `"`} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(challenge, want) {
+					t.Errorf("WWW-Authenticate = %q, want it to carry %s", challenge, want)
+				}
+			})
+		}
+	})
+
+	t.Run("the metadata document", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			"http://"+addr+strings.TrimPrefix(metadataURL, cfg.PublicURL), nil)
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("metadata request failed: %v", err)
+		}
+		payload := readAndCloseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d (%s), want 200", resp.StatusCode, payload)
+		}
+		var meta map[string]any
+		if decodeErr := json.Unmarshal([]byte(payload), &meta); decodeErr != nil {
+			t.Fatalf("decode metadata: %v", decodeErr)
+		}
+		for field, want := range map[string]string{
+			"resource_documentation": cfg.ResourceDocumentation,
+			"resource_policy_uri":    cfg.ResourcePolicyURI,
+			"resource_tos_uri":       cfg.ResourceTermsURI,
+		} {
+			t.Run(field, func(t *testing.T) {
+				if got := meta[field]; got != want {
+					t.Errorf("%s = %v, want %q", field, got, want)
+				}
+			})
+		}
+	})
+}
+
+// TestServeHTTP_OAuthMode_Stateful_TheSessionAnswersOnlyTheBearerThatOpenedIt
+// covers a stateful oauth deployment past the door, where the gate stands
+// behind the bearer guard.
+//
+// The guard verifies the Bearer credential, so the gate must serve the
+// request as that credential even when a PRIVATE-TOKEN header rides along:
+// reading that header instead would build a pool entry for a token nobody
+// verified. And a GET or DELETE naming a session is a live operation on it,
+// reading its stream or ending it, so on a stateful deployment the gate holds
+// both to the credential that opened the session, as it holds a POST. A
+// second user, verified in its own right, is therefore refused the session,
+// and the owner keeps it.
+func TestServeHTTP_OAuthMode_Stateful_TheSessionAnswersOnlyTheBearerThatOpenedIt(t *testing.T) {
+	const owner, stranger = "owner-oauth-token", "stranger-oauth-token"
+	mockGL := newMockGitLabServerWithUsers(t, map[string]int{owner: 42, stranger: 43})
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		AuthMode:       "oauth",
+		PublicURL:      "http://localhost:8080",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		Stateless:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	addr, errCh := oauthAddr(t, ctx, cfg)
+	defer stopOAuthServer(t, cancel, errCh)
+
+	send := func(t *testing.T, method, token, sessionID, body string, extra http.Header) *http.Response {
+		t.Helper()
+		reqCtx, stop := context.WithTimeout(t.Context(), testHTTPLivenessTimeout)
+		t.Cleanup(stop)
+		var reader io.Reader = http.NoBody
+		if body != "" {
+			reader = strings.NewReader(body)
+		}
+		req, err := http.NewRequestWithContext(reqCtx, method, "http://"+addr, reader)
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		req.Header.Set("Authorization", "Bearer "+token)
+		if sessionID != "" {
+			req.Header.Set(hdrMCPSessionID, sessionID)
+			req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+		}
+		for key, values := range extra {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
+		}
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s as %s: %v", method, token, err)
+		}
+		return resp
+	}
+
+	initResp := send(t, http.MethodPost, owner, "",
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`,
+		http.Header{"Private-Token": {"a-token-nobody-verified"}})
+	initBody := readAndCloseBody(t, initResp)
+	sessionID := initResp.Header.Get(hdrMCPSessionID)
+	if initResp.StatusCode != http.StatusOK || sessionID == "" {
+		t.Fatalf("initialize as the verified bearer, an unverified PRIVATE-TOKEN beside it: status = %d, session = %q (%s); want 200 and a session",
+			initResp.StatusCode, sessionID, initBody)
+	}
+	defer func() {
+		closeResp := send(t, http.MethodDelete, owner, sessionID, "", nil)
+		_, _ = io.Copy(io.Discard, closeResp.Body)
+		_ = closeResp.Body.Close()
+	}()
+	initializedResp := send(t, http.MethodPost, owner, sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`, nil)
+	_, _ = io.Copy(io.Discard, initializedResp.Body)
+	_ = initializedResp.Body.Close()
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run("a "+method+" by another user", func(t *testing.T) {
+			resp := send(t, method, stranger, sessionID, "", nil)
+			// Closed unread: a stream opened by mistake would never end.
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Errorf("status = %d, want 404: the session belongs to another credential", resp.StatusCode)
+			}
+		})
+	}
+
+	resp := send(t, http.MethodPost, owner, sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`, nil)
+	body := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "gitlab_find_action") {
+		t.Errorf("tools/list by the owner afterwards: status = %d, body = %q; want 200 and the catalog", resp.StatusCode, body)
+	}
+}
+
 // TestServeHTTP_LegacyMode_NoMetadataEndpoint verifies that legacy mode
 // does NOT serve the /.well-known/oauth-protected-resource endpoint.
 func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
@@ -5186,7 +6650,7 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 		SessionTimeout: config.DefaultSessionTimeout,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
-		// to build the full individual catalog — which, under the race
+		// to build the full individual catalog, which, under the race
 		// detector, costs longer than any sane client timeout.
 		ToolSurface: config.ToolSurfaceDynamic,
 	}
@@ -5205,7 +6669,7 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Legacy mode has no metadata endpoint — the catch-all handler will respond
+	// Legacy mode has no metadata endpoint, so the catch-all handler will respond
 	// but not with a valid OAuth metadata JSON.
 	if resp.StatusCode == http.StatusOK {
 		var meta map[string]any
@@ -5227,10 +6691,30 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 	}
 }
 
+// refusalBound is how long a test expecting runHTTP to refuse its
+// configuration lets it run. A refusal returns before anything listens, so
+// the bound is never reached on a correct tree; it exists for the tree where
+// the refusal is gone.
+const refusalBound = 5 * time.Second
+
+// runHTTPExpectingRefusal runs runHTTP under a context that ends on its own,
+// for a test asserting that a configuration is refused. With an unbounded
+// context, a configuration accepted by mistake is served until the test
+// binary's own deadline, so the test reports a timeout of the whole package
+// rather than the acceptance it exists to catch, and every test after it goes
+// unrun. Bounded, the same acceptance ends the serve and returns nil, which the
+// caller's own `err == nil` check reports by name.
+func runHTTPExpectingRefusal(t *testing.T, hcfg *httpConfig) error {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), refusalBound)
+	defer cancel()
+	return runHTTP(ctx, hcfg)
+}
+
 // TestRunHTTP_InvalidAuthMode verifies that runHTTP rejects an unsupported
 // auth-mode value.
 func TestRunHTTP_InvalidAuthMode(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "saml",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
@@ -5252,7 +6736,7 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 // makes free instance selection tolerable for a local single-user deployment
 // does not open it for a deployment forwarding bearer tokens.
 func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:         "",
 		allowAnyGitLabURL: true,
 		// The hatch is only admitted on a listener nobody else can reach, so
@@ -5274,7 +6758,7 @@ func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
 // TestRunHTTP_OAuthCacheTTL_BelowMin verifies that runHTTP rejects an
 // oauth-cache-ttl below the minimum allowed value.
 func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
 		publicURL:      "http://localhost:8080",
@@ -5293,7 +6777,7 @@ func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
 // TestRunHTTP_OAuthCacheTTL_AboveMax verifies that runHTTP rejects an
 // oauth-cache-ttl above the maximum allowed value.
 func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
 		publicURL:      "http://localhost:8080",
@@ -5312,7 +6796,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 // TestRunHTTP_SessionTimeoutExceedsMax verifies that runHTTP rejects a
 // session-timeout that exceeds the maximum.
 func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: 48 * time.Hour,
@@ -5328,7 +6812,7 @@ func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
 // TestRunHTTP_RevalidateIntervalExceedsMax verifies that runHTTP rejects a
 // revalidate-interval that exceeds the maximum.
 func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:          "https://gitlab.example.com",
 		maxHTTPClients:     config.DefaultMaxHTTPClients,
 		sessionTimeout:     config.DefaultSessionTimeout,
@@ -5344,7 +6828,7 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 
 // TestRunHTTP_InvalidGitLabURL verifies that runHTTP rejects a non-HTTP(S) URL.
 func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "ftp://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -5659,6 +7143,211 @@ func assertServerCardToolMetadata(t *testing.T, toolsRaw []any) {
 	if withAnnotations == 0 {
 		t.Error("no tool exposes 'annotations' — scanner will not see destructive/readOnly hints")
 	}
+}
+
+// TestBuildServerCard_CarriesSubscriptionsOnlyWhereTheyAreServed covers the
+// subscriptions block of the enumerating card, the one place a directory can
+// learn without connecting that this deployment accepts subscriptions and
+// for which URIs. The full surface carries the enforcement whitelist itself;
+// the minimal surface serves no subscribable resource and must not carry the
+// key at all, not even as null.
+func TestBuildServerCard_CarriesSubscriptionsOnlyWhereTheyAreServed(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		surface string
+		want    []string
+	}{
+		{name: "full", surface: config.CapabilitySurfaceFull, want: subscriptions.Templates()},
+		{name: "minimal", surface: config.CapabilitySurfaceMinimal},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := buildServerCard(t.Context(), &config.Config{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: tc.surface,
+				Stateless:         true,
+			})
+			if err != nil {
+				t.Fatalf("buildServerCard: %v", err)
+			}
+			var card struct {
+				Subscriptions *struct {
+					Templates []string `json:"subscribable_uri_templates"`
+				} `json:"subscriptions"`
+			}
+			var keys map[string]json.RawMessage
+			if decodeErr := json.Unmarshal(data, &keys); decodeErr != nil {
+				t.Fatalf("decode card: %v", decodeErr)
+			}
+			if decodeErr := json.Unmarshal(data, &card); decodeErr != nil {
+				t.Fatalf("decode card: %v", decodeErr)
+			}
+
+			_, present := keys["subscriptions"]
+			if present != (tc.want != nil) {
+				t.Errorf("subscriptions key present = %t, want %t", present, tc.want != nil)
+			}
+			var got []string
+			if card.Subscriptions != nil {
+				got = card.Subscriptions.Templates
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("subscribable templates = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// cardTitled is the part of a server card entry this file compares with the
+// live listing: the name it is keyed by, and the two texts a directory shows.
+type cardTitled struct {
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	// Required is set for a prompt argument only: whether a caller has to
+	// supply it, which a card consumer reads to build the form it shows.
+	Required bool `json:"required"`
+}
+
+// assertCardTexts holds each card entry to the live entry of the same name,
+// title and description each in its own place. The case is empty unless at
+// least one live entry has a title that differs from its description, since
+// otherwise exchanging the two would change nothing.
+func assertCardTexts(t *testing.T, card []cardTitled, live map[string]cardTitled) {
+	t.Helper()
+	if len(card) != len(live) {
+		t.Errorf("card lists %d entries, the server %d", len(card), len(live))
+	}
+	distinct := 0
+	for _, entry := range live {
+		if entry.Title != entry.Description {
+			distinct++
+		}
+	}
+	if distinct == 0 {
+		t.Fatal("no live entry has a title that differs from its description; the case cannot tell them apart")
+	}
+	for _, entry := range card {
+		want, ok := live[entry.Name]
+		if !ok {
+			t.Errorf("card entry %q is not in the live listing", entry.Name)
+			continue
+		}
+		if entry != want {
+			t.Errorf("card entry = %+v, live = %+v", entry, want)
+		}
+	}
+}
+
+// TestBuildServerCard_EachPrimitiveKeepsItsTitleAndDescription covers the
+// copy the card makes of each listing. Tools, resources, resource templates,
+// prompts and prompt arguments are each copied field by field into the card's
+// own types, and a directory renders the title as a heading and the
+// description as the text under it, so each entry is held to what the server
+// itself lists under the same name. A prompt argument is held to whether it is
+// required as well, which is what a directory builds the prompt's form from.
+func TestBuildServerCard_EachPrimitiveKeepsItsTitleAndDescription(t *testing.T) {
+	cfg := &config.Config{
+		ToolSurface:       config.ToolSurfaceMeta,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		SkipTLSVerify:     true,
+	}
+	data, err := buildServerCard(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard: %v", err)
+	}
+	var card struct {
+		Tools             []cardTitled `json:"tools"`
+		Resources         []cardTitled `json:"resources"`
+		ResourceTemplates []cardTitled `json:"resourceTemplates"`
+		Prompts           []cardPrompt `json:"prompts"`
+	}
+	if decodeErr := json.Unmarshal(data, &card); decodeErr != nil {
+		t.Fatalf("decode card: %v", decodeErr)
+	}
+
+	session := newInMemorySession(t, mustCreateServer(t, newMockGitLabClient(t), cfg.ServerConfig()))
+	ctx := t.Context()
+
+	t.Run("tools", func(t *testing.T) {
+		listed, listErr := session.ListTools(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListTools: %v", listErr)
+		}
+		live := map[string]cardTitled{}
+		for _, tool := range listed.Tools {
+			live[tool.Name] = cardTitled{Name: tool.Name, Title: tool.Title, Description: tool.Description}
+		}
+		assertCardTexts(t, card.Tools, live)
+	})
+	t.Run("resources", func(t *testing.T) {
+		listed, listErr := session.ListResources(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListResources: %v", listErr)
+		}
+		live := map[string]cardTitled{}
+		for _, resource := range listed.Resources {
+			live[resource.Name] = cardTitled{Name: resource.Name, Title: resource.Title, Description: resource.Description}
+		}
+		assertCardTexts(t, card.Resources, live)
+	})
+	t.Run("resource templates", func(t *testing.T) {
+		listed, listErr := session.ListResourceTemplates(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListResourceTemplates: %v", listErr)
+		}
+		live := map[string]cardTitled{}
+		for _, template := range listed.ResourceTemplates {
+			live[template.Name] = cardTitled{Name: template.Name, Title: template.Title, Description: template.Description}
+		}
+		assertCardTexts(t, card.ResourceTemplates, live)
+	})
+	t.Run("prompts and their arguments", func(t *testing.T) {
+		listed, listErr := session.ListPrompts(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListPrompts: %v", listErr)
+		}
+		prompts, arguments := livePromptTexts(listed.Prompts)
+		cardPrompts, cardArguments := cardPromptTexts(card.Prompts)
+		assertCardTexts(t, cardPrompts, prompts)
+		assertCardTexts(t, cardArguments, arguments)
+	})
+}
+
+// cardPrompt is a prompt as the server card writes it, with its arguments.
+type cardPrompt struct {
+	cardTitled
+	Arguments []cardTitled `json:"arguments"`
+}
+
+// livePromptTexts keys the listed prompts by name and their arguments by
+// prompt and argument name together, since two prompts may share an argument
+// name.
+func livePromptTexts(listed []*mcp.Prompt) (prompts, arguments map[string]cardTitled) {
+	prompts, arguments = map[string]cardTitled{}, map[string]cardTitled{}
+	for _, prompt := range listed {
+		prompts[prompt.Name] = cardTitled{Name: prompt.Name, Title: prompt.Title, Description: prompt.Description}
+		for _, argument := range prompt.Arguments {
+			key := prompt.Name + "/" + argument.Name
+			arguments[key] = cardTitled{Name: key, Title: argument.Title, Description: argument.Description, Required: argument.Required}
+		}
+	}
+	return prompts, arguments
+}
+
+// cardPromptTexts flattens the card's prompts the way livePromptTexts keys the
+// listing, so the two can be compared entry by entry.
+func cardPromptTexts(card []cardPrompt) (prompts, arguments []cardTitled) {
+	prompts = make([]cardTitled, 0, len(card))
+	for _, prompt := range card {
+		prompts = append(prompts, prompt.cardTitled)
+		for _, argument := range prompt.Arguments {
+			argument.Name = prompt.Name + "/" + argument.Name
+			arguments = append(arguments, argument)
+		}
+	}
+	return prompts, arguments
 }
 
 // TestBuildServerCard_IndividualMode verifies that [buildServerCard] returns
@@ -6524,7 +8213,7 @@ func TestSSEWriteDeadlineMiddleware_PassesThrough(t *testing.T) {
 // TestRunHTTP_NegativeIdleTimeout_Rejected verifies that runHTTP rejects a
 // negative --http-idle-timeout with an actionable error.
 func TestRunHTTP_NegativeIdleTimeout_Rejected(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:       "https://gitlab.example.com",
 		maxHTTPClients:  config.DefaultMaxHTTPClients,
 		sessionTimeout:  config.DefaultSessionTimeout,
@@ -6574,6 +8263,134 @@ func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 		t.Errorf("configFromHTTPFlags() defaults: Stateless=%v JSONResponse=%v, want false/false",
 			defaults.Stateless, defaults.JSONResponse)
 	}
+}
+
+// TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField holds the whole
+// flag-to-configuration mapping, not a sample of it. Every value that is not a
+// boolean differs from all of its siblings, so a field filled from the one
+// beside it (the two authentication budgets, the three metadata links, the
+// certificate and its key) is a mismatch here. The booleans cannot all
+// differ, so each is driven on its own and the whole struct compared, which is
+// what tells a swap between two of them from a correct mapping.
+func TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField(t *testing.T) {
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "7340033")
+
+	base := httpConfig{
+		gitlabURL:             "https://first.example.test",
+		gitlabURLs:            repeatedFlag{"https://first.example.test", "https://second.example.test"},
+		toolSurface:           "surface-flag-the-caller-already-parsed",
+		capabilitySurface:     "capability-surface-value",
+		tier:                  "ultimate",
+		excludeTools:          "tool.one, tool.two",
+		maxHTTPClients:        101,
+		sessionTimeout:        31 * time.Minute,
+		revalidateInterval:    16 * time.Minute,
+		poolIdleTimeout:       61 * time.Minute,
+		actionTimeout:         66 * time.Minute,
+		drainDelay:            7 * time.Second,
+		maxRequestBodyBytes:   4097,
+		authMode:              "auth-mode-value",
+		publicURL:             "https://public.example.test/prefix",
+		resourceDocumentation: "https://docs.example.test/app",
+		resourcePolicyURI:     "https://policy.example.test/data",
+		resourceTermsURI:      "https://terms.example.test/tos",
+		oauthCacheTTL:         17 * time.Minute,
+		oauthClientUID:        "uid-one,uid-two",
+		trustedProxyHeader:    "X-Proxy-Header-Value",
+		trustedProxies:        "10.0.0.1, 10.0.0.0/8",
+		trustedOrigins:        "https://origin.example.test",
+		rateLimitRPS:          7.5,
+		rateLimitBurst:        41,
+		authFailureLimit:      11,
+		authFailureWindow:     2 * time.Minute,
+		authDistinctLimit:     51,
+		authDistinctWindow:    11 * time.Minute,
+		metaParamSchema:       "meta-param-schema-value",
+		tlsCert:               "/etc/tls/cert.pem",
+		tlsKey:                "/etc/tls/key.pem",
+		socketModeParsed:      0o640,
+	}
+	want := config.Config{
+		GitLabURL:              "https://first.example.test",
+		GitLabURLs:             []string{"https://first.example.test", "https://second.example.test"},
+		ToolSurface:            "surface-argument",
+		CapabilitySurface:      "capability-surface-value",
+		Tier:                   edition.Premium,
+		ExcludeTools:           []string{"tool.one", "tool.two"},
+		MaxHTTPClients:         101,
+		SessionTimeout:         31 * time.Minute,
+		RevalidateInterval:     16 * time.Minute,
+		PoolIdleTimeout:        61 * time.Minute,
+		ActionTimeout:          66 * time.Minute,
+		DrainDelay:             7 * time.Second,
+		MaxRequestBodyBytes:    4097,
+		UploadMaxFileSize:      7340033,
+		AuthMode:               "auth-mode-value",
+		PublicURL:              "https://public.example.test/prefix",
+		ResourceDocumentation:  "https://docs.example.test/app",
+		ResourcePolicyURI:      "https://policy.example.test/data",
+		ResourceTermsURI:       "https://terms.example.test/tos",
+		OAuthCacheTTL:          17 * time.Minute,
+		OAuthClientUIDs:        []string{"uid-one", "uid-two"},
+		TrustedProxyHeader:     "X-Proxy-Header-Value",
+		TrustedProxies:         []string{"10.0.0.1", "10.0.0.0/8"},
+		TrustedOrigins:         []string{"https://origin.example.test", "https://public.example.test"},
+		RateLimitRPS:           7.5,
+		RateLimitBurst:         41,
+		AuthFailureLimit:       11,
+		AuthFailureWindow:      2 * time.Minute,
+		AuthDistinctTokenLimit: 51,
+		AuthDistinctWindow:     11 * time.Minute,
+		MetaParamSchema:        "meta-param-schema-value",
+		TLSCertFile:            "/etc/tls/cert.pem",
+		TLSKeyFile:             "/etc/tls/key.pem",
+		SocketMode:             0o640,
+	}
+
+	cases := []struct {
+		name         string
+		set          func(*httpConfig)
+		tierExplicit bool
+		mark         func(*config.Config)
+	}{
+		{name: "no switch on", set: func(*httpConfig) {}, mark: func(*config.Config) {}},
+		{name: "tier explicit", set: func(*httpConfig) {}, tierExplicit: true, mark: func(c *config.Config) { c.TierExplicit = true }},
+		{name: "skip-tls-verify", set: func(h *httpConfig) { h.skipTLSVerify = true }, mark: func(c *config.Config) { c.SkipTLSVerify = true }},
+		{name: "read-only", set: func(h *httpConfig) { h.readOnly = true }, mark: func(c *config.Config) { c.ReadOnly = true }},
+		{name: "safe-mode", set: func(h *httpConfig) { h.safeMode = true }, mark: func(c *config.Config) { c.SafeMode = true }},
+		{name: "embedded-resources", set: func(h *httpConfig) { h.embeddedResources = true }, mark: func(c *config.Config) { c.EmbeddedResources = true }},
+		{name: "ignore-scopes", set: func(h *httpConfig) { h.ignoreScopes = true }, mark: func(c *config.Config) { c.IgnoreScopes = true }},
+		{name: "stateless", set: func(h *httpConfig) { h.stateless = true }, mark: func(c *config.Config) { c.Stateless = true }},
+		{name: "json-response", set: func(h *httpConfig) { h.jsonResponse = true }, mark: func(c *config.Config) { c.JSONResponse = true }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hcfg := base
+			tc.set(&hcfg)
+			expected := want
+			tc.mark(&expected)
+
+			got := configFromHTTPFlags(&hcfg, "surface-argument", edition.Premium, tc.tierExplicit)
+			for _, field := range configFieldsThatDiffer(*got, expected) {
+				t.Errorf("configFromHTTPFlags() %s differs from the flag it maps", field)
+			}
+		})
+	}
+}
+
+// configFieldsThatDiffer names each field of two configurations that does not
+// hold the same value, with both values, so a failed mapping says which flag
+// went where instead of printing two structs of forty fields.
+func configFieldsThatDiffer(got, want config.Config) []string {
+	var differ []string
+	gotValue, wantValue := reflect.ValueOf(got), reflect.ValueOf(want)
+	for i := range gotValue.NumField() {
+		g, w := gotValue.Field(i).Interface(), wantValue.Field(i).Interface()
+		if !reflect.DeepEqual(g, w) {
+			differ = append(differ, fmt.Sprintf("%s = %v, want %v", gotValue.Type().Field(i).Name, g, w))
+		}
+	}
+	return differ
 }
 
 // TestStreamableHTTPOptions_MapsConfigFields verifies that the shared handler
@@ -6729,6 +8546,39 @@ func TestServeHTTP_Stateless_GETMethodNotAllowed(t *testing.T) {
 	}
 	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
 		t.Errorf("Allow header = %q, want POST", allow)
+	}
+}
+
+// TestServeHTTP_Stateless_GETAndDELETE_AreAnsweredWithoutACredential covers
+// the half of the stateless contract the test above cannot see, since it
+// sends a valid credential: GET and DELETE address no session on a stateless
+// deployment, so the gate lets them through unauthenticated and the answer is
+// the transport's 405 whatever they carry. Gated, the same requests would be
+// answered 401, telling a client to authenticate for a method that can never
+// succeed.
+func TestServeHTTP_Stateless_GETAndDELETE_AreAnsweredWithoutACredential(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, false))
+	defer shutdown()
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), method, "http://"+addr+"/", nil)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			resp, err := testHTTPClient.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			body := readAndCloseBody(t, resp)
+			if resp.StatusCode != http.StatusMethodNotAllowed {
+				t.Errorf("%s without a credential: status = %d (%s), want 405", method, resp.StatusCode, body)
+			}
+			if challenge := resp.Header.Get("WWW-Authenticate"); challenge != "" {
+				t.Errorf("%s without a credential carried a challenge %q; nothing here can be authorized", method, challenge)
+			}
+		})
 	}
 }
 
@@ -6911,7 +8761,260 @@ func TestServeHTTP_Stateless_BodyLimitReturns413(t *testing.T) {
 // cacheScope=private and the 5-minute list TTL.
 func TestServeHTTP_CacheHints_ToolsListPrivate(t *testing.T) {
 	mockGL := newMockGitLabServer(t)
+	scope, ttlMs := toolsListCacheHint(t, statelessTestConfig(mockGL.URL, true))
+
+	if scope != "private" {
+		t.Errorf("cacheScope = %q, want private", scope)
+	}
+	if ttlMs != 300000 {
+		t.Errorf("ttlMs = %d, want 300000", ttlMs)
+	}
+}
+
+// TestServeHTTP_StartsThePoolsRevalidationAndIdleEviction covers the two
+// loops serveHTTPOn starts on the credential pool. Revalidation is what drops
+// a pooled credential GitLab has since revoked, so it is held by what it
+// does: with a short interval, the credential that was admitted is asked
+// about again. Idle eviction sweeps no faster than once a minute, so it is
+// held by the line the pool writes when the loop starts.
+func TestServeHTTP_StartsThePoolsRevalidationAndIdleEviction(t *testing.T) {
+	logged := captureLogMessages(t)
+	var probes atomic.Int64
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+		case "/api/v4/user":
+			probes.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	cfg := statelessTestConfig(gitlab.URL, true)
+	cfg.RevalidateInterval = 50 * time.Millisecond
+	cfg.PoolIdleTimeout = time.Hour
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("tools/list status = %d, want 200 for an admitted credential", resp.StatusCode)
+	}
+	admitted := probes.Load()
+	for deadline := time.Now().Add(5 * time.Second); probes.Load() <= admitted; {
+		if time.Now().After(deadline) {
+			t.Fatalf("the pooled credential was asked about %d times at admission and never again", admitted)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !logged("server pool: starting idle eviction") {
+		t.Error("the pool's idle eviction was never started")
+	}
+}
+
+// TestServeHTTP_HealthCarriesTheDeploymentsConfigDigest covers what /health
+// reports about the configuration: the digest of this deployment's settings,
+// which is how the instances behind one balancer are compared with each other.
+func TestServeHTTP_HealthCarriesTheDeploymentsConfigDigest(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		ConfigDigest string `json:"config_digest"`
+	}
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&body); decodeErr != nil {
+		t.Fatalf("decode /health: %v", decodeErr)
+	}
+	if want := configDigest(cfg); want == "" || body.ConfigDigest != want {
+		t.Errorf("config_digest = %q, want this deployment's %q", body.ConfigDigest, want)
+	}
+}
+
+// TestServeHTTP_AnswersTheHostItsPublicURLNames covers the host guard
+// serveHTTPOn installs: a Host the deployment advertised through --public-url
+// is answered, and a name nobody declared is refused. The listen address and
+// the public URL reach the guard side by side, and only the URL names this
+// host.
+func TestServeHTTP_AnswersTheHostItsPublicURLNames(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	cfg.PublicURL = "https://mcp.example.test"
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	for _, tc := range []struct {
+		host string
+		want int
+	}{
+		{host: "mcp.example.test", want: http.StatusOK},
+		{host: "elsewhere.example.test", want: http.StatusForbidden},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			req.Host = tc.host
+			resp, err := testHTTPClient.Do(req)
+			if err != nil {
+				t.Fatalf("GET /health: %v", err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != tc.want {
+				t.Errorf("Host %q answered %d, want %d", tc.host, resp.StatusCode, tc.want)
+			}
+		})
+	}
+}
+
+// TestServeHTTP_DrainDelay_AnswersDrainingBeforeTheListenerCloses covers the
+// delay serveHTTPOn hands the drain once shutdown is asked for: /health
+// answers 503 draining for that long, which is what lets a balancer take the
+// instance out before the close rather than one failed request later.
+func TestServeHTTP_DrainDelay_AnswersDrainingBeforeTheListenerCloses(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	cfg.DrainDelay = 3 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	errCh := make(chan error, 1)
+	go func() { errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout) }()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	cancel()
+	draining := false
+	for deadline := time.Now().Add(2 * time.Second); !draining && time.Now().Before(deadline); {
+		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+		if reqErr != nil {
+			t.Fatalf("build request: %v", reqErr)
+		}
+		if resp, doErr := testHTTPClient.Do(req); doErr == nil {
+			draining = resp.StatusCode == http.StatusServiceUnavailable
+			_ = resp.Body.Close()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !draining {
+		t.Error("/health never answered 503 draining inside the configured delay")
+	}
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			t.Errorf("serveHTTPOn() = %v, want a clean stop after the drain", serveErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveHTTPOn did not stop after the drain")
+	}
+}
+
+// TestServeHTTP_Stateful_AnUnsupportedVersionIsToldTheSessionRevisions covers
+// which list a refused protocol version is answered with on a stateful
+// deployment. The endpoint is built from the deployment's own statelessness,
+// and a stateful one must not offer the revision it cannot serve, since the
+// list exists to say what to retry with.
+func TestServeHTTP_Stateful_AnUnsupportedVersionIsToldTheSessionRevisions(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	cfg.Stateless = false
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr,
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("MCP-Protocol-Version", "1999-01-01")
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	var refusal unsupportedVersionError
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&refusal); decodeErr != nil {
+		t.Fatalf("decode refusal: %v", decodeErr)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	if want := supportedProtocolVersionsFor(false); !slices.Equal(refusal.Error.Data.Supported, want) {
+		t.Errorf("supported = %v, want the stateful list %v", refusal.Error.Data.Supported, want)
+	}
+}
+
+// TestServeHTTP_RefusesABodyNestedPastTheInboundDepth covers the depth ceiling
+// serveHTTPOn puts on every request body. The SDK decodes params._meta for
+// every method before any receiving middleware runs, with no depth guard of
+// its own, so a bare ping carrying a deeply nested _meta is refused here or
+// nowhere; the ceiling sits above the tool argument bound, which is the one a
+// legitimate call should meet first.
+func TestServeHTTP_RefusesABodyNestedPastTheInboundDepth(t *testing.T) {
+	if maxInboundJSONDepth <= toolutil.DefaultMaxArgumentDepth {
+		t.Fatalf("maxInboundJSONDepth = %d, want it above the argument bound %d", maxInboundJSONDepth, toolutil.DefaultMaxArgumentDepth)
+	}
+	mockGL := newMockGitLabServer(t)
 	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	nesting := maxInboundJSONDepth + 10
+	body := `{"jsonrpc":"2.0","id":1,"method":"ping","params":{"_meta":{"deep":` +
+		strings.Repeat("[", nesting) + strings.Repeat("]", nesting) + `}}}`
+	resp := postStatelessJSONRPC(t, addr, body)
+	respBody := readAndCloseBody(t, resp)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for a body nested %d deep", resp.StatusCode, nesting)
+	}
+	if want := fmt.Sprintf("deeper than %d levels", maxInboundJSONDepth); !strings.Contains(respBody, want) {
+		t.Errorf("body = %q, want the refusal to name the ceiling (%q)", respBody, want)
+	}
+}
+
+// TestServeHTTP_CacheHints_APinnedTier_KeepsTheToolListForAnHour is the other
+// side of the same hint: a tier the operator pinned cannot change while the
+// server runs, so the tool catalog earns the hour the compiled-in catalogs
+// get, where a detected one is held to five minutes by the test above.
+func TestServeHTTP_CacheHints_APinnedTier_KeepsTheToolListForAnHour(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	cfg.Tier, cfg.TierExplicit = edition.Free, true
+	scope, ttlMs := toolsListCacheHint(t, cfg)
+
+	if scope != "private" {
+		t.Errorf("cacheScope = %q, want private", scope)
+	}
+	if ttlMs != 3600000 {
+		t.Errorf("ttlMs = %d, want 3600000 for a pinned tier", ttlMs)
+	}
+}
+
+// toolsListCacheHint serves cfg over stateless HTTP and returns the cache
+// scope and lifetime its tools/list response carries.
+func toolsListCacheHint(t *testing.T, cfg *config.Config) (scope string, ttlMs int) {
+	t.Helper()
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
 	defer shutdown()
 
 	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
@@ -6930,12 +9033,7 @@ func TestServeHTTP_CacheHints_ToolsListPrivate(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&rpc); err != nil {
 		t.Fatalf("decode JSON-RPC response: %v", err)
 	}
-	if rpc.Result.CacheScope != "private" {
-		t.Errorf("cacheScope = %q, want private", rpc.Result.CacheScope)
-	}
-	if rpc.Result.TTLMs != 300000 {
-		t.Errorf("ttlMs = %d, want 300000", rpc.Result.TTLMs)
-	}
+	return rpc.Result.CacheScope, rpc.Result.TTLMs
 }
 
 // TestServeHTTP_StatefulOptOut_SessionHeaderPresent verifies that stateful
@@ -6961,6 +9059,54 @@ func TestServeHTTP_StatefulOptOut_SessionHeaderPresent(t *testing.T) {
 		t.Fatal("stateful opt-out must set Mcp-Session-Id, got empty")
 	}
 	closeMCPSession(t, "http://"+addr, sessionID)
+}
+
+// TestServeHTTP_Stateful_TheSessionAnswersTheCredentialThatOpenedIt covers the
+// request after initialize, which is the whole of a stateful session's use.
+// The gate refuses a session ID whose owner it cannot name, so the server has
+// to record the owner as the session is opened; a server that did not would
+// issue a session ID and then answer 404 to every request carrying it.
+func TestServeHTTP_Stateful_TheSessionAnswersTheCredentialThatOpenedIt(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, false)
+	cfg.Stateless = false
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	initResp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`)
+	_ = readAndCloseBody(t, initResp)
+	sessionID := initResp.Header.Get(hdrMCPSessionID)
+	if initResp.StatusCode != http.StatusOK || sessionID == "" {
+		t.Fatalf("initialize status = %d, session = %q, want 200 and a session ID", initResp.StatusCode, sessionID)
+	}
+	defer closeMCPSession(t, "http://"+addr, sessionID)
+
+	inSession := func(body string) *http.Response {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		req.Header.Set("PRIVATE-TOKEN", testToken)
+		req.Header.Set(hdrMCPSessionID, sessionID)
+		req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		return resp
+	}
+	initializedResp := inSession(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	_, _ = io.Copy(io.Discard, initializedResp.Body)
+	_ = initializedResp.Body.Close()
+
+	resp := inSession(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	body := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "gitlab_find_action") {
+		t.Errorf("tools/list in the session: status = %d, body = %q, want 200 and the catalog", resp.StatusCode, body)
+	}
 }
 
 // headerRoundTripper injects a static header set into every outgoing request.
@@ -7421,6 +9567,9 @@ func TestBuildTrustedOrigins_SeedsPublicURLOrigin(t *testing.T) {
 		{"both combined", "https://a.example", "https://mcp.jmrp.io", []string{"https://a.example", "https://mcp.jmrp.io"}},
 		{"empty yields nil", "", "", nil},
 		{"wildcard passes through", "*", "", []string{"*"}},
+		// A public URL that parses and names no host has no origin to
+		// seed; a scheme and a separator alone are an origin nobody can be.
+		{"a public url without a host seeds nothing", "", "/gitlab", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -7486,6 +9635,60 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	}
 	if !slices.Contains(rec.Header().Values("Vary"), "Origin") {
 		t.Error("the response varies by Origin and must say so")
+	}
+}
+
+// TestCorsMiddleware_HalfAPreflight_IsAnOrdinaryRequest covers what counts as
+// a preflight, on both branches. For a trusted origin a preflight is answered
+// here and never reaches the endpoint, so a POST that merely carries the
+// request-method header, or an OPTIONS that carries none, must still reach
+// the handler rather than be answered 204 in its place. For an untrusted
+// origin only a real preflight is marked as varying by Origin, since that
+// mark is what keeps a cache from serving one origin's answer to another.
+func TestCorsMiddleware_HalfAPreflight_IsAnOrdinaryRequest(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{TrustedOrigins: []string{"https://claude.ai"}}
+	for _, tc := range []struct {
+		name          string
+		origin        string
+		method        string
+		requestMethod bool
+		wantReached   bool
+		wantVary      bool
+	}{
+		{name: "trusted POST naming a method", origin: "https://claude.ai", method: http.MethodPost, requestMethod: true, wantReached: true, wantVary: true},
+		{name: "trusted OPTIONS naming none", origin: "https://claude.ai", method: http.MethodOptions, wantReached: true, wantVary: true},
+		{name: "untrusted POST naming a method", origin: "https://evil.example.com", method: http.MethodPost, requestMethod: true, wantReached: true},
+		{name: "untrusted OPTIONS naming none", origin: "https://evil.example.com", method: http.MethodOptions, wantReached: true},
+		{name: "untrusted real preflight", origin: "https://evil.example.com", method: http.MethodOptions, requestMethod: true, wantReached: true, wantVary: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var reached atomic.Bool
+			handler := corsMiddleware(cfg, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				reached.Store(true)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/mcp", http.NoBody)
+			req.Header.Set("Origin", tc.origin)
+			if tc.requestMethod {
+				req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if reached.Load() != tc.wantReached {
+				t.Errorf("handler reached = %t, want %t (status %d)", reached.Load(), tc.wantReached, rec.Code)
+			}
+			if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "" {
+				t.Errorf("Access-Control-Allow-Methods = %q on a request that is not a trusted preflight", got)
+			}
+			if vary := slices.Contains(rec.Header().Values("Vary"), "Origin"); vary != tc.wantVary {
+				t.Errorf("Vary: Origin = %t, want %t", vary, tc.wantVary)
+			}
+		})
 	}
 }
 
@@ -7867,6 +10070,40 @@ func TestCorsExposeHeaders_ARateLimitedBrowserClientCanReadRetryAfter(t *testing
 	if !slices.Contains(exposed, http.CanonicalHeaderKey(headerRetryAfter)) {
 		t.Errorf("Access-Control-Expose-Headers = %v, want it to name %q so the browser does not strip the backoff",
 			exposed, headerRetryAfter)
+	}
+}
+
+// TestWriteServerCard_NamesTheValidatorWithoutReplacingALongerList covers the
+// one CORS header the card sets itself. A cross-origin script can read only
+// the response headers it is told about, so a card answering an origin the
+// operator did not name has to expose its ETag or the validator is useless to
+// the scanners it is published for; and a trusted origin already carries the
+// longer list corsMiddleware set, which the card must leave in place rather
+// than cut down to the ETag alone.
+func TestWriteServerCard_NamesTheValidatorWithoutReplacingALongerList(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		given string
+		want  string
+	}{
+		{name: "nothing exposed yet", want: hdrETag},
+		{name: "a trusted origin's list", given: corsExposeHeaders, want: corsExposeHeaders},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rec := httptest.NewRecorder()
+			if tc.given != "" {
+				rec.Header().Set(headerExposeHeaders, tc.given)
+			}
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, serverCardPath, http.NoBody)
+
+			writeServerCard(rec, req, `"card-tag"`, []byte(`{"name":"card"}`))
+
+			if got := rec.Header().Get(headerExposeHeaders); got != tc.want {
+				t.Errorf("%s = %q, want %q", headerExposeHeaders, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -8532,7 +10769,7 @@ func TestCreateServer_GatewayCompatInvalidValue(t *testing.T) {
 // fail at startup, before the listener comes up.
 func TestRunHTTP_InvalidDescriptionSubstitutions(t *testing.T) {
 	t.Setenv(gatewaycompat.EnvVar, "abc")
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -8805,6 +11042,23 @@ func TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart(t *testing.T
 	}
 }
 
+// TestUploadMaxFileSize_TheCeilingItselfIsNotAnOverflow covers the upload
+// limit at exactly the documented maximum. That is a value an operator may
+// set, so it is used as given and no warning claims it was clamped: a line
+// saying a limit exceeds the maximum when it equals it sends an operator to
+// fix a setting that is correct.
+func TestUploadMaxFileSize_TheCeilingItselfIsNotAnOverflow(t *testing.T) {
+	logged := captureLogMessages(t)
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", strconv.FormatInt(config.MaxFileSize, 10))
+
+	if got := uploadMaxFileSize(); got != config.MaxFileSize {
+		t.Errorf("uploadMaxFileSize() = %d, want %d", got, config.MaxFileSize)
+	}
+	if logged("exceeds the maximum") {
+		t.Error("a limit equal to the maximum was reported as exceeding it")
+	}
+}
+
 // TestMCPOriginMiddleware_DecidesInTheDocumentedOrder covers every arm of the
 // origin decision the MCP endpoint makes before authentication.
 //
@@ -8880,6 +11134,51 @@ func TestMCPOriginMiddleware_DecidesInTheDocumentedOrder(t *testing.T) {
 	}
 }
 
+// TestMCPOriginMiddleware_OnlyARealPreflightIsExempt covers what counts as a
+// preflight, since a preflight skips the origin check. It takes both halves:
+// the OPTIONS method and the Access-Control-Request-Method header a browser
+// sends with it. Either alone is something a script can send, and a
+// cross-origin POST that could buy the exemption by adding one header would
+// drive a session from an origin nobody trusted.
+func TestMCPOriginMiddleware_OnlyARealPreflightIsExempt(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{TrustedOrigins: []string{"https://app.example.com"}}
+	for _, tc := range []struct {
+		name          string
+		method        string
+		requestMethod bool
+		wantPass      bool
+	}{
+		{name: "OPTIONS naming a method", method: http.MethodOptions, requestMethod: true, wantPass: true},
+		{name: "OPTIONS naming none", method: http.MethodOptions},
+		{name: "a POST naming a method", method: http.MethodPost, requestMethod: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var reached bool
+			handler := mcpOriginMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached = true
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/mcp", http.NoBody)
+			req.Host = "mcp.example.com"
+			req.Header.Set("Origin", "https://evil.example.com")
+			if tc.requestMethod {
+				req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if reached != tc.wantPass {
+				t.Errorf("handler reached = %t, want %t (status %d)", reached, tc.wantPass, rec.Code)
+			}
+		})
+	}
+}
+
 // TestServerCardAuthentication_OAuthModeNamesTheScopeAndTheMetadata covers what
 // the public card says about getting in.
 //
@@ -8926,9 +11225,15 @@ func TestServerCardAuthentication_OAuthModeNamesTheScopeAndTheMetadata(t *testin
 			if len(scopes) != 1 || scopes[0] != tt.wantScope {
 				t.Errorf("scopes = %v, want [%s]", info["scopes"], tt.wantScope)
 			}
-			_, hasMeta := info["resourceMetadata"]
+			link, hasMeta := info["resourceMetadata"]
 			if hasMeta != tt.wantResourceMeta {
 				t.Errorf("resourceMetadata present = %v, want %v", hasMeta, tt.wantResourceMeta)
+			}
+			// The document's own address, which is not the public URL it
+			// describes: a client following the public URL lands on the MCP
+			// endpoint and never finds the authorization servers.
+			if want := oauth.MetadataURLFor(tt.cfg.PublicURL); hasMeta && link != want {
+				t.Errorf("resourceMetadata = %v, want %q", link, want)
 			}
 		})
 	}
@@ -9221,10 +11526,37 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			mutate:  func(c *config.Config) { c.RateLimitRPS, c.RateLimitBurst = 10, 0 },
 			wantErr: "rate-limit",
 		},
+		// The documented maximum is a value an operator may configure, so each
+		// ceiling is held at the maximum itself as well as one past it.
 		{
+			name:   "a rate at its maximum",
+			mutate: func(c *config.Config) { c.RateLimitRPS = config.MaxRateLimitRPS },
+		},
+		{
+			name:    "a rate past its maximum",
+			mutate:  func(c *config.Config) { c.RateLimitRPS = config.MaxRateLimitRPS + 1 },
+			wantErr: "--rate-limit-rps",
+		},
+		{
+			name:   "a burst at its maximum",
+			mutate: func(c *config.Config) { c.RateLimitBurst = config.MaxRateLimitBurst },
+		},
+		{
+			name:    "a burst past its maximum",
+			mutate:  func(c *config.Config) { c.RateLimitBurst = config.MaxRateLimitBurst + 1 },
+			wantErr: "--rate-limit-burst",
+		},
+		{
+			// Named by the entry, not only by the flag: a check that refused
+			// the wildcard or a well-formed origin would also say
+			// "trusted-origins", and be refusing the wrong thing.
 			name:    "a trusted origin that is not an origin",
 			mutate:  func(c *config.Config) { c.TrustedOrigins = []string{"*", "https://app.example.com", "not-an-origin"} },
-			wantErr: "trusted-origins",
+			wantErr: `--trusted-origins entry "not-an-origin"`,
+		},
+		{
+			name:   "trusted origins beside the wildcard",
+			mutate: func(c *config.Config) { c.TrustedOrigins = []string{"*", "https://app.example.com"} },
 		},
 		{
 			name:    "a documentation link that is not a URL",
@@ -9268,6 +11600,53 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			name:    "a drain delay past its maximum",
 			mutate:  func(c *config.Config) { c.DrainDelay = config.MaxDrainDelay + time.Second },
 			wantErr: "drain-delay",
+		},
+		// Each duration ceiling admits its maximum and refuses the next
+		// nanosecond, and the two whose zero means "off" admit that zero: a
+		// bound one step too tight refuses exactly the value the
+		// documentation names as allowed.
+		{
+			name:   "a session timeout at its maximum",
+			mutate: func(c *config.Config) { c.SessionTimeout = config.MaxSessionTimeout },
+		},
+		{
+			name:    "a session timeout past its maximum",
+			mutate:  func(c *config.Config) { c.SessionTimeout = config.MaxSessionTimeout + time.Nanosecond },
+			wantErr: "--session-timeout",
+		},
+		{
+			name:   "a revalidation interval at its maximum",
+			mutate: func(c *config.Config) { c.RevalidateInterval = config.MaxRevalidateInterval },
+		},
+		{
+			name:   "a pool idle timeout at its maximum",
+			mutate: func(c *config.Config) { c.PoolIdleTimeout = config.MaxPoolIdleTimeout },
+		},
+		{
+			name:    "a pool idle timeout past its maximum",
+			mutate:  func(c *config.Config) { c.PoolIdleTimeout = config.MaxPoolIdleTimeout + time.Nanosecond },
+			wantErr: "--pool-idle-timeout",
+		},
+		{
+			name:   "an action timeout at its maximum",
+			mutate: func(c *config.Config) { c.ActionTimeout = config.MaxActionTimeout },
+		},
+		{
+			name:   "an action timeout of zero, which disables it",
+			mutate: func(c *config.Config) { c.ActionTimeout = 0 },
+		},
+		{
+			name:   "a drain delay at its maximum",
+			mutate: func(c *config.Config) { c.DrainDelay = config.MaxDrainDelay },
+		},
+		{
+			name:   "a drain delay of zero, which closes at once",
+			mutate: func(c *config.Config) { c.DrainDelay = 0 },
+		},
+		{
+			name:    "a negative drain delay",
+			mutate:  func(c *config.Config) { c.DrainDelay = -time.Nanosecond },
+			wantErr: "--drain-delay",
 		},
 	}
 
@@ -9382,7 +11761,7 @@ func TestRunHTTP_RefusesABadConfigurationBeforeBinding(t *testing.T) {
 			hcfg.maxHTTPClients = config.DefaultMaxHTTPClients
 			hcfg.sessionTimeout = config.DefaultSessionTimeout
 
-			err := runHTTP(t.Context(), hcfg)
+			err := runHTTPExpectingRefusal(t, hcfg)
 
 			if err == nil {
 				t.Fatal("runHTTP started with a configuration it must refuse")
@@ -9521,11 +11900,65 @@ func TestMain_VersionAndToolSearch_ExitBeforeAnythingIsStarted(t *testing.T) {
 	}
 }
 
+// TestMain_ToolSearch_TakesTheTierFromTheFlagOnlyWhenItWasPassed covers what
+// main records about --tier. The flag's default is empty, so whether it was
+// passed is read from the flags actually visited, and only a visit of --tier
+// itself may count: marking the tier as passed because some other flag was, as
+// --tool-search always is here, would search at the Free tier a blank flag
+// resolves to instead of the tier the environment configures.
+func TestMain_ToolSearch_TakesTheTierFromTheFlagOnlyWhenItWasPassed(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want edition.Tier
+	}{
+		{
+			name: "the environment's tier when --tier is not passed",
+			args: []string{"gitlab-mcp-server", "-tool-search", "issue"},
+			want: edition.Premium,
+		},
+		{
+			name: "the flag's tier when it is passed",
+			args: []string{"gitlab-mcp-server", "-tool-search", "issue", "-tier", "ultimate"},
+			want: edition.Ultimate,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			t.Setenv(config.EnvFileVar, "")
+			t.Setenv("GITLAB_MCP_TIER", "premium")
+
+			searched := false
+			var tier edition.Tier
+			originalRunner, originalExit, originalArgs := toolSearchRunner, exitProcess, os.Args
+			t.Cleanup(func() { toolSearchRunner, exitProcess, os.Args = originalRunner, originalExit, originalArgs })
+			toolSearchRunner = func(_, _ string, searchTier edition.Tier) error {
+				searched, tier = true, searchTier
+				return nil
+			}
+			var exits []int
+			exitProcess = func(code int) { exits = append(exits, code) }
+			os.Args = tc.args
+
+			main()
+
+			if !searched || len(exits) != 0 {
+				t.Fatalf("searched = %t, exit codes = %v, want one search and no exit", searched, exits)
+			}
+			if tier != tc.want {
+				t.Errorf("searched at tier %s, want %s", tier, tc.want)
+			}
+		})
+	}
+}
+
 // TestMain_ProcessLevelModes_ExitThroughTheSeam covers the argument forms
 // that end the process with a status code, every one of which now leaves
 // through exitProcess so the code can be read back here: a transport nobody
 // recognizes, --shutdown with nothing to stop, --probe of a listener that
-// answers, and an HTTP deployment that names no instance. The first case is
+// answers (a TLS one among them, which answers only through the certificate
+// --tls-cert names), and an HTTP deployment that names no instance. The first case is
 // --version again, carrying the two flags main handles before it prints:
 // --env-file, which has to reach the environment before anything reads it,
 // and --meta-tools, which is recorded as explicitly set.
@@ -9536,6 +11969,11 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 	envFile := filepath.Join(t.TempDir(), "server.env")
 	health := httptest.NewServer(healthMux(http.StatusOK))
 	t.Cleanup(health.Close)
+	// A self-signed listener no system root trusts, so its probe answers 0
+	// only when main hands the probe the certificate --tls-cert names.
+	tlsHealth := httptest.NewTLSServer(healthMux(http.StatusOK))
+	t.Cleanup(tlsHealth.Close)
+	pin := writeCertPEM(t, tlsHealth.Certificate())
 
 	cases := []struct {
 		name       string
@@ -9572,15 +12010,34 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 			wantExit: []int{0},
 		},
 		{
+			name:     "--probe of a TLS listener is pinned to the certificate --tls-cert names",
+			args:     []string{"gitlab-mcp-server", "-probe", "-tls-cert", pin, tlsHealth.URL},
+			wantExit: []int{0},
+		},
+		{
 			name:     "--http naming no instance exits 1",
 			args:     []string{"gitlab-mcp-server", "-http"},
 			wantExit: []int{1},
+			// Settled before the instance check refuses the start, and for
+			// the whole process: a caller reached over HTTP has no files on
+			// this machine, so no tool may read or write a local path for it.
+			verify: func(t *testing.T) {
+				t.Helper()
+				if toolutil.LocalFilesystemAccessAllowed() {
+					t.Error("local filesystem access is still allowed after main chose HTTP, want it refused")
+				}
+			},
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			withFreshFlagSet(t)
+			// The --shutdown case reads the real process listing, so it is
+			// narrowed to this process's own children: a findPeers that
+			// matched every name would otherwise terminate whatever shares
+			// the test's process namespace.
+			listOnlyOwnProcesses(t)
 			// Claimed through t.Setenv so what main writes reverts with the
 			// test, and cleared so no instance from the environment turns the
 			// HTTP case into a working server.
@@ -9618,6 +12075,636 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 				tt.verify(t)
 			}
 		})
+	}
+}
+
+// withBuildIdentity gives the build's version and commit values of the test's
+// choosing for as long as it runs. An unstamped test binary carries "dev" and
+// "none", which a check for one of them can find inside a line that printed
+// them the wrong way round, so a test holding their places sets two values
+// neither can be mistaken for.
+func withBuildIdentity(t *testing.T, buildVersion, buildCommit string) {
+	t.Helper()
+	originalVersion, originalCommit := version, commit
+	version, commit = buildVersion, buildCommit
+	t.Cleanup(func() { version, commit = originalVersion, originalCommit })
+}
+
+// TestMain_Version_PrintsTheVersionAndThenTheCommit covers the line --version
+// answers with. The version and the commit are two strings printed side by
+// side, so the whole line is compared with each given a value of its own.
+func TestMain_Version_PrintsTheVersionAndThenTheCommit(t *testing.T) {
+	withFreshFlagSet(t)
+	withBuildIdentity(t, "9.8.7-version", "c0mm1t-sha")
+	originalArgs := os.Args
+	os.Args = []string{"gitlab-mcp-server", "-version"}
+	t.Cleanup(func() { os.Args = originalArgs })
+	stdout := captureStdout(t)
+
+	main()
+
+	if got, want := stdout(), "gitlab-mcp-server 9.8.7-version (commit: c0mm1t-sha)\n"; got != want {
+		t.Errorf("--version printed %q, want %q", got, want)
+	}
+}
+
+// TestMain_RegistersEachFlagWithItsDocumentedDefault covers the defaults main
+// registers its flags with. Several are numbers or durations of the same type
+// sitting a line apart, and a default handed to its neighbor's flag compiles
+// and changes what every deployment that does not pass the flag runs with.
+func TestMain_RegistersEachFlagWithItsDocumentedDefault(t *testing.T) {
+	withFreshFlagSet(t)
+	originalArgs := os.Args
+	os.Args = []string{"gitlab-mcp-server", "-version"}
+	t.Cleanup(func() { os.Args = originalArgs })
+	captureStdout(t)
+
+	main()
+
+	for name, want := range map[string]string{
+		"http-addr":                  ":8080",
+		"allow-any-gitlab-url":       "false",
+		"skip-tls-verify":            "false",
+		"tool-surface":               "",
+		"capability-surface":         config.DefaultCapabilitySurface,
+		"tier":                       "",
+		"read-only":                  "false",
+		"safe-mode":                  "false",
+		"embedded-resources":         "true",
+		"ignore-scopes":              "false",
+		"max-http-clients":           strconv.Itoa(config.DefaultMaxHTTPClients),
+		"session-timeout":            config.DefaultSessionTimeout.String(),
+		"revalidate-interval":        config.DefaultRevalidateInterval.String(),
+		"pool-idle-timeout":          config.DefaultPoolIdleTimeout.String(),
+		"action-timeout":             config.DefaultActionTimeout.String(),
+		"drain-delay":                config.DefaultDrainDelay.String(),
+		"auth-mode":                  config.AuthModeLegacy,
+		"oauth-cache-ttl":            config.DefaultOAuthCacheTTL.String(),
+		"rate-limit-rps":             strconv.FormatFloat(config.DefaultHTTPRateLimitRPS, 'g', -1, 64),
+		"rate-limit-burst":           strconv.Itoa(config.DefaultRateLimitBurst),
+		"auth-failure-limit":         strconv.Itoa(config.DefaultAuthFailureLimit),
+		"auth-failure-window":        config.DefaultAuthFailureWindow.String(),
+		"auth-distinct-token-limit":  strconv.Itoa(config.DefaultAuthDistinctTokenLimit),
+		"auth-distinct-token-window": config.DefaultAuthDistinctWindow.String(),
+		"meta-param-schema":          config.DefaultMetaParamSchema,
+		"http-idle-timeout":          defaultHTTPIdleTimeout.String(),
+		"stateless":                  "true",
+		"json-response":              "false",
+		"max-request-body-bytes":     "0",
+	} {
+		t.Run(name, func(t *testing.T) {
+			registered := flag.CommandLine.Lookup(name)
+			if registered == nil {
+				t.Fatalf("-%s is not registered", name)
+			}
+			if registered.DefValue != want {
+				t.Errorf("-%s defaults to %q, want %q", name, registered.DefValue, want)
+			}
+		})
+	}
+}
+
+// runMainOverHTTPOnABusyAddress runs main as an HTTP deployment of one
+// instance with args after the flags that name it, on a listen address another
+// listener already holds, and returns what main logged and the exit codes it
+// asked for. A configuration main refuses ends in validation and one it
+// accepts ends at the bind, so no case can leave a server running.
+func runMainOverHTTPOnABusyAddress(t *testing.T, args ...string) (logged string, exits []int) {
+	t.Helper()
+	return runMainOverHTTPOnABusyLoopback(t, append([]string{"-gitlab-url", "https://gitlab.example.test"}, args...)...)
+}
+
+// runMainOverHTTPOnABusyLoopback is [runMainOverHTTPOnABusyAddress] without
+// the instance, for the flags that decide what a deployment naming none does.
+// The address is loopback, so --allow-any-gitlab-url is accepted there.
+func runMainOverHTTPOnABusyLoopback(t *testing.T, args ...string) (logged string, exits []int) {
+	t.Helper()
+	withFreshFlagSet(t)
+	t.Setenv(config.EnvFileVar, "")
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv("GITLAB_MCP_TELEMETRY", "")
+	busy, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = busy.Close() })
+
+	originalExit, originalArgs := exitProcess, os.Args
+	originalLogger, originalBase := slog.Default(), baseLogHandler
+	exitProcess = func(code int) { exits = append(exits, code) }
+	os.Args = append([]string{"gitlab-mcp-server", "-http", "-http-addr", busy.Addr().String()}, args...)
+	t.Cleanup(func() {
+		exitProcess, os.Args = originalExit, originalArgs
+		slog.SetDefault(originalLogger)
+		baseLogHandler = originalBase
+		toolutil.SetLocalFilesystemAccess(true)
+	})
+	stderr := captureStderr(t)
+
+	main()
+
+	return stderr(), exits
+}
+
+// loggedRecord returns the first JSON log record main wrote whose message is
+// msg, decoded.
+func loggedRecord(t *testing.T, logged, msg string) map[string]any {
+	t.Helper()
+	for line := range strings.SplitSeq(logged, "\n") {
+		var record map[string]any
+		if json.Unmarshal([]byte(line), &record) == nil && record["msg"] == msg {
+			return record
+		}
+	}
+	t.Fatalf("main logged no %q record:\n%s", msg, logged)
+	return nil
+}
+
+// TestMain_HTTPFlags_ReachTheSettingsTheyName covers where each HTTP flag
+// main registers is written. Many are two of a kind a line apart, a boolean
+// beside a boolean or a duration beside a duration, so every flag here is
+// passed a value no neighbor shares and read back where the deployment uses
+// it: the startup record serveHTTPOn logs, the configuration digest it logs
+// with it, and the settings runHTTP hands the tool layer.
+func TestMain_HTTPFlags_ReachTheSettingsTheyName(t *testing.T) {
+	withToolSettings(t, time.Hour, 1, true)
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "3145728")
+
+	logged, exits := runMainOverHTTPOnABusyAddress(t,
+		"-max-http-clients", "77",
+		"-session-timeout", "17m",
+		"-revalidate-interval", "19m",
+		"-pool-idle-timeout", "13m",
+		"-action-timeout", "11m",
+		"-drain-delay", "7s",
+		"-stateless=false",
+		"-json-response",
+		"-trusted-proxy-header", "X-Real-IP",
+		"-trusted-proxies", "10.0.0.0/8",
+		"-embedded-resources=false",
+		"-tool-surface", config.ToolSurfaceMeta,
+		"-capability-surface", config.CapabilitySurfaceMinimal,
+		"-meta-param-schema", config.MetaParamSchemaCompact,
+		"-tier", "premium",
+		"-ignore-scopes",
+		"-read-only",
+		"-safe-mode",
+		"-exclude-tools", "gitlab_example_tool",
+	)
+
+	if !slices.Equal(exits, []int{1}) {
+		t.Fatalf("exit codes = %v, want [1] from the taken address:\n%s", exits, logged)
+	}
+	started := loggedRecord(t, logged, "starting MCP server in HTTP mode")
+	for _, field := range []struct {
+		key  string
+		want any
+	}{
+		{key: "max_clients", want: float64(77)},
+		{key: "session_timeout", want: float64(17 * time.Minute)},
+		{key: "drain_delay", want: float64(7 * time.Second)},
+		{key: "stateless", want: false},
+		{key: "json_response", want: true},
+		{key: "trusted_proxy_header", want: "X-Real-IP"},
+		{key: "trusted_proxies", want: []any{"10.0.0.0/8"}},
+		{key: "config_digest", want: configDigest(&config.Config{
+			ToolSurface:       config.ToolSurfaceMeta,
+			CapabilitySurface: config.CapabilitySurfaceMinimal,
+			MetaParamSchema:   config.MetaParamSchemaCompact,
+			Tier:              edition.Premium,
+			TierExplicit:      true,
+			IgnoreScopes:      true,
+			ReadOnly:          true,
+			SafeMode:          true,
+			ExcludeTools:      []string{"gitlab_example_tool"},
+		})},
+	} {
+		t.Run(field.key, func(t *testing.T) {
+			if got := started[field.key]; !reflect.DeepEqual(got, field.want) {
+				t.Errorf("%s = %v, want %v", field.key, got, field.want)
+			}
+		})
+	}
+	assertToolSettings(t, 11*time.Minute, 3145728, false)
+}
+
+// TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue covers the
+// rest of the flags from the other side: a value the deployment refuses is
+// refused under the flag it was passed to. A flag written into its
+// neighbor's field would be refused under the neighbor's name, or not at
+// all.
+func TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"-auth-failure-limit", "100001"}, want: "--auth-failure-limit 100001 exceeds"},
+		{args: []string{"-auth-distinct-token-limit", "100001"}, want: "--auth-distinct-token-limit 100001 exceeds"},
+		{args: []string{"-auth-failure-window", "25h"}, want: "--auth-failure-window 25h0m0s exceeds"},
+		{args: []string{"-auth-distinct-token-window", "25h"}, want: "--auth-distinct-token-window 25h0m0s exceeds"},
+		{args: []string{"-session-timeout", "25h"}, want: "--session-timeout 25h0m0s exceeds"},
+		{args: []string{"-revalidate-interval", "25h"}, want: "--revalidate-interval 25h0m0s exceeds"},
+		{args: []string{"-pool-idle-timeout", "25h"}, want: "--pool-idle-timeout 25h0m0s exceeds"},
+		{args: []string{"-action-timeout", "25h"}, want: "--action-timeout 25h0m0s is outside"},
+		{args: []string{"-drain-delay", "6m"}, want: "--drain-delay 6m0s is outside"},
+		{args: []string{"-max-http-clients", "10001"}, want: "--max-http-clients 10001 exceeds"},
+		{args: []string{"-resource-documentation", "ftp://docs.example.test"}, want: `--resource-documentation "ftp://docs.example.test"`},
+		{args: []string{"-resource-policy-uri", "ftp://policy.example.test"}, want: `--resource-policy-uri "ftp://policy.example.test"`},
+		{args: []string{"-resource-tos-uri", "ftp://terms.example.test"}, want: `--resource-tos-uri "ftp://terms.example.test"`},
+		{args: []string{"-public-url", "not a url"}, want: `--public-url "not a url"`},
+		{args: []string{"-tls-cert", "/nonexistent/cert.pem"}, want: "--tls-cert requires --tls-key"},
+		{args: []string{"-tls-key", "/nonexistent/key.pem"}, want: "--tls-key requires --tls-cert"},
+		{args: []string{"-trusted-proxy-header", "X-Real-IP"}, want: "--trusted-proxy-header names a header nobody is trusted to set"},
+		{args: []string{"-trusted-proxies", "10.0.0.0/8"}, want: "--trusted-proxies names proxies whose header is never read"},
+		{args: []string{"-trusted-origins", "not an origin"}, want: `--trusted-origins entry "not an origin"`},
+		{args: []string{"-meta-param-schema", "sprawling"}, want: "--meta-param-schema must be one of"},
+		{args: []string{"-capability-surface", "sprawling"}, want: "--capability-surface must be"},
+		{args: []string{"-tool-surface", "sprawling"}, want: "parse tool surface"},
+		{args: []string{"-tier", "platinum"}, want: "invalid --tier"},
+		{args: []string{"-auth-mode", "saml"}, want: "--auth-mode must be"},
+		{args: []string{"-http-socket-mode", "0999"}, want: "invalid --http-socket-mode"},
+		{args: []string{"-http-idle-timeout", "-1s"}, want: "invalid --http-idle-timeout"},
+		{args: []string{"-max-request-body-bytes", "-1"}, want: "--max-request-body-bytes must be >= 0"},
+		// Two flags only an oauth deployment reads. The TTL shares its 15m
+		// default with --revalidate-interval, so a registration writing one
+		// into the other's field keeps every default and is seen only here.
+		{args: []string{"-oauth-cache-ttl", "3h", "-auth-mode", "oauth", "-public-url", "https://mcp.example.test"}, want: "--oauth-cache-ttl 3h0m0s exceeds"},
+		{args: []string{"-skip-tls-verify", "-auth-mode", "oauth", "-public-url", "https://mcp.example.test"}, want: "--auth-mode=oauth refuses --skip-tls-verify"},
+	} {
+		t.Run(tc.args[0], func(t *testing.T) {
+			logged, exits := runMainOverHTTPOnABusyAddress(t, tc.args...)
+
+			if !slices.Equal(exits, []int{1}) {
+				t.Errorf("exit codes = %v, want [1]", exits)
+			}
+			refusal, _ := loggedRecord(t, logged, "server exited with error")["error"].(string)
+			if !strings.Contains(refusal, tc.want) {
+				t.Errorf("main refused with %q, want it to carry %q", refusal, tc.want)
+			}
+		})
+	}
+}
+
+// TestMain_HTTPFlags_TheHatchAndThePinnedApplicationsReachTheirSettings covers
+// two flags a neighbor of the same type and default could stand in for
+// unseen: --allow-any-gitlab-url beside --skip-tls-verify, both false, and
+// --oauth-client-uid beside the other string flags, all empty. Each is passed
+// through main and read back where the deployment acts on it: the hatch is
+// accepted on a loopback listener instead of refused for naming no instance,
+// and the verifier is told how many applications it admits.
+func TestMain_HTTPFlags_TheHatchAndThePinnedApplicationsReachTheirSettings(t *testing.T) {
+	t.Run("-allow-any-gitlab-url", func(t *testing.T) {
+		logged, exits := runMainOverHTTPOnABusyLoopback(t, "-allow-any-gitlab-url")
+
+		if !slices.Equal(exits, []int{1}) {
+			t.Errorf("exit codes = %v, want [1] from the taken address", exits)
+		}
+		if !strings.Contains(logged, "--allow-any-gitlab-url is set and no instance is published") {
+			t.Errorf("main did not take the hatch on a loopback listener:\n%s", logged)
+		}
+		if strings.Contains(logged, "--gitlab-url is required in HTTP mode") {
+			t.Errorf("main refused a deployment that passed --allow-any-gitlab-url for naming no instance:\n%s", logged)
+		}
+	})
+	t.Run("-oauth-client-uid", func(t *testing.T) {
+		logged, exits := runMainOverHTTPOnABusyAddress(t,
+			"-oauth-client-uid", "app-one,app-two",
+			"-auth-mode", "oauth",
+			"-public-url", "https://mcp.example.test",
+		)
+
+		if !slices.Equal(exits, []int{1}) {
+			t.Errorf("exit codes = %v, want [1] from the taken address:\n%s", exits, logged)
+		}
+		pinned := loggedRecord(t, logged, "admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused")
+		if got := pinned["applications"]; got != float64(2) {
+			t.Errorf("applications = %v, want 2 for the two uids passed", got)
+		}
+	})
+}
+
+// withToolSettings sets the three process-wide settings both transports write
+// into the tool layer at startup to values of the test's choosing, and puts
+// the ones it found back when the test ends. A test hands the transport a
+// configuration carrying other values, so a write that went missing leaves one
+// of these behind where the configured value belongs.
+func withToolSettings(t *testing.T, actionTimeout time.Duration, maxFileSize int64, embedded bool) {
+	t.Helper()
+	originalTimeout := toolutil.ActionTimeout()
+	originalMaxFileSize := toolutil.GetUploadConfig().MaxFileSize
+	originalEmbedded := toolutil.EmbeddedResourcesEnabled()
+	toolutil.SetActionTimeout(actionTimeout)
+	toolutil.SetUploadConfig(maxFileSize)
+	toolutil.EnableEmbeddedResources(embedded)
+	t.Cleanup(func() {
+		toolutil.SetActionTimeout(originalTimeout)
+		toolutil.SetUploadConfig(originalMaxFileSize)
+		toolutil.EnableEmbeddedResources(originalEmbedded)
+	})
+}
+
+// assertToolSettings reports each process-wide tool setting that differs from
+// what the transport was configured with.
+func assertToolSettings(t *testing.T, actionTimeout time.Duration, maxFileSize int64, embedded bool) {
+	t.Helper()
+	if got := toolutil.ActionTimeout(); got != actionTimeout {
+		t.Errorf("action deadline = %s, want the configured %s", got, actionTimeout)
+	}
+	if got := toolutil.GetUploadConfig().MaxFileSize; got != maxFileSize {
+		t.Errorf("upload ceiling = %d bytes, want the configured %d", got, maxFileSize)
+	}
+	if got := toolutil.EmbeddedResourcesEnabled(); got != embedded {
+		t.Errorf("embedded resources = %t, want the configured %t", got, embedded)
+	}
+}
+
+// TestRunHTTP_HandsTheToolLayerItsSettings covers the three settings runHTTP
+// writes into the tool layer before it serves: the deadline every action runs
+// under, the largest local file an upload may read, and whether a result
+// embeds its resource link. None of them is read back through the HTTP
+// configuration afterwards, so a write that went missing would leave every
+// pool entry running on whatever the process last set.
+func TestRunHTTP_HandsTheToolLayerItsSettings(t *testing.T) {
+	withToolSettings(t, time.Hour, 1, true)
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "3145728")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	err := runHTTP(ctx, &httpConfig{
+		addr:              "127.0.0.1:0",
+		gitlabURL:         "https://gitlab.example.com",
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+		actionTimeout:     7 * time.Minute,
+		embeddedResources: false,
+	})
+	if err != nil {
+		t.Fatalf("runHTTP() = %v, want a clean stop", err)
+	}
+
+	assertToolSettings(t, 7*time.Minute, 3145728, false)
+}
+
+// TestRunStdio_HandsTheToolLayerItsSettings is the stdio half of the test
+// above: the same three settings, read from the environment, written before
+// the transport is connected.
+func TestRunStdio_HandsTheToolLayerItsSettings(t *testing.T) {
+	withToolSettings(t, time.Hour, 1, true)
+	gitlab := newMockGitLabServer(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
+	t.Setenv("GITLAB_MCP_ACTION_TIMEOUT", "7m")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "3145728")
+	t.Setenv("GITLAB_MCP_EMBEDDED_RESOURCES", "false")
+	closedStdin(t)
+
+	if err := runStdio(t.Context()); err != nil {
+		t.Fatalf("runStdio() = %v, want a clean stop when the client closes its pipe", err)
+	}
+
+	assertToolSettings(t, 7*time.Minute, 3145728, false)
+}
+
+// TestRunWithContext_ReportsTheBuildAsTheTelemetryServiceVersion covers what
+// runWithContext hands telemetry: this build's version, which a collector
+// records as service.version on everything the process exports, beside the
+// surface the tool-name policy is sized by. The two are strings passed side by
+// side, so the build carries a version no surface can be mistaken for, and
+// the resource is read off a span recorded through the provider telemetry
+// installed.
+func TestRunWithContext_ReportsTheBuildAsTheTelemetryServiceVersion(t *testing.T) {
+	withBuildIdentity(t, "9.8.7-telemetry", "c0mm1t-telemetry")
+	restoreFlag := telemetryFlag
+	previousTracer, previousMeter, previousLogger := otel.GetTracerProvider(), otel.GetMeterProvider(), otelloggl.GetLoggerProvider()
+	t.Cleanup(func() {
+		telemetryFlag = restoreFlag
+		otel.SetTracerProvider(previousTracer)
+		otel.SetMeterProvider(previousMeter)
+		otelloggl.SetLoggerProvider(previousLogger)
+	})
+	telemetryFlag = nil
+	// A provider no earlier test can have left behind, so the wait below ends
+	// on the one this run installs and on nothing else.
+	otel.SetTracerProvider(nooptrace.NewTracerProvider())
+	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+	t.Setenv("OTEL_BSP_EXPORT_TIMEOUT", "200")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- runWithContext(ctx, &httpConfig{
+			addr:           "127.0.0.1:0",
+			gitlabURL:      "https://gitlab.example.com",
+			toolSurface:    config.ToolSurfaceIndividual,
+			maxHTTPClients: config.DefaultMaxHTTPClients,
+			sessionTimeout: config.DefaultSessionTimeout,
+		})
+	}()
+
+	installed := awaitInstalledTracerProvider(t)
+	recorder := tracetest.NewSpanRecorder()
+	installed.RegisterSpanProcessor(recorder)
+	_, span := installed.Tracer("service-version-probe").Start(ctx, "probe")
+	span.End()
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("runWithContext() = %v, want a clean stop", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("runWithContext did not return after its context ended")
+	}
+
+	ended := recorder.Ended()
+	if len(ended) == 0 {
+		t.Fatal("the probe span was not recorded")
+	}
+	got, _ := ended[0].Resource().Set().Value(attribute.Key("service.version"))
+	if got.AsString() != "9.8.7-telemetry" {
+		t.Errorf("service.version = %q, want the build's version %q", got.AsString(), "9.8.7-telemetry")
+	}
+}
+
+// awaitInstalledTracerProvider waits for telemetry to install an SDK tracer
+// provider as the global one and returns it.
+func awaitInstalledTracerProvider(t *testing.T) *sdktrace.TracerProvider {
+	t.Helper()
+	for deadline := time.Now().Add(testHTTPLivenessTimeout); ; {
+		if provider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider); ok {
+			return provider
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("runWithContext never installed a tracer provider with telemetry on")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestRunWithContext_Stdio_NamesTheConfiguredInstanceOnTheClientMetric covers
+// the one input stdio startup hands the outbound request metric: the instance
+// GITLAB_URL names. The metric carries a host only when startup declared it
+// and counts every other host as the overflow value, so a declaration taken
+// from anywhere but the configured instance would count every request this
+// process makes as one to a stranger.
+func TestRunWithContext_Stdio_NamesTheConfiguredInstanceOnTheClientMetric(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	previous := otel.GetMeterProvider()
+	otel.SetMeterProvider(provider)
+	restoreFlag := telemetryFlag
+	t.Cleanup(func() {
+		telemetryFlag = restoreFlag
+		otel.SetMeterProvider(previous)
+		_ = provider.Shutdown(context.Background())
+	})
+	telemetryFlag = nil
+
+	gitlab := newMockGitLabServerWithUser(t)
+	gitlabURL, err := url.Parse(gitlab.URL)
+	if err != nil {
+		t.Fatalf("parsing the mock URL: %v", err)
+	}
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
+	t.Setenv("GITLAB_MCP_TELEMETRY", "false")
+	client := pipedStdin(t)
+
+	done := make(chan error, 1)
+	go func() { done <- runWithContext(t.Context(), nil) }()
+
+	address := awaitClientMetricAddress(t, reader)
+	_ = client.Close()
+	select {
+	case runErr := <-done:
+		if runErr != nil {
+			t.Errorf("runWithContext() = %v, want a clean stop when the client closes its pipe", runErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("runWithContext did not return after the client closed its pipe")
+	}
+
+	if address != gitlabURL.Hostname() {
+		t.Errorf("the request metric names server.address %q, want the configured instance %q", address, gitlabURL.Hostname())
+	}
+}
+
+// awaitClientMetricAddress waits for the first outbound request the reader
+// records and returns the server.address it was counted under.
+func awaitClientMetricAddress(t *testing.T, reader *sdkmetric.ManualReader) string {
+	t.Helper()
+	for deadline := time.Now().Add(testHTTPLivenessTimeout); ; {
+		var collected metricdata.ResourceMetrics
+		if err := reader.Collect(t.Context(), &collected); err != nil {
+			t.Fatalf("collecting metrics: %v", err)
+		}
+		for _, scope := range collected.ScopeMetrics {
+			for _, m := range scope.Metrics {
+				histogram, ok := m.Data.(metricdata.Histogram[float64])
+				if !ok || m.Name != "http.client.request.duration" {
+					continue
+				}
+				for _, point := range histogram.DataPoints {
+					if address, found := point.Attributes.Value(attribute.Key("server.address")); found {
+						return address.AsString()
+					}
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("startup made no request the client metric recorded")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestMain_PublishesTheServerIdentityToTheHealthTool covers what main hands
+// the health tool before it starts a transport: the version, the author and
+// the repository a caller of that tool is shown. Each is a distinct value, so
+// one read from the field beside it is a mismatch. An HTTP start naming no instance
+// is the shortest path through main that publishes them.
+func TestMain_PublishesTheServerIdentityToTheHealthTool(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv(config.EnvFileVar, "")
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv("GITLAB_MCP_TELEMETRY", "")
+
+	var exits []int
+	originalExit, originalArgs := exitProcess, os.Args
+	originalLogger, originalBase := slog.Default(), baseLogHandler
+	exitProcess = func(code int) { exits = append(exits, code) }
+	os.Args = []string{"gitlab-mcp-server", "-http"}
+	t.Cleanup(func() {
+		exitProcess, os.Args = originalExit, originalArgs
+		slog.SetDefault(originalLogger)
+		baseLogHandler = originalBase
+		toolutil.SetLocalFilesystemAccess(true)
+	})
+
+	main()
+
+	if !slices.Equal(exits, []int{1}) {
+		t.Fatalf("exit codes = %v, want [1] from an HTTP start naming no instance", exits)
+	}
+	out, err := healthtool.Check(t.Context(), newMockGitLabClient(t), healthtool.Input{})
+	if err != nil {
+		t.Fatalf("health check: %v", err)
+	}
+	if out.MCPServerVersion != version || out.Author != projectAuthor || out.Repository != projectRepository || out.Department != projectDepartment {
+		t.Errorf("health identity = version %q, author %q, repository %q, department %q; want %q, %q, %q, %q",
+			out.MCPServerVersion, out.Author, out.Repository, out.Department, version, projectAuthor, projectRepository, projectDepartment)
+	}
+}
+
+// TestMain_OnAPipe_MissingCredentials_NeverShowTheGuidanceScreen covers the
+// guard in front of the guidance screen from the side every MCP client is on:
+// a pipe. The screen waits for a line on stdin, and on a pipe that line would
+// be the client's first JSON-RPC message, so the screen is for a terminal
+// only, whatever is missing. A retired variable that refuses startup stands
+// in for the rest of startup, so the run ends at once with exit 1.
+func TestMain_OnAPipe_MissingCredentials_NeverShowTheGuidanceScreen(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv(config.EnvFileVar, "")
+	t.Setenv("GITLAB_READ_ONLY", "true")
+
+	stdin, client, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	// Closed at once: were the screen shown, its read would end on EOF rather
+	// than hang, and the missing exit is what fails the test.
+	_ = client.Close()
+	t.Cleanup(func() { _ = stdin.Close() })
+
+	var exits []int
+	originalStdin, originalArgs, originalExit := os.Stdin, os.Args, exitProcess
+	originalLogger, originalBase := slog.Default(), baseLogHandler
+	os.Stdin, os.Args = stdin, []string{"gitlab-mcp-server"}
+	exitProcess = func(code int) { exits = append(exits, code) }
+	t.Cleanup(func() {
+		os.Stdin, os.Args, exitProcess = originalStdin, originalArgs, originalExit
+		slog.SetDefault(originalLogger)
+		baseLogHandler = originalBase
+	})
+
+	main()
+
+	if !slices.Equal(exits, []int{1}) {
+		t.Errorf("exit codes = %v, want [1]: a piped stdin reached the guidance screen instead of startup", exits)
 	}
 }
 
@@ -9681,6 +12768,21 @@ func TestMain_StdioMode_StartsAndStopsWithTheClient(t *testing.T) {
 // it is invisible until the output grows or the platform changes.
 func captureStdout(t *testing.T) func() string {
 	t.Helper()
+	return captureFile(t, &os.Stdout, "stdout")
+}
+
+// captureStderr is [captureStdout] for os.Stderr, which is where main writes
+// its log once it has installed its handler.
+func captureStderr(t *testing.T) func() string {
+	t.Helper()
+	return captureFile(t, &os.Stderr, "stderr")
+}
+
+// captureFile points *target at a pipe drained from the start, and returns a
+// function that restores it and yields what was written. See [captureStdout]
+// for why the drain starts first.
+func captureFile(t *testing.T, target **os.File, name string) func() string {
+	t.Helper()
 
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -9697,20 +12799,20 @@ func captureStdout(t *testing.T) func() string {
 		drained <- capture{out: out, err: readErr}
 	}()
 
-	original := os.Stdout
-	os.Stdout = writer
+	original := *target
+	*target = writer
 
 	var once sync.Once
 	var captured string
 	stop := func() string {
 		once.Do(func() {
-			os.Stdout = original
+			*target = original
 			// Closing the writer is what ends the drain: ReadAll returns on
 			// EOF, which arrives only once the last write end is gone.
 			_ = writer.Close()
 			result := <-drained
 			if result.err != nil {
-				t.Errorf("reading captured stdout: %v", result.err)
+				t.Errorf("reading captured %s: %v", name, result.err)
 			}
 			captured = string(result.out)
 			_ = reader.Close()
@@ -9857,6 +12959,23 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		}
 		if rec.Body.Len() != 0 {
 			t.Errorf("body = %q, want no frame written to a stream that just wrote", rec.Body.String())
+		}
+	})
+
+	t.Run("a stream that wrote long ago is idle again", func(t *testing.T) {
+		t.Parallel()
+
+		// One event earlier in the stream's life does not keep it alive: a
+		// tool call that reported progress once and then waits on GitLab is
+		// exactly the silence a proxy's read timeout collects.
+		rec := httptest.NewRecorder()
+		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now().Add(-time.Hour)}
+
+		if !writer.writeKeepAlive() {
+			t.Error("the heartbeat stopped on a stream that is alive")
+		}
+		if got := rec.Body.String(); got != string(sseKeepAliveFrame) {
+			t.Errorf("body = %q, want the keep-alive comment on a stream idle since its last event", got)
 		}
 	})
 
@@ -10407,6 +13526,10 @@ func TestListenerIsHostLocal_AName_IsJudgedByWhatItResolvesTo(t *testing.T) {
 		{name: "a loopback literal", addr: "127.0.0.2:8080", resolveNo: true, want: true},
 		{name: "an ipv6 loopback literal", addr: "[::1]:8080", resolveNo: true, want: true},
 		{name: "a routable literal", addr: "10.0.0.7:8080", resolveNo: true},
+		// A wildcard bind names no host, and it is the container CMD's bind:
+		// it is refused on that emptiness alone, before any resolver is asked,
+		// so a resolver answering loopback for the empty name changes nothing.
+		{name: "a wildcard bind", addr: ":8080", resolveTo: []string{"127.0.0.1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			previous := lookupHost
@@ -10433,7 +13556,7 @@ func TestListenerIsHostLocal_AName_IsJudgedByWhatItResolvesTo(t *testing.T) {
 // rather than only in the helper, so a deployment cannot reach a listener
 // through some other path.
 func TestRunHTTP_RefusesWithoutAnInstance(t *testing.T) {
-	err := runHTTP(t.Context(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		addr:           "127.0.0.1:0",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -11049,6 +14172,63 @@ func TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline(t *
 	}
 }
 
+// TestHTTPShutdownTimeout_SitsInsideTheBracketItsCommentArgues holds the drain
+// budget to the two bounds its own comment derives, which nothing else does:
+// every other test reads the constant back through the code that uses it. It
+// must stay above the ten seconds test/e2e/http gives the binary to exit after
+// SIGTERM, or a drain hung on a stream becomes indistinguishable from a prompt
+// exit; and there is nothing to buy past the thirty seconds Kubernetes waits,
+// the longest of the usual supervisors, because the process is killed there.
+func TestHTTPShutdownTimeout_SitsInsideTheBracketItsCommentArgues(t *testing.T) {
+	if httpShutdownTimeout <= 10*time.Second || httpShutdownTimeout > 30*time.Second {
+		t.Errorf("httpShutdownTimeout = %s, want above 10s and at most 30s", httpShutdownTimeout)
+	}
+}
+
+// TestStartServing_AServerClosedOnPurpose_ReportsNoFailure covers the channel
+// the serve loop reports on. Close is how every orderly stop ends Serve, and
+// it does so with http.ErrServerClosed; the channel must close empty then, or
+// a caller waiting on it reads an ordinary shutdown as a serve failure. A
+// listener that is already gone is the failure case beside it.
+func TestStartServing_AServerClosedOnPurpose_ReportsNoFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		closeFirst bool
+		wantErr    bool
+	}{
+		{name: "closed on purpose"},
+		{name: "a listener already gone", closeFirst: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("listen: %v", err)
+			}
+			if tc.closeFirst {
+				_ = listener.Close()
+			}
+			httpServer := &http.Server{Handler: http.NotFoundHandler(), ReadHeaderTimeout: time.Second}
+
+			serverErr, startErr := startServing(t.Context(), &config.Config{}, httpServer, listener.Addr().String(), listener)
+			if startErr != nil {
+				t.Fatalf("startServing: %v", startErr)
+			}
+			if !tc.closeFirst {
+				_ = httpServer.Close()
+			}
+
+			select {
+			case reported, open := <-serverErr:
+				if gotErr := open && reported != nil; gotErr != tc.wantErr {
+					t.Errorf("serve failure reported = %t (%v), want %t", gotErr, reported, tc.wantErr)
+				}
+			case <-time.After(testHTTPLivenessTimeout):
+				t.Fatal("the serve loop reported nothing after it stopped")
+			}
+		})
+	}
+}
+
 // cancelledDeadlineContext returns a context whose deadline is the given
 // distance from now, already cancelled so it matches the state the drain sees:
 // the serve context is done before the budget is ever computed.
@@ -11198,6 +14378,12 @@ func TestServerCardSubscriptions_AvailabilityFollowsTheTransport(t *testing.T) {
 			if legacy["available"] != !testCase.wantListen {
 				t.Errorf("resources/subscribe available = %v, want %v", legacy["available"], !testCase.wantListen)
 			}
+			// The revision a client must negotiate to send a listen at all,
+			// whichever transport this deployment runs: an earlier one would
+			// tell a client the method exists where the handshake refuses it.
+			if listen["since_protocol"] != protocolVersionStatelessOnly {
+				t.Errorf("subscriptions/listen since_protocol = %v, want %q, the revision that introduced it", listen["since_protocol"], protocolVersionStatelessOnly)
+			}
 		})
 	}
 }
@@ -11343,6 +14529,28 @@ func TestTelemetryShutdownTimeout_IsABoundRatherThanZero(t *testing.T) {
 	if telemetryShutdownTimeout > time.Minute {
 		t.Errorf("telemetryShutdownTimeout = %v, want at most a minute: a process that will not exit is worse than telemetry that did not flush",
 			telemetryShutdownTimeout)
+	}
+}
+
+// TestStdioStartupDrainTimeout_OutlastsTheWorkItWaitsFor pins the drain's
+// default, which the tests of runStdio shorten and so cannot see.
+//
+// When serving ends, the startup work is cancelled first, so what the drain
+// waits for is at most a catalog build a moment from finishing. A drain that
+// collapsed to zero would not wait at all: the select would choose at random
+// between a startup that had finished and a timer that had already fired, so a
+// catalog failure would be reported on some runs and not on others, and on
+// the rest the startup goroutine would outlive runStdio and keep logging. It
+// is also what a person pressing Ctrl-C waits on, so it stays below the
+// budget an HTTP deployment gives its own in-flight requests.
+func TestStdioStartupDrainTimeout_OutlastsTheWorkItWaitsFor(t *testing.T) {
+	if stdioStartupDrainTimeout < time.Second {
+		t.Errorf("stdioStartupDrainTimeout = %s, want at least a second: a cancelled catalog build takes a few hundred milliseconds to return",
+			stdioStartupDrainTimeout)
+	}
+	if stdioStartupDrainTimeout >= httpShutdownTimeout {
+		t.Errorf("stdioStartupDrainTimeout = %s, want below the %s httpShutdownTimeout: it is a backstop, not a budget",
+			stdioStartupDrainTimeout, httpShutdownTimeout)
 	}
 }
 

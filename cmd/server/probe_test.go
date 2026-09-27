@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -44,6 +45,15 @@ func TestParseListenerFlags_ReadsEverySpelling(t *testing.T) {
 		{name: "equals spellings", args: []string{"--http-addr=:9090", "--tls-cert=/c.pem", "--transport=http"}, want: listenerFlags{addr: ":9090", tlsCert: "/c.pem", transport: "http"}},
 		{name: "single dash", args: []string{"-http", "-http-addr", "/run/mcp.sock"}, want: listenerFlags{addr: "/run/mcp.sock", http: true, httpSet: true}},
 		{name: "http=false", args: []string{"--http=false"}, want: listenerFlags{addr: ":8080", httpSet: true}},
+		{name: "http=true", args: []string{"--http=true"}, want: listenerFlags{addr: ":8080", http: true, httpSet: true}},
+		// A positional is a value, even when it spells a flag's name: the
+		// peer's own parser read "http" here as what --tool-search searches
+		// for, and reading it as --http would send the probe to a port a stdio
+		// server never opened.
+		{name: "positionals that spell a flag's name", args: []string{"--tool-search", "http", "probe"}, want: listenerFlags{addr: ":8080"}},
+		{name: "a version query is not a server", args: []string{"--version"}, want: listenerFlags{addr: ":8080", utility: true}},
+		{name: "help is not a server", args: []string{"-h"}, want: listenerFlags{addr: ":8080", utility: true}},
+		{name: "long help is not a server", args: []string{"--help"}, want: listenerFlags{addr: ":8080", utility: true}},
 		{name: "unknown flags and positionals between", args: []string{"--gitlab-url", "https://gitlab.example.com", "extra", "--read-only", "--http-addr=:1234", "--"}, want: listenerFlags{addr: ":1234"}},
 		{name: "a value missing at the end", args: []string{"--http", "--http-addr"}, want: listenerFlags{addr: "", http: true, httpSet: true}},
 		{name: "a bare -- ends the scan", args: []string{"--http-addr=:9090", "--", "--http", "--http-addr=:1234"}, want: listenerFlags{addr: ":9090"}},
@@ -441,6 +451,8 @@ func TestRunProbe_Discovery(t *testing.T) {
 		{name: "the image's command run by a client over stdio", peers: []probePeer{server(20, "--transport", "auto", "--http-addr", "0.0.0.0:8080")}, stdinNull: map[int32]bool{20: false}, wantCode: probeHealthy, wantSaid: "serves stdio"},
 		{name: "an HTTP instance nobody answers for", peers: []probePeer{server(20, "--http", "--http-addr="+closedAddr)}, wantCode: probeUnhealthy, wantSaid: "pid 20"},
 		{name: "the lowest pid is tried first and a later one rescues", peers: []probePeer{server(30, "--http", "--http-addr="+healthyAddr), server(20, "--http", "--http-addr="+closedAddr)}, wantCode: probeHealthy, wantSaid: "pid 30"},
+		// Both answer, so only the order decides which one is reported.
+		{name: "the lowest pid answers when both would", peers: []probePeer{server(30, "--http", "--http-addr="+healthyAddr), server(20, "--http", "--http-addr="+healthyAddr)}, wantCode: probeHealthy, wantSaid: "pid 20"},
 		{name: "other probes and shutdowns are not instances", peers: []probePeer{server(40, "--probe"), server(41, "--shutdown")}, wantCode: probeUnhealthy, wantSaid: "no running instance"},
 		{name: "a peer with an empty command line is skipped", peers: []probePeer{{pid: 50}}, wantCode: probeUnhealthy, wantSaid: "no running instance"},
 	}
@@ -499,6 +511,13 @@ func TestRunProbe_UnansweredPeers_StayInsideTheHealthCheckBudget(t *testing.T) {
 		t.Errorf("probeBudget is %s, which two sequential attempts at %s each reach on their own: the run bounds nothing",
 			probeBudget, probeTimeout)
 	}
+	// The other side of the same bound: an attempt allowed the whole budget
+	// leaves a later peer no time at all, so the rescue by a second instance
+	// the discovery table relies on could never happen in the image.
+	if probeTimeout <= 0 || probeTimeout >= probeBudget {
+		t.Errorf("probeTimeout is %s against a %s budget; one unanswered attempt must leave the run time to try another",
+			probeTimeout, probeBudget)
+	}
 
 	blocked := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
@@ -530,6 +549,18 @@ func TestRunProbe_UnansweredPeers_StayInsideTheHealthCheckBudget(t *testing.T) {
 	if elapsed >= probeTimeout {
 		t.Errorf("two unanswered peers took %s under a stated budget of %s, want the run's own deadline to bound them rather than %s per attempt",
 			elapsed, budget, probeTimeout)
+	}
+
+	// A caller's deadline further out than the budget does not stretch the
+	// run: whichever is nearer ends it, so a probe handed a generous context
+	// still answers inside the HEALTHCHECK that is waiting for it.
+	far, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	start = time.Now()
+	code = runProbe(far, nil, "", deps, &said)
+	if elapsed = time.Since(start); code != probeUnhealthy || elapsed >= probeTimeout {
+		t.Errorf("under an hour-long caller deadline the run took %s and answered %d, want the %s budget to bound it: %s",
+			elapsed, code, budget, said.String())
 	}
 }
 
@@ -698,6 +729,61 @@ func TestCertificateName_PrefersDNSThenIPThenCommonName(t *testing.T) {
 			t.Parallel()
 			if got := certificateName(tc.cert); got != tc.want {
 				t.Errorf("certificateName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProbeExitCodes_AreTheNumbersTheirReadersExpect pins the numbers --probe
+// exits with, which every other test here compares with the same constants
+// that produced them. The image's HEALTHCHECK reads 0 as healthy and 1 as
+// unhealthy and nothing else, and the reference documents 2 for a target that
+// does not parse, which must be told apart from both verdicts.
+func TestProbeExitCodes_AreTheNumbersTheirReadersExpect(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		{name: "healthy", got: probeHealthy, want: 0},
+		{name: "unhealthy", got: probeUnhealthy, want: 1},
+		{name: "usage", got: probeUsage, want: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.got != tc.want {
+				t.Errorf("the %s exit code is %d, want %d", tc.name, tc.got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProbeTLSConfig_HoldsTheServersFloor covers the client half of TLS: the
+// probe refuses anything below TLS 1.2, the floor tlsConfigFor states for the
+// listener, whether it verifies against the pinned certificate or against the
+// system roots. A probe accepting less would report healthy a listener no
+// real client could negotiate with at the floor the operator was promised.
+func TestProbeTLSConfig_HoldsTheServersFloor(t *testing.T) {
+	t.Parallel()
+
+	pin := writeCertPEM(t, freshSelfSignedCert(t))
+	for _, tc := range []struct {
+		name   string
+		target probeTarget
+	}{
+		{name: "a pinned https listener", target: probeTarget{scheme: "https", addr: "127.0.0.1:8443", certFile: pin}},
+		{name: "an https target without a pin", target: probeTarget{scheme: "https", addr: "mcp.example:443"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg, err := probeTLSConfig(tc.target)
+			if err != nil {
+				t.Fatalf("probeTLSConfig: %v", err)
+			}
+			if cfg.MinVersion != tls.VersionTLS12 {
+				t.Errorf("MinVersion = %#x, want TLS 1.2 (%#x)", cfg.MinVersion, tls.VersionTLS12)
 			}
 		})
 	}

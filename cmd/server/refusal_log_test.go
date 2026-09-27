@@ -36,6 +36,9 @@ func TestLineThrottle_OnePerMessagePerWindow(t *testing.T) {
 		{name: "past the window it is written with the count", advance: time.Second, msg: "a", wantWrite: true, wantSuppressed: 3},
 		{name: "the count restarts", msg: "a", wantWrite: false},
 		{name: "the other message's window is its own", advance: 30 * time.Second, msg: "b", wantWrite: true, wantSuppressed: 0},
+		// Only what was held since the last written line: the three reported
+		// before it are not counted a second time.
+		{name: "the next report carries only its own window's count", advance: 30 * time.Second, msg: "a", wantWrite: true, wantSuppressed: 1},
 	}
 	// sequential: each step's verdict depends on the writes before it
 	for _, tc := range cases {
@@ -82,6 +85,23 @@ func TestLineThrottle_Log(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "debug only") {
 		t.Error("a line below the handler's level was written")
+	}
+}
+
+// TestRefusalLog_HoldsEachMessageForAMinuteOnTheWallClock pins the throttle
+// both gates share, which the tests above build for themselves. A caller with
+// no credential chooses how often these lines are caused, so the window is
+// what bounds them: a minute writes each message at most sixty times an hour
+// whatever the rate, and a shorter one would hand the flood straight back to
+// the log it exists to protect.
+func TestRefusalLog_HoldsEachMessageForAMinuteOnTheWallClock(t *testing.T) {
+	t.Parallel()
+
+	if refusalLog.window != time.Minute {
+		t.Errorf("the shared refusal throttle holds a message for %s, want a minute", refusalLog.window)
+	}
+	if before, got := time.Now(), refusalLog.now(); got.Before(before.Add(-time.Second)) || got.After(time.Now().Add(time.Second)) {
+		t.Errorf("the shared refusal throttle reads %v as now, want the wall clock", got)
 	}
 }
 

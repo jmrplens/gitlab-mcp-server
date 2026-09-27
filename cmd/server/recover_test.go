@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -101,6 +103,32 @@ func TestRecoverPanics_KeepsTheProcessAndHidesTheStack(t *testing.T) {
 			t.Errorf("code = %d, want %d (internal error)", rpcErr.Code, jsonrpc.CodeInternalError)
 		}
 	})
+}
+
+// TestRecoverPanics_LogsTheDefectAtError pins where the panic goes instead of
+// the caller: an ERROR record naming the method and carrying the panic's text.
+// A recovered panic is a defect that is now invisible to the client by design,
+// so the log line is the only trace of it, and a deployment logging at warn
+// must still see it.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestRecoverPanics_LogsTheDefectAtError(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn})))
+
+	_, _ = recoverPanics(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		panic("boom in the handler")
+	})(context.Background(), "resources/read", nil)
+
+	for _, want := range []string{`"level":"ERROR"`, `"method":"resources/read"`, "boom in the handler"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(logged.String(), want) {
+				t.Errorf("the recovered panic's log line does not carry %s: %q", want, logged.String())
+			}
+		})
+	}
 }
 
 // noCapabilities returns the nil the SDK returns for a request that declared

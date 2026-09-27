@@ -108,12 +108,19 @@ func buildDiscoveryCard(cfg *config.Config) ([]byte, error) {
 		card["remotes"] = []any{remote}
 	}
 
-	out, err := json.MarshalIndent(card, "", "  ")
+	out, err := marshalDiscoveryCard(card, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshaling the server card: %w", err)
 	}
 	return out, nil
 }
+
+// marshalDiscoveryCard is the encoder [buildDiscoveryCard] renders with, a
+// variable only so a test can make it fail. Nothing the card is built from can
+// make encoding/json refuse it, and the wrapped error is still what the route
+// answers 503 over, so the branch is driven through this seam rather than left
+// unrun.
+var marshalDiscoveryCard = json.MarshalIndent
 
 // discoveryCardRemote describes how to connect to THIS deployment, or nil
 // when the deployment cannot say.

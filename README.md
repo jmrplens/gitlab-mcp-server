@@ -474,38 +474,38 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,357 |       311,021 |
-| Unit tests (`_test.go`)  |       931 |       613,078 |
+| Source (`.go`, non-test) |     1,357 |       311,029 |
+| Unit tests (`_test.go`)  |       931 |       619,722 |
 | End-to-end tests         |       497 |       104,045 |
-| **Total**                | **2,785** | **1,028,144** |
+| **Total**                | **2,785** | **1,034,796** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,733 |
+| Source functions                | 10,732 |
 | . Exported (public)             |  3,255 |
-| . Unexported (private)          |  7,478 |
-| Unit test functions (`TestXxx`) | 18,174 |
-| Subtests (`t.Run(...)`)         |  6,571 |
+| . Unexported (private)          |  7,477 |
+| Unit test functions (`TestXxx`) | 18,303 |
+| Subtests (`t.Run(...)`)         |  6,642 |
 | End-to-end test functions       |  1,355 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.97× more tests than code |
+| Test lines vs source lines         | 1.99× more tests than code |
 | Average source file length         |                 ~229 lines |
-| Average test file length           |                 ~659 lines |
-| Comment lines in source            |  74,348 (~23.9% of source) |
+| Average test file length           |                 ~666 lines |
+| Comment lines in source            |  74,388 (~23.9% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 9,599 |
-| `defer` statements                 | 1,175 |
+| `if err != nil` checks             | 9,657 |
+| `defer` statements                 | 1,205 |
 | `struct` types defined             | 3,460 |
 | `//nolint` suppressions            |   241 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
@@ -522,14 +522,14 @@ and the workaround this server carries until it ships.
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,831 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 11,523 lines |
+| Longest source file | `cmd/server/main.go`. 4,810 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 14,731 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,654 pages of A4                                                                                      |
+| Source code printed at 55 lines/page | ~5,655 pages of A4                                                                                      |
 | Source lines mentioning `"gitlab"`   | 14,505 (impossible to avoid)                                                                            |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                        |
 | Longest test function name           | `TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor` (90 chars) |

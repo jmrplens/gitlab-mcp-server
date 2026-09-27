@@ -131,6 +131,32 @@ func TestTelemetryUsers_EveryPooledServerAgreesOnTheDigest(t *testing.T) {
 	}
 }
 
+// TestTelemetryUsers_TheFullPolicyNamesTheCallerTheHandlersResolved covers
+// what the attributer hands the redactor: the id and the name the tool
+// handlers resolve for the same request, each under its own key. The digest
+// test above reads only user.hash, which the pseudonymous policy derives from
+// the id alone, so an attributer that dropped or swapped the name would pass
+// it while the full policy an operator chose published the wrong person.
+func TestTelemetryUsers_TheFullPolicyNamesTheCallerTheHandlersResolved(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityName, string(telemetry.IdentityFull))
+	resetIdentityRedactor(t)
+
+	users := telemetryUsers()
+	if users == nil {
+		t.Fatal("no attributer was built for the full policy")
+	}
+	ctx := toolutil.IdentityToContext(context.Background(),
+		toolutil.UserIdentity{UserID: "15767218", Username: "someone"})
+
+	got := map[string]string{}
+	for _, attr := range users.UserAttributes(ctx, nil) {
+		got[string(attr.Key)] = attr.Value.AsString()
+	}
+	if got[telemetry.AttrUserID] != "15767218" || got[telemetry.AttrUserName] != "someone" {
+		t.Errorf("attributes = %v, want %s=15767218 and %s=someone", got, telemetry.AttrUserID, telemetry.AttrUserName)
+	}
+}
+
 // digestOf pulls user.hash out of an attribute set.
 func digestOf(t *testing.T, attrs []attribute.KeyValue) string {
 	t.Helper()
@@ -295,9 +321,11 @@ func TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading(t *testing.T) {
 			unwanted: []string{"telemetry records caller identity"},
 		},
 		{
+			// At WARN, so a deployment logging at warn still learns that
+			// names leave the process.
 			name:   "full names what leaves the process",
 			policy: "full",
-			want:   []string{"telemetry records caller identity", "the GitLab user id and username"},
+			want:   []string{`level=WARN msg="telemetry records caller identity"`, "the GitLab user id and username"},
 		},
 		{
 			name:   "a configured key is stable across replicas",
@@ -310,6 +338,17 @@ func TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading(t *testing.T) {
 			policy:   "pseudonymous",
 			key:      "a deployment-wide secret",
 			rotation: "24h",
+			// At WARN: two settings that cannot both hold are a
+			// configuration to fix, not a line to read past.
+			want: []string{`level=WARN msg="telemetry pseudonyms use the configured key; the rotation interval is ignored"`},
+		},
+		{
+			// Any rotation at all is cancelled, not only a long one: the key
+			// is the operator's to rotate whatever interval they also asked for.
+			name:     "a configured key cancels even a short rotation",
+			policy:   "pseudonymous",
+			key:      "a deployment-wide secret",
+			rotation: "1m",
 			want:     []string{"the rotation interval is ignored"},
 		},
 		{
@@ -317,6 +356,14 @@ func TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading(t *testing.T) {
 			policy:   "pseudonymous",
 			rotation: "24h",
 			want:     []string{"generated key that rotates"},
+		},
+		{
+			// A generated key without a rotation lives as long as the
+			// process, so there is nothing about it to announce, and above
+			// all not that it rotates.
+			name:     "a generated key that does not rotate says nothing about rotating",
+			policy:   "pseudonymous",
+			unwanted: []string{"rotates", "configured key"},
 		},
 	}
 
@@ -342,7 +389,7 @@ func TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading(t *testing.T) {
 			}
 			for _, unwanted := range tt.unwanted {
 				if strings.Contains(logged, unwanted) {
-					t.Errorf("startup log %q announces %q for a policy that records nobody", logged, unwanted)
+					t.Errorf("startup log %q says %q, which this configuration does not do", logged, unwanted)
 				}
 			}
 		})

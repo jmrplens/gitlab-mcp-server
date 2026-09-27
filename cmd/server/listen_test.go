@@ -300,6 +300,11 @@ func TestParseSocketMode_ReadsOctal(t *testing.T) {
 		{name: "go style prefix", value: "0o600", want: 0o600},
 		{name: "owner only", value: "600", want: 0o600},
 		{name: "world readable", value: "666", want: 0o666},
+		// The top of the permission bits is a mode like any other; the refusal
+		// starts one past it, at the setuid, setgid and sticky bits.
+		{name: "every permission bit", value: "777", want: 0o777},
+		{name: "the smallest usable mode", value: "1", want: 0o001},
+		{name: "one past the permission bits", value: "1000", wantErr: true},
 		{name: "not a number", value: "rw-rw----", wantErr: true},
 		{name: "not octal", value: "0899", wantErr: true},
 		{name: "zero is not a usable mode", value: "0", wantErr: true},

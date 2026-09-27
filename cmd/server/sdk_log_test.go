@@ -108,7 +108,7 @@ func TestSDKLogHandler_SessionChatterIsNotTheDefaultStream(t *testing.T) {
 // because the defect is invisible in the text: both members are there.
 func TestSDKLogHandler_LevelAttributeDoesNotOverwriteTheSeverity(t *testing.T) {
 	logger, buf := sdkLogSink(slog.LevelDebug)
-	logger.Info("client log level set", "level", "")
+	logger.Info("client log level set", "level", "", "session_id", "s1")
 
 	records := decodeRecords(t, buf)
 	if len(records) != 1 {
@@ -120,6 +120,51 @@ func TestSDKLogHandler_LevelAttributeDoesNotOverwriteTheSeverity(t *testing.T) {
 	}
 	if _, ok := records[0]["sdk_level"]; !ok {
 		t.Error("the SDK's own level attribute was dropped rather than renamed")
+	}
+	// Only the colliding key moves: an aggregator querying the SDK's other
+	// attributes by name must find them where the SDK put them.
+	if got := records[0]["session_id"]; got != "s1" {
+		t.Errorf("session_id = %v, want s1 left under its own name; only a key the record reserves is renamed", got)
+	}
+}
+
+// TestSDKLogHandler_AnswersEnabledForTheBaseHandler pins that the wrapper
+// asks the process handler before a record is built. A record that is neither
+// demoted nor renamed goes straight to the base's Handle, which writes what it
+// is given without looking at the level, so a wrapper answering yes for
+// everything would put the SDK's debug output onto a stream set to info.
+func TestSDKLogHandler_AnswersEnabledForTheBaseHandler(t *testing.T) {
+	logger, buf := sdkLogSink(slog.LevelInfo)
+	logger.Debug("an SDK detail nobody asked for")
+
+	if records := decodeRecords(t, buf); len(records) != 0 {
+		t.Errorf("a debug record reached a stream set to info: %v", records)
+	}
+	if logger.Handler().Enabled(t.Context(), slog.LevelDebug) {
+		t.Error("Enabled(debug) = true for a base handler set to info")
+	}
+}
+
+// TestSDKLogHandler_RenamesEveryKeyTheRecordReserves covers the whole reserved
+// set rather than the one key the SDK happens to collide on today. A JSON
+// handler writes time, level and msg into every record, and source into every
+// record once AddSource is on, so an SDK attribute under any of the four names
+// would come out beside the field it shadows and a parser keeping the last
+// one reads the SDK's value in its place.
+func TestSDKLogHandler_RenamesEveryKeyTheRecordReserves(t *testing.T) {
+	for _, key := range []string{slog.TimeKey, slog.LevelKey, slog.MessageKey, slog.SourceKey} {
+		t.Run(key, func(t *testing.T) {
+			logger, buf := sdkLogSink(slog.LevelDebug)
+			logger.Info("a message the SDK sent", key, "the SDK's value")
+
+			records := decodeRecords(t, buf)
+			if len(records) != 1 {
+				t.Fatalf("%d records, want 1", len(records))
+			}
+			if got := records[0]["sdk_"+key]; got != "the SDK's value" {
+				t.Errorf("sdk_%s = %v, want the SDK's attribute moved out of the record's own %q", key, got, key)
+			}
+		})
 	}
 }
 
@@ -267,5 +312,18 @@ func TestSDKLogHandler_GroupedAttributesAreLeftAlone(t *testing.T) {
 	}
 	if got := records[0]["level"]; got != "INFO" {
 		t.Errorf("record severity = %v, want INFO", got)
+	}
+
+	// A logger derived with With keeps the group it came from. The SDK
+	// attaches attributes to its loggers, and a derived handler that forgot
+	// the group would start renaming keys that sit safely inside it.
+	buf.Reset()
+	logger.With("session_id", "s1").Info("resource updated notification sent", "level", "info")
+	records = decodeRecords(t, &buf)
+	if len(records) != 1 {
+		t.Fatalf("%d records from the derived logger, want 1", len(records))
+	}
+	if derived, _ := records[0]["sdk"].(map[string]any); derived["level"] != "info" {
+		t.Errorf("the derived logger renamed a grouped attribute: %v", records[0])
 	}
 }

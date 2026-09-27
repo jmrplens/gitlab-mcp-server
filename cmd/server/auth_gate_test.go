@@ -1,18 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -703,10 +706,32 @@ func TestMCPServerGate_ValidToken_AttachesServerAndResolvesPoolOnce(t *testing.T
 
 // TestServerFromRequestContext_WithoutGate_ReturnsNil documents the fallback:
 // without the gate the callback has nothing to return, which is the very
-// "no server available" path the gate exists to prevent.
+// "no server available" path the gate exists to prevent. It is logged as a
+// wiring fault, since the SDK's own answer to the nil names no cause.
 func TestServerFromRequestContext_WithoutGate_ReturnsNil(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
 	if got := serverFromRequestContext(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)); got != nil {
 		t.Errorf("server = %v, want nil when the gate did not run", got)
+	}
+	if !strings.Contains(logged.String(), "reached without a gated server") {
+		t.Errorf("log = %q, want the missing gate reported", logged.String())
+	}
+}
+
+// TestServerFromRequestContext_ReturnsTheGatedServerQuietly is the path every
+// gated request takes: the server the gate resolved comes back, and nothing is
+// logged, because a wiring fault reported on every healthy request would bury
+// the one that is real.
+func TestServerFromRequestContext_ReturnsTheGatedServerQuietly(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	ctx := context.WithValue(t.Context(), resolvedServerContextKey{}, server)
+
+	if got := serverFromRequestContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil)); got != server {
+		t.Errorf("server = %p, want the gated %p", got, server)
+	}
+	if strings.Contains(logged.String(), "reached without a gated server") {
+		t.Errorf("a gated request was reported as a wiring fault: %s", logged.String())
 	}
 }
 
@@ -1804,5 +1829,597 @@ func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
 	budget.charge(source, "198.51.100.1")
 	if blocked, _ := budget.blockedFor(source); !blocked {
 		t.Error("a key whose window lapsed did not charge the source again after cleanup")
+	}
+}
+
+// TestNewTransportBudget_AZeroWindow_DeduplicatesOverTheDefault covers the
+// configuration that reaches the budget with no window of its own: a zero
+// --auth-failure-window, which turns the primary budget off and leaves this one
+// to fall back to the default.
+//
+// The fallback has to reach the accounting, not only the value the budget
+// reports. A pair remembered for no time at all is forgotten at once, so every
+// failure of one client charges the source again, and the fleet budget counts
+// failures rather than clients: the very aggregation it exists to avoid.
+func TestNewTransportBudget_AZeroWindow_DeduplicatesOverTheDefault(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), 0)
+	const source = "203.0.113.7"
+	for range 5 {
+		budget.charge(source, "198.51.100.1")
+	}
+	if blocked, _ := budget.blockedFor(source); blocked {
+		t.Error("one client failing five times exhausted a budget of two distinct clients; a zero window deduplicated over nothing")
+	}
+}
+
+// TestTransportBudget_Charge_RechargesAPairWhoseWindowLapsed covers a pair the
+// sweep has not reached yet. Its window has passed, so the key is a fresh
+// failing client again and the source pays for it, whether or not cleanup has
+// run in between: the sweep bounds the map, and the window is what decides.
+func TestTransportBudget_Charge_RechargesAPairWhoseWindowLapsed(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+	const source, key = "203.0.113.7", "198.51.100.1"
+	budget.charge(source, key)
+
+	budget.mu.Lock()
+	budget.charged[source+"\x00"+key] = time.Now().Add(-2 * authFailureWindow)
+	budget.mu.Unlock()
+
+	budget.charge(source, key)
+	if blocked, _ := budget.blockedFor(source); !blocked {
+		t.Error("a key whose window lapsed was not charged again; the source is let off a client it has not paid for this window")
+	}
+}
+
+// TestTransportBudget_Charge_KeepsTheSourceAndKeyApart pins the separator in
+// the pair a charge is remembered under.
+//
+// Two addresses concatenate into one string in more than one way: source
+// 10.0.0.1 with key 23.4.5.6 and source 10.0.0.12 with key 3.4.5.6 both read
+// 10.0.0.123.4.5.6. Without the separator the second pair is taken for the
+// first, and a source that has never been charged is let off its first client.
+func TestTransportBudget_Charge_KeepsTheSourceAndKeyApart(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow), authFailureWindow)
+	budget.charge("10.0.0.1", "23.4.5.6")
+	budget.charge("10.0.0.12", "3.4.5.6")
+
+	for _, source := range []string{"10.0.0.1", "10.0.0.12"} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			if blocked, _ := budget.blockedFor(source); !blocked {
+				t.Errorf("source %s was not charged for its one client", source)
+			}
+		})
+	}
+}
+
+// TestNewHeader_IgnoresAnOddTrailingName pins what the pair builder does with
+// a name that has no value: it is dropped, rather than emitted empty or read
+// past the end of the list.
+func TestNewHeader_IgnoresAnOddTrailingName(t *testing.T) {
+	t.Parallel()
+
+	h := newHeader("WWW-Authenticate", `Bearer realm="x"`, "Retry-After")
+
+	if got := h.Get("WWW-Authenticate"); got != `Bearer realm="x"` {
+		t.Errorf("WWW-Authenticate = %q, want the value it was paired with", got)
+	}
+	if _, present := h["Retry-After"]; present {
+		t.Errorf("header = %v, want the unpaired Retry-After left out", h)
+	}
+	if len(h) != 1 {
+		t.Errorf("header = %v, want exactly the one complete pair", h)
+	}
+}
+
+// TestLongestAuthBlock_AnActiveBlockWithNoTimeLeftStillRefuses covers a budget
+// that reports itself blocked with nothing left to wait.
+//
+// Whether a request is refused is the budget's answer, and the time is only
+// what Retry-After says about it. A block ending this instant is still a block,
+// and [retryAfterSeconds] answers it with one second; dropping it for having no
+// length would admit the request the budget just refused.
+func TestLongestAuthBlock_AnActiveBlockWithNoTimeLeftStillRefuses(t *testing.T) {
+	t.Parallel()
+
+	blocked, after, reason := longestAuthBlock(true, 0, false, 0, false, 0)
+	if !blocked || after != 0 || reason != mcpotel.AuthBlockFailureLockout {
+		t.Errorf("longestAuthBlock(active, 0) = (%v, %v, %q), want (true, 0, %q)",
+			blocked, after, reason, mcpotel.AuthBlockFailureLockout)
+	}
+}
+
+// TestMcpServerGate_WithIdentity_AnUnresolvedUserIsLeftAbsent covers the pool
+// holding an entry whose user it could not name: GitLab accepted the token and
+// answered /user without an id.
+//
+// The entry exists, so the lookup succeeds, and it is the identity inside it
+// that is empty. Storing it would put an identity with an instance and no user
+// on the context, which a handler reads as an authenticated call by nobody.
+func TestMcpServerGate_WithIdentity_AnUnresolvedUserIsLeftAbsent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"username":"no-id-sent"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	gate := newGateAgainst(t, okFactory, srv.URL)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-anonymous")
+	if _, failure := gate.resolve(req); failure != nil {
+		t.Fatalf("resolve: %+v", failure)
+	}
+	if _, pooled := gate.pool.IdentityFor("glpat-anonymous", srv.URL); !pooled {
+		t.Fatal("the pool holds no entry for the credential; the case under test is an entry with an unnamed user")
+	}
+
+	if got := toolutil.IdentityFromContext(gate.withIdentity(t.Context(), req)); got != (toolutil.UserIdentity{}) {
+		t.Errorf("identity = %+v, want nothing stored for a user the pool could not name", got)
+	}
+}
+
+// TestMCPServerGate_Blocked_RetryAfterIsTheBlockThatHoldsIt is the gate's
+// half of the guard test of the same name: the 429 announces what the block
+// holding the request has left, ten minutes for the distinct-token budget's
+// first rung here, and not the one-minute failure window.
+func TestMCPServerGate_Blocked_RetryAfterIsTheBlockThatHoldsIt(t *testing.T) {
+	gate := newGateAgainst(t, okFactory, gateStubGitLab(t, true))
+	gate.limiter = nil
+	gate.spray = serverpool.NewDistinctTokenBudget(2, time.Hour, 10*time.Minute)
+	handler := gate.middleware(http.NotFoundHandler())
+
+	post := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+		if token != "" {
+			req.Header.Set("PRIVATE-TOKEN", token)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	post("glpat-refused-a")
+	post("glpat-refused-b")
+
+	rec := post("")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+	assertRetryAfterWithin(t, rec.Header().Get("Retry-After"), 9*time.Minute, 10*time.Minute)
+}
+
+// TestMCPServerGate_OAuthMode_EachUnauthorizedNamesItsOwnVerdict drives the
+// gate's two 401s in oauth mode, where their challenges differ: RFC 6750
+// section 3.1 forbids an error code on the answer to a request that carried no
+// credential, and a credential GitLab refused is answered with invalid_token,
+// the verdict the bearer guard gives the same judgement. In legacy mode the two
+// challenges are the same string, so only this mode can tell them apart.
+func TestMCPServerGate_OAuthMode_EachUnauthorizedNamesItsOwnVerdict(t *testing.T) {
+	newOAuthGate := func(t *testing.T) *mcpServerGate {
+		t.Helper()
+		gate := newGateAgainst(t, okFactory, gateStubGitLab(t, true))
+		gate.limiter = nil
+		gate.oauthMode, gate.bearerOnly = true, true
+		gate.challenge = oauthChallenge("api", testMetadataURL)
+		return gate
+	}
+	post := func(t *testing.T, gate *mcpServerGate, bearer string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		rec := httptest.NewRecorder()
+		gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("no credential", func(t *testing.T) {
+		gate := newOAuthGate(t)
+		rec := post(t, gate, "")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+		if got := rec.Header().Get("WWW-Authenticate"); got != gate.challenge {
+			t.Errorf("challenge = %q, want the plain %q: a request that carried nothing has got nothing wrong", got, gate.challenge)
+		}
+	})
+
+	t.Run("a credential GitLab refused", func(t *testing.T) {
+		gate := newOAuthGate(t)
+		rec := post(t, gate, "gloas-refused")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+		if got := rec.Header().Get("WWW-Authenticate"); !strings.Contains(got, `error="invalid_token"`) {
+			t.Errorf("challenge = %q, want the invalid_token verdict", got)
+		}
+	})
+}
+
+// gateRequestCarrying builds a POST to the MCP endpoint carrying each header
+// whose value is not empty.
+func gateRequestCarrying(t *testing.T, headers map[string]string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	for name, value := range headers {
+		if value != "" {
+			req.Header.Set(name, value)
+		}
+	}
+	return req
+}
+
+// TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode drives every
+// refusal the legacy gate makes through its middleware and reads what a client
+// reads: the status, the JSON-RPC code, the challenge, the Retry-After and the
+// sentence.
+//
+// The status and the code travel together and a client may act on either, so
+// each is asserted apart; a refusal whose code was taken from a neighboring
+// branch reads as a different condition to a client that routes on the code.
+// Only a block answers Retry-After. The failure lockout and the transport
+// source each have a row, with windows the other does not share, so a block
+// announced with its neighbor's remaining time is a different number; the
+// distinct-token block is held by
+// TestMCPServerGate_Blocked_RetryAfterIsTheBlockThatHoldsIt.
+func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
+	stub := gateStubGitLab(t, false)
+	refusing := gateStubGitLab(t, true)
+
+	cases := []struct {
+		name string
+		// instance is the stub the gate's pool asks about credentials.
+		instance string
+		// factory builds the pool's servers; nil is okFactory.
+		factory serverpool.ServerFactory
+		// arm puts the gate in the state under test, or nil for none.
+		arm       func(*mcpServerGate)
+		token     string
+		header    string
+		session   string
+		status    int
+		code      int
+		challenge string
+		// retryAfter is the length of the block that refused the request,
+		// or zero where the refusal must carry no Retry-After; see
+		// [assertRetryAfterIsTheBlock].
+		retryAfter time.Duration
+		says       string
+	}{
+		{
+			name: "no credential", instance: stub,
+			status: http.StatusUnauthorized, code: errCodeUnauthorized,
+			challenge: legacyAuthChallenge, says: missingTokenMessage,
+		},
+		{
+			name: "a blocked address", instance: stub,
+			arm: func(g *mcpServerGate) {
+				g.limiter = serverpool.NewAuthRateLimiter(1, authFailureWindow)
+				g.limiter.RecordFailure("192.0.2.1")
+			},
+			token:  gateTestToken,
+			status: http.StatusTooManyRequests, code: errCodeTooManyRequests,
+			retryAfter: authFailureWindow, says: "Too many failed authentication attempts",
+		},
+		{
+			// The gate's own failure limiter stays armed and unspent, so the
+			// one budget holding the request is the source's, and a
+			// Retry-After taken from the limiter's side reads as a second.
+			name: "a blocked transport source", instance: stub,
+			arm: func(g *mcpServerGate) {
+				g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, sourceBlockWindow), sourceBlockWindow)
+				g.sourceBudget.charge("192.0.2.1", "198.51.100.1")
+			},
+			token:  gateTestToken,
+			status: http.StatusTooManyRequests, code: errCodeTooManyRequests,
+			retryAfter: sourceBlockWindow, says: "Too many failed authentication attempts",
+		},
+		{
+			name: "no instance selected where several are published", instance: stub,
+			arm:    func(g *mcpServerGate) { g.gitlabURLs = []string{stub, "https://gitlab.other.example"} },
+			token:  gateTestToken,
+			status: http.StatusBadRequest, code: errCodeInvalidRequest,
+			says: "Ask the operator which instances it publishes.",
+		},
+		{
+			name: "no instance named where none is published", instance: stub,
+			arm:    func(g *mcpServerGate) { g.gitlabURLs = nil },
+			token:  gateTestToken,
+			status: http.StatusBadRequest, code: errCodeInvalidRequest,
+			says: capitalizeFirst(serverpool.ErrMissingGitLabURL.Error()) + ".",
+		},
+		{
+			name: "a destination the caller named that this server will not dial", instance: stub,
+			arm:   func(g *mcpServerGate) { g.gitlabURLs = nil },
+			token: gateTestToken, header: "http://169.254.169.254",
+			status: http.StatusBadRequest, code: errCodeInvalidRequest,
+			says: "destination refused",
+		},
+		{
+			name: "a credential GitLab refused", instance: refusing,
+			token:  "glpat-refused",
+			status: http.StatusUnauthorized, code: errCodeUnauthorized,
+			challenge: legacyAuthChallenge, says: "GitLab rejected this token.",
+		},
+		{
+			name: "a pool that could not be built", instance: stub, factory: failingFactory,
+			token:  gateTestToken,
+			status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable,
+			says: "retry shortly",
+		},
+		{
+			name: "a session another credential owns", instance: stub,
+			arm:   func(g *mcpServerGate) { g.sessions = newSessionOwners(false) },
+			token: gateTestToken, session: "opened-by-somebody-else",
+			status: http.StatusNotFound, code: errCodeInvalidRequest,
+			says: "does not belong to the presented credential",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			factory := tc.factory
+			if factory == nil {
+				factory = okFactory
+			}
+			gate := newGateAgainst(t, factory, tc.instance)
+			if tc.arm != nil {
+				tc.arm(gate)
+			}
+			rec := httptest.NewRecorder()
+			gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, gateRequestCarrying(t, map[string]string{
+				"PRIVATE-TOKEN":                   tc.token,
+				serverpool.RequestOptionGitLabURL: tc.header,
+				mcpSessionIDHeader:                tc.session,
+			}))
+
+			if rec.Code != tc.status {
+				t.Errorf("status = %d, want %d", rec.Code, tc.status)
+			}
+			decoded := decodeJSONRPCError(t, rec.Body.String())
+			if decoded.Error.Code != tc.code {
+				t.Errorf("error.code = %d, want %d", decoded.Error.Code, tc.code)
+			}
+			if got := rec.Header().Get("WWW-Authenticate"); got != tc.challenge {
+				t.Errorf("WWW-Authenticate = %q, want %q", got, tc.challenge)
+			}
+			assertRetryAfterIsTheBlock(t, rec.Header().Get("Retry-After"), tc.retryAfter)
+			if !strings.Contains(decoded.Error.Message, tc.says) {
+				t.Errorf("message = %q, want it to carry %q", decoded.Error.Message, tc.says)
+			}
+		})
+	}
+}
+
+// TestMCPServerGate_OAuthMode_BuildsTheEntryOnTheScopesTheBearerCarried covers
+// the scopes the bearer middleware verified reaching the pool.
+//
+// The pool cannot ask GitLab what an OAuth access token may do, since the PAT
+// self endpoint does not answer for one, so the scopes introspection already
+// returned are the only account of its authority there is. A read_api bearer
+// whose scopes were dropped on the way is built as a token of unknown
+// authority, which is to say one that may write, and is served the writing
+// surface. The stub answers /user and nothing else, which is what an instance
+// asked about an OAuth token's scopes effectively does.
+func TestMCPServerGate_OAuthMode_BuildsTheEntryOnTheScopesTheBearerCarried(t *testing.T) {
+	stub := gateStubGitLab(t, false)
+	pool := serverpool.New(&config.Config{GitLabURL: stub, Tier: edition.Free, TierExplicit: true}, okFactory)
+	t.Cleanup(pool.Close)
+	gate := &mcpServerGate{
+		pool: pool, gitlabURLs: []string{stub},
+		challenge: oauthChallenge("api", testMetadataURL), oauthMode: true, bearerOnly: true,
+	}
+	verify := func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return &auth.TokenInfo{UserID: "7", Scopes: []string{"read_api"}, Expiration: time.Now().Add(time.Hour)}, nil
+	}
+	handler := auth.RequireBearerToken(verify, nil)(gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer gloas-read-only")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	entry := gateTestEntry(t, pool, "gloas-read-only", stub)
+	if cfg := entry.Config(); !cfg.ReadOnly || !slices.Equal(cfg.TokenScopes, []string{"read_api"}) {
+		t.Errorf("entry built with scopes %v, read-only %v; want the bearer's [read_api] and a read-only surface",
+			cfg.TokenScopes, cfg.ReadOnly)
+	}
+}
+
+// TestMCPServerGate_OAuthMode_TheExemptionIsJudgedOnTheBearer covers which
+// credential the address-block exemption asks the pool about in oauth mode.
+//
+// The request executes as its bearer, never as a PRIVATE-TOKEN it may also
+// carry, so the bearer is what has to be admitted. A request pairing an
+// admitted PRIVATE-TOKEN with a bearer nobody has verified would otherwise be
+// let past the block on the strength of a credential it will not run as, and
+// the unverified bearer would be taken to GitLab from an address that is
+// blocked.
+func TestMCPServerGate_OAuthMode_TheExemptionIsJudgedOnTheBearer(t *testing.T) {
+	stub := gateStubGitLab(t, false)
+	gate := newGateAgainst(t, okFactory, stub)
+	gate.oauthMode, gate.bearerOnly = true, true
+	gate.challenge = oauthChallenge("api", testMetadataURL)
+	gateTestEntry(t, gate.pool, "gloas-admitted", stub)
+	gate.limiter = serverpool.NewAuthRateLimiter(1, authFailureWindow)
+	gate.limiter.RecordFailure("192.0.2.1")
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", "gloas-admitted")
+	req.Header.Set("Authorization", "Bearer gloas-never-verified")
+	rec := httptest.NewRecorder()
+	gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d: the bearer is not admitted, whatever PRIVATE-TOKEN says", rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+// TestMCPServerGate_Middleware_HandsTheHandlerWhatItResolved covers what the
+// gate puts on the request it lets through, read where the handler reads it:
+// the server the SDK callback returns, the credential the binding middleware
+// installs, the identity handlers log under with the instance it belongs to,
+// and the mark that makes the request wait for the catalog.
+//
+// It runs in oauth mode with a PRIVATE-TOKEN beside the bearer, both valid and
+// naming different users, so every one of those answers has to come from the
+// bearer: the credential the request executes as.
+func TestMCPServerGate_Middleware_HandsTheHandlerWhatItResolved(t *testing.T) {
+	mux := http.NewServeMux()
+	users := map[string]string{
+		"gloas-user-1": `{"id":1,"username":"user-1"}`,
+		"gloas-user-2": `{"id":2,"username":"user-2"}`,
+	}
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		body, known := users[r.Header.Get("PRIVATE-TOKEN")]
+		if !known {
+			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	gate := newGateAgainst(t, okFactory, srv.URL)
+	gate.oauthMode, gate.bearerOnly = true, true
+	gate.challenge = oauthChallenge("api", testMetadataURL)
+	entry := gateTestEntry(t, gate.pool, "gloas-user-2", srv.URL)
+	state := &credentialState{owner: entry.Owner()}
+	gate.credentials = &credentialStates{}
+	gate.credentials.add(state)
+
+	var reached bool
+	handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		if got := serverFromRequestContext(r); got != entry.Server() {
+			t.Errorf("server = %p, want the bearer's entry's %p", got, entry.Server())
+		}
+		if got := credentialFromRequestContext(r.Context()); got != state {
+			t.Errorf("credential = %v, want the bearer's entry's state", got)
+		}
+		want := toolutil.UserIdentity{UserID: "2", Username: "user-2", Instance: srv.URL}
+		if got := toolutil.IdentityFromContext(r.Context()); got != want {
+			t.Errorf("identity = %+v, want %+v", got, want)
+		}
+		if !readinessEnforced(r.Context()) {
+			t.Error("the request was not marked to wait for the catalog")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", "gloas-user-1")
+	req.Header.Set("Authorization", "Bearer gloas-user-2")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if !reached {
+		t.Fatalf("the request was refused with %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// gateSpend is one request a test sends to put a budget in the state under
+// test: the forwarded client address, and the credential it carries, if any.
+type gateSpend struct{ client, token string }
+
+// TestMCPServerGate_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt holds
+// the gate to the telemetry an operator reads: each refusal is counted once,
+// under the budget that made it, and under no other.
+//
+// Every request arrives through one trusted proxy, so the client a failure is
+// charged to and the source the fleet budget is charged to are different
+// addresses, and a count filed under the wrong one of them is visible.
+func TestMCPServerGate_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt(t *testing.T) {
+	const proxy = "203.0.113.7"
+
+	cases := []struct {
+		name    string
+		arm     func(*mcpServerGate)
+		spend   []gateSpend
+		refused string
+		want    mcpotel.AuthBlockCounts
+	}{
+		{
+			name: "the failure lockout",
+			arm: func(g *mcpServerGate) {
+				g.limiter = serverpool.NewAuthRateLimiter(1, authFailureWindow)
+			},
+			spend:   []gateSpend{{"198.51.100.1", ""}},
+			refused: "198.51.100.1",
+			want:    mcpotel.AuthBlockCounts{FailureLockout: 1},
+		},
+		{
+			name: "the transport source",
+			arm: func(g *mcpServerGate) {
+				g.limiter = nil
+				g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow), authFailureWindow)
+			},
+			spend:   []gateSpend{{"198.51.100.1", ""}},
+			refused: "198.51.100.2",
+			want:    mcpotel.AuthBlockCounts{TransportSource: 1},
+		},
+		{
+			name: "the distinct-token budget",
+			arm: func(g *mcpServerGate) {
+				g.limiter = nil
+				g.spray = serverpool.NewDistinctTokenBudget(2, time.Minute, time.Minute)
+			},
+			spend:   []gateSpend{{"198.51.100.1", "glpat-refused-a"}, {"198.51.100.1", "glpat-refused-b"}},
+			refused: "198.51.100.1",
+			want:    mcpotel.AuthBlockCounts{DistinctTokens: 1},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gate := newGateAgainst(t, okFactory, gateStubGitLab(t, true))
+			gate.trustedProxyHeader = "X-Forwarded-For"
+			gate.trustedProxies = trustedProxiesOf([]string{proxy})
+			gate.blocks = &authBlockCounters{}
+			tc.arm(gate)
+			handler := gate.middleware(http.NotFoundHandler())
+
+			post := func(client, token string) int {
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+				req.RemoteAddr = proxy + ":44444"
+				req.Header.Set("X-Forwarded-For", client)
+				if token != "" {
+					req.Header.Set("PRIVATE-TOKEN", token)
+				}
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				return rec.Code
+			}
+
+			for _, s := range tc.spend {
+				if got := post(s.client, s.token); got != http.StatusUnauthorized {
+					t.Fatalf("spending the budget from %s got %d, want %d", s.client, got, http.StatusUnauthorized)
+				}
+			}
+			if got := gate.blocks.counts(); got != (mcpotel.AuthBlockCounts{}) {
+				t.Fatalf("counts before any refusal = %+v, want none: a failure is not a block", got)
+			}
+			if got := post(tc.refused, ""); got != http.StatusTooManyRequests {
+				t.Fatalf("the request from %s got %d, want %d", tc.refused, got, http.StatusTooManyRequests)
+			}
+			if got := gate.blocks.counts(); got != tc.want {
+				t.Errorf("counts = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }

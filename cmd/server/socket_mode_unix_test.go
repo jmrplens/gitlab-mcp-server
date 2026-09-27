@@ -521,6 +521,43 @@ func TestBindUnixSocket_RefusesAPathNoAddressCanHold(t *testing.T) {
 	}
 }
 
+// TestBindUnixSocket_AStagingPathExactlyAtTheLimitBinds is the other side of
+// the refusal above, and the one that holds the staging overhead to the
+// thirteen bytes the budget is written for: a slash, the ten-byte staging
+// name, a slash and the one-character socket name. A directory that leaves
+// exactly that much room must still bind; a longer staging name or socket
+// name would refuse a path a client could reach.
+func TestBindUnixSocket_AStagingPathExactlyAtTheLimitBinds(t *testing.T) {
+	t.Parallel()
+
+	dir := padDirTo(t, maxUnixPathLen-13)
+	path := filepath.Join(dir, "s")
+	listener, err := bindUnixSocket(t.Context(), path, 0o660)
+	if err != nil {
+		t.Fatalf("bindUnixSocket(%d-byte path, staged at %d bytes) = %v, want it bound", len(path), len(dir)+13, err)
+	}
+	_ = listener.Close()
+	if leftovers := stagingLeftovers(t, dir); len(leftovers) != 0 {
+		t.Errorf("staging directories left behind: %v", leftovers)
+	}
+}
+
+// TestStagingDirMode_OpensTheDirectoryToTheOwnerAlone pins the mode the chmod
+// inside the staging directory relies on. restrictDirToOwner verifies the
+// directory against this same constant, so a mode that let a group traverse
+// it would be applied and then confirmed, and the symlink swap this directory
+// exists to rule out would be back for every member of that group.
+func TestStagingDirMode_OpensTheDirectoryToTheOwnerAlone(t *testing.T) {
+	t.Parallel()
+
+	if stagingDirMode.Perm()&0o077 != 0 {
+		t.Errorf("stagingDirMode = %#o grants group or other access", stagingDirMode)
+	}
+	if stagingDirMode.Perm()&0o700 != 0o700 {
+		t.Errorf("stagingDirMode = %#o, want the owner able to read, write and traverse it", stagingDirMode)
+	}
+}
+
 // TestNewStagingDir_AParentThatCannotHoldIt_IsReported covers the reservation
 // failing, which is the branch that decides whether a bind proceeds at all.
 //
