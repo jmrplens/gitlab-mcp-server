@@ -47,8 +47,9 @@ func openPTY(t *testing.T) (master, slave *os.File) {
 
 // TestMain_StartedByHandWithoutCredentials_ExplainsAndWaits covers the screen
 // shown to somebody who double-clicked the binary: stdin is a terminal and no
-// credentials are configured, so main prints what the program is and what it
-// needs on stderr, waits for a line, and returns without starting a server.
+// credentials are configured, so main prints what the program is, which
+// version it is and what it needs on stderr, waits for a line, and returns
+// without starting a server.
 //
 // A pseudo-terminal is the only honest stdin for this, since the guard is a
 // terminal check and a pipe is exactly what it must not match. The message
@@ -59,6 +60,9 @@ func TestMain_StartedByHandWithoutCredentials_ExplainsAndWaits(t *testing.T) {
 	t.Setenv("GITLAB_URL", "")
 	t.Setenv("GITLAB_TOKEN", "")
 	t.Setenv(config.EnvFileVar, "")
+	// The screen names the build it belongs to, and the commit is the value
+	// that could stand in its place.
+	withBuildIdentity(t, "9.8.7-guidance", "c0mm1t-guidance")
 
 	master, slave := openPTY(t)
 	originalStdin, originalArgs, originalLogger := os.Stdin, os.Args, slog.Default()
@@ -109,6 +113,9 @@ func TestMain_StartedByHandWithoutCredentials_ExplainsAndWaits(t *testing.T) {
 
 	if len(exits) != 0 {
 		t.Errorf("exit codes = %v, want none: the screen returns rather than failing", exits)
+	}
+	if want := "gitlab-mcp-server 9.8.7-guidance\n"; !strings.Contains(stderr.String(), want) {
+		t.Errorf("stderr = %q, want the screen to name the version, %q", stderr.String(), want)
 	}
 	for _, want := range []string{"GITLAB_URL", "GITLAB_TOKEN", "Press Enter to close."} {
 		t.Run(want, func(t *testing.T) {
