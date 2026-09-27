@@ -44,10 +44,6 @@ const (
 	testGoSuffix      = "_test.go"
 )
 
-var metaOnlyProjectionActions = map[string]string{
-	"server.health_check": "meta-only alias for gitlab_server status; the individual surface uses gitlab_server_status",
-}
-
 // coverageReport is the JSON document written to dist/action-spec-coverage.json.
 //
 // SchemaVersion lets downstream consumers detect breaking changes to the file
@@ -175,6 +171,26 @@ type packageActionCoverage struct {
 // value a test can read rather than the end of the test binary.
 var exitProcess = os.Exit
 
+// Seams for failures no planted tree can produce, because each call's input
+// has already been read or built successfully a step earlier, or is compiled
+// into this binary. Each is a variable a test restores.
+var (
+	// buildActionCatalog and addStandaloneCatalog assemble the catalog both
+	// the projection rule and the coverage count read, from specs this binary
+	// was built with, where neither fails.
+	buildActionCatalog   = tools.BuildActionCatalog
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog
+	// parseRegistrationFile parses register.go and register_meta.go for the
+	// packages they name, after the selector audit has already parsed both.
+	parseRegistrationFile = parser.ParseFile
+	// architectureReportFor reads the bridge files the source audit has
+	// already read and passed.
+	architectureReportFor = buildArchitectureReport
+	// marshalIndent encodes a report of strings, ints and maps, which never
+	// fails.
+	marshalIndent = json.MarshalIndent
+)
+
 func main() {
 	exitProcess(runMain(os.Args[1:], os.Stderr))
 }
@@ -251,14 +267,15 @@ func buildCoverageReport(root string) (coverageReport, error) {
 		return coverageReport{}, err
 	}
 
+	// The rows are the report's in package order, and they arrive in it:
+	// discoverDomainSources reads the domains with os.ReadDir, which returns
+	// them sorted by name, and a domain's package is its directory's name. A
+	// sort here could reorder nothing, so there is none.
 	domains := make([]domainCoverage, 0, len(sources))
 	for _, source := range sources {
 		domains = append(domains, domainCoverageFor(source, actionCoverage, registeredPackages, delegatedMetaPackages))
 	}
 
-	sort.Slice(domains, func(first, second int) bool {
-		return domains[first].Package < domains[second].Package
-	})
 	if invariantErr := assertCoverageInvariants(domains); invariantErr != nil {
 		return coverageReport{}, invariantErr
 	}
@@ -268,7 +285,7 @@ func buildCoverageReport(root string) (coverageReport, error) {
 	}
 
 	summary := summarizeCoverage(domains)
-	architecture, err := buildArchitectureReport(root, summary)
+	architecture, err := architectureReportFor(root, summary)
 	if err != nil {
 		return coverageReport{}, err
 	}
@@ -348,11 +365,11 @@ func assertCoverageInvariants(domains []domainCoverage) error {
 }
 
 func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Client) error {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
 		return fmt.Errorf("build action catalog: %w", err)
 	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	catalog, err = addStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		return fmt.Errorf("add standalone dynamic catalog actions: %w", err)
 	}
@@ -361,40 +378,87 @@ func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Cli
 
 // projectionPolicyError is the verdict half of the projection rule: the
 // finding it emits when a catalog carries an action no individual tool name
-// projects, and nil when none does.
+// projects, or when a declaration excusing one excuses nothing, and nil when
+// neither holds.
 //
 // It is separate from the build half above because the catalog that half
 // assembles is the one compiled into this binary, where nothing is missing, so
 // the line that decides whether a finding is emitted at all was reachable from
 // no test: the rule could have stopped reporting and stayed green.
 func projectionPolicyError(catalog *actioncatalog.Catalog) error {
-	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
-	if len(missing) > 0 {
-		return fmt.Errorf("catalog actions missing individual projection policy: %s", strings.Join(missing, ", "))
+	projections := projectionIndex(catalog)
+	var findings []string
+	if missing := catalogActionsMissingIndividualProjectionPolicy(projections); len(missing) > 0 {
+		findings = append(findings, "catalog actions missing individual projection policy: "+strings.Join(missing, ", "))
+	}
+	findings = append(findings, staleMetaOnlyProjections(projections)...)
+	if len(findings) > 0 {
+		return errors.New(strings.Join(findings, "; "))
 	}
 	return nil
 }
 
-func catalogActionsMissingIndividualProjectionPolicy(catalog *actioncatalog.Catalog) []string {
+// projectionIndex is the projection walk: every action ID the catalog carries,
+// mapped to the individual tool name that action projects, empty where it
+// projects none.
+//
+// The catalog refuses an ID a second group repeats, so an ID names one action
+// and the index loses nothing by keying on it. Nor is an ID ever empty: the
+// catalog derives one for every action it stores that declares none, and
+// Groups hands back only those.
+func projectionIndex(catalog *actioncatalog.Catalog) map[string]string {
+	projections := map[string]string{}
 	if catalog == nil {
-		return nil
+		return projections
 	}
-	var missing []string
 	for _, group := range catalog.Groups() {
 		for _, action := range group.ActionsInOrder() {
-			if strings.TrimSpace(action.IndividualTool.Name) == "" {
-				// Never empty: the catalog derives an ID for every action it
-				// stores that declares none, and Groups hands back only those.
-				actionID := string(action.ID)
-				if _, ok := metaOnlyProjectionActions[actionID]; ok {
-					continue
-				}
-				missing = append(missing, actionID)
-			}
+			projections[string(action.ID)] = strings.TrimSpace(action.IndividualTool.Name)
 		}
+	}
+	return projections
+}
+
+// catalogActionsMissingIndividualProjectionPolicy returns, sorted, every action
+// of the walk that projects no individual tool and that no
+// metaOnlyProjectionActions declaration answers.
+func catalogActionsMissingIndividualProjectionPolicy(projections map[string]string) []string {
+	var missing []string
+	for actionID, toolName := range projections {
+		if toolName != "" {
+			continue
+		}
+		if _, declared := metaOnlyProjectionActions[actionID]; declared {
+			continue
+		}
+		missing = append(missing, actionID)
 	}
 	sort.Strings(missing)
 	return missing
+}
+
+// staleMetaOnlyProjections names, sorted, every metaOnlyProjectionActions
+// declaration the walk did not consume, which is a finding on the same terms
+// as the state it excuses: a declaration is consumed only by an action the
+// catalog carries that projects no tool, so one naming an ID no action carries,
+// or an action that projects a tool of its own, excuses nothing and would
+// silently excuse the next action given that ID.
+//
+// The two shapes are worded apart because they are fixed apart: the first is
+// a declaration to delete, the second one a new projection made unnecessary.
+func staleMetaOnlyProjections(projections map[string]string) []string {
+	var stale []string
+	for actionID, reason := range metaOnlyProjectionActions {
+		toolName, carried := projections[actionID]
+		switch {
+		case !carried:
+			stale = append(stale, fmt.Sprintf("meta-only projection declaration for %s (%s) matches nothing: no catalog action has that ID", actionID, reason))
+		case toolName != "":
+			stale = append(stale, fmt.Sprintf("meta-only projection declaration for %s (%s) matches nothing: the action projects the individual tool %s", actionID, reason, toolName))
+		}
+	}
+	sort.Strings(stale)
+	return stale
 }
 
 func auditCatalogFirstSource(root string) error {
@@ -755,6 +819,9 @@ func manifestBuilderNames(function *ast.FuncDecl) []string {
 	return names
 }
 
+// discoverDomainSources reads every domain directory under internal/tools, in
+// the name order os.ReadDir returns them, which is the order the coverage
+// report lists its domains in.
 func discoverDomainSources(root string) ([]domainSource, error) {
 	toolsDir := filepath.Join(root, "internal", "tools")
 	entries, err := os.ReadDir(toolsDir)
@@ -863,7 +930,7 @@ func referencedRegisterMetaPackages(root string) (map[string]bool, error) {
 
 func referencedPackages(path, selectorName string) (map[string]bool, error) {
 	fileSet := token.NewFileSet()
-	file, err := parser.ParseFile(fileSet, path, nil, 0)
+	file, err := parseRegistrationFile(fileSet, path, nil, 0)
 	if err != nil {
 		return nil, fmt.Errorf(parsePathError, path, err)
 	}
@@ -890,11 +957,11 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client, true))
 	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
 
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
 		return nil, fmt.Errorf("build action catalog: %w", err)
 	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	catalog, err = addStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("add standalone dynamic catalog actions: %w", err)
 	}
@@ -1163,7 +1230,7 @@ func cloneStringIntMap(values map[string]int) map[string]int {
 }
 
 func marshalReport(report coverageReport) ([]byte, error) {
-	content, err := json.MarshalIndent(report, "", "  ")
+	content, err := marshalIndent(report, "", "  ")
 	if err != nil {
 		return nil, err
 	}

@@ -31,7 +31,12 @@ const emptyEnumReport = `{"packages":[]}`
 // so a value that lands under the wrong name is visible rather than hidden
 // behind a sibling that happens to read the same.
 const (
-	countedStructReport = `{"packages":[{"package":"x","missing_input_count":11,"missing_output_count":12,"extra_output_count":13,"gaps":[{"kind":"input"}]}]}`
+	countedStructReport = `{"stale_declarations":[
+	  {"table":"docAddedFields","key":"x.Output.a"},{"table":"docAddedFields","key":"x.Output.b"},
+	  {"table":"docAddedFields","key":"x.Output.c"},{"table":"docAddedFields","key":"x.Output.d"},
+	  {"table":"docAddedFields","key":"x.Output.e"},{"table":"docAddedFields","key":"x.Output.f"},
+	  {"table":"curatedRefSubsets","key":"x.RefOutput"}
+	],"packages":[{"package":"x","missing_input_count":11,"missing_output_count":12,"extra_output_count":13,"gaps":[{"kind":"input"}]}]}`
 	countedActionReport = `{"services":[{"service":"Svc","packages":["x"],"api_methods":31,"covered_methods":22,"missing_methods":["A","B","C","D","E","F"]}]}`
 	countedMetaReport   = `{"packages":[{"package":"x","findings":[
 	  {"action":"x.a","tool":"gitlab_x_a","usage":"Use to reach a.","flags":["generic_usage","generic_usage"]},
@@ -322,12 +327,16 @@ func TestMergeBacklog_EveryCounter_LandsUnderTheFieldItNames(t *testing.T) {
 	}
 	wantSummary := backlogSummary{
 		Packages: 1, StructMissingInput: 11, StructMissingOutput: 12, StructExtraOutput: 13,
-		ActionMissingMethods: 6, MetaGenericUsage: 2, MetaAliasesOnlyToolname: 3,
+		StructStaleDeclarations: 7,
+		ActionMissingMethods:    6, MetaGenericUsage: 2, MetaAliasesOnlyToolname: 3,
 		MetaEmptyRelated: 4, MetaWeakIndividualDescription: 5,
 		EnumMissingValues: 14, EnumExtraValues: 15,
 	}
 	if bl.Summary != wantSummary {
 		t.Errorf("summary = %+v, want %+v", bl.Summary, wantSummary)
+	}
+	if !reflect.DeepEqual(bl.StructStaleDeclarations, structRep.StaleDeclarations) {
+		t.Errorf("stale declarations = %s, want the struct stream's seven passed through", bl.StructStaleDeclarations)
 	}
 }
 
@@ -360,6 +369,9 @@ func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T
 		{name: "summary.struct_missing_input", path: []any{"summary", "struct_missing_input"}, want: float64(11)},
 		{name: "summary.struct_missing_output", path: []any{"summary", "struct_missing_output"}, want: float64(12)},
 		{name: "summary.struct_extra_output", path: []any{"summary", "struct_extra_output"}, want: float64(13)},
+		{name: "summary.struct_stale_declarations", path: []any{"summary", "struct_stale_declarations"}, want: float64(7)},
+		{name: "struct_stale_declarations.key", path: []any{"struct_stale_declarations", 6, "key"}, want: "x.RefOutput"},
+		{name: "struct_stale_declarations.table", path: []any{"struct_stale_declarations", 6, "table"}, want: "curatedRefSubsets"},
 		{name: "summary.action_missing_methods", path: []any{"summary", "action_missing_methods"}, want: float64(6)},
 		{name: "summary.meta_generic_usage", path: []any{"summary", "meta_generic_usage"}, want: float64(2)},
 		{name: "summary.meta_aliases_only_toolname", path: []any{"summary", "meta_aliases_only_toolname"}, want: float64(3)},
@@ -394,6 +406,29 @@ func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T
 				t.Errorf("%v = %#v, want %#v", tc.path, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestBuildBacklogFromBytes_NoStaleDeclaration_PublishesTheCountAlone verifies
+// the shape of a clean struct stream in the backlog: the summary says zero and
+// the list is left out, so a reader of the older shape finds nothing new
+// until there is something to find.
+func TestBuildBacklogFromBytes_NoStaleDeclaration_PublishesTheCountAlone(t *testing.T) {
+	structReport := `{"packages":[{"package":"x","missing_input_count":1,"missing_output_count":0,"extra_output_count":0}]}`
+	content, err := BuildBacklogFromBytes([]byte(structReport), []byte(`{"services":[]}`), []byte(`{"packages":[]}`), []byte(emptyEnumReport))
+	if err != nil {
+		t.Fatalf("BuildBacklogFromBytes: %v", err)
+	}
+	var document map[string]any
+	if unmarshalErr := json.Unmarshal(content, &document); unmarshalErr != nil {
+		t.Fatalf("decode the merged document: %v", unmarshalErr)
+	}
+
+	if got := jsonAt(t, document, "summary", "struct_stale_declarations"); got != float64(0) {
+		t.Errorf("summary.struct_stale_declarations = %#v, want 0", got)
+	}
+	if list, published := document["struct_stale_declarations"]; published {
+		t.Errorf("struct_stale_declarations = %#v, want the key left out of a clean backlog", list)
 	}
 }
 

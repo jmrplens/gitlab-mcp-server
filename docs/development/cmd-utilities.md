@@ -95,7 +95,7 @@ go run ./cmd/audit_1to1/ -validate-docs
 
 #### Output
 
-JSON. A single-scope run produces that auditor's native shape. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (11 counters), and a `packages[]` array in which each package carries its `struct`, `actions`, `metadata` and `enums` sections. `-validate-docs` emits `{schema_version, checked, ok, stale[]}`.
+JSON. A single-scope run produces that auditor's native shape. The structs one carries `schema_version`, `client_go_path`, a `summary` block (9 counters), `stale_declarations[]` and `packages[]`. `stale_declarations[]` lists, with its table and the reason it carries, every key of the six tables the field diff consults (`acceptedOutputRenames`, `curatedRefSubsets`, `docOmittedFields`, `docAddedFields`, `acceptedExtraOutputs`, `acceptedMissingInputs`) that answered no candidate finding, including a per-field key that a whole-type key for the same type answers first; it is omitted when empty and counted in `summary.stale_declarations`. It is judged over the whole tree whatever `-gaps-only` says, since that flag drops clean packages from the report and never from the diff. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (12 counters, `struct_stale_declarations` among them), `struct_stale_declarations[]` (the structs report's list, omitted when empty), and a `packages[]` array in which each package carries its `struct`, `actions`, `metadata` and `enums` sections. `-validate-docs` emits `{schema_version, checked, ok, stale[]}`.
 
 #### SDK parity gate
 
@@ -213,6 +213,8 @@ This single binary replaces four former binaries. The legacy Make targets remain
 Generates the source-discovered inventory of ActionSpec catalog-first coverage. It reports `RegisterTools`/`RegisterMeta`/`ActionSpecs` presence, surface classification, and dynamic-catalog counts, plus catalog-first invariant checks.
 
 It also holds every exported `ActionSpecs` under `internal/tools` to something that aggregates it. That rule is separate from the inventory and reads the tree differently: the inventory sees a function of that name and treats its presence as health, while this asks whether anything calls it, resolved through the type checker (`cmd/internal/goprogram`) rather than by a text scan. A package whose specs nothing aggregates publishes usage lines, aliases, tags and parameter guidance that no surface serves, so a maintainer editing the obvious file changes nothing a model reads and gets a green build for it. The join cannot be `OwnerPackage`: an admin action's owner is the domain package its handler lives in, so a package can own catalog actions while its own `ActionSpecs` reaches nothing. A package deliberately in that state is declared in `cmd/audit_catalog_first/declarations.go`, where a declaration matching nothing is itself a finding.
+
+The same file holds `metaOnlyProjectionActions`, the catalog actions that may project no individual tool because the individual surface reaches them under another tool, and it is held to the same terms. The projection walk indexes every catalog action by ID with the tool name it projects, and an entry it does not consume fails the run in one of two shapes, each worded for its fix: an ID no catalog action carries, or an action that now projects an individual tool of its own. Either would excuse nothing today and would answer, silently, the next action given that ID.
 
 #### Usage
 

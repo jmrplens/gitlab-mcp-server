@@ -9,7 +9,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
-const backlogNote = "Merged 1:1 audit backlog. The struct, action and metadata streams are candidate lists; intentional renames (e.g. branch->branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package. The enum stream is gated by -scope=sdk and is expected to be empty: an entry there is an SDK value we do not offer, or a value we offer that the SDK does not declare."
+const backlogNote = "Merged 1:1 audit backlog. The struct, action and metadata streams are candidate lists; intentional renames (e.g. branch->branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package. A struct stale declaration is a key of one of the struct stream's declaration tables that answered no candidate: delete it, or restore what it described. The enum stream is gated by -scope=sdk and is expected to be empty: an entry there is an SDK value we do not offer, or a value we offer that the SDK does not declare."
 
 // BuildBacklogFromPaths reads four report files and returns the merged backlog
 // as indented JSON (with a trailing newline). This is the file-based path used
@@ -77,11 +77,14 @@ func mergeBacklog(structRep structReport, actionRep actionReport, metaRep metada
 	}
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Package < packages[j].Package })
 
+	summary := summarizeBacklog(packages)
+	summary.StructStaleDeclarations = len(structRep.StaleDeclarations)
 	return backlog{
-		SchemaVersion: shared.SchemaVersion,
-		Note:          backlogNote,
-		Summary:       summarizeBacklog(packages),
-		Packages:      packages,
+		SchemaVersion:           shared.SchemaVersion,
+		Note:                    backlogNote,
+		Summary:                 summary,
+		StructStaleDeclarations: structRep.StaleDeclarations,
+		Packages:                packages,
 	}
 }
 
