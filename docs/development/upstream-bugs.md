@@ -1675,7 +1675,9 @@ GitLab source it rests on, so it can be reviewed and bisected one commit at a
 time. It carries entries 6, 7, 19, 20, 22, 25 to 33, 35 to 37, 40 to 45, 51,
 52, 54 and 58 to 65, this entry's own held-back gaps below together with
 `public_email` on both service account structs, and the Orbit schema's
-`format` parameter, whose entry arrives with
+`format` parameter, whose entry,
+[entry 70](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled),
+arrived with
 [issue 972](https://github.com/jmrplens/gitlab-mcp-server/issues/972). Three
 things are left out on purpose: the seven `Hook` fields, which are
 `gitlab-org/api/client-go!3048`; the `action` object and the illustration
@@ -3191,8 +3193,7 @@ the same key for their own llm answers.
 records each Orbit call through the handlers against GitLab.com, and the
 schema's llm call was refused with 406. The unit tests had pinned
 `format` as the parameter name, so they passed against a request GitLab
-refuses. The handler fix is commit `7b2a5d3f0` on the issue 972 branch, to be
-replaced by the commit that lands on main.
+refuses. The handler fix comes with the change that closes issue 972.
 
 **Effort**: small. Retag the field as `url:"response_format,omitempty"`, or
 add a `ResponseFormat` field with that tag, as the other four Orbit option

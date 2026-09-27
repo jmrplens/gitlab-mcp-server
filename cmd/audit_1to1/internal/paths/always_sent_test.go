@@ -303,6 +303,26 @@ func TestBodyEndpoints_AreOrderedByPackagePathAndMethod(t *testing.T) {
 	}
 }
 
+// TestBodyEndpoints_OnePackage_IsOrderedByPathThenMethod verifies the order
+// within a package, from rows recorded the other way round so that every
+// comparison of the sort is asked in both directions.
+func TestBodyEndpoints_OnePackage_IsOrderedByPathThenMethod(t *testing.T) {
+	endpoints := bodyEndpoints([]requestinventory.Row{
+		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/b"},
+		{Package: "internal/tools/issues", Kind: "rest", Method: "PUT", Path: "/a"},
+		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/a"},
+	})
+
+	want := []bodyEndpoint{
+		{pkg: "internal/tools/issues", method: "POST", path: "/a"},
+		{pkg: "internal/tools/issues", method: "PUT", path: "/a"},
+		{pkg: "internal/tools/issues", method: "POST", path: "/b"},
+	}
+	if !reflect.DeepEqual(endpoints, want) {
+		t.Errorf("endpoints = %+v, want %+v", endpoints, want)
+	}
+}
+
 // TestCompareAlwaysSent_IsATotalOrder verifies the finding order compares
 // every field of the identity in turn, and holds a finding equal only to
 // itself, which is what slices.SortFunc asks of a comparison and what keeps two

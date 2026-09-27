@@ -1098,6 +1098,11 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 // C, never A to C directly, so only a second pass from B reaches C; a walk that
 // looked at the first type's neighbors alone, or that stopped queuing, would
 // call the chain two groups.
+//
+// Each call runs on its own goroutine under a deadline the test goroutine
+// holds, because the likeliest way to break the walk is to queue a type it has
+// already reached, and that walk never ends: unbounded, it would stall the
+// whole test binary rather than fail the one case.
 func TestOneFamily_ReachesThroughAChainAndStopsAtTwoGroups(t *testing.T) {
 	edges := map[[2]string]bool{{"A", "B"}: true, {"B", "C"}: true, {"X", "Y"}: true}
 	related := func(a, b string) bool { return edges[[2]string{a, b}] || edges[[2]string{b, a}] }
@@ -1114,8 +1119,15 @@ func TestOneFamily_ReachesThroughAChainAndStopsAtTwoGroups(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := oneFamily(tt.types, related); got != tt.want {
-				t.Errorf("oneFamily(%v) = %v, want %v", tt.types, got, tt.want)
+			answer := make(chan bool, 1)
+			go func() { answer <- oneFamily(tt.types, related) }()
+			select {
+			case got := <-answer:
+				if got != tt.want {
+					t.Errorf("oneFamily(%v) = %v, want %v", tt.types, got, tt.want)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatalf("oneFamily(%v) did not return: a walk that queues a type it has already reached never ends", tt.types)
 			}
 		})
 	}

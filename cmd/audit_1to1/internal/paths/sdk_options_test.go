@@ -136,11 +136,13 @@ func TestWalkOptionParams_NestedStructs_AreNamedTheWayGrapeDeclaresThem(t *testi
 	}
 }
 
-// TestWalkOptionParams_AChainDeeperThanTheBound_StopsAtIt verifies the depth
-// bound on its own, with no type repeated for the ancestor check to catch: a
-// chain of nested option structs longer than client-go's deepest is walked to
-// the bound and no further.
-func TestWalkOptionParams_AChainDeeperThanTheBound_StopsAtIt(t *testing.T) {
+// TestWalkOptionParams_AChainDeeperThanTheBound_NamesTheDeepestParam verifies
+// what the depth bound leaves the caller, with no type repeated for the
+// ancestor check to catch: a chain of nested option structs longer than
+// client-go's deepest is walked to the bound, the last param named with one
+// bracket per level, and an embed chain promotes its fields from the deepest
+// level the bound reaches.
+func TestWalkOptionParams_AChainDeeperThanTheBound_NamesTheDeepestParam(t *testing.T) {
 	types := map[string]sdkOptionType{}
 	for level := range optionDepth + 3 {
 		types[fmt.Sprintf("Level%dOptions", level)] = sdkOptionType{Fields: []sdkOptionField{
