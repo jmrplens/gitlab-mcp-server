@@ -131,9 +131,10 @@ func Transfer(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 			return current.failed || inNamespace(current.project, input.Namespace)
 		},
 	})
-	switch {
-	case err != nil:
+	if err != nil {
 		return TransferOutput{}, err
+	}
+	switch {
 	case !done:
 		return TransferOutput{Output: answered, TransferQueued: true}, nil
 	case settled.failed:
@@ -165,17 +166,15 @@ func inNamespace(p Output, namespace string) bool {
 // in the namespace needs nothing more, which reading the project back settles
 // in both cases, while only a name or path collision is fixed by renaming. The
 // route looks the project up before the namespace, so a 404 names which of
-// the two it could not find, and [notFoundProject] reads which from the
+// the two it could not find, and [notFoundHint] reads which from the
 // captured answer.
 func transferError(err error, captured *gitlabclient.ResponseCapture) error {
 	const op = "projectTransfer"
 	switch {
 	case toolutil.IsPermissionRefusal(err):
 		return toolutil.WrapErrWithHint(op, err, hintTransferPermission)
-	case toolutil.IsHTTPStatus(err, http.StatusNotFound) && notFoundProject(captured):
-		return toolutil.WrapErrWithHint(op, err, hintTransferNotFound)
 	case toolutil.IsHTTPStatus(err, http.StatusNotFound):
-		return toolutil.WrapErrWithHint(op, err, hintTransferNamespace)
+		return toolutil.WrapErrWithHint(op, err, notFoundHint(captured))
 	case !toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 		return toolutil.WrapErrWithMessage(op, err)
 	case toolutil.ContainsAny(err, "transfer in progress"):
@@ -191,16 +190,22 @@ func transferError(err error, captured *gitlabclient.ResponseCapture) error {
 	}
 }
 
-// notFoundProject reports whether a transfer's 404 names the project rather
-// than the namespace. client-go answers every 404 with one sentinel that
-// drops GitLab's message, so the message is read from the captured body:
-// "404 Project Not Found" from the route's project lookup, and "404 Namespace
-// Not Found" from its namespace lookup. A body that does not decode names
+// notFoundHint is the hint for a transfer's 404, chosen by which lookup of
+// the route failed. client-go answers every 404 with one sentinel that drops
+// GitLab's message, so the message is read from the captured body: "404
+// Project Not Found" from the route's project lookup, and "404 Namespace Not
+// Found" from its namespace lookup. A body that does not decode names
 // neither, and is read as the namespace, the lookup a caller most often gets
 // wrong.
-func notFoundProject(captured *gitlabclient.ResponseCapture) bool {
+func notFoundHint(captured *gitlabclient.ResponseCapture) string {
 	var body struct {
 		Message string `json:"message"`
 	}
-	return captured.Decode(&body) == nil && strings.Contains(body.Message, "Project Not Found")
+	if err := captured.Decode(&body); err != nil {
+		return hintTransferNamespace
+	}
+	if strings.Contains(body.Message, "Project Not Found") {
+		return hintTransferNotFound
+	}
+	return hintTransferNamespace
 }

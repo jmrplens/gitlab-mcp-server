@@ -129,9 +129,10 @@ func TransferSubGroup(ctx context.Context, req *mcp.CallToolRequest, client *git
 			return current.failed || underParent(current.group, input.ParentID)
 		},
 	})
-	switch {
-	case err != nil:
+	if err != nil {
 		return TransferSubGroupOutput{}, err
+	}
+	switch {
 	case !done:
 		return TransferSubGroupOutput{DetailOutput: answered, TransferQueued: true}, nil
 	case settled.failed:
