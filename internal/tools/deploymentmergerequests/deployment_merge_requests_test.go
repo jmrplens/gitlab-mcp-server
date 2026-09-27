@@ -439,9 +439,11 @@ func TestList_MergeRequestFilters(t *testing.T) {
 
 // TestList_AdditionalMergeRequestFilters verifies the merge-request filters added
 // for 1:1 parity with gl.ListMergeRequestsOptions (labels, not_labels, milestone,
-// scope, search, branch, reviewer, reaction, view, wip, label-detail toggles, and
+// scope, search, branch, reviewer, reaction, wip, non-archived, and
 // updated-date bounds) are each forwarded to the GitLab API query string under
-// their canonical parameter names.
+// their canonical parameter names, and that the three options this route
+// declares and never reads (view, with_labels_details and
+// with_merge_status_recheck) are not sent.
 func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -455,13 +457,13 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 			"source_branch":             "feature",
 			"target_branch":             "main",
 			"my_reaction_emoji":         "thumbsup",
-			"view":                      "simple",
 			"wip":                       "no",
 			"labels":                    "bug,urgent",
 			"not[labels]":               "wontfix",
-			"with_labels_details":       "true",
-			"with_merge_status_recheck": "true",
 			"non_archived":              "true",
+			"view":                      "",
+			"with_labels_details":       "",
+			"with_merge_status_recheck": "",
 		}
 		for key, want := range checks {
 			t.Run(key, func(t *testing.T) {
@@ -479,50 +481,66 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	withDetails := true
-	withRecheck := true
 	nonArchived := true
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:              "1",
-		DeploymentID:           2,
-		NotAuthorUsername:      "bob",
-		ReviewerID:             21,
-		ReviewerUsername:       "carol",
-		Milestone:              "v1.0",
-		Scope:                  "all",
-		Search:                 "fix bug",
-		SourceBranch:           "feature",
-		TargetBranch:           "main",
-		MyReactionEmoji:        "thumbsup",
-		View:                   "simple",
-		WIP:                    "no",
-		Labels:                 []string{"bug", "urgent"},
-		NotLabels:              []string{"wontfix"},
-		WithLabelsDetails:      &withDetails,
-		WithMergeStatusRecheck: &withRecheck,
-		NonArchived:            &nonArchived,
-		UpdatedAfter:           "2025-02-01T00:00:00Z",
-		UpdatedBefore:          "2025-11-30T23:59:59Z",
+		ProjectID:         "1",
+		DeploymentID:      2,
+		NotAuthorUsername: "bob",
+		ReviewerID:        21,
+		ReviewerUsername:  "carol",
+		Milestone:         "v1.0",
+		Scope:             "all",
+		Search:            "fix bug",
+		SourceBranch:      "feature",
+		TargetBranch:      "main",
+		MyReactionEmoji:   "thumbsup",
+		WIP:               "no",
+		Labels:            []string{"bug", "urgent"},
+		NotLabels:         []string{"wontfix"},
+		NonArchived:       &nonArchived,
+		UpdatedAfter:      "2025-02-01T00:00:00Z",
+		UpdatedBefore:     "2025-11-30T23:59:59Z",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestList_EveryBoolFilter_ReachesItsOwnQueryKey drives one of the four *bool
+// TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset verifies an
+// input naming no approver username leaves the option nil rather than
+// pointing it at the empty list. Both encode to the same query today, so the
+// options themselves are what can tell a filter the caller gave from one the
+// handler invented.
+func TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		usernames []string
+	}{
+		{name: "nil", usernames: nil},
+		{name: "empty", usernames: []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := buildListOptions(ListInput{ProjectID: "1", DeploymentID: 2, ApprovedByUsernames: tc.usernames})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if opts.ApprovedByUsernames != nil {
+				t.Errorf("ApprovedByUsernames = %v, want nil for an input naming no username", *opts.ApprovedByUsernames)
+			}
+		})
+	}
+}
+
+// TestList_EveryBoolFilter_ReachesItsOwnQueryKey drives one of the two *bool
 // filters at a time and holds the query to that filter's key alone, the other
-// three absent. TestList_AdditionalMergeRequestFilters sets three of them
-// non-nil and true in one call, which any permutation of their assignments
-// reproduces exactly; a filter written onto a sibling's option leaves its own
-// key unsent once it is the only one driven. Each is driven false as well,
-// since an assignment replaced by a literal true would otherwise pass.
+// absent. A filter written onto its sibling's option leaves its own key unsent
+// once it is the only one driven. Each is driven false as well, since an
+// assignment replaced by a literal true would otherwise pass.
 func TestList_EveryBoolFilter_ReachesItsOwnQueryKey(t *testing.T) {
 	filters := []struct {
 		key string
 		set func(*ListInput, *bool)
 	}{
-		{"with_labels_details", func(in *ListInput, v *bool) { in.WithLabelsDetails = v }},
-		{"with_merge_status_recheck", func(in *ListInput, v *bool) { in.WithMergeStatusRecheck = v }},
 		{"draft", func(in *ListInput, v *bool) { in.Draft = v }},
 		{"non_archived", func(in *ListInput, v *bool) { in.NonArchived = v }},
 	}

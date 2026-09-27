@@ -228,16 +228,18 @@ func hookNameCell(name string) string {
 	return toolutil.EscapeMdTableCell(name)
 }
 
-// hookEvents pairs each event a webhook can subscribe to with whether this hook
-// does, in the order the card lists them.
-func hookEvents(out HookOutput) []struct {
+// hookEvent is one event a webhook can subscribe to and whether this hook does.
+type hookEvent struct {
 	name string
 	on   bool
-} {
-	return []struct {
-		name string
-		on   bool
-	}{
+}
+
+// hookEvents pairs each event a webhook can subscribe to with whether this hook
+// does, in the order the card lists them. The Duo flow callback is listed only
+// when GitLab said which it is: an instance older than 19.4 sends no key, and
+// a row reading off would be a claim nobody made.
+func hookEvents(out HookOutput) []hookEvent {
+	events := []hookEvent{
 		{"Push", out.PushEvents},
 		{"Issues", out.IssuesEvents},
 		{"Confidential Issues", out.ConfidentialIssuesEvents},
@@ -258,6 +260,10 @@ func hookEvents(out HookOutput) []struct {
 		{"Resource Deploy Token", out.ResourceDeployTokenEvents},
 		{"Vulnerability", out.VulnerabilityEvents},
 	}
+	if out.DuoFlowCallbackEnabled != nil {
+		events = append(events, hookEvent{"Duo Flow Callback", *out.DuoFlowCallbackEnabled})
+	}
+	return events
 }
 
 // FormatHookMarkdown renders a single project webhook as a card, with the

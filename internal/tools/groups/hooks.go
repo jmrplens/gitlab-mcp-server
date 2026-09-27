@@ -147,6 +147,11 @@ type HookOutput struct {
 	// it on the project hook and the system hook only, so it is read from the
 	// captured answer (ADR-0021).
 	RepositoryUpdateEvents bool `json:"repository_update_events"`
+	// DuoFlowCallbackEnabled says whether GitLab Duo flow events are sent to
+	// the hook. GitLab sends it on every group hook from 19.4 and client-go
+	// does not model it, so it is read from the captured answer too, and is
+	// absent from an older instance's answer rather than reported off.
+	DuoFlowCallbackEnabled *bool `json:"duo_flow_callback_enabled,omitempty"`
 }
 
 // HookListOutput holds a paginated list of group hooks.
@@ -170,6 +175,7 @@ func hookOutput(op string, h *gl.GroupHook, captured *gitlabclient.ResponseCaptu
 func hookToOutput(h *gl.GroupHook, extra toolutil.GroupHookExtra) HookOutput {
 	out := HookOutput{
 		RepositoryUpdateEvents:    extra.RepositoryUpdateEvents,
+		DuoFlowCallbackEnabled:    extra.DuoFlowCallbackEnabled,
 		ID:                        h.ID,
 		URL:                       h.URL,
 		Name:                      h.Name,
@@ -530,6 +536,7 @@ func enabledEvents(h HookOutput) string {
 		{"resource_access_token", h.ResourceAccessTokenEvents},
 		{"project", h.ProjectEvents},
 		{"repository_update", h.RepositoryUpdateEvents},
+		{"duo_flow_callback", h.DuoFlowCallbackEnabled != nil && *h.DuoFlowCallbackEnabled},
 	}
 	events := make([]string, 0, len(flags))
 	for _, flag := range flags {

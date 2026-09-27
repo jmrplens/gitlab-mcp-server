@@ -15,41 +15,49 @@ import (
 // merge requests endpoint shares its query options with the project merge
 // request list endpoint (gl.ListMergeRequestsOptions), so this mirrors the same
 // filters for 1:1 fidelity with client-go.
+//
+// Three of those options are left out because this route declares them and
+// never reads them. lib/api/deployments.rb takes merge_requests_base_params
+// and presents `Entities::MergeRequestBasic, current_user: current_user`
+// whatever the request said. All three are turned into presenter options by
+// serializer_options_for in lib/api/merge_requests.rb, which this route does
+// not call: view=simple selects MergeRequestSimple there, with_labels_details
+// is passed through to the entity there, and with_merge_status_recheck is
+// inverted into skip_merge_status_recheck there. Here MergeRequestBasic is
+// given none of them, so it renders label titles and rechecks the merge
+// status on every call, and MergeRequestsFinder reads none of the three.
 type ListInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
 	DeploymentID int64                `json:"deployment_id" jsonschema:"Deployment ID,required"`
 
-	State                  string                     `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, locked, merged, or all (default all)"`
-	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)"`
-	Sort                   string                     `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
-	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
-	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
-	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
-	AssigneeID             int64                      `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee user ID"`
-	AuthorID               int64                      `json:"author_id,omitempty"       jsonschema:"Filter by author user ID"`
-	AuthorUsername         string                     `json:"author_username,omitempty" jsonschema:"Filter by author username"`
-	NotAuthorUsername      string                     `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
-	ReviewerID             int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
-	ReviewerUsername       string                     `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
-	Labels                 []string                   `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
-	NotLabels              []string                   `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
-	Milestone              string                     `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
-	Scope                  string                     `json:"scope,omitempty"           jsonschema:"Filter by scope: created_by_me, assigned_to_me, reviews_for_me, or all"`
-	Search                 string                     `json:"search,omitempty"          jsonschema:"Search in title and description"`
-	SourceBranch           string                     `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
-	TargetBranch           string                     `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
-	MyReactionEmoji        string                     `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
-	View                   string                     `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
-	WIP                    string                     `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
-	WithLabelsDetails      *bool                      `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
-	WithMergeStatusRecheck *bool                      `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
-	CreatedAfter           string                     `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
-	CreatedBefore          string                     `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
-	UpdatedAfter           string                     `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
-	UpdatedBefore          string                     `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
-	Draft                  *bool                      `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
-	NonArchived            *bool                      `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
-	In                     string                     `json:"in,omitempty"              jsonschema:"Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description"`
+	State               string                     `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, locked, merged, or all (default all)"`
+	OrderBy             string                     `json:"order_by,omitempty"        jsonschema:"Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)"`
+	Sort                string                     `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
+	ApprovedByIDs       toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
+	ApprovedByUsernames []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
+	ApproverIDs         toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
+	AssigneeID          int64                      `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee user ID"`
+	AuthorID            int64                      `json:"author_id,omitempty"       jsonschema:"Filter by author user ID"`
+	AuthorUsername      string                     `json:"author_username,omitempty" jsonschema:"Filter by author username"`
+	NotAuthorUsername   string                     `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
+	ReviewerID          int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ReviewerUsername    string                     `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
+	Labels              []string                   `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
+	NotLabels           []string                   `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
+	Milestone           string                     `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
+	Scope               string                     `json:"scope,omitempty"           jsonschema:"Filter by scope: created_by_me, assigned_to_me, reviews_for_me, or all"`
+	Search              string                     `json:"search,omitempty"          jsonschema:"Search in title and description"`
+	SourceBranch        string                     `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
+	TargetBranch        string                     `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
+	MyReactionEmoji     string                     `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	WIP                 string                     `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
+	CreatedAfter        string                     `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore       string                     `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter        string                     `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore       string                     `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	Draft               *bool                      `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	NonArchived         *bool                      `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
+	In                  string                     `json:"in,omitempty"              jsonschema:"Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -145,7 +153,6 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 		{input.SourceBranch, &opts.SourceBranch},
 		{input.TargetBranch, &opts.TargetBranch},
 		{input.MyReactionEmoji, &opts.MyReactionEmoji},
-		{input.View, &opts.View},
 		{input.WIP, &opts.WIP},
 		{input.In, &opts.In},
 	}
@@ -157,22 +164,16 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	}
 }
 
-// applyLabelAndBoolFilters sets the label-name list filters and the four
-// boolean toggles (label details, merge-status recheck, draft and
-// non-archived), each of which is left unset when the caller supplied no
-// value, so GitLab applies its own default rather than ours.
+// applyLabelAndBoolFilters sets the label-name list filters and the two
+// boolean toggles (draft and non-archived), each of which is left unset when
+// the caller supplied no value, so GitLab applies its own default rather than
+// ours.
 func applyLabelAndBoolFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	if labels := labelOptions(input.Labels); labels != nil {
 		opts.Labels = labels
 	}
 	if labels := labelOptions(input.NotLabels); labels != nil {
 		opts.NotLabels = labels
-	}
-	if input.WithLabelsDetails != nil {
-		opts.WithLabelsDetails = input.WithLabelsDetails
-	}
-	if input.WithMergeStatusRecheck != nil {
-		opts.WithMergeStatusRecheck = input.WithMergeStatusRecheck
 	}
 	if input.Draft != nil {
 		opts.Draft = input.Draft

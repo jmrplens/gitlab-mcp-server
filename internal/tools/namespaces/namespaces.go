@@ -76,6 +76,10 @@ type Output struct {
 	// subscription.
 	MaxSeatsUsedChangedAt string `json:"max_seats_used_changed_at,omitempty"`
 	EndDate               string `json:"end_date,omitempty"`
+
+	// CIMinutesUsage is sent for a top-level namespace to its owner or an
+	// administrator, on an enterprise build from GitLab 19.4.
+	CIMinutesUsage *toolutil.CIMinutesUsageOutput `json:"ci_minutes_usage,omitempty"`
 }
 
 // ListOutput represents a paginated list of namespaces.
@@ -157,15 +161,19 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return toOutput(ns, extra), nil
 }
 
+// newRequest builds the fallback lookup's request. It is a test seam: for the
+// fixed GET and a path gl.PathEscape built, client-go's NewRequest has no input
+// it can refuse.
+var newRequest = (*gl.Client).NewRequest
+
 // getFromArray asks for the namespace again and reads the answer as the array
 // some GitLab versions send for a path lookup, taking the first entry.
 func getFromArray(ctx context.Context, client *gitlabclient.Client, id string) (Output, error) {
-	req, reqErr := client.GL().NewRequest("GET", "namespaces/"+gl.PathEscape(id), nil, nil)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	req, reqErr := newRequest(client.GL(), http.MethodGet, "namespaces/"+gl.PathEscape(id), nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if reqErr != nil {
 		return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	req = req.WithContext(ctx)
 
 	var nsList []*gl.Namespace
 	if _, doErr := client.GL().Do(req, &nsList); doErr != nil {
@@ -225,9 +233,10 @@ func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput)
 // Converters.
 
 // toOutput converts the GitLab API response to the tool output format,
-// filling from the decoded namespace and, for the three limit fields, from
-// what the capture read beside it: client-go models those as plain int64, so
-// the null that means "no limit" would reach a caller as a limit of zero.
+// filling from the decoded namespace and, for the three limit fields and the
+// compute-minute usage, from what the capture read beside it: client-go models
+// the limits as plain int64, so the null that means "no limit" would reach a
+// caller as a limit of zero, and it does not model the usage at all.
 func toOutput(ns *gl.Namespace, extra toolutil.NamespaceExtra) Output {
 	o := Output{
 		ID:                               ns.ID,
@@ -244,6 +253,7 @@ func toOutput(ns *gl.Namespace, extra toolutil.NamespaceExtra) Output {
 		ExtraSharedRunnersMinutesLimit:   extra.ExtraSharedRunnersMinutesLimit,
 		AdditionalPurchasedStorageSize:   extra.AdditionalPurchasedStorageSize,
 		AdditionalPurchasedStorageEndsOn: isoDate(ns.AdditionalPurchasedStorageEndsOn),
+		CIMinutesUsage:                   extra.CIMinutesUsage,
 		BillableMembersCount:             ns.BillableMembersCount,
 		Plan:                             ns.Plan,
 		Trial:                            ns.Trial,

@@ -42,6 +42,11 @@ type ListInput struct {
 // basic entity and send none of them; the merge request pipeline creation
 // presents the full one and sends all twelve, so each is omitted when the
 // route that filled this type did not send it.
+//
+// Name is omitted on the same terms: the project list presents
+// PipelineBasicWithMetadata, which adds it, while the merge request list and
+// the merge request pipeline creation present PipelineBasic and Pipeline,
+// which do not.
 type Output struct {
 	toolutil.HintableOutput
 	ID        int64  `json:"id"`
@@ -51,7 +56,7 @@ type Output struct {
 	Source    string `json:"source"`
 	Ref       string `json:"ref"`
 	SHA       string `json:"sha"`
-	Name      string `json:"name"`
+	Name      string `json:"name,omitempty"`
 	WebURL    string `json:"web_url"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -207,6 +212,10 @@ type GetInput struct {
 // [gl.Pipeline] decodes, plus whether it is archived, which
 // lib/api/entities/ci/pipeline.rb sends on every pipeline rendered whole and
 // the SDK does not carry, read from the captured response (ADR-0021).
+//
+// Name is omitted when empty: the single GET, the latest pipeline and the
+// metadata update present PipelineWithMetadata, which sends it, while
+// creation, cancellation and retry present Pipeline, which does not.
 type DetailOutput struct {
 	toolutil.HintableOutput
 	ID             int64                     `json:"id"`
@@ -217,7 +226,7 @@ type DetailOutput struct {
 	Ref            string                    `json:"ref"`
 	SHA            string                    `json:"sha"`
 	BeforeSHA      string                    `json:"before_sha,omitempty"`
-	Name           string                    `json:"name"`
+	Name           string                    `json:"name,omitempty"`
 	Tag            bool                      `json:"tag"`
 	Archived       bool                      `json:"archived"`
 	YamlErrors     string                    `json:"yaml_errors,omitempty"`

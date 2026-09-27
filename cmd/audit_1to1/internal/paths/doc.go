@@ -149,11 +149,11 @@
 // recorded calling and holds each of that package's top-level output types
 // against the union. It is exact for a package with one endpoint and weaker as
 // the package grows, which is the honest shape available while the inventory
-// records a package and never an action. It finds 610 fields across 130
-// packages, and most of them are not phantoms: our own wrappers around a JSON
-// array, our own answers to a 204 and to a not-found, and an endpoint the
-// document gives no schema for sitting in a package where another endpoint has
-// one.
+// records a package and never an action. What it finds is counted as
+// summary.unpublished_fields, and most of it is not phantoms: our own wrappers
+// around a JSON array, our own answers to a 204 and to a not-found, and an
+// endpoint the document gives no schema for sitting in a package where another
+// endpoint has one.
 //
 // The type grain asks only about the endpoints a type actually models, along a
 // chain in which every link already existed. A converter pairs an output type
@@ -163,9 +163,14 @@
 // the SDK source the handlers compile against; and the document says what those
 // endpoints send. Nothing in it consults the inventory, which is the point: the
 // inventory cannot be sharpened, because it records a package by construction.
-// Of 432 top-level output types it compares 24 and reports 3 fields, skipping
-// 394 that no converter pairs, 1 that no method answers with, and 13 whose
-// endpoints the document describes no response for. mrapprovals.ConfigOutput,
+// The summary counts the types it compares (typed_types_compared), the fields
+// it reports (typed_unpublished_fields) and the three kinds of type it skips:
+// those no converter pairs (typed_types_without_pairing), those whose struct
+// no method answers with (typed_types_without_route), and those whose
+// endpoints the document describes no response for
+// (typed_types_without_schema). The figures move with every release the record
+// is taken from, so they are read off a run of go run ./cmd/audit_1to1/
+// -scope=paths rather than written here. mrapprovals.ConfigOutput,
 // the first confirmed phantom this repository found, is the case the join was
 // built against: its old shape produces exactly the twenty findings the fix
 // removed, and its current one produces none.
@@ -174,20 +179,39 @@
 // record carries the properties of each object a response nests. A nested
 // output type is held against the properties the document gives the response
 // property it sits under, and only when the document describes an object there
-// at all: 11 nested types compared, 25 fields reported. The reticence is what
-// makes that level usable, since it is the level whose first, unguarded attempt
-// produced 1418 findings. None of those 25 is declared yet, so
-// typed_undeclared_fields reads 25 while the three top-level findings are all
-// answered: that counter spans both levels. They sit in issuelinks and
-// pipelinetriggers, and adjudicating one means reading its page first.
+// at all (typed_nested_types_compared, typed_nested_unpublished_fields). The
+// reticence is what makes that level usable, since it is the level whose first,
+// unguarded attempt produced 1418 findings. typed_undeclared_fields spans both
+// levels: it counts every finding at this grain no declaration answers, and
+// adjudicating one means reading its page first.
 //
 // A finding at type grain can be answered rather than fixed, because the oracle
-// is generated and is not always complete: an endpoint rendering a bare hash
-// gets no useful schema, and a nested property can be given a narrower entity
-// than the one the endpoint renders. shape_declarations.go is where such a
-// finding is written down with its category and its evidence, on the terms
-// every other declaration table here works on: a declaration that stops
-// matching is itself a finding.
+// is generated and is not always complete, and because some published fields
+// are this server's own. shape_declarations.go is where such a finding is
+// written down, on the terms every other declaration table here works on: a
+// declaration that stops matching is itself a finding. Each entry meets one
+// evidence bar, which is GitLab's documentation page printing the response
+// that carries the field, GitLab's handler presenting the entity that exposes
+// it, or, for a field this server fills itself, the code here that fills it,
+// and falls under one of five categories:
+//
+//   - record-does-not-model-the-response: the endpoint renders a bare hash, so
+//     the record carries some other response for it, or none of the right
+//     shape (the add-a-member POST /invitations).
+//   - this-server-shapes-what-gitlab-sends-flat: a name this server publishes
+//     for values GitLab sends under names of its own (the Geo replicable
+//     matrix, and the label objects client-go re-keys into label_details).
+//   - route-annotation-names-another-entity-than-the-handler-presents: the
+//     route's desc annotates one entity and its present call renders another,
+//     so the join reads the wrong one (the billable members, an
+//     administrator's view of a user, the project pipeline list, the group
+//     Datadog integration).
+//   - this-server-derives-the-value-from-what-gitlab-sends: a field this
+//     server computes, which no entity can carry (an event's target_url).
+//   - shared-type-field-only-another-package-fills: a field of a type shared
+//     with another package whose routes alone fill it, absent from every
+//     response of this package (label_details on the deployment merge
+//     request list).
 //
 // # Does a list say where it ends
 //
@@ -203,11 +227,11 @@
 // which returns a bare array of tokens while GitLab serves twenty at a time. A
 // caller cannot tell it has one page and cannot ask for the next.
 //
-// The oracle is the live record's params: 308 of its 2110 mounted routes declare
-// per_page, 304 of those declare page beside it and the other four take a cursor
-// or a page_token. That is a far stronger statement than a guess from an
-// endpoint's name, and it is available because the record asks the router rather
-// than reading prose.
+// The oracle is the live record's params: 318 of its 2152 mounted routes declare
+// per_page at 19.4.1-ee, 311 of those declare page beside it and the other seven
+// take a cursor or a page_token. That is a far stronger statement than a guess
+// from an endpoint's name, and it is available because the record asks the
+// router rather than reading prose.
 //
 // An action is judged when its output is a collection envelope, which is exactly
 // one content field that is a list of objects, with this server's own framing

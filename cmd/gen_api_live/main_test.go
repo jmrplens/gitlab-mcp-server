@@ -1005,7 +1005,7 @@ func TestDockerRun_DrivesOneBootAndCleansUpAfterIt(t *testing.T) {
       *) echo ready ;;
     esac
     ;;
-  cp) cat "$2" > `+copied+` ;;
+  cp) cp -p "$2" `+copied+` ;;
   inspect) echo "gitlab/gitlab-ee@sha256:deadbeef" ;;
   *) exit 0 ;;
 esac
@@ -1048,6 +1048,21 @@ esac
 		}
 		if string(got) != introspectScript {
 			t.Errorf("copied %d bytes, want the %d bytes of introspect.rb", len(got), len(introspectScript))
+		}
+	})
+	// docker cp keeps the mode it is handed and the runner drops to the git
+	// user, so this is the property that decides whether the script loads:
+	// the stand-in copies with the mode preserved, the way docker does.
+	t.Run("the script is handed over readable by a user other than its owner", func(t *testing.T) {
+		info, statErr := os.Stat(copied)
+		if statErr != nil {
+			t.Fatalf("reading the mode of what the stand-in was handed: %v", statErr)
+		}
+		// The git user owns neither the file nor, necessarily, its group, so
+		// what it needs is the bit for everyone else; nobody else needs to
+		// write it.
+		if got := info.Mode().Perm(); got&0o004 == 0 || got&0o022 != 0 {
+			t.Errorf("the staged script was handed over as %v, want it readable and not writable by other users so the runner's git user can load it", got)
 		}
 	})
 	t.Run("the staged copy does not outlive the run", func(t *testing.T) {
@@ -1567,16 +1582,18 @@ esac
 }
 
 // staleScriptFile is a staged script file that reports a failure where a full
-// or dying filesystem reports one: a write that stopped short, and a close that
-// reports a write the kernel had deferred.
+// or dying filesystem reports one: a write that stopped short, a mode change
+// refused, and a close that reports a write the kernel had deferred.
 //
-// It exists because neither can be provoked through a temp directory a test can
-// build — the directory is either there, and every write to a file this small
-// succeeds, or it is not, and the creation fails first, which is the case the
-// test above already drives.
+// It exists because none of them can be provoked through a temp directory a
+// test can build: the directory is either there, and every write to and mode
+// change of a file this small, owned by the process, succeeds, or it is not,
+// and the creation fails first, which is the case the test above already
+// drives.
 type staleScriptFile struct {
 	name     string
 	writeErr error
+	chmodErr error
 	closeErr error
 }
 
@@ -1588,6 +1605,8 @@ func (f staleScriptFile) WriteString(s string) (int, error) {
 	}
 	return len(s), nil
 }
+
+func (f staleScriptFile) Chmod(os.FileMode) error { return f.chmodErr }
 
 func (f staleScriptFile) Close() error { return f.closeErr }
 
@@ -1653,6 +1672,51 @@ func TestDockerRun_WhenTheStagedScriptCannotBeWritten_NeverTouchesTheContainer(t
 	t.Run("nothing was copied into the container", func(t *testing.T) {
 		if strings.Contains(string(calls), "cp ") {
 			t.Errorf("calls were:\n%s\nwant no copy of a script that was never written", calls)
+		}
+	})
+	t.Run("the container is torn down anyway", func(t *testing.T) {
+		if strings.Count(string(calls), "rm -f "+containerName) != 2 {
+			t.Errorf("calls were:\n%s\nwant the container removed after the failure too", calls)
+		}
+	})
+}
+
+// TestDockerRun_WhenTheStagedScriptCannotBeMadeReadable_NeverTouchesTheContainer
+// verifies that a refused mode change ends the run the same way.
+//
+// Copying the script in regardless would not fail there: docker would copy it,
+// the runner would refuse to load it as the git user, and the run would end
+// twenty minutes into a boot with a LoadError that says nothing about the mode
+// it came from. That is exactly how the missing mode change surfaced.
+func TestDockerRun_WhenTheStagedScriptCannotBeMadeReadable_NeverTouchesTheContainer(t *testing.T) {
+	docker, log := dockerAnsweringReady(t)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+	refused := errors.New("operation not permitted")
+	stagesInto(t, staleScriptFile{name: filepath.Join(t.TempDir(), "introspect.rb"), chmodErr: refused})
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("dockerRun returned no error for a script it could not make readable")
+	}
+	calls, readErr := os.ReadFile(log)
+	if readErr != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	}
+
+	t.Run("the failure names the step", func(t *testing.T) {
+		if !strings.Contains(err.Error(), "staging the introspection script") {
+			t.Errorf("error = %q, want it to name the step that failed", err)
+		}
+	})
+	t.Run("the filesystem's own reason is carried", func(t *testing.T) {
+		if !errors.Is(err, refused) {
+			t.Errorf("error = %q, want it to wrap %v", err, refused)
+		}
+	})
+	t.Run("nothing was copied into the container", func(t *testing.T) {
+		if strings.Contains(string(calls), "cp ") {
+			t.Errorf("calls were:\n%s\nwant no copy of a script the runner could not load", calls)
 		}
 	})
 	t.Run("the container is torn down anyway", func(t *testing.T) {

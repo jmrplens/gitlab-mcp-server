@@ -1181,11 +1181,35 @@ func TestGetHook_PublishesEachFlagOnItsOwn(t *testing.T) {
 		{key: "token_present", want: HookOutput{ID: 10, TokenPresent: true}},
 		{key: "signing_token_present", want: HookOutput{ID: 10, SigningTokenPresent: true}},
 		{key: "repository_update_events", want: HookOutput{ID: 10, RepositoryUpdateEvents: true}},
+		{key: "duo_flow_callback_enabled", want: HookOutput{ID: 10, DuoFlowCallbackEnabled: new(true)}},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
 			out := getDistinctHook(t, `{"id":10,"`+tc.key+`":true}`)
 			if !reflect.DeepEqual(out, tc.want) {
 				t.Errorf("GetHook() published %+v, want %+v", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetHook_DuoFlowCallbackEnabled_TellsOffFromNotSent verifies the Duo
+// flow callback setting keeps the difference between a hook with it off,
+// which GitLab 19.4 and later sends as false, and an answer from an older
+// instance that sends no key at all: the first is published as false and the
+// second is left out.
+func TestGetHook_DuoFlowCallbackEnabled_TellsOffFromNotSent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want *bool
+	}{
+		{name: "sent off", body: `{"id":10,"duo_flow_callback_enabled":false}`, want: new(false)},
+		{name: "not sent", body: `{"id":10}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := getDistinctHook(t, tc.body)
+			if !reflect.DeepEqual(out.DuoFlowCallbackEnabled, tc.want) {
+				t.Errorf("DuoFlowCallbackEnabled = %v, want %v", out.DuoFlowCallbackEnabled, tc.want)
 			}
 		})
 	}

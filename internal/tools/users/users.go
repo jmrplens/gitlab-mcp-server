@@ -73,8 +73,9 @@ type Output struct {
 	// arrives depends on the route: the profile fields are on every user, the
 	// three counts on a caller allowed to read the profile, bio_html on the
 	// single-user GET, the two enterprise keys and the provisioning group on
-	// the administrator routes under their license, and unconfirmed_email on
-	// the service account POST alone.
+	// the administrator routes under their license, the provisioning project
+	// wherever an administrator is answered, with no license, and
+	// unconfirmed_email on the service account POST alone.
 	CommitEmail                 string `json:"commit_email,omitempty"`
 	Discord                     string `json:"discord,omitempty"`
 	GitHub                      string `json:"github,omitempty"`
@@ -90,6 +91,7 @@ type Output struct {
 	EnterpriseGroupID           *int64 `json:"enterprise_group_id,omitempty" tier:"premium"`
 	EnterpriseGroupAssociatedAt string `json:"enterprise_group_associated_at,omitempty" tier:"premium"`
 	ProvisionedByGroupID        *int64 `json:"provisioned_by_group_id,omitempty" tier:"premium"`
+	ProvisionedByProjectID      *int64 `json:"provisioned_by_project_id,omitempty"`
 }
 
 // IdentityOutput mirrors gl.UserIdentity, a provider/extern_uid pair linking a
@@ -678,6 +680,7 @@ func toOutput(u *gl.User, extra toolutil.InstanceUserExtra) Output {
 		UnconfirmedEmail:               extra.UnconfirmedEmail,
 		EnterpriseGroupID:              extra.EnterpriseGroupID,
 		ProvisionedByGroupID:           extra.ProvisionedByGroupID,
+		ProvisionedByProjectID:         extra.ProvisionedByProjectID,
 	}
 	if extra.EnterpriseGroupAssociatedAt != nil {
 		out.EnterpriseGroupAssociatedAt = extra.EnterpriseGroupAssociatedAt.Format(time.RFC3339)

@@ -62,6 +62,8 @@ const (
 	docGroupsList       = "groups.md#list-all-groups"
 	docGroupsGet        = "groups.md#get-a-single-group"
 	docGroupHooks       = "group_webhooks.md"
+	docProjectHooks     = "project_webhooks.md"
+	docNamespaces       = "namespaces.md"
 	docIssuesList       = "issues.md#list-issues"
 	docProjectsGet      = "projects.md#get-a-single-project"
 	docProjectUsersList = "projects.md#list-a-projects-users"
@@ -158,6 +160,12 @@ const (
 		"and epic.list pins types to EPIC at group scope, so the filter would select epics by an association " +
 		"only a project's work items can have. Exposed on internal/tools/workitems, where the type is the " +
 		"caller's to choose"
+	// deploymentMergeRequestsInert is the reason three merge request list
+	// options are absent from the deployment merge request input.
+	deploymentMergeRequestsInert = "declared by GET /projects/:id/deployments/:deployment_id/merge_requests through " +
+		"merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic " +
+		"with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option " +
+		"into a presenter option; exposed on the merge request list inputs, where it takes effect"
 	tagKeyJSON    = "json"
 	typNameString = "string"
 	typNameInt64  = "int64"
@@ -667,6 +675,7 @@ var docAddedFields = map[string]string{
 	"groups.DetailOutput.unique_project_download_limit_interval_in_seconds": docGroupsGet,
 	"groups.DetailOutput.web_based_commit_signing_enabled":                  docGroupsGet,
 	"groups.HookOutput.repository_update_events":                            docGroupHooks,
+	"groups.HookOutput.duo_flow_callback_enabled":                           docGroupHooks,
 
 	"issues.BasicOutput.blocking_issues_count": docIssuesList,
 	"issues.BasicOutput.start_date":            docIssuesList,
@@ -698,9 +707,18 @@ var docAddedFields = map[string]string{
 	"projects.Output.spp_repository_pipeline_access":               docProjectsGet,
 	"projects.Output.warn_about_potentially_unwanted_characters":   docProjectsGet,
 	"projects.Output.web_based_commit_signing_enabled":             docProjectsGet,
+	"projects.Output.ci_skip_branch_pipelines_for_mrs":             docProjectsGet,
+	"projects.HookOutput.duo_flow_callback_enabled":                docProjectHooks,
 	"projects.ApprovalRuleOutput.coverage_minimum_threshold":       docMRApprovals,
 	"projects.ProjectUserOutput.locked":                            docProjectUsersList,
 	"projects.ProjectUserOutput.public_email":                      docProjectUsersList,
+
+	// namespaces: the compute-minute usage ee/lib/ee/api/entities/namespace.rb
+	// renders through ee/lib/api/entities/ci/minutes/usage.rb for an owner of
+	// a top-level namespace, which client-go's Namespace does not model, read
+	// from the captured response (ADR-0021, toolutil.CapturedNamespace).
+	// Recorded in docs/development/upstream-bugs.md.
+	"namespaces.Output.ci_minutes_usage": docNamespaces,
 
 	// tokens — lib/api/entities/personal_access_token.rb exposes granular on
 	// every token, and the entities inheriting it add granular_scopes and
@@ -789,6 +807,7 @@ var docAddedFields = map[string]string{
 	"users.Output.enterprise_group_id":                docUsersEnterpriseGroup,
 	"users.Output.enterprise_group_associated_at":     docUsersEnterpriseGroup,
 	"users.Output.provisioned_by_group_id":            docUsers,
+	"users.Output.provisioned_by_project_id":          docUsers,
 	"enterpriseusers.Output.commit_email":             docUsers,
 	"enterpriseusers.Output.discord":                  docUsers,
 	"enterpriseusers.Output.github":                   docUsers,
@@ -1034,6 +1053,18 @@ var acceptedMissingInputs = map[string]string{
 	// SDK options fields the endpoint does not accept (generic ListOptions plumbing).
 	"groupsshcerts.ListInput.order_by": "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
 	"groupsshcerts.ListInput.sort":     "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
+
+	// SDK options fields the route declares and never reads. The deployment
+	// merge request list takes merge_requests_base_params and presents
+	// `Entities::MergeRequestBasic, current_user: current_user` whatever the
+	// request said (lib/api/deployments.rb): the three are turned into
+	// presenter options only by serializer_options_for in
+	// lib/api/merge_requests.rb, which this route does not call, and
+	// MergeRequestsFinder reads none of them. Offering them would promise a
+	// model label objects, a simple view or a skipped recheck it cannot get.
+	"deploymentmergerequests.ListInput.view":                      deploymentMergeRequestsInert,
+	"deploymentmergerequests.ListInput.with_labels_details":       deploymentMergeRequestsInert,
+	"deploymentmergerequests.ListInput.with_merge_status_recheck": deploymentMergeRequestsInert,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

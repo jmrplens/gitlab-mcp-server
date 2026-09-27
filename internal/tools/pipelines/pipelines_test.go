@@ -4,6 +4,7 @@ package pipelines
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -962,6 +963,39 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	}
 	if out.WebURL != "https://gitlab.example.com/-/pipelines/5" {
 		t.Errorf("WebURL = %q, want non-empty", out.WebURL)
+	}
+}
+
+// TestPipelineOutputs_NameTheRouteDidNotSend_IsOmitted verifies that both
+// pipeline types leave name out of their JSON when it is empty and write it
+// when it is set. Half the routes that fill each type present an entity
+// without name (PipelineBasic and Pipeline), and a key written empty on
+// those would state a name GitLab never sent.
+func TestPipelineOutputs_NameTheRouteDidNotSend_IsOmitted(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+		want  bool
+	}{
+		{name: "list row without name", value: Output{ID: 1}, want: false},
+		{name: "list row with name", value: Output{ID: 1, Name: "Build"}, want: true},
+		{name: "detail without name", value: DetailOutput{ID: 1}, want: false},
+		{name: "detail with name", value: DetailOutput{ID: 1, Name: "Build"}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := json.Marshal(tc.value)
+			if err != nil {
+				t.Fatalf("json.Marshal: %v", err)
+			}
+			var keys map[string]json.RawMessage
+			if err = json.Unmarshal(encoded, &keys); err != nil {
+				t.Fatalf("json.Unmarshal: %v", err)
+			}
+			if _, got := keys["name"]; got != tc.want {
+				t.Errorf("name present = %v in %s, want %v", got, encoded, tc.want)
+			}
+		})
 	}
 }
 
