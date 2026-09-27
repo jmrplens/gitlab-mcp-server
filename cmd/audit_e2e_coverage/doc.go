@@ -164,4 +164,23 @@
 // lists the harness exports nothing uses. With the ratchet on, every catalog
 // action needs an ID in a package that can run it or an entry in exemptions.go,
 // and the unused exports fail too.
+//
+// # The skips of a complete run
+//
+// -check-skips reads the go test -json stream of one Docker run (-results)
+// and fails on every test whose last run ended skipped that no entry of
+// skip_declarations.go covers for that run's -runtime, ce or ee, and on every
+// entry for that runtime no skip matched. An entry names the package, the test
+// or a test whose every subtest it covers, a fragment the printed reason must
+// contain, a category and a reason, so it excuses one skip for the reason it
+// gives and for no other; a second entry for the same skip covers nothing and
+// is stale like one whose skip went. The reason is read back out of the
+// stream, the last message the test logged before the frame that reports the
+// skip, because the stream holds every skip whatever called it while the
+// harness's skip lines hold only the ones it was told about. A skip is the one
+// verdict that says nothing about the server, so a run could pass while leaving
+// out whatever it liked, and the two complete runs of de1ab3b49 left out eleven
+// and ten scenarios that way (issue 1014). make test-e2e-ce and make
+// test-e2e-ee apply it through run-docker-e2e.sh, after the tests, and it
+// decides the status only of a run whose tests passed.
 package main

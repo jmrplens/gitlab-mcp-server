@@ -54,7 +54,11 @@
 #                                  pins a release and is held to the registry the
 #                                  same way; a digest pins an image and is never asked
 #   GITLAB_RUNNER_IMAGE            the CI runner's image; gitlab/gitlab-runner:latest
-#   GOTESTSUM                      the gotestsum binary; the one on PATH
+#   E2E_GATE_SKIPS                 true holds the run's skips to the ones
+#                                  cmd/audit_e2e_coverage/skip_declarations.go declares
+#                                  for the runtime, failing a run whose tests passed on
+#                                  any other; make test-e2e-ce and test-e2e-ee set it
+#   GOTESTSUM                     the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
 #   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
 #   E2E_REGISTRY_EXTERNAL_URL      the registry's: http:// and the GitLab URL's host on port 5050,
@@ -99,6 +103,8 @@ E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
 derive_fixture_addresses
 # shellcheck source=test/e2e/scripts/docker-images.sh
 . "${SCRIPT_DIR}/docker-images.sh"
+# shellcheck source=test/e2e/scripts/skip-gate.sh
+. "${SCRIPT_DIR}/skip-gate.sh"
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
 E2E_REPORT_NAME="${E2E_REPORT_NAME:-e2e-${RUNTIME}}"
 GOTESTSUM="${GOTESTSUM:-gotestsum}"
@@ -271,3 +277,17 @@ set +e
 ) 2>&1 | tee "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt"
 RUN_STATUS="${PIPESTATUS[0]}"
 set -e
+
+# A complete run is held to the skips it may end with as well: the gate reads
+# the stream gotestsum just wrote and fails on a skip that no declaration in
+# cmd/audit_e2e_coverage/skip_declarations.go covers, and on a declaration no
+# skip of this run matches. It runs whatever the tests did, so a failing run
+# still names its undeclared skips, and it decides the status only of a run
+# whose tests passed, so a failing run is never reported as a skip finding.
+if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
+    echo "=== Holding the run's skips to the declared ones (${RUNTIME}) ==="
+    GATE_STATUS=0
+    gate_skips "${RUNTIME}" "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-log.json" \
+        "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt" || GATE_STATUS=$?
+    RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"
+fi

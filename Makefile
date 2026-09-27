@@ -439,7 +439,15 @@ E2E_GITLAB_TIMEOUT ?= 3600s
 # set it: an offline host says E2E_EXTERNAL_NETWORK=false in the environment
 # or on the make command line. The process environment outranks every dotenv
 # file the harness reads, so a value in .env does not reach these two targets.
-e2e_complete_run_env = E2E_EXTERNAL_NETWORK="$${E2E_EXTERNAL_NETWORK:-true}"
+#
+# E2E_GATE_SKIPS has run-docker-e2e.sh hold the run's skips to the ones
+# cmd/audit_e2e_coverage/skip_declarations.go declares for its runtime, so a
+# run whose tests all passed still fails on a scenario that skipped for a
+# reason nobody declared, and on a declaration no skip of it matched. A green
+# run used to read as full coverage whatever it had skipped (issue 1014). The
+# modeleval targets share the script and set neither: a model evaluation is
+# not a coverage claim, and its cases skip by design where a tier lacks them.
+e2e_complete_run_env = E2E_EXTERNAL_NETWORK="$${E2E_EXTERNAL_NETWORK:-true}" E2E_GATE_SKIPS=true
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
 # Instrumented under COVER=1: the binary every documented run drives is the one

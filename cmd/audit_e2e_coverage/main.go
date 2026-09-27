@@ -53,6 +53,12 @@ type options struct {
 	checkRecord     bool
 	checkRecordPage bool
 	renderRecord    bool
+	// checkSkips holds the skips of the -results stream to the declarations
+	// for -runtime, which is how a complete Docker run fails on a skip nobody
+	// declared.
+	checkSkips bool
+	// skipDeclarations is the skip gate's table.
+	skipDeclarations []skipDeclaration
 	// recordPath and recordPage are the two committed artifacts; empty means
 	// the repository's own.
 	recordPath string
@@ -96,6 +102,7 @@ func main() {
 	opts := options{
 		catalogs: buildServedCatalog, harnessPath: harnessImportPath, staticPatterns: staticPatterns,
 		ratchet: ratchetEnabled, exemptions: exemptedActions, drops: declaredDrops, retired: retiredTests,
+		skipDeclarations: declaredSkips,
 	}
 	flag.StringVar(&opts.dir, "dir", "", "repository root (default: found from the working directory)")
 	flag.StringVar(&opts.calls, "calls", "", "shard directory written by the e2e suite, or a directory holding one per runtime")
@@ -120,6 +127,7 @@ func main() {
 	flag.BoolVar(&opts.renderRecord, "render-record", false, "redraw the committed record's Markdown page from the record itself")
 	flag.StringVar(&opts.recordPath, "record-path", "", "the coverage record to write, check or render (default: the repository's "+recordRelPath+")")
 	flag.StringVar(&opts.recordPage, "record-page", "", "the page rendered from the record (default: the repository's "+recordPageRelPath+")")
+	flag.BoolVar(&opts.checkSkips, "check-skips", false, "fail on a skip in the -results stream that no declaration for -runtime (ce or ee) covers, and on a declaration no skip of it matches")
 	flag.Parse()
 	osExit(run(opts, os.Stdout, os.Stderr))
 }
@@ -127,9 +135,10 @@ func main() {
 // run is main with its streams and its exit status handed to it.
 func run(opts options, stdout, stderr io.Writer) int {
 	// The three record modes read a committed artifact and need no shards,
-	// which is the whole reason they can gate on a machine with no Docker.
-	if opts.calls == "" && !opts.static && !opts.portMap && !opts.checkRecord && !opts.checkRecordPage && !opts.renderRecord {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: nothing to do: give -calls, -static, -port-map, -check-record, -check-record-page or -render-record")
+	// which is the whole reason they can gate on a machine with no Docker, and
+	// the skip gate reads the results stream alone.
+	if opts.calls == "" && !opts.static && !opts.portMap && !opts.checkRecord && !opts.checkRecordPage && !opts.renderRecord && !opts.checkSkips {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: nothing to do: give -calls, -static, -port-map, -check-record, -check-record-page, -render-record or -check-skips")
 		return exitUsage
 	}
 	// -record is not a mode of its own: it commits what a -calls run
@@ -168,6 +177,9 @@ func run(opts options, stdout, stderr io.Writer) int {
 	}
 	if opts.renderRecord {
 		status = max(status, runRecordRender(opts, stdout, stderr))
+	}
+	if opts.checkSkips {
+		status = max(status, runCheckSkips(opts, stdout, stderr))
 	}
 	return status
 }
