@@ -324,6 +324,18 @@ const (
 	projectWithAccessEntity   = "API::Entities::Projects::WithAccessAndCatalogSetting"
 	basicProjectDetailsEntity = "API::Entities::BasicProjectDetails"
 	groupDetailEntity         = "API::Entities::GroupDetail"
+	projectEntity             = "API::Entities::Project"
+)
+
+// The packages whose project presenter-option rows below answer the same
+// three keys each, spelled once because each is named on every one of them.
+const (
+	attestationsPkg     = toolsDir + "/attestations"
+	eventsPkg           = toolsDir + "/events"
+	jobTokenScopePkg    = toolsDir + "/jobtokenscope"
+	projectDiscoveryPkg = toolsDir + "/projectdiscovery"
+	securityFindingsPkg = toolsDir + "/securityfindings"
+	vulnerabilitiesPkg  = toolsDir + "/vulnerabilities"
 )
 
 // The presenter options behind the 31 package-grain findings the live record
@@ -508,7 +520,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// the narrower type as well. Named with the type set, so the type that
 	// really does model the wider entity keeps being judged against it.
 	{
-		Package: projectsPkg, Type: "BasicOutput", Entity: "API::Entities::Project", Field: declaredSegment,
+		Package: projectsPkg, Type: "BasicOutput", Entity: projectEntity, Field: declaredSegment,
 		Category: categoryEntityPublishedElsewhere,
 		Reason: "projects.BasicOutput models API::Entities::BasicProjectDetails, which is what the project search scope " +
 			"(lib/api/search.rb SCOPE_ENTITY) and the job token allowlist answer with, and what any route narrows to under " +
@@ -613,33 +625,33 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// that read one without presenting it get back from GET /projects/:id.
 	// users publishes a user's custom_attributes, so the package grain finds
 	// that name published there and reports only the license pair.
-	{Package: toolsDir + "/attestations", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/attestations", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/attestations", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/events", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/events", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/events", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/projectdiscovery", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/projectdiscovery", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/projectdiscovery", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/securityfindings", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/securityfindings", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/securityfindings", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: attestationsPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: attestationsPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: attestationsPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: projectDiscoveryPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: projectDiscoveryPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: projectDiscoveryPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: securityFindingsPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: securityFindingsPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: securityFindingsPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: usersPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: usersPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/vulnerabilities", Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/vulnerabilities", Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
-	{Package: toolsDir + "/vulnerabilities", Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: vulnerabilitiesPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: vulnerabilitiesPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: vulnerabilitiesPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 
 	// The license pair on a group's projects, which the group routes never
 	// ask the presenter for.
-	{Package: groupsPkg, Entity: "API::Entities::Project", Field: "license", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
-	{Package: groupsPkg, Entity: "API::Entities::Project", Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
+	{Package: groupsPkg, Entity: projectEntity, Field: "license", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
+	{Package: groupsPkg, Entity: projectEntity, Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
 
 	// The same three project keys on the job token allowlists.
-	{Package: toolsDir + "/jobtokenscope", Entity: basicProjectDetailsEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
-	{Package: toolsDir + "/jobtokenscope", Entity: basicProjectDetailsEntity, Field: "license", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
-	{Package: toolsDir + "/jobtokenscope", Entity: basicProjectDetailsEntity, Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
+	{Package: jobTokenScopePkg, Entity: basicProjectDetailsEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
+	{Package: jobTokenScopePkg, Entity: basicProjectDetailsEntity, Field: "license", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
+	{Package: jobTokenScopePkg, Entity: basicProjectDetailsEntity, Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
 
 	// A group's statistics, which no route presenting one group sets, and its
 	// custom attributes, which the one route that can is never asked for.

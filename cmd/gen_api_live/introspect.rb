@@ -164,6 +164,11 @@ def conditions_of(exposure)
       entry["hash"] = squeeze(condition.cond_hash.inspect)
     when Grape::Entity::Condition::SymbolCondition
       entry["symbol"] = condition.symbol.to_s
+    else
+      # A kind none of the branches above reads keeps its kind alone, which is
+      # what makes gen_api_live refuse the record rather than read the field
+      # it gates as always sent.
+      nil
     end
 
     entry
