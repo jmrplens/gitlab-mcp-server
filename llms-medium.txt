@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Medium Reference
 
-> Version 3.1.0 | up to 1092 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.1.0 | up to 1094 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
@@ -125,7 +125,7 @@ Actions (10): feature_flag_create, feature_flag_delete, feature_flag_get, featur
 
 Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
 
-Actions (157): analytics_issues_count, analytics_members_count, analytics_mr_count, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, create, credential_delete_ssh_key, credential_list_pats, credential_list_ssh_keys, credential_revoke_pat, delete, epic_board_get, epic_board_list, epic_create, epic_delete, epic_discussion_add_note, epic_discussion_create, epic_discussion_delete_note, epic_discussion_get, epic_discussion_list, epic_discussion_update_note, epic_get, epic_get_links, epic_issue_assign, epic_issue_list, epic_issue_remove, epic_issue_update, epic_list, epic_note_create, epic_note_delete, epic_note_get, epic_note_list, epic_note_update, epic_update, event_epic_label_get, event_epic_label_list, get, group_billable_member_memberships_list, group_billable_member_remove, group_billable_members_list, group_board_create, group_board_create_list, group_board_delete, group_board_delete_list, group_board_get, group_board_get_list, group_board_list, group_board_list_lists, group_board_update, group_board_update_list, group_export_download, group_export_schedule, group_import_file, group_label_create, group_label_delete, group_label_get, group_label_list, group_label_subscribe, group_label_unsubscribe, group_label_update, group_member_add, group_member_edit, group_member_get, group_member_get_inherited, group_member_remove, group_member_share, group_member_unshare, group_milestone_burndown, group_milestone_create, group_milestone_delete, group_milestone_get, group_milestone_issues, group_milestone_list, group_milestone_merge_requests, group_milestone_update, group_relations_list_status, group_relations_schedule, group_upload_delete_by_id, group_upload_delete_by_secret, group_upload_list, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_resend_event, hook_set_custom_header, hook_set_url_variable, hook_test, invited_groups, issues, ldap_link_add, ldap_link_delete, ldap_link_delete_for_provider, ldap_link_list, ldap_sync, list, list_provisioned_users, members, projects, protected_branch_get, protected_branch_list, protected_branch_protect, protected_branch_unprotect, protected_branch_update, protected_env_get, protected_env_list, protected_env_protect, protected_env_unprotect, protected_env_update, push_rule_add, push_rule_delete, push_rule_edit, push_rule_get, release_list, restore, saml_link_add, saml_link_delete, saml_link_get, saml_link_list, saml_users_list, search, security_settings_update, service_account_create, service_account_delete, service_account_list, service_account_pat_create, service_account_pat_list, service_account_pat_revoke, service_account_pat_rotate, service_account_update, share_with_group, shared_projects, shared_with, ssh_cert_create, ssh_cert_delete, ssh_cert_list, subgroups, transfer, transfer_locations, transfer_project, unarchive, unshare_from_group, update, upload_avatar, wiki_create, wiki_delete, wiki_edit, wiki_get, wiki_list
+Actions (158): analytics_issues_count, analytics_members_count, analytics_mr_count, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, create, credential_delete_ssh_key, credential_list_pats, credential_list_ssh_keys, credential_revoke_pat, delete, epic_board_get, epic_board_list, epic_create, epic_delete, epic_discussion_add_note, epic_discussion_create, epic_discussion_delete_note, epic_discussion_get, epic_discussion_list, epic_discussion_update_note, epic_get, epic_get_links, epic_issue_assign, epic_issue_list, epic_issue_remove, epic_issue_update, epic_list, epic_note_create, epic_note_delete, epic_note_get, epic_note_list, epic_note_update, epic_update, event_epic_label_get, event_epic_label_list, get, group_billable_member_memberships_list, group_billable_member_remove, group_billable_members_list, group_board_create, group_board_create_list, group_board_delete, group_board_delete_list, group_board_get, group_board_get_list, group_board_list, group_board_list_lists, group_board_update, group_board_update_list, group_export_download, group_export_schedule, group_import_file, group_label_create, group_label_delete, group_label_get, group_label_list, group_label_subscribe, group_label_unsubscribe, group_label_update, group_member_add, group_member_edit, group_member_get, group_member_get_inherited, group_member_remove, group_member_share, group_member_unshare, group_milestone_burndown, group_milestone_create, group_milestone_delete, group_milestone_get, group_milestone_issues, group_milestone_list, group_milestone_merge_requests, group_milestone_update, group_relations_list_status, group_relations_schedule, group_upload_delete_by_id, group_upload_delete_by_secret, group_upload_list, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_resend_event, hook_set_custom_header, hook_set_url_variable, hook_test, invited_groups, issues, ldap_link_add, ldap_link_delete, ldap_link_delete_for_provider, ldap_link_list, ldap_sync, list, list_provisioned_users, members, projects, protected_branch_get, protected_branch_list, protected_branch_protect, protected_branch_unprotect, protected_branch_update, protected_env_get, protected_env_list, protected_env_protect, protected_env_unprotect, protected_env_update, push_rule_add, push_rule_delete, push_rule_edit, push_rule_get, release_list, restore, saml_link_add, saml_link_delete, saml_link_get, saml_link_list, saml_users_list, search, security_settings_update, service_account_create, service_account_delete, service_account_get, service_account_list, service_account_pat_create, service_account_pat_list, service_account_pat_revoke, service_account_pat_rotate, service_account_update, share_with_group, shared_projects, shared_with, ssh_cert_create, ssh_cert_delete, ssh_cert_list, subgroups, transfer, transfer_locations, transfer_project, unarchive, unshare_from_group, update, upload_avatar, wiki_create, wiki_delete, wiki_edit, wiki_get, wiki_list
 
 ### gitlab_interactive_issue_create
 
@@ -213,7 +213,7 @@ Actions (33): cancel, create, delete, get, latest, list, resource_group_edit, re
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping).
 
-Actions (143): approval_config_change, approval_config_get, approval_rule_create, approval_rule_delete, approval_rule_get, approval_rule_list, approval_rule_update, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, board_create, board_delete, board_get, board_list, board_list_create, board_list_delete, board_list_get, board_list_list, board_list_update, board_update, create, create_for_user, create_fork_relation, delete, delete_fork_relation, delete_shared_group, dependency_firewall_evaluate, download_avatar, export_download, export_schedule, export_status, fork, get, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_set_custom_header, hook_set_url_variable, hook_test, import_from_file, import_status, integration_delete, integration_delete_group, integration_delete_group_datadog, integration_get, integration_get_group, integration_get_group_datadog, integration_list, integration_list_group, integration_set, integration_set_group, integration_set_group_datadog, integration_set_jira, label_create, label_delete, label_get, label_list, label_promote, label_subscribe, label_unsubscribe, label_update, languages, list, list_forks, list_groups, list_invited_groups, list_starrers, list_user_contributed, list_user_projects, list_user_starred, list_users, member_add, member_delete, member_edit, member_get, member_inherited, members, milestone_create, milestone_delete, milestone_get, milestone_issues, milestone_list, milestone_merge_requests, milestone_update, mirror_add, mirror_delete, mirror_edit, mirror_force_push, mirror_get, mirror_get_public_key, mirror_list, pages_domain_create, pages_domain_delete, pages_domain_get, pages_domain_list, pages_domain_list_all, pages_domain_update, pages_get, pages_unpublish, pages_update, pull_mirror_configure, pull_mirror_get, push_rule_add, push_rule_delete, push_rule_edit, push_rule_get, repository_storage_get, restore, security_settings_get, security_settings_update, service_account_create, service_account_delete, service_account_list, service_account_pat_create, service_account_pat_list, service_account_pat_revoke, service_account_pat_rotate, service_account_update, share_with_group, star, start_housekeeping, start_mirroring, statistics_get, target_branch_rule_create, target_branch_rule_delete, target_branch_rule_list, transfer, unarchive, unstar, update, upload, upload_avatar, upload_delete, upload_delete_by_secret, upload_list
+Actions (144): approval_config_change, approval_config_get, approval_rule_create, approval_rule_delete, approval_rule_get, approval_rule_list, approval_rule_update, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, board_create, board_delete, board_get, board_list, board_list_create, board_list_delete, board_list_get, board_list_list, board_list_update, board_update, create, create_for_user, create_fork_relation, delete, delete_fork_relation, delete_shared_group, dependency_firewall_evaluate, download_avatar, export_download, export_schedule, export_status, fork, get, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_set_custom_header, hook_set_url_variable, hook_test, import_from_file, import_status, integration_delete, integration_delete_group, integration_delete_group_datadog, integration_get, integration_get_group, integration_get_group_datadog, integration_list, integration_list_group, integration_set, integration_set_group, integration_set_group_datadog, integration_set_jira, label_create, label_delete, label_get, label_list, label_promote, label_subscribe, label_unsubscribe, label_update, languages, list, list_forks, list_groups, list_invited_groups, list_starrers, list_user_contributed, list_user_projects, list_user_starred, list_users, member_add, member_delete, member_edit, member_get, member_inherited, members, milestone_create, milestone_delete, milestone_get, milestone_issues, milestone_list, milestone_merge_requests, milestone_update, mirror_add, mirror_delete, mirror_edit, mirror_force_push, mirror_get, mirror_get_public_key, mirror_list, pages_domain_create, pages_domain_delete, pages_domain_get, pages_domain_list, pages_domain_list_all, pages_domain_update, pages_get, pages_unpublish, pages_update, pull_mirror_configure, pull_mirror_get, push_rule_add, push_rule_delete, push_rule_edit, push_rule_get, repository_storage_get, restore, security_settings_get, security_settings_update, service_account_create, service_account_delete, service_account_get, service_account_list, service_account_pat_create, service_account_pat_list, service_account_pat_revoke, service_account_pat_rotate, service_account_update, share_with_group, star, start_housekeeping, start_mirroring, statistics_get, target_branch_rule_create, target_branch_rule_delete, target_branch_rule_list, transfer, unarchive, unstar, update, upload, upload_avatar, upload_delete, upload_delete_by_secret, upload_list
 
 ### gitlab_release
 
@@ -447,7 +447,7 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 ## Individual Tools
 
-Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation.
 
 - gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership.
 - gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership.
@@ -877,6 +877,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_group_search: Search GitLab groups by name or path.
 - gitlab_group_service_account_create: Create a service account in a GitLab group (top-level only).
 - gitlab_group_service_account_delete: Delete a service account from a GitLab group (top-level only).
+- gitlab_group_service_account_get: Get one service account of a GitLab group by its user ID (GitLab 19.4 or later).
 - gitlab_group_service_account_list: List all service accounts for a GitLab group.
 - gitlab_group_service_account_pat_create: Create a personal access token for a group service account.
 - gitlab_group_service_account_pat_list: List personal access tokens for a group service account.
@@ -967,7 +968,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_issue_unsubscribe: Unsubscribe from an issue's notifications.
 - gitlab_issue_update: Update a GitLab issue.
 - gitlab_issue_weight_event_list: List weight events for an issue (Premium/Ultimate).
-- gitlab_job_artifacts: Download the full artifact archive for a CI job (base64-encoded, truncated at 1MB).
+- gitlab_job_artifacts: Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB.
 - gitlab_job_cancel: Cancel a CI job.
 - gitlab_job_delete_artifacts: Delete the artifacts for one CI job (destructive).
 - gitlab_job_delete_project_artifacts: Delete every eligible artifact across a project (destructive, irreversible).
@@ -1012,7 +1013,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_list_deployment_merge_requests: List the merge requests associated with a deployment, with merge-request filtering (state, approval, author, assignee, draft, created date) and offset or keyset...
 - gitlab_list_dockerfile_templates: List available Dockerfile templates with pagination and sorting.
 - gitlab_list_emails: List the current user's email addresses.
-- gitlab_list_emails_for_user: List all email addresses registered to a specific user account.
+- gitlab_list_emails_for_user: List the email addresses registered to a specific user account.
 - gitlab_list_enterprise_users: List enterprise users for a top-level group with filtering and pagination.
 - gitlab_list_epic_discussions: List discussion threads on a group epic with cursor-based keyset pagination.
 - gitlab_list_error_tracking_client_keys: List error-tracking client keys.
@@ -1036,7 +1037,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_list_group_scim_identities: List a top-level group's SCIM identities provisioned through SAML SSO SCIM.
 - gitlab_list_group_ssh_certificates: List the SSH CA certificates registered on a group.
 - gitlab_list_group_ssh_keys: List a group's enterprise SSH keys.
-- gitlab_list_impersonation_tokens: List all impersonation tokens for a user.
+- gitlab_list_impersonation_tokens: List the impersonation tokens of a user.
 - gitlab_list_instance_audit_events: List instance-level audit events (administrator only).
 - gitlab_list_instance_member_roles: List instance-level custom member roles.
 - gitlab_list_integrations: List all integrations (services) configured for a project, including their active status.
@@ -1047,7 +1048,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_list_merge_request_in_merge_train: List the merge requests on a merge train for a target branch.
 - gitlab_list_mr_context_commits: List the context commits pinned to a merge request for review.
 - gitlab_list_package_protection_rules: List package protection rules for a project.
-- gitlab_list_project_aliases: List every project alias the authenticated administrator can see.
+- gitlab_list_project_aliases: List the project aliases the authenticated administrator can see.
 - gitlab_list_project_audit_events: List project-level audit events for a project.
 - gitlab_list_project_badges: List badges for a project, including inherited group badges.
 - gitlab_list_project_dependencies: List dependencies for a GitLab project.
@@ -1093,7 +1094,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_mr_approval_rule_create: Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups.
 - gitlab_mr_approval_rule_delete: Delete an approval rule from a merge request. Returns: a success confirmation.
 - gitlab_mr_approval_rule_update: Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups.
-- gitlab_mr_approval_rules: List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule.
+- gitlab_mr_approval_rules: List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule,...
 - gitlab_mr_approval_state: Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag...
 - gitlab_mr_approve: Approve a merge request on behalf of the caller.
 - gitlab_mr_cancel_auto_merge: Cancel auto-merge (merge-when-pipeline-succeeds) on a merge request. Returns: the MR with auto-merge disabled.
@@ -1120,7 +1121,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_mr_draft_note_get: Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position.
 - gitlab_mr_draft_note_list: List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata.
 - gitlab_mr_draft_note_publish: Publish a single draft note as a regular merge request note.
-- gitlab_mr_draft_note_publish_all: Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project.
+- gitlab_mr_draft_note_publish_all: Publish all of the user's pending draft notes on a merge request, optionally with a summary note and a reviewer state.
 - gitlab_mr_draft_note_update: Update a pending draft note's body or position.
 - gitlab_mr_emoji_create: Add an emoji reaction to a merge request. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type.
 - gitlab_mr_emoji_delete: Remove an emoji reaction from a merge request by award id.
@@ -1190,7 +1191,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_pages_domain_delete: Remove a custom Pages domain from a project (destructive).
 - gitlab_pages_domain_get: Get a single Pages custom domain by name.
 - gitlab_pages_domain_list: List the custom Pages domains for a project with pagination.
-- gitlab_pages_domain_list_all: List ALL GitLab Pages custom domains across the whole instance in one call (admin only).
+- gitlab_pages_domain_list_all: List the GitLab Pages custom domains across the whole instance (admin only), one page at a time.
 - gitlab_pages_domain_update: Update an existing Pages custom domain's auto-SSL flag or certificate.
 - gitlab_pages_get: Get the Pages settings for a project.
 - gitlab_pages_unpublish: Unpublish a project's Pages site (destructive).
@@ -1300,6 +1301,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1092 tools, one per operation
 - gitlab_project_restore: Restore a project marked for deletion.
 - gitlab_project_service_account_create: Create a GitLab project service account.
 - gitlab_project_service_account_delete: Delete a GitLab project service account.
+- gitlab_project_service_account_get: Get one GitLab project service account by its user ID (GitLab 19.4 or later).
 - gitlab_project_service_account_list: List GitLab project service accounts.
 - gitlab_project_service_account_pat_create: Create a personal access token for a GitLab project service account.
 - gitlab_project_service_account_pat_list: List personal access tokens for a GitLab project service account.

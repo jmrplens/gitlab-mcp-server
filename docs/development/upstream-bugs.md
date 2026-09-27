@@ -2890,15 +2890,20 @@ against the session's.
   writes when the stream's handler returns, which tells a conforming client the
   subscription has ended.
 - **Workaround**: none, and unlike the malformed-message entry this one really
-  has none: the type cannot be constructed at all, so there is nothing to
-  interpose.
+  has none: no method of the SDK sends the notification for a request the
+  client made, so there is nothing to interpose.
 
 **What**: 2026-07-28 says a server "MUST send `notifications/cancelled`
 referencing a `subscriptions/listen` request ID when it tears down that
-subscription stream". `SubscriptionsListenResult` embeds an unexported type, so
-application code cannot build the message, and the SDK offers no method that
-sends one. A server that ends a subscription can therefore satisfy the graceful
-half of the contract and not this one.
+subscription stream". go-sdk sends `notifications/cancelled` only when a call
+it made itself is abandoned (`call` and `cancelCall` in `mcp/transport.go`), and
+`ServerSession` offers no method that sends one for a request the client made.
+A server that ends a subscription can therefore satisfy the graceful half of
+the contract and not this one. This entry used to give the reason as
+`SubscriptionsListenResult` embedding an unexported type; that type is the
+listen's result, not this notification, and application code can build one,
+which go-sdk sends only in place of its own handler
+(`internal/tenancy/channels_integration_test.go` holds that).
 
 **How we found it**: the interaction-pattern specification audit. Reproduced on
 stdio at 2026-07-28: a watcher retired after its resource began returning 404,

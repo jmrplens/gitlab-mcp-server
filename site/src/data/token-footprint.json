@@ -10,19 +10,19 @@
   },
   "individual": {
     "free": {
-      "visible_tools": 866,
-      "tool_schema_tokens": 538148,
-      "reduction_factor_vs_dynamic": 353
+      "visible_tools": 868,
+      "tool_schema_tokens": 543166,
+      "reduction_factor_vs_dynamic": 356
     },
     "premium": {
-      "visible_tools": 1020,
-      "tool_schema_tokens": 647596,
-      "reduction_factor_vs_dynamic": 425
+      "visible_tools": 1022,
+      "tool_schema_tokens": 655642,
+      "reduction_factor_vs_dynamic": 430
     },
     "ultimate": {
-      "visible_tools": 1086,
-      "tool_schema_tokens": 681163,
-      "reduction_factor_vs_dynamic": 447
+      "visible_tools": 1088,
+      "tool_schema_tokens": 695365,
+      "reduction_factor_vs_dynamic": 456
     }
   }
 }

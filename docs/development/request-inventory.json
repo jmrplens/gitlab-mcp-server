@@ -2210,6 +2210,7 @@
         "pwa_icon",
         "pwa_name",
         "pwa_short_name",
+        "site_name",
         "title",
         "url"
       ]
@@ -2460,7 +2461,7 @@
         "sort"
       ],
       "identifiers": {
-        ":issue_id": 1
+        ":issue_id": 2
       }
     },
     {
@@ -2472,7 +2473,7 @@
         "name"
       ],
       "identifiers": {
-        ":issue_id": 1
+        ":issue_id": 2
       }
     },
     {
@@ -2491,8 +2492,8 @@
       "method": "GET",
       "path": "/projects/my-project/issues/:issue_id/award_emoji/:award_emoji_id",
       "identifiers": {
-        ":award_emoji_id": 1,
-        ":issue_id": 1
+        ":award_emoji_id": 2,
+        ":issue_id": 2
       }
     },
     {
@@ -2500,6 +2501,19 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/my-project/issues/:issue_id/notes/:note_id/award_emoji",
+      "identifiers": {
+        ":issue_id": 2,
+        ":note_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/my-project/issues/:issue_id/notes/:note_id/award_emoji",
+      "body": [
+        "name"
+      ],
       "identifiers": {
         ":issue_id": 1,
         ":note_id": 1
@@ -2520,13 +2534,24 @@
       "package": "internal/tools/awardemoji",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/my-project/issues/:issue_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":issue_id": 1,
+        ":note_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/my-project/merge_requests/:merge_request_id/award_emoji",
       "query": [
         "page",
         "per_page"
       ],
       "identifiers": {
-        ":merge_request_id": 1
+        ":merge_request_id": 2
       }
     },
     {
@@ -2538,7 +2563,28 @@
         "name"
       ],
       "identifiers": {
+        ":merge_request_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/my-project/merge_requests/:merge_request_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
         ":merge_request_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/my-project/merge_requests/:merge_request_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":merge_request_id": 1,
+        ":note_id": 1
       }
     },
     {
@@ -2547,6 +2593,39 @@
       "method": "GET",
       "path": "/projects/my-project/snippets/:snippet_id/award_emoji",
       "identifiers": {
+        ":snippet_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/my-project/snippets/:snippet_id/award_emoji",
+      "body": [
+        "name"
+      ],
+      "identifiers": {
+        ":snippet_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/my-project/snippets/:snippet_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":snippet_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/awardemoji",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/my-project/snippets/:snippet_id/notes/:note_id/award_emoji/:award_emoji_id",
+      "identifiers": {
+        ":award_emoji_id": 1,
+        ":note_id": 1,
         ":snippet_id": 1
       }
     },
@@ -3352,6 +3431,7 @@
       "path": "/broadcast_messages",
       "body": [
         "broadcast_type",
+        "color",
         "dismissable",
         "ends_at",
         "font",
@@ -3387,6 +3467,7 @@
       "path": "/broadcast_messages/:broadcast_message_id",
       "body": [
         "broadcast_type",
+        "color",
         "dismissable",
         "ends_at",
         "font",
@@ -4088,6 +4169,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/repository/commits/abc123/merge_requests",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -5048,10 +5133,7 @@
         "target_branch",
         "updated_after",
         "updated_before",
-        "view",
-        "wip",
-        "with_labels_details",
-        "with_merge_status_recheck"
+        "wip"
       ],
       "identifiers": {
         ":deployment_id": 4,
@@ -8077,7 +8159,7 @@
         "sort"
       ],
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 3
       }
     },
     {
@@ -9048,6 +9130,15 @@
       ],
       "identifiers": {
         ":service_account_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groupserviceaccounts",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/mygroup/service_accounts/:service_account_id",
+      "identifiers": {
+        ":service_account_id": 2
       }
     },
     {
@@ -11048,8 +11139,11 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/jobs/:job_id/artifacts",
+      "query": [
+        "file_type"
+      ],
       "identifiers": {
-        ":job_id": 1,
+        ":job_id": 2,
         ":project_id": 1
       }
     },
@@ -12006,6 +12100,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/blocks",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 1,
         ":project_id": 1
@@ -12475,6 +12573,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/approval_rules",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 1,
         ":project_id": 1
@@ -12991,6 +13093,11 @@
       "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes/bulk_publish",
+      "body": [
+        "internal",
+        "note",
+        "reviewer_state"
+      ],
       "identifiers": {
         ":merge_request_id": 1,
         ":project_id": 1
@@ -13611,7 +13718,11 @@
       "package": "internal/tools/pages",
       "kind": "rest",
       "method": "GET",
-      "path": "/pages/domains"
+      "path": "/pages/domains",
+      "query": [
+        "page",
+        "per_page"
+      ]
     },
     {
       "package": "internal/tools/pages",
@@ -14120,7 +14231,11 @@
       "package": "internal/tools/projectaliases",
       "kind": "rest",
       "method": "GET",
-      "path": "/project_aliases"
+      "path": "/project_aliases",
+      "query": [
+        "page",
+        "per_page"
+      ]
     },
     {
       "package": "internal/tools/projectaliases",
@@ -15300,6 +15415,16 @@
     {
       "package": "internal/tools/projectserviceaccounts",
       "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/service_accounts/:service_account_id",
+      "identifiers": {
+        ":project_id": 2,
+        ":service_account_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/projectserviceaccounts",
+      "kind": "rest",
       "method": "PATCH",
       "path": "/projects/:project_id/service_accounts/:service_account_id",
       "body": [
@@ -16415,6 +16540,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/resource_groups",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -16445,6 +16574,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/resource_groups/production/upcoming_jobs",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -17675,7 +17808,11 @@
       "package": "internal/tools/systemhooks",
       "kind": "rest",
       "method": "GET",
-      "path": "/hooks"
+      "path": "/hooks",
+      "query": [
+        "page",
+        "per_page"
+      ]
     },
     {
       "package": "internal/tools/systemhooks",
@@ -18294,7 +18431,11 @@
       "package": "internal/tools/usergpgkeys",
       "kind": "rest",
       "method": "GET",
-      "path": "/user/gpg_keys"
+      "path": "/user/gpg_keys",
+      "query": [
+        "page",
+        "per_page"
+      ]
     },
     {
       "package": "internal/tools/usergpgkeys",
@@ -18328,6 +18469,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/gpg_keys",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":user_id": 2
       }
@@ -18437,7 +18582,11 @@
       "package": "internal/tools/users",
       "kind": "rest",
       "method": "GET",
-      "path": "/user/emails"
+      "path": "/user/emails",
+      "query": [
+        "page",
+        "per_page"
+      ]
     },
     {
       "package": "internal/tools/users",
@@ -18601,7 +18750,6 @@
         "reset_password",
         "shared_runners_minutes_limit",
         "skip_confirmation",
-        "skype",
         "theme_id",
         "twitter",
         "username",
@@ -18656,7 +18804,6 @@
         "provider",
         "public_email",
         "skip_reconfirmation",
-        "skype",
         "theme_id",
         "twitter",
         "username",

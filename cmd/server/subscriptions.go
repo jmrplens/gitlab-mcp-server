@@ -783,12 +783,15 @@ func stampWatchEnd(result mcp.Result, stream *listenStream) {
 //
 // A subscription at protocol 2026-07-28 is a request the client leaves
 // open, and the specification says a server that tears one down should
-// answer it rather than go quiet. The SDK gives application code no way to
-// send that answer — SubscriptionsListenResult embeds an unexported type,
-// so it cannot be constructed here — but the SDK's own handler produces it
-// when its context ends. Canceling that context from middleware is
-// therefore the only way to close a stream properly, which is what this
-// does.
+// answer it rather than go quiet. Once the SDK's handler has acknowledged the
+// stream, application code has no way to send that answer itself: a
+// SubscriptionsListenResult it builds is sent only when a middleware returns
+// it in place of that handler, before anything is subscribed or acknowledged
+// (internal/tenancy holds this in
+// TestSubscriptionsListenResult_BuiltByApplicationCode_AnswersOnlyInPlaceOfTheSDKHandler).
+// The SDK's own handler produces the answer when its context ends, so
+// canceling that context from middleware is the only way to close an
+// acknowledged stream properly, which is what this does.
 //
 // Granularity is the stream, not the URI, so a stream is only closed once
 // none of its URIs are watched any more, and never if it also carries
@@ -960,8 +963,8 @@ func (s *listenStreams) closeOwner(owner string, end *watchEnd) map[*mcp.ServerS
 // supervisor's next step is SIGKILL, possibly mid-write.
 //
 // Canceling is also how each stream gets its completion result: the SDK writes
-// one when its handler's context ends, and application code cannot construct
-// that result itself.
+// one when its handler's context ends, and application code cannot send one for
+// a stream the handler has already acknowledged.
 func (s *listenStreams) closeAll() {
 	s.mu.Lock()
 	open := make([]*listenStream, 0, len(s.streams))
@@ -1009,10 +1012,11 @@ func (s *listenStreams) middleware() mcp.Middleware {
 			// when the stream is torn down.
 			result, err := next(withListenStream(streamCtx, stream), method, req)
 			// Here rather than anywhere else because this is the only place the
-			// result exists in a form application code can touch:
-			// SubscriptionsListenResult embeds an unexported type, so it cannot
-			// be constructed, and it is written to the wire the moment this
-			// middleware returns.
+			// SDK's own result passes through application code, and it is
+			// written to the wire the moment this middleware returns. A result
+			// of this middleware's own making would be sent only in place of
+			// the handler, before anything was acknowledged, so the handler's
+			// result is the one a watch-end reason can go on.
 			stampWatchEnd(result, stream)
 			return result, err
 		}

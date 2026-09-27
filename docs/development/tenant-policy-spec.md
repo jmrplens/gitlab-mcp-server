@@ -242,8 +242,37 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 
 A limit whose refusal no client can see is not the limit its author meant, so the channel
 is part of the decision. `tenancy.Carriages()` is the matrix below as data, and it
-describes go-sdk as this server builds against it: an SDK upgrade that changes what is
-carried edits it in the same change. The wording is part of a refusal too: a client may
+describes go-sdk as this server builds against it. It is checked against the SDK rather
+than asserted by it: `internal/tenancy/channels_integration_test.go` drives the pinned
+go-sdk in process through every row whose method the SDK owns, in both eras, over three
+transports: the in-memory one, which carries what stdio carries, and the streamable HTTP
+handler on `httptest` answering with an event stream and with a JSON body. Over HTTP a
+2026-07-28 client meets a stateless handler, which is how `cmd/server` serves that
+revision by default, and a 2025-11-25 client a stateful session, the only way a client of
+that revision receives a notification; the expiry row is driven over HTTP alone, since
+only the handler times a session out. In an era a row holds in, every channel it lists
+must be carried. In either era, a channel the test attempts that the SDK carries must be
+one the matrix lists for that method and era, so a row confined to one era is held in the
+other too: the one place go-sdk carries a method outside its row's era,
+`subscriptions/listen` on a 2025-11-25 session, which no client of that revision sends, is
+declared in the test with that reason, and the declaration fails once the SDK stops bearing
+it out. A failure names the row, the era, the transport, the channel expected and the
+channel observed, including a failure that kept the row from being observed at all.
+
+That second direction holds only for a channel the test attempts. Every channel is
+attempted on every request method except three: a gate status, which is written in front
+of the SDK, a refusal to start, which no method carries, and a session close, which the SDK
+lets a server send in answer to any request and which the matrix gives to the expiry and
+eviction row alone; and a narrowing (`Withheld`, `Absent`, `Unknown`) is attempted on the
+two tool methods alone, since the SDK serves whatever surface it is given. For those the
+test cannot catch the SDK carrying a channel a row leaves out, and it fails when a channel
+of the register is neither attempted nor declared as not attempted, so the list cannot
+silently grow. A channel counts as carried only when what the server sent arrives intact,
+so the SDK's own `-32601` for a method it removed from an era does not count as the
+server's refusal reaching the client. The gate and startup rows describe this server's own
+layers and are not driven, and neither is the eviction method, whose row is driven through
+expiry. An SDK upgrade that changes what is carried therefore fails its own pull request,
+which edits the matrix in the same change. The wording is part of a refusal too: a client may
 recognize one only by its stable leading text (a refused `tools/call` by
 `toolutil.RateLimitRefusalPrefix`, which `cmd/bench_resources` reads as well), so that
 text, a row's `Prefix`, belongs to the wire shape with the code, the status and the
@@ -286,6 +315,32 @@ What the protocol and the SDK leave a server:
 - **A refusal is never a notification the client did not ask for**, a server-initiated
   request, or `notifications/cancelled`.
 - **On stdio there is no status**: only in-band errors, tool errors and empty completions.
+
+The same test holds the half of that list that is about the SDK, over the same three
+transports unless this says otherwise: an in-band error takes no status but 404 and 400,
+and those at 2026-07-28 alone, whichever kind of HTTP answer carries it; a plain Go error
+arrives as code 0, a wrapped JSON-RPC error keeps its code and takes the outer text, and a
+`-32601` loses its text to the SDK's own; every in-band refusal the register declares
+reaches the client with its code and its text, `Prefix` included; and a listen is refused
+before the acknowledgment, which a 2026-07-28 Go SDK client, driven in memory, never sees.
+It also holds three facts other decisions rest on without being rows:
+
+- **A typed nil result is not a refusal.** A receiving middleware that answers with one
+  and no error gets a `null` result at 2025-11-25, and at 2026-07-28 a panic after the
+  middleware chain has returned, which ends the process. No middleware can recover it: the
+  test answers it in a child process of its own, in memory, whose outermost middleware
+  recovers any panic the chain raises, and the process still ends. A refusal is therefore
+  always an error.
+- **Load shedding is not a "retry later".** A handler that answers with an empty
+  input-request map gets a code 0 `the server is busy, retry later` at 2025-11-25, and at
+  2026-07-28 an `input_required` result that a Go SDK client, driven in memory, retries
+  three times and then turns into a local error the model never reads. No row carries it.
+- **A listen is ended through its handler's context.** Application code can build a
+  `SubscriptionsListenResult`, and one a middleware returns instead of calling the SDK's
+  handler is sent, but only in place of that handler, before anything is subscribed or
+  acknowledged. A stream the handler has acknowledged is answered only when the handler's
+  context ends, with the SDK's own result, which a middleware can still stamp with a
+  watch-end reason: that is the `ListenEnd` channel.
 
 ### Where a refused caller learns what to do
 
