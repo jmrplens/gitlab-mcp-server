@@ -12031,6 +12031,11 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			withFreshFlagSet(t)
+			// The --shutdown case reads the real process listing, so it is
+			// narrowed to this process's own children: a findPeers that
+			// matched every name would otherwise terminate whatever shares
+			// the test's process namespace.
+			listOnlyOwnProcesses(t)
 			// Claimed through t.Setenv so what main writes reverts with the
 			// test, and cleared so no instance from the environment turns the
 			// HTTP case into a working server.

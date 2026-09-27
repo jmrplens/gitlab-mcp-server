@@ -148,6 +148,7 @@ func TestCountAlive_CountsOnlyProcessesStillRunning(t *testing.T) {
 // by matching some unrelated process on the machine.
 func TestRunShutdown_NoPeers_SucceedsWithoutTouchingAnything(t *testing.T) {
 	withArgv0(t, filepath.Join(t.TempDir(), peerName(t)))
+	listOnlyOwnProcesses(t)
 
 	if got := runShutdown(); got != 0 {
 		t.Errorf("runShutdown() = %d with no instance running, want 0", got)
@@ -205,6 +206,7 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 
 			binary := buildPeer(t, filepath.Join(t.TempDir(), peerName(t)))
 			withArgv0(t, binary)
+			listOnlyOwnProcesses(t)
 
 			var env []string
 			if tt.ignoresTerm {
@@ -368,6 +370,41 @@ func withArgv0(t *testing.T, path string) {
 	original := os.Args[0]
 	os.Args[0] = path
 	t.Cleanup(func() { os.Args[0] = original })
+}
+
+// listOnlyOwnProcesses narrows the process listing findPeers reads to this
+// test process and the processes it started, for the duration of the test.
+//
+// The private name keeps the real listing safe only while findPeers compares
+// names correctly. One wrong operator there, which is exactly what a mutation
+// run applies, hands runShutdown every process in the environment, and the
+// test then terminates the process running it and anything else sharing its
+// process namespace: a gremlins run of this package lost its container that
+// way. Narrowed to its own children, the same defect fails the test and
+// reaches nothing else. The listing is still the real one, filtered, so what
+// the tests assert about names, pids and exits is unchanged.
+func listOnlyOwnProcesses(t *testing.T) {
+	t.Helper()
+	self := pid32(t, os.Getpid())
+	original := listProcesses
+	listProcesses = func() ([]*process.Process, error) {
+		all, err := original()
+		if err != nil {
+			return nil, err
+		}
+		var own []*process.Process
+		for _, p := range all {
+			if p.Pid == self {
+				own = append(own, p)
+				continue
+			}
+			if parent, ppidErr := p.Ppid(); ppidErr == nil && parent == self {
+				own = append(own, p)
+			}
+		}
+		return own, nil
+	}
+	t.Cleanup(func() { listProcesses = original })
 }
 
 // peerIgnoreTermEnv is the variable testdata/peer reads to decide whether to
