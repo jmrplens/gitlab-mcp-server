@@ -147,6 +147,21 @@ type Summary struct {
 	// upstream merge request rather than an edit here. The remainder is a
 	// field the SDK already gives us and only this server does not publish.
 	TypedUnsurfacedNotInSDK int `json:"typed_unsurfaced_not_in_sdk"`
+	// TypedJudgedByOrbit counts the types the type grain could not judge and
+	// the Orbit response record did, which are listed there instead of in its
+	// skip lists. See [TypedShapeCheck.OrbitRecord].
+	TypedJudgedByOrbit int `json:"typed_types_compared_against_orbit_record"`
+	// The Orbit counts are both shape questions asked of the Orbit output
+	// types against the recording of what GitLab.com answered their handlers:
+	// the calls read, the output and nested types compared, the findings in
+	// each direction, and the half of them no declaration answers. See
+	// [OrbitCheck].
+	OrbitCalls       int `json:"orbit_record_calls"`
+	OrbitCompared    int `json:"orbit_types_compared"`
+	OrbitNested      int `json:"orbit_nested_types_compared"`
+	OrbitUnpublished int `json:"orbit_unpublished_fields"`
+	OrbitUnsurfaced  int `json:"orbit_unsurfaced_fields"`
+	OrbitUndeclared  int `json:"orbit_undeclared_fields"`
 	// The pagination counts are R-PAGE, the one question here that is about a
 	// response header rather than a field: PaginatedRoutes and KeysetRoutes are
 	// what the record says GitLab pages at all, and the collection counts are
@@ -304,6 +319,10 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	}
 
 	shapes := shapeCheck(root, inventory.Requests, publishedTypes(root))
+	// Asked apart from the live record, which says nothing about Orbit and
+	// whose absence must not silence a comparison that does not read it.
+	shapes.Orbit = orbitCheck(root)
+	shapes.Typed = shapes.Typed.judgedAgainstOrbit(shapes.Orbit.judged())
 	sentAlways, sentWhen, sentDeclared := unsurfacedCounts(shapes.Sent.Unsurfaced)
 	typedSentAlways, typedSentWhen, typedSentDeclared := unsurfacedCounts(shapes.Typed.Unsurfaced)
 	pagination := paginationCheck(root, inventory.Requests, actions)
@@ -315,6 +334,7 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	stale = append(stale, endpoints.staleDeclarations()...)
 	stale = append(stale, shapes.Typed.staleDeclarations()...)
 	stale = append(stale, shapes.Sent.staleDeclarations()...)
+	stale = append(stale, shapes.Orbit.staleDeclarations()...)
 	stale = append(stale, pagination.staleDeclarations()...)
 	sort.Strings(stale)
 
@@ -367,6 +387,13 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 			TypedUndeclaredFields:   shapes.Typed.undeclared(),
 			TypedNestedCompared:     shapes.Typed.NestedCompared,
 			TypedNestedUnpublished:  len(shapes.Typed.Nested),
+			TypedJudgedByOrbit:      len(shapes.Typed.OrbitRecord),
+			OrbitCalls:              shapes.Orbit.Calls,
+			OrbitCompared:           len(shapes.Orbit.Compared),
+			OrbitNested:             len(shapes.Orbit.Nested),
+			OrbitUnpublished:        len(shapes.Orbit.Unpublished),
+			OrbitUnsurfaced:         len(shapes.Orbit.Unsurfaced),
+			OrbitUndeclared:         shapes.Orbit.undeclared(),
 			PaginatedRoutes:         pagination.Routes.Offset,
 			KeysetRoutes:            pagination.Routes.Keyset,
 			CollectionActions:       pagination.Collections.Actions,

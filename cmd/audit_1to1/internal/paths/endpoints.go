@@ -50,7 +50,8 @@ func (e Endpoint) declared() bool { return e.Category != "" }
 //     doc/api entirely, under doc/user;
 //   - client-go still spells the integrations endpoints /services/, an alias
 //     GitLab replaced with /integrations/ and no longer documents, and the
-//     Orbit Knowledge Graph endpoints are experimental and documented nowhere.
+//     Orbit Knowledge Graph endpoints are documented only in a generated
+//     reference their doc/api page points at and spells no line of.
 //
 // None of those is a defect in this server, and every one of them looks exactly
 // like one. A gate that failed a release over the spelling of a documentation
