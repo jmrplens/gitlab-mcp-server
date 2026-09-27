@@ -11,8 +11,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -218,15 +220,29 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 			if code != 0 {
 				t.Errorf("runShutdown() = %d, want 0 once every instance is gone", code)
 			}
-			if tt.graceful && terminateIsASignal && elapsed >= shutdownGracePeriod {
-				t.Errorf("runShutdown took %s: a peer that stops on SIGTERM must not cost the whole grace period", elapsed)
-			}
+			checkShutdownElapsed(t, elapsed, tt.graceful && terminateIsASignal, tt.ignoresTerm)
 			for i, peer := range peers {
 				if !peer.exited(t) {
 					t.Errorf("peer %d was still running when runShutdown returned", i)
 				}
 			}
 		})
+	}
+}
+
+// checkShutdownElapsed holds how long runShutdown took to the path the peers
+// forced it down. A peer that stops on SIGTERM must not cost the whole grace
+// period, and a peer that ignores it can only be gone once the grace period
+// has run out and the kill has followed; a wedged case that finished sooner
+// never reached the kill.
+func checkShutdownElapsed(t *testing.T, elapsed time.Duration, stopsOnTerm, ignoresTerm bool) {
+	t.Helper()
+	if stopsOnTerm && elapsed >= shutdownGracePeriod {
+		t.Errorf("runShutdown took %s: a peer that stops on SIGTERM must not cost the whole grace period", elapsed)
+	}
+	if ignoresTerm && elapsed < shutdownGracePeriod {
+		t.Errorf("runShutdown took %s: a peer that ignores SIGTERM can only be gone once the %s grace period has run out and the kill has followed",
+			elapsed, shutdownGracePeriod)
 	}
 }
 
@@ -414,9 +430,17 @@ func startPeer(t *testing.T, binary string, env []string) *peerProcess {
 	// directory.
 	cmd := exec.CommandContext(t.Context(), binary)
 	cmd.Env = append(os.Environ(), env...)
-	if err := cmd.Start(); err != nil {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("piping a peer's output: %v", err)
+	}
+	if err = cmd.Start(); err != nil {
 		t.Fatalf("starting a peer: %v", err)
 	}
+	// Wait closes the pipe once the process exits, so the ready line is read
+	// before the reaper starts. The reaper and the cleanup are installed even
+	// when the line never comes, so the process is still killed and reaped.
+	ready := awaitPeerReady(stdout)
 	peer := &peerProcess{cmd: cmd, waited: make(chan struct{})}
 	go func() {
 		_ = cmd.Wait()
@@ -426,7 +450,32 @@ func startPeer(t *testing.T, binary string, env []string) *peerProcess {
 		_ = cmd.Process.Kill()
 		<-peer.waited
 	})
+	if !ready {
+		t.Fatalf("the peer never wrote %q, so its signal disposition is unknown", peerReadyLine)
+	}
 	return peer
+}
+
+// peerReadyLine is what testdata/peer writes once its signal disposition is
+// set, declared here for the reason peerIgnoreTermEnv is.
+const peerReadyLine = "ready"
+
+// awaitPeerReady reports whether the peer wrote its ready line within the
+// bound. Seeing the process in the table is not enough before signaling it:
+// a peer meant to ignore SIGTERM that is signaled before it has said so dies
+// of the signal, and the wedged case then passes without reaching the kill.
+func awaitPeerReady(stdout io.Reader) bool {
+	line := make(chan string, 1)
+	go func() {
+		s, _ := bufio.NewReader(stdout).ReadString('\n')
+		line <- strings.TrimSpace(s)
+	}()
+	select {
+	case got := <-line:
+		return got == peerReadyLine
+	case <-time.After(10 * time.Second):
+		return false
+	}
 }
 
 // waitForPeers blocks until the operating system reports the expected number of
