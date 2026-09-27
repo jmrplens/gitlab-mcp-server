@@ -155,6 +155,7 @@ func (h fakeHead) commit(t *testing.T, from string) {
 	if err = os.MkdirAll(h.dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and the record's file name
 	if err = os.WriteFile(orbitrecord.Path(h.dir), raw, 0o600); err != nil {
 		t.Fatal(err)
 	}

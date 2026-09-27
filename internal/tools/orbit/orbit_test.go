@@ -419,7 +419,7 @@ func TestDSL_EachResponseFormat_PublishesTheDSLItself(t *testing.T) {
 				_, _ = w.Write([]byte(tc.body))
 			}))
 
-			out, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: tc.format}})
+			out, err := DSL(context.Background(), client, DSLInput{ResponseFormat: tc.format})
 			if err != nil {
 				t.Fatalf("DSL() error: %v", err)
 			}
