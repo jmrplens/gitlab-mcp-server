@@ -12169,6 +12169,14 @@ func TestMain_RegistersEachFlagWithItsDocumentedDefault(t *testing.T) {
 // accepts ends at the bind, so no case can leave a server running.
 func runMainOverHTTPOnABusyAddress(t *testing.T, args ...string) (logged string, exits []int) {
 	t.Helper()
+	return runMainOverHTTPOnABusyLoopback(t, append([]string{"-gitlab-url", "https://gitlab.example.test"}, args...)...)
+}
+
+// runMainOverHTTPOnABusyLoopback is [runMainOverHTTPOnABusyAddress] without
+// the instance, for the flags that decide what a deployment naming none does.
+// The address is loopback, so --allow-any-gitlab-url is accepted there.
+func runMainOverHTTPOnABusyLoopback(t *testing.T, args ...string) (logged string, exits []int) {
+	t.Helper()
 	withFreshFlagSet(t)
 	t.Setenv(config.EnvFileVar, "")
 	t.Setenv("GITLAB_URL", "")
@@ -12183,7 +12191,7 @@ func runMainOverHTTPOnABusyAddress(t *testing.T, args ...string) (logged string,
 	originalExit, originalArgs := exitProcess, os.Args
 	originalLogger, originalBase := slog.Default(), baseLogHandler
 	exitProcess = func(code int) { exits = append(exits, code) }
-	os.Args = append([]string{"gitlab-mcp-server", "-http", "-gitlab-url", "https://gitlab.example.test", "-http-addr", busy.Addr().String()}, args...)
+	os.Args = append([]string{"gitlab-mcp-server", "-http", "-http-addr", busy.Addr().String()}, args...)
 	t.Cleanup(func() {
 		exitProcess, os.Args = originalExit, originalArgs
 		slog.SetDefault(originalLogger)
@@ -12239,6 +12247,7 @@ func TestMain_HTTPFlags_ReachTheSettingsTheyName(t *testing.T) {
 		"-tier", "premium",
 		"-ignore-scopes",
 		"-read-only",
+		"-safe-mode",
 		"-exclude-tools", "gitlab_example_tool",
 	)
 
@@ -12265,6 +12274,7 @@ func TestMain_HTTPFlags_ReachTheSettingsTheyName(t *testing.T) {
 			TierExplicit:      true,
 			IgnoreScopes:      true,
 			ReadOnly:          true,
+			SafeMode:          true,
 			ExcludeTools:      []string{"gitlab_example_tool"},
 		})},
 	} {
@@ -12314,6 +12324,11 @@ func TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue(t *testing.T)
 		{args: []string{"-http-socket-mode", "0999"}, want: "invalid --http-socket-mode"},
 		{args: []string{"-http-idle-timeout", "-1s"}, want: "invalid --http-idle-timeout"},
 		{args: []string{"-max-request-body-bytes", "-1"}, want: "--max-request-body-bytes must be >= 0"},
+		// Two flags only an oauth deployment reads. The TTL shares its 15m
+		// default with --revalidate-interval, so a registration writing one
+		// into the other's field keeps every default and is seen only here.
+		{args: []string{"-oauth-cache-ttl", "3h", "-auth-mode", "oauth", "-public-url", "https://mcp.example.test"}, want: "--oauth-cache-ttl 3h0m0s exceeds"},
+		{args: []string{"-skip-tls-verify", "-auth-mode", "oauth", "-public-url", "https://mcp.example.test"}, want: "--auth-mode=oauth refuses --skip-tls-verify"},
 	} {
 		t.Run(tc.args[0], func(t *testing.T) {
 			logged, exits := runMainOverHTTPOnABusyAddress(t, tc.args...)
@@ -12327,6 +12342,44 @@ func TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue(t *testing.T)
 			}
 		})
 	}
+}
+
+// TestMain_HTTPFlags_TheHatchAndThePinnedApplicationsReachTheirSettings covers
+// two flags a neighbor of the same type and default could stand in for
+// unseen: --allow-any-gitlab-url beside --skip-tls-verify, both false, and
+// --oauth-client-uid beside the other string flags, all empty. Each is passed
+// through main and read back where the deployment acts on it: the hatch is
+// accepted on a loopback listener instead of refused for naming no instance,
+// and the verifier is told how many applications it admits.
+func TestMain_HTTPFlags_TheHatchAndThePinnedApplicationsReachTheirSettings(t *testing.T) {
+	t.Run("-allow-any-gitlab-url", func(t *testing.T) {
+		logged, exits := runMainOverHTTPOnABusyLoopback(t, "-allow-any-gitlab-url")
+
+		if !slices.Equal(exits, []int{1}) {
+			t.Errorf("exit codes = %v, want [1] from the taken address", exits)
+		}
+		if !strings.Contains(logged, "--allow-any-gitlab-url is set and no instance is published") {
+			t.Errorf("main did not take the hatch on a loopback listener:\n%s", logged)
+		}
+		if strings.Contains(logged, "--gitlab-url is required in HTTP mode") {
+			t.Errorf("main refused a deployment that passed --allow-any-gitlab-url for naming no instance:\n%s", logged)
+		}
+	})
+	t.Run("-oauth-client-uid", func(t *testing.T) {
+		logged, exits := runMainOverHTTPOnABusyAddress(t,
+			"-oauth-client-uid", "app-one,app-two",
+			"-auth-mode", "oauth",
+			"-public-url", "https://mcp.example.test",
+		)
+
+		if !slices.Equal(exits, []int{1}) {
+			t.Errorf("exit codes = %v, want [1] from the taken address:\n%s", exits, logged)
+		}
+		pinned := loggedRecord(t, logged, "admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused")
+		if got := pinned["applications"]; got != float64(2) {
+			t.Errorf("applications = %v, want 2 for the two uids passed", got)
+		}
+	})
 }
 
 // withToolSettings sets the three process-wide settings both transports write
