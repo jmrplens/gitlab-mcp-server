@@ -134,6 +134,14 @@ const (
 	docMRCreatePipeline      = docMergeRequests + "#create-merge-request-pipeline"
 	docMRCreatePipelineQueue = docMRCreatePipeline + " (queued_duration, exposed unconditionally by " +
 		"lib/api/entities/ci/pipeline.rb and absent from that section's example body)"
+	// lib/api/entities/plan_limit.rb exposes twenty-nine limits and the change
+	// history, every one with no condition, and client-go's PlanLimit models
+	// the eight package file sizes. The page lists the rest among the update
+	// parameters, except the two webhook tiers GitLab.com uses, and neither of
+	// its example bodies carries the webhook limits or the history, so the
+	// entity is the oracle for those four.
+	docPlanLimits = "plan_limits.md (lib/api/entities/plan_limit.rb exposes every limit and limits_history " +
+		"with no condition; web_hook_calls_low, web_hook_calls_mid and limits_history are on the entity and not on the page)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -926,6 +934,34 @@ var docAddedFields = map[string]string{
 	"pipelines.Output.coverage":        docMRCreatePipeline,
 	"pipelines.Output.detailed_status": docMRCreatePipeline,
 	"pipelines.Output.archived":        docMRCreatePipeline,
+
+	// planlimits: the twenty-one limits and the change history
+	// API::Entities::PlanLimit sends beside the eight package file sizes
+	// client-go's PlanLimit models, read from the captured response (ADR-0021,
+	// planlimits.capturedLimits) on both plan limit routes. Recorded in
+	// docs/development/upstream-bugs.md.
+	"planlimits.PlanLimitItem.cargo_max_file_size":                   docPlanLimits,
+	"planlimits.PlanLimitItem.ci_instance_level_variables":           docPlanLimits,
+	"planlimits.PlanLimitItem.ci_pipeline_size":                      docPlanLimits,
+	"planlimits.PlanLimitItem.ci_active_jobs":                        docPlanLimits,
+	"planlimits.PlanLimitItem.ci_project_subscriptions":              docPlanLimits,
+	"planlimits.PlanLimitItem.ci_pipeline_schedules":                 docPlanLimits,
+	"planlimits.PlanLimitItem.ci_needs_size_limit":                   docPlanLimits,
+	"planlimits.PlanLimitItem.ci_registered_group_runners":           docPlanLimits,
+	"planlimits.PlanLimitItem.ci_registered_project_runners":         docPlanLimits,
+	"planlimits.PlanLimitItem.dotenv_variables":                      docPlanLimits,
+	"planlimits.PlanLimitItem.dotenv_size":                           docPlanLimits,
+	"planlimits.PlanLimitItem.enforcement_limit":                     docPlanLimits,
+	"planlimits.PlanLimitItem.notification_limit":                    docPlanLimits,
+	"planlimits.PlanLimitItem.storage_size_limit":                    docPlanLimits,
+	"planlimits.PlanLimitItem.pipeline_hierarchy_size":               docPlanLimits,
+	"planlimits.PlanLimitItem.max_pipelines_per_merge_train":         docPlanLimits,
+	"planlimits.PlanLimitItem.service_desk_outbound_emails_per_hour": docPlanLimits,
+	"planlimits.PlanLimitItem.service_desk_outbound_emails_per_day":  docPlanLimits,
+	"planlimits.PlanLimitItem.web_hook_calls":                        docPlanLimits,
+	"planlimits.PlanLimitItem.web_hook_calls_low":                    docPlanLimits,
+	"planlimits.PlanLimitItem.web_hook_calls_mid":                    docPlanLimits,
+	"planlimits.PlanLimitItem.limits_history":                        docPlanLimits,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

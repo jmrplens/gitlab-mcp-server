@@ -184,7 +184,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		description: "Delete a package permanently. Returns: a success confirmation naming the deleted package and project. See also: gitlab_package_list, gitlab_package_file_delete.",
 	},
 	"file_delete": {
-		usage:       "Permanently delete a single file from a package while keeping the package itself. Provide project_id, package_id, and the package_file_id from package.file_list.",
+		usage:       "Permanently delete a single file from a package while keeping the package itself. Provide project_id, package_id, and as package_file_id the id package.file_list returns for the file.",
 		aliases:     []string{"delete package file", "remove one package asset", "purge single package file", "drop file from package"},
 		related:     []string{actionPackageFileList, actionPackageDelete, actionPackageList},
 		description: "Delete a single file from a package permanently. Returns: a success confirmation naming the deleted file, package, and project. See also: gitlab_package_file_list, gitlab_package_delete.",
@@ -286,7 +286,7 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 				ValueSource:  "The numeric id package.list or package.group_list returns for the package, whose status there must be default or deprecated: GitLab answers 404 for a package in any other status, one package.list shows in error status included, as it does for a deleted version.",
 				CommonConfusions: []string{
 					"Do not pass the package name or a version string: every version of a package is a package of its own, with its own package_id.",
-					"Do not pass a package_file_id from package.file_list.",
+					"Do not pass the id package.file_list returns for a file, which is a package_file_id.",
 				},
 			},
 		}

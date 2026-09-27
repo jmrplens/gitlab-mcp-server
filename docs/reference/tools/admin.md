@@ -275,14 +275,14 @@ Get all Sidekiq metrics in a single compound response (admin). Returns queue met
 
 ### `gitlab_get_plan_limits`
 
-Get current plan limits (admin). Optionally filter by plan name (default, free, bronze, silver, gold, premium, ultimate).
+Get current plan limits (admin). Optionally filter by plan name (default, free, bronze, silver, gold, premium, ultimate). Returns every limit GitLab sends: the package file sizes (Cargo, Conan, generic, Helm, Maven, npm, NuGet, PyPI, Terraform module), the CI/CD limits, the dotenv limits, the namespace storage limits in MiB, the webhook and Service Desk rates, and the change history GitLab keeps for the storage limits. A limit the instance does not send, because it predates it, is left out rather than reported as zero.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_change_plan_limits`
 
-Change plan limits (admin). Requires plan_name; optionally set individual file size limits.
+Change plan limits (admin). Requires plan_name; optionally set individual package file size limits. Returns the plan's limits after the change, the same set the read returns.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

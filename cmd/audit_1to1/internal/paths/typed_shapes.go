@@ -108,6 +108,33 @@ type TypedShapeCheck struct {
 	// anywhere. Reported rather than gated, because none of the three is a
 	// defect on its own.
 	Skipped SkippedTypes `json:"skipped,omitzero"`
+	// Projections names, as "package.Type", sorted, the types among Compared
+	// that no converter pairs and a handler builds field by field out of a
+	// client-go struct (see [structs.ProjectionPairing]). Each is judged
+	// against the endpoints of the service methods whose answer it is built
+	// from, found in the function holding the literal or in the package's
+	// functions calling it, rather than against every endpoint answering with
+	// the struct, because a compact row is read from one endpoint and a
+	// finding about it has to name that one.
+	//
+	// These are the milestone's issue rows, the resource group's job rows and
+	// the rest of the compact projections that nothing paired before, whose
+	// gaps only the package grain saw, under two thousand findings of other
+	// kinds.
+	Projections []string `json:"projections,omitempty"`
+	// Envelopes names, as "package.Type", sorted, the output types that carry
+	// no pairing because they are this server's packaging around payloads that
+	// have one, and whose every payload was compared, so the response each
+	// packages was judged under its payload's name. They were counted among
+	// the types without a pairing, which read as a response nobody judged
+	// while its payload was being judged a line below.
+	//
+	// Packaging around a payload that is paired and then skipped, for want of
+	// a route or of a response schema, is not here: it is counted in that
+	// payload's skip, since the response it packages was judged no more than
+	// the payload was. Listing it here would call judged a response nobody
+	// compared.
+	Envelopes []string `json:"envelopes,omitempty"`
 }
 
 // SkippedTypes names the output types each skip bucket holds.
@@ -160,13 +187,26 @@ const (
 	grainType    = "type"
 )
 
-// Seams for the two inputs the real tree resolves and a test cannot: loading
-// the typed tool packages costs twenty seconds, and the client-go source lives
-// in a module cache. Each is a variable a test restores.
+// Seams for the inputs the real tree resolves and a test cannot: loading the
+// typed tool packages costs twenty seconds, and the client-go source lives in
+// a module cache. Each is a variable a test restores.
 var (
-	collectPairings = structs.CollectOutputPairings
-	readRoutes      = readSDKRoutes
+	collectPairings  = structs.CollectOutputPairings
+	readRoutes       = readSDKRoutes
+	readMethodRoutes = readSDKMethodRoutes
 )
+
+// typeJoin is everything the type grain reads once per run and consults per
+// output type.
+type typeJoin struct {
+	index        *operationIndex
+	conditions   *conditionIndex
+	routes       map[string][]sdkRoute
+	methodRoutes map[string][]sdkRoute
+	sdkTypes     map[[2]string][]string
+	projected    map[[2]string][]structs.ProjectionPairing
+	sdkFields    map[string]map[string]bool
+}
 
 // typedShapeCheck compares each output type with the responses of the
 // operations its client-go struct models.
@@ -175,92 +215,253 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 	if err != nil || pairings.ClientGoDir == "" {
 		return TypedShapeCheck{}
 	}
-	routes := readRoutes(pairings.ClientGoDir)
-	sdkTypes := pairedSDKTypes(pairings.Outputs)
-	sdkFields := sdkFieldsByType(pairings.Outputs)
+	join := typeJoin{
+		index:        index,
+		conditions:   conditions,
+		routes:       readRoutes(pairings.ClientGoDir),
+		methodRoutes: readMethodRoutes(pairings.ClientGoDir),
+		sdkTypes:     pairedSDKTypes(pairings.Outputs),
+		projected:    projectionsByType(pairings.Outputs, pairings.Projections),
+		sdkFields:    sdkFieldsByType(pairings.Outputs, pairings.Projections),
+	}
 
 	check := TypedShapeCheck{Ran: true}
+	outcomes := map[[2]string]typeOutcome{}
+	var envelopes []publishedType
 	for _, candidate := range published {
-		named := shortPackage(candidate.Package) + "." + candidate.Name
-		paired := sdkTypes[[2]string{shortPackage(candidate.Package), candidate.Name}]
-		if candidate.Inner && !candidate.Payload {
-			// A reference to another resource sitting inside a response, not a
-			// response. Its pairing names the struct of the whole entity, so
-			// judging it here would hold a job's project reference to what
-			// GET /projects/:id answers with and report all eighty-five fields
-			// of a project as missing from it. The nested pass asks the only
-			// question that fits, against the property it sits under.
+		if join.envelope(candidate) {
+			// Decided once every payload has been judged, since what the
+			// envelope is counted as is what became of them.
+			envelopes = append(envelopes, candidate)
 			continue
 		}
-		if len(paired) == 0 && candidate.Payload {
-			// Wrapped and unpaired: the envelope was already counted a skip
-			// under its own name, and counting the payload again would double
-			// one response.
-			continue
-		}
-		if len(paired) == 0 {
-			check.SkippedNoPairing++
-			check.Skipped.NoPairing = append(check.Skipped.NoPairing, named)
-			continue
-		}
-		described := describedRoutes(paired, routes, index)
-		switch {
-		case !described.Routed:
-			check.SkippedNoRoute++
-			check.Skipped.NoRoute = append(check.Skipped.NoRoute, named)
-		case len(described.Known) == 0:
-			check.SkippedNoSchema++
-			check.Skipped.NoSchema = append(check.Skipped.NoSchema, named)
-		default:
-			check.Compared++
-			// Counted here rather than before the switch, because it is
-			// documented as how many of Compared were reached through an
-			// envelope. An inner payload whose endpoints have no route or no
-			// response is a skip like any other, and counting it above would
-			// report a subset larger than the set it is a subset of.
-			if candidate.Inner {
-				check.ComparedInner++
-			}
-			check.Unpublished = append(check.Unpublished, unpublishedAtTypeGrain(candidate, paired, described)...)
-			nested, compared := unpublishedNested(candidate, paired, described)
-			check.Nested = append(check.Nested, nested...)
-			check.NestedCompared += compared
-			check.Unsurfaced = append(check.Unsurfaced, unsurfacedAtTypeGrain(candidate, paired, sdkFields, described, conditions)...)
-		}
+		outcomes[[2]string{shortPackage(candidate.Package), candidate.Name}] = join.judge(&check, candidate)
+	}
+	for _, candidate := range envelopes {
+		countEnvelope(&check, candidate, outcomes)
 	}
 	sortFindings(check.Unpublished)
 	sortFindings(check.Nested)
 	sortUnsurfaced(check.Unsurfaced)
-	for _, names := range [][]string{check.Skipped.NoPairing, check.Skipped.NoRoute, check.Skipped.NoSchema} {
+	for _, names := range [][]string{check.Skipped.NoPairing, check.Skipped.NoRoute, check.Skipped.NoSchema, check.Envelopes, check.Projections} {
 		sort.Strings(names)
 	}
 	check.Unpublished, check.Nested, check.UnusedDeclarations = classifyShapeFindings(check.Unpublished, check.Nested)
 	return check
 }
 
-// pairedSDKTypes indexes the client-go structs each output type models.
+// typeOutcome is what the type grain did with one output type, which is what
+// an envelope around it is counted by.
+type typeOutcome int
+
+// The outcomes of [typeJoin.judge]. Only a paired type reaches the last three,
+// and a payload an envelope is decided by is always paired.
+const (
+	outcomePassedOver typeOutcome = iota
+	outcomeNoPairing
+	outcomeCompared
+	outcomeNoRoute
+	outcomeNoSchema
+)
+
+// judge decides what the type grain does with one output type that is not an
+// envelope: pass it over, count it, or compare it. It returns what it did.
+func (join typeJoin) judge(c *TypedShapeCheck, candidate publishedType) typeOutcome {
+	named := shortPackage(candidate.Package) + "." + candidate.Name
+	paired, projections := join.pairing(candidate)
+	if candidate.Inner && !candidate.Payload {
+		// A reference to another resource sitting inside a response, not a
+		// response. Its pairing names the struct of the whole entity, so
+		// judging it here would hold a job's project reference to what
+		// GET /projects/:id answers with and report all eighty-five fields of
+		// a project as missing from it. The nested pass asks the only question
+		// that fits, against the property it sits under.
+		return outcomePassedOver
+	}
+	if len(paired) > 0 {
+		return join.compare(c, candidate, named, paired, projections)
+	}
+	if candidate.Payload {
+		// Wrapped and unpaired: the envelope is counted a skip under its own
+		// name, and counting the payload again would double one response.
+		return outcomePassedOver
+	}
+	c.SkippedNoPairing++
+	c.Skipped.NoPairing = append(c.Skipped.NoPairing, named)
+	return outcomeNoPairing
+}
+
+// pairing names the client-go structs a type models, through a converter or,
+// failing one, through the projections a handler builds it by, and those
+// projections.
+func (join typeJoin) pairing(candidate publishedType) ([]string, []structs.ProjectionPairing) {
+	key := [2]string{shortPackage(candidate.Package), candidate.Name}
+	projections := join.projected[key]
+	if paired := join.sdkTypes[key]; len(paired) > 0 {
+		return paired, projections
+	}
+	return projectedSDKTypes(projections), projections
+}
+
+// envelope reports whether a type is packaging with no pairing of its own
+// around payloads that every one have one: a top-level type, since a type some
+// struct names is either a payload or a reference, whose response is judged
+// under its payloads' names. Such a type cannot be counted until they have
+// been judged.
+func (join typeJoin) envelope(candidate publishedType) bool {
+	if candidate.Inner || candidate.Payload {
+		return false
+	}
+	if paired, _ := join.pairing(candidate); len(paired) > 0 {
+		return false
+	}
+	return wrapsOnlyPaired(candidate, join.sdkTypes, join.projected)
+}
+
+// countEnvelope counts packaging by what became of the payloads it carries.
+// It is listed among the envelopes when every payload was compared, and is
+// otherwise counted in the skip of the first payload, in its sorted list, that
+// was not: the response it packages was judged no more than that payload was,
+// and listing it among the envelopes would call it judged.
+func countEnvelope(c *TypedShapeCheck, candidate publishedType, outcomes map[[2]string]typeOutcome) {
+	named := shortPackage(candidate.Package) + "." + candidate.Name
+	for _, payload := range candidate.Wraps {
+		switch outcomes[[2]string{shortPackage(candidate.Package), payload}] {
+		case outcomeNoRoute:
+			c.SkippedNoRoute++
+			c.Skipped.NoRoute = append(c.Skipped.NoRoute, named)
+			return
+		case outcomeNoSchema:
+			c.SkippedNoSchema++
+			c.Skipped.NoSchema = append(c.Skipped.NoSchema, named)
+			return
+		}
+	}
+	c.Envelopes = append(c.Envelopes, named)
+}
+
+// compare holds one paired output type against the responses of the endpoints
+// its pairing names, or counts it among the skips when there is nothing to
+// hold it against, and says which it did.
+func (join typeJoin) compare(c *TypedShapeCheck, candidate publishedType, named string, paired []string, projections []structs.ProjectionPairing) typeOutcome {
+	var described describedResponses
+	if len(projections) > 0 {
+		described = describedProjections(projections, join.routes, join.methodRoutes, join.index)
+	} else {
+		described = describedRoutes(paired, join.routes, join.index)
+	}
+	if !described.Routed {
+		c.SkippedNoRoute++
+		c.Skipped.NoRoute = append(c.Skipped.NoRoute, named)
+		return outcomeNoRoute
+	}
+	if len(described.Known) == 0 {
+		c.SkippedNoSchema++
+		c.Skipped.NoSchema = append(c.Skipped.NoSchema, named)
+		return outcomeNoSchema
+	}
+	c.Compared++
+	// Counted here rather than before the two skips above, because it is
+	// documented as how many of Compared were reached through an envelope. An
+	// inner payload whose endpoints have no route or no response is a skip
+	// like any other, and counting it earlier would report a subset larger
+	// than the set it is a subset of.
+	if candidate.Inner {
+		c.ComparedInner++
+	}
+	if len(projections) > 0 {
+		c.Projections = append(c.Projections, named)
+	}
+	c.Unpublished = append(c.Unpublished, unpublishedAtTypeGrain(candidate, paired, described)...)
+	nested, compared := unpublishedNested(candidate, paired, described)
+	c.Nested = append(c.Nested, nested...)
+	c.NestedCompared += compared
+	c.Unsurfaced = append(c.Unsurfaced, unsurfacedAtTypeGrain(candidate, paired, join.sdkFields, described, join.conditions)...)
+	return outcomeCompared
+}
+
 // sdkFieldsByType indexes what each client-go struct deserializes, which is
 // what the upstream half of a sent finding is judged against.
 //
 // Keyed by the struct's name rather than by the pairing, because the question
 // is about client-go and not about which of our types happens to model it: two
 // packages modeling one SDK struct must get the same answer, and the struct
-// carries what it carries.
-func sdkFieldsByType(pairings []structs.OutputPairing) map[string]map[string]bool {
+// carries what it carries. A projection names its struct's fields the same way
+// a converter pairing does, so both lists feed one index.
+func sdkFieldsByType(pairings []structs.OutputPairing, projections []structs.ProjectionPairing) map[string]map[string]bool {
 	out := map[string]map[string]bool{}
-	for _, pairing := range pairings {
-		fields := out[pairing.SDKType]
+	add := func(sdkType string, names []string) {
+		fields := out[sdkType]
 		if fields == nil {
-			fields = make(map[string]bool, len(pairing.SDKFields))
-			out[pairing.SDKType] = fields
+			fields = make(map[string]bool, len(names))
+			out[sdkType] = fields
 		}
-		for _, name := range pairing.SDKFields {
+		for _, name := range names {
 			fields[name] = true
 		}
+	}
+	for _, pairing := range pairings {
+		add(pairing.SDKType, pairing.SDKFields)
+	}
+	for _, projection := range projections {
+		add(projection.SDKType, projection.SDKFields)
 	}
 	return out
 }
 
+// projectionsByType indexes the projection pairings by package and type, for
+// the types no converter pairs. A type a converter pairs keeps the endpoints it
+// has always been judged against, every one answering with its struct: that
+// pairing says the type models the struct wherever it is answered, which is a
+// wider claim than a literal in one handler makes, and narrowing it here would
+// silently drop the endpoints its other callers read.
+func projectionsByType(outputs []structs.OutputPairing, projections []structs.ProjectionPairing) map[[2]string][]structs.ProjectionPairing {
+	converted := make(map[[2]string]bool, len(outputs))
+	for _, pairing := range outputs {
+		converted[[2]string{pairing.Package, pairing.MCPType}] = true
+	}
+	out := map[[2]string][]structs.ProjectionPairing{}
+	for _, projection := range projections {
+		key := [2]string{projection.Package, projection.MCPType}
+		if converted[key] {
+			continue
+		}
+		out[key] = append(out[key], projection)
+	}
+	return out
+}
+
+// projectedSDKTypes names the client-go structs a type's projections read,
+// sorted and each once.
+func projectedSDKTypes(projections []structs.ProjectionPairing) []string {
+	var out []string
+	for _, projection := range projections {
+		if !slices.Contains(out, projection.SDKType) {
+			out = append(out, projection.SDKType)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// wrapsOnlyPaired reports whether a type is packaging whose every payload is
+// paired, by a converter or by a projection, so that the response it wraps is
+// judged under the payload's name.
+func wrapsOnlyPaired(candidate publishedType, sdkTypes map[[2]string][]string, projected map[[2]string][]structs.ProjectionPairing) bool {
+	if len(candidate.Wraps) == 0 {
+		return false
+	}
+	pkg := shortPackage(candidate.Package)
+	for _, payload := range candidate.Wraps {
+		key := [2]string{pkg, payload}
+		if len(sdkTypes[key]) == 0 && len(projected[key]) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// pairedSDKTypes indexes the client-go structs each output type models.
 func pairedSDKTypes(pairings []structs.OutputPairing) map[[2]string][]string {
 	out := map[[2]string][]string{}
 	for _, pairing := range pairings {
@@ -308,10 +509,38 @@ type describedResponses struct {
 // answered from whose response the document actually spells, and the names it
 // gives them.
 func describedRoutes(paired []string, routes map[string][]sdkRoute, index *operationIndex) describedResponses {
+	lists := make([][]sdkRoute, 0, len(paired))
+	for _, sdkType := range paired {
+		lists = append(lists, routes[sdkType])
+	}
+	return describe(lists, index)
+}
+
+// describedProjections is the same for a type built out of client-go structs
+// without a converter: the endpoints of the methods each projection is built
+// from, and the endpoints of the struct itself for a projection whose method
+// was not found, which is what a converter pairing would have searched.
+func describedProjections(projections []structs.ProjectionPairing, routes, methodRoutes map[string][]sdkRoute, index *operationIndex) describedResponses {
+	var lists [][]sdkRoute
+	for _, projection := range projections {
+		if len(projection.Methods) == 0 {
+			lists = append(lists, routes[projection.SDKType])
+			continue
+		}
+		for _, method := range projection.Methods {
+			lists = append(lists, methodRoutes[method])
+		}
+	}
+	return describe(lists, index)
+}
+
+// describe reads what GitLab's document says about each route of each list, in
+// order, which is the order an entity is credited to a key by.
+func describe(lists [][]sdkRoute, index *operationIndex) describedResponses {
 	seen := map[string]bool{}
 	described := describedResponses{EntityOf: map[string]string{}, Known: map[string]bool{}, Nested: map[string]map[string]bool{}}
-	for _, sdkType := range paired {
-		for _, route := range routes[sdkType] {
+	for _, list := range lists {
+		for _, route := range list {
 			described.Routed = true
 			// Only an exact match: a loose one accepts a literal segment of
 			// ours where GitLab has a placeholder, which is evidence about a
@@ -342,9 +571,11 @@ func (d *describedResponses) absorb(operation operation) {
 		d.Known[name] = true
 		// The entity this key came from, not the operation's own: a shape that
 		// merged two routes answers for keys of both, and the one it is named
-		// for does not expose all of them.
-		if from := operation.EntityOf[name]; from != "" && d.EntityOf[name] == "" {
-			d.EntityOf[name] = from
+		// for does not expose all of them. Every key of a response has one,
+		// since the record only lists a key it read on an entity, so the first
+		// response carrying the key is the one that names it.
+		if d.EntityOf[name] == "" {
+			d.EntityOf[name] = operation.EntityOf[name]
 		}
 	}
 	for property, names := range operation.Nested {

@@ -1544,7 +1544,7 @@ func TestListContributionEvents_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 		switch r.URL.Path {
 		case pathContribEvents:
 			testutil.RespondJSON(w, http.StatusOK, `[{
-				"id":200,"title":"event title","project_id":5,"action_name":"pushed",
+				"id":200,"project_id":5,"action_name":"pushed",
 				"target_id":10,"target_iid":11,"target_type":"Issue",
 				"target_title":"target title","created_at":"2026-03-15T09:00:00Z"
 			}]`)
@@ -1564,7 +1564,6 @@ func TestListContributionEvents_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 	}
 	want := ContributionEventOutput{
 		ID:          200,
-		Title:       "event title",
 		ProjectID:   5,
 		ActionName:  "pushed",
 		TargetID:    10,

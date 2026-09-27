@@ -1470,6 +1470,45 @@ func TestGroupListProjects_Success(t *testing.T) {
 	}
 }
 
+// TestGroupListProjects_ARow_CarriesWhatTheCompactRowKeeps pins the whole row
+// a group's project list publishes: the names and paths, where to open and
+// clone the project, its visibility, default branch and topics, the stars and
+// forks it has, whether it is archived, and when it was created and last
+// active. The keys GitLab sends beside them, the permissions and the
+// statistics among them, are project.get's and do not reach the row.
+func TestGroupListProjects_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"id":42,"name":"my-project","name_with_namespace":"Org / Infra / my-project","path":"my-project",
+			"path_with_namespace":"org/infra/my-project","description":"A project","visibility":"private",
+			"web_url":"https://gitlab.example.com/org/infra/my-project",
+			"http_url_to_repo":"https://gitlab.example.com/org/infra/my-project.git",
+			"ssh_url_to_repo":"git@gitlab.example.com:org/infra/my-project.git",
+			"default_branch":"main","topics":["infra","go"],"star_count":3,"forks_count":2,"archived":true,
+			"permissions":{"project_access":{"access_level":40}},"statistics":{"commit_count":9},
+			"created_at":"2026-02-01T12:00:00Z","last_activity_at":"2026-03-04T05:06:07Z"
+		}]`)
+	}))
+
+	out, err := ListProjects(context.Background(), client, ListProjectsInput{GroupID: "99"})
+	if err != nil {
+		t.Fatalf(fmtGroupListProjectsErr, err)
+	}
+
+	want := []ProjectItem{{
+		ID: 42, Name: "my-project", NameWithNamespace: "Org / Infra / my-project", Path: "my-project",
+		PathWithNamespace: "org/infra/my-project", Description: "A project", Visibility: "private",
+		WebURL:        "https://gitlab.example.com/org/infra/my-project",
+		HTTPURLToRepo: "https://gitlab.example.com/org/infra/my-project.git",
+		SSHURLToRepo:  "git@gitlab.example.com:org/infra/my-project.git",
+		DefaultBranch: "main", Topics: []string{"infra", "go"}, StarCount: 3, ForksCount: 2, Archived: new(true),
+		CreatedAt: "2026-02-01T12:00:00Z", LastActivityAt: "2026-03-04T05:06:07Z",
+	}}
+	if !reflect.DeepEqual(out.Projects, want) {
+		t.Errorf("Projects = %+v, want %+v", out.Projects, want)
+	}
+}
+
 // TestGroupListProjects_MissingGroupID verifies that GroupListProjects_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

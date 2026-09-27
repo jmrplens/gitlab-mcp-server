@@ -62,7 +62,7 @@ func TestProjectLabels_SubscribeAndPromote_ReadBack(t *testing.T) {
 		grouped := fixture.NewProject(e, fixture.WithNamePrefix("groupedlabels"), fixture.InGroup(group))
 		promotable := e.Name("promotable")
 		groupedLabel := harness.Do[labeldata.Output](s, actionProjectLabelCreate, map[string]any{"project_id": grouped.IDParam(), "name": promotable, "color": labelColor})
-		if groupedLabel.ID == 0 || !groupedLabel.IsProjectLabel {
+		if groupedLabel.ID == 0 || groupedLabel.IsProjectLabel == nil || !*groupedLabel.IsProjectLabel {
 			e.T.Fatalf("label_create answered %+v, want the project label %q with an ID", groupedLabel, promotable)
 		}
 		harness.DoVoid(s, actionProjectLabelPromote, map[string]any{"project_id": grouped.IDParam(), "label_id": promotable})

@@ -42,6 +42,8 @@ func FormatGroupMarkdown(g ResourceGroupItem) string {
 	// The key is the resource_group name written in .gitlab-ci.yml.
 	c.Field("Key", g.Key)
 	c.Field("Process Mode", g.ProcessMode)
+	c.Time("Created", g.CreatedAt)
+	c.Time("Updated", g.UpdatedAt)
 	c.End(
 		toolutil.HintAction(actionResourceGroupUpcomingJobs, "see the jobs waiting on this group"),
 		toolutil.HintAction(actionResourceGroupEdit, "change its process mode"),
@@ -57,16 +59,19 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Upcoming Jobs", len(out.Jobs), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage", "Ref", "Pipeline", "Created"))
 	for _, j := range out.Jobs {
 		b.WriteString(toolutil.MarkdownTableRow(
-			strconv.FormatInt(j.ID, 10),
+			toolutil.MdTitleLink(strconv.FormatInt(j.ID, 10), j.WebURL),
 			toolutil.EscapeMdTableCell(j.Name),
 			jobStatusCell(j.Status),
 			toolutil.EscapeMdTableCell(j.Stage),
+			toolutil.EscapeMdTableCell(j.Ref),
+			pipelineCell(j.Pipeline),
+			toolutil.FormatTime(j.CreatedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
 		toolutil.HintAction(actionJobGet, "see one of these jobs in full"),
 		toolutil.HintAction(actionJobTrace, "read a job's log"),
 		toolutil.HintAction(actionResourceGroupList, "see the other resource groups of this project"),
@@ -81,6 +86,15 @@ func jobStatusCell(status string) string {
 		return ""
 	}
 	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
+}
+
+// pipelineCell names the pipeline a waiting job belongs to, linked to its page
+// when GitLab sent one, or nothing when GitLab rendered no pipeline.
+func pipelineCell(p *JobPipelineItem) string {
+	if p == nil {
+		return ""
+	}
+	return toolutil.MdTitleLink("#"+strconv.FormatInt(p.ID, 10), p.WebURL)
 }
 
 func init() {

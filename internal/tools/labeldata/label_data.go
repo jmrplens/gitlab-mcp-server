@@ -10,6 +10,12 @@ import (
 // what the SDK's label structs decode, plus the description rendered as
 // HTML, which lib/api/entities/label.rb sends on every label and neither
 // struct carries, read from the captured response (ADR-0021).
+//
+// Priority and IsProjectLabel are the two keys lib/api/entities/project_label.rb
+// adds to Entities::Label, so only the project label routes send them;
+// Entities::GroupLabel adds nothing. Both are pointers so a group label
+// publishes neither, and so a project label without a priority publishes no
+// priority rather than a zero, which is a priority GitLab accepts.
 type Output struct {
 	toolutil.HintableOutput
 	ID                     int64  `json:"id"`
@@ -21,9 +27,8 @@ type Output struct {
 	OpenIssuesCount        int64  `json:"open_issues_count"`
 	ClosedIssuesCount      int64  `json:"closed_issues_count"`
 	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
-	Priority               int64  `json:"priority"`
-	PrioritySpecified      bool   `json:"-"`
-	IsProjectLabel         bool   `json:"is_project_label"`
+	Priority               *int64 `json:"priority,omitempty"`
+	IsProjectLabel         *bool  `json:"is_project_label,omitempty"`
 	Subscribed             bool   `json:"subscribed"`
 	Archived               bool   `json:"archived"`
 }
@@ -34,7 +39,7 @@ func ProjectOutput(label *gl.Label, extra toolutil.LabelExtra) Output {
 	if label == nil {
 		return Output{}
 	}
-	return outputFromFields(labelFields{
+	out := outputFromFields(labelFields{
 		ID:                     label.ID,
 		Name:                   label.Name,
 		Color:                  label.Color,
@@ -44,15 +49,20 @@ func ProjectOutput(label *gl.Label, extra toolutil.LabelExtra) Output {
 		OpenIssuesCount:        label.OpenIssuesCount,
 		ClosedIssuesCount:      label.ClosedIssuesCount,
 		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
-		Priority:               label.Priority,
-		IsProjectLabel:         label.IsProjectLabel,
 		Subscribed:             label.Subscribed,
 		Archived:               label.Archived,
 	})
+	out.Priority = priorityFromNullable(label.Priority)
+	out.IsProjectLabel = new(label.IsProjectLabel)
+	return out
 }
 
 // GroupOutput converts a GitLab group label to shared output fields, and
-// takes the field the capture read beside the SDK.
+// takes the field the capture read beside the SDK. It sets neither Priority
+// nor IsProjectLabel: the group label routes present Entities::GroupLabel,
+// which sends neither, so the SDK struct's copies of them are always empty
+// there and publishing them would state a priority and a scope GitLab never
+// gave.
 func GroupOutput(label *gl.GroupLabel, extra toolutil.LabelExtra) Output {
 	if label == nil {
 		return Output{}
@@ -67,8 +77,6 @@ func GroupOutput(label *gl.GroupLabel, extra toolutil.LabelExtra) Output {
 		OpenIssuesCount:        label.OpenIssuesCount,
 		ClosedIssuesCount:      label.ClosedIssuesCount,
 		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
-		Priority:               label.Priority,
-		IsProjectLabel:         label.IsProjectLabel,
 		Subscribed:             label.Subscribed,
 		Archived:               label.Archived,
 	})
@@ -104,7 +112,17 @@ func NewGroupListOptions(page, perPage int, search string, withCounts, includeAn
 
 // ToMarkdown converts shared label output to the toolutil markdown model.
 func ToMarkdown(label Output) toolutil.LabelMarkdown {
-	return toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, Priority: label.Priority, PrioritySpecified: label.PrioritySpecified, IsProjectLabel: label.IsProjectLabel, Subscribed: label.Subscribed, Archived: label.Archived}
+	md := toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, IsProjectLabel: isProjectLabel(label), Subscribed: label.Subscribed, Archived: label.Archived}
+	if label.Priority != nil {
+		md.Priority, md.PrioritySpecified = *label.Priority, true
+	}
+	return md
+}
+
+// isProjectLabel reads the scope a label states, false for a group label,
+// which states none.
+func isProjectLabel(label Output) bool {
+	return label.IsProjectLabel != nil && *label.IsProjectLabel
 }
 
 // The copy each scope's label surfaces are rendered with. It lives here, with
@@ -154,7 +172,7 @@ var (
 // one of those "Label" and points at the project actions names actions that
 // cannot touch it.
 func MarkdownOptionsFor(label Output) toolutil.LabelMarkdownOptions {
-	if label.IsProjectLabel {
+	if isProjectLabel(label) {
 		return ProjectMarkdownOptions
 	}
 	return GroupMarkdownOptions
@@ -178,14 +196,11 @@ type labelFields struct {
 	OpenIssuesCount        int64
 	ClosedIssuesCount      int64
 	OpenMergeRequestsCount int64
-	Priority               gl.Nullable[int64]
-	IsProjectLabel         bool
 	Subscribed             bool
 	Archived               bool
 }
 
 func outputFromFields(fields labelFields) Output {
-	priority, prioritySpecified := priorityFromNullable(fields.Priority)
 	return Output{
 		ID:                     fields.ID,
 		Name:                   fields.Name,
@@ -196,19 +211,19 @@ func outputFromFields(fields labelFields) Output {
 		OpenIssuesCount:        fields.OpenIssuesCount,
 		ClosedIssuesCount:      fields.ClosedIssuesCount,
 		OpenMergeRequestsCount: fields.OpenMergeRequestsCount,
-		Priority:               priority,
-		PrioritySpecified:      prioritySpecified,
-		IsProjectLabel:         fields.IsProjectLabel,
 		Subscribed:             fields.Subscribed,
 		Archived:               fields.Archived,
 	}
 }
 
-func priorityFromNullable(value gl.Nullable[int64]) (int64, bool) {
+// priorityFromNullable reads the priority a project label route sent, nil
+// when it sent null or nothing: GitLab accepts zero as a priority, so a
+// missing one cannot be published as zero.
+func priorityFromNullable(value gl.Nullable[int64]) *int64 {
 	if !value.IsSpecified() || value.IsNull() {
-		return 0, false
+		return nil
 	}
-	return value.MustGet(), true
+	return new(value.MustGet())
 }
 
 func applyCommonListOptions(opts *gl.ListOptions, page, perPage int) {

@@ -20,16 +20,16 @@ import (
 func TestFormatListExportStatusMarkdownString(t *testing.T) {
 	md := FormatListExportStatusMarkdownString(ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
-			{Relation: "projects", Status: 1, Batched: false, BatchesCount: 0, UpdatedAt: "2026-01-01T00:00:00Z"},
-			{Relation: "milestones", Status: 0, Error: "timeout", Batched: true, BatchesCount: 3, UpdatedAt: "2026-01-02T00:00:00Z"},
+			{Relation: "projects", Status: 1, Batched: false, BatchesCount: 0, TotalObjectsCount: 4, UpdatedAt: "2026-01-01T00:00:00Z"},
+			{Relation: "milestones", Status: 0, Error: "timeout", Batched: true, BatchesCount: 3, TotalObjectsCount: 250, UpdatedAt: "2026-01-02T00:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
 	})
 
 	want := "## Group Relations Export Status (2)\n\n" +
-		"| Relation | Status | Batched | Batches | Error |\n| --- | --- | --- | --- | --- |\n" +
-		"| projects | finished (1) | ❌ | 0 |  |\n" +
-		"| milestones | started (0) | ✅ | 3 | timeout |\n" +
+		"| Relation | Status | Batched | Batches | Objects | Error |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| projects | finished (1) | ❌ | 0 | 4 |  |\n" +
+		"| milestones | started (0) | ✅ | 3 | 250 | timeout |\n" +
 		"\nPage 1 of 1 | 2 items total\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'group.group_relations_schedule' to start a new export\n"

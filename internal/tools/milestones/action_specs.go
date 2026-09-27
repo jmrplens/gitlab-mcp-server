@@ -152,12 +152,12 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.Usage = "List the issues assigned to a milestone by milestone_iid, with ordering and pagination."
 		options.Aliases = []string{"list milestone issues", "issues in milestone", "show milestone issues"}
 		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneMergeRequests, actionIssueList}
-		options.IndividualTool.Description = "List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, title, state, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list."
+		options.IndividualTool.Description = "List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, project, title, state, labels, author, assignees, confidentiality, weight, due date, web URL, timestamps, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list."
 	case "milestone_merge_requests":
 		options.Usage = "List the merge requests assigned to a milestone by milestone_iid, with ordering and pagination."
 		options.Aliases = []string{"list milestone merge requests", "MRs in milestone", "show milestone merge requests"}
 		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, actionMergeRequestList}
-		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list."
+		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, project, title, state, draft flag, merge status, source/target branches, labels, author, assignees, reviewers, web URL, timestamps, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list."
 	}
 
 	return options

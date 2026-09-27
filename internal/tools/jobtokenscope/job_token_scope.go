@@ -181,12 +181,13 @@ type ListGroupAllowlistInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// AllowlistGroupItem is a group on the job token allowlist.
+// AllowlistGroupItem is a group on the job token allowlist, as
+// GET /projects/:id/job_token_scope/groups_allowlist presents it
+// (Entities::BasicGroupDetails: the id, the name and the page, and no path).
 type AllowlistGroupItem struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	FullPath string `json:"full_path"`
-	WebURL   string `json:"web_url"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	WebURL string `json:"web_url"`
 }
 
 // ListGroupAllowlistOutput is the output for listing allowlist groups.
@@ -208,10 +209,9 @@ func ListGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input 
 	items := make([]AllowlistGroupItem, 0, len(groups))
 	for _, g := range groups {
 		items = append(items, AllowlistGroupItem{
-			ID:       g.ID,
-			Name:     g.Name,
-			FullPath: g.FullPath,
-			WebURL:   g.WebURL,
+			ID:     g.ID,
+			Name:   g.Name,
+			WebURL: g.WebURL,
 		})
 	}
 	return ListGroupAllowlistOutput{

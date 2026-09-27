@@ -350,3 +350,23 @@ func TestSentCheck_APackagePublishingNothingReadable_IsNotJudged(t *testing.T) {
 		t.Errorf("Unsurfaced = %+v, want nothing for a package with no published type", check.Sent.Unsurfaced)
 	}
 }
+
+// TestSentCheck_ARowNamedOneLevelDown_CountsAsPublished verifies that the
+// package grain credits the fields of a type a response names one level down,
+// a shared row such as `diffs: []toolutil.DiffOutput` that the package does
+// not declare, as it credits a row type the package declares itself: without
+// it a package was reported as failing to surface the fields of its own rows.
+// A field no type publishes at either level is still a finding.
+func TestSentCheck_ARowNamedOneLevelDown_CountsAsPublished(t *testing.T) {
+	root := projectRecord(t)
+	published := []publishedType{{
+		Package: "internal/tools/projects", Name: "ListOutput", Fields: []string{"projects"},
+		Nested: map[string]nestedType{"projects": {Name: "toolutil.ProjectOutput", Fields: []string{"archived", "id", "mirror", "star_count"}}},
+	}}
+
+	check := shapeCheck(root, projectRows(), published)
+
+	if len(check.Sent.Unsurfaced) != 1 || check.Sent.Unsurfaced[0].Field != "name" {
+		t.Errorf("Unsurfaced = %+v, want name alone", check.Sent.Unsurfaced)
+	}
+}

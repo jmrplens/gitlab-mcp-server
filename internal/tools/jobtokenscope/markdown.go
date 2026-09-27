@@ -99,12 +99,11 @@ func FormatListGroupAllowlistMarkdown(out ListGroupAllowlistOutput) *mcp.CallToo
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Job Token Group Allowlist", len(out.Groups), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name"))
 	for _, g := range out.Groups {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(g.ID, 10),
 			toolutil.MdTitleLink(g.Name, g.WebURL),
-			toolutil.EscapeMdTableCell(g.FullPath),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,

@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -258,35 +261,114 @@ func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithRelationFilter verifies the ListExportStatus_WithRelationFilter handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestListExportStatus_WithRelationFilter verifies the relation filter against
+// the answer GitLab gives it: lib/api/group_export.rb presents the one export
+// as an object when relation is set, which client-go's ListExportStatus
+// cannot decode into its slice, so the mock answers exactly that object. It
+// asserts the relation reaches the query and the one status comes back whole,
+// the object count client-go does not model included.
 func TestListExportStatus_WithRelationFilter(t *testing.T) {
+	var gotPath, gotRelation string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"milestones","status":0,"batched":true,"batches_count":2,"updated_at":"2026-06-15T10:00:00Z"}]`)
+		gotPath, gotRelation = r.URL.Path, r.URL.Query().Get("relation")
+		testutil.RespondJSON(w, http.StatusOK, `{"relation":"milestones","status":0,"batched":true,"batches_count":2,"total_objects_count":150,"updated_at":"2026-06-15T10:00:00Z",`+
+			`"batches":[{"status":1,"batch_number":1,"objects_count":100,"updated_at":"2026-06-15T10:01:00Z"}]}`)
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
-		GroupID:  "10",
+		GroupID:  "my/group",
 		Relation: "milestones",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+	if gotPath != "/api/v4/groups/my/group/export_relations/status" || gotRelation != "milestones" {
+		t.Errorf("request = (%q, relation=%q), want the group's status path with relation=milestones", gotPath, gotRelation)
+	}
 	if len(out.Statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(out.Statuses))
 	}
-	if out.Statuses[0].Relation != "milestones" {
-		t.Errorf("expected relation 'milestones', got %q", out.Statuses[0].Relation)
+	got := out.Statuses[0]
+	if got.Relation != "milestones" || !got.Batched || got.BatchesCount != 2 || got.TotalObjectsCount != 150 {
+		t.Errorf("status = %+v, want milestones, batched, 2 batches, 150 objects", got)
 	}
-	if !out.Statuses[0].Batched {
-		t.Error("expected Batched=true")
+	if len(got.Batches) != 1 || got.Batches[0].ObjectsCount != 100 {
+		t.Errorf("batches = %+v, want the one batch of 100 objects", got.Batches)
 	}
-	if out.Statuses[0].BatchesCount != 2 {
-		t.Errorf("expected BatchesCount=2, got %d", out.Statuses[0].BatchesCount)
+}
+
+// TestListExportStatus_RelationWithNoExport_SaysHowToStartOne verifies the
+// 404 GitLab answers when the group holds no export of the named relation
+// ("Export not found") is wrapped with the way to list every relation and
+// the action that schedules an export.
+func TestListExportStatus_RelationWithNoExport_SaysHowToStartOne(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"Export not found"}`)
+	}))
+	_, err := ListExportStatus(t.Context(), client, ListExportStatusInput{GroupID: "10", Relation: "labels"})
+	if err == nil {
+		t.Fatal("ListExportStatus() = nil error, want the 404")
+	}
+	for _, want := range []string{"leaving relation out", "group.group_relations_schedule"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to mention %q", err, want)
+			}
+		})
+	}
+}
+
+// TestGetRelationStatus_NewRequestError covers the NewRequest error branch of
+// the relation read. A path carrying an invalid percent-escape ("%zz") makes
+// gitlab.NewRequest fail before any HTTP call, which is the only way the
+// branch is reached, since the handler escapes the group it builds the path
+// from.
+func TestGetRelationStatus_NewRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	if _, err := getRelationStatus(t.Context(), client, "groups/%zz/export_relations/status", &gl.ListGroupRelationsStatusOptions{}); err == nil {
+		t.Error("getRelationStatus() = nil error, want the NewRequest error")
+	}
+}
+
+// TestListExportStatus_ReadsTheObjectCountOfEveryRelation verifies the list
+// reads total_objects_count, which client-go's GroupRelationStatus does not
+// model, off the captured answer for each relation in order.
+func TestListExportStatus_ReadsTheObjectCountOfEveryRelation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+
+			`{"relation":"labels","status":1,"batched":false,"batches_count":0,"total_objects_count":12,"updated_at":"2026-06-15T10:00:00Z"},`+
+			`{"relation":"milestones","status":0,"batched":false,"batches_count":0,"total_objects_count":7,"updated_at":"2026-06-15T10:00:00Z"}]`)
+	}))
+	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{GroupID: "10"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Statuses) != 2 || out.Statuses[0].TotalObjectsCount != 12 || out.Statuses[1].TotalObjectsCount != 7 {
+		t.Errorf("statuses = %+v, want labels with 12 objects then milestones with 7", out.Statuses)
+	}
+}
+
+// TestListExportStatus_ACountThatDoesNotDecode_IsAnError verifies an answer
+// client-go decodes and the capture cannot, a total_objects_count that is not
+// a number, is reported rather than published as zero.
+func TestListExportStatus_ACountThatDoesNotDecode_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"labels","status":1,"total_objects_count":"many","updated_at":"2026-06-15T10:00:00Z"}]`)
+	}))
+	if _, err := ListExportStatus(t.Context(), client, ListExportStatusInput{GroupID: "10"}); err == nil {
+		t.Error("ListExportStatus() = nil error, want the capture's decode error")
+	}
+}
+
+// TestCapturedExportStatuses_ACountThatDisagrees_IsAnError verifies the
+// capture is held to what the SDK decoded, so no count lands on another
+// relation.
+func TestCapturedExportStatuses_ACountThatDisagrees_IsAnError(t *testing.T) {
+	if _, err := capturedExportStatuses(gitlabclient.CapturedBody([]byte(`[{"total_objects_count":1}]`)), 2); err == nil {
+		t.Error("capturedExportStatuses() = nil error, want the count mismatch")
 	}
 }
 
@@ -340,10 +422,10 @@ func TestListExportStatus_KeysetAndOrdering(t *testing.T) {
 			return
 		}
 		gotQuery = r.URL.RawQuery
-		testutil.RespondJSON(w, http.StatusOK, `[{
+		testutil.RespondJSON(w, http.StatusOK, `{
 			"relation":"project","status":1,"batched":true,"batches_count":1,"updated_at":"2026-06-15T10:00:00Z",
 			"batches":[{"status":1,"batch_number":1,"objects_count":42,"error":"","updated_at":"2026-06-15T10:01:00Z"}]
-		}]`)
+		}`)
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
 		GroupID:               "10",

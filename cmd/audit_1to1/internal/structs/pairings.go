@@ -54,6 +54,11 @@ type Pairings struct {
 	// Outputs is every (MCP output struct, client-go struct) pairing the field
 	// diff runs over, in the order [CollectPairs] returns them.
 	Outputs []OutputPairing
+	// Projections is every output struct a handler builds from a client-go
+	// struct without a converter, package by package in load order and within
+	// a package in the order [CollectProjections] returns them. The field diff
+	// does not read it; see [ProjectionPairing] for why.
+	Projections []ProjectionPairing
 }
 
 // CollectOutputPairings loads every package under internal/tools rooted at root
@@ -81,6 +86,7 @@ func CollectOutputPairings(root string) (Pairings, error) {
 				SDKFields: sdkFieldNames(pair.SDKType),
 			})
 		}
+		found.Projections = append(found.Projections, CollectProjections(pkg)...)
 	}
 	return found, nil
 }

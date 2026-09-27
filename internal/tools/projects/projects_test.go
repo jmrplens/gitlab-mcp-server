@@ -2306,11 +2306,16 @@ func TestProjectListStarrers_EmptyProjectID(t *testing.T) {
 // ShareProjectWithGroup
 // ---------------------------------------------------------------------------.
 
-// TestProjectShare_WithGroupSuccess verifies ProjectShare when with group success.
+// TestProjectShare_WithGroupSuccess verifies that a share answers with the
+// link GitLab created, which client-go does not decode: its ID and project,
+// the group and access it names, the expiry and, on an instance with custom
+// roles, the role, each from a key of its own so that one read into another
+// fails.
 func TestProjectShare_WithGroupSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/share" {
-			w.WriteHeader(http.StatusCreated)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"project_id":42,"group_id":5,"group_access":30,`+
+				`"expires_at":"2026-12-31","member_role_id":12}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -2323,8 +2328,24 @@ func TestProjectShare_WithGroupSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Message == "" {
-		t.Error("expected non-empty message")
+	want := ShareProjectOutput{
+		Message: "Project 42 shared with group 5 as Developer", ID: 7, ProjectID: 42, GroupID: 5, GroupAccess: 30,
+		AccessRole: testAccessDeveloper, ExpiresAt: "2026-12-31", MemberRoleID: 12,
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("ShareProjectWithGroup() = %+v, want %+v", out, want)
+	}
+}
+
+// TestProjectShare_AnAnswerThatIsNotALink_IsAnError verifies that a share
+// whose answer does not decode into the link is reported rather than passed
+// off as a share with no link behind it.
+func TestProjectShare_AnAnswerThatIsNotALink_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":"seven"}`)
+	}))
+	if _, err := ShareProjectWithGroup(t.Context(), client, ShareProjectInput{ProjectID: "42", GroupID: 5, GroupAccess: 30}); err == nil {
+		t.Error("ShareProjectWithGroup() = nil error, want one")
 	}
 }
 
@@ -2918,16 +2939,22 @@ const shareHints = "---\n💡 **Next steps:**\n" +
 // name rather than by its number, and the group the share names.
 func TestFormatShareProjectMarkdown(t *testing.T) {
 	out := ShareProjectOutput{
-		Message:     "Project 42 shared with group 5 as Developer",
-		GroupID:     5,
-		GroupAccess: 30,
-		AccessRole:  testAccessDeveloper,
+		Message:      "Project 42 shared with group 5 as Developer",
+		ID:           7,
+		GroupID:      5,
+		GroupAccess:  30,
+		AccessRole:   testAccessDeveloper,
+		ExpiresAt:    "2026-12-31",
+		MemberRoleID: 12,
 	}
 	md := FormatShareProjectMarkdown(out)
 	want := "## Project Shared\n\n" +
 		"- **Message**: Project 42 shared with group 5 as Developer\n" +
+		"- **Link ID**: 7\n" +
 		"- **Group ID**: 5\n" +
-		"- **Access Role**: Developer\n\n" +
+		"- **Access Role**: Developer\n" +
+		"- **Expires**: 31 Dec 2026\n" +
+		"- **Custom Role ID**: 12\n\n" +
 		shareHints
 	if md != want {
 		t.Errorf("FormatShareProjectMarkdown()\n got: %q\nwant: %q", md, want)
@@ -2968,7 +2995,7 @@ func TestFormatShareProjectMarkdown_HostileMessage(t *testing.T) {
 func TestShareProjectOutput_ContainsRoleName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/share" {
-			w.WriteHeader(http.StatusCreated)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"project_id":42,"group_id":5,"group_access":30}`)
 			return
 		}
 		http.NotFound(w, r)

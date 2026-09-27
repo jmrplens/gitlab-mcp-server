@@ -65,6 +65,89 @@ func TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain(t *te
 	}
 }
 
+// TestSentDeclarationCovers_ATypedDeclaration_ReachesThePackageGrainOnlyForOneField
+// verifies what a declaration naming a type answers. At the type grain it
+// answers that type's findings and no other type's. At the package grain,
+// which names no type, one naming a field answers the package's finding on
+// that field, since no type of the package publishes it and the named type's
+// reason is the package's reason as far as that type goes; one naming a whole
+// entity does not, since what one type does with an entity says nothing about
+// the rest of the package. A declaration naming no type answers both grains.
+func TestSentDeclarationCovers_ATypedDeclaration_ReachesThePackageGrainOnlyForOneField(t *testing.T) {
+	const pkg, entity = "internal/tools/groups", "API::Entities::Project"
+	field := sentDeclaration{Package: pkg, Type: "ProjectItem", Entity: entity, Field: "namespace"}
+	splat := sentDeclaration{Package: pkg, Type: "ProjectItem", Entity: entity, Field: declaredSegment}
+	untyped := sentDeclaration{Package: pkg, Entity: entity, Field: "namespace"}
+	onType := func(typ, name string) UnsurfacedField {
+		return UnsurfacedField{Grain: grainType, Package: pkg, Type: typ, Entity: entity, Field: name}
+	}
+	onPackage := func(name string) UnsurfacedField {
+		return UnsurfacedField{Grain: grainPackage, Package: pkg, Entity: entity, Field: name}
+	}
+	cases := []struct {
+		name        string
+		declaration sentDeclaration
+		finding     UnsurfacedField
+		want        bool
+	}{
+		{name: "a field on its own type", declaration: field, finding: onType("ProjectItem", "namespace"), want: true},
+		{name: "a field on another type", declaration: field, finding: onType("Output", "namespace")},
+		{name: "a field on its package", declaration: field, finding: onPackage("namespace"), want: true},
+		{name: "another field on its package", declaration: field, finding: onPackage("owner")},
+		{name: "a splat on its own type", declaration: splat, finding: onType("ProjectItem", "owner"), want: true},
+		{name: "a splat on its package", declaration: splat, finding: onPackage("owner")},
+		{name: "an untyped field on any type", declaration: untyped, finding: onType("Output", "namespace"), want: true},
+		{name: "an untyped field on its package", declaration: untyped, finding: onPackage("namespace"), want: true},
+		{name: "another package", declaration: field, finding: UnsurfacedField{Grain: grainPackage, Package: "internal/tools/projects", Entity: entity, Field: "namespace"}},
+		{name: "another entity", declaration: field, finding: UnsurfacedField{Grain: grainPackage, Package: pkg, Entity: "API::Entities::Group", Field: "namespace"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.declaration.covers(tc.finding); got != tc.want {
+				t.Errorf("covers(%+v) = %t, want %t", tc.finding, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCompactRow_EveryKey_IsItsOwnDeclarationNamingTheRest verifies how a
+// compact row's decision is written down: one declaration per key, each
+// naming the type so it reaches no other type of the package, in the
+// compact-row category, with a reason that is the row's own followed by every
+// key the row leaves out, so any single finding shows the whole decision.
+func TestCompactRow_EveryKey_IsItsOwnDeclarationNamingTheRest(t *testing.T) {
+	got := compactRow("internal/tools/groups", "ProjectItem", "API::Entities::Project", "The row keeps the names.", "namespace", "owner")
+
+	const reason = "The row keeps the names. The keys it leaves out: namespace, owner."
+	want := []sentDeclaration{
+		{Package: "internal/tools/groups", Type: "ProjectItem", Entity: "API::Entities::Project", Field: "namespace", Category: categoryCompactRow, Reason: reason},
+		{Package: "internal/tools/groups", Type: "ProjectItem", Entity: "API::Entities::Project", Field: "owner", Category: categoryCompactRow, Reason: reason},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("compactRow() = %+v, want %+v", got, want)
+	}
+}
+
+// TestDeclaredCompactRows_NoRow_IsASplat verifies the rule the compact-row
+// category rests on across the whole table: every declaration of it names one
+// type and one key, so a key GitLab adds to the entity surfaces as a finding
+// instead of being answered by a decision nobody made about it.
+func TestDeclaredCompactRows_NoRow_IsASplat(t *testing.T) {
+	for _, declaration := range declaredUnsurfaced {
+		if declaration.Category != categoryCompactRow {
+			continue
+		}
+		t.Run(declaration.key(), func(t *testing.T) {
+			if declaration.Type == "" || declaration.Field == declaredSegment {
+				t.Errorf("compact-row declaration %s names no type or every key", declaration.key())
+			}
+			if !strings.Contains(declaration.Reason, declaration.Field) {
+				t.Errorf("compact-row declaration %s has a reason that does not name its key", declaration.key())
+			}
+		})
+	}
+}
+
 // TestSentCheck_StaleDeclarations_AreSilentUntilTheCheckRuns verifies that a
 // check which did not run reports no stale declaration, since every one of
 // them would be unused then, and that one which ran names each unused one
@@ -281,6 +364,22 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the live record: %v", err)
 	}
+	knownCategories := map[string]bool{
+		categoryDocumentedNotSent:        true,
+		categoryOptionNeverPassed:        true,
+		categoryOptionTurnedOff:          true,
+		categoryOptionNeverRequested:     true,
+		categoryEntityPublishedElsewhere: true,
+		categorySDKRouteNeverCalled:      true,
+		categorySDKRouteFillsAnotherType: true,
+		categorySubclassCannotSatisfy:    true,
+		categoryAbilityNoRoleGrants:      true,
+		categoryConstantEmpty:            true,
+		categoryCompactRow:               true,
+		categoryAssociationNullOnScope:   true,
+		categoryConfirmationOnly:         true,
+		categoryReadForItsOwnUse:         true,
+	}
 	for _, declaration := range declaredUnsurfaced {
 		t.Run(declaration.key(), func(t *testing.T) {
 			if _, statErr := os.Stat(filepath.Join(root, declaration.Package)); statErr != nil {
@@ -291,17 +390,7 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 			if _, held := doc.Entities[declaration.Entity]; !held {
 				t.Errorf("entity %s is not in the live record", declaration.Entity)
 			}
-			known := declaration.Category == categoryDocumentedNotSent ||
-				declaration.Category == categoryOptionNeverPassed ||
-				declaration.Category == categoryOptionTurnedOff ||
-				declaration.Category == categoryOptionNeverRequested ||
-				declaration.Category == categoryEntityPublishedElsewhere ||
-				declaration.Category == categorySDKRouteNeverCalled ||
-				declaration.Category == categorySDKRouteFillsAnotherType ||
-				declaration.Category == categorySubclassCannotSatisfy ||
-				declaration.Category == categoryAbilityNoRoleGrants ||
-				declaration.Category == categoryConstantEmpty
-			if !known || declaration.Reason == "" || declaration.Field == "" {
+			if !knownCategories[declaration.Category] || declaration.Reason == "" || declaration.Field == "" {
 				t.Errorf("declaration %+v is missing its category, reason or field", declaration)
 			}
 		})

@@ -135,7 +135,7 @@ List descendant subgroups of a GitLab group. Returns each subgroup's name, path,
 
 ### `gitlab_group_projects`
 
-List projects belonging to a GitLab group. Supports filtering by search, archived status, visibility, and including subgroup projects. Returns project name, path, visibility, and archived status with pagination.
+List projects belonging to a GitLab group. Supports filtering by search, archived status, visibility, and including subgroup projects. Returns a compact row per project with pagination: ID, names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status (absent under `simple`, whose response does not carry it), and the created and last-activity times. The rest of a project is what `project.get` returns.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -728,14 +728,14 @@ Delete a group milestone by ID.
 
 ### `gitlab_group_milestone_issues`
 
-List all issues assigned to a group milestone. Returns issue ID, IID, title, state, and web URL with pagination.
+List all issues assigned to a group milestone. Returns a compact row per issue with pagination: ID, IID, project, title, state, labels, author, assignees, confidentiality, weight, due date, web URL, and the created, updated and closed times. The rest of an issue (its description, time tracking and counters) is what `issue.get` returns.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_group_milestone_merge_requests`
 
-List all merge requests assigned to a group milestone. Returns MR ID, IID, title, state, source/target branches with pagination.
+List all merge requests assigned to a group milestone. Returns a compact row per merge request with pagination: ID, IID, project, title, state, draft flag, detailed merge status, source and target branches, labels, author, assignees, reviewers, web URL, and the created, updated, merged and closed times. The rest of a merge request (its description, commit SHAs, merge options and counters) is what `merge_request.get` returns.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -863,7 +863,7 @@ Schedule a new group relations export.
 
 ### `gitlab_list_group_relations_export_status`
 
-List the status of group relations exports.
+List the status of group relations exports: per relation, its state, whether it was batched and into how many batches, how many objects the export holds, and any error. With `relation` set, GitLab answers with that one relation's status, or a 404 when the group holds no export of it.
 
 | Annotation | **Read** |
 | ---------- | -------- |

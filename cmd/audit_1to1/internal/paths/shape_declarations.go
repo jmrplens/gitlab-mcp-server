@@ -201,7 +201,110 @@ var declaredShapeFields = []shapeDeclaration{
 	// The link this server builds to what an event names.
 	{Package: toolsDir + "/events", Type: "ContributionEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonEventTargetURL},
 	{Package: toolsDir + "/events", Type: "ProjectEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonEventTargetURL},
+	{Package: usersPkg, Type: "ContributionEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonUserEventTargetURL},
+
+	// Values this server echoes or derives rather than reads off a key.
+	{Package: groupAnalyticsPkg, Type: "IssuesCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
+	{Package: groupAnalyticsPkg, Type: "MRCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
+	{Package: groupAnalyticsPkg, Type: "MembersCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
+	{
+		Package: projectDiscoveryPkg, Type: "ResolveOutput", Field: "extracted_path", Category: categoryServerDerived,
+		Reason: "the path this server reads off the git remote the caller passed, which is what it asks GET /projects/:id for; " +
+			"no route sends it, and it is published so a caller can see which part of the remote was taken as the project.",
+	},
+	{
+		Package: mergeRequestsPkg, Type: "ApproveOutput", Field: "approvals_required", Category: categoryAnnotationNotPresented,
+		Reason: "lib/api/merge_request_approvals.rb describes POST /projects/:id/merge_requests/:merge_request_iid/approve with " +
+			"Entities::MergeRequestApprovals, which is what a Community Edition instance presents, and " +
+			"ee/lib/ee/api/merge_request_approvals.rb overrides present_approval to present the merge request's approval state " +
+			"with Entities::ApprovalState, which exposes approvals_required with no condition " +
+			"(ee/lib/api/entities/approval_state.rb). The record reads the annotation, so the key an Enterprise instance sends " +
+			"reads as one no response carries; on a Community Edition instance it is absent and the field reads zero.",
+	},
+	{
+		Package: mergeRequestsPkg, Type: "ApproveOutput", Field: "approved_by_count", Category: categoryServerDerived,
+		Reason: "the length of the approved_by list lib/api/entities/merge_request_approvals.rb sends, which this server counts; " +
+			"no route sends a count.",
+	},
+
+	// Objects GitLab nests that this server publishes one level up.
+	{Package: toolsDir + "/wikis", Type: "AttachmentOutput", Field: "url", Category: categoryServerShape, Reason: reasonWikiAttachmentLink},
+	{Package: toolsDir + "/wikis", Type: "AttachmentOutput", Field: "markdown", Category: categoryServerShape, Reason: reasonWikiAttachmentLink},
+	{Package: toolsDir + "/projectimportexport", Type: "ExportStatusOutput", Field: "api_url", Category: categoryServerShape, Reason: reasonExportStatusLinks},
+	{Package: toolsDir + "/projectimportexport", Type: "ExportStatusOutput", Field: "web_url", Category: categoryServerShape, Reason: reasonExportStatusLinks},
+	{Package: mergeRequestsPkg, Type: "CreateTodoOutput", Field: "project_name", Category: categoryServerShape, Reason: reasonTodoFlattened},
+	{Package: mergeRequestsPkg, Type: "CreateTodoOutput", Field: "target_title", Category: categoryServerShape, Reason: reasonTodoFlattened},
+	{Package: issuesPkg, Type: "TodoOutput", Field: "target_title", Category: categoryServerShape, Reason: reasonTodoFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "id", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "username", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "name", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "avatar_url", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "web_url", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "review_state", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+
+	// The project starrers, whose route annotates a user and presents the star.
+	{Package: projectsPkg, Type: "StarrerOutput", Field: "starred_since", Category: categoryAnnotationNotPresented, Reason: reasonStarrerPresented},
+	{Package: projectsPkg, Type: "StarrerOutput", Field: "user", Category: categoryAnnotationNotPresented, Reason: reasonStarrerPresented},
+
+	// The keys a tag's signature merges in from the signature's own entity.
+	{Package: toolsDir + "/tags", Type: "SignatureOutput", Field: "verification_status", Category: categoryRecordSilent, Reason: reasonTagSignatureMerged},
+	{Package: toolsDir + "/tags", Type: "SignatureOutput", Field: "x509_certificate", Category: categoryRecordSilent, Reason: reasonTagSignatureMerged},
+
+	// The two project-only keys of the label type the group labels share.
+	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "priority", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
+	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "is_project_label", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
 }
+
+// reasonUserEventTargetURL answers target_url on the user contribution events.
+const reasonUserEventTargetURL = "no events route sends it: lib/api/entities/event.rb exposes target_type and target_iid and " +
+	"no URL for the target. internal/tools/users builds it the way internal/tools/events does, from those two keys and the " +
+	"web_url GET /projects/:id answers with for the event's project, so it is a link this server adds to what the event names."
+
+// reasonAnalyticsGroupPath answers group_path on the three group counts.
+const reasonAnalyticsGroupPath = "the group_path the caller passed, echoed so the count says which group it counts: the " +
+	"analytics routes (ee/lib/api/analytics/group_activity_analytics.rb) answer with the count alone."
+
+// groupAnalyticsPkg is the package of those three counts, spelled once because
+// each of them is declared on its own.
+const groupAnalyticsPkg = toolsDir + "/groupanalytics"
+
+// reasonWikiAttachmentLink answers the two keys of an uploaded wiki attachment's link.
+const reasonWikiAttachmentLink = "lib/api/entities/wiki_attachment.rb sends url and markdown inside link " +
+	"(`expose :link do expose :file_path, as: :url; expose :markdown end`), and wikis.AttachmentOutput publishes them one " +
+	"level up beside file_name, file_path and branch. The values are GitLab's own."
+
+// reasonExportStatusLinks answers the two download links of a finished export.
+const reasonExportStatusLinks = "lib/api/entities/project_export_status.rb sends api_url and web_url inside _links once the " +
+	"export has finished, and projectimportexport.ExportStatusOutput publishes them one level up. The values are GitLab's own."
+
+// reasonTodoFlattened answers the target and project names a to-do publishes.
+const reasonTodoFlattened = "lib/api/entities/todo.rb sends the target and the project as objects, and the to-do published " +
+	"here carries the target's title and the project's name one level up, beside the target's URL. The values are GitLab's own."
+
+// reasonReviewerFlattened answers the reviewer's keys.
+const reasonReviewerFlattened = "GET /projects/:id/merge_requests/:merge_request_iid/reviewers presents " +
+	"Entities::MergeRequestReviewer, the reviewer under user beside state and created_at. mergerequests.ReviewerOutput " +
+	"publishes the user's keys one level up and the reviewer's state as review_state, since the user has a state of its own. " +
+	"The values are GitLab's own."
+
+// reasonStarrerPresented answers the two keys of a project's starrer.
+const reasonStarrerPresented = "lib/api/projects.rb describes GET /projects/:id/starrers with `model: Entities::UserBasic` and " +
+	"presents `with: Entities::UserStarsProject` (line 865), which is starred_since and the user under user " +
+	"(lib/api/entities/user_stars_project.rb). The record holds the route under the annotated user, so the two keys the " +
+	"presented entity has read as keys no response carries."
+
+// reasonTagSignatureMerged answers the keys a tag's signature merges in.
+const reasonTagSignatureMerged = "lib/api/entities/tag_signature.rb exposes signature_type and then the signature through a " +
+	"`merge: true` block that presents X509Signature (verification_status and x509_certificate) into the same object. The " +
+	"record reads a merged block as no key of its own, so the keys the block contributes are missing from it; " +
+	"doc/api/tags.md lists both among the response attributes of the X.509 signature endpoint."
+
+// reasonGroupLabelProjectKeys answers the two project-only keys on the group
+// label type.
+const reasonGroupLabelProjectKeys = "grouplabels.Output is labeldata.Output, the type the project labels fill too. " +
+	"lib/api/entities/project_label.rb adds priority and is_project_label to Entities::Label, and Entities::GroupLabel " +
+	"(lib/api/entities/group_label.rb) is Entities::Label with nothing added, so no group label route sends either key. " +
+	"labeldata.GroupOutput leaves both unset and both are omitted when unset, so they are absent from every group label."
 
 // declaredShapeField finds the declaration covering one finding.
 func declaredShapeField(finding UnpublishedField) (shapeDeclaration, bool) {

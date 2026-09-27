@@ -219,7 +219,7 @@ type MergeRequestOutput struct {
 		{Package: "internal/tools/sample", Name: "DeleteOutput", Fields: []string{"status"}},
 		{Package: "internal/tools/sample", Name: "DiscussionOutput", Fields: []string{"notes"}, Nested: map[string]nestedType{
 			"notes": {Name: "toolutil.NoteOutput", Fields: []string{"body"}},
-		}},
+		}, Wraps: []string{"toolutil.NoteOutput"}},
 		{Package: "internal/tools/sample", Name: "MemberRoleOutput", Fields: []string{"id", "owner"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "other", "role"}, Nested: map[string]nestedType{
@@ -318,10 +318,13 @@ type GradeOutput struct {
 
 	types := publishedTypes(root)
 
+	// ListOutput publishes nothing of its own and embeds one type, so it is
+	// packaging around that type, as a one-key envelope would be; GradeOutput
+	// publishes a field beside its embed and is a response of its own.
 	want := []publishedType{
 		{Package: "internal/tools/sample", Name: "GradeOutput", Fields: []string{"Grade"}},
-		{Package: "internal/tools/sample", Name: "ListOutput", Fields: []string{"extra", "id"}},
-		{Package: "internal/tools/sample", Name: "RowOutput", Fields: []string{"extra", "id"}},
+		{Package: "internal/tools/sample", Name: "ListOutput", Fields: []string{"extra", "id"}, Wraps: []string{"RowOutput"}},
+		{Package: "internal/tools/sample", Name: "RowOutput", Fields: []string{"extra", "id"}, Payload: true},
 	}
 	if !reflect.DeepEqual(types, want) {
 		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
@@ -370,6 +373,130 @@ func TestNamedType_OnlyALocalNameOrASharedShape_IsOneOfOurs(t *testing.T) {
 				t.Errorf("namedType() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestQualifiedName_OnlyAnotherPackagesTypeAsWritten_IsNamed verifies what a
+// type declared as, or from, another package's type is read as: the qualified
+// name when that is all it is, and nothing for a local name, for a type built
+// around one, or for a selector that is not a package's.
+func TestQualifiedName_OnlyAnotherPackagesTypeAsWritten_IsNamed(t *testing.T) {
+	cases := []struct {
+		name string
+		expr ast.Expr
+		want string
+	}{
+		{
+			name: "another package's type",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "labeldata"}, Sel: &ast.Ident{Name: "Output"}},
+			want: "labeldata.Output",
+		},
+		{name: "a local name", expr: &ast.Ident{Name: "Output"}},
+		{name: "a slice of another package's type", expr: &ast.ArrayType{Elt: &ast.SelectorExpr{X: &ast.Ident{Name: "labeldata"}, Sel: &ast.Ident{Name: "Output"}}}},
+		{
+			name: "a selector whose left side is itself a selector",
+			expr: &ast.SelectorExpr{
+				X:   &ast.SelectorExpr{X: &ast.Ident{Name: "outer"}, Sel: &ast.Ident{Name: "inner"}},
+				Sel: &ast.Ident{Name: "Thing"},
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := qualifiedName(testCase.expr); got != testCase.want {
+				t.Errorf("qualifiedName() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPublishedTypes_AnAliasOfAnotherToolsPackagesType_IsThatType verifies the
+// alias the project and group labels and iterations publish their responses
+// through (`type Output = labeldata.Output`): it resolves to the fields that
+// package declares, flattened there, and is nested when the package nests it.
+// A type declared from a package this tree does not hold, which is every type
+// from outside this repository, stays the scalar it was read as and publishes
+// nothing. A field typed as another tools package's type is not resolved,
+// since that is how two domain packages would come to publish each other's
+// shapes.
+func TestPublishedTypes_AnAliasOfAnotherToolsPackagesType_IsThatType(t *testing.T) {
+	root := writePackage(t, "labels", `package labels
+
+type Output = labeldata.Output
+
+type ListOutput struct {
+	Labels []Output `+"`json:\"labels\"`"+`
+}
+
+type SDKOutput = gitlab.Label
+
+type RowOutput struct {
+	Other labeldata.Row `+"`json:\"other\"`"+`
+}
+`)
+	writeToolsPackage(t, root, "labeldata", `package labeldata
+
+type base struct {
+	ID int64 `+"`json:\"id\"`"+`
+}
+
+type Output struct {
+	base
+	Name string `+"`json:\"name\"`"+`
+	Row  Row    `+"`json:\"row\"`"+`
+}
+
+type Row struct {
+	Color string `+"`json:\"color\"`"+`
+}
+`)
+	writeShared(t, root, "package toolutil\n")
+
+	var labels []publishedType
+	for _, published := range publishedTypes(root) {
+		if published.Package == "internal/tools/labels" {
+			labels = append(labels, published)
+		}
+	}
+
+	want := []publishedType{
+		{Package: "internal/tools/labels", Name: "ListOutput", Fields: []string{"labels"}, Nested: map[string]nestedType{
+			"labels": {Name: "Output", Fields: []string{"id", "name", "row"}},
+		}, Wraps: []string{"Output"}},
+		{Package: "internal/tools/labels", Name: "Output", Fields: []string{"id", "name", "row"}, Inner: true, Payload: true},
+		{Package: "internal/tools/labels", Name: "RowOutput", Fields: []string{"other"}},
+	}
+	if !reflect.DeepEqual(labels, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", labels, want)
+	}
+}
+
+// TestSharedShapes_NestedShapes_AreThePackagesOwnUnderItsPrefix verifies the
+// nesting a shape library reports: the shapes it names as a field type itself,
+// keyed the way another package names them, and not a shape of a third
+// package it happens to name, since what one package nests of another's says
+// nothing about how a domain package aliasing it uses it.
+func TestSharedShapes_NestedShapes_AreThePackagesOwnUnderItsPrefix(t *testing.T) {
+	dir := t.TempDir()
+	writeSourceFile(t, dir, "lib.go", `package labeldata
+
+type Output struct {
+	Row   Row                     `+"`json:\"row\"`"+`
+	Owner toolutil.BasicUserOutput `+"`json:\"owner\"`"+`
+}
+
+type Row struct {
+	Color string `+"`json:\"color\"`"+`
+}
+`)
+
+	shapes, nested := sharedShapes(dir, "labeldata.")
+
+	if !reflect.DeepEqual(nested, map[string]bool{"labeldata.Row": true}) {
+		t.Errorf("nested = %v, want the library's own row alone", nested)
+	}
+	if got := shapes["labeldata.Output"].FieldTypes["row"]; got != "labeldata.Row" {
+		t.Errorf("Output's row field is typed %q, want the rekeyed labeldata.Row", got)
 	}
 }
 
@@ -656,6 +783,77 @@ func TestEnvelopePayloads_TellsThePackagingFromTheContent(t *testing.T) {
 	}
 }
 
+// TestEmbeddedPayload_OneEmbedBesideTheHints_IsThePayload verifies the envelope
+// rule for a wrapper that publishes nothing of its own and embeds the response
+// instead of naming it: `GetOutput{HintableOutput; PlanLimitItem}`. The hints
+// are this server's, so they are set aside; a second embed makes the struct a
+// response of its own built from two shapes, and neither half is packaging.
+func TestEmbeddedPayload_OneEmbedBesideTheHints_IsThePayload(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name   string
+		embeds []string
+		want   []string
+	}{
+		{name: "the response beside the hints", embeds: []string{hintsType, "PlanLimitItem"}, want: []string{"PlanLimitItem"}},
+		{name: "the response alone", embeds: []string{"PlanLimitItem"}, want: []string{"PlanLimitItem"}},
+		{name: "the hints alone", embeds: []string{hintsType}},
+		{name: "two shapes", embeds: []string{"RowOutput", "StatsOutput"}},
+		{name: "nothing embedded"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := embeddedPayload(testCase.embeds); !slices.Equal(got, testCase.want) {
+				t.Errorf("embeddedPayload(%q) = %q, want %q", testCase.embeds, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPublishedTypes_AWrapperThatOnlyEmbeds_IsPackagingAroundItsPayload
+// verifies the rule end to end on the shape it was written for. The plan limits
+// are what GitLab answered with and are named by no field, only embedded, so
+// before the rule they read as a reference nothing judged while the two
+// structs around them had no pairing to be judged by. A struct whose one field
+// is a string is no envelope at all, and one wrapping a type from another
+// package names nothing the walk can resolve, so neither is credited with a
+// payload.
+func TestPublishedTypes_AWrapperThatOnlyEmbeds_IsPackagingAroundItsPayload(t *testing.T) {
+	root := writePackage(t, "planlimits", `package planlimits
+
+import "example.com/toolutil"
+
+type PlanLimitItem struct {
+	ConanMaxFileSize int64 `+"`json:\"conan_max_file_size\"`"+`
+}
+
+type GetOutput struct {
+	toolutil.HintableOutput
+	PlanLimitItem
+}
+
+type StatusOutput struct {
+	Status string `+"`json:\"status\"`"+`
+}
+
+type ForeignOutput struct {
+	Thing elsewhere.Thing `+"`json:\"thing\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	want := []publishedType{
+		{Package: "internal/tools/planlimits", Name: "ForeignOutput", Fields: []string{"thing"}},
+		{Package: "internal/tools/planlimits", Name: "GetOutput", Fields: []string{"conan_max_file_size"}, Wraps: []string{"PlanLimitItem"}},
+		{Package: "internal/tools/planlimits", Name: "PlanLimitItem", Fields: []string{"conan_max_file_size"}, Inner: true, Payload: true},
+		{Package: "internal/tools/planlimits", Name: "StatusOutput", Fields: []string{"status"}},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
 // TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse verifies the
 // second half of the envelope rule. A list that keeps two shapes of one
 // entity apart, the narrow one embedded in the wide one, wraps both, and both
@@ -690,18 +888,27 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 			{Name: "BaseOutput", Fields: []string{"b"}},
 			{Name: "StrangerOutput", Fields: []string{"s"}},
 		},
-		alternatives: [][]string{
-			{"Output", "BasicOutput"},
-			{"GroupOutput", "ProjectObject"},
-			{"DetailOutput", "CoreOutput"},
+		wraps: map[string][]string{},
+		alternatives: map[string][]string{
+			"ListOutput":  {"Output", "BasicOutput"},
+			"PairOutput":  {"GroupOutput", "ProjectObject"},
+			"ChainOutput": {"DetailOutput", "CoreOutput"},
 			// A before and an after: one type named twice is two
 			// references, not two shapes.
-			{"UserOutput", "UserOutput"},
-			{"NarrowOutput", "WideOutput"},
-			{"TopOutput", "StrangerOutput"},
+			"ChangeOutput":   {"UserOutput", "UserOutput"},
+			"ReversedOutput": {"NarrowOutput", "WideOutput"},
+			"DiamondOutput":  {"TopOutput", "StrangerOutput"},
 		},
 	}
 	resolveAlternatives(&parsed)
+	wantWraps := map[string][]string{
+		"ListOutput":     {"BasicOutput", "Output"},
+		"ChainOutput":    {"CoreOutput", "DetailOutput"},
+		"ReversedOutput": {"NarrowOutput", "WideOutput"},
+	}
+	if !reflect.DeepEqual(parsed.wraps, wantWraps) {
+		t.Errorf("wraps = %v, want only the wrappers whose payloads are shapes of one entity, each sorted: %v", parsed.wraps, wantWraps)
+	}
 	for name, want := range map[string]bool{
 		"Output": true, "BasicOutput": true,
 		"GroupOutput": false, "ProjectObject": false,

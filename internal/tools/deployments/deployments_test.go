@@ -816,7 +816,8 @@ func TestDeploymentApprove_Success(t *testing.T) {
 			if body.Status != "approved" {
 				t.Errorf("status = %q, want %q", body.Status, "approved")
 			}
-			w.WriteHeader(http.StatusOK)
+			testutil.RespondJSON(w, http.StatusOK, `{"user":{"id":3,"username":"alice"},"status":"approved",`+
+				`"created_at":"2026-02-24T20:22:30Z","comment":"LGTM"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -835,6 +836,23 @@ func TestDeploymentApprove_Success(t *testing.T) {
 	if out.Message == "" {
 		t.Error("expected non-empty message")
 	}
+	// client-go decodes nothing of the answer, so the approval GitLab recorded
+	// is read off the captured response or not at all.
+	if a := out.Approval; a == nil || a.User == nil || a.User.Username != "alice" || a.Status != "approved" || a.Comment != "LGTM" || a.CreatedAt == nil {
+		t.Errorf("Approval = %+v, want the one GitLab recorded", out.Approval)
+	}
+}
+
+// TestDeploymentApproveOrReject_AnAnswerThatIsNotAnApproval_IsAnError verifies
+// that a success whose body does not decode into an approval is reported
+// rather than passed off as a recorded approval with nothing in it.
+func TestDeploymentApproveOrReject_AnAnswerThatIsNotAnApproval_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"status":7}`)
+	}))
+	if _, err := ApproveOrReject(t.Context(), client, ApproveOrRejectInput{ProjectID: "42", DeploymentID: 10, Status: "approved"}); err == nil {
+		t.Error("ApproveOrReject() = nil error, want one")
+	}
 }
 
 // TestDeploymentReject_Success verifies that DeploymentReject succeeds when the GitLab API returns a valid response.
@@ -843,7 +861,7 @@ func TestDeploymentApprove_Success(t *testing.T) {
 func TestDeploymentReject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments/10/approval" {
-			w.WriteHeader(http.StatusOK)
+			testutil.RespondJSON(w, http.StatusOK, `{"status":"rejected"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1507,6 +1525,35 @@ func TestFormatApproveOrRejectMarkdown_Approved(t *testing.T) {
 	}
 }
 
+// TestFormatApproveOrRejectMarkdown_TheRecordedApproval_FollowsTheSentence
+// pins the lines the approval GitLab recorded adds: who, when and the
+// comment, each only when GitLab sent it, the comment escaped as the inline
+// value it is.
+func TestFormatApproveOrRejectMarkdown_TheRecordedApproval_FollowsTheSentence(t *testing.T) {
+	at := time.Date(2026, 2, 24, 20, 22, 30, 0, time.UTC)
+	got := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
+		Message: "Deployment #10 approved successfully",
+		Approval: &toolutil.DeploymentApprovalOutput{
+			User:      &toolutil.UserBasicOutput{Username: "alice", WebURL: "https://gitlab.example.com/alice"},
+			Status:    "approved",
+			CreatedAt: &at,
+			Comment:   "LGTM | ship",
+		},
+	})
+	want := "✅ Deployment #10 approved successfully\n" +
+		"- **By**: [@alice](https://gitlab.example.com/alice)\n" +
+		"- **At**: 24 Feb 2026 20:22 UTC\n" +
+		"- **Comment**: LGTM &#124; ship\n" + confirmHints
+	if got != want {
+		t.Errorf("confirmation mismatch:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+
+	bare := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{Message: "Deployment #10 rejected successfully", Approval: &toolutil.DeploymentApprovalOutput{Status: "rejected"}})
+	if wantBare := "✅ Deployment #10 rejected successfully\n" + confirmHints; bare != wantBare {
+		t.Errorf("an approval with nothing to show wrote %q, want %q", bare, wantBare)
+	}
+}
+
 // TestFormatApproveOrRejectMarkdown_Rejected pins the same shape for the other
 // half of the action.
 func TestFormatApproveOrRejectMarkdown_Rejected(t *testing.T) {
@@ -1724,7 +1771,7 @@ func newDeploymentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 
 	// Approve or reject deployment
 	handler.HandleFunc("POST /api/v4/projects/1/deployments/1/approval", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		testutil.RespondJSON(w, http.StatusOK, `{"status":"approved"}`)
 	})
 
 	client := testutil.NewTestClient(t, handler)

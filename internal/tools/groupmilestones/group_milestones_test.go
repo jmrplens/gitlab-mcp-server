@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -75,6 +76,22 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Milestones[0].GroupID != 10 {
 		t.Errorf("GroupID = %d, want 10", out.Milestones[0].GroupID)
+	}
+}
+
+// TestList_NoIIDs_SendsNoIIDsParameter verifies that a list the caller did
+// not narrow by IID sends no iids[] key at all. The handler hands the SDK its
+// IID slice unguarded, which is correct only because the query encoder leaves
+// an empty slice out; this is what holds that reading to the wire.
+func TestList_NoIIDs_SendsNoIIDsParameter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if values, sent := r.URL.Query()["iids[]"]; sent {
+			t.Errorf("iids[] = %v, want the key absent", values)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	}))
+	if _, err := List(context.Background(), client, ListInput{GroupID: testGroupID}); err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
 	}
 }
 
@@ -1411,7 +1428,11 @@ func TestFormatListMarkdown_EmptyList(t *testing.T) {
 func TestFormatIssuesMarkdown_WithData(t *testing.T) {
 	out := IssuesOutput{
 		Issues: []IssueItem{
-			{ID: 100, IID: 5, Title: "Fix bug", State: "opened", WebURL: "https://gitlab.example.com/g/p/-/issues/5"},
+			{
+				ID: 100, IID: 5, Title: "Fix bug", State: "opened", WebURL: "https://gitlab.example.com/g/p/-/issues/5",
+				Assignees: []*toolutil.IssueUserOutput{{Username: "alice"}, {Username: ""}, {Username: "b|ob"}},
+				Labels:    []string{"bug", "p|1"}, DueDate: "2026-02-01",
+			},
 			{ID: 101, IID: 6, Title: "Add feature", State: "closed", CreatedAt: "2026-01-05T00:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
@@ -1420,10 +1441,10 @@ func TestFormatIssuesMarkdown_WithData(t *testing.T) {
 	md := FormatIssuesMarkdownString(out)
 
 	want := "## Milestone Issues (2)\n\n" +
-		"| IID | Title | State | Created |\n" +
-		"| --- | --- | --- | --- |\n" +
-		"| [#5](https://gitlab.example.com/g/p/-/issues/5) | Fix bug | " + toolutil.EmojiGreen + " opened |  |\n" +
-		"| #6 | Add feature | " + toolutil.EmojiRed + " closed | 5 Jan 2026 00:00 UTC |\n\n" +
+		"| IID | Title | State | Assignees | Labels | Due | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| [#5](https://gitlab.example.com/g/p/-/issues/5) | Fix bug | " + toolutil.EmojiGreen + " opened | @alice, @b&#124;ob | bug, p&#124;1 | 1 Feb 2026 |  |\n" +
+		"| #6 | Add feature | " + toolutil.EmojiRed + " closed |  |  |  | 5 Jan 2026 00:00 UTC |\n\n" +
 		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
@@ -1455,18 +1476,23 @@ func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 func TestFormatMergeRequestsMarkdown_WithData(t *testing.T) {
 	out := MergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{
-			{ID: 200, IID: 10, Title: "Feature MR", State: "merged", SourceBranch: "feat", TargetBranch: "main", WebURL: "https://gitlab.example.com/g/p/-/merge_requests/10"},
+			{
+				ID: 200, IID: 10, Title: "Feature MR", State: "merged", SourceBranch: "feat", TargetBranch: "main",
+				WebURL: "https://gitlab.example.com/g/p/-/merge_requests/10", Author: &toolutil.BasicUserOutput{Username: "carol"},
+			},
+			{ID: 201, IID: 11, Title: "No author", State: "opened", SourceBranch: "fix", TargetBranch: "main"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
 
 	md := FormatMergeRequestsMarkdownString(out)
 
-	want := "## Milestone Merge Requests (1)\n\n" +
-		"| IID | Title | State | Source | Target | Created |\n" +
-		"| --- | --- | --- | --- | --- | --- |\n" +
-		"| [!10](https://gitlab.example.com/g/p/-/merge_requests/10) | Feature MR | " + toolutil.EmojiPurple + " merged | feat | main |  |\n\n" +
-		"Page 1 of 1 | 1 items total | 20 per page\n\n" +
+	want := "## Milestone Merge Requests (2)\n\n" +
+		"| IID | Title | State | Author | Source | Target | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| [!10](https://gitlab.example.com/g/p/-/merge_requests/10) | Feature MR | " + toolutil.EmojiPurple + " merged | @carol | feat | main |  |\n" +
+		"| !11 | No author | " + toolutil.EmojiGreen + " opened |  | fix | main |  |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'merge_request.get' to read one of these merge requests in full\n" +
@@ -2151,6 +2177,95 @@ func newGroupMilestoneChildClient(t *testing.T, child, body string) *gitlabclien
 	}))
 }
 
+// TestGetIssues_ARow_CarriesWhatTheCompactRowKeeps pins the whole row a group
+// milestone's issue list publishes, the project each issue belongs to first
+// among it, since a group milestone gathers issues from many projects and an
+// IID alone names none of them. The description and the counters GitLab sends
+// beside the kept keys are issue.get's.
+func TestGetIssues_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
+	client := newGroupMilestoneChildClient(t, "issues", `[{
+		"id":100,"iid":5,"project_id":7,"title":"Fix bug","state":"closed",
+		"description":"left to issue.get","labels":["bug"],
+		"author":{"id":3,"username":"alice","name":"Alice","state":"active","avatar_url":"https://a/3.png","web_url":"https://gitlab.example.com/alice"},
+		"assignees":[{"id":4,"username":"bob","name":"Bob","state":"active","avatar_url":"https://a/4.png","web_url":"https://gitlab.example.com/bob"}],
+		"confidential":true,"weight":2,"due_date":"2026-03-01","upvotes":4,
+		"web_url":"https://gitlab.example.com/g/p/-/issues/5",
+		"created_at":"2026-01-10T00:00:00Z","updated_at":"2026-01-11T00:00:00Z","closed_at":"2026-01-12T00:00:00Z"
+	}]`)
+
+	out, err := GetIssues(context.Background(), client, GetIssuesInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := IssueItem{
+		ID: 100, IID: 5, ProjectID: 7, Title: "Fix bug", State: "closed", Labels: []string{"bug"},
+		Author:       &toolutil.IssueUserOutput{ID: 3, Username: "alice", Name: "Alice", State: "active", AvatarURL: "https://a/3.png", WebURL: "https://gitlab.example.com/alice"},
+		Assignees:    []*toolutil.IssueUserOutput{{ID: 4, Username: "bob", Name: "Bob", State: "active", AvatarURL: "https://a/4.png", WebURL: "https://gitlab.example.com/bob"}},
+		Confidential: true, Weight: 2, DueDate: "2026-03-01",
+		WebURL:    "https://gitlab.example.com/g/p/-/issues/5",
+		CreatedAt: "2026-01-10T00:00:00Z", UpdatedAt: "2026-01-11T00:00:00Z", ClosedAt: "2026-01-12T00:00:00Z",
+	}
+	if got, wantJSON := rowJSON(t, out.Issues), rowJSON(t, []IssueItem{want}); got != wantJSON {
+		t.Errorf("Issues = %s, want %s", got, wantJSON)
+	}
+}
+
+// TestGetMergeRequests_ARow_CarriesWhatTheCompactRowKeeps pins the whole row a
+// group milestone's merge request list publishes: the project, whether it can
+// merge, the branches, the people and labels, and the four instants. The
+// description and the SHAs GitLab sends beside them are merge_request.get's.
+func TestGetMergeRequests_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
+	client := newGroupMilestoneChildClient(t, "merge_requests", `[{
+		"id":200,"iid":10,"project_id":7,"title":"Feature MR","state":"merged",
+		"description":"left to merge_request.get","sha":"abc123",
+		"draft":true,"detailed_merge_status":"mergeable",
+		"source_branch":"feature","target_branch":"main","labels":["feature"],
+		"author":{"id":3,"username":"alice","name":"Alice","state":"active","avatar_url":"https://a/3.png","web_url":"https://gitlab.example.com/alice"},
+		"assignees":[{"id":4,"username":"bob","name":"Bob","state":"active","avatar_url":"https://a/4.png","web_url":"https://gitlab.example.com/bob"}],
+		"reviewers":[{"id":5,"username":"carol","name":"Carol","state":"active","avatar_url":"https://a/5.png","web_url":"https://gitlab.example.com/carol"}],
+		"web_url":"https://gitlab.example.com/g/p/-/merge_requests/10",
+		"created_at":"2026-02-01T00:00:00Z","updated_at":"2026-02-02T00:00:00Z","merged_at":"2026-02-03T00:00:00Z","closed_at":"2026-02-04T00:00:00Z"
+	}]`)
+
+	out, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	user := func(id int64, username, name string) *toolutil.BasicUserOutput {
+		return &toolutil.BasicUserOutput{
+			ID: id, Username: username, Name: name, State: "active",
+			AvatarURL: "https://a/" + strconv.FormatInt(id, 10) + ".png", WebURL: "https://gitlab.example.com/" + username,
+		}
+	}
+	want := MergeRequestItem{
+		ID: 200, IID: 10, ProjectID: 7, Title: "Feature MR", State: "merged",
+		Draft: true, DetailedMergeStatus: "mergeable",
+		SourceBranch: "feature", TargetBranch: "main", Labels: []string{"feature"},
+		Author:    user(3, "alice", "Alice"),
+		Assignees: []*toolutil.BasicUserOutput{user(4, "bob", "Bob")},
+		Reviewers: []*toolutil.BasicUserOutput{user(5, "carol", "Carol")},
+		WebURL:    "https://gitlab.example.com/g/p/-/merge_requests/10",
+		CreatedAt: "2026-02-01T00:00:00Z", UpdatedAt: "2026-02-02T00:00:00Z", MergedAt: "2026-02-03T00:00:00Z", ClosedAt: "2026-02-04T00:00:00Z",
+	}
+	if got, wantJSON := rowJSON(t, out.MergeRequests), rowJSON(t, []MergeRequestItem{want}); got != wantJSON {
+		t.Errorf("MergeRequests = %s, want %s", got, wantJSON)
+	}
+}
+
+// rowJSON renders rows the way a client reads them, so a comparison of two
+// sets of rows is a comparison of what either would publish, nested users
+// included.
+func rowJSON(t *testing.T, rows any) string {
+	t.Helper()
+	encoded, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", rows, err)
+	}
+	return string(encoded)
+}
+
 // TestGetIssues_OptionalFields_ArePublishedOrLeftEmpty asserts that an issue's
 // web_url and created_at are copied when GitLab sends them and left empty when
 // it does not. GitLab omits created_at from a confidential issue a token may
@@ -2289,7 +2404,7 @@ func TestFormatIssuesMarkdown_StateGitLabDidNotSend_RendersAnEmptyCell(t *testin
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 
-	const wantRow = "| #5 | Fix bug |  |  |\n"
+	const wantRow = "| #5 | Fix bug |  |  |  |  |  |\n"
 	if !strings.Contains(md, wantRow) {
 		t.Errorf("FormatIssuesMarkdownString()\n got %q\nwant a row %q", md, wantRow)
 	}

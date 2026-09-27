@@ -2960,13 +2960,33 @@ type ShareProjectInput struct {
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 }
 
-// ShareProjectOutput holds the result of sharing a project.
+// ShareProjectOutput holds the result of sharing a project: the sentence this
+// server composes, and the link GitLab created (Entities::ProjectGroupLink),
+// which client-go's ShareProjectWithGroup does not decode and is read from the
+// captured response (ADR-0021); the gap is recorded in
+// docs/development/upstream-bugs.md. member_role_id is sent when the project
+// can carry a custom role on the link, which is an Ultimate feature.
 type ShareProjectOutput struct {
 	toolutil.HintableOutput
-	Message     string `json:"message"`
-	GroupID     int64  `json:"group_id,omitempty"`
-	GroupAccess int    `json:"group_access,omitempty"`
-	AccessRole  string `json:"access_role,omitempty"`
+	Message      string `json:"message"`
+	ID           int64  `json:"id,omitempty"`
+	ProjectID    int64  `json:"project_id,omitempty"`
+	GroupID      int64  `json:"group_id,omitempty"`
+	GroupAccess  int    `json:"group_access,omitempty"`
+	AccessRole   string `json:"access_role,omitempty"`
+	ExpiresAt    string `json:"expires_at,omitempty"`
+	MemberRoleID int64  `json:"member_role_id,omitempty" tier:"ultimate"`
+}
+
+// shareLink is the link a project share answers with, as
+// lib/api/entities/project_group_link.rb and its EE prepend render it.
+type shareLink struct {
+	ID           int64  `json:"id"`
+	ProjectID    int64  `json:"project_id"`
+	GroupID      int64  `json:"group_id"`
+	GroupAccess  int    `json:"group_access"`
+	ExpiresAt    string `json:"expires_at"`
+	MemberRoleID int64  `json:"member_role_id"`
 }
 
 // ShareProjectWithGroup shares a project with the given group.
@@ -2987,6 +3007,7 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 	if input.ExpiresAt != "" {
 		opts.ExpiresAt = new(input.ExpiresAt)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, err := client.GL().Projects.ShareProjectWithGroup(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -2996,12 +3017,20 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 		return ShareProjectOutput{}, toolutil.WrapErrWithStatusHint("projectShareWithGroup", err, http.StatusNotFound,
 			"verify project_id and group_id with project.get and group.get")
 	}
-	roleName := toolutil.AccessLevelDescription(gl.AccessLevelValue(input.GroupAccess))
+	var link shareLink
+	if err = captured.Decode(&link); err != nil {
+		return ShareProjectOutput{}, toolutil.WrapErr("projectShareWithGroup", err)
+	}
+	roleName := toolutil.AccessLevelDescription(gl.AccessLevelValue(link.GroupAccess))
 	return ShareProjectOutput{
-		Message:     fmt.Sprintf("Project %s shared with group %d as %s", input.ProjectID, input.GroupID, roleName),
-		GroupID:     input.GroupID,
-		GroupAccess: input.GroupAccess,
-		AccessRole:  roleName,
+		Message:      fmt.Sprintf("Project %s shared with group %d as %s", input.ProjectID, link.GroupID, roleName),
+		ID:           link.ID,
+		ProjectID:    link.ProjectID,
+		GroupID:      link.GroupID,
+		GroupAccess:  link.GroupAccess,
+		AccessRole:   roleName,
+		ExpiresAt:    link.ExpiresAt,
+		MemberRoleID: link.MemberRoleID,
 	}, nil
 }
 

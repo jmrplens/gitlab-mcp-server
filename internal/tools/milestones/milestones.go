@@ -82,9 +82,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		//nolint:staticcheck // 1:1 SDK field coverage: deprecated in GitLab 16.7 in favor of include_ancestors.
 		opts.IncludeParentMilestones = new(true)
 	}
-	if len(input.IIDs) > 0 {
-		opts.IIDs = &input.IIDs
-	}
+	// No emptiness guard: the query encoder leaves an empty slice out of the
+	// request whatever pointer holds it, so a guard would decide nothing.
+	opts.IIDs = &input.IIDs
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
@@ -194,14 +194,28 @@ type GetMergeRequestsInput struct {
 
 // ---------- Output types for related resources ----------.
 
-// IssueItem is a simplified issue representation for milestone context.
+// IssueItem is one issue of a milestone as a compact row: what tells the
+// issues apart and lets a caller pick one, the people and labels on it, and
+// its dates. GitLab answers the list with IssueBasic, whose other keys (the
+// description, the milestone being listed, time tracking and the counters)
+// are what issue.get returns; repeating them on every row of a milestone is a
+// cost this row does not pay.
 type IssueItem struct {
-	ID        int64  `json:"id"`
-	IID       int64  `json:"iid"`
-	Title     string `json:"title"`
-	State     string `json:"state"`
-	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at"`
+	ID           int64                       `json:"id"`
+	IID          int64                       `json:"iid"`
+	ProjectID    int64                       `json:"project_id"`
+	Title        string                      `json:"title"`
+	State        string                      `json:"state"`
+	Labels       []string                    `json:"labels,omitempty"`
+	Author       *toolutil.IssueUserOutput   `json:"author,omitempty"`
+	Assignees    []*toolutil.IssueUserOutput `json:"assignees,omitempty"`
+	Confidential bool                        `json:"confidential,omitempty"`
+	Weight       int64                       `json:"weight,omitempty" tier:"premium"`
+	DueDate      string                      `json:"due_date,omitempty"`
+	WebURL       string                      `json:"web_url"`
+	CreatedAt    string                      `json:"created_at"`
+	UpdatedAt    string                      `json:"updated_at,omitempty"`
+	ClosedAt     string                      `json:"closed_at,omitempty"`
 }
 
 // MilestoneIssuesOutput holds a paginated list of issues for a milestone.
@@ -211,16 +225,32 @@ type MilestoneIssuesOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// MergeRequestItem is a simplified merge request representation for milestone context.
+// MergeRequestItem is one merge request of a milestone as a compact row: what
+// tells the merge requests apart, whether each can merge, the branches, the
+// people and labels on it, and its dates. GitLab answers the list with
+// MergeRequestBasic, whose other keys (the description, the commit SHAs, the
+// merge options, time tracking and the counters) are what merge_request.get
+// returns; repeating them on every row of a milestone is a cost this row does
+// not pay.
 type MergeRequestItem struct {
-	ID           int64  `json:"id"`
-	IID          int64  `json:"iid"`
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	SourceBranch string `json:"source_branch"`
-	TargetBranch string `json:"target_branch"`
-	WebURL       string `json:"web_url"`
-	CreatedAt    string `json:"created_at"`
+	ID                  int64                       `json:"id"`
+	IID                 int64                       `json:"iid"`
+	ProjectID           int64                       `json:"project_id"`
+	Title               string                      `json:"title"`
+	State               string                      `json:"state"`
+	Draft               bool                        `json:"draft,omitempty"`
+	DetailedMergeStatus string                      `json:"detailed_merge_status,omitempty"`
+	SourceBranch        string                      `json:"source_branch"`
+	TargetBranch        string                      `json:"target_branch"`
+	Labels              []string                    `json:"labels,omitempty"`
+	Author              *toolutil.BasicUserOutput   `json:"author,omitempty"`
+	Assignees           []*toolutil.BasicUserOutput `json:"assignees,omitempty"`
+	Reviewers           []*toolutil.BasicUserOutput `json:"reviewers,omitempty"`
+	WebURL              string                      `json:"web_url"`
+	CreatedAt           string                      `json:"created_at"`
+	UpdatedAt           string                      `json:"updated_at,omitempty"`
+	MergedAt            string                      `json:"merged_at,omitempty"`
+	ClosedAt            string                      `json:"closed_at,omitempty"`
 }
 
 // MilestoneMergeRequestsOutput holds a paginated list of merge requests for a milestone.
@@ -431,14 +461,21 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	items := make([]IssueItem, len(issues))
 	for i, issue := range issues {
 		items[i] = IssueItem{
-			ID:     issue.ID,
-			IID:    issue.IID,
-			Title:  issue.Title,
-			State:  issue.State,
-			WebURL: issue.WebURL,
-		}
-		if issue.CreatedAt != nil {
-			items[i].CreatedAt = issue.CreatedAt.Format(time.RFC3339)
+			ID:           issue.ID,
+			IID:          issue.IID,
+			ProjectID:    issue.ProjectID,
+			Title:        issue.Title,
+			State:        issue.State,
+			Labels:       []string(issue.Labels),
+			Author:       toolutil.NewIssueUserOutputFromIssueAuthor(issue.Author),
+			Assignees:    toolutil.NewIssueUserOutputsFromIssueAssignees(issue.Assignees),
+			Confidential: issue.Confidential,
+			Weight:       issue.Weight,
+			DueDate:      toolutil.FormatISOTimePtr(issue.DueDate),
+			WebURL:       issue.WebURL,
+			CreatedAt:    toolutil.RFC3339Ptr(issue.CreatedAt),
+			UpdatedAt:    toolutil.RFC3339Ptr(issue.UpdatedAt),
+			ClosedAt:     toolutil.RFC3339Ptr(issue.ClosedAt),
 		}
 	}
 	return MilestoneIssuesOutput{Issues: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
@@ -479,16 +516,24 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	items := make([]MergeRequestItem, len(mrs))
 	for i, mr := range mrs {
 		items[i] = MergeRequestItem{
-			ID:           mr.ID,
-			IID:          mr.IID,
-			Title:        mr.Title,
-			State:        mr.State,
-			SourceBranch: mr.SourceBranch,
-			TargetBranch: mr.TargetBranch,
-			WebURL:       mr.WebURL,
-		}
-		if mr.CreatedAt != nil {
-			items[i].CreatedAt = mr.CreatedAt.Format(time.RFC3339)
+			ID:                  mr.ID,
+			IID:                 mr.IID,
+			ProjectID:           mr.ProjectID,
+			Title:               mr.Title,
+			State:               mr.State,
+			Draft:               mr.Draft,
+			DetailedMergeStatus: mr.DetailedMergeStatus,
+			SourceBranch:        mr.SourceBranch,
+			TargetBranch:        mr.TargetBranch,
+			Labels:              []string(mr.Labels),
+			Author:              toolutil.NewBasicUserOutput(mr.Author),
+			Assignees:           toolutil.NewBasicUserOutputs(mr.Assignees),
+			Reviewers:           toolutil.NewBasicUserOutputs(mr.Reviewers),
+			WebURL:              mr.WebURL,
+			CreatedAt:           toolutil.RFC3339Ptr(mr.CreatedAt),
+			UpdatedAt:           toolutil.RFC3339Ptr(mr.UpdatedAt),
+			MergedAt:            toolutil.RFC3339Ptr(mr.MergedAt),
+			ClosedAt:            toolutil.RFC3339Ptr(mr.ClosedAt),
 		}
 	}
 	return MilestoneMergeRequestsOutput{MergeRequests: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -27,11 +28,15 @@ const fmtUnexpErr = "unexpected error: %v"
 // which is what makes a converter that drops one or reads a neighbour's key
 // observable: each handler used to be judged on a single field, so the other
 // two could go missing with nothing failing.
-const fixtureGroupJSON = `{"id":7,"key":"production","process_mode":"oldest_first"}`
+const fixtureGroupJSON = `{"id":7,"key":"production","process_mode":"oldest_first",` +
+	`"created_at":"2026-01-02T03:04:05Z","updated_at":"2026-02-03T04:05:06Z"}`
 
 // wantFixtureGroup is fixtureGroupJSON as the handlers must convert it.
 func wantFixtureGroup() ResourceGroupItem {
-	return ResourceGroupItem{ID: 7, Key: "production", ProcessMode: "oldest_first"}
+	return ResourceGroupItem{
+		ID: 7, Key: "production", ProcessMode: "oldest_first",
+		CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
+	}
 }
 
 // TestListAll verifies ListAll converts every field GitLab sent, not only the
@@ -157,22 +162,87 @@ func TestEdit_Error(t *testing.T) {
 // TestListUpcomingJobs verifies every field of a queued job survives the
 // conversion. The old fixture named the job and its stage both "deploy" and
 // only the name was asserted, so swapping the status and the stage, or dropping
-// the id, produced exactly the same passing run.
+// the id, produced exactly the same passing run. The second job carries no
+// pipeline, which GitLab does not render for one, and keeps the row's pipeline
+// empty rather than a pipeline with ID zero; the keys the compact row leaves to
+// job.get (the user, and the run fields a waiting job has not filled) do not
+// reach it.
+//
+// The first pipeline carries every key Entities::Ci::PipelineBasic sends, and
+// the five client-go's JobPipeline does not model are read off the captured
+// answer beside the five it does, each with a value of its own so that one
+// read into another's field fails. The third job's pipeline is rendered by an
+// older GitLab without them, and keeps the modeled half alone.
 func TestListUpcomingJobs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production/upcoming_jobs" || r.Method != http.MethodGet {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"deploy-to-prod","status":"pending","stage":"release"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":10,"name":"deploy-to-prod","status":"pending","stage":"release","ref":"v1.0","tag":true,"allow_failure":true,
+			 "pipeline":{"id":77,"iid":7,"project_id":1,"ref":"v1.0","sha":"abc123","status":"running","source":"push",
+			  "created_at":"2026-01-04T00:00:00Z","updated_at":"2026-01-04T12:00:00Z",
+			  "web_url":"https://gitlab.example.com/g/p/-/pipelines/77"},
+			 "user":{"id":3,"username":"alice"},"started_at":null,
+			 "web_url":"https://gitlab.example.com/-/jobs/10","created_at":"2026-01-05T00:00:00Z"},
+			{"id":11,"name":"smoke","status":"created","stage":"verify"},
+			{"id":12,"name":"lint","status":"created","stage":"test",
+			 "pipeline":{"id":78,"project_id":1,"ref":"main","sha":"def456","status":"created"}}
+		]`)
 	}))
 	out, err := ListUpcomingJobs(t.Context(), client, ListUpcomingJobsInput{ProjectID: "1", Key: "production"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	want := []JobItem{{ID: 10, Name: "deploy-to-prod", Status: "pending", Stage: "release"}}
+	want := []JobItem{
+		{
+			ID: 10, Name: "deploy-to-prod", Status: "pending", Stage: "release", Ref: "v1.0", Tag: true, AllowFailure: true,
+			Pipeline: &JobPipelineItem{
+				ID: 77, IID: 7, ProjectID: 1, Ref: "v1.0", SHA: "abc123", Status: "running", Source: "push",
+				CreatedAt: "2026-01-04T00:00:00Z", UpdatedAt: "2026-01-04T12:00:00Z",
+				WebURL: "https://gitlab.example.com/g/p/-/pipelines/77",
+			},
+			WebURL: "https://gitlab.example.com/-/jobs/10", CreatedAt: "2026-01-05T00:00:00Z",
+		},
+		{ID: 11, Name: "smoke", Status: "created", Stage: "verify"},
+		{
+			ID: 12, Name: "lint", Status: "created", Stage: "test",
+			Pipeline: &JobPipelineItem{ID: 78, ProjectID: 1, Ref: "main", SHA: "def456", Status: "created"},
+		},
+	}
 	if !reflect.DeepEqual(out.Jobs, want) {
 		t.Errorf("ListUpcomingJobs jobs = %+v, want %+v", out.Jobs, want)
+	}
+}
+
+// TestListUpcomingJobs_UnreadableCapturedAnswer_IsAnError verifies that the
+// extras are never paired with the wrong job: a captured answer that does not
+// decode into the extras' shape, or that holds a different number of jobs than
+// the SDK decoded, is an error rather than a queue whose pipelines are read off
+// somebody else's row.
+func TestListUpcomingJobs_UnreadableCapturedAnswer_IsAnError(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		count int
+	}{
+		{name: "a pipeline whose number is not a number", body: `[{"id":10,"pipeline":{"id":77,"iid":"seven"}}]`, count: 1},
+		{name: "fewer jobs than the SDK decoded", body: `[{"id":10}]`, count: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := capturedUpcomingJobs(gitlabclient.CapturedBody([]byte(tt.body)), tt.count); err == nil {
+				t.Errorf("capturedUpcomingJobs(%s, %d) = nil error, want one", tt.body, tt.count)
+			}
+		})
+	}
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"pipeline":{"id":77,"created_at":"yesterday"}}]`)
+	}))
+	if _, err := ListUpcomingJobs(t.Context(), client, ListUpcomingJobsInput{ProjectID: "1", Key: "production"}); err == nil {
+		t.Error("ListUpcomingJobs() = nil error on an answer the SDK decodes and the extras do not, want one")
 	}
 }
 
@@ -224,11 +294,16 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 
 // TestFormatGroupMarkdown verifies FormatGroupMarkdown.
 func TestFormatGroupMarkdown(t *testing.T) {
-	md := FormatGroupMarkdown(ResourceGroupItem{ID: 42, Key: "staging", ProcessMode: "oldest_first"})
+	md := FormatGroupMarkdown(ResourceGroupItem{
+		ID: 42, Key: "staging", ProcessMode: "oldest_first",
+		CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
+	})
 	want := "## Resource Group: staging\n\n" +
 		"- **ID**: 42\n" +
 		"- **Key**: staging\n" +
 		"- **Process Mode**: oldest_first\n" +
+		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
+		"- **Updated**: 3 Feb 2026 04:05 UTC\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'pipeline.resource_group_upcoming_jobs' to see the jobs waiting on this group\n" +
 		"- Use action 'pipeline.resource_group_edit' to change its process mode\n"
@@ -245,18 +320,28 @@ func TestFormatGroupMarkdown(t *testing.T) {
 func TestFormatJobsMarkdown_WithData(t *testing.T) {
 	md := FormatJobsMarkdown(ListUpcomingJobsOutput{
 		Jobs: []JobItem{
-			{ID: 10, Name: "deploy", Status: "pending", Stage: "deploy"},
+			{
+				ID: 10, Name: "deploy", Status: "pending", Stage: "deploy", Ref: "main|x",
+				Pipeline: &JobPipelineItem{ID: 77, WebURL: "https://gitlab.example.com/g/p/-/pipelines/77"},
+				WebURL:   "https://gitlab.example.com/-/jobs/10", CreatedAt: "2026-01-05T00:00:00Z",
+			},
 			{ID: 11, Name: "build", Status: "created", Stage: "build"},
+			{ID: 12, Name: "lint", Status: "created", Stage: "test", Pipeline: &JobPipelineItem{ID: 78}},
 		},
 	})
 	// The status carries the glyph every job row in the tree shows, which this
-	// table was the one place not to.
-	want := "## Upcoming Jobs (2)\n\n" +
-		"| ID | Name | Status | Stage |\n" +
-		"| --- | --- | --- | --- |\n" +
-		"| 10 | deploy | 🟡 pending | deploy |\n" +
-		"| 11 | build | 🆕 created | build |\n" +
+	// table was the one place not to. The ID links to the job, the ref is
+	// escaped for a cell, the pipeline is named by its ID and linked to its
+	// page when GitLab sent one, and a job GitLab rendered no pipeline or time
+	// for leaves those cells empty.
+	want := "## Upcoming Jobs (3)\n\n" +
+		"| ID | Name | Status | Stage | Ref | Pipeline | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| [10](https://gitlab.example.com/-/jobs/10) | deploy | 🟡 pending | deploy | main&#124;x | [#77](https://gitlab.example.com/g/p/-/pipelines/77) | 5 Jan 2026 00:00 UTC |\n" +
+		"| 11 | build | 🆕 created | build |  |  |  |\n" +
+		"| 12 | lint | 🆕 created | test |  | #78 |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'job.get' to see one of these jobs in full\n" +
 		"- Use action 'job.trace' to read a job's log\n" +
 		"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n"
@@ -283,10 +368,11 @@ func TestFormatJobsMarkdown_BlankStatus(t *testing.T) {
 		Jobs: []JobItem{{ID: 12, Name: "provision", Status: "  ", Stage: "setup"}},
 	})
 	want := "## Upcoming Jobs (1)\n\n" +
-		"| ID | Name | Status | Stage |\n" +
-		"| --- | --- | --- | --- |\n" +
-		"| 12 | provision |  | setup |\n" +
+		"| ID | Name | Status | Stage | Ref | Pipeline | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| 12 | provision |  | setup |  |  |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'job.get' to see one of these jobs in full\n" +
 		"- Use action 'job.trace' to read a job's log\n" +
 		"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n"

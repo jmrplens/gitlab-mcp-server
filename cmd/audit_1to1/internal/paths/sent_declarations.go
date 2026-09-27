@@ -34,6 +34,15 @@ type sentDeclaration struct {
 	// of them against the union of endpoints their shared client-go struct
 	// reaches, so without this a splat over the entity would silence the type
 	// that really does model it.
+	//
+	// A declaration naming a type and one field answers the package grain's
+	// finding on the same package, entity and field as well. The package grain
+	// reports a field no type of the package publishes, so the reason the named
+	// type leaves it out is the package's reason as far as that type goes, and
+	// another type of the package leaving the same key out is still reported
+	// at the type grain, where the declaration does not reach it. A splat
+	// naming a type never does: it answers what one type does with a whole
+	// entity, which says nothing about the rest of the package.
 	Type string
 	// Field is the json name, or "*" for every field read on the component.
 	Field string
@@ -121,6 +130,113 @@ const (
 	// point: it can hold and the value is still empty, and only a GitLab
 	// release that removes the block retires the declaration.
 	categoryConstantEmpty = "entity-renders-a-constant-empty-value"
+	// categoryCompactRow is a key the endpoint does send, which a compact row
+	// leaves out on purpose. It is the one category here that answers a
+	// finding true of GitLab: the row keeps what tells the objects of a list
+	// apart and lets a caller pick one, and repeating the rest of the entity
+	// on every row is a token cost the list does not pay, since one action
+	// returns the whole object. The reason names that action, so a caller
+	// told the key is missing knows where it is. A key the row's caller needs
+	// is published instead, and a declaration of this category is a decision
+	// about the surface that a later need can overturn rather than a fact
+	// about GitLab's record. It is therefore made one key at a time and for
+	// one type, by [compactRow], so that a key GitLab adds to the entity is a
+	// finding and not a decision nobody made.
+	categoryCompactRow = "compact-row-leaves-it-to-the-detail-action"
+	// categoryAssociationNullOnScope is an association the entity exposes
+	// that is always null on the routes a package calls, because every object
+	// those routes present belongs to another scope: a board's project on the
+	// group board routes. The key arrives and carries nothing, so publishing it
+	// would advertise a value no answer of these routes holds. Kept apart from
+	// [categoryConstantEmpty] because the evidence is the scope of the routes
+	// rather than a block that ignores its object, and the same key is filled
+	// on the routes of the other scope.
+	categoryAssociationNullOnScope = "entity-association-null-on-these-routes"
+	// categoryConfirmationOnly is a key of the response to a write that this
+	// server answers with a confirmation instead, because the response echoes
+	// objects the caller named to make the write and another action returns
+	// in full. Like [categoryCompactRow] it answers a finding true of GitLab
+	// and is a decision about the surface, and its reason names the actions
+	// that return what the confirmation leaves out.
+	categoryConfirmationOnly = "write-answers-with-a-confirmation"
+	// categoryReadForItsOwnUse is a response a package reads to decide
+	// something and returns nothing of: a pre-check that lists a merge
+	// request's diffs to tell a caller a line is outside them before GitLab
+	// refuses the write. None of its keys is a gap in the package's surface,
+	// which never answers with the object, and the action that does answer
+	// with it is named in the reason.
+	categoryReadForItsOwnUse = "endpoint-the-package-reads-for-its-own-use"
+)
+
+// The packages and entities the compact-row declarations name. The two
+// milestone packages share one reason per entity, since a project milestone and
+// a group milestone list the same two entities through routes of the same
+// shape; the commits package lists the merge request entity again.
+const (
+	milestonesPkg      = toolsDir + "/milestones"
+	groupMilestonesPkg = toolsDir + "/groupmilestones"
+	commitsPkg         = toolsDir + "/commits"
+	issueBasicEntity   = "API::Entities::IssueBasic"
+	mrBasicEntity      = "API::Entities::MergeRequestBasic"
+)
+
+// The milestone rows' answers: what the row keeps, and why the rest is the
+// detail action's.
+const (
+	reasonMilestoneIssueRow = "the milestone issue lists (GET /projects/:id/milestones/:milestone_id/issues and " +
+		"GET /groups/:id/milestones/:milestone_id/issues) present Entities::IssueBasic through milestone_issuables_for in " +
+		"lib/api/milestone_responses.rb. " +
+		"The row keeps the identifiers and the project, title, state, labels, author, assignees, confidentiality, weight, " +
+		"due date, web URL and the created, updated and closed instants, which is what tells the issues of a milestone " +
+		"apart, and leaves the rest to issue.get, which returns the whole issue for the one a caller picks: the " +
+		"description and start date, the type (sent twice, as type and issue_type), who closed it, the discussion lock, " +
+		"the vote counts, the note, merge request and blocking issue counts, time tracking and task completion, the " +
+		"deprecated single assignee, and the milestone, which is the one being listed."
+	reasonMilestoneMergeRequestRow = "the milestone merge request lists (GET /projects/:id/milestones/:milestone_id/merge_requests " +
+		"and GET /groups/:id/milestones/:milestone_id/merge_requests) present Entities::MergeRequestBasic through " +
+		"milestone_issuables_for in lib/api/milestone_responses.rb. The row keeps the identifiers and the project, title, state, draft flag, detailed " +
+		"merge status, both branches, labels, author, assignees, reviewers, web URL and the created, updated, merged and " +
+		"closed instants, and leaves the rest to merge_request.get, which returns the whole merge request for the one a " +
+		"caller picks: the description, the source and target projects, the three SHAs, the merge and squash options and " +
+		"schedule, who merged or closed it and the merge user, the conflict and discussion state, the import origin, the " +
+		"references, time tracking, task completion, the vote and note counts and the approvals required, the deprecated " +
+		"merge_status, work_in_progress, reference and single assignee, and the milestone, which is the one being listed."
+	reasonMilestoneRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exposes title_html and description_html only " +
+		"when the presenter is given render_html, and the milestone merge request lists declare no parameter but the " +
+		"milestone, its parent and the page, so Grape passes the option on neither and the keys are never on their responses."
+	reasonCommitMergeRequestRow = "GET /projects/:id/repository/commits/:sha/merge_requests presents Entities::MergeRequestBasic " +
+		"(lib/api/commits.rb). The row keeps the identifiers and the project, title, state, draft flag, both branches, the " +
+		"merge commit SHA, labels, author, web URL and the created, updated, merged and closed instants, which is what says " +
+		"which merge request carried the commit and where it landed, and leaves the rest to merge_request.get, which returns " +
+		"the whole merge request: the description, the source and target projects, the source and squash SHAs, the merge " +
+		"and squash options and schedule, the detailed merge status, who merged or closed it and the merge user, the " +
+		"assignees and reviewers, the milestone, the conflict and discussion state, the import origin, the references, time " +
+		"tracking, task completion, the vote and note counts and the approvals required, and the deprecated merge_status, " +
+		"work_in_progress, reference and single assignee."
+	reasonCommitRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exposes title_html and description_html only " +
+		"when the presenter is given render_html, and GET /projects/:id/repository/commits/:sha/merge_requests declares " +
+		"no such parameter (only sha, state and the page), so the keys are never on its response."
+	reasonGroupProjectRow = "GET /groups/:id/projects and GET /groups/:id/projects/shared present Entities::Project, or " +
+		"Entities::BasicProjectDetails when the caller passes simple, through present_projects in lib/api/groups.rb. The row " +
+		"keeps the names and paths, the web and clone URLs, visibility, default branch, topics, the star and fork counts, " +
+		"the archived flag and the created and last-activity instants, which is what tells the projects of a group apart and " +
+		"lets a caller open or clone one, and leaves the rest to project.get, which returns the whole project: the " +
+		"namespace, owner and creator, the fork parent, the avatar and readme links and the API links, the rendered " +
+		"description, the deprecated tag_list, the last update, whether the repository is empty, the open issue count and " +
+		"statistics, the import and mirror state, the pending deletion, the groups it is shared with, the custom " +
+		"attributes and compliance frameworks, and every project setting: each feature's access level and enabled flag, " +
+		"the CI/CD, merge, merge train, squash, template, container registry, Duo, security, service desk, runner and " +
+		"email settings."
+	reasonTransferLocationsPresented = "lib/api/groups.rb describes GET /groups/:id/transfer_locations with `success Entities::Group` " +
+		"and presents `present_groups params, groups, serializer: Entities::PublicGroupDetails`: BasicGroupDetails (id, web_url, " +
+		"name) plus avatar_url, full_name and full_path, the six keys this type publishes. The record holds the route under the " +
+		"annotated entity, so every other key of a group is reported against a response that carries none of them."
+	reasonUpcomingJobRow = "GET /projects/:id/resource_groups/:key/upcoming_jobs presents Entities::Ci::JobBasic " +
+		"(lib/api/ci/resource_groups.rb). The row keeps the ID, name, status, stage, ref, the tag and allow-failure flags, " +
+		"the pipeline, web URL and creation time, which is what tells the jobs waiting on the group apart and where each " +
+		"comes from. The user, commit and project are job.get's, which returns the whole job, and the fields of a run " +
+		"(started_at, finished_at, erased_at, duration, queued_duration, coverage and failure_reason) describe a job that " +
+		"has run, which a job waiting on the resource group has not."
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -442,7 +558,7 @@ const (
 // A variable rather than a constant table so the type-grain stub can empty
 // it: the entries are about the real tree, and against a synthetic one every
 // last one of them is unused.
-var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adjudication table, emptied by the test stub
+var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglobals // the adjudication table, emptied by the test stub
 	{
 		Package:  toolsDir + "/keys",
 		Entity:   "API::Entities::UserWithAdmin",
@@ -526,8 +642,8 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// named one by one rather than with a splat: every other key of the same
 	// entity on that type is published, and a splat would swallow the next one
 	// GitLab adds.
-	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
-	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
 
 	// avatar_path on the four types that publish a user. The user entities
 	// inherit it from UserBasic, so it is the same option and the same answer
@@ -592,7 +708,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	},
 
 	{
-		Package: projectsPkg, Type: "BasicOutput", Entity: "API::Entities::Projects::WithAccessAndCatalogSetting", Field: declaredSegment,
+		Package: projectsPkg, Type: "BasicOutput", Entity: projectWithAccessEntity, Field: declaredSegment,
 		Category: categoryEntityPublishedElsewhere,
 		Reason: "GET /projects/:id answers with Project plus permissions and cicd_catalog_enabled, and projects.Output " +
 			"publishes both. BasicProjectDetails carries neither, which is what BasicOutput models.",
@@ -745,14 +861,261 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 			"gl.GeoSite, and the four that do answer with a site send none of these keys, so publishing them on " +
 			"the site type would invent them. Both halves are recorded in docs/development/upstream-bugs.md.",
 	},
+
+	// The rendered markup on the milestone and commit merge request rows,
+	// which those routes never send. The keys the rows do leave out are
+	// declared by [declaredCompactRows], one at a time.
+	{Package: milestonesPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: milestonesPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: groupMilestonesPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: groupMilestonesPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonMilestoneRenderHTMLNeverPassed},
+	{Package: commitsPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonCommitRenderHTMLNeverPassed},
+	{Package: commitsPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonCommitRenderHTMLNeverPassed},
+
+	// The groups a group can be transferred to, whose route annotates a whole
+	// group and presents six keys of one.
+	{Package: groupsPkg, Type: "TransferLocationOutput", Entity: "API::Entities::Group", Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: reasonTransferLocationsPresented},
+
+	// An epic's subscription on the list, which only the read of one epic
+	// passes the option for.
+	{
+		Package: toolsDir + "/epics", Entity: "API::Entities::Epic", Field: "subscribed", Category: categoryOptionNeverPassed,
+		Reason: "lib/api/entities/epic.rb exposes subscribed under `options.fetch(:include_subscribed, false)`. ee/lib/api/epics.rb " +
+			"passes `include_subscribed: true` on the read of one epic (GET /groups/:id/epics/:epic_iid, line 167) and nowhere else, " +
+			"and GET /groups/:id/epics presents through epic_options (ee/lib/api/helpers/epics_helpers.rb), which never sets it, so " +
+			"the list has never sent the key.",
+	},
+
+	// A board's project on the group board routes.
+	{
+		Package: toolsDir + "/groupboards", Entity: "API::Entities::Board", Field: "project", Category: categoryAssociationNullOnScope,
+		Reason: "lib/api/entities/board.rb exposes project with no condition, and app/models/board.rb validates a board's group " +
+			"absent whenever it has a project (lines 16 to 19), so a board belongs to a project or to a group and never both. " +
+			"Every route of this package presents the boards of a group (lib/api/group_boards.rb), so project is null on every " +
+			"response it reads; the project boards, where it is filled, are internal/tools/boards'.",
+	},
+
+	// The response to setting a status check's status.
+	{Package: toolsDir + "/externalstatuschecks", Entity: "API::Entities::MergeRequests::StatusCheckResponse", Field: "merge_request", Category: categoryConfirmationOnly, Reason: reasonStatusCheckResponse},
+	{Package: toolsDir + "/externalstatuschecks", Entity: "API::Entities::MergeRequests::StatusCheckResponse", Field: "external_status_check", Category: categoryConfirmationOnly, Reason: reasonStatusCheckResponse},
+
+	// Objects this server publishes under keys of its own.
+	{
+		Package: toolsDir + "/wikis", Entity: "API::Entities::WikiAttachment", Field: "link", Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/wiki_attachment.rb exposes link as an object of two keys, url (the file path) and markdown, and " +
+			"wikis.AttachmentOutput publishes both one level up, as url and markdown beside file_name, file_path and branch.",
+	},
+	{
+		Package: toolsDir + "/projectstatistics", Entity: "API::Entities::ProjectDailyStatistics", Field: "fetches", Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/project_daily_statistics.rb exposes fetches as an object of total and days, and " +
+			"projectstatistics.GetOutput publishes both one level up, as total_fetches and days.",
+	},
+	{
+		Package: toolsDir + "/projectimportexport", Entity: "API::Entities::ProjectExportStatus", Field: "_links", Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/project_export_status.rb exposes _links, once the export has finished, as an object of api_url " +
+			"and web_url, and projectimportexport.ExportStatusOutput publishes both one level up under the same names.",
+	},
+
+	// The diffs the two note packages list for a position pre-check.
+	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
+	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
+
+	// The project starrers, whose route annotates a user and presents the star.
+	{
+		Package: projectsPkg, Type: "StarrerOutput", Entity: userBasicEntity, Field: declaredSegment, Category: categoryDocumentedNotSent,
+		Reason: "lib/api/projects.rb describes GET /projects/:id/starrers with `model: Entities::UserBasic` and presents " +
+			"`with: Entities::UserStarsProject` (line 865), which is starred_since and the user under user " +
+			"(lib/api/entities/user_stars_project.rb). None of UserBasic's keys is at the top of the response; they are under " +
+			"user, which projects.StarrerOutput publishes as ProjectUserOutput.",
+	},
+}, declaredCompactRows())
+
+// reasonStatusCheckResponse answers the two objects the response to setting a
+// status check's status echoes.
+const reasonStatusCheckResponse = "POST /projects/:id/merge_requests/:merge_request_iid/status_check_responses presents " +
+	"Entities::MergeRequests::StatusCheckResponse (ee/lib/api/status_checks.rb): the response's id, the whole merge request " +
+	"and the check, both of which the caller named to make the call. " +
+	"external_status_check.set_project_mr_status answers with a confirmation; merge_request.get returns the merge request " +
+	"and external_status_check.list_project_mr_checks the checks with the status each now has."
+
+// reasonPositionPreCheck answers the file diffs the two note packages list
+// before they write a note on a line.
+const reasonPositionPreCheck = "the package lists a merge request's diffs through " +
+	"toolutil.MergeRequestDiffsForPositionCheck only to tell a caller that a line is outside them before GitLab refuses the " +
+	"note with a bare 400 or 500, and returns nothing of the answer. mr_review.changes_get is the action that answers with a " +
+	"merge request's file diffs."
+
+// compactRow declares the keys one compact row leaves to the action returning
+// the whole object, one declaration per key.
+//
+// Every declaration names the type, so it answers that row and no other type
+// of the package presenting the same entity, and one key, so a key GitLab
+// adds to the entity later is a finding somebody decides on rather than one a
+// splat over the entity already answered. The reason is the row's own followed
+// by every key the row leaves out, so any one finding shows the whole of the
+// decision it belongs to, and a key missing from that list is one nobody
+// decided.
+func compactRow(pkg, typ, entity, reason string, fields ...string) []sentDeclaration {
+	full := reason + " The keys it leaves out: " + strings.Join(fields, ", ") + "."
+	declarations := make([]sentDeclaration, 0, len(fields))
+	for _, field := range fields {
+		declarations = append(declarations, sentDeclaration{
+			Package: pkg, Type: typ, Entity: entity, Field: field,
+			Category: categoryCompactRow, Reason: full,
+		})
+	}
+	return declarations
 }
 
-// covers reports whether this declaration accounts for one finding.
+// declaredCompactRows is what every compact row leaves out, key by key: the
+// milestone issue and merge request rows, the merge requests a commit belongs
+// to, the jobs waiting on a resource group, a group's projects and the project
+// a git remote resolves to.
+func declaredCompactRows() []sentDeclaration {
+	milestoneIssueKeys := []string{
+		"assignee", "blocking_issues_count", "closed_by", "description", "discussion_locked", "downvotes", "issue_type",
+		"merge_requests_count", "milestone", "start_date", "task_completion_status", "time_stats", "type", "upvotes",
+		"user_notes_count",
+	}
+	milestoneMergeRequestKeys := []string{
+		"allow_collaboration", "allow_maintainer_to_push", "approvals_before_merge", "assignee",
+		"blocking_discussions_resolved", "closed_by", "description", "discussion_locked", "downvotes",
+		"force_remove_source_branch", "has_conflicts", "imported", "imported_from", "merge_after", "merge_commit_sha",
+		"merge_status", "merge_user", "merge_when_pipeline_succeeds", "merged_by", "milestone", "prepared_at", "reference",
+		"references", "sha", "should_remove_source_branch", "source_project_id", "squash", "squash_commit_sha",
+		"squash_on_merge", "target_project_id", "task_completion_status", "time_stats", "upvotes", "user_notes_count",
+		"work_in_progress",
+	}
+	return slices.Concat(
+		compactRow(milestonesPkg, "IssueItem", issueBasicEntity, reasonMilestoneIssueRow, milestoneIssueKeys...),
+		compactRow(groupMilestonesPkg, "IssueItem", issueBasicEntity, reasonMilestoneIssueRow, milestoneIssueKeys...),
+		compactRow(milestonesPkg, "MergeRequestItem", mrBasicEntity, reasonMilestoneMergeRequestRow, milestoneMergeRequestKeys...),
+		compactRow(groupMilestonesPkg, "MergeRequestItem", mrBasicEntity, reasonMilestoneMergeRequestRow, milestoneMergeRequestKeys...),
+		compactRow(commitsPkg, "BasicMROutput", mrBasicEntity, reasonCommitMergeRequestRow,
+			"allow_collaboration", "allow_maintainer_to_push", "approvals_before_merge", "assignee", "assignees",
+			"blocking_discussions_resolved", "closed_by", "description", "detailed_merge_status", "discussion_locked",
+			"downvotes", "force_remove_source_branch", "has_conflicts", "imported", "imported_from", "merge_after",
+			"merge_status", "merge_user", "merge_when_pipeline_succeeds", "merged_by", "milestone", "prepared_at",
+			"reference", "references", "reviewers", "sha", "should_remove_source_branch", "source_project_id", "squash",
+			"squash_commit_sha", "squash_on_merge", "target_project_id", "task_completion_status", "time_stats", "upvotes",
+			"user_notes_count", "work_in_progress"),
+		compactRow(toolsDir+"/resourcegroups", "JobItem", "API::Entities::Ci::JobBasic", reasonUpcomingJobRow,
+			"commit", "coverage", "duration", "erased_at", "failure_reason", "finished_at", "project", "queued_duration",
+			"started_at", "user"),
+		compactRow(groupsPkg, "ProjectItem", projectEntity, reasonGroupProjectRow,
+			"_links", "allow_merge_on_skipped_pipeline", "allow_pipeline_trigger_approve_deployment",
+			"analytics_access_level", "approvals_before_merge", "auto_cancel_pending_pipelines",
+			"auto_devops_deploy_strategy", "auto_devops_enabled", "auto_duo_code_review_enabled",
+			"autoclose_referenced_issues", "automatic_rebase_enabled", "avatar_url", "build_git_strategy", "build_timeout",
+			"builds_access_level", "can_create_merge_request_in", "ci_allow_fork_pipelines_to_run_in_parent_project",
+			"ci_config_path", "ci_default_git_depth", "ci_delete_pipelines_in_seconds", "ci_display_pipeline_variables",
+			"ci_forward_deployment_enabled", "ci_forward_deployment_rollback_allowed", "ci_id_token_sub_claim_components",
+			"ci_job_token_scope_enabled", "ci_pipeline_variables_minimum_override_role",
+			"ci_push_repository_for_job_token_allowed", "ci_restrict_pipeline_cancellation_role", "ci_separated_caches",
+			"ci_skip_branch_pipelines_for_mrs", "compliance_frameworks", "container_expiration_policy",
+			"container_registry_access_level", "container_registry_enabled", "container_registry_image_prefix",
+			"creator_id", "custom_attributes", "description_html", "duo_dependency_bump_breaking_changes_enabled",
+			"duo_foundational_flows_enabled", "duo_remote_flows_enabled", "duo_sast_fp_detection_enabled",
+			"duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled", "emails_disabled", "emails_enabled",
+			"empty_repo", "enforce_auth_checks_on_uploads", "environments_access_level",
+			"external_authorization_classification_label", "feature_flags_access_level", "forked_from_project",
+			"forking_access_level", "group_runners_enabled", "import_error", "import_status", "import_type", "import_url",
+			"infrastructure_access_level", "issue_branch_template", "issues_access_level", "issues_enabled",
+			"issues_template", "jobs_enabled", "keep_latest_artifact", "lfs_enabled", "marked_for_deletion_at",
+			"marked_for_deletion_on", "max_artifacts_size", "max_pipelines_per_merge_train", "merge_commit_template",
+			"merge_method", "merge_pipelines_enabled", "merge_request_title_regex", "merge_request_title_regex_description",
+			"merge_requests_access_level", "merge_requests_enabled", "merge_requests_template", "merge_train_enforcement",
+			"merge_trains_enabled", "merge_trains_skip_train_allowed", "mirror", "mirror_overwrites_diverged_branches",
+			"mirror_trigger_builds", "mirror_user_id", "model_experiments_access_level", "model_registry_access_level",
+			"monitor_access_level", "mr_default_target_self", "mr_default_title_template", "namespace",
+			"only_allow_merge_if_all_discussions_are_resolved", "only_allow_merge_if_all_status_checks_passed",
+			"only_allow_merge_if_pipeline_succeeds", "only_mirror_protected_branches", "open_issues_count", "owner",
+			"package_registry_access_level", "packages_enabled", "pages_access_level",
+			"pre_receive_secret_detection_enabled", "prevent_merge_without_jira_issue",
+			"printing_merge_request_link_enabled", "protect_merge_request_pipelines", "public_jobs", "readme_url",
+			"releases_access_level", "remove_source_branch_after_merge", "repository_access_level",
+			"repository_object_format", "repository_storage", "request_access_enabled", "requirements_access_level",
+			"requirements_enabled", "resolve_outdated_diff_discussions", "resource_group_default_process_mode",
+			"restrict_user_defined_variables", "reviewer_assignment_strategy", "runner_token_expiration_interval",
+			"runners_token", "secret_push_protection_enabled", "security_and_compliance_access_level",
+			"security_and_compliance_enabled", "security_policy_pipeline_must_succeed", "service_desk_address",
+			"service_desk_enabled", "shared_runners_enabled", "shared_with_groups", "show_diff_preview_in_email",
+			"snippets_access_level", "snippets_enabled", "spp_repository_pipeline_access", "squash_commit_template",
+			"squash_option", "statistics", "suggestion_commit_message", "tag_list", "updated_at",
+			"warn_about_potentially_unwanted_characters", "web_based_commit_signing_enabled", "wiki_access_level",
+			"wiki_enabled"),
+		compactRow(projectDiscoveryPkg, "ResolveOutput", projectWithAccessEntity, reasonResolvedProject,
+			"_links", "allow_merge_on_skipped_pipeline", "allow_pipeline_trigger_approve_deployment", "analytics_access_level",
+			"approvals_before_merge", "archived", "auto_cancel_pending_pipelines", "auto_devops_deploy_strategy",
+			"auto_devops_enabled", "auto_duo_code_review_enabled", "autoclose_referenced_issues", "automatic_rebase_enabled",
+			"avatar_url", "build_git_strategy", "build_timeout", "builds_access_level", "can_create_merge_request_in",
+			"ci_allow_fork_pipelines_to_run_in_parent_project", "ci_config_path", "ci_default_git_depth",
+			"ci_delete_pipelines_in_seconds", "ci_display_pipeline_variables", "ci_forward_deployment_enabled",
+			"ci_forward_deployment_rollback_allowed", "ci_id_token_sub_claim_components", "ci_job_token_scope_enabled",
+			"ci_pipeline_variables_minimum_override_role", "ci_push_repository_for_job_token_allowed",
+			"ci_restrict_pipeline_cancellation_role", "ci_separated_caches", "ci_skip_branch_pipelines_for_mrs",
+			"cicd_catalog_enabled", "compliance_frameworks", "container_expiration_policy", "container_registry_access_level",
+			"container_registry_enabled", "container_registry_image_prefix", "created_at", "creator_id", "description_html",
+			"duo_dependency_bump_breaking_changes_enabled", "duo_foundational_flows_enabled", "duo_remote_flows_enabled",
+			"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled",
+			"emails_disabled", "emails_enabled", "empty_repo", "enforce_auth_checks_on_uploads", "environments_access_level",
+			"external_authorization_classification_label", "feature_flags_access_level", "forked_from_project",
+			"forking_access_level", "forks_count", "group_runners_enabled", "import_error", "import_status", "import_type",
+			"import_url", "infrastructure_access_level", "issue_branch_template", "issues_access_level", "issues_enabled",
+			"issues_template", "jobs_enabled", "keep_latest_artifact", "last_activity_at", "lfs_enabled",
+			"marked_for_deletion_at", "marked_for_deletion_on", "max_artifacts_size", "max_pipelines_per_merge_train",
+			"merge_commit_template", "merge_method", "merge_pipelines_enabled", "merge_request_title_regex",
+			"merge_request_title_regex_description", "merge_requests_access_level", "merge_requests_enabled",
+			"merge_requests_template", "merge_train_enforcement", "merge_trains_enabled", "merge_trains_skip_train_allowed",
+			"mirror", "mirror_overwrites_diverged_branches", "mirror_trigger_builds", "mirror_user_id",
+			"model_experiments_access_level", "model_registry_access_level", "monitor_access_level", "mr_default_target_self",
+			"mr_default_title_template", "name_with_namespace", "namespace", "only_allow_merge_if_all_discussions_are_resolved",
+			"only_allow_merge_if_all_status_checks_passed", "only_allow_merge_if_pipeline_succeeds",
+			"only_mirror_protected_branches", "open_issues_count", "owner", "package_registry_access_level", "packages_enabled",
+			"pages_access_level", "permissions", "pre_receive_secret_detection_enabled", "prevent_merge_without_jira_issue",
+			"printing_merge_request_link_enabled", "protect_merge_request_pipelines", "public_jobs", "readme_url",
+			"releases_access_level", "remove_source_branch_after_merge", "repository_access_level", "repository_object_format",
+			"repository_storage", "request_access_enabled", "requirements_access_level", "requirements_enabled",
+			"resolve_outdated_diff_discussions", "resource_group_default_process_mode", "restrict_user_defined_variables",
+			"reviewer_assignment_strategy", "runner_token_expiration_interval", "runners_token",
+			"secret_push_protection_enabled", "security_and_compliance_access_level", "security_and_compliance_enabled",
+			"security_policy_pipeline_must_succeed", "service_desk_address", "service_desk_enabled", "shared_runners_enabled",
+			"shared_with_groups", "show_diff_preview_in_email", "snippets_access_level", "snippets_enabled",
+			"spp_repository_pipeline_access", "squash_commit_template", "squash_option", "star_count", "statistics",
+			"suggestion_commit_message", "tag_list", "topics", "updated_at", "warn_about_potentially_unwanted_characters",
+			"web_based_commit_signing_enabled", "wiki_access_level", "wiki_enabled"),
+	)
+}
+
+// reasonResolvedProject answers what the project a git remote resolves to
+// leaves to project.get.
+const reasonResolvedProject = "discovering the project behind a git remote reads GET /projects/:id, which presents " +
+	"Entities::Projects::WithAccessAndCatalogSetting, the whole project with the caller's permissions (lib/api/projects.rb). " +
+	"The result keeps what a caller needs to name the project in every other action and to fetch or push to it: the ID, " +
+	"name and paths, the web and clone URLs, the default branch, description and visibility, beside the path it read off the " +
+	"remote. It is a resolution rather than a read of the project, which is the class the package-grain report sets apart " +
+	"as calls that only resolve an object, and the rest is project.get's, which returns the whole project with its settings, " +
+	"counts, links and permissions."
+
+// covers reports whether this declaration accounts for one finding: a
+// declaration naming no type answers the package's findings at both grains,
+// and one naming a type answers that type's, and, when it names one field,
+// the package grain's finding on that field (see [sentDeclaration.Type]).
 func (d sentDeclaration) covers(finding UnsurfacedField) bool {
-	return d.Package == finding.Package &&
-		d.Entity == finding.Entity &&
-		(d.Type == "" || d.Type == finding.Type) &&
-		(d.Field == declaredSegment || d.Field == finding.Field)
+	if d.Package != finding.Package || d.Entity != finding.Entity {
+		return false
+	}
+	if d.Field != declaredSegment && d.Field != finding.Field {
+		return false
+	}
+	switch {
+	case d.Type == "":
+		return true
+	case finding.Grain == grainType:
+		return d.Type == finding.Type
+	default:
+		return d.Field != declaredSegment
+	}
 }
 
 // key names one declaration in a report, which is how a stale one is reported.

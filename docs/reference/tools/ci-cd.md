@@ -283,14 +283,14 @@ Resource groups serialize concurrent jobs in a pipeline by sharing a single conc
 
 ### `gitlab_list_resource_groups`
 
-List the CI resource groups configured for a project. Returns each resource group's ID, key, and process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency.
+List the CI resource groups configured for a project. Returns each resource group's ID, key, process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency, and created and updated times.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_get_resource_group`
 
-Get one CI resource group in a project by key. Returns the resource group ID, key, and process mode (the concurrency mode that controls how jobs sharing the resource group are serialized).
+Get one CI resource group in a project by key. Returns the resource group ID, key, process mode (the concurrency mode that controls how jobs sharing the resource group are serialized), and created and updated times.
 
 | Parameter    | Required | Description                    |
 | ------------ | -------- | ------------------------------ |
@@ -302,7 +302,7 @@ Get one CI resource group in a project by key. Returns the resource group ID, ke
 
 ### `gitlab_edit_resource_group`
 
-Update the process mode of one CI resource group by key. Returns the updated resource group ID, key, and new process mode that controls how queued jobs sharing the resource group are serialized. Valid `process_mode` values: `unordered`, `oldest_first`, `newest_first`, `newest_ready_first`.
+Update the process mode of one CI resource group by key. Returns the updated resource group ID, key, new process mode that controls how queued jobs sharing the resource group are serialized, and created and updated times. Valid `process_mode` values: `unordered`, `oldest_first`, `newest_first`, `newest_ready_first`.
 
 | Parameter      | Required | Description                                                                      |
 | -------------- | -------- | -------------------------------------------------------------------------------- |
@@ -315,7 +315,7 @@ Update the process mode of one CI resource group by key. Returns the updated res
 
 ### `gitlab_list_resource_group_upcoming_jobs`
 
-List the upcoming CI jobs queued for one resource group by key. Returns each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode.
+List the upcoming CI jobs queued for one resource group by key. Returns a compact row per pending job, ordered as they will run under the resource group's process mode: ID, name, status, stage, ref, tag and allow-failure flags, the pipeline it belongs to, web URL, and creation time. The commit, project, user and the fields of a run, which a waiting job leaves empty, are what `job.get` returns.
 
 | Parameter    | Required | Description                    |
 | ------------ | -------- | ------------------------------ |

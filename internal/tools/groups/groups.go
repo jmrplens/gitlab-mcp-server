@@ -657,17 +657,23 @@ func projectItemsFromGroup(projects []*gl.Project, simple bool) []ProjectItem {
 		out[i] = ProjectItem{
 			ID:                p.ID,
 			Name:              p.Name,
+			NameWithNamespace: p.NameWithNamespace,
+			Path:              p.Path,
 			PathWithNamespace: p.PathWithNamespace,
 			Description:       p.Description,
 			Visibility:        string(p.Visibility),
 			WebURL:            p.WebURL,
+			HTTPURLToRepo:     p.HTTPURLToRepo,
+			SSHURLToRepo:      p.SSHURLToRepo,
 			DefaultBranch:     p.DefaultBranch,
+			Topics:            p.Topics,
+			StarCount:         p.StarCount,
+			ForksCount:        p.ForksCount,
+			CreatedAt:         toolutil.RFC3339Ptr(p.CreatedAt),
+			LastActivityAt:    toolutil.RFC3339Ptr(p.LastActivityAt),
 		}
 		if !simple {
 			out[i].Archived = new(p.Archived)
-		}
-		if p.CreatedAt != nil {
-			out[i].CreatedAt = p.CreatedAt.Format(time.RFC3339)
 		}
 	}
 	return out
@@ -1181,20 +1187,33 @@ type ListProjectsInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// ProjectItem is a simplified project representation for group context.
+// ProjectItem is one project of a group as a compact row: what names it and
+// where to clone and open it, its visibility, default branch and topics, how
+// much attention it gets, and when it was created and last active. GitLab
+// answers the two group project lists with Entities::Project, or with
+// BasicProjectDetails under simple; the rest of the project (its settings,
+// permissions, statistics and links) is what project.get returns.
 type ProjectItem struct {
-	ID                int64  `json:"id"`
-	Name              string `json:"name"`
-	PathWithNamespace string `json:"path_with_namespace"`
-	Description       string `json:"description,omitempty"`
-	Visibility        string `json:"visibility"`
-	WebURL            string `json:"web_url"`
-	DefaultBranch     string `json:"default_branch,omitempty"`
+	ID                int64    `json:"id"`
+	Name              string   `json:"name"`
+	NameWithNamespace string   `json:"name_with_namespace,omitempty"`
+	Path              string   `json:"path,omitempty"`
+	PathWithNamespace string   `json:"path_with_namespace"`
+	Description       string   `json:"description,omitempty"`
+	Visibility        string   `json:"visibility"`
+	WebURL            string   `json:"web_url"`
+	HTTPURLToRepo     string   `json:"http_url_to_repo,omitempty"`
+	SSHURLToRepo      string   `json:"ssh_url_to_repo,omitempty"`
+	DefaultBranch     string   `json:"default_branch,omitempty"`
+	Topics            []string `json:"topics,omitempty"`
+	StarCount         int64    `json:"star_count,omitempty"`
+	ForksCount        int64    `json:"forks_count,omitempty"`
 	// Archived is a pointer because the two group project lists take simple,
 	// which makes GitLab render BasicProjectDetails, and that entity does not
 	// say whether a project is archived: nil there is no answer, not false.
-	Archived  *bool  `json:"archived,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
+	Archived       *bool  `json:"archived,omitempty"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	LastActivityAt string `json:"last_activity_at,omitempty"`
 }
 
 // ListProjectsOutput holds a paginated list of group projects.

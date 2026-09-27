@@ -382,16 +382,15 @@ func TestRemoveProjectAllowlist_Success(t *testing.T) {
 }
 
 // TestListGroupAllowlist_EachGroupField_ComesFromItsOwnSourceField holds the
-// whole row for the reason its project sibling does, and for one more: a
-// top-level group's name and full path are the same string, so the fixture
-// this replaced gave two of the three assignments the same value and could not
-// have told them apart even had it asserted them. The groups here are nested,
-// so name, path and URL all differ.
+// whole row for the reason its project sibling does. The route presents
+// Entities::BasicGroupDetails, which is the id, the name and the page and no
+// path, so the fixture carries exactly those keys, with a name and a URL that
+// differ, and the row holds nothing else.
 func TestListGroupAllowlist_EachGroupField_ComesFromItsOwnSourceField(t *testing.T) {
 	var got capturedRequest
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusOK, `[
-		{"id": 5, "name": "my-group", "full_path": "parent/my-group", "web_url": "https://gitlab.example.com/groups/parent/my-group"},
-		{"id": 6, "name": "other-group", "full_path": "parent/other-group", "web_url": "https://gitlab.example.com/groups/parent/other-group"}
+		{"id": 5, "name": "my-group", "web_url": "https://gitlab.example.com/groups/parent/my-group"},
+		{"id": 6, "name": "other-group", "web_url": "https://gitlab.example.com/groups/parent/other-group"}
 	]`, &got))
 
 	out, err := ListGroupAllowlist(t.Context(), client, ListGroupAllowlistInput{ProjectID: "42"})
@@ -401,8 +400,8 @@ func TestListGroupAllowlist_EachGroupField_ComesFromItsOwnSourceField(t *testing
 	assertAddressed(t, got, http.MethodGet, "/api/v4/projects/42/job_token_scope/groups_allowlist")
 
 	want := []AllowlistGroupItem{
-		{ID: 5, Name: "my-group", FullPath: "parent/my-group", WebURL: "https://gitlab.example.com/groups/parent/my-group"},
-		{ID: 6, Name: "other-group", FullPath: "parent/other-group", WebURL: "https://gitlab.example.com/groups/parent/other-group"},
+		{ID: 5, Name: "my-group", WebURL: "https://gitlab.example.com/groups/parent/my-group"},
+		{ID: 6, Name: "other-group", WebURL: "https://gitlab.example.com/groups/parent/other-group"},
 	}
 	if !slices.Equal(out.Groups, want) {
 		t.Errorf("Groups =\n %+v\nwant\n %+v", out.Groups, want)
@@ -894,14 +893,14 @@ func TestFormatAddProjectAllowlistMarkdown(t *testing.T) {
 func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 	r := FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{
 		Groups: []AllowlistGroupItem{
-			{ID: 5, Name: "group-a", FullPath: "group-a", WebURL: "https://gitlab.example.com/groups/group-a"},
-			{ID: 6, Name: "group-b", FullPath: "org/group-b", WebURL: "https://gitlab.example.com/groups/org/group-b"},
+			{ID: 5, Name: "group-a", WebURL: "https://gitlab.example.com/groups/group-a"},
+			{ID: 6, Name: "group-b", WebURL: "https://gitlab.example.com/groups/org/group-b"},
 		},
 	})
 	want := "## Job Token Group Allowlist (2)\n\n" +
-		"| ID | Name | Path |\n| --- | --- | --- |\n" +
-		"| 5 | [group-a](https://gitlab.example.com/groups/group-a) | group-a |\n" +
-		"| 6 | [group-b](https://gitlab.example.com/groups/org/group-b) | org/group-b |\n" +
+		"| ID | Name |\n| --- | --- |\n" +
+		"| 5 | [group-a](https://gitlab.example.com/groups/group-a) |\n" +
+		"| 6 | [group-b](https://gitlab.example.com/groups/org/group-b) |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'job.token_scope_add_group' to allow another group\n" +
@@ -956,10 +955,10 @@ func TestFormatListInboundAllowlistMarkdown_EscapesPipes(t *testing.T) {
 func TestFormatListGroupAllowlistMarkdown_EscapesPipes(t *testing.T) {
 	r := FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{
 		Groups: []AllowlistGroupItem{
-			{ID: 5, Name: "group|special", FullPath: "group-special", WebURL: "https://gitlab.example.com/groups/group-special"},
+			{ID: 5, Name: "group|special", WebURL: "https://gitlab.example.com/groups/group-special"},
 		},
 	})
-	const wantRow = "| 5 | [group&#124;special](https://gitlab.example.com/groups/group-special) | group-special |\n"
+	const wantRow = "| 5 | [group&#124;special](https://gitlab.example.com/groups/group-special) |\n"
 	if got := markdownText(t, r); !strings.Contains(got, wantRow) {
 		t.Errorf("FormatListGroupAllowlistMarkdown() missing %q:\n%s", wantRow, got)
 	}

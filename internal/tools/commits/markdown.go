@@ -177,17 +177,8 @@ func FormatDiffMarkdown(out DiffOutput) string {
 	toolutil.WriteListHeading(&b, "Commit Diffs", len(out.Diffs), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("Status", "Old Path", "New Path"))
 	for _, d := range out.Diffs {
-		status := "modified"
-		switch {
-		case d.NewFile:
-			status = "added"
-		case d.DeletedFile:
-			status = "deleted"
-		case d.RenamedFile:
-			status = "renamed"
-		}
 		b.WriteString(toolutil.MarkdownTableRow(
-			status,
+			d.Status(),
 			toolutil.MdCodeSpanCell(d.OldPath),
 			toolutil.MdCodeSpanCell(d.NewPath),
 		))
@@ -339,14 +330,15 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Merge Requests for Commit", len(out.MergeRequests), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source -> Target", "Author"))
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source -> Target", "Author", "Merged"))
 	for _, mr := range out.MergeRequests {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink("!"+strconv.FormatInt(mr.IID, 10), mr.WebURL),
 			toolutil.EscapeMdTableCell(mr.Title),
 			mrStateCell(mr.State),
 			toolutil.EscapeMdTableCell(mr.SourceBranch)+" -> "+toolutil.EscapeMdTableCell(mr.TargetBranch),
-			toolutil.EscapeMdTableCell(mr.Author),
+			mrAuthorCell(mr.Author),
+			toolutil.FormatTime(mr.MergedAt),
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
@@ -354,6 +346,16 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 		toolutil.HintAction(actionMRChangesGet, "see its diff"),
 	)
 	return b.String()
+}
+
+// mrAuthorCell renders the author of a merge request row as a handle, or
+// nothing when GitLab sent no author, as it does for one raised by a user
+// since deleted.
+func mrAuthorCell(author *toolutil.BasicUserOutput) string {
+	if author == nil {
+		return ""
+	}
+	return toolutil.MdUserHandle(author.Username)
 }
 
 // mrStateCell renders a merge request state with its emoji, the way every

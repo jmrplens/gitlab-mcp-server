@@ -1,7 +1,9 @@
 package labeldata
 
 import (
+	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -19,10 +21,14 @@ import (
 // copies of one field list: a pair that crossed color with text_color, or
 // dropped the archive flag the card now reads, agrees with itself on every
 // field it does fill and so passes any assertion that only compares the two.
+//
+// The group label is handed a priority and a project flag and must publish
+// neither: Entities::GroupLabel sends no such keys, so whatever the SDK struct
+// holds there is not something GitLab said.
 func TestOutputConverters_MapSharedFields(t *testing.T) {
 	priority := gl.NewNullableWithValue(int64(3))
 	extra := toolutil.LabelExtra{DescriptionHTML: "<p>Bug</p>"}
-	want := Output{
+	shared := Output{
 		ID:                     11,
 		Name:                   "bug",
 		Color:                  "#d9534f",
@@ -32,21 +38,50 @@ func TestOutputConverters_MapSharedFields(t *testing.T) {
 		OpenIssuesCount:        5,
 		ClosedIssuesCount:      2,
 		OpenMergeRequestsCount: 7,
-		Priority:               3,
-		PrioritySpecified:      true,
-		IsProjectLabel:         true,
 		Subscribed:             true,
 		Archived:               true,
 	}
+	wantProject := shared
+	wantProject.Priority = new(int64(3))
+	wantProject.IsProjectLabel = new(true)
 
 	project := ProjectOutput(&gl.Label{ID: 11, Name: "bug", Color: "#d9534f", TextColor: "#ffffff", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 7, Priority: priority, IsProjectLabel: true, Subscribed: true, Archived: true}, extra)
-	if !reflect.DeepEqual(project, want) {
-		t.Errorf("ProjectOutput() = %+v, want %+v", project, want)
+	if !reflect.DeepEqual(project, wantProject) {
+		t.Errorf("ProjectOutput() = %+v, want %+v", project, wantProject)
 	}
 
 	group := GroupOutput(&gl.GroupLabel{ID: 11, Name: "bug", Color: "#d9534f", TextColor: "#ffffff", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 7, Priority: priority, IsProjectLabel: true, Subscribed: true, Archived: true}, extra)
-	if !reflect.DeepEqual(group, want) {
-		t.Errorf("GroupOutput() = %+v, want %+v", group, want)
+	if !reflect.DeepEqual(group, shared) {
+		t.Errorf("GroupOutput() = %+v, want %+v", group, shared)
+	}
+}
+
+// TestOutput_JSON_ProjectKeysOnlyOnAProjectLabel verifies what each scope
+// publishes on the wire: a project label states whether it is the project's
+// own even when it is not, and a group label states neither key, so no group
+// label reads as an inherited project label with priority zero.
+func TestOutput_JSON_ProjectKeysOnlyOnAProjectLabel(t *testing.T) {
+	inherited, err := json.Marshal(ProjectOutput(&gl.Label{ID: 1, Priority: gl.NewNullNullable[int64]()}, toolutil.LabelExtra{}))
+	if err != nil {
+		t.Fatalf("json.Marshal(project label) error = %v", err)
+	}
+	if !strings.Contains(string(inherited), `"is_project_label":false`) {
+		t.Errorf("project label JSON = %s, want is_project_label false stated", inherited)
+	}
+	if strings.Contains(string(inherited), `"priority"`) {
+		t.Errorf("project label JSON = %s, want no priority for a null one", inherited)
+	}
+
+	group, err := json.Marshal(GroupOutput(&gl.GroupLabel{ID: 2}, toolutil.LabelExtra{}))
+	if err != nil {
+		t.Fatalf("json.Marshal(group label) error = %v", err)
+	}
+	for _, key := range []string{`"priority"`, `"is_project_label"`} {
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(group), key) {
+				t.Errorf("group label JSON = %s, want no %s key", group, key)
+			}
+		})
 	}
 }
 
@@ -131,7 +166,7 @@ func TestListOptions_NegativePagination_IsNeverSent(t *testing.T) {
 // without dropping label counts, priority, subscription state or the archive
 // flag, which the view model carried nowhere until the card started showing it.
 func TestToMarkdown(t *testing.T) {
-	in := Output{ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: 3, PrioritySpecified: true, IsProjectLabel: true, Subscribed: true, Archived: true}
+	in := Output{ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: new(int64(3)), IsProjectLabel: new(true), Subscribed: true, Archived: true}
 
 	got := ToMarkdown(in)
 
@@ -145,6 +180,28 @@ func TestToMarkdown(t *testing.T) {
 	}
 }
 
+// TestToMarkdown_NoPriorityAndNoScope_LeavesBothUnset verifies a label that
+// states neither a priority nor a scope, which is every group label, reaches
+// the card model with no priority and as a group label, and that a project
+// label stating it is not the project's own is read the same way.
+func TestToMarkdown_NoPriorityAndNoScope_LeavesBothUnset(t *testing.T) {
+	tests := []struct {
+		name  string
+		label Output
+	}{
+		{name: "group label", label: Output{ID: 2, Name: "infra"}},
+		{name: "inherited project label", label: Output{ID: 3, Name: "infra", IsProjectLabel: new(false)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ToMarkdown(tt.label)
+			if got.Priority != 0 || got.PrioritySpecified || got.IsProjectLabel {
+				t.Errorf("ToMarkdown(%+v) = (priority %d, specified %t, project %t), want (0, false, false)", tt.label, got.Priority, got.PrioritySpecified, got.IsProjectLabel)
+			}
+		})
+	}
+}
+
 // TestMarkdownOptionsFor verifies the copy is chosen from the label's own
 // scope: both label packages alias this one output type, so the formatter that
 // wins the registry has to answer for a project label and a group one alike.
@@ -155,7 +212,7 @@ func TestToMarkdown(t *testing.T) {
 // happily on a tree where both scopes had been given the project wording,
 // which is the only way this function can be wrong.
 func TestMarkdownOptionsFor(t *testing.T) {
-	if got := MarkdownOptionsFor(Output{IsProjectLabel: true}); got.DetailTitle != "Label" || got.ListTitle != "Labels" {
+	if got := MarkdownOptionsFor(Output{IsProjectLabel: new(true)}); got.DetailTitle != "Label" || got.ListTitle != "Labels" {
 		t.Errorf("MarkdownOptionsFor(project) titles = (%q, %q), want (\"Label\", \"Labels\")", got.DetailTitle, got.ListTitle)
 	}
 	if got := MarkdownOptionsFor(Output{}); got.DetailTitle != "Group Label" || got.ListTitle != "Group Labels" {
@@ -167,7 +224,7 @@ func TestMarkdownOptionsFor(t *testing.T) {
 // both label packages register titles the card and names the follow-up actions
 // from the project copy when GitLab says the label belongs to the project.
 func TestFormatMarkdown_ProjectLabel_CarriesTheProjectCopy(t *testing.T) {
-	got := FormatMarkdown(Output{ID: 3, Name: "bug", Color: "#d9534f", IsProjectLabel: true})
+	got := FormatMarkdown(Output{ID: 3, Name: "bug", Color: "#d9534f", IsProjectLabel: new(true)})
 
 	if !strings.HasPrefix(got, "## Label: bug\n") {
 		t.Errorf("FormatMarkdown(project label) heading = %q, want it to open \"## Label: bug\"", firstLine(got))
@@ -209,53 +266,38 @@ func firstLine(s string) string {
 
 // TestPriorityFromNullable covers the three nullability states handled by
 // the converter: specified with a value, explicitly null, and unspecified.
-// GitLab's nullable priority field must collapse to (0, false) in the
-// latter two cases so downstream consumers can distinguish "no priority"
-// from "priority 0".
+// GitLab's nullable priority field must collapse to no priority in the latter
+// two cases, and keep zero in the second, so a consumer can tell "no
+// priority" from "priority 0".
 func TestPriorityFromNullable(t *testing.T) {
 	tests := []struct {
-		name          string
-		nullable      gl.Nullable[int64]
-		wantPriority  int64
-		wantSpecified bool
+		name     string
+		nullable gl.Nullable[int64]
+		want     *int64
 	}{
-		{
-			name:          "specified with positive value",
-			nullable:      gl.NewNullableWithValue(int64(5)),
-			wantPriority:  5,
-			wantSpecified: true,
-		},
-		{
-			name:          "specified with zero value",
-			nullable:      gl.NewNullableWithValue(int64(0)),
-			wantPriority:  0,
-			wantSpecified: true,
-		},
-		{
-			name:          "explicit null",
-			nullable:      gl.NewNullNullable[int64](),
-			wantPriority:  0,
-			wantSpecified: false,
-		},
-		{
-			name:          "unspecified (zero value)",
-			nullable:      gl.Nullable[int64]{},
-			wantPriority:  0,
-			wantSpecified: false,
-		},
+		{name: "specified with positive value", nullable: gl.NewNullableWithValue(int64(5)), want: new(int64(5))},
+		{name: "specified with zero value", nullable: gl.NewNullableWithValue(int64(0)), want: new(int64(0))},
+		{name: "explicit null", nullable: gl.NewNullNullable[int64]()},
+		{name: "unspecified (zero value)", nullable: gl.Nullable[int64]{}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPriority, gotSpecified := priorityFromNullable(tt.nullable)
-			if gotPriority != tt.wantPriority {
-				t.Errorf("priority = %d, want %d", gotPriority, tt.wantPriority)
-			}
-			if gotSpecified != tt.wantSpecified {
-				t.Errorf("specified = %t, want %t", gotSpecified, tt.wantSpecified)
+			got := priorityFromNullable(tt.nullable)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("priorityFromNullable() = %v, want %v", describePriority(got), describePriority(tt.want))
 			}
 		})
 	}
+}
+
+// describePriority spells a priority for a failure message, which a pointer
+// printed with %v would not.
+func describePriority(p *int64) string {
+	if p == nil {
+		return "none"
+	}
+	return strconv.FormatInt(*p, 10)
 }
 
 // TestOutputConverters_PropagateNullPriority verifies the converters surface
@@ -265,12 +307,12 @@ func TestOutputConverters_PropagateNullPriority(t *testing.T) {
 	nullPriority := gl.NewNullNullable[int64]()
 
 	project := ProjectOutput(&gl.Label{ID: 7, Name: "needs-info", Priority: nullPriority}, toolutil.LabelExtra{})
-	if project.Priority != 0 || project.PrioritySpecified {
-		t.Fatalf("ProjectOutput priority = (%d, %t), want (0, false) for null nullable", project.Priority, project.PrioritySpecified)
+	if project.Priority != nil {
+		t.Fatalf("ProjectOutput priority = %s, want none for a null one", describePriority(project.Priority))
 	}
 
 	group := GroupOutput(&gl.GroupLabel{ID: 7, Name: "needs-info", Priority: nullPriority}, toolutil.LabelExtra{})
-	if group.Priority != 0 || group.PrioritySpecified {
-		t.Fatalf("GroupOutput priority = (%d, %t), want (0, false) for null nullable", group.Priority, group.PrioritySpecified)
+	if group.Priority != nil {
+		t.Fatalf("GroupOutput priority = %s, want none", describePriority(group.Priority))
 	}
 }

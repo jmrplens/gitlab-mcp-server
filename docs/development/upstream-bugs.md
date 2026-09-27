@@ -131,6 +131,8 @@ readable without opening the tracker:
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
 | 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | No | No | No | No | Partial |
+| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | No | No | No | No | Partial |
+| 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2285,6 +2287,228 @@ the record's route params for the three parameters.
 
 **Effort**: small. Four scalar members with `json` tags, one struct of three
 integers for the usage, and three option fields with `url` and `json` tags.
+
+### PlanLimit models eight of the twenty-nine limits GitLab sends and accepts
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes for the response, whose twenty-one other limits and
+  change history are read from the captured response beside the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `planlimits.capturedLimits`; it retires when the struct carries them.
+  None for the parameters: `admin.plan_limits_change` offers the eight the
+  options struct can send, and taking the other twenty-one would mean building
+  the request outside the SDK.
+
+**What**: `PlanLimit` in client-go v3.14.0's `plan_limits.go` carries the eight
+package file sizes (`conan`, `generic_packages`, `helm`, `maven`, `npm`,
+`nuget`, `pypi`, `terraform_module`), and it is what both plan limit routes
+decode into. `lib/api/entities/plan_limit.rb` at 19.4.1-ee exposes twenty-nine
+limits and `limits_history`, all with no condition, so both routes answer with
+all of them and the SDK drops twenty-two keys: `cargo_max_file_size`,
+`ci_instance_level_variables`, `ci_pipeline_size`, `ci_active_jobs`,
+`ci_project_subscriptions`, `ci_pipeline_schedules`, `ci_needs_size_limit`,
+`ci_registered_group_runners`, `ci_registered_project_runners`,
+`dotenv_variables`, `dotenv_size`, `enforcement_limit`, `notification_limit`,
+`storage_size_limit`, `pipeline_hierarchy_size`,
+`max_pipelines_per_merge_train`, `service_desk_outbound_emails_per_hour`,
+`service_desk_outbound_emails_per_day`, `web_hook_calls`,
+`web_hook_calls_low`, `web_hook_calls_mid` and `limits_history`, the last an
+object keyed by limit name whose entries carry `user_id`, `username`,
+`timestamp` and `value` (`app/validators/json_schemas/plan_limits_history.json`).
+`ChangePlanLimitOptions` has the same gap on the request side:
+`PUT /application/plan_limits` declares the twenty-nine limits as optional
+params in `lib/api/admin/plan_limits.rb`, and the options struct sends the
+eight file sizes and `plan_name`.
+
+The page is a partial oracle here.
+[doc/api/plan_limits.md](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/doc/api/plan_limits.md)
+lists every limit among the update parameters except `web_hook_calls_low` and
+`web_hook_calls_mid`, which the route describes as GitLab.com only, and neither
+of its example bodies carries the three webhook limits or `limits_history`. A
+contributor working from the page alone would model twenty-seven limits and no
+history.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`go run ./cmd/audit_1to1/ -scope=paths`), which listed the twenty-two keys at
+package grain (`shapes.sent.unsurfaced`) and, once
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971) made the
+type grain judge a wrapper that embeds its payload (`GetOutput`,
+`ChangeOutput`) through that payload, against `PlanLimit` itself
+(`shapes.typed.unsurfaced`, `sdk_models: false` on every one); and the route
+params of the live record for the options.
+
+**Effort**: small. Twenty-one `int64` fields and one map of a four-field struct
+on `PlanLimit`, and twenty-one pointer fields with `url` and `json` tags on
+`ChangePlanLimitOptions`.
+
+### JobPipeline models five of the ten keys a job's pipeline carries
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `pipeline.resource_group_upcoming_jobs` reads the other
+  five keys from the captured response beside the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `resourcegroups.capturedUpcomingJobs`; it retires when the struct
+  carries them.
+
+**What**: `lib/api/entities/ci/job_basic.rb` at 19.4.1-ee exposes a job's
+`pipeline` with `Entities::Ci::PipelineBasic`, which sends `id`, `iid`,
+`project_id`, `sha`, `ref`, `status`, `source`, `created_at`, `updated_at` and
+`web_url`, all with no condition. `JobPipeline` in client-go v3.14.0's
+`jobs.go` carries `ID`, `ProjectID`, `Ref`, `Sha` and `Status`, so every
+method answering with a `Job`, and the resource group queue's
+`ListUpcomingJobsForASpecificResourceGroup`, drops the pipeline's number, what
+started it, both timestamps and its page. `doc/api/jobs.md` prints the five
+modeled keys in its examples, which is where the struct's shape comes from.
+
+**How we found it**: review of the resource group queue's rows for
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971), which
+published the nested pipeline and was held to the entity by hand. No audit
+here asks the sent question one level down, since the type grain compares a
+nested type only in the unpublished direction.
+
+**Effort**: small. Five fields on `JobPipeline`, `IID` an `int64`, `Source` and
+`WebURL` strings and the two timestamps `*time.Time`.
+
+### AwardEmoji does not model the image URL of a custom emoji
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. Every `internal/tools/awardemoji` handler returning
+  awards reads it from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `capturedOutput` and `capturedListOutput`; it retires when the struct
+  carries it.
+
+**What**: `lib/api/entities/award_emoji.rb` at 19.4.1-ee exposes `url` with no
+condition, the image of a custom emoji and null for a standard one.
+`AwardEmoji` in client-go v3.14.0's `award_emojis.go` stops at
+`awardable_type`, so every award read or created through the SDK arrives
+without it, and a custom emoji is a name with nothing to show.
+
+**How we found it**: the package grain of the sent dimension
+(`shapes.sent.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971).
+
+**Effort**: small. One `string` field.
+
+### Diff does not model why a file diff arrives without its text
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. The commit diff and the comparison read the three flags
+  from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  into `toolutil.DiffExtra`; it retires when the struct carries them.
+
+**What**: `lib/api/entities/diff.rb` at 19.4.1-ee exposes `collapsed`,
+`too_large` and `generated_file` on every file diff, with no condition. `Diff`
+in client-go v3.14.0's `commits.go` models none of the three, so a diff GitLab
+left out for its size decodes as a change with an empty `diff`, which is
+indistinguishable from a file whose content did not change. `MergeRequestDiff`
+in `merge_requests.go` already carries all three.
+
+**How we found it**: the package grain of the sent dimension, during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971).
+
+**Effort**: small. Three `bool` fields.
+
+### ApproveOrRejectProjectDeployment discards the approval GitLab records
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `environment.deployment_approve_or_reject` reads the
+  approval from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md));
+  it retires when the method returns it.
+
+**What**: `POST /projects/:id/deployments/:deployment_id/approval` answers with
+`Entities::Deployments::Approval` (`ee/lib/api/entities/deployments/approval.rb`
+at 19.4.1-ee: the user, the status, the time and the comment).
+`ApproveOrRejectProjectDeployment` in client-go v3.14.0's `deployments.go`
+decodes into `none` and returns only the `*Response`, so a caller cannot see
+what was recorded without reading the deployment again.
+
+**How we found it**: the type grain of the sent dimension, once
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971) paired
+the compact rows a handler builds with the endpoints of the methods it calls.
+
+**Effort**: small. Return a `*DeploymentApproval` (the struct the deployment's
+own `approvals` list already decodes into) beside the response.
+
+### ShareProjectWithGroup discards the link GitLab creates
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `project.share_with_group` reads the link from the
+  captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md));
+  it retires when the method returns it.
+
+**What**: `POST /projects/:id/share` answers 201 with `Entities::ProjectGroupLink`
+(`lib/api/entities/project_group_link.rb` at 19.4.1-ee: `id`, `project_id`,
+`group_id`, `group_access` and `expires_at`, and, from the EE prepend,
+`member_role_id` when the project may carry a custom role on the link).
+`ShareProjectWithGroup` in client-go v3.14.0's `projects.go` decodes into
+`none` and returns only the `*Response`, so the link's id, the one a later
+update of the share needs, is not available to a caller.
+
+**How we found it**: the package grain of the sent dimension, during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971).
+
+**Effort**: small. A `ProjectGroupLink` struct of six fields returned beside
+the response, which changes the method's signature and so belongs in a major.
+
+### GroupRelationStatus does not model the object count, and a relation's status does not decode
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes for both.
+  `group.group_relations_list_status` reads `total_objects_count` from the
+  captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `grouprelationsexport.capturedExportStatuses`, and with `relation`
+  set issues the request itself (`grouprelationsexport.getRelationStatus`,
+  with client-go's own options) and decodes the one object. Both retire when
+  the SDK carries the field and a method answering with one status.
+
+**What**: two gaps in client-go v3.14.0's `group_relations_export.go`.
+`lib/api/entities/bulk_imports/export_status.rb` at 19.4.1-ee exposes
+`total_objects_count` with no condition, and `GroupRelationStatus` stops at
+`batches`. The second is a defect rather than a gap: `GET
+/groups/:id/export_relations/status` answers with an array, and with
+`relation` set `lib/api/group_export.rb` presents that one export as an object
+(`present export, with: Entities::BulkImports::ExportStatus`), or a 404 when
+there is none. `ListExportStatus` decodes every answer into
+`[]*GroupRelationStatus`, so the relation filter its own options offer fails
+with a decode error on every instance. `lib/api/project_export.rb` answers the
+project route the same way, which the SDK's project relations export would
+meet too.
+
+**How we found it**: the package grain of the sent dimension named
+`total_objects_count` during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971), and
+reading the route to confirm it showed the object answer, which the unit test
+had been mocking as an array.
+
+**Effort**: small. One `int64` field, and a `GetExportStatus(gid, relation)`
+returning one `*GroupRelationStatus`, with `Relation` dropped from the list's
+options or documented as answering an object.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

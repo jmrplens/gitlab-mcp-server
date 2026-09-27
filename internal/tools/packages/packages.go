@@ -710,13 +710,15 @@ type FileListInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// FileListItem represents a single file within a package.
+// FileListItem represents a single file within a package, under the keys
+// Entities::PackageFile sends it with: the file's own id as id, which is the
+// package_file_id package.file_delete takes, and its digest as file_sha256.
 type FileListItem struct {
-	PackageFileID int64  `json:"package_file_id"`
+	PackageFileID int64  `json:"id"`
 	PackageID     int64  `json:"package_id"`
 	FileName      string `json:"file_name"`
 	Size          int64  `json:"size"`
-	SHA256        string `json:"sha256"`
+	SHA256        string `json:"file_sha256"`
 	FileMD5       string `json:"file_md5,omitempty"`
 	FileSHA1      string `json:"file_sha1,omitempty"`
 	CreatedAt     string `json:"created_at,omitempty"`

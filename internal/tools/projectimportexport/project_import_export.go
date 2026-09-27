@@ -103,7 +103,6 @@ type ExportStatusOutput struct {
 	PathWithNamespace string `json:"path_with_namespace"`
 	CreatedAt         string `json:"created_at,omitempty"`
 	ExportStatus      string `json:"export_status"`
-	Message           string `json:"message,omitempty"`
 	APIURL            string `json:"api_url,omitempty"`
 	WebURL            string `json:"web_url,omitempty"`
 }
@@ -124,7 +123,6 @@ func GetExportStatus(ctx context.Context, client *gitlabclient.Client, input Exp
 		Path:              status.Path,
 		PathWithNamespace: status.PathWithNamespace,
 		ExportStatus:      status.ExportStatus,
-		Message:           status.Message,
 	}
 	if status.CreatedAt != nil {
 		out.CreatedAt = status.CreatedAt.Format(time.RFC3339)

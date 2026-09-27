@@ -151,17 +151,18 @@ func FormatListProjectsMarkdown(out ListProjectsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Group Projects", len(out.Projects), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility", "Archived"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility", "Archived", "Last Activity"))
 	for _, p := range out.Projects {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(p.ID, 10),
-			toolutil.EscapeMdTableCell(p.Name),
+			toolutil.MdTitleLink(p.Name, p.WebURL),
 			toolutil.EscapeMdTableCell(p.PathWithNamespace),
 			toolutil.EscapeMdTableCell(p.Visibility),
 			archivedCell(p),
+			toolutil.FormatTime(p.LastActivityAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, out.Pagination, false,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionProjectGet, "view a project's details"),
 		toolutil.HintAction(actionProjectCreate, "add a new project to this group"),
 	)

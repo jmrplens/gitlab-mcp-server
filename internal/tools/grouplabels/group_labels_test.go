@@ -107,8 +107,10 @@ func TestList_Success(t *testing.T) {
 	if out.Labels[0].Name != "bug" {
 		t.Errorf("Name = %q, want %q", out.Labels[0].Name, "bug")
 	}
-	if out.Labels[0].Priority != 1 {
-		t.Errorf("Priority = %d, want 1", out.Labels[0].Priority)
+	// Entities::GroupLabel sends neither key, so a group label publishes
+	// neither even when the body it came from carried them.
+	if out.Labels[0].Priority != nil || out.Labels[0].IsProjectLabel != nil {
+		t.Errorf("(Priority, IsProjectLabel) = (%v, %v), want (nil, nil) on a group label", out.Labels[0].Priority, out.Labels[0].IsProjectLabel)
 	}
 }
 
@@ -483,7 +485,6 @@ func TestFormatMarkdown(t *testing.T) {
 		Name:        "bug",
 		Color:       "#d9534f",
 		Description: "Bug report",
-		Priority:    1,
 		Subscribed:  true,
 		Archived:    true,
 	}
@@ -494,7 +495,6 @@ func TestFormatMarkdown(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Color**: #d9534f\n" +
 		"- **Description**: Bug report\n" +
-		"- **Priority**: 1\n" +
 		"- **Project label**: " + toolutil.EmojiCross + "\n" +
 		"- **Subscribed**: " + toolutil.EmojiSuccess + "\n" +
 		"- " + toolutil.EmojiArchived + " **Archived**\n" +
@@ -733,8 +733,9 @@ func TestCreate_WithOptionalFields(t *testing.T) {
 	if out.Description != "Feature request" {
 		t.Errorf("Description = %q, want %q", out.Description, "Feature request")
 	}
-	if out.Priority != 3 {
-		t.Errorf("Priority = %d, want 3", out.Priority)
+	// The priority is sent, and the answer is a group label, which states none.
+	if out.Priority != nil {
+		t.Errorf("Priority = %d, want none on a group label", *out.Priority)
 	}
 }
 
@@ -794,8 +795,8 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	if out.Name != "critical-bug" {
 		t.Errorf("Name = %q, want %q", out.Name, "critical-bug")
 	}
-	if out.Priority != 5 {
-		t.Errorf("Priority = %d, want 5", out.Priority)
+	if out.Priority != nil {
+		t.Errorf("Priority = %d, want none on a group label", *out.Priority)
 	}
 }
 
@@ -899,8 +900,6 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		Name:                   "bug",
 		Color:                  "#d9534f",
 		Description:            "Bug report",
-		Priority:               2,
-		IsProjectLabel:         false,
 		Subscribed:             true,
 		OpenIssuesCount:        5,
 		ClosedIssuesCount:      3,
@@ -911,7 +910,6 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Color**: #d9534f\n" +
 		"- **Description**: Bug report\n" +
-		"- **Priority**: 2\n" +
 		"- **Project label**: " + toolutil.EmojiCross + "\n" +
 		"- **Subscribed**: " + toolutil.EmojiSuccess + "\n" +
 		"- **Issues**: 5 open, 3 closed\n" +
@@ -1017,7 +1015,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 // package's registration answered.
 func TestFormatMarkdown_ScopeDecidesTheCopy(t *testing.T) {
 	group := Output{ID: 4, Name: "shared", Color: "#111111"}
-	project := Output{ID: 5, Name: "owned", Color: "#222222", IsProjectLabel: true}
+	project := Output{ID: 5, Name: "owned", Color: "#222222", IsProjectLabel: new(true)}
 
 	if got := FormatMarkdown(group); !strings.HasPrefix(got, "## Group Label: shared\n") {
 		t.Errorf("group label card:\n got %q\nwant a Group Label heading", got)
@@ -1048,14 +1046,12 @@ func TestFormatListMarkdown_Result(t *testing.T) {
 // priorityFromNullable — zero for unset
 // ---------------------------------------------------------------------------.
 
-// TestPriorityFromNullable_Zero verifies the PriorityFromNullable_Zero handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestPriorityFromNullable_Zero verifies the zero label states no priority,
+// rather than priority zero, which GitLab accepts as a priority of its own.
 func TestPriorityFromNullable_Zero(t *testing.T) {
-	// toOutput is tested through the handlers, but verify edge case
 	out := Output{}
-	if out.Priority != 0 {
-		t.Errorf("Priority = %d, want 0 for zero value", out.Priority)
+	if out.Priority != nil {
+		t.Errorf("Priority = %d, want none for the zero value", *out.Priority)
 	}
 }
 

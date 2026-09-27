@@ -21,13 +21,25 @@ import (
 // is where the table itself is exercised.
 func stubTypeGrainInputs(t *testing.T, pairings structs.Pairings, loadErr error, routes map[string][]sdkRoute) {
 	t.Helper()
-	previousPairings, previousRoutes, previousDeclarations, previousSent := collectPairings, readRoutes, declaredShapeFields, declaredUnsurfaced
+	previousPairings, previousRoutes, previousMethodRoutes := collectPairings, readRoutes, readMethodRoutes
+	previousDeclarations, previousSent := declaredShapeFields, declaredUnsurfaced
 	collectPairings = func(string) (structs.Pairings, error) { return pairings, loadErr }
 	readRoutes = func(string) map[string][]sdkRoute { return routes }
+	readMethodRoutes = func(string) map[string][]sdkRoute { return nil }
 	declaredShapeFields, declaredUnsurfaced = nil, nil
 	t.Cleanup(func() {
-		collectPairings, readRoutes, declaredShapeFields, declaredUnsurfaced = previousPairings, previousRoutes, previousDeclarations, previousSent
+		collectPairings, readRoutes, readMethodRoutes = previousPairings, previousRoutes, previousMethodRoutes
+		declaredShapeFields, declaredUnsurfaced = previousDeclarations, previousSent
 	})
+}
+
+// stubMethodRoutes hands the type grain the per-method routes a projection is
+// judged against, on top of what [stubTypeGrainInputs] stubbed.
+func stubMethodRoutes(t *testing.T, routes map[string][]sdkRoute) {
+	t.Helper()
+	previous := readMethodRoutes
+	readMethodRoutes = func(string) map[string][]sdkRoute { return routes }
+	t.Cleanup(func() { readMethodRoutes = previous })
 }
 
 // approvalOperations is what GitLab's document says about the two endpoints
@@ -590,6 +602,280 @@ func TestTypedShapeCheck_StaleDeclarations_AreSilentUntilTheCheckRuns(t *testing
 	}
 	if lines := (TypedShapeCheck{UnusedDeclarations: stale.UnusedDeclarations}).staleDeclarations(); lines != nil {
 		t.Errorf("staleDeclarations() = %v on a check that did not run, want nothing", lines)
+	}
+}
+
+// milestoneIssueOperations is what GitLab's document says about the milestone's
+// issue list and about the project issue list client-go's Issue is also
+// answered from: the second sends a key the first does not.
+var milestoneIssueOperations = map[string]response{
+	"GET /api/v4/projects/{id}/milestones/{milestone_id}/issues": {Response: []string{"id", "iid", "title", "labels"}},
+	"GET /api/v4/projects/{id}/issues":                           {Response: []string{"id", "iid", "title", "labels", "subscribed"}},
+}
+
+// milestoneIssueRoutes is every endpoint client-go answers Issue from, and
+// milestoneIssueMethodRoutes the one method a milestone's issue row is read
+// from.
+var (
+	milestoneIssueRoutes = map[string][]sdkRoute{"Issue": {
+		{Method: "GET", Path: "/projects/:/milestones/:/issues", Many: true},
+		{Method: "GET", Path: "/projects/:/issues", Many: true},
+	}}
+	milestoneIssueMethodRoutes = map[string][]sdkRoute{
+		"Milestones.GetMilestoneIssues": {{Method: "GET", Path: "/projects/:/milestones/:/issues", Many: true}},
+	}
+)
+
+// issueItemProjection is what the structs pass records for a row a handler
+// builds field by field out of the milestone issue list's answer.
+var issueItemProjection = structs.ProjectionPairing{
+	Package: "milestones", MCPType: "IssueItem", SDKType: "Issue",
+	SDKFields: []string{"id", "iid", "labels", "title"},
+	Methods:   []string{"Milestones.GetMilestoneIssues"},
+}
+
+// TestTypedShapeCheck_AProjection_IsJudgedAgainstTheMethodItIsReadFrom
+// verifies the pairing issue 971 added. A compact row is built in a handler
+// out of one method's answer, and no converter names the pairing, so the type
+// grain used to count it a skip and the only comparison that saw its gaps was
+// the package grain. Paired now, it is held to the endpoint of that one
+// method: a key only the project issue list sends is not a key this row was
+// ever sent, and reporting it would repeat the package grain's noise at the
+// sharper grain.
+func TestTypedShapeCheck_AProjection_IsJudgedAgainstTheMethodItIsReadFrom(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{
+		ClientGoDir: "/client-go",
+		Projections: []structs.ProjectionPairing{issueItemProjection},
+	}, nil, milestoneIssueRoutes)
+	stubMethodRoutes(t, milestoneIssueMethodRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "IssueItem", Fields: []string{"id", "iid", "invented", "title"}, Inner: true, Payload: true},
+		{Package: "internal/tools/milestones", Name: "MilestoneIssuesOutput", Fields: []string{"issues", "pagination"}, Wraps: []string{"IssueItem"}},
+	})
+
+	if check.Compared != 1 || check.ComparedInner != 1 || !slices.Equal(check.Projections, []string{"milestones.IssueItem"}) {
+		t.Fatalf("check = %+v, want the row compared through its projection", check)
+	}
+	wantOperations := []string{"GET /projects/:/milestones/:/issues (collection)"}
+	if len(check.Unpublished) != 1 || check.Unpublished[0].Field != "invented" || !slices.Equal(check.Unpublished[0].Operations, wantOperations) {
+		t.Errorf("unpublished = %+v, want only the invented field, searched in the one endpoint", check.Unpublished)
+	}
+	if len(check.Unsurfaced) != 1 || check.Unsurfaced[0].Field != "labels" || !check.Unsurfaced[0].SDKModels {
+		t.Errorf("unsurfaced = %+v, want labels alone, which the projection's own struct models", check.Unsurfaced)
+	}
+	if !slices.Equal(check.Envelopes, []string{"milestones.MilestoneIssuesOutput"}) || check.SkippedNoPairing != 0 {
+		t.Errorf("envelopes = %v, no-pairing = %d; want the list around the row counted as its packaging", check.Envelopes, check.SkippedNoPairing)
+	}
+}
+
+// TestTypedShapeCheck_AProjectionWithoutAMethod_IsReadAsItsStructWouldBe
+// verifies the fallback for a row whose method the structs pass could not
+// find: a literal built from a value no call in reach answers with. The
+// struct's own endpoints are then searched, which is what a converter pairing
+// would have searched, rather than nothing.
+func TestTypedShapeCheck_AProjectionWithoutAMethod_IsReadAsItsStructWouldBe(t *testing.T) {
+	unrouted := issueItemProjection
+	unrouted.Methods = nil
+	stubTypeGrainInputs(t, structs.Pairings{ClientGoDir: "/client-go", Projections: []structs.ProjectionPairing{unrouted}}, nil, milestoneIssueRoutes)
+	stubMethodRoutes(t, milestoneIssueMethodRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "IssueItem", Fields: []string{"id", "iid", "labels", "title"}},
+	})
+
+	if check.Compared != 1 || len(check.Unsurfaced) != 1 || check.Unsurfaced[0].Field != "subscribed" {
+		t.Errorf("check = %+v, want both endpoints of the struct searched", check)
+	}
+}
+
+// TestTypedShapeCheck_AProjectionWhoseMethodReachesNothing_IsUnrouted verifies
+// that a method this reader could not see a route for leaves the row unrouted
+// rather than borrowing its struct's endpoints: the method named it, and a
+// guess at which of the struct's endpoints the method meant is exactly what the
+// per-method reading exists to avoid.
+func TestTypedShapeCheck_AProjectionWhoseMethodReachesNothing_IsUnrouted(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{ClientGoDir: "/client-go", Projections: []structs.ProjectionPairing{issueItemProjection}}, nil, milestoneIssueRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "IssueItem", Fields: []string{"id"}},
+	})
+
+	if check.SkippedNoRoute != 1 || !slices.Equal(check.Skipped.NoRoute, []string{"milestones.IssueItem"}) || len(check.Projections) != 0 {
+		t.Errorf("check = %+v, want the row counted unrouted and not among the compared projections", check)
+	}
+}
+
+// TestTypedShapeCheck_AConverterPairing_WinsOverAProjection verifies that a
+// type a converter pairs keeps every endpoint of its struct. The converter
+// says the type models the struct wherever it is answered; a literal in one
+// handler says less, and narrowing the converter's type to that handler's
+// method would silently drop the endpoints its other callers read.
+func TestTypedShapeCheck_AConverterPairing_WinsOverAProjection(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs:     []structs.OutputPairing{{Package: "milestones", MCPType: "IssueItem", SDKType: "Issue"}},
+		Projections: []structs.ProjectionPairing{issueItemProjection},
+	}, nil, milestoneIssueRoutes)
+	stubMethodRoutes(t, milestoneIssueMethodRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "IssueItem", Fields: []string{"id", "iid", "labels", "title"}},
+	})
+
+	if check.Compared != 1 || len(check.Projections) != 0 || len(check.Unsurfaced) != 1 || check.Unsurfaced[0].Field != "subscribed" {
+		t.Errorf("check = %+v, want the converter's two endpoints searched and no projection counted", check)
+	}
+}
+
+// TestTypedShapeCheck_AnEnvelopeAroundAnUnpairedPayload_StaysASkip verifies
+// the other half of the envelope rule: packaging is only judged through its
+// payload when the payload has a pairing. Around a payload nothing pairs, the
+// envelope is the one name the unjudged response is counted under, and moving
+// it out of the skips would lose it from every count.
+func TestTypedShapeCheck_AnEnvelopeAroundAnUnpairedPayload_StaysASkip(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{ClientGoDir: "/client-go"}, nil, milestoneIssueRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "MilestoneIssuesOutput", Fields: []string{"issues"}, Wraps: []string{"IssueItem", "OtherItem"}},
+		{Package: "internal/tools/milestones", Name: "ListOutput", Fields: []string{"items"}},
+	})
+
+	want := []string{"milestones.ListOutput", "milestones.MilestoneIssuesOutput"}
+	if check.SkippedNoPairing != 2 || !slices.Equal(check.Skipped.NoPairing, want) || len(check.Envelopes) != 0 {
+		t.Errorf("check = %+v, want both counted without a pairing", check)
+	}
+}
+
+// TestTypedShapeCheck_AnEnvelopeAroundASkippedPayload_TakesItsSkip verifies
+// that packaging is listed among the envelopes only when the response it
+// packages was compared. A payload can be paired and still not be judged,
+// for want of a route or of a response schema, and the envelope around it is
+// then counted in that payload's skip rather than called judged. The envelope
+// is listed before its payloads in every case, since what it is counted as
+// has to wait for them whatever order the types are read in.
+func TestTypedShapeCheck_AnEnvelopeAroundASkippedPayload_TakesItsSkip(t *testing.T) {
+	const pkg = "internal/tools/milestones"
+	// Named to sort before IssueItem, so the case with one of each reads the
+	// compared payload first and has to keep looking.
+	converted := structs.OutputPairing{Package: "milestones", MCPType: "AnotherItem", SDKType: "Issue"}
+	cases := []struct {
+		name       string
+		pairings   structs.Pairings
+		operations map[string]response
+		methods    map[string][]sdkRoute
+		wraps      []string
+		want       SkippedTypes
+		envelopes  []string
+	}{
+		{
+			name:       "a payload whose method reaches no route",
+			pairings:   structs.Pairings{ClientGoDir: "/client-go", Projections: []structs.ProjectionPairing{issueItemProjection}},
+			operations: milestoneIssueOperations,
+			wraps:      []string{"IssueItem"},
+			want:       SkippedTypes{NoRoute: []string{"milestones.IssueItem", "milestones.MilestoneIssuesOutput"}},
+		},
+		{
+			name:     "a payload whose routes the record gives no response",
+			pairings: structs.Pairings{ClientGoDir: "/client-go", Outputs: []structs.OutputPairing{converted}},
+			wraps:    []string{"AnotherItem"},
+			want:     SkippedTypes{NoSchema: []string{"milestones.AnotherItem", "milestones.MilestoneIssuesOutput"}},
+		},
+		{
+			name:       "a compared payload beside one with no route",
+			pairings:   structs.Pairings{ClientGoDir: "/client-go", Outputs: []structs.OutputPairing{converted}, Projections: []structs.ProjectionPairing{issueItemProjection}},
+			operations: milestoneIssueOperations,
+			wraps:      []string{"AnotherItem", "IssueItem"},
+			want:       SkippedTypes{NoRoute: []string{"milestones.IssueItem", "milestones.MilestoneIssuesOutput"}},
+		},
+		{
+			name:       "every payload compared",
+			pairings:   structs.Pairings{ClientGoDir: "/client-go", Outputs: []structs.OutputPairing{converted}, Projections: []structs.ProjectionPairing{issueItemProjection}},
+			operations: milestoneIssueOperations,
+			methods:    milestoneIssueMethodRoutes,
+			wraps:      []string{"AnotherItem", "IssueItem"},
+			envelopes:  []string{"milestones.MilestoneIssuesOutput"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stubTypeGrainInputs(t, testCase.pairings, nil, milestoneIssueRoutes)
+			stubMethodRoutes(t, testCase.methods)
+
+			published := []publishedType{{Package: pkg, Name: "MilestoneIssuesOutput", Fields: []string{"issues"}, Wraps: testCase.wraps}}
+			for _, payload := range testCase.wraps {
+				published = append(published, publishedType{Package: pkg, Name: payload, Fields: []string{"id"}, Inner: true, Payload: true})
+			}
+			check := typedCheckOf("", testCase.operations, published)
+
+			if !reflect.DeepEqual(check.Skipped, testCase.want) || !slices.Equal(check.Envelopes, testCase.envelopes) {
+				t.Errorf("skipped = %+v, envelopes = %v; want %+v and %v", check.Skipped, check.Envelopes, testCase.want, testCase.envelopes)
+			}
+			if check.SkippedNoRoute != len(testCase.want.NoRoute) || check.SkippedNoSchema != len(testCase.want.NoSchema) || check.SkippedNoPairing != 0 {
+				t.Errorf("counters = %d no route, %d no schema, %d no pairing; want them to agree with the lists", check.SkippedNoRoute, check.SkippedNoSchema, check.SkippedNoPairing)
+			}
+		})
+	}
+}
+
+// TestTypedShapeCheck_APayloadThatIsItselfPackaging_IsCountedUnderItsEnvelope
+// verifies that a payload is never counted on its own name, even when it is a
+// top-level type, one embedded rather than named as a field, that packages a
+// paired payload of its own. The response is counted under the outermost
+// envelope, whose own payload carries no pairing, so it is the one type named
+// among the skips; listing the middle one among the envelopes as well would
+// count the one response twice.
+func TestTypedShapeCheck_APayloadThatIsItselfPackaging_IsCountedUnderItsEnvelope(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs:     []structs.OutputPairing{{Package: "milestones", MCPType: "IssueItem", SDKType: "Issue"}},
+	}, nil, milestoneIssueRoutes)
+
+	check := typedCheckOf("", milestoneIssueOperations, []publishedType{
+		{Package: "internal/tools/milestones", Name: "GetOutput", Fields: []string{"id"}, Wraps: []string{"DetailOutput"}},
+		{Package: "internal/tools/milestones", Name: "DetailOutput", Fields: []string{"id"}, Payload: true, Wraps: []string{"IssueItem"}},
+		{Package: "internal/tools/milestones", Name: "IssueItem", Fields: []string{"id"}, Inner: true, Payload: true},
+	})
+
+	if check.Compared != 1 || len(check.Envelopes) != 0 || !slices.Equal(check.Skipped.NoPairing, []string{"milestones.GetOutput"}) {
+		t.Errorf("check = %+v, want the item compared and the response counted once, under the outer envelope", check)
+	}
+}
+
+// TestWrapsOnlyPaired_EveryPayload_MustBePaired verifies that one paired
+// payload among several does not make the envelope judged: the others are
+// responses nothing reads, and they are only counted if the envelope is.
+func TestWrapsOnlyPaired_EveryPayload_MustBePaired(t *testing.T) {
+	converted := map[[2]string][]string{{"projects", "Output"}: {"Project"}}
+	projected := map[[2]string][]structs.ProjectionPairing{{"projects", "BasicOutput"}: {{SDKType: "BasicProject"}}}
+	cases := []struct {
+		name  string
+		wraps []string
+		want  bool
+	}{
+		{name: "a converter's payload", wraps: []string{"Output"}, want: true},
+		{name: "a projection's payload", wraps: []string{"BasicOutput"}, want: true},
+		{name: "both, one of each", wraps: []string{"BasicOutput", "Output"}, want: true},
+		{name: "one of them unpaired", wraps: []string{"Output", "StrangerOutput"}},
+		{name: "no payload at all"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := publishedType{Package: "internal/tools/projects", Name: "ListOutput", Wraps: testCase.wraps}
+			if got := wrapsOnlyPaired(candidate, converted, projected); got != testCase.want {
+				t.Errorf("wrapsOnlyPaired(%v) = %v, want %v", testCase.wraps, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestProjectedSDKTypes_EachStruct_IsNamedOnceInOrder verifies how a type
+// built from several structs names them on a finding: once each and sorted,
+// as a converter pairing's list is, so the two spellings read alike.
+func TestProjectedSDKTypes_EachStruct_IsNamedOnceInOrder(t *testing.T) {
+	got := projectedSDKTypes([]structs.ProjectionPairing{{SDKType: "Project"}, {SDKType: "BasicProject"}, {SDKType: "Project"}})
+	if want := []string{"BasicProject", "Project"}; !slices.Equal(got, want) {
+		t.Errorf("projectedSDKTypes() = %v, want %v", got, want)
 	}
 }
 

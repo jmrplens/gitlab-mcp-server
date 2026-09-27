@@ -30,7 +30,6 @@ func FormatExportStatusMarkdown(out ExportStatusOutput) *mcp.CallToolResult {
 	var b strings.Builder
 	c := statusCard(&b, "Export Status", out.Name, out.ID, out.PathWithNamespace)
 	c.Field("Status", out.ExportStatus)
-	c.Field("Message", out.Message)
 	c.Link("API URL", "", out.APIURL)
 	c.Link("Web URL", "", out.WebURL)
 	c.End(toolutil.HintAction(actionExportDownload, "download the archive once the export status is 'finished'"))

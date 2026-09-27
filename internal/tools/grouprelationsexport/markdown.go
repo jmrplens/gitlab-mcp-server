@@ -22,13 +22,14 @@ func FormatListExportStatusMarkdownString(o ListExportStatusOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Group Relations Export Status", len(o.Statuses), o.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Relation", "Status", "Batched", "Batches", "Error"))
+	b.WriteString(toolutil.MarkdownTableHeader("Relation", "Status", "Batched", "Batches", "Objects", "Error"))
 	for _, s := range o.Statuses {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(s.Relation),
 			exportStatusLabel(s.Status),
 			toolutil.BoolEmoji(s.Batched),
 			strconv.FormatInt(s.BatchesCount, 10),
+			strconv.FormatInt(s.TotalObjectsCount, 10),
 			toolutil.EscapeMdTableCell(s.Error),
 		))
 	}

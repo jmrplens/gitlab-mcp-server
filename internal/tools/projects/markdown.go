@@ -388,8 +388,11 @@ func FormatShareProjectMarkdown(out ShareProjectOutput) string {
 	// The message is server-authored but interpolates the caller's own
 	// project_id, which nothing validates before it lands here.
 	c.Field("Message", out.Message)
+	c.Count("Link ID", out.ID)
 	c.Count("Group ID", out.GroupID)
 	c.Field("Access Role", out.AccessRole)
+	c.Time("Expires", out.ExpiresAt)
+	c.Count("Custom Role ID", out.MemberRoleID)
 	c.End(
 		toolutil.HintAction(actionProjectListInvGroups, "verify the share"),
 		toolutil.HintAction("project.delete_shared_group", "revoke the group's access"),
