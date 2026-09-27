@@ -391,7 +391,7 @@ func FormatShareProjectMarkdown(out ShareProjectOutput) string {
 	c.Count("Link ID", out.ID)
 	c.Count("Group ID", out.GroupID)
 	c.Field("Access Role", out.AccessRole)
-	c.Field("Expires", out.ExpiresAt)
+	c.Time("Expires", out.ExpiresAt)
 	c.Count("Custom Role ID", out.MemberRoleID)
 	c.End(
 		toolutil.HintAction(actionProjectListInvGroups, "verify the share"),

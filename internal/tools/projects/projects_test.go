@@ -2953,7 +2953,7 @@ func TestFormatShareProjectMarkdown(t *testing.T) {
 		"- **Link ID**: 7\n" +
 		"- **Group ID**: 5\n" +
 		"- **Access Role**: Developer\n" +
-		"- **Expires**: 2026-12-31\n" +
+		"- **Expires**: 31 Dec 2026\n" +
 		"- **Custom Role ID**: 12\n\n" +
 		shareHints
 	if md != want {
