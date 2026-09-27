@@ -77,9 +77,11 @@ func TestOutput_JSON_ProjectKeysOnlyOnAProjectLabel(t *testing.T) {
 		t.Fatalf("json.Marshal(group label) error = %v", err)
 	}
 	for _, key := range []string{`"priority"`, `"is_project_label"`} {
-		if strings.Contains(string(group), key) {
-			t.Errorf("group label JSON = %s, want no %s key", group, key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(group), key) {
+				t.Errorf("group label JSON = %s, want no %s key", group, key)
+			}
+		})
 	}
 }
 

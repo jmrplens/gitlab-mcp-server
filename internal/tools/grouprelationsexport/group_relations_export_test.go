@@ -313,9 +313,11 @@ func TestListExportStatus_RelationWithNoExport_SaysHowToStartOne(t *testing.T) {
 		t.Fatal("ListExportStatus() = nil error, want the 404")
 	}
 	for _, want := range []string{"leaving relation out", "group.group_relations_schedule"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error = %q, want it to mention %q", err, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to mention %q", err, want)
+			}
+		})
 	}
 }
 
