@@ -2,7 +2,7 @@
 
 // session_not_found_test.go holds what the go-sdk client this module is built
 // against does when this server answers 404 to a request that carries a
-// session ID. It is the third item of issue 961 and row 63 of
+// session ID. It is the third item of issue 961 and row 68 of
 // docs/development/upstream-bugs.md.
 //
 // The 2025-11-25 transport says a client receiving that 404 MUST start a new
@@ -49,7 +49,7 @@ const sessionEraProtocol = "2025-11-25"
 // sessionNotFoundFix is what a failure here asks the pull request to do, since
 // every assertion below fails for the same reason: go-sdk changed what its
 // client does with this server's 404.
-const sessionNotFoundFix = "Update row 63 of docs/development/upstream-bugs.md and its section, the comment on " +
+const sessionNotFoundFix = "Update row 68 of docs/development/upstream-bugs.md and its section, the comment on " +
 	"checkSessionOwnership in cmd/server/auth_gate.go, F-22 on row ADM-007 in internal/tenancy/decisions_admit.go " +
 	"if the client now recovers, the statements of what a client does once its session is gone (the Session Timeout " +
 	"steps and the pool eviction bullet of docs/guides/http-server-mode.md, the session lifecycle list of " +
@@ -57,8 +57,8 @@ const sessionNotFoundFix = "Update row 63 of docs/development/upstream-bugs.md a
 	"and these tests, in this same pull request."
 
 // gateRefusalFix is what a failure about the refusal's own code or words asks
-// for: that is this server's text, which row 63 quotes, and not go-sdk's.
-const gateRefusalFix = "The gate's session refusal changed: update the quotation of it in row 63 of " +
+// for: that is this server's text, which row 68 quotes, and not go-sdk's.
+const gateRefusalFix = "The gate's session refusal changed: update the quotation of it in row 68 of " +
 	"docs/development/upstream-bugs.md and these tests' expectation of it, in this same pull request."
 
 // Gate refusal the tests expect to reach the application unchanged on the

@@ -2,7 +2,7 @@
 
 // result_type_test.go holds what the go-sdk this binary is built against
 // writes as the resultType of a tools/call result a receiving middleware made
-// rather than the tool handler. It is the first item of issue 961 and row 61
+// rather than the tool handler. It is the first item of issue 961 and row 66
 // of docs/development/upstream-bugs.md.
 //
 // 2026-07-28 says a server implementing it MUST include resultType on every
@@ -26,7 +26,7 @@ import (
 )
 
 // resultTypeFix is what a failure here asks the pull request to do.
-const resultTypeFix = "Update row 61 of docs/development/upstream-bugs.md and its section, drop F-20 from row RTC-001 " +
+const resultTypeFix = "Update row 66 of docs/development/upstream-bugs.md and its section, drop F-20 from row RTC-001 " +
 	"in internal/tenancy/decisions_allow.go, and turn this test into the assertion that the refusal carries " +
 	"resultType \"complete\", in this same pull request."
 
