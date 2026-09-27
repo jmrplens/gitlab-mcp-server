@@ -357,9 +357,11 @@ func markAndReread(ctx context.Context, kind string, id int64, path string, step
 // marked, and waits through a transfer still being applied to the object:
 // GitLab refuses the mark with 400 "State cannot transition via ..." until
 // the transfer's state machine lets go of it. gone reports that GitLab no
-// longer has the object. The status is part of the match, as it is for every
-// tolerance here: the same words under another status are an answer this
-// code has not seen.
+// longer has the object. The transfer refusal is matched on its status as
+// well as its words, since the same words under another status are an answer
+// this code has not seen. The tolerance of an object already marked is older
+// than this function and matches on its words alone, as it did before: no
+// run has recorded the status GitLab answers it with.
 func markForDeletion(ctx context.Context, kind string, id int64, path string, steps deletionSteps) (gone bool, err error) {
 	err = harness.Poll(ctx, transitionPollInterval, transitionWait, func() (bool, string, error) {
 		markErr := steps.mark(ctx)

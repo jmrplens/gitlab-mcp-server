@@ -112,14 +112,15 @@ func TestProjectRestore_AfterDelete_ReturnsTheProject(t *testing.T) {
 // personal project of each surface's own into a group of its own and back
 // into the run user's namespace.
 //
-// GitLab 19.4 applies a transfer in the background, and the action waits for
-// it only for a bounded time, so each answer is held to what it claims: an
-// answer that says the move landed must show the destination, and one that
-// says it is queued is allowed not to. Either way the project is then read
-// back with project.get until GitLab holds it under the destination, because
-// the transfer back is refused while the first is still being applied. On
-// 19.3 and older the answer comes after the move and the read finds it at
-// once.
+// GitLab 19.4 applies a transfer in the background and the action waits for
+// it, so each answer must show the move landed: an empty project moves in
+// seconds, well inside the action's wait, and a queued answer here means the
+// handler never saw a move GitLab applied, which is the defect this scenario
+// exists to catch. A test that accepted the queued answer would stay green
+// against a handler that waits out its whole bound on every call. The project
+// is then read back with project.get, independently of the action's own read,
+// until GitLab holds it under the destination. On 19.3 and older the answer
+// comes after the move and both hold at once.
 //
 // Replaces: TestMeta_ProjectTransfer
 func TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace(t *testing.T) {
@@ -136,18 +137,16 @@ func TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace(t *testing.T) {
 }
 
 // transferProjectAndWait transfers a project into a namespace, holds the
-// answer to what it claims, and waits until GitLab holds the project there.
+// answer to a move that landed, and reads the project back until GitLab holds
+// it there.
 func transferProjectAndWait(e *harness.Env, s *harness.Session, project fixture.Project, namespace string) {
 	e.T.Helper()
 	params := map[string]any{"project_id": project.IDParam()}
 	under := namespace + "/"
 
 	moved := harness.Do[projects.TransferOutput](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": namespace}))
-	if moved.ID != project.ID {
-		e.T.Errorf("the transfer to %q answered project %d, want %d", namespace, moved.ID, project.ID)
-	}
-	if !moved.TransferQueued && !strings.HasPrefix(moved.PathWithNamespace, under) {
-		e.T.Errorf("the transfer to %q answered the move applied with the project at %q", namespace, moved.PathWithNamespace)
+	if moved.ID != project.ID || moved.TransferQueued || !strings.HasPrefix(moved.PathWithNamespace, under) {
+		e.T.Errorf("the transfer to %q answered %+v, want project %d applied under %q", namespace, moved, project.ID, under)
 	}
 
 	stored := harness.Eventually[projects.Output](s, actionProjectGet, params, 2*time.Second, 90*time.Second,
