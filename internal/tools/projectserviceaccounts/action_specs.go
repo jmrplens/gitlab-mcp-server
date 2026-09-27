@@ -1,6 +1,8 @@
 package projectserviceaccounts
 
 import (
+	"fmt"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -9,6 +11,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		projectServiceAccountReadSpec("service_account_list", toolutil.RouteAction(client, List), "gitlab_project_service_account_list"),
+		projectServiceAccountReadSpec("service_account_get", projectServiceAccountGetRoute(client), "gitlab_project_service_account_get"),
 		projectServiceAccountCreateSpec("service_account_create", toolutil.RouteAction(client, Create), "gitlab_project_service_account_create"),
 		projectServiceAccountUpdateSpec("service_account_update", toolutil.RouteAction(client, Update), "gitlab_project_service_account_update"),
 		projectServiceAccountDeleteSpec("service_account_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_project_service_account_delete"),
@@ -17,6 +20,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		projectServiceAccountCreateSpec("service_account_pat_rotate", toolutil.RouteAction(client, RotatePAT), "gitlab_project_service_account_pat_rotate"),
 		projectServiceAccountDeleteSpec("service_account_pat_revoke", toolutil.DestructiveVoidAction(client, RevokePAT), "gitlab_project_service_account_pat_revoke"),
 	}
+}
+
+// projectServiceAccountGetRoute answers GitLab's 404 with a not-found result
+// naming the account and the project, rather than with an error.
+func projectServiceAccountGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	return toolutil.RouteAction(client, Get).WrapNotFound(func(params map[string]any) any {
+		return serviceAccountNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s",
+			toolutil.ParamText(params["service_account_id"]), toolutil.ParamText(params["project_id"]))}
+	})
 }
 
 func projectServiceAccountReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -57,6 +69,9 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 	if actionName == "service_account_create" || actionName == "service_account_update" {
 		options.Usage += " Omit email unless the task gives an explicit valid email address."
 	}
+	if actionName == "service_account_get" {
+		options.Usage = "Get one project service account by its user ID. Needs GitLab 19.4 or later, which is where GitLab mounts the route. On an older instance, read the account from project.service_account_list. " + options.Usage
+	}
 	if actionName == "service_account_pat_list" {
 		// https://docs.gitlab.com/api/service_accounts/#list-all-personal-access-tokens-for-a-project-service-account
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -73,6 +88,8 @@ func projectServiceAccountDescription(actionName string) string {
 	switch actionName {
 	case "service_account_list":
 		return "List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_project_get, gitlab_project_service_account_create, gitlab_project_service_account_pat_list."
+	case "service_account_get":
+		return "Get one GitLab project service account by its user ID (GitLab 19.4 or later). Returns: the project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_update, gitlab_project_service_account_pat_list."
 	case "service_account_create":
 		return "Create a GitLab project service account. Returns: the created project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_update, gitlab_project_service_account_pat_create."
 	case "service_account_update":
@@ -106,6 +123,8 @@ func projectServiceAccountAliases(actionName string) []string {
 	switch actionName {
 	case "service_account_list":
 		aliases = append(aliases, "project service account list", "list project service accounts", "show project service accounts", "browse project service accounts")
+	case "service_account_get":
+		aliases = append(aliases, "project service account get", "get project service account", "show project service account", "retrieve project service account")
 	case "service_account_create":
 		aliases = append(aliases, "project service account create", "create project service account", "new project service account", "provision project service account")
 	case "service_account_update":

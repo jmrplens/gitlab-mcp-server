@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -153,6 +155,128 @@ func TestList(t *testing.T) {
 			}
 			if tt.wantFirst != "" && out.Accounts[0].Username != tt.wantFirst {
 				t.Errorf("Username = %q, want %q", out.Accounts[0].Username, tt.wantFirst)
+			}
+		})
+	}
+}
+
+// TestGet verifies the Get handler: it asks GET
+// /groups/:id/service_accounts/:user_id for the account the caller named and
+// publishes every field GitLab's service account entity sends, refuses a call
+// missing either identifier before reaching GitLab, and says what a 400 means
+// on this route, where GitLab answers one for a user of the group who is not a
+// service account. Any other refusal is reported with GitLab's own message.
+func TestGet(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      GetInput
+		handler    http.HandlerFunc
+		want       Output
+		errContain []string
+		errAbsent  string
+	}{
+		{
+			name:  "returns every field GitLab sent",
+			input: GetInput{GroupID: "mygroup", ServiceAccountID: 42},
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				testutil.AssertRequestPath(t, r, pathServiceAccount42)
+				testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"svc-bot","username":"svc-bot-user",`+
+					`"email":"svc@test.com","public_email":"pub@test.com","unconfirmed_email":"new@test.com"}`)
+			},
+			want: Output{
+				ID: 42, Name: "svc-bot", Username: "svc-bot-user", Email: "svc@test.com",
+				PublicEmail: "pub@test.com", UnconfirmedEmail: "new@test.com",
+			},
+		},
+		{
+			name:       "refuses an empty group_id",
+			input:      GetInput{ServiceAccountID: 42},
+			handler:    testutil.ForbiddenHandler(t).ServeHTTP,
+			errContain: []string{"group_id"},
+		},
+		{
+			name:       "refuses a zero service_account_id",
+			input:      GetInput{GroupID: "mygroup"},
+			handler:    testutil.ForbiddenHandler(t).ServeHTTP,
+			errContain: []string{"service_account_id"},
+		},
+		{
+			name:  "a 400 says the user is not a service account",
+			input: GetInput{GroupID: "mygroup", ServiceAccountID: 42},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad request - User is not of type Service Account"}`)
+			},
+			errContain: []string{"get group service account", "not a service account", "group.service_account_list"},
+		},
+		{
+			name:  "another refusal carries GitLab's message and no such hint",
+			input: GetInput{GroupID: "mygroup", ServiceAccountID: 42},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			},
+			errContain: []string{"get group service account", "403 Forbidden"},
+			errAbsent:  "not a service account",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			out, err := Get(context.Background(), client, tt.input)
+			if len(tt.errContain) == 0 {
+				if err != nil {
+					t.Fatalf("Get() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(out, tt.want) {
+					t.Errorf("Get() = %+v, want %+v", out, tt.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Get() = %+v, want an error", out)
+			}
+			assertGetError(t, err, tt.errContain, tt.errAbsent)
+		})
+	}
+}
+
+// assertGetError checks a Get refusal names every fragment in contain and,
+// when absent is set, does not carry that hint.
+func assertGetError(t *testing.T, err error, contain []string, absent string) {
+	t.Helper()
+	for _, want := range contain {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Get() error %q does not contain %q", err, want)
+		}
+	}
+	if absent != "" && strings.Contains(err.Error(), absent) {
+		t.Errorf("Get() error %q carries %q, a hint for a status GitLab did not answer", err, absent)
+	}
+}
+
+// TestFormatServiceAccountNotFound verifies the not-found answer the get
+// route gives for a 404, read back through the Markdown registry so the
+// registration is held too: an error result naming the account and the group,
+// pointing at the listing, and saying that an instance older than GitLab 19.4
+// answers 404 for every ID because it does not mount the route.
+func TestFormatServiceAccountNotFound(t *testing.T) {
+	result := toolutil.MarkdownForResult(serviceAccountNotFoundOutput{Identifier: "ID 42 in group mygroup"})
+	if result == nil || !result.IsError || len(result.Content) != 1 {
+		t.Fatalf("MarkdownForResult(not found) = %#v, want one error content block", result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content = %T, want *mcp.TextContent", result.Content[0])
+	}
+	for _, want := range []string{
+		"Group Service Account Not Found",
+		"ID 42 in group mygroup",
+		"Use group.service_account_list with group_id to find the account's ID",
+		"GitLab mounts this route from 19.4",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text.Text, want) {
+				t.Errorf("not-found card does not contain %q:\n%s", want, text.Text)
 			}
 		})
 	}

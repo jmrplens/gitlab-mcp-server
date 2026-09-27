@@ -66,7 +66,7 @@ Get current application appearance settings. Requires admin access.
 
 ### `gitlab_update_appearance`
 
-Update application appearance (title, description, messages, PWA settings). Requires admin access.
+Update application appearance (site name, title, description, messages, PWA settings). `site_name` is the text GitLab appends after the page title. Requires admin access.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
@@ -91,14 +91,14 @@ Get a specific broadcast message by ID. Requires admin access.
 
 ### `gitlab_create_broadcast_message`
 
-Create a broadcast message. Requires admin access.
+Create a broadcast message. Accepts `theme` for a banner's color scheme and the older `color` background hex code, which GitLab deprecates in favor of `theme` and still accepts. Requires admin access.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_update_broadcast_message`
 
-Update a broadcast message. Requires admin access.
+Update a broadcast message. Takes the same `theme` and deprecated `color` parameters as create. Requires admin access.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

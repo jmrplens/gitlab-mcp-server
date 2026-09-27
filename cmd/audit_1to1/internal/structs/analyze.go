@@ -182,7 +182,20 @@ const (
 	tagKeyJSON = "json"
 	// tagKeyURL is the tag go-querystring names a query parameter by, which
 	// client-go's Options structs carry beside their json tags.
-	tagKeyURL     = "url"
+	tagKeyURL = "url"
+	// projectParamGitLabDropped is the reason a project option client-go still
+	// carries is absent from the project inputs.
+	projectParamGitLabDropped = "not declared by POST /projects or PUT /projects/:id in GitLab 19.3.1 " +
+		"(lib/api/helpers/projects_helpers.rb at v19.3.1-ee) or 19.4.1 (gitlab-api-live.json), so GitLab drops " +
+		"the value; client-go keeps the field"
+	// mrApprovalRulesOffsetOnly is the reason the approval rules list offers
+	// no ordering or keyset field of the gl.ListOptions it pages with.
+	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page " +
+		"and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
+	// achievementAvatarUpload is the reason the avatar upload is absent under
+	// its SDK key.
+	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or " +
+		"avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
 	typNameString = "string"
 	typNameInt64  = "int64"
 )
@@ -960,9 +973,37 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"grouplabels.DeleteInput.name": "deprecated DELETE /groups/:id/labels name param; current endpoint uses label_id in path",
 	"grouplabels.UpdateInput.name": "deprecated PUT /groups/:id/labels name param; current endpoint uses label_id in path",
 
+	// Project params client-go still models and GitLab no longer declares:
+	// neither POST /projects nor PUT /projects/:id carries them in the live
+	// record (gitlab-api-live.json, 19.4.1-ee), and lib/api/helpers/
+	// projects_helpers.rb at v19.3.1-ee names none of them. Grape drops an
+	// undeclared param, so a value offered here would be sent and ignored.
+	// automatic_rebase_enabled is not among them: PUT /projects/:id declares
+	// it from 19.4, and project.update offers it.
+	"projects.CreateInput.build_coverage_regex":    projectParamGitLabDropped,
+	"projects.CreateInput.operations_access_level": projectParamGitLabDropped,
+	"projects.UpdateInput.build_coverage_regex":    projectParamGitLabDropped,
+	"projects.UpdateInput.operations_access_level": projectParamGitLabDropped,
+
+	// A file upload offered in the shape every upload here takes rather than
+	// as the SDK's *GraphQLUpload: avatar_filename and avatar_content_type
+	// with either avatar_file_path or avatar_content_base64 (AvatarInput),
+	// which the handler assembles into opts.Avatar.
+	"achievements.CreateInput.avatar": achievementAvatarUpload,
+	"achievements.UpdateInput.avatar": achievementAvatarUpload,
+
 	// SDK options fields the endpoint does not accept (generic ListOptions plumbing).
 	"groupsshcerts.ListInput.order_by": "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
 	"groupsshcerts.ListInput.sort":     "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
+	// The merge request approval rules list pages through a gl.ListOptions the
+	// handler's own raw request encodes, and GET /projects/:id/merge_requests/
+	// :merge_request_iid/approval_rules declares page and per_page and nothing
+	// else of it (gitlab-api-live.json, 19.4.1-ee), so neither the ordering nor
+	// the keyset fields would reach anything.
+	"mrapprovals.RulesInput.order_by":   mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.sort":       mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.pagination": mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.page_token": mrApprovalRulesOffsetOnly,
 
 	// SDK options fields the route declares and never reads. The deployment
 	// merge request list takes merge_requests_base_params and presents
@@ -1066,6 +1107,15 @@ type packageReport struct {
 	Gaps               []gap  `json:"gaps"`
 }
 
+// hasFindings reports whether the package carries at least one finding of any
+// of the three classes, which is what -gaps-only keeps. It is a method of its
+// own because the repository is the only other input the filter ever sees,
+// and a tree whose input rows are all answered cannot say whether the input
+// count is read at all.
+func (pr packageReport) hasFindings() bool {
+	return pr.MissingInputCount != 0 || pr.MissingOutputCount != 0 || pr.ExtraOutputCount != 0
+}
+
 // report is the JSON document written to the output path.
 type report struct {
 	SchemaVersion int           `json:"schema_version"`
@@ -1121,7 +1171,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		if !ok {
 			continue
 		}
-		if gapsOnly && pr.MissingInputCount == 0 && pr.MissingOutputCount == 0 && pr.ExtraOutputCount == 0 {
+		if gapsOnly && !pr.hasFindings() {
 			continue
 		}
 		reports = append(reports, pr)

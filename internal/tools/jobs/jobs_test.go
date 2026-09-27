@@ -937,7 +937,7 @@ func TestGetArtifacts_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetArtifacts(context.Background(), client, GetInput{ProjectID: "42", JobID: 100})
+	out, err := GetArtifacts(context.Background(), client, ArtifactsInput{ProjectID: "42", JobID: 100})
 	if err != nil {
 		t.Fatalf("GetArtifacts() unexpected error: %v", err)
 	}
@@ -946,6 +946,83 @@ func TestGetArtifacts_Success(t *testing.T) {
 	}
 	if out.Content == "" {
 		t.Error("Content is empty")
+	}
+}
+
+// TestGetArtifacts_FileType_ReachesTheQueryOnlyWhenGiven verifies the one
+// parameter the artifacts route gained in GitLab 19.4: a file_type the caller
+// names reaches the query string with its value, and a call naming none sends
+// no file_type at all, so it asks for the archive exactly as it did before the
+// parameter existed and an instance older than 19.4 is sent nothing it does
+// not declare. The content GitLab answers with is what the output carries,
+// whichever artifact that is.
+func TestGetArtifacts_FileType_ReachesTheQueryOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileType string
+		body     string
+	}{
+		{name: "junit report", fileType: "junit", body: "\x1f\x8bjunit-gzip"},
+		{name: "sarif report", fileType: "sarif", body: `{"version":"2.1.0"}`},
+		{name: "no file_type", body: "PK\x03\x04archive"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != pathJobArtifacts {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				query := r.URL.Query()
+				if _, sent := query["file_type"]; sent != (tt.fileType != "") || query.Get("file_type") != tt.fileType {
+					t.Errorf("query = %q, want file_type=%q sent only when given", r.URL.RawQuery, tt.fileType)
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+
+			out, err := GetArtifacts(context.Background(), client, ArtifactsInput{ProjectID: "42", JobID: 100, FileType: tt.fileType})
+			if err != nil {
+				t.Fatalf("GetArtifacts() unexpected error: %v", err)
+			}
+			decoded, decodeErr := base64.StdEncoding.DecodeString(out.Content)
+			if decodeErr != nil || string(decoded) != tt.body {
+				t.Errorf("Content decodes to %q (err %v), want the %d bytes GitLab answered", decoded, decodeErr, len(tt.body))
+			}
+			if out.JobID != 100 || out.Size != len(tt.body) || out.Truncated {
+				t.Errorf("JobID/Size/Truncated = %d/%d/%v, want 100/%d/false", out.JobID, out.Size, out.Truncated, len(tt.body))
+			}
+		})
+	}
+}
+
+// TestGetArtifacts_NotFound_HintNamesTheFileType verifies the corrective text
+// a 404 carries now that a 404 has one more cause: GitLab answers it for a
+// file_type the job produced no artifact of, as well as for a job whose
+// artifacts are gone. Any other refusal carries no such hint.
+func TestGetArtifacts_NotFound_HintNamesTheFileType(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{name: "404 names file_type", status: http.StatusNotFound, wantHint: true},
+		{name: "403 has no artifact hint", status: http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			_, err := GetArtifacts(context.Background(), client, ArtifactsInput{ProjectID: "42", JobID: 100, FileType: "junit"})
+			if err == nil {
+				t.Fatal("GetArtifacts() error = nil, want the refusal")
+			}
+			if got := strings.Contains(err.Error(), "verify job_id and file_type"); got != tt.wantHint {
+				t.Errorf("error %q carries the file_type hint = %v, want %v", err, got, tt.wantHint)
+			}
+		})
 	}
 }
 
@@ -988,7 +1065,7 @@ func TestGetArtifacts_LimitIsTheMebibyteTheCardPromises(t *testing.T) {
 				http.NotFound(w, r)
 			}))
 
-			out, err := GetArtifacts(context.Background(), client, GetInput{ProjectID: "42", JobID: 100})
+			out, err := GetArtifacts(context.Background(), client, ArtifactsInput{ProjectID: "42", JobID: 100})
 			if err != nil {
 				t.Fatalf("GetArtifacts() unexpected error: %v", err)
 			}
@@ -1233,7 +1310,7 @@ func TestProjectIDRequired_Validation(t *testing.T) {
 		{"Trace", func() error { _, e := Trace(ctx, client, TraceInput{JobID: 100}); return e }},
 		{"Cancel", func() error { _, e := Cancel(ctx, client, CancelInput{JobID: 100}); return e }},
 		{"Retry", func() error { _, e := Retry(ctx, client, ActionInput{JobID: 100}); return e }},
-		{"GetArtifacts", func() error { _, e := GetArtifacts(ctx, client, GetInput{JobID: 100}); return e }},
+		{"GetArtifacts", func() error { _, e := GetArtifacts(ctx, client, ArtifactsInput{JobID: 100}); return e }},
 		{"DownloadArtifacts", func() error {
 			_, e := DownloadArtifacts(ctx, client, DownloadArtifactsInput{RefName: "main", JobName: "build"})
 			return e
@@ -1320,8 +1397,8 @@ func TestJobIDRequired_Validation(t *testing.T) {
 		{"Cancel_negative", func() error { _, e := Cancel(ctx, client, CancelInput{ProjectID: pid, JobID: -3}); return e }},
 		{"Retry_zero", func() error { _, e := Retry(ctx, client, ActionInput{ProjectID: pid, JobID: 0}); return e }},
 		{"Retry_negative", func() error { _, e := Retry(ctx, client, ActionInput{ProjectID: pid, JobID: -1}); return e }},
-		{"GetArtifacts_zero", func() error { _, e := GetArtifacts(ctx, client, GetInput{ProjectID: pid, JobID: 0}); return e }},
-		{"GetArtifacts_negative", func() error { _, e := GetArtifacts(ctx, client, GetInput{ProjectID: pid, JobID: -1}); return e }},
+		{"GetArtifacts_zero", func() error { _, e := GetArtifacts(ctx, client, ArtifactsInput{ProjectID: pid, JobID: 0}); return e }},
+		{"GetArtifacts_negative", func() error { _, e := GetArtifacts(ctx, client, ArtifactsInput{ProjectID: pid, JobID: -1}); return e }},
 		{"DownloadSingleArtifact_zero", func() error {
 			_, e := DownloadSingleArtifact(ctx, client, SingleArtifactInput{ProjectID: pid, JobID: 0, ArtifactPath: "a.txt"})
 			return e
@@ -1438,7 +1515,7 @@ func TestReadHandlers_NotFoundHint_GatedOnTheStatus(t *testing.T) {
 			return e
 		}},
 		{"GetArtifacts", "expire_in", func(c *gitlabclient.Client) error {
-			_, e := GetArtifacts(ctx, c, GetInput{ProjectID: "42", JobID: 100})
+			_, e := GetArtifacts(ctx, c, ArtifactsInput{ProjectID: "42", JobID: 100})
 			return e
 		}},
 		{"DownloadArtifacts", "non-expired artifacts", func(c *gitlabclient.Client) error {
@@ -1881,7 +1958,7 @@ func TestGetArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
-	_, err := GetArtifacts(context.Background(), client, GetInput{ProjectID: "42", JobID: 100})
+	_, err := GetArtifacts(context.Background(), client, ArtifactsInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
@@ -1895,7 +1972,7 @@ func TestGetArtifacts_CancelledContext(t *testing.T) {
 		_, _ = w.Write([]byte("PK"))
 	}))
 	ctx := testutil.CancelledCtx(t)
-	_, err := GetArtifacts(ctx, client, GetInput{ProjectID: "42", JobID: 100})
+	_, err := GetArtifacts(ctx, client, ArtifactsInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
 	}
@@ -2645,7 +2722,7 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 	})
 	want := "## Job #100 Artifacts\n\n" +
 		"- **Size (bytes)**: 2048\n" +
-		"\nThe archive is base64-encoded; decode it to extract the files.\n" +
+		"\nThe content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading.\n" +
 		artifactsHints
 	if md != want {
 		t.Errorf("FormatArtifactsMarkdown()\n got %q\nwant %q", md, want)
@@ -2656,14 +2733,15 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 const artifactsHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'job.download_single_artifact' to fetch one file out of the archive instead\n"
 
-// TestFormatArtifactsMarkdown_WithoutJobID checks the heading of the by-ref
+// TestFormatArtifactsMarkdown_WithoutJobID checks the card of the by-ref
 // download, which answers for a ref rather than for a job ID and must not
-// print "Job #0".
+// print "Job #0", and whose note names no file_type: that route declares
+// none, so the content is always the zip archive.
 func TestFormatArtifactsMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{Size: 512})
 	want := "## Artifacts\n\n" +
 		"- **Size (bytes)**: 512\n" +
-		"\nThe archive is base64-encoded; decode it to extract the files.\n" +
+		"\nThe zip archive is base64-encoded. Decode it to extract the files.\n" +
 		artifactsHints
 	if md != want {
 		t.Errorf("FormatArtifactsMarkdown(no job)\n got %q\nwant %q", md, want)
@@ -2682,7 +2760,7 @@ func TestFormatArtifactsMarkdown_Truncated(t *testing.T) {
 	want := "## Job #100 Artifacts\n\n" +
 		"- **Size (bytes)**: 1048576\n" +
 		"- ⚠️ **Truncated at 1 MB**\n" +
-		"\nThe archive is base64-encoded; decode it to extract the files.\n" +
+		"\nThe content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading.\n" +
 		artifactsHints
 	if md != want {
 		t.Errorf("FormatArtifactsMarkdown(truncated)\n got %q\nwant %q", md, want)

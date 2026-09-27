@@ -148,6 +148,39 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Accounts: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
+// GetInput holds parameters for retrieving one project service account.
+type GetInput struct {
+	ProjectID        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	ServiceAccountID int64                `json:"service_account_id" jsonschema:"Service account user ID,required"`
+}
+
+// Get retrieves one service account of a project through
+// GET /projects/:id/service_accounts/:user_id, which GitLab mounts from 19.4.
+// A 404 is left to the route's not-found answer, which says what it can mean:
+// no such account in the project, or an instance older than the route.
+func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	if input.ProjectID == "" {
+		return Output{}, toolutil.ErrFieldRequired("project_id")
+	}
+	if input.ServiceAccountID == 0 {
+		return Output{}, toolutil.ErrFieldRequired("service_account_id")
+	}
+	if err := ctx.Err(); err != nil {
+		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
+	}
+
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	account, _, err := client.GL().Projects.GetProjectServiceAccount(input.ProjectID.String(), input.ServiceAccountID, gl.WithContext(ctx))
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get project service account", err)
+	}
+	extra, err := toolutil.CapturedServiceAccount(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get project service account", err)
+	}
+	return toOutput(account, extra), nil
+}
+
 // CreateInput holds parameters for creating a project service account.
 type CreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`

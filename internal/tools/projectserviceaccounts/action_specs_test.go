@@ -40,10 +40,11 @@ func TestProjectServiceAccountAliases_UnknownAction_HasNone(t *testing.T) {
 }
 
 // TestActionSpecs_ConditionalMetadataReachesOnlyTheActionsThatNeedIt holds each
-// of the four per-action additions to exactly the actions it is written for:
+// of the five per-action additions to exactly the actions it is written for:
 // the token_id guidance on the two that take one, the email caution on the two
-// that accept an email, the state enum on the one list that filters by it, and
-// the expiry caution on the two that set one. Each is a name compared with a
+// that accept an email, the state enum on the one list that filters by it, the
+// expiry caution on the two that set one, and the GitLab version note on the
+// one action whose route GitLab mounts only from 19.4. Each is a name compared with a
 // literal, so a misspelling attaches the advice to the wrong action in silence,
 // and advice about a parameter an action does not have costs a model the call
 // it builds from it.
@@ -59,9 +60,11 @@ func TestActionSpecs_ConditionalMetadataReachesOnlyTheActionsThatNeedIt(t *testi
 		tokenGuidance bool
 		emailCaution  bool
 		expiryCaution bool
+		versionNote   bool
 		stateEnum     string
 	}{
 		{name: "service_account_list"},
+		{name: "service_account_get", versionNote: true},
 		{name: "service_account_create", emailCaution: true},
 		{name: "service_account_update", emailCaution: true},
 		{name: "service_account_delete"},
@@ -83,6 +86,9 @@ func TestActionSpecs_ConditionalMetadataReachesOnlyTheActionsThatNeedIt(t *testi
 			}
 			if has := strings.Contains(spec.Usage, "Omit expires_at"); has != tt.expiryCaution {
 				t.Errorf("expires_at caution = %v, want %v", has, tt.expiryCaution)
+			}
+			if has := strings.Contains(spec.Usage, "Needs GitLab 19.4 or later"); has != tt.versionNote {
+				t.Errorf("GitLab version note = %v, want %v", has, tt.versionNote)
 			}
 			if got := strings.Join(schemaEnumValues(spec, "state"), ","); got != tt.stateEnum {
 				t.Errorf("state enum = %q, want %q", got, tt.stateEnum)

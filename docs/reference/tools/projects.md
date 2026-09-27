@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Projects
-> **Individual tools**: 91
+> **Individual tools**: 92
 > **Meta-tool**: `gitlab_project` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Projects API](https://docs.gitlab.com/ee/api/projects.html)
@@ -505,6 +505,13 @@ List service accounts for a project. Supports ordering by ID or username, sortin
 | Annotation | **Read** |
 | ---------- | -------- |
 
+### `gitlab_project_service_account_get`
+
+Get one service account of a project by `project_id` and `service_account_id`. Returns ID, name, username, email, public email, and the unconfirmed email when a change is pending. Needs GitLab 19.4 or later, which is where GitLab mounts `GET /projects/:id/service_accounts/:user_id`; on an older instance every ID answers 404, so read the account from `gitlab_project_service_account_list` instead. A 404 is answered with a not-found result naming the account and the project.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
 ### `gitlab_project_service_account_create`
 
 Create a project service account. Optionally provide name, username, and email.
@@ -862,41 +869,42 @@ Delete a target branch rule by its `rule_id` (find via `gitlab_project_list_targ
 | 54 | `gitlab_project_list_user_contributed` | User & Group | Read |
 | 55 | `gitlab_project_list_user_starred` | User & Group | Read |
 | 56 | `gitlab_project_service_account_list` | Project Service Accounts | Read |
-| 57 | `gitlab_project_service_account_create` | Project Service Accounts | Create |
-| 58 | `gitlab_project_service_account_update` | Project Service Accounts | Update |
-| 59 | `gitlab_project_service_account_delete` | Project Service Accounts | Delete |
-| 60 | `gitlab_project_service_account_pat_list` | Project Service Accounts | Read |
-| 61 | `gitlab_project_service_account_pat_create` | Project Service Accounts | Create |
-| 62 | `gitlab_project_service_account_pat_rotate` | Project Service Accounts | Create |
-| 63 | `gitlab_project_service_account_pat_revoke` | Project Service Accounts | Delete |
-| 64 | `gitlab_project_get_push_rules` | Push Rules | Read |
-| 65 | `gitlab_project_add_push_rule` | Push Rules | Create |
-| 66 | `gitlab_project_edit_push_rule` | Push Rules | Update |
-| 67 | `gitlab_project_delete_push_rule` | Push Rules | Delete |
-| 68 | `gitlab_project_upload` | Uploads | Create |
-| 69 | `gitlab_project_upload_list` | Uploads | Read |
-| 70 | `gitlab_project_upload_delete` | Uploads | Delete |
-| 71 | `gitlab_project_upload_delete_by_secret` | Uploads | Delete |
-| 72 | `gitlab_project_upload_avatar` | Avatar | Create |
-| 73 | `gitlab_project_download_avatar` | Avatar | Read |
-| 74 | `gitlab_schedule_project_export` | Import / Export | Create |
-| 75 | `gitlab_get_project_export_status` | Import / Export | Read |
-| 76 | `gitlab_download_project_export` | Import / Export | Read |
-| 77 | `gitlab_import_project_from_file` | Import / Export | Create |
-| 78 | `gitlab_get_project_import_status` | Import / Export | Read |
-| 79 | `gitlab_project_approval_config_get` | Approvals (Premium/Ultimate) | Read |
-| 80 | `gitlab_project_approval_config_change` | Approvals (Premium/Ultimate) | Update |
-| 81 | `gitlab_project_approval_rule_list` | Approvals (Premium/Ultimate) | Read |
-| 82 | `gitlab_project_approval_rule_get` | Approvals (Premium/Ultimate) | Read |
-| 83 | `gitlab_project_approval_rule_create` | Approvals (Premium/Ultimate) | Create |
-| 84 | `gitlab_project_approval_rule_update` | Approvals (Premium/Ultimate) | Update |
-| 85 | `gitlab_project_approval_rule_delete` | Approvals (Premium/Ultimate) | Delete |
-| 86 | `gitlab_project_pull_mirror_get` | Pull Mirroring (Premium/Ultimate) | Read |
-| 87 | `gitlab_project_pull_mirror_configure` | Pull Mirroring (Premium/Ultimate) | Update |
-| 88 | `gitlab_project_start_mirroring` | Pull Mirroring (Premium/Ultimate) | Update |
-| 89 | `gitlab_project_list_target_branch_rules` | Target Branch Rules (Premium/Ultimate) | Read |
-| 90 | `gitlab_project_create_target_branch_rule` | Target Branch Rules (Premium/Ultimate) | Create |
-| 91 | `gitlab_project_delete_target_branch_rule` | Target Branch Rules (Premium/Ultimate) | Delete |
+| 57 | `gitlab_project_service_account_get` | Project Service Accounts | Read |
+| 58 | `gitlab_project_service_account_create` | Project Service Accounts | Create |
+| 59 | `gitlab_project_service_account_update` | Project Service Accounts | Update |
+| 60 | `gitlab_project_service_account_delete` | Project Service Accounts | Delete |
+| 61 | `gitlab_project_service_account_pat_list` | Project Service Accounts | Read |
+| 62 | `gitlab_project_service_account_pat_create` | Project Service Accounts | Create |
+| 63 | `gitlab_project_service_account_pat_rotate` | Project Service Accounts | Create |
+| 64 | `gitlab_project_service_account_pat_revoke` | Project Service Accounts | Delete |
+| 65 | `gitlab_project_get_push_rules` | Push Rules | Read |
+| 66 | `gitlab_project_add_push_rule` | Push Rules | Create |
+| 67 | `gitlab_project_edit_push_rule` | Push Rules | Update |
+| 68 | `gitlab_project_delete_push_rule` | Push Rules | Delete |
+| 69 | `gitlab_project_upload` | Uploads | Create |
+| 70 | `gitlab_project_upload_list` | Uploads | Read |
+| 71 | `gitlab_project_upload_delete` | Uploads | Delete |
+| 72 | `gitlab_project_upload_delete_by_secret` | Uploads | Delete |
+| 73 | `gitlab_project_upload_avatar` | Avatar | Create |
+| 74 | `gitlab_project_download_avatar` | Avatar | Read |
+| 75 | `gitlab_schedule_project_export` | Import / Export | Create |
+| 76 | `gitlab_get_project_export_status` | Import / Export | Read |
+| 77 | `gitlab_download_project_export` | Import / Export | Read |
+| 78 | `gitlab_import_project_from_file` | Import / Export | Create |
+| 79 | `gitlab_get_project_import_status` | Import / Export | Read |
+| 80 | `gitlab_project_approval_config_get` | Approvals (Premium/Ultimate) | Read |
+| 81 | `gitlab_project_approval_config_change` | Approvals (Premium/Ultimate) | Update |
+| 82 | `gitlab_project_approval_rule_list` | Approvals (Premium/Ultimate) | Read |
+| 83 | `gitlab_project_approval_rule_get` | Approvals (Premium/Ultimate) | Read |
+| 84 | `gitlab_project_approval_rule_create` | Approvals (Premium/Ultimate) | Create |
+| 85 | `gitlab_project_approval_rule_update` | Approvals (Premium/Ultimate) | Update |
+| 86 | `gitlab_project_approval_rule_delete` | Approvals (Premium/Ultimate) | Delete |
+| 87 | `gitlab_project_pull_mirror_get` | Pull Mirroring (Premium/Ultimate) | Read |
+| 88 | `gitlab_project_pull_mirror_configure` | Pull Mirroring (Premium/Ultimate) | Update |
+| 89 | `gitlab_project_start_mirroring` | Pull Mirroring (Premium/Ultimate) | Update |
+| 90 | `gitlab_project_list_target_branch_rules` | Target Branch Rules (Premium/Ultimate) | Read |
+| 91 | `gitlab_project_create_target_branch_rule` | Target Branch Rules (Premium/Ultimate) | Create |
+| 92 | `gitlab_project_delete_target_branch_rule` | Target Branch Rules (Premium/Ultimate) | Delete |
 
 ### Destructive Tools (Require Confirmation)
 

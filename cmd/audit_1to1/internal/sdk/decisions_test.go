@@ -25,7 +25,7 @@ const minReasonLength = 40
 // Client struct field or an interface name.
 func TestDeclaredServices_Entries_CarryAKnownCategoryAndEvidence(t *testing.T) {
 	known := map[string]bool{
-		coveredRaw: true, coveredGeneric: true, coveredGraphQL: true,
+		coveredRaw: true, coveredGraphQL: true,
 		supersededUpstream: true, unwrappedTracked: true,
 	}
 	for service, declared := range declaredServices {

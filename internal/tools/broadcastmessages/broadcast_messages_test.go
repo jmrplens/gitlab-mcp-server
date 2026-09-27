@@ -40,6 +40,8 @@ const (
 	testMessage = "Test"
 	// fmtExpErrMentionID identifies the fmt exp err mention ID constant used by this package.
 	fmtExpErrMentionID = "expected error to mention 'id', got: %v"
+	// testColor is a background color in the hex form GitLab validates.
+	testColor = "#E75E40"
 )
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
@@ -451,8 +453,9 @@ func TestGet_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts that the 400 hint lists every theme GitLab's enum accepts,
+// dark and light included, since a model avoids any value the hint leaves out.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -460,6 +463,10 @@ func TestCreate_APIError(t *testing.T) {
 	_, err := Create(context.Background(), client, CreateInput{Message: "test"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+	const themes = "theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red, dark, light;"
+	if !strings.Contains(err.Error(), themes) {
+		t.Errorf("Create() 400 error = %q, want it to contain %q", err.Error(), themes)
 	}
 }
 
@@ -912,6 +919,7 @@ func TestUpdate_OptionalFields_ReachTheRequestBody(t *testing.T) {
 		BroadcastType:      testBannerType,
 		Dismissable:        &dismiss,
 		Theme:              "red",
+		Color:              testColor,
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -937,6 +945,7 @@ func TestUpdate_OptionalFields_ReachTheRequestBody(t *testing.T) {
 		// it is set fails as loudly as one never sending it.
 		{field: "dismissable", want: false},
 		{field: "theme", want: "red"},
+		{field: "color", want: testColor},
 	}
 	for _, tt := range tests {
 		t.Run(tt.field, func(t *testing.T) {
@@ -1003,4 +1012,76 @@ func TestBroadcastMessages_NoTargetAccessLevels_SendNoSuchField(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBroadcastMessages_Color_SentOnlyWhenGiven verifies that a create and an
+// update carry `color` in the body with the value the caller gave, and leave it
+// out when the caller gave none. GitLab still declares the parameter on both
+// routes although it deprecates it in favor of theme, and an absent color keeps
+// the message's current one where an empty string would ask GitLab to clear it.
+func TestBroadcastMessages_Color_SentOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		color  string
+		call   func(*gitlabclient.Client, string) error
+	}{
+		{name: "create with color", method: http.MethodPost, path: pathBroadcastMessages, color: testColor, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Create(context.Background(), c, CreateInput{Message: testMessage, Color: color})
+			return err
+		}},
+		{name: "create without color", method: http.MethodPost, path: pathBroadcastMessages, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Create(context.Background(), c, CreateInput{Message: testMessage, Color: color})
+			return err
+		}},
+		{name: "update with color", method: http.MethodPut, path: pathBroadcastMessage1, color: testColor, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Color: color})
+			return err
+		}},
+		{name: "update without color", method: http.MethodPut, path: pathBroadcastMessage1, call: func(c *gitlabclient.Client, color string) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Message: testMessage, Color: color})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, body := bodyRecordingClient(t, tt.method, tt.path)
+			if err := tt.call(client, tt.color); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			var sent map[string]any
+			if err := json.Unmarshal(*body, &sent); err != nil {
+				t.Fatalf("decode request body %q: %v", *body, err)
+			}
+			got, ok := sent["color"]
+			if want := tt.color != ""; ok != want || (ok && got != tt.color) {
+				t.Errorf("request body %s carries color = %#v (present %v), want %q sent only when given", *body, got, ok, tt.color)
+			}
+		})
+	}
+}
+
+// bodyRecordingClient returns a client whose mock answers one broadcast
+// message for the given method and path, and the body of the request it
+// received. A request to anything else is reported and refused.
+func bodyRecordingClient(t *testing.T, method, path string) (*gitlabclient.Client, *[]byte) {
+	t.Helper()
+	body := new([]byte)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path || r.Method != method {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		*body = read
+		testutil.RespondJSON(w, http.StatusOK, messageJSON)
+	}))
+	return client, body
 }

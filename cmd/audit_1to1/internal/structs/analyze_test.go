@@ -298,6 +298,32 @@ func TestBuildReport_Deterministic(t *testing.T) {
 	}
 }
 
+// TestPackageReport_HasFindings_ReadsEachClassOnItsOwn verifies the -gaps-only
+// filter keeps a package with a finding of any one class and drops one with
+// none. Each class is set alone, so a filter that stopped reading one of them
+// drops a package whose only findings are of that class: the missing inputs
+// are the case the repository can no longer show, since every one of its
+// input rows is answered.
+func TestPackageReport_HasFindings_ReadsEachClassOnItsOwn(t *testing.T) {
+	cases := []struct {
+		name string
+		pr   packageReport
+		want bool
+	}{
+		{name: "no finding", pr: packageReport{InputPairs: 3, OutputPairs: 2}},
+		{name: "a missing input", pr: packageReport{MissingInputCount: 1}, want: true},
+		{name: "a missing output", pr: packageReport{MissingOutputCount: 2}, want: true},
+		{name: "an extra output", pr: packageReport{ExtraOutputCount: 3}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.pr.hasFindings(); got != tc.want {
+				t.Errorf("hasFindings(%+v) = %v, want %v", tc.pr, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildReport_TheCounters_AgreeWithTheGapsTheyCount verifies each
 // package's three totals are the findings under it, counted by class.
 //

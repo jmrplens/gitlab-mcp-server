@@ -575,11 +575,25 @@ type ArtifactsOutput struct {
 	Truncated bool   `json:"truncated"`
 }
 
-// GetArtifacts downloads the artifacts archive for a specific CI/CD
-// job via the GitLab Jobs artifacts API
-// (GET /projects/:id/jobs/:job_id/artifacts). The archive is truncated
-// to [maxArtifactBytes] and base64-encoded into the response.
-func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input GetInput) (ArtifactsOutput, error) {
+// ArtifactsInput defines parameters for downloading one job's artifacts.
+type ArtifactsInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	JobID     int64                `json:"job_id"     jsonschema:"Job ID whose artifacts to download,required"`
+	FileType  string               `json:"file_type,omitempty" jsonschema:"Which of the job's artifacts to download: archive (the default, the zip of the job's artifacts:paths) or a report type such as junit, cobertura, sast or dotenv. GitLab reads it from 19.4, and an older instance ignores it and answers with the archive"`
+}
+
+// GetArtifacts downloads one artifact of a specific CI/CD job via the GitLab
+// Jobs artifacts API (GET /projects/:id/jobs/:job_id/artifacts): the archive
+// by default, or the report file_type names. The content is truncated to
+// [maxArtifactBytes] and base64-encoded into the response.
+//
+// It calls the options variant because the other binding sends no file_type.
+// client-go marks that variant deprecated only because it plans to fold the
+// options into GetJobArtifacts in v4, and says to use it meanwhile whenever
+// the options are needed. A GET encodes the options as a query string, where
+// an unset file_type is left out, so a call naming none asks for exactly what
+// it asked for before.
+func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input ArtifactsInput) (ArtifactsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ArtifactsOutput{}, err
 	}
@@ -591,10 +605,14 @@ func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input GetInp
 		return ArtifactsOutput{}, toolutil.ErrRequiredInt64("jobGetArtifacts", "job_id")
 	}
 
-	reader, _, err := client.GL().Jobs.GetJobArtifacts(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
+	opts := &gl.GetJobArtifactsOptions{}
+	if input.FileType != "" {
+		opts.FileType = new(gl.ArtifactFileTypeValue(input.FileType))
+	}
+	reader, _, err := client.GL().Jobs.GetJobArtifactsWithOptions(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries file_type until client-go v4 folds it into GetJobArtifacts.
 	if err != nil {
 		return ArtifactsOutput{}, toolutil.WrapErrWithStatusHint("jobGetArtifacts", err, http.StatusNotFound,
-			"verify job_id; the job may have no artifacts, or its artifacts may have expired (controlled by .gitlab-ci.yml expire_in)")
+			"verify job_id and file_type; the job may have no artifact of that type, or its artifacts may have expired (controlled by .gitlab-ci.yml expire_in)")
 	}
 	return readArtifactContent(reader, input.JobID)
 }
@@ -805,15 +823,15 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 	if input.JobID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("jobPlay", "job_id")
 	}
-	opts := &gl.PlayJobOptions{}
-	if len(input.JobInputs) > 0 {
-		inputs, err := toolutil.BuildPipelineInputs(input.JobInputs)
-		if err != nil {
-			return Output{}, toolutil.WrapErrWithHint("jobPlay", err,
-				"job inputs must be string, number, boolean, or array of strings")
-		}
-		opts.JobInputs = inputs
+	// No input converts to an empty map, which the option's omitempty leaves
+	// out of the request exactly as it leaves out a nil one, so a guard on the
+	// length could not be observed.
+	inputs, err := toolutil.BuildPipelineInputs(input.JobInputs)
+	if err != nil {
+		return Output{}, toolutil.WrapErrWithHint("jobPlay", err,
+			"job inputs must be string, number, boolean, or array of strings")
 	}
+	opts := &gl.PlayJobOptions{JobInputs: inputs}
 	if len(input.JobVariablesAttributes) > 0 {
 		vars := make([]*gl.JobVariableOptions, len(input.JobVariablesAttributes))
 		for i, v := range input.JobVariablesAttributes {

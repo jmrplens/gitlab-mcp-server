@@ -299,8 +299,8 @@ The `job` domain provides complete job management. Its actions are `job.<action>
 | `cancel`             | Cancel a running job                                                       |
 | `retry`              | Retry a failed job                                                         |
 | `trace`              | Get job log output                                                         |
-| `artifacts`          | List job artifacts                                                         |
-| `download_artifacts` | Download a job's artifacts archive                                         |
+| `artifacts`          | Download a job's artifacts archive, or one report by `file_type` (19.4+)   |
+| `download_artifacts` | Download the latest artifacts archive for a ref and job name               |
 | `download_single_*`  | Download one file from a job's artifacts, by job ID or by ref and job name |
 | `keep_artifacts`     | Keep artifacts past their expiry                                           |
 | `delete_artifacts`   | Delete a job's artifacts (a project-wide variant deletes every job's)      |

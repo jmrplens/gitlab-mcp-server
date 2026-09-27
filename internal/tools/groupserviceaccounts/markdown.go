@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -12,6 +14,25 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatPATMarkdownString)
 	toolutil.RegisterMarkdown(FormatListPATMarkdownString)
+	toolutil.RegisterMarkdownResult(formatServiceAccountNotFound)
+}
+
+// serviceAccountNotFoundOutput is what group.service_account_get answers in
+// place of GitLab's 404, naming the account and the group it was asked for.
+type serviceAccountNotFoundOutput struct {
+	Identifier string
+}
+
+// formatServiceAccountNotFound renders the not-found answer. A 404 here has
+// two causes a caller cannot tell apart from the status alone: no such
+// service account in the group, or an instance older than GitLab 19.4, which
+// does not mount the route at all.
+func formatServiceAccountNotFound(out serviceAccountNotFoundOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult(
+		"Group Service Account", out.Identifier,
+		"Use group.service_account_list with group_id to find the account's ID",
+		"GitLab mounts this route from 19.4. On an older instance every ID answers 404, so read the account from group.service_account_list",
+	)
 }
 
 // FormatMarkdownString renders a service account as Markdown.

@@ -3,19 +3,19 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 const (
 	coveredRawGeneric     = "COVERED_RAW. Generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)"
-	coveredGenericSearch  = "COVERED_GENERIC. Method-value scoped search"
 	coveredGraphQLEpicDsc = "COVERED_GRAPHQL. Epicdiscussions pkg"
 	coveredGraphQLEpicNts = "COVERED_GRAPHQL. Epicnotes pkg"
 	skipBinaryBytes       = "INTENTIONAL_SKIP_BINARY. File bytes"
 	coveredGraphQLEpics   = "COVERED_GRAPHQL. Epics pkg"
-	coveredGenericMethod  = "COVERED_GENERIC. Method-value"
 	coveredGenericDeprPrj = "COVERED_GENERIC. Deprecated; project variant"
 )
 
@@ -78,7 +78,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		}
 		services = append(services, cov)
 	}
-	sort.Slice(services, func(i, j int) bool { return services[i].Service < services[j].Service })
+	slices.SortFunc(services, func(a, b serviceCoverage) int { return strings.Compare(a.Service, b.Service) })
 
 	var staleAcceptances []string
 	for _, use := range usage {
@@ -101,45 +101,24 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	}, nil
 }
 
-// acceptedMissingMethods adjudicates SDK service methods that the call-expression
-// scanner reports as uncovered but which are legitimately handled another way (so
-// they are NOT genuine R-ACTION gaps). The scanner only sees direct
-// client.GL().Svc.Method(...) calls, so it misses: methods passed as VALUES into a
-// generic helper, RAW REST handlers (client.GL().NewRequest+Do with a path string),
-// GraphQL handlers (ADR-0006), and capabilities covered by a superseding/generic
-// variant. It also can't know which endpoints are INTENTIONALLY not exposed (binary
-// file transfer, CI-job-token self-lookup). Each entry carries a category+rationale.
-// Key = "<Service>.<Method>" (service name without the ServiceInterface suffix).
-// Methods NOT listed here and still uncovered are the genuine new-tool backlog.
+// acceptedMissingMethods adjudicates SDK service methods that the scanner
+// reports as uncovered but which are legitimately handled another way (so they
+// are NOT genuine R-ACTION gaps). The scanner sees every selector naming a
+// method of a client-go service interface, called in place or handed on as a
+// method value, so it misses: RAW REST handlers (client.GL().NewRequest+Do with
+// a path string), GraphQL handlers (ADR-0006), and capabilities covered by a
+// superseding/generic variant. It also can't know which endpoints are
+// INTENTIONALLY not exposed (binary file transfer, CI-job-token self-lookup).
+// Each entry carries a category+rationale. Key = "<Service>.<Method>" (service
+// name without the ServiceInterface suffix). Methods NOT listed here and still
+// uncovered are the genuine new-tool backlog, and an entry whose method a
+// handler reaches is reported as stale.
 var acceptedMissingMethods = map[string]string{
 	// COVERED_VARIANT — an alternative SDK binding for an endpoint another
 	// covered method already drives; one action per endpoint is the rule.
-	"RepositoryFiles.GetRawFile": "COVERED_VARIANT. Same raw-file endpoint; gitlab_file_raw calls the streaming GetRawFileReader (client-go v2.58.0) so UPLOAD_MAX_FILE_SIZE is enforced without buffering the blob",
-
-	// COVERED_GENERIC — method-value passed to a generic helper (not a call.Fun).
-	"AwardEmoji.ListIssuesAwardEmojiOnNote":         "COVERED_GENERIC. Method-value -> listNoteAwardEmoji (gitlab_issue_note_emoji_list)",
-	"AwardEmoji.CreateIssuesAwardEmojiOnNote":       "COVERED_GENERIC. Method-value -> createNoteAwardEmoji",
-	"AwardEmoji.DeleteIssuesAwardEmojiOnNote":       "COVERED_GENERIC. Method-value -> deleteNoteAwardEmoji",
-	"AwardEmoji.ListMergeRequestAwardEmojiOnNote":   "COVERED_GENERIC. Method-value (gitlab_mr_note_emoji_list)",
-	"AwardEmoji.CreateMergeRequestAwardEmojiOnNote": coveredGenericMethod,
-	"AwardEmoji.DeleteMergeRequestAwardEmojiOnNote": coveredGenericMethod,
-	"AwardEmoji.ListSnippetAwardEmojiOnNote":        "COVERED_GENERIC. Method-value (gitlab_snippet_note_emoji_list)",
-	"AwardEmoji.CreateSnippetAwardEmojiOnNote":      coveredGenericMethod,
-	"AwardEmoji.DeleteSnippetAwardEmojiOnNote":      coveredGenericMethod,
-	"Search.Commits":                "COVERED_GENERIC. Method-value in runScopedSearch (gitlab_search_commits)",
-	"Search.CommitsByGroup":         coveredGenericSearch,
-	"Search.CommitsByProject":       coveredGenericSearch,
-	"Search.Issues":                 coveredGenericSearch,
-	"Search.IssuesByGroup":          coveredGenericSearch,
-	"Search.IssuesByProject":        coveredGenericSearch,
-	"Search.MergeRequests":          coveredGenericSearch,
-	"Search.MergeRequestsByGroup":   coveredGenericSearch,
-	"Search.MergeRequestsByProject": coveredGenericSearch,
-	"Search.Milestones":             coveredGenericSearch,
-	"Search.MilestonesByGroup":      coveredGenericSearch,
-	"Search.MilestonesByProject":    coveredGenericSearch,
-	"Runners.ListRunners":           "COVERED_GENERIC. Method-value (gitlab_runner_list)",
-	"Runners.ListAllRunners":        "COVERED_GENERIC. Method-value (gitlab_runner_list_all)",
+	"RepositoryFiles.GetRawFile":      "COVERED_VARIANT. Same raw-file endpoint; gitlab_file_raw calls the streaming GetRawFileReader (client-go v2.58.0) so UPLOAD_MAX_FILE_SIZE is enforced without buffering the blob",
+	"DraftNotes.PublishAllDraftNotes": "COVERED_VARIANT. Same POST .../draft_notes/bulk_publish endpoint; mr_review.draft_note_publish_all calls PublishAllDraftNotesWithOptions, the only binding that carries the route's note, internal and reviewer_state",
+	"Jobs.GetJobArtifacts":            "COVERED_VARIANT. Same GET /projects/:id/jobs/:job_id/artifacts endpoint; job.artifacts calls GetJobArtifactsWithOptions, the only binding that carries the route's file_type (declared from GitLab 19.4)",
 
 	// COVERED_GRAPHQL — ADR-0006 GraphQL handlers (no SDK service call).
 	"Epics.CreateEpic":                     coveredGraphQLEpics,
@@ -180,9 +159,6 @@ var acceptedMissingMethods = map[string]string{
 	"Projects.EditProjectHook":                 "COVERED_RAW. gitlab_project_hook_edit",
 	"Projects.GetProjectHook":                  "COVERED_RAW. gitlab_project_hook_get",
 	"Projects.ListProjectHooks":                "COVERED_RAW. gitlab_project_hook_list",
-	"Projects.ListUserContributedProjects":     "COVERED_RAW. gitlab_project_list_user_contributed",
-	"Projects.ListUserProjects":                "COVERED_RAW. gitlab_project_list_user_projects",
-	"Projects.ListUserStarredProjects":         "COVERED_RAW. gitlab_project_list_user_starred",
 	"ProjectImportExport.ImportFromFile":       "COVERED_RAW. gitlab_import_project_from_file",
 	"ProjectImportExport.ImportStatus":         "COVERED_RAW. gitlab_get_project_import_status",
 	"Features.SetFeatureFlag":                  "COVERED_RAW. gitlab_set_feature_flag (raw POST)",

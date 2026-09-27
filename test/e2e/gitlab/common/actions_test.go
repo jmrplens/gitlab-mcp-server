@@ -38,6 +38,7 @@ const (
 // A project's service accounts and their tokens.
 const (
 	actionProjectServiceAccountList      harness.ActionID = "project.service_account_list"
+	actionProjectServiceAccountGet       harness.ActionID = "project.service_account_get"
 	actionProjectServiceAccountCreate    harness.ActionID = "project.service_account_create"
 	actionProjectServiceAccountUpdate    harness.ActionID = "project.service_account_update"
 	actionProjectServiceAccountDelete    harness.ActionID = "project.service_account_delete"
@@ -128,6 +129,7 @@ const (
 // A group's service accounts and their tokens, Free like the project's.
 const (
 	actionGroupServiceAccountList      harness.ActionID = "group.service_account_list"
+	actionGroupServiceAccountGet       harness.ActionID = "group.service_account_get"
 	actionGroupServiceAccountCreate    harness.ActionID = "group.service_account_create"
 	actionGroupServiceAccountUpdate    harness.ActionID = "group.service_account_update"
 	actionGroupServiceAccountDelete    harness.ActionID = "group.service_account_delete"

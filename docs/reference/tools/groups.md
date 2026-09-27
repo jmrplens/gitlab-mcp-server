@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Groups
-> **Individual tools**: 104
+> **Individual tools**: 105
 > **Meta-tool**: `gitlab_group` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog) — one tool for the whole domain, including members, labels, milestones, boards, push rules, protected branches and environments, releases, service accounts, wikis, relations export and markdown uploads
 > **Dynamic IDs**: `group.*`, `issue.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
@@ -16,7 +16,7 @@ The groups domain covers the full lifecycle of GitLab groups: creation, retrieva
 
 On the default dynamic surface, these operations are the `group.*`, `issue.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the 104 individual tools below collapse into the single `gitlab_group` meta-tool, which dispatches by `action` parameter. Labels, milestones, boards, members, wikis and the rest have no meta-tool of their own — each is a set of actions on `gitlab_group`, such as `group_label_list`, `group_milestone_create`, `group_board_get` and `group_member_add`. Group SCIM is the one exception — it ships as its own `gitlab_group_scim` meta-tool and is documented in [identity-security.md](identity-security.md).
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the 105 individual tools below collapse into the single `gitlab_group` meta-tool, which dispatches by `action` parameter. Labels, milestones, boards, members, wikis and the rest have no meta-tool of their own: each is a set of actions on `gitlab_group`, such as `group_label_list`, `group_milestone_create`, `group_board_get` and `group_member_add`. Group SCIM is the one exception, since it ships as its own `gitlab_group_scim` meta-tool and is documented in [identity-security.md](identity-security.md).
 
 ### Common Questions
 
@@ -514,6 +514,13 @@ List all service accounts for a GitLab group. Returns ID, name, username, and em
 | Annotation | **Read** |
 | ---------- | -------- |
 
+### `gitlab_group_service_account_get`
+
+Get one service account of a GitLab group by `group_id` and `service_account_id`. Returns ID, name, username, email, public email, and the unconfirmed email when a change is pending. Needs GitLab 19.4 or later, which is where GitLab mounts `GET /groups/:id/service_accounts/:user_id`; on an older instance every ID answers 404, so read the account from `gitlab_group_service_account_list` instead. A 404 is answered with a not-found result naming the account and the group, and a 400 means the user belongs to the group and is not a service account.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
 ### `gitlab_group_service_account_create`
 
 Create a service account in a top-level GitLab group. Send `group_id`, plus `name` and `username`, and optionally `email`. Requires Owner role.
@@ -960,53 +967,54 @@ Delete a group markdown upload by secret and filename.
 | 55 | `gitlab_group_protected_environment_unprotect` | Protected Environments | Delete |
 | 56 | `gitlab_group_release_list` | Releases | Read |
 | 57 | `gitlab_group_service_account_list` | Service Accounts | Read |
-| 58 | `gitlab_group_service_account_create` | Service Accounts | Create |
-| 59 | `gitlab_group_service_account_update` | Service Accounts | Update |
-| 60 | `gitlab_group_service_account_delete` | Service Accounts | Delete |
-| 61 | `gitlab_group_service_account_pat_list` | Service Accounts | Read |
-| 62 | `gitlab_group_service_account_pat_create` | Service Accounts | Create |
-| 63 | `gitlab_group_service_account_pat_revoke` | Service Accounts | Delete |
-| 64 | `gitlab_group_service_account_pat_rotate` | Service Accounts | Update |
-| 65 | `gitlab_group_wiki_list` | Wikis (Premium) | Read |
-| 66 | `gitlab_group_wiki_get` | Wikis (Premium) | Read |
-| 67 | `gitlab_group_wiki_create` | Wikis (Premium) | Create |
-| 68 | `gitlab_group_wiki_edit` | Wikis (Premium) | Update |
-| 69 | `gitlab_group_wiki_delete` | Wikis (Premium) | Delete |
-| 70 | `gitlab_list_group_epic_label_events` | Epic Label Events (Premium/Ultimate) | Read |
-| 71 | `gitlab_get_group_epic_label_event` | Epic Label Events (Premium/Ultimate) | Read |
-| 72 | `gitlab_group_label_list` | Labels | Read |
-| 73 | `gitlab_group_label_get` | Labels | Read |
-| 74 | `gitlab_group_label_create` | Labels | Create |
-| 75 | `gitlab_group_label_update` | Labels | Update |
-| 76 | `gitlab_group_label_delete` | Labels | Delete |
-| 77 | `gitlab_group_label_subscribe` | Labels | Update |
-| 78 | `gitlab_group_label_unsubscribe` | Labels | Update |
-| 79 | `gitlab_group_milestone_list` | Milestones | Read |
-| 80 | `gitlab_group_milestone_get` | Milestones | Read |
-| 81 | `gitlab_group_milestone_create` | Milestones | Create |
-| 82 | `gitlab_group_milestone_update` | Milestones | Update |
-| 83 | `gitlab_group_milestone_delete` | Milestones | Delete |
-| 84 | `gitlab_group_milestone_issues` | Milestones | Read |
-| 85 | `gitlab_group_milestone_merge_requests` | Milestones | Read |
-| 86 | `gitlab_group_milestone_burndown_events` | Milestones | Read |
-| 87 | `gitlab_schedule_group_export` | Import/Export | Create |
-| 88 | `gitlab_download_group_export` | Import/Export | Read |
-| 89 | `gitlab_import_group_from_file` | Import/Export | Create |
-| 90 | `gitlab_group_board_list` | Issue Boards | Read |
-| 91 | `gitlab_group_board_get` | Issue Boards | Read |
-| 92 | `gitlab_group_board_create` | Issue Boards | Create |
-| 93 | `gitlab_group_board_update` | Issue Boards | Update |
-| 94 | `gitlab_group_board_delete` | Issue Boards | Delete |
-| 95 | `gitlab_group_board_list_lists` | Issue Boards | Read |
-| 96 | `gitlab_group_board_list_get` | Issue Boards | Read |
-| 97 | `gitlab_group_board_list_create` | Issue Boards | Create |
-| 98 | `gitlab_group_board_list_update` | Issue Boards | Update |
-| 99 | `gitlab_group_board_list_delete` | Issue Boards | Delete |
-| 100 | `gitlab_schedule_group_relations_export` | Relations Export | Create |
-| 101 | `gitlab_list_group_relations_export_status` | Relations Export | Read |
-| 102 | `gitlab_list_group_markdown_uploads` | Markdown Uploads | Read |
-| 103 | `gitlab_delete_group_markdown_upload_by_id` | Markdown Uploads | Delete |
-| 104 | `gitlab_delete_group_markdown_upload_by_secret` | Markdown Uploads | Delete |
+| 58 | `gitlab_group_service_account_get` | Service Accounts | Read |
+| 59 | `gitlab_group_service_account_create` | Service Accounts | Create |
+| 60 | `gitlab_group_service_account_update` | Service Accounts | Update |
+| 61 | `gitlab_group_service_account_delete` | Service Accounts | Delete |
+| 62 | `gitlab_group_service_account_pat_list` | Service Accounts | Read |
+| 63 | `gitlab_group_service_account_pat_create` | Service Accounts | Create |
+| 64 | `gitlab_group_service_account_pat_revoke` | Service Accounts | Delete |
+| 65 | `gitlab_group_service_account_pat_rotate` | Service Accounts | Update |
+| 66 | `gitlab_group_wiki_list` | Wikis (Premium) | Read |
+| 67 | `gitlab_group_wiki_get` | Wikis (Premium) | Read |
+| 68 | `gitlab_group_wiki_create` | Wikis (Premium) | Create |
+| 69 | `gitlab_group_wiki_edit` | Wikis (Premium) | Update |
+| 70 | `gitlab_group_wiki_delete` | Wikis (Premium) | Delete |
+| 71 | `gitlab_list_group_epic_label_events` | Epic Label Events (Premium/Ultimate) | Read |
+| 72 | `gitlab_get_group_epic_label_event` | Epic Label Events (Premium/Ultimate) | Read |
+| 73 | `gitlab_group_label_list` | Labels | Read |
+| 74 | `gitlab_group_label_get` | Labels | Read |
+| 75 | `gitlab_group_label_create` | Labels | Create |
+| 76 | `gitlab_group_label_update` | Labels | Update |
+| 77 | `gitlab_group_label_delete` | Labels | Delete |
+| 78 | `gitlab_group_label_subscribe` | Labels | Update |
+| 79 | `gitlab_group_label_unsubscribe` | Labels | Update |
+| 80 | `gitlab_group_milestone_list` | Milestones | Read |
+| 81 | `gitlab_group_milestone_get` | Milestones | Read |
+| 82 | `gitlab_group_milestone_create` | Milestones | Create |
+| 83 | `gitlab_group_milestone_update` | Milestones | Update |
+| 84 | `gitlab_group_milestone_delete` | Milestones | Delete |
+| 85 | `gitlab_group_milestone_issues` | Milestones | Read |
+| 86 | `gitlab_group_milestone_merge_requests` | Milestones | Read |
+| 87 | `gitlab_group_milestone_burndown_events` | Milestones | Read |
+| 88 | `gitlab_schedule_group_export` | Import/Export | Create |
+| 89 | `gitlab_download_group_export` | Import/Export | Read |
+| 90 | `gitlab_import_group_from_file` | Import/Export | Create |
+| 91 | `gitlab_group_board_list` | Issue Boards | Read |
+| 92 | `gitlab_group_board_get` | Issue Boards | Read |
+| 93 | `gitlab_group_board_create` | Issue Boards | Create |
+| 94 | `gitlab_group_board_update` | Issue Boards | Update |
+| 95 | `gitlab_group_board_delete` | Issue Boards | Delete |
+| 96 | `gitlab_group_board_list_lists` | Issue Boards | Read |
+| 97 | `gitlab_group_board_list_get` | Issue Boards | Read |
+| 98 | `gitlab_group_board_list_create` | Issue Boards | Create |
+| 99 | `gitlab_group_board_list_update` | Issue Boards | Update |
+| 100 | `gitlab_group_board_list_delete` | Issue Boards | Delete |
+| 101 | `gitlab_schedule_group_relations_export` | Relations Export | Create |
+| 102 | `gitlab_list_group_relations_export_status` | Relations Export | Read |
+| 103 | `gitlab_list_group_markdown_uploads` | Markdown Uploads | Read |
+| 104 | `gitlab_delete_group_markdown_upload_by_id` | Markdown Uploads | Delete |
+| 105 | `gitlab_delete_group_markdown_upload_by_secret` | Markdown Uploads | Delete |
 
 ### Destructive Tools (Require Confirmation)
 

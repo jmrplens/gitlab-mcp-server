@@ -28,8 +28,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 
-	if len(specs) != 8 {
-		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
+	if len(specs) != 9 {
+		t.Fatalf("len(ActionSpecs) = %d, want 9", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "groupserviceaccounts" {
@@ -41,7 +41,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 
 	byTool := groupServiceAccountSpecsByTool(t, specs)
-	for _, name := range []string{"gitlab_group_service_account_list", "gitlab_group_service_account_pat_list"} {
+	for _, name := range []string{"gitlab_group_service_account_list", "gitlab_group_service_account_get", "gitlab_group_service_account_pat_list"} {
 		t.Run(name, func(t *testing.T) {
 			if !byTool[name].ReadOnly {
 				t.Errorf("%s should be read-only", name)
@@ -71,6 +71,8 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/service_accounts"):
 			testutil.RespondJSON(w, http.StatusOK, registerAccountsJSON)
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/service_accounts/42"):
+			testutil.RespondJSON(w, http.StatusOK, registerAccountJSON)
 		case r.Method == http.MethodGet && strings.Contains(path, "/personal_access_tokens"):
 			testutil.RespondJSON(w, http.StatusOK, registerPATsJSON)
 		case r.Method == http.MethodPost && strings.Contains(path, "/personal_access_tokens"):
@@ -93,6 +95,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_group_service_account_list", map[string]any{"group_id": "mygroup"}},
+		{"gitlab_group_service_account_get", map[string]any{"group_id": "mygroup", "service_account_id": 42}},
 		{"gitlab_group_service_account_create", map[string]any{"group_id": "mygroup", "name": "svc", "username": "svc-user"}},
 		{"gitlab_group_service_account_update", map[string]any{"group_id": "mygroup", "service_account_id": 42, "name": "svc2"}},
 		{"gitlab_group_service_account_delete", map[string]any{"group_id": "mygroup", "service_account_id": 42}},
@@ -149,7 +152,68 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	}
 }
 
-// groupServiceAccountMetadataSpecs returns the eight specs with a client that
+// TestActionSpecs_GetRoute_AnswersA404WithANotFoundResult verifies the get
+// route answers GitLab's 404 with the not-found output naming the account and
+// the group the caller asked about, and passes every other refusal through as
+// an error. A 404 is the one answer an instance older than GitLab 19.4 gives
+// for every ID, so the not-found card is where that is said.
+func TestActionSpecs_GetRoute_AnswersA404WithANotFoundResult(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		input      map[string]any
+		wantResult any
+		wantErr    bool
+	}{
+		{
+			// JSON numbers of eight digits, which reach the route as float64s
+			// and would print in exponent form without ParamText.
+			name:       "404 as JSON numbers",
+			status:     http.StatusNotFound,
+			input:      map[string]any{"group_id": "mygroup", "service_account_id": float64(31234567)},
+			wantResult: serviceAccountNotFoundOutput{Identifier: "ID 31234567 in group mygroup"},
+		},
+		{
+			name:    "403 stays an error",
+			status:  http.StatusForbidden,
+			input:   map[string]any{"group_id": "mygroup", "service_account_id": float64(42)},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			byTool := groupServiceAccountSpecsByTool(t, ActionSpecs(client))
+			result, err := byTool["gitlab_group_service_account_get"].Route.Handler(t.Context(), tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Route.Handler error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && result != tt.wantResult {
+				t.Errorf("Route.Handler result = %#v, want %#v", result, tt.wantResult)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_Get_StatesTheGitLabVersionItNeeds verifies the get action
+// tells a model, before it calls, that GitLab mounts the route from 19.4 and
+// where to read the account on an older instance. The route is absent from
+// 19.3, so without the sentence an older instance's 404 reads as an account
+// that does not exist.
+func TestActionSpecs_Get_StatesTheGitLabVersionItNeeds(t *testing.T) {
+	usage := groupServiceAccountMetadataSpecs(t)["gitlab_group_service_account_get"].Usage
+	for _, want := range []string{"GitLab 19.4 or later", "group.service_account_list"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(usage, want) {
+				t.Errorf("service_account_get usage %q does not contain %q", usage, want)
+			}
+		})
+	}
+}
+
+// groupServiceAccountMetadataSpecs returns the nine specs with a client that
 // answers nothing, for the assertions that read metadata rather than call a
 // route. Every spec-building branch runs at construction, so no GitLab response
 // is involved in any of them.
@@ -164,7 +228,7 @@ func groupServiceAccountMetadataSpecs(t *testing.T) map[string]toolutil.ActionSp
 // toolsWhere returns the sorted individual-tool names whose spec satisfies
 // match. Collecting the whole set and comparing it once is what makes a
 // pairing assertable: a branch that names the wrong tool both loses the tool it
-// was written for and gains the seven it was not, and only the full set shows
+// was written for and gains the eight it was not, and only the full set shows
 // both halves.
 func toolsWhere(byTool map[string]toolutil.ActionSpec, match func(toolutil.ActionSpec) bool) []string {
 	var names []string
@@ -182,7 +246,7 @@ func toolsWhere(byTool map[string]toolutil.ActionSpec, match func(toolutil.Actio
 // before it shapes a call — when to leave email out, when to leave expires_at
 // out, and what rotating does to the token it is handed — and the catalog is
 // well formed either way, so nothing that counts the specs or reads their
-// names can tell the advice landed on the wrong seven actions. The property is
+// names can tell the advice landed on the wrong actions. The property is
 // the pairing between a sentence and the tools that must carry it.
 func TestActionSpecs_UsageGuidance_ReachesExactlyTheToolsItIsWrittenFor(t *testing.T) {
 	byTool := groupServiceAccountMetadataSpecs(t)
@@ -220,24 +284,36 @@ func TestActionSpecs_UsageGuidance_ReachesExactlyTheToolsItIsWrittenFor(t *testi
 	}
 }
 
-// TestActionSpecs_RotateAlone_CarriesAnIndividualToolDescription holds the
-// branch that gives the rotate tool a description of its own. It is the only
-// action here whose result is a secret the caller can never fetch again, and
-// the description is where that is said; given to the other seven instead it
+// TestActionSpecs_RotateAndGetAlone_CarryAnIndividualToolDescription holds
+// the two branches that give a tool a description of its own. Rotate is the
+// only action here whose result is a secret the caller can never fetch again,
+// and the description is where that is said; given to the others instead it
 // would tell a model that listing tokens returns a one-time value, and leave
-// the action it was written for described by its generated title alone.
-func TestActionSpecs_RotateAlone_CarriesAnIndividualToolDescription(t *testing.T) {
+// the action it was written for described by its generated title alone. Get
+// is the one action the curated snapshot has no row for yet.
+func TestActionSpecs_RotateAndGetAlone_CarryAnIndividualToolDescription(t *testing.T) {
 	byTool := groupServiceAccountMetadataSpecs(t)
 
 	got := toolsWhere(byTool, func(spec toolutil.ActionSpec) bool {
 		return spec.IndividualTool.Description != ""
 	})
-	want := []string{"gitlab_group_service_account_pat_rotate"}
+	want := []string{"gitlab_group_service_account_get", "gitlab_group_service_account_pat_rotate"}
 	if !slices.Equal(got, want) {
 		t.Errorf("tools carrying an individual-tool description = %v, want %v", got, want)
 	}
 	if desc := byTool["gitlab_group_service_account_pat_rotate"].IndividualTool.Description; !strings.Contains(desc, "revokes the supplied token_id") {
 		t.Errorf("rotate description = %q, want it to say the supplied token is revoked", desc)
+	}
+	// The get action is new, so the golden snapshot the others take their
+	// curated description from has no row for it yet: its own description
+	// is what says the release it needs, what it returns and where to go next.
+	getDesc := byTool["gitlab_group_service_account_get"].IndividualTool.Description
+	for _, want := range []string{"GitLab 19.4 or later", "Returns:", "See also: gitlab_group_service_account_list"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(getDesc, want) {
+				t.Errorf("get description = %q, want it to contain %q", getDesc, want)
+			}
+		})
 	}
 }
 
@@ -245,7 +321,7 @@ func TestActionSpecs_RotateAlone_CarriesAnIndividualToolDescription(t *testing.T
 // input-schema override branch. `state` is not one of the parameters the
 // central table gives an enum to, so this override is the only thing telling a
 // model that active and inactive are the two values GitLab accepts; landed on
-// the other seven actions it would constrain a parameter they do not have and
+// the other eight actions it would constrain a parameter they do not have and
 // leave the listing taking any string.
 func TestActionSpecs_TokenStateEnum_IsPublishedOnThePATListingAlone(t *testing.T) {
 	byTool := groupServiceAccountMetadataSpecs(t)
@@ -270,7 +346,7 @@ func TestActionSpecs_TokenStateEnum_IsPublishedOnThePATListingAlone(t *testing.T
 // TestActionSpecs_TokenIDGuidance_GoesToTheTwoActionsThatTakeATokenID holds
 // both operands of the guidance branch. The guidance exists because the two
 // actions take a service_account_id and a token_id side by side and a model
-// that confuses them revokes or rotates the wrong credential; given to the six
+// that confuses them revokes or rotates the wrong credential; given to the seven
 // actions that take no token_id it describes a parameter that is not there,
 // and the two that need it are left with the confusion unaddressed.
 func TestActionSpecs_TokenIDGuidance_GoesToTheTwoActionsThatTakeATokenID(t *testing.T) {

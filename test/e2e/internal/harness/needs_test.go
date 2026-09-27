@@ -7,12 +7,15 @@
 package harness
 
 import (
+	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // testInstance builds an instance for the need table, with no client: every
@@ -85,6 +88,13 @@ func TestNeeds_EachRequirement_IsJudgedAgainstTheRun(t *testing.T) {
 			absent:     testInstance(runtimeFacts{Tier: edition.Premium}, nil),
 			reasonWord: "premium",
 		},
+		{
+			name:       "gitlab release",
+			need:       GitLabAtLeast(19, 4),
+			provided:   testInstance(runtimeFacts{Version: "19.4.0-ee"}, nil),
+			absent:     testInstance(runtimeFacts{Version: "19.3.1-ee"}, nil),
+			reasonWord: "19.4",
+		},
 	}
 
 	for _, testCase := range cases {
@@ -98,6 +108,54 @@ func TestNeeds_EachRequirement_IsJudgedAgainstTheRun(t *testing.T) {
 			}
 			if !containsFold(reason, testCase.reasonWord) {
 				t.Fatalf("%s reason = %q, want it to name %q", testCase.need, reason, testCase.reasonWord)
+			}
+		})
+	}
+}
+
+// TestGitLabAtLeast_ComparesTheReleaseAndRefusesAnUnreadableVersion checks the
+// release comparison at each of its edges: a later major whatever its minor, the
+// same major with the minor at or past the one wanted, the same major below it,
+// and an earlier major whose minor is larger, which a comparison of the minor
+// alone would pass. A version that does not read as a release is judged too old
+// and says so, because running a scenario against an instance that may lack
+// the route fails it for a reason that is not this server's.
+func TestGitLabAtLeast_ComparesTheReleaseAndRefusesAnUnreadableVersion(t *testing.T) {
+	need := GitLabAtLeast(19, 4)
+	if got, want := need.String(), "GitLab 19.4 or later"; got != want {
+		t.Errorf("need name = %q, want %q", got, want)
+	}
+	cases := []struct {
+		version    string
+		want       bool
+		reasonWord string
+	}{
+		{version: "20.0.0", want: true},
+		{version: "19.4.0-ee", want: true},
+		{version: "19.5.0-pre", want: true},
+		// A version with no patch still names its release.
+		{version: "19.4", want: true},
+		{version: "19.3.1-ee", want: false, reasonWord: "19.3.1-ee"},
+		{version: "18.11.0", want: false, reasonWord: "18.11.0"},
+		{version: "", want: false, reasonWord: "does not read"},
+		{version: "19", want: false, reasonWord: "does not read"},
+		{version: "x.4.0", want: false, reasonWord: "does not read"},
+		{version: "19.y.0", want: false, reasonWord: "does not read"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.version, func(t *testing.T) {
+			ok, reason := need.available(testInstance(runtimeFacts{Version: testCase.version}, nil))
+			if ok != testCase.want {
+				t.Fatalf("available(%q) = %v (%s), want %v", testCase.version, ok, reason, testCase.want)
+			}
+			if testCase.want {
+				if reason != "" {
+					t.Errorf("available(%q) reason = %q, want none", testCase.version, reason)
+				}
+				return
+			}
+			if !strings.Contains(reason, testCase.reasonWord) {
+				t.Errorf("available(%q) reason = %q, want it to name %q", testCase.version, reason, testCase.reasonWord)
 			}
 		})
 	}
@@ -119,6 +177,54 @@ func TestNeedRunner_NoClientOutsideDocker_IsUnavailable(t *testing.T) {
 	// The answer is remembered, so a package full of runner tests asks once.
 	if ok, _ := NeedRunner.available(inst); ok {
 		t.Fatal("NeedRunner changed its answer on the second call")
+	}
+}
+
+// TestNeedRunner_ListingOutsideDocker_AsksForAnInstanceRunner checks the half
+// of the runner lookup a self-hosted run with a client takes: it lists the
+// instance runners and answers yes only when the listing holds one. A listing
+// GitLab refuses is a run that cannot tell, which is judged as no runner.
+func TestNeedRunner_ListingOutsideDocker_AsksForAnInstanceRunner(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   bool
+	}{
+		{name: "one instance runner", status: http.StatusOK, body: `[{"id":1,"runner_type":"instance_type"}]`, want: true},
+		{name: "no runner", status: http.StatusOK, body: `[]`},
+		{name: "listing refused", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inst := testInstance(runtimeFacts{}, nil)
+			inst.client = testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/runners" || r.URL.Query().Get("type") != "instance_type" {
+					t.Errorf("request = %s?%s, want the instance runner listing", r.URL.Path, r.URL.RawQuery)
+				}
+				testutil.RespondJSON(w, tc.status, tc.body)
+			}))
+			if ok, _ := NeedRunner.available(inst); ok != tc.want {
+				t.Errorf("NeedRunner available = %v, want %v", ok, tc.want)
+			}
+		})
+	}
+}
+
+// TestOptions_LocksAndSerial_RecordTheirDeclarations checks the two run
+// declarations reach the options the Env is built from: every lock named, in
+// order and repeats included (acquireLocks takes a repeated one once), and the
+// serial flag.
+func TestOptions_LocksAndSerial_RecordTheirDeclarations(t *testing.T) {
+	var opts envOptions
+	for _, option := range []Option{Locks(LockInstanceGlobal, LockCurrentUserState), Locks(LockInstanceGlobal), Serial()} {
+		option(&opts)
+	}
+	if want := []Lock{LockInstanceGlobal, LockCurrentUserState, LockInstanceGlobal}; !slices.Equal(opts.locks, want) {
+		t.Errorf("locks = %v, want %v", opts.locks, want)
+	}
+	if !opts.serial {
+		t.Error("serial = false after Serial()")
 	}
 }
 
@@ -264,10 +370,12 @@ func TestSerialGate_ManyHolders_ReleaseEveryOne(t *testing.T) {
 	})
 
 	for i, release := range releases {
+		// The wait gives the serial test time to walk through a gate that
+		// opened too early; a non-blocking look would pass before it had run.
 		select {
 		case <-opened:
 			t.Fatalf("the gate opened with %d holders still inside", len(releases)-i)
-		default:
+		case <-time.After(50 * time.Millisecond):
 		}
 		release()
 	}
@@ -277,6 +385,35 @@ func TestSerialGate_ManyHolders_ReleaseEveryOne(t *testing.T) {
 	case <-opened:
 	default:
 		t.Fatal("the gate never opened after every holder left")
+	}
+}
+
+// TestSerialGate_SerialTestInside_KeepsEveryOtherTestOut checks the other
+// direction of Serial: once a serial test holds the gate, a test that did not
+// hold a slot before waits until the serial test leaves, rather than starting
+// beside the change it declared nothing could share the instance with.
+func TestSerialGate_SerialTestInside_KeepsEveryOtherTestOut(t *testing.T) {
+	g := newSerialGate()
+	release := g.enter("TestSerial", true)
+
+	entered := make(chan struct{})
+	go func() {
+		other := g.enter("TestOther", false)
+		close(entered)
+		other()
+	}()
+
+	select {
+	case <-entered:
+		t.Fatal("another test entered while the serial test held the gate")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	release()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the other test never entered after the serial test left")
 	}
 }
 

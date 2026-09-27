@@ -1299,8 +1299,11 @@ written; the record has been re-pinned to 19.4.1-ee since.
   `ProjectsService.GetProjectServiceAccount` wrap
   `GET /…/service_accounts/:user_id` as of **v3.12.0**
   ([!3056](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3056),
-  somebody else's), which this server does not yet publish an action for. That
-  is new surface for the 1:1 review (R-ACTION) rather than a workaround.
+  somebody else's), which this server publishes as `group.service_account_get`
+  and `project.service_account_get`. GitLab mounts that route from 19.4
+  ([gitlab-org/gitlab!250360](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/250360),
+  first tagged in `v19.4.0-ee`), so both actions say so, and on an older
+  instance every ID answers 404.
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
@@ -3568,13 +3571,18 @@ written the same way.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: none taken. Reaching the body-less shape again would mean
-  calling `PublishAllDraftNotesWithOptions`, which is marked `Deprecated:`
-  upstream and would trip `staticcheck` SA1019 under this repository's
-  `checks: all`, to buy bytes GitLab ignores.
-  `TestDraftNotePublishAll_SendsNoPublishParameters` in
-  `internal/tools/mrdraftnotes` pins what the call sends instead, and accepts
-  either spelling of an empty body so an upstream fix does not fail the suite.
+- **Workaround**: no longer reached from this repository, as a side effect
+  rather than a workaround. `mr_review.draft_note_publish_all` offers the
+  route's `note`, `internal` and `reviewer_state`, and only
+  `PublishAllDraftNotesWithOptions` carries them, so the handler calls it with
+  a non-nil options value and a call naming none of the three sends `{}`. The
+  call carries a `//nolint:staticcheck` for SA1019, because client-go marks the
+  method `Deprecated:` only until v4 folds the options into
+  `PublishAllDraftNotes`, and says to use it meanwhile when the options are
+  needed. `TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven`
+  in `internal/tools/mrdraftnotes` pins the body for each combination. The
+  defect itself is untouched and still reaches any other delegation of the
+  same shape on a POST, PUT or PATCH.
 
 ### Seven more option structs send an optional param on every call
 

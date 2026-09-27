@@ -1,15 +1,14 @@
 package sdk
 
-// Service declaration categories. The first four mirror the vocabulary
+// Service declaration categories. The first two mirror the vocabulary
 // acceptedMissingMethods already uses one level up, so a reader who knows the
-// method table can read this one; the last two are service-level only.
+// method table can read this one; the last two are service-level only. There
+// is no category for a service whose methods are handed on as values: the
+// scanner records a method value as reached, so such a service is called.
 const (
 	// coveredRaw: reached through client.GL().NewRequest + Do rather than the
 	// wrapper, for a reason the handler documents.
 	coveredRaw = "COVERED_RAW"
-	// coveredGeneric: the wrapper's methods are passed as VALUES into a generic
-	// helper, so they are calls the call-expression scanner cannot see.
-	coveredGeneric = "COVERED_GENERIC"
 	// coveredGraphQL: the domain is reached over GraphQL (ADR-0006). The
 	// decision about whether that is still right lives in graphqlDecisions,
 	// per operation.
@@ -64,9 +63,6 @@ var declaredServices = map[string]declaration{
 	"ApplicationStatistics": {coveredRaw, "internal/tools/appstatistics.Get issues a raw GET application/statistics: client-go's ApplicationStatistics declares int64 fields and some GitLab versions answer with string-encoded numbers, so the wrapper cannot decode a successful response. Recorded in docs/development/upstream-bugs.md"},
 	"GroupEpicBoards":       {coveredRaw, "internal/tools/groupepicboards issues raw GETs for groups/:id/epic_boards and .../:board_id: the wrapper's GroupEpicBoard type omits documented response fields (hide_backlog_list, hide_closed_list, labels, lists), and the raw request decodes the full documented shape"},
 	"Epics":                 {coveredRaw, "internal/tools/epics issues raw GETs for groups/:id/epics and .../:epic_iid/epics: the wrapper's Epic type omits fourteen documented response fields (parent_iid, color, text_color, web_edit_url, work_item_id, subscribed, reference, references, imported, imported_from, _links, end_date and the two inherited-source dates), declares two the endpoint never sends (user_notes_count, url), types labels []string so the documented with_labels_details parameter makes the response undecodable, and its EpicAuthor omits the locked and public_email keys the live author carries. The other four epic actions take the Work Items GraphQL API, which the interface's own upstream doc comment directs to. Recorded in docs/development/upstream-bugs.md"},
-
-	// COVERED_GENERIC
-	"Invites": {coveredGeneric, "internal/tools/invites passes all four methods as method VALUES into generic list/invite helpers (ListPendingProjectInvitations, ListPendingGroupInvitations, ProjectInvites, GroupInvites), which is a call the call-expression scanner cannot see"},
 
 	// COVERED_GRAPHQL — see graphqlDecisions for the per-operation decision.
 	"EpicIssues":             {coveredGraphQL, "internal/tools/epicissues drives the work-item hierarchy widget over GraphQL. The interface itself is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'"},
