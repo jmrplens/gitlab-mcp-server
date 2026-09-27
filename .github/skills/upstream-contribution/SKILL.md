@@ -65,7 +65,7 @@ Answer the breaking-change heading honestly rather than with a flat "no". Correc
 
 Say the gap was found while developing this MCP server and link the repository: the backlink is the point of contributing from here.
 
-**Always reference the drift issue, and do it in the opening line.** Every merge request that comes out of the field-by-field review names issue 2300 in the first paragraph of "What does this MR do?", and carries the machine-readable form on a line of its own at the end:
+**While issue 2300 is open, always reference it, and do it in the opening line.** Every merge request that comes out of the field-by-field review before the umbrella closes names issue 2300 in the first paragraph of "What does this MR do?", and carries the machine-readable form on a line of its own at the end:
 
 ```text
 Related to https://gitlab.com/gitlab-org/api/client-go/-/issues/2300

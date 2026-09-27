@@ -779,9 +779,11 @@ parameter is typed with the wrong value type altogether.
 - `EventTypeValue` lacks `approved`, which
   [the user contribution events](https://docs.gitlab.com/user/profile/contributions_calendar/#user-contribution-events)
   list among the action types the events API filters on.
-- `EventTargetTypeValue` lacks `epic`, which the
-  [events API](https://docs.gitlab.com/api/events/) lists as a `target_type`
-  since GitLab 17.3.
+- `EventTargetTypeValue` lacks `wiki` and `design`, which the events routes
+  accept. The [events API](https://docs.gitlab.com/api/events/) page also lists
+  `epic` as a `target_type` since GitLab 17.3, but the routes validate against
+  `Event.target_types`, which has no epic, so a request filtering on it is
+  refused; `epic` is not a value to add.
 - `TodoAction` lacks `unmergeable`, `merge_train_removed` and
   `member_access_requested`, all listed by the
   [to-do items API](https://docs.gitlab.com/api/todos/) as `action` filter
