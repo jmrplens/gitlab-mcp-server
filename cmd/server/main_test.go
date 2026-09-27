@@ -55,6 +55,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -1803,6 +1804,99 @@ func TestCreateServer_MetaParameterSchema_IsAppliedOnlyWhereMetaToolsAreBuilt(t 
 
 			if got := tools.MetaParamSchema(); got != tc.want {
 				t.Errorf("meta parameter schema after a %s server = %q, want %q", tc.surface, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRegister_AnExcludedResource_CannotBeSubscribedTo covers the handler index
+// registration publishes to the subscription runtime. Until it does, the
+// watchers read through an index seeded with every resource, so an operator
+// who removed pipeline.get with --exclude-tools would still find the pipeline
+// watchable, and polled on a schedule, by any client that knows the URI. The
+// served case beside it proves the backend answers that URI, so the refusal
+// is the exclusion's and not the fixture's.
+//
+// It subscribes through the credential's own manager rather than through a
+// client, as the tests in subscriptions_test.go do: on the protocol the SDK
+// negotiates a client's Subscribe never waits for the answer, so a refusal
+// would be invisible there.
+func TestRegister_AnExcludedResource_CannotBeSubscribedTo(t *testing.T) {
+	cases := []struct {
+		name        string
+		exclude     []string
+		wantRefused bool
+	}{
+		{name: "served"},
+		{name: "excluded", exclude: []string{"pipeline.get"}, wantRefused: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			backend, gitlab := newPipelineBackend(t, "running")
+			client := subscriptionGitLabClient(t, gitlab.URL)
+			shell, err := newServerShell(t.Context(), client, &config.ServerConfig{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+				GitLabURL:         gitlab.URL,
+				ExcludeTools:      tc.exclude,
+			})
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+			if regErr := shell.register(t.Context()); regErr != nil {
+				t.Fatalf("register: %v", regErr)
+			}
+			manager := shell.state.subs.manager
+			t.Cleanup(manager.Close)
+
+			subErr := manager.Subscribe(t.Context(), testSession, "gitlab://project/42/pipeline/99")
+
+			if refused := subErr != nil; refused != tc.wantRefused {
+				t.Errorf("subscribe refused = %t (%v), want %t", refused, subErr, tc.wantRefused)
+			}
+			if polled := backend.hits.Load() > 0; polled == tc.wantRefused {
+				t.Errorf("GitLab read the pipeline = %t, want %t", polled, !tc.wantRefused)
+			}
+		})
+	}
+}
+
+// TestCreateServer_TheToolManifestAdvertisesSubscriptionsOnlyWhereServed covers
+// the subscriptions block of gitlab://tools, the one resource both capability
+// surfaces serve and so the one place a client can learn the watchable set.
+// The full surface publishes the enforcement whitelist itself; the minimal
+// surface serves no subscribable resource and must not claim any.
+func TestCreateServer_TheToolManifestAdvertisesSubscriptionsOnlyWhereServed(t *testing.T) {
+	cases := []struct {
+		name    string
+		surface string
+		want    []string
+	}{
+		{name: "full", surface: config.CapabilitySurfaceFull, want: subscriptions.Templates()},
+		{name: "minimal", surface: config.CapabilitySurfaceMinimal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: tc.surface,
+			})
+			session := newInMemorySession(t, server)
+			result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+			if err != nil || len(result.Contents) == 0 {
+				t.Fatalf("read gitlab://tools: %v", err)
+			}
+			var manifest resources.ToolSurfaceManifest
+			if decodeErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); decodeErr != nil {
+				t.Fatalf("decode gitlab://tools: %v", decodeErr)
+			}
+
+			var got []string
+			if manifest.Subscriptions != nil {
+				got = manifest.Subscriptions.SubscribableURITemplates
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("subscribable templates = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -9361,6 +9455,51 @@ func TestMCPOriginMiddleware_DecidesInTheDocumentedOrder(t *testing.T) {
 	}
 }
 
+// TestMCPOriginMiddleware_OnlyARealPreflightIsExempt covers what counts as a
+// preflight, since a preflight skips the origin check. It takes both halves:
+// the OPTIONS method and the Access-Control-Request-Method header a browser
+// sends with it. Either alone is something a script can send, and a
+// cross-origin POST that could buy the exemption by adding one header would
+// drive a session from an origin nobody trusted.
+func TestMCPOriginMiddleware_OnlyARealPreflightIsExempt(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{TrustedOrigins: []string{"https://app.example.com"}}
+	for _, tc := range []struct {
+		name          string
+		method        string
+		requestMethod bool
+		wantPass      bool
+	}{
+		{name: "OPTIONS naming a method", method: http.MethodOptions, requestMethod: true, wantPass: true},
+		{name: "OPTIONS naming none", method: http.MethodOptions},
+		{name: "a POST naming a method", method: http.MethodPost, requestMethod: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var reached bool
+			handler := mcpOriginMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached = true
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/mcp", http.NoBody)
+			req.Host = "mcp.example.com"
+			req.Header.Set("Origin", "https://evil.example.com")
+			if tc.requestMethod {
+				req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if reached != tc.wantPass {
+				t.Errorf("handler reached = %t, want %t (status %d)", reached, tc.wantPass, rec.Code)
+			}
+		})
+	}
+}
+
 // TestServerCardAuthentication_OAuthModeNamesTheScopeAndTheMetadata covers what
 // the public card says about getting in.
 //
@@ -10505,6 +10644,23 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		}
 		if rec.Body.Len() != 0 {
 			t.Errorf("body = %q, want no frame written to a stream that just wrote", rec.Body.String())
+		}
+	})
+
+	t.Run("a stream that wrote long ago is idle again", func(t *testing.T) {
+		t.Parallel()
+
+		// One event earlier in the stream's life does not keep it alive: a
+		// tool call that reported progress once and then waits on GitLab is
+		// exactly the silence a proxy's read timeout collects.
+		rec := httptest.NewRecorder()
+		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now().Add(-time.Hour)}
+
+		if !writer.writeKeepAlive() {
+			t.Error("the heartbeat stopped on a stream that is alive")
+		}
+		if got := rec.Body.String(); got != string(sseKeepAliveFrame) {
+			t.Errorf("body = %q, want the keep-alive comment on a stream idle since its last event", got)
 		}
 	})
 
@@ -11696,6 +11852,63 @@ func TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline(t *
 			}
 			if got < tc.wantRange[0] || got > tc.wantRange[1] {
 				t.Errorf("httpShutdownBudget() = %s, want between %s and %s", got, tc.wantRange[0], tc.wantRange[1])
+			}
+		})
+	}
+}
+
+// TestHTTPShutdownTimeout_SitsInsideTheBracketItsCommentArgues holds the drain
+// budget to the two bounds its own comment derives, which nothing else does:
+// every other test reads the constant back through the code that uses it. It
+// must stay above the ten seconds test/e2e/http gives the binary to exit after
+// SIGTERM, or a drain hung on a stream becomes indistinguishable from a prompt
+// exit; and there is nothing to buy past the thirty seconds Kubernetes waits,
+// the longest of the usual supervisors, because the process is killed there.
+func TestHTTPShutdownTimeout_SitsInsideTheBracketItsCommentArgues(t *testing.T) {
+	if httpShutdownTimeout <= 10*time.Second || httpShutdownTimeout > 30*time.Second {
+		t.Errorf("httpShutdownTimeout = %s, want above 10s and at most 30s", httpShutdownTimeout)
+	}
+}
+
+// TestStartServing_AServerClosedOnPurpose_ReportsNoFailure covers the channel
+// the serve loop reports on. Close is how every orderly stop ends Serve, and
+// it does so with http.ErrServerClosed; the channel must close empty then, or
+// a caller waiting on it reads an ordinary shutdown as a serve failure. A
+// listener that is already gone is the failure case beside it.
+func TestStartServing_AServerClosedOnPurpose_ReportsNoFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		closeFirst bool
+		wantErr    bool
+	}{
+		{name: "closed on purpose"},
+		{name: "a listener already gone", closeFirst: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("listen: %v", err)
+			}
+			if tc.closeFirst {
+				_ = listener.Close()
+			}
+			httpServer := &http.Server{Handler: http.NotFoundHandler(), ReadHeaderTimeout: time.Second}
+
+			serverErr, startErr := startServing(t.Context(), &config.Config{}, httpServer, listener.Addr().String(), listener)
+			if startErr != nil {
+				t.Fatalf("startServing: %v", startErr)
+			}
+			if !tc.closeFirst {
+				_ = httpServer.Close()
+			}
+
+			select {
+			case reported, open := <-serverErr:
+				if gotErr := open && reported != nil; gotErr != tc.wantErr {
+					t.Errorf("serve failure reported = %t (%v), want %t", gotErr, reported, tc.wantErr)
+				}
+			case <-time.After(testHTTPLivenessTimeout):
+				t.Fatal("the serve loop reported nothing after it stopped")
 			}
 		})
 	}
