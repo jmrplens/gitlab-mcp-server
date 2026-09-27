@@ -34,6 +34,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -3563,6 +3564,56 @@ func TestTransportFailureBudget_ExistsOnlyWithATrustedHeader(t *testing.T) {
 	}
 }
 
+// TestTransportFailureBudget_BlocksForItsOwnWindow covers the window the
+// secondary budget's limiter is built with. The fast budget may be switched
+// off with a zero window, and this one must not inherit that zero: a limiter
+// whose window is zero forgets each failure the instant it is recorded, so it
+// would never block the header rotation it exists to catch. A positive window
+// is the operator's and is used as given.
+func TestTransportFailureBudget_BlocksForItsOwnWindow(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		window     time.Duration
+		wantAtMost time.Duration
+		wantAbove  time.Duration
+	}{
+		{name: "a zero window takes the default", window: 0, wantAtMost: config.DefaultAuthFailureWindow, wantAbove: config.DefaultAuthFailureWindow - time.Minute/2},
+		{name: "a negative window takes the default", window: -time.Second, wantAtMost: config.DefaultAuthFailureWindow, wantAbove: config.DefaultAuthFailureWindow - time.Minute/2},
+		{name: "a configured window is kept", window: 3 * time.Minute, wantAtMost: 3 * time.Minute, wantAbove: 2 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			budget := transportFailureBudget(&config.Config{TrustedProxyHeader: "X-Forwarded-For", AuthFailureWindow: tc.window})
+			limiter := budget.rateLimiter()
+			for range transportFailureLimit {
+				limiter.RecordFailure("203.0.113.9")
+			}
+
+			blocked, remaining := limiter.BlockedFor("203.0.113.9")
+
+			if !blocked || remaining > tc.wantAtMost || remaining <= tc.wantAbove {
+				t.Errorf("BlockedFor = %t, %s; want blocked for more than %s and at most %s", blocked, remaining, tc.wantAbove, tc.wantAtMost)
+			}
+		})
+	}
+}
+
+// TestLoggedHeaderPrefix_KeepsAValueUpToTheBoundWhole covers the bound on a
+// caller-supplied header written to the log before anybody is authenticated:
+// a value of exactly the bound is logged as it is, and one byte more is cut
+// to the bound and marked as cut.
+func TestLoggedHeaderPrefix_KeepsAValueUpToTheBoundWhole(t *testing.T) {
+	t.Parallel()
+	atBound := strings.Repeat("a", loggedHeaderPrefixBytes)
+	if got := loggedHeaderPrefix(atBound); got != atBound {
+		t.Errorf("a %d-byte value logged as %q, want it whole", loggedHeaderPrefixBytes, got)
+	}
+	if got := loggedHeaderPrefix(atBound + "b"); got != atBound+"..." {
+		t.Errorf("a %d-byte value logged as %q, want the first %d bytes and ...", loggedHeaderPrefixBytes+1, got, loggedHeaderPrefixBytes)
+	}
+}
+
 // TestWriteUnsupportedProtocolVersion_LogsAResponseTheClientNeverReceived
 // covers the write failing under the refusal, where the status is already on
 // the wire and the log line is the only trace of what was lost.
@@ -3613,6 +3664,108 @@ func TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds(t *testing.T) {
 		}
 	}
 	t.Error("cleanup kept running after its context ended")
+}
+
+// TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild covers which tables
+// of recorded failures get a sweep. A table a caller never comes back to is
+// never read again, so without its sweep it keeps every entry for good; a
+// budget the operator turned off builds no table and must start no loop,
+// since a loop over nothing is a goroutine for the life of the process. The
+// oauth mode sweeps its token cache and its rejected-token cache whatever the
+// budgets are, and says once at startup when it admits only pinned
+// applications.
+func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		oauth     bool
+		budgets   bool
+		pinned    bool
+		wantLoops int
+	}{
+		{name: "legacy with every budget off"},
+		{name: "legacy with every budget on", budgets: true, wantLoops: 3},
+		{name: "oauth with every budget off", oauth: true, wantLoops: 2},
+		{name: "oauth with every budget on and applications pinned", oauth: true, budgets: true, pinned: true, wantLoops: 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				GitLabURL:     "https://gitlab.example.com",
+				Tier:          edition.Free,
+				TierExplicit:  true,
+				IgnoreScopes:  true,
+				Stateless:     true,
+				AuthMode:      config.AuthModeLegacy,
+				PublicURL:     "https://mcp.example.com",
+				OAuthCacheTTL: config.DefaultOAuthCacheTTL,
+			}
+			if tc.oauth {
+				cfg.AuthMode = config.AuthModeOAuth
+			}
+			if tc.budgets {
+				cfg.AuthFailureLimit, cfg.AuthFailureWindow = 10, time.Minute
+				cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow = 50, 10*time.Minute
+				cfg.TrustedProxyHeader, cfg.TrustedProxies = "X-Forwarded-For", []string{"127.0.0.1"}
+			}
+			if tc.pinned {
+				cfg.OAuthClientUIDs = []string{"pinned-application-uid"}
+			}
+			logged := captureLogMessages(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			self := currentGoroutineID()
+			pool := newGateTestPool(t, okFactory, cfg.GitLabURL)
+			binding := poolBinding{credentials: &credentialStates{}, sessions: newSessionOwners(false)}
+
+			if tc.oauth {
+				registerOAuthMCPHandlers(ctx, cfg, "", pool, binding, http.NewServeMux())
+			} else {
+				registerLegacyMCPHandlers(ctx, cfg, pool, binding, http.NewServeMux())
+			}
+			loops := cleanupLoopsStartedBy(self)
+			cancel()
+
+			if loops != tc.wantLoops {
+				t.Errorf("sweep loops started = %d, want %d", loops, tc.wantLoops)
+			}
+			if noted := logged("admitting only tokens issued to the pinned OAuth applications"); noted != tc.pinned {
+				t.Errorf("pinned-applications note logged = %t, want %t", noted, tc.pinned)
+			}
+			deadline := time.Now().Add(testHTTPLivenessTimeout)
+			for cleanupLoopsStartedBy(self) > 0 {
+				if time.Now().After(deadline) {
+					t.Fatal("a sweep loop outlived its context")
+				}
+				time.Sleep(time.Millisecond)
+			}
+		})
+	}
+}
+
+// currentGoroutineID returns the id the runtime prints for the calling
+// goroutine, which is how a stack dump names the goroutine that started
+// another.
+func currentGoroutineID() string {
+	buf := make([]byte, 64)
+	fields := strings.Fields(string(buf[:runtime.Stack(buf, false)]))
+	return fields[1]
+}
+
+// cleanupLoopsStartedBy counts the sweep loops startPeriodicCleanup started
+// from the given goroutine that are still running. Naming the starting
+// goroutine keeps loops another test left behind out of the count. The
+// package is matched by the function's name alone, since a test binary names
+// this package by its import path rather than as main.
+func cleanupLoopsStartedBy(goroutineID string) int {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	return strings.Count(string(buf), ".startPeriodicCleanup in goroutine "+goroutineID+"\n")
 }
 
 // TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate covers
@@ -7996,6 +8149,9 @@ func TestBuildTrustedOrigins_SeedsPublicURLOrigin(t *testing.T) {
 		{"both combined", "https://a.example", "https://mcp.jmrp.io", []string{"https://a.example", "https://mcp.jmrp.io"}},
 		{"empty yields nil", "", "", nil},
 		{"wildcard passes through", "*", "", []string{"*"}},
+		// A public URL that parses and names no host has no origin to
+		// seed; a scheme and a separator alone are an origin nobody can be.
+		{"a public url without a host seeds nothing", "", "/gitlab", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -8061,6 +8217,60 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	}
 	if !slices.Contains(rec.Header().Values("Vary"), "Origin") {
 		t.Error("the response varies by Origin and must say so")
+	}
+}
+
+// TestCorsMiddleware_HalfAPreflight_IsAnOrdinaryRequest covers what counts as
+// a preflight, on both branches. For a trusted origin a preflight is answered
+// here and never reaches the endpoint, so a POST that merely carries the
+// request-method header, or an OPTIONS that carries none, must still reach
+// the handler rather than be answered 204 in its place. For an untrusted
+// origin only a real preflight is marked as varying by Origin, since that
+// mark is what keeps a cache from serving one origin's answer to another.
+func TestCorsMiddleware_HalfAPreflight_IsAnOrdinaryRequest(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{TrustedOrigins: []string{"https://claude.ai"}}
+	for _, tc := range []struct {
+		name          string
+		origin        string
+		method        string
+		requestMethod bool
+		wantReached   bool
+		wantVary      bool
+	}{
+		{name: "trusted POST naming a method", origin: "https://claude.ai", method: http.MethodPost, requestMethod: true, wantReached: true, wantVary: true},
+		{name: "trusted OPTIONS naming none", origin: "https://claude.ai", method: http.MethodOptions, wantReached: true, wantVary: true},
+		{name: "untrusted POST naming a method", origin: "https://evil.example.com", method: http.MethodPost, requestMethod: true, wantReached: true},
+		{name: "untrusted OPTIONS naming none", origin: "https://evil.example.com", method: http.MethodOptions, wantReached: true},
+		{name: "untrusted real preflight", origin: "https://evil.example.com", method: http.MethodOptions, requestMethod: true, wantReached: true, wantVary: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var reached atomic.Bool
+			handler := corsMiddleware(cfg, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				reached.Store(true)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/mcp", http.NoBody)
+			req.Header.Set("Origin", tc.origin)
+			if tc.requestMethod {
+				req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if reached.Load() != tc.wantReached {
+				t.Errorf("handler reached = %t, want %t (status %d)", reached.Load(), tc.wantReached, rec.Code)
+			}
+			if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "" {
+				t.Errorf("Access-Control-Allow-Methods = %q on a request that is not a trusted preflight", got)
+			}
+			if vary := slices.Contains(rec.Header().Values("Vary"), "Origin"); vary != tc.wantVary {
+				t.Errorf("Vary: Origin = %t, want %t", vary, tc.wantVary)
+			}
+		})
 	}
 }
 
