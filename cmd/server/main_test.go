@@ -4245,6 +4245,13 @@ func TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate(t *tes
 // pinned case is not passing for want of one. The tier is held in the client
 // as well as in the server configuration, since the handlers that choose an
 // Enterprise document at call time read the client's copy.
+//
+// The version endpoint reports an enterprise instance, as a real Enterprise
+// Edition does, because the connectivity check that reads it sets the
+// client's tier from that flag to Premium. Without it the client would hold
+// the pinned tier from its construction alone, and the fixture could not tell
+// a startup that restores the pin after that check from one that leaves the
+// flag's Premium in place.
 func TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -4261,7 +4268,7 @@ func TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance(t *testi
 			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/api/v4/version":
-					testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+					testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0-ee","revision":"abc","enterprise":true}`)
 				case "/api/v4/user":
 					testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
 				case "/api/v4/license":
@@ -5303,6 +5310,24 @@ func TestDoToolSearch_AnswersTheSameOnEverySurface(t *testing.T) {
 	}
 }
 
+// TestDoToolSearch_TheServerSelfDiagnostics_AreFoundLikeAnyOtherAction covers
+// the one group the search catalog has to ask for: the server's own
+// self-diagnostics are not a domain's specs, so the catalog carries them only
+// when it is built with the maintenance group, and every surface serves them.
+// A search that could not find the action a person reaches for when a token
+// stops working would be the search failing exactly when it is needed.
+func TestDoToolSearch_TheServerSelfDiagnostics_AreFoundLikeAnyOtherAction(t *testing.T) {
+	stdout := captureStdout(t)
+
+	if searchErr := doToolSearch("server status", config.ToolSurfaceMeta, edition.Free); searchErr != nil {
+		t.Fatalf("doToolSearch() error: %v", searchErr)
+	}
+	out := stdout()
+	if want := fmt.Sprintf("\n%-42s %s", "server.status", "gitlab_server action=status"); !strings.Contains(out, want) {
+		t.Errorf("stdout = %q, want a row %q", out, want)
+	}
+}
+
 // TestToolSearchSettings_FlagsBeatTheEnvironmentAndTheEnvironmentIsRead pins
 // the precedence of the two settings a search runs under.
 //
@@ -5468,11 +5493,13 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list", Description: "List issues in a project."},
 		},
 		{
+			// A verb-first individual name, the legacy form, so that the meta
+			// group tool's name is found through the group tool alone.
 			ID:             "project.get",
 			ToolName:       "gitlab_project",
 			Domain:         "project",
 			Name:           "get",
-			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_get", Description: "Get one project."},
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_get_project", Description: "Get one project."},
 		},
 	}
 
@@ -11962,6 +11989,15 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 			name:     "--http naming no instance exits 1",
 			args:     []string{"gitlab-mcp-server", "-http"},
 			wantExit: []int{1},
+			// Settled before the instance check refuses the start, and for
+			// the whole process: a caller reached over HTTP has no files on
+			// this machine, so no tool may read or write a local path for it.
+			verify: func(t *testing.T) {
+				t.Helper()
+				if toolutil.LocalFilesystemAccessAllowed() {
+					t.Error("local filesystem access is still allowed after main chose HTTP, want it refused")
+				}
+			},
 		},
 	}
 
@@ -14254,6 +14290,12 @@ func TestServerCardSubscriptions_AvailabilityFollowsTheTransport(t *testing.T) {
 			}
 			if legacy["available"] != !testCase.wantListen {
 				t.Errorf("resources/subscribe available = %v, want %v", legacy["available"], !testCase.wantListen)
+			}
+			// The revision a client must negotiate to send a listen at all,
+			// whichever transport this deployment runs: an earlier one would
+			// tell a client the method exists where the handshake refuses it.
+			if listen["since_protocol"] != protocolVersionStatelessOnly {
+				t.Errorf("subscriptions/listen since_protocol = %v, want %q, the revision that introduced it", listen["since_protocol"], protocolVersionStatelessOnly)
 			}
 		})
 	}
