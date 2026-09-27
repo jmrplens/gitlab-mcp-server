@@ -127,6 +127,13 @@ const (
 	toolutilDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The two epic packages whose note and discussion declarations below name
+// them row after row, spelled once so a reader compares names.
+const (
+	epicDiscussionsPkg = toolsDir + "/epicdiscussions"
+	epicNotesPkg       = toolsDir + "/epicnotes"
+)
+
 // userCoreReason is what a user object under an author is doing there, which
 // is the largest single block of this dimension's findings.
 const userCoreReason = "The object is the author of a note, a discussion or a work item, named so a reader knows " +
@@ -321,14 +328,14 @@ func epicSentDeclarations() []sentDeclaration {
 				"held to this same question on their own documents.",
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "UserCore",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
 			Reason:     userCoreReason,
 		},
 		{
-			Package:    toolsDir + "/epicnotes",
+			Package:    epicNotesPkg,
 			SchemaType: "UserCore",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
@@ -342,21 +349,21 @@ func epicSentDeclarations() []sentDeclaration {
 			Reason:     userCoreReason,
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "WorkItem",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
 			Reason:     notesAnchorReason("queryListDiscussions", "gitlab_list_epic_discussions"),
 		},
 		{
-			Package:    toolsDir + "/epicnotes",
+			Package:    epicNotesPkg,
 			SchemaType: "WorkItem",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
 			Reason:     notesAnchorReason("queryListWorkItemNotes", "gitlab_epic_note_list"),
 		},
 		{
-			Package:    toolsDir + "/epicnotes",
+			Package:    epicNotesPkg,
 			SchemaType: "Note",
 			Field:      "discussion",
 			Category:   categoryNotThisResponse,
@@ -365,7 +372,7 @@ func epicSentDeclarations() []sentDeclaration {
 				"note tools mirror GitLab's flat note, which carries no thread in the REST note entity either.",
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "Discussion",
 			Field:      "createdAt",
 			Category:   categoryPublishedElsewhere,
@@ -375,7 +382,7 @@ func epicSentDeclarations() []sentDeclaration {
 				"a hundred, against a limit that query sits 30 under.",
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "Discussion",
 			Field:      "noteable",
 			Category:   categoryNotThisResponse,
@@ -384,7 +391,7 @@ func epicSentDeclarations() []sentDeclaration {
 				"inside every thread of its own list would answer a threads call with the epic again.",
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "Discussion",
 			Field:      "replyId",
 			Category:   categoryPublishedElsewhere,
@@ -395,7 +402,7 @@ func epicSentDeclarations() []sentDeclaration {
 				"complexity at a page of a hundred, against a limit that query sits 30 under.",
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "Discussion",
 			Field:      "truncatedDiffLines",
 			Category:   categoryNeverSentHere,
@@ -404,7 +411,7 @@ func epicSentDeclarations() []sentDeclaration {
 				"thread on an epic never is one, so the field is null on every thread these documents read.",
 		},
 		{
-			Package:    toolsDir + "/epicdiscussions",
+			Package:    epicDiscussionsPkg,
 			SchemaType: "Discussion",
 			Field:      "userPermissions",
 			Category:   categoryViewer,
@@ -420,7 +427,7 @@ func epicSentDeclarations() []sentDeclaration {
 				"returns the errors and nothing else, so both are null on every destroyNote response. The document " +
 				"selects the errors, which ExecGraphQLDestroyNote reads.",
 		},
-	}, epicNoteDeclarations(toolsDir+"/epicnotes"), epicNoteDeclarations(toolsDir+"/epicdiscussions"), epicIssueDeclarations())
+	}, epicNoteDeclarations(epicNotesPkg), epicNoteDeclarations(epicDiscussionsPkg), epicIssueDeclarations())
 }
 
 // covers reports whether this declaration accounts for one finding.
