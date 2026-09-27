@@ -39,8 +39,18 @@ type certReloader struct {
 	cert *tls.Certificate
 	// source is what the two files looked like when cert was read.
 	source certStamp
-	// reported is the stamp of the last pair that failed to load, so a pair
-	// that stays broken is reported once rather than once per handshake.
+	// failing is whether a failure has been reported since the last
+	// successful load, and reported is the state of the files it was seen in,
+	// the zero stamp when they could not be read at all. Together they make a
+	// state that persists be reported once rather than once per handshake,
+	// while the first failure after a load is always written.
+	//
+	// The flag is what keeps the zero stamp usable for unreadable files. Used
+	// alone, the zero stamp is also what reported holds before anything was
+	// reported, so the first failure compared equal to it and had to be
+	// exempted, and the exemption reported an unreadable pair on every
+	// handshake.
+	failing  bool
 	reported certStamp
 }
 
@@ -117,6 +127,9 @@ func (r *certReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 
 	stamp, err := stampOf(r.certFile, r.keyFile)
 	if err != nil {
+		// The zero stamp stands for files that could not be read. A pair on
+		// disk produces it only as two empty files dated at the epoch, which
+		// cannot load either, so the two sharing one report loses nothing.
 		r.reportOnce(certStamp{}, "the TLS certificate files could not be read; serving the certificate already loaded", err)
 		return r.cert, nil
 	}
@@ -135,7 +148,7 @@ func (r *certReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 	}
 	r.cert = &cert
 	r.source = stamp
-	r.reported = certStamp{}
+	r.failing = false
 	slog.Info("reloaded the TLS certificate", "cert_file", r.certFile)
 	return r.cert, nil
 }
@@ -147,9 +160,10 @@ func (r *certReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 // buries the one line that says what is wrong under the traffic of every
 // client retrying.
 func (r *certReloader) reportOnce(stamp certStamp, msg string, err error) {
-	if r.reported == stamp && stamp != (certStamp{}) {
+	if r.failing && r.reported == stamp {
 		return
 	}
+	r.failing = true
 	r.reported = stamp
 	slog.Warn(msg, "cert_file", r.certFile, "key_file", r.keyFile, "error", err)
 }

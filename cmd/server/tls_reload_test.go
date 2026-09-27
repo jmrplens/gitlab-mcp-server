@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,10 +9,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"log/slog"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,6 +74,7 @@ func mintPair(t *testing.T, serial int64) (certPEM, keyPEM []byte) {
 // writePEM writes one PEM file and stamps it with the given time.
 func writePEM(t *testing.T, path string, body []byte, when time.Time) {
 	t.Helper()
+	//#nosec G703 -- both halves of every path given here are the test's own: a t.TempDir and a literal
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
@@ -155,6 +159,115 @@ func TestCertReloader_UnchangedFilesAreReadOnce(t *testing.T) {
 	}
 }
 
+// TestStampOf_ReadsEachFilesOwnSizeAndTime pins which file each of the four
+// stamp fields comes from. Every rotation test above moves both files at
+// once, so a stamp that read the key's time off the certificate, or the
+// certificate's size off the key, noticed every one of them; it would miss a
+// replacement that changes only the field it lost, such as a file copied in
+// with its modification time preserved. The two files here differ in both
+// size and time, so no field can stand in for another.
+func TestStampOf_ReadsEachFilesOwnSizeAndTime(t *testing.T) {
+	dir := t.TempDir()
+	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	certTime := time.Date(2026, 9, 1, 10, 0, 0, 111, time.UTC)
+	keyTime := time.Date(2026, 9, 2, 11, 30, 0, 222, time.UTC)
+	writePEM(t, certPath, []byte("twenty-five bytes of cert"), certTime)
+	writePEM(t, keyPath, []byte("key"), keyTime)
+
+	got, err := stampOf(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("stampOf: %v", err)
+	}
+	want := certStamp{certSize: 25, certTime: certTime.UnixNano(), keySize: 3, keyTime: keyTime.UnixNano()}
+	if got != want {
+		t.Errorf("stampOf = %+v, want %+v", got, want)
+	}
+}
+
+// TestCertReloader_ARotationIsLoadedOnce covers what a reload leaves behind.
+// The new stamp has to become the one later handshakes compare against, or
+// every handshake after a rotation parses the pair again and logs a reload,
+// which is the hot-path cost the stamp exists to avoid, returning for the
+// rest of the process's life after the first renewal.
+func TestCertReloader_ARotationIsLoadedOnce(t *testing.T) {
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	certPath, keyPath := rotatingPair(t, dir, 1, base)
+
+	loads := 0
+	original := loadTLSKeyPair
+	loadTLSKeyPair = func(certFile, keyFile string) (tls.Certificate, error) {
+		loads++
+		return original(certFile, keyFile)
+	}
+	t.Cleanup(func() { loadTLSKeyPair = original })
+
+	reloader, err := newCertReloader(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("newCertReloader: %v", err)
+	}
+	rotatingPair(t, dir, 2, base.Add(time.Minute))
+	for range 5 {
+		if got := servedSerial(t, reloader); got != 2 {
+			t.Fatalf("served serial after the rotation = %d, want 2", got)
+		}
+	}
+
+	if loads != 2 {
+		t.Errorf("the pair was loaded %d times for one rotation and five handshakes, want 2 (startup and the rotation)", loads)
+	}
+}
+
+// TestCertReloader_ABrokenStateSeenAgainAfterARecoveryIsReportedAgain covers
+// the reset that follows a successful reload. A failure is reported once per
+// state of the files, and a recovery ends that state: if the same broken pair
+// comes back afterwards (a copy that preserves modification times restores
+// the exact stamp), it is a new failure and the operator has to hear about
+// it, not have it silenced by a report from before the recovery.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestCertReloader_ABrokenStateSeenAgainAfterARecoveryIsReportedAgain(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	const failure = "the TLS certificate on disk could not be loaded"
+
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	certPath, keyPath := rotatingPair(t, dir, 1, base)
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatalf("reading the key: %v", err)
+	}
+	reloader, err := newCertReloader(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("newCertReloader: %v", err)
+	}
+	breakPair := func() {
+		writePEM(t, certPath, []byte("not a certificate"), base.Add(time.Minute))
+		writePEM(t, keyPath, keyPEM, base)
+	}
+
+	breakPair()
+	servedSerial(t, reloader)
+	servedSerial(t, reloader)
+	if n := strings.Count(logged.String(), failure); n != 1 {
+		t.Fatalf("the broken pair was reported %d times across two handshakes, want once", n)
+	}
+
+	rotatingPair(t, dir, 2, base.Add(2*time.Minute))
+	if got := servedSerial(t, reloader); got != 2 {
+		t.Fatalf("served serial after the recovery = %d, want 2", got)
+	}
+
+	breakPair()
+	servedSerial(t, reloader)
+	if n := strings.Count(logged.String(), failure); n != 2 {
+		t.Errorf("the same broken pair returning after a recovery was reported %d times in all, want 2", n)
+	}
+}
+
 // TestCertReloader_AHalfWrittenRotationKeepsThePreviousCertificate covers the
 // window every rotation has.
 //
@@ -215,6 +328,101 @@ func TestCertReloader_UnreadableFilesKeepThePreviousCertificate(t *testing.T) {
 
 	if got := servedSerial(t, reloader); got != 3 {
 		t.Errorf("served serial with the certificate file gone = %d, want the loaded 3", got)
+	}
+}
+
+// TestCertReloader_AnUnreadablePairIsReportedOncePerOutage holds the files
+// being gone to the same rule as the files being broken: one WARN for the
+// state, not one per handshake. A renewal that unlinks before it writes, or a
+// mount that drops, can last long enough for a busy listener to take
+// thousands of handshakes, and a line for each buries the one that says what
+// is wrong. A recovery ends the state, so the next outage is reported again.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestCertReloader_AnUnreadablePairIsReportedOncePerOutage(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	const unreadable = "the TLS certificate files could not be read"
+
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	certPath, keyPath := rotatingPair(t, dir, 1, base)
+	reloader, err := newCertReloader(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("newCertReloader: %v", err)
+	}
+
+	if removeErr := os.Remove(certPath); removeErr != nil {
+		t.Fatalf("removing the certificate: %v", removeErr)
+	}
+	for range 3 {
+		if got := servedSerial(t, reloader); got != 1 {
+			t.Fatalf("served serial with the certificate gone = %d, want the loaded 1", got)
+		}
+	}
+	if n := strings.Count(logged.String(), unreadable); n != 1 {
+		t.Errorf("three handshakes against missing files wrote %d reports, want one for the outage", n)
+	}
+
+	rotatingPair(t, dir, 2, base.Add(time.Minute))
+	if got := servedSerial(t, reloader); got != 2 {
+		t.Fatalf("served serial after the files came back = %d, want 2", got)
+	}
+	if removeErr := os.Remove(keyPath); removeErr != nil {
+		t.Fatalf("removing the key: %v", removeErr)
+	}
+	servedSerial(t, reloader)
+	if n := strings.Count(logged.String(), unreadable); n != 2 {
+		t.Errorf("a second outage after a recovery brought the reports to %d, want 2", n)
+	}
+}
+
+// TestCertReloader_EachDistinctBrokenStateIsReported holds the other half of
+// "once per state": a state that changes while still broken is a new failure.
+// A rotation can fail one way and then another (a truncated certificate, then
+// one written whole against a key that is still the old one, then the files
+// gone), and each of those says something different about what went wrong.
+// A report keyed only on "already failing" would keep the first line and hide
+// the rest.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestCertReloader_EachDistinctBrokenStateIsReported(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	const (
+		broken     = "the TLS certificate on disk could not be loaded"
+		unreadable = "the TLS certificate files could not be read"
+	)
+
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	certPath, keyPath := rotatingPair(t, dir, 1, base)
+	reloader, err := newCertReloader(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("newCertReloader: %v", err)
+	}
+
+	writePEM(t, certPath, []byte("not a certificate"), base.Add(time.Minute))
+	servedSerial(t, reloader)
+	newCert, _ := mintPair(t, 2)
+	writePEM(t, certPath, newCert, base.Add(2*time.Minute))
+	servedSerial(t, reloader)
+	if n := strings.Count(logged.String(), broken); n != 2 {
+		t.Errorf("two different broken pairs in a row were reported %d times, want once each", n)
+	}
+
+	if removeErr := os.Remove(certPath); removeErr != nil {
+		t.Fatalf("removing the certificate: %v", removeErr)
+	}
+	if got := servedSerial(t, reloader); got != 1 {
+		t.Errorf("served serial with the certificate gone = %d, want the loaded 1", got)
+	}
+	if n := strings.Count(logged.String(), unreadable); n != 1 {
+		t.Errorf("the files going missing after a broken pair wrote %d unreadable reports, want 1", n)
 	}
 }
 
