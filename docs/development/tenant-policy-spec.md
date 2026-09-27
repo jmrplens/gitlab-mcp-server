@@ -169,7 +169,9 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   policy (`INV-017`).
 - **With a recorded decision**: a holding taken across keys (`INV-005`); and a process
   partner switched off with the per-key limit it stands beside (`INV-015`), which is the
-  one zero another row decides that passes without a finding (`RTC-007`, issue 951).
+  one zero another row decides that passes without a finding (`RTC-007`, issue 951). The
+  decision is the one the row's `OffWithBy` names, among those it records: a row whose
+  decisions are about something else does not pass that way.
 - **With a finding recorded for the invariant**: a per-key ceiling on a process resource
   with no partner (`INV-004`); a table keyed on a mintable value with no capacity
   (`INV-010`); a code in the legacy `-32000` range (`INV-011`); a second in-band code for

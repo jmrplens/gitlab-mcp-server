@@ -71,7 +71,8 @@ the code; the layers keep enforcing.**
   any mintable key, a per-caller number protecting a process resource with no constant
   process partner, a holding taken across keys without a recorded decision, a refusal on
   a channel its method cannot carry, a second in-band code for one class of next action,
-  a zero that does not mean off, a reason whose unit differs from its key, a structure
+  a zero that does not mean off (a process partner following its per-key row by a
+  recorded decision apart), a reason whose unit differs from its key, a structure
   keyed on a mintable value with no capacity, a configurable value that bypasses the
   configuration package, and a charged failure the caller did not cause. They refuse in
   three ways, which the specification lists rule by rule. With no exception: a share on a
@@ -83,12 +84,15 @@ the code; the layers keep enforcing.**
   row that does not say it protects one (`INV-004`); a valued row that does not say what
   zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
   configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
-  recorded decision: a holding taken across keys (`INV-005`). Only through a finding
-  recorded for the invariant: a per-caller number protecting a process resource with no
-  partner, a structure keyed on a mintable value with no capacity, a code in the legacy
-  `-32000` range, a second in-band code for one class of next action, a zero that does not
-  mean off, a reason whose unit differs from its key or misstates its own, a value only an
-  environment variable or a Go option reaches, and a ceiling nothing bounds.
+  recorded decision: a holding taken across keys (`INV-005`), and a process partner
+  switched off with the per-key row it stands beside (`INV-015`), where the decision is
+  the one the row's `OffWithBy` names, which is how `RTC-007` follows `RTC-003` (issue
+  951). Only through a finding recorded for the invariant: a per-caller number protecting
+  a process resource with no partner, a structure keyed on a mintable value with no
+  capacity, a code in the legacy `-32000` range, a second in-band code for one class of
+  next action, any other zero that does not mean off, a reason whose unit differs from its
+  key or misstates its own, a value only an environment variable or a Go option reaches,
+  and a ceiling nothing bounds.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its
