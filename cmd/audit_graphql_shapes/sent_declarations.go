@@ -50,22 +50,60 @@ const (
 	// cannot say for the reason the report records, so the evidence is a
 	// GitLab documentation or changelog citation.
 	categoryDeprecated = "deprecated-upstream"
+	// categoryExperiment is a field GitLab marks Status: Experiment. GitLab
+	// may change or remove an experiment without notice, and it refuses a
+	// whole document that names a field it no longer has, so selecting one
+	// stakes every action sharing the selection on the experiment rather than
+	// only the one field. The pin cannot say it for the reason
+	// categoryDeprecated's evidence is prose, and the evidence is the same
+	// kind: the field's entry in GitLab's GraphQL API reference.
+	categoryExperiment = "experiment-upstream"
+	// categoryNewerThanFloor is a field GitLab added after the oldest release
+	// the documents sharing the selection are held to. GitLab refuses a whole
+	// document that names a field it does not have yet, just as it refuses one
+	// naming a field it removed, so selecting it would stop every action
+	// sharing the selection on every instance between that floor and the
+	// field's release. The pin cannot say it, since it records one release and
+	// no history; the evidence is the first versioned GitLab GraphQL reference
+	// that lists the field, beside the last that does not.
+	categoryNewerThanFloor = "newer-than-release-floor"
+	// categorySeparateAction is a collection a caller would page through,
+	// which is an action of its own rather than a field of the object it
+	// hangs from.
+	categorySeparateAction = "separate-action-not-a-field"
+	// categoryPublishedElsewhere is a value this server does publish, under
+	// another spelling or through an action the response names, which the
+	// automatic same-name match did not find.
+	categoryPublishedElsewhere = "published-elsewhere"
+	// categoryAffordance is a value the web UI reads to decide which control
+	// to draw for the viewer, which says nothing about the object a caller
+	// asked for.
+	categoryAffordance = "ui-affordance"
+	// categoryUnusedIdentifier is a record's own global id that no action of
+	// this server takes, so publishing it would hand a caller a handle nothing
+	// here accepts.
+	categoryUnusedIdentifier = "identifier-no-action-takes"
+	// categoryRecursiveShape is a field whose type contains itself, so no
+	// document can select the whole of it: any selection stops at a depth
+	// chosen arbitrarily and silently drops whatever lies below.
+	categoryRecursiveShape = "recursive-shape"
 )
 
-// Three more categories are wanted and are not written down until the first
-// finding needs one, because a category nothing uses is a vocabulary rather
-// than a decision: separate-action-not-a-field for a collection that would be
-// its own catalog action, tier-gated-above-this-domain for a field GitLab
-// serves only above the tier the domain is gated at, and published-elsewhere
-// for a value this server does publish under a spelling the automatic match
-// did not find. The first two need prose evidence for the same reason
-// categoryDeprecated does: neither the tier nor the deprecation is in the pin.
+// One more category is wanted and is not written down until the first finding
+// needs one, because a category nothing uses is a vocabulary rather than a
+// decision: tier-gated-above-this-domain for a field GitLab serves only above
+// the tier the domain is gated at. It needs prose evidence for the same reason
+// categoryDeprecated does: the tier is not in the pin.
 
 // Where the packages these findings are filed against live, spelled once. A
 // finding names the package the decoding struct is declared in, so the note
 // mutations a shared toolutil wrapper sends are answered under the domain that
-// decodes them and not under the wrapper.
-const toolsDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+// decodes them and not under the wrapper, and a shape two domains decode
+// through one struct of toolutil's is answered under toolutil, once.
+const (
+	toolsDir    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	toolutilDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
 
 // userCoreReason is what a user object under an author is doing there, which
 // is the largest single block of this dimension's findings.
@@ -108,76 +146,60 @@ func referenceStub(object, tools string) string {
 
 // declaredSent holds every field the schema offers that a document leaves out
 // on purpose, each with the reason. It is what [auditRun.declarations] carries
-// on a real run.
-var declaredSent = []sentDeclaration{ //nolint:gochecknoglobals // the adjudication table this repository answers with
-	{
-		Package:    toolsDir + "/epicworkitems",
-		SchemaType: "WorkItem",
-		Field:      declaredSegment,
-		Category:   categoryLookup,
-		Reason: "queryResolveWorkItemGID exists to turn a namespace path and an iid into the global id the epic " +
-			"mutations take, and it reads the one field that answers it. Nothing else it could select was ever " +
-			"meant to reach a caller: the work item itself is surfaced by epicissues and epicnotes, which are " +
-			"held to this same question on their own documents.",
-	},
-	{
-		Package:    toolsDir + "/epicdiscussions",
-		SchemaType: "UserCore",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     userCoreReason,
-	},
-	{
-		Package:    toolsDir + "/epicnotes",
-		SchemaType: "UserCore",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     userCoreReason,
-	},
-	{
-		Package:    toolsDir + "/epicissues",
-		SchemaType: "UserCore",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     userCoreReason,
-	},
-	{
-		Package:    toolsDir + "/epicdiscussions",
-		SchemaType: "WorkItem",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     notesAnchorReason("queryListDiscussions", "gitlab_list_epic_discussions"),
-	},
-	{
-		Package:    toolsDir + "/epicnotes",
-		SchemaType: "WorkItem",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     notesAnchorReason("queryListWorkItemNotes", "gitlab_epic_note_list"),
-	},
-	{
-		Package:    toolsDir + "/vulnerabilities",
-		SchemaType: "Project",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     referenceStub("project", "gitlab_project"),
-	},
-	{
-		Package:    toolsDir + "/vulnerabilities",
-		SchemaType: "MergeRequest",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason:     referenceStub("merge request a vulnerability was raised on", "gitlab_merge_request"),
-	},
-	{
-		Package:    toolsDir + "/securityfindings",
-		SchemaType: "Vulnerability",
-		Field:      declaredSegment,
-		Category:   categoryNotThisResponse,
-		Reason: referenceStub("vulnerability a pipeline finding was promoted to", "gitlab_vulnerability") +
-			" The vulnerabilities package sends its own documents against this same object, and is held to this " +
-			"question on them.",
-	},
+// on a real run. The two GraphQL-only security domains and the shapes they
+// share keep their answers in [securitySentDeclarations], which is most of the
+// table.
+var declaredSent = append(epicSentDeclarations(), securitySentDeclarations()...) //nolint:gochecknoglobals // the adjudication table this repository answers with
+
+// epicSentDeclarations answers the epic domains' findings.
+func epicSentDeclarations() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package:    toolsDir + "/epicworkitems",
+			SchemaType: "WorkItem",
+			Field:      declaredSegment,
+			Category:   categoryLookup,
+			Reason: "queryResolveWorkItemGID exists to turn a namespace path and an iid into the global id the epic " +
+				"mutations take, and it reads the one field that answers it. Nothing else it could select was ever " +
+				"meant to reach a caller: the work item itself is surfaced by epicissues and epicnotes, which are " +
+				"held to this same question on their own documents.",
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "UserCore",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason:     userCoreReason,
+		},
+		{
+			Package:    toolsDir + "/epicnotes",
+			SchemaType: "UserCore",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason:     userCoreReason,
+		},
+		{
+			Package:    toolsDir + "/epicissues",
+			SchemaType: "UserCore",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason:     userCoreReason,
+		},
+		{
+			Package:    toolsDir + "/epicdiscussions",
+			SchemaType: "WorkItem",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason:     notesAnchorReason("queryListDiscussions", "gitlab_list_epic_discussions"),
+		},
+		{
+			Package:    toolsDir + "/epicnotes",
+			SchemaType: "WorkItem",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason:     notesAnchorReason("queryListWorkItemNotes", "gitlab_epic_note_list"),
+		},
+	}
 }
 
 // covers reports whether this declaration accounts for one finding.

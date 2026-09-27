@@ -129,14 +129,14 @@ var vulnerabilityActionMeta = map[string]vulnerabilityActionMetaEntry{
 		usage:       "List a project's detected vulnerabilities. Filter by severity, state, scanner, report_type, has_issues, or has_resolution, and page through results when the prompt asks for a security overview or open findings in a known project.",
 		aliases:     []string{"list project vulnerabilities", "show security vulnerabilities", "find open vulnerabilities", "list security findings for project"},
 		related:     []string{actionVulnGet, actionVulnSeverityCount, actionSecurityFindingList},
-		description: "List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination. Returns: matching vulnerabilities with title, severity, state, report type, scanner, identifiers, detection time, and web URL. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.",
+		description: "List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination. Returns: matching vulnerabilities with UUID, title, severity, state, report type, scanner, identifiers, location, CVSS and EPSS data, who confirmed, dismissed or resolved each, detection time, and web URL. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.",
 		overrides:   []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("sort", vulnerabilitySortValues...)},
 	},
 	"gitlab_get_vulnerability": {
 		usage:       "Fetch one vulnerability by its global ID. Use after a list result or when the prompt names a concrete vulnerability ID to read its full detail, identifiers, location, linked issues, and merge request.",
 		aliases:     []string{"get vulnerability", "show vulnerability details", "fetch vulnerability by id"},
 		related:     []string{actionVulnList, actionVulnDismiss, actionVulnConfirm, actionVulnResolve},
-		description: "Get a single vulnerability by global ID. Returns: title, description, severity, state, report type, scanner, identifiers, location, solution, linked issues, and merge request. See also: gitlab_list_vulnerabilities, gitlab_dismiss_vulnerability, gitlab_confirm_vulnerability.",
+		description: "Get a single vulnerability by global ID. Returns: title, description, severity, state and its comment, report type, scanner, identifiers, CVSS assessments, EPSS and known-exploit data, location, solution, report links, a leaked token's status, who confirmed, dismissed or resolved it, linked issues, and merge request. See also: gitlab_list_vulnerabilities, gitlab_dismiss_vulnerability, gitlab_confirm_vulnerability.",
 	},
 	"gitlab_dismiss_vulnerability": {
 		usage:       "Dismiss a vulnerability with a reason (for example a false positive or accepted risk). Use during triage to mark a finding as not actionable.",
@@ -173,6 +173,6 @@ var vulnerabilityActionMeta = map[string]vulnerabilityActionMetaEntry{
 		usage:       "Return the security report summary for one pipeline run, broken down by scan type (SAST, DAST, and others). Use to review the security results produced by a specific pipeline.",
 		aliases:     []string{"pipeline security summary", "security report for pipeline", "pipeline scan results"},
 		related:     []string{actionVulnSeverityCount, actionVulnList, actionProjectGet},
-		description: "Summarize a pipeline's security scan results. Returns: per-scanner vulnerability and scanned-resource counts for the pipeline (SAST, DAST, and other report types). See also: gitlab_vulnerability_severity_count, gitlab_list_vulnerabilities.",
+		description: "Summarize a pipeline's security scan results. Returns: per-scanner vulnerability and scanned-resource counts for the pipeline (SAST, DAST, and other report types), the scans that ran with their status, errors and warnings, and the first resources a DAST scan requested. See also: gitlab_vulnerability_severity_count, gitlab_list_vulnerabilities.",
 	},
 }

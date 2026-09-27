@@ -60,21 +60,35 @@ List security report findings for a specific pipeline run. Supports filtering by
 
 Each finding includes:
 
-| Field                 | Type   | Description                                            |
-| --------------------- | ------ | ------------------------------------------------------ |
-| `uuid`                | string | Unique identifier for the finding                      |
-| `title`               | string | Human-readable title                                   |
-| `severity`            | string | Severity level                                         |
-| `report_type`         | string | Scanner report type                                    |
-| `scanner`             | object | Scanner name, vendor, and external ID                  |
-| `description`         | string | Detailed description                                   |
-| `solution`            | string | Recommended remediation                                |
-| `identifiers`         | array  | CVE, CWE, OWASP identifiers with URLs                  |
-| `location`            | object | File path, line numbers (scanner-specific)             |
-| `state`               | string | Finding state                                          |
-| `evidence`            | object | Supporting evidence: `summary`, `source`, `source_url` |
-| `vulnerability_id`    | string | Linked vulnerability GID (if tracked)                  |
-| `vulnerability_state` | string | Current state of the linked vulnerability              |
+| Field                 | Type   | Description                                                                                                                                                                    |
+| --------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uuid`                | string | Unique identifier for the finding, the same `uuid` its vulnerability carries                                                                                                   |
+| `title`               | string | Human-readable title                                                                                                                                                           |
+| `severity`            | string | Severity level                                                                                                                                                                 |
+| `original_severity`   | string | Severity before any override                                                                                                                                                   |
+| `report_type`         | string | Scanner report type                                                                                                                                                            |
+| `scanner`             | object | Scanner name, vendor, and external ID                                                                                                                                          |
+| `description`         | string | Detailed description                                                                                                                                                           |
+| `solution`            | string | Recommended remediation                                                                                                                                                        |
+| `identifiers`         | array  | CVE, CWE, OWASP identifiers with URLs                                                                                                                                          |
+| `location`            | object | Where it was found, in the terms of its scan type, the same shape a vulnerability's location has                                                                               |
+| `state`               | string | Finding state                                                                                                                                                                  |
+| `state_comment`       | string | The comment written with the latest dismissal                                                                                                                                  |
+| `dismissed_at`        | string | When the vulnerability the finding became was dismissed                                                                                                                        |
+| `dismissed_by`        | object | Who dismissed it: `username`, `name`, `web_url`                                                                                                                                |
+| `dismissal_reason`    | string | Why it was dismissed                                                                                                                                                           |
+| `false_positive`      | bool   | GitLab's false-positive verdict, only where the project is licensed for the detection                                                                                          |
+| `evidence`            | object | Supporting evidence: `summary`, `source`, `source_id`, `source_url`, and the HTTP `request` and `response` a DAST or API fuzzing scan recorded, with any `supporting_messages` |
+| `remediations`        | array  | Fixes the scanner proposed: `summary`, and as `diff` the patch in the form `git apply` takes, decoded from the base64 the report format carries it in                          |
+| `links`               | array  | References the security report attached: `name` and `url`                                                                                                                      |
+| `assets`              | array  | Artifacts the scan attached: `name`, `type`, `url`                                                                                                                             |
+| `token_status`        | object | For a leaked secret, whether it still works: `status`, `last_verified_at`, `created_at` and `updated_at`                                                                       |
+| `vulnerability_id`    | string | Linked vulnerability GID (if tracked)                                                                                                                                          |
+| `vulnerability_state` | string | Current state of the linked vulnerability                                                                                                                                      |
+
+The issue links and the merge request of a finding are those of its vulnerability, since GitLab resolves both through it: read them with `vulnerability.get` on the `vulnerability_id`.
+
+The action needs GitLab 18.5 or later, the release that added the newest fields it reads (`original_severity` and the token status's `last_verified_at`). A finding's `unverified` flag, added in 18.11, is not read, since GitLab refuses a whole document that names a field it does not have.
 
 ---
 
@@ -88,7 +102,7 @@ Each finding includes:
 
 ## Notes
 
-- Finding locations vary by scanner type: SAST and Secret Detection return file/line, DAST returns URL path, Container Scanning returns image name, Dependency Scanning returns file path
+- Finding locations vary by scan type, and every member of GitLab's location union is read: `file` is the file, the DAST request path or the container image, and the fields beside it are the ones the [vulnerabilities reference](vulnerabilities.md#notes) lists for each scan type
 - Findings may or may not be linked to a tracked vulnerability — check `vulnerability_id` to determine if the finding has been promoted to a vulnerability
 - This tool replaces the deprecated REST `GET /projects/:id/vulnerability_findings` endpoint
 

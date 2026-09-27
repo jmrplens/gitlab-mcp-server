@@ -2,9 +2,11 @@ package securityfindings
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
-	"strconv"
+	"reflect"
 	"strings"
+	"unicode/utf8"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -13,20 +15,37 @@ import (
 )
 
 // FindingItem represents a single security report finding from a pipeline scan.
+//
+// The dismissal fields are the state transition GitLab last recorded when it
+// dismissed the vulnerability this finding became, read through the finding
+// so a pipeline's findings say who dismissed each one and why without a call
+// per finding. The finding's issue links and merge request are its
+// vulnerability's too, and vulnerability.get publishes them for the
+// vulnerability_id given here.
 type FindingItem struct {
-	UUID        string           `json:"uuid"`
-	Title       string           `json:"title"`
-	Severity    string           `json:"severity"`
-	ReportType  string           `json:"report_type"`
-	Scanner     *ScannerItem     `json:"scanner,omitempty"`
-	Description string           `json:"description,omitempty"`
-	Solution    string           `json:"solution,omitempty"`
-	Identifiers []IdentifierItem `json:"identifiers,omitempty"`
-	Location    *LocationItem    `json:"location,omitempty"`
-	State       string           `json:"state"`
-	Evidence    *EvidenceItem    `json:"evidence,omitempty"`
-	VulnID      string           `json:"vulnerability_id,omitempty"`
-	VulnState   string           `json:"vulnerability_state,omitempty"`
+	UUID             string                                   `json:"uuid"`
+	Title            string                                   `json:"title"`
+	Severity         string                                   `json:"severity"`
+	OriginalSeverity string                                   `json:"original_severity,omitempty"`
+	ReportType       string                                   `json:"report_type"`
+	Scanner          *ScannerItem                             `json:"scanner,omitempty"`
+	Description      string                                   `json:"description,omitempty"`
+	Solution         string                                   `json:"solution,omitempty"`
+	Identifiers      []IdentifierItem                         `json:"identifiers,omitempty"`
+	Location         *LocationItem                            `json:"location,omitempty"`
+	State            string                                   `json:"state"`
+	StateComment     string                                   `json:"state_comment,omitempty"`
+	DismissedAt      string                                   `json:"dismissed_at,omitempty"`
+	DismissedBy      *toolutil.UserCoreRefOutput              `json:"dismissed_by,omitempty"`
+	DismissalReason  string                                   `json:"dismissal_reason,omitempty"`
+	FalsePositive    *bool                                    `json:"false_positive,omitempty"`
+	Evidence         *EvidenceItem                            `json:"evidence,omitempty"`
+	Remediations     []RemediationItem                        `json:"remediations,omitempty"`
+	Links            []toolutil.VulnerabilityLinkOutput       `json:"links,omitempty"`
+	Assets           []AssetItem                              `json:"assets,omitempty"`
+	TokenStatus      *toolutil.VulnerabilityTokenStatusOutput `json:"token_status,omitempty"`
+	VulnID           string                                   `json:"vulnerability_id,omitempty"`
+	VulnState        string                                   `json:"vulnerability_state,omitempty"`
 }
 
 // ScannerItem represents the scanner that produced the finding.
@@ -44,24 +63,109 @@ type IdentifierItem struct {
 	URL          string `json:"url,omitempty"`
 }
 
-// LocationItem represents the code location where the finding was detected.
-type LocationItem struct {
-	File      string `json:"file,omitempty"`
-	StartLine int    `json:"start_line,omitempty"`
-	EndLine   int    `json:"end_line,omitempty"`
-	BlobPath  string `json:"blob_path,omitempty"`
-}
+// LocationItem is where the scanner found the finding. It is the shape the
+// vulnerabilities share, so a finding and the vulnerability it becomes name
+// their location in the same words.
+type LocationItem = toolutil.VulnerabilityLocationOutput
 
 // EvidenceItem holds supporting evidence for a finding. The GraphQL
-// VulnerabilityEvidence type is an object rather than a blob, so the summary
-// and the named source it points at are carried separately.
+// VulnerabilityEvidence type is an object rather than a blob, so the summary,
+// the named source it points at, and the HTTP exchange a DAST or API fuzzing
+// scan recorded as proof are carried separately.
 type EvidenceItem struct {
-	Summary   string `json:"summary,omitempty"`
-	Source    string `json:"source,omitempty"`
-	SourceURL string `json:"source_url,omitempty"`
+	Summary            string                  `json:"summary,omitempty"`
+	Source             string                  `json:"source,omitempty"`
+	SourceID           string                  `json:"source_id,omitempty"`
+	SourceURL          string                  `json:"source_url,omitempty"`
+	Request            *HTTPRequestItem        `json:"request,omitempty"`
+	Response           *HTTPResponseItem       `json:"response,omitempty"`
+	SupportingMessages []SupportingMessageItem `json:"supporting_messages,omitempty"`
 }
 
-// GraphQL query for pipeline security report findings.
+// HTTPHeaderItem is one header of a request or a response the evidence
+// recorded.
+type HTTPHeaderItem struct {
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+// HTTPRequestItem is the request a scan sent to show the vulnerability.
+type HTTPRequestItem struct {
+	Method  string           `json:"method,omitempty"`
+	URL     string           `json:"url,omitempty"`
+	Headers []HTTPHeaderItem `json:"headers,omitempty"`
+	Body    string           `json:"body,omitempty"`
+}
+
+// HTTPResponseItem is what the application answered that request with.
+type HTTPResponseItem struct {
+	StatusCode   int              `json:"status_code,omitempty"`
+	ReasonPhrase string           `json:"reason_phrase,omitempty"`
+	Headers      []HTTPHeaderItem `json:"headers,omitempty"`
+	Body         string           `json:"body,omitempty"`
+}
+
+// SupportingMessageItem is a further exchange the scan recorded beside the
+// evidence, such as the unmodified request it compared the attack with.
+type SupportingMessageItem struct {
+	Name     string            `json:"name"`
+	Request  *HTTPRequestItem  `json:"request,omitempty"`
+	Response *HTTPResponseItem `json:"response,omitempty"`
+}
+
+// RemediationItem is a fix the scanner proposed, with the patch that applies
+// it when the scanner produced one. Diff is the patch in the form git apply
+// takes: GitLab passes on the report's value unchanged, which the security
+// report format defines as that patch encoded in base64, so it is decoded
+// before it is published (see [remediationToItem]).
+type RemediationItem struct {
+	Summary string `json:"summary,omitempty"`
+	Diff    string `json:"diff,omitempty"`
+}
+
+// AssetItem is an artifact the scan attached to the finding, such as the
+// recording of a DAST session.
+type AssetItem struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+// httpRequestSelection and httpResponseSelection are what an evidence request
+// and response are read with, at the evidence itself and at each supporting
+// message alike, since both are decoded into the same structs.
+const (
+	httpRequestSelection = `
+              method
+              url
+              body
+              headers {
+                name
+                value
+              }
+            `
+	httpResponseSelection = `
+              statusCode
+              reasonPhrase
+              body
+              headers {
+                name
+                value
+              }
+            `
+)
+
+// queryListFindings reads one page of a pipeline's security report findings.
+//
+// GitLab refuses a whole document that names a field it does not have, so
+// what it selects decides the oldest GitLab the action works on at all. The
+// newest fields selected are originalSeverity and the token status's
+// lastVerifiedAt, both added in GitLab 18.5, below the 18.10 the vulnerability
+// documents are held to; unverified, added in 18.11, is left out and declared
+// in cmd/audit_graphql_shapes/sent_declarations_security.go. At first=100 on
+// GitLab.com (19.5-pre) the document costs 201 of the 250 complexity GitLab
+// allows an authenticated caller, against at most 200 before issue 967, and
+// nothing in the unit suite can see that ceiling.
 const queryListFindings = `
 query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $scanner: [String!], $reportType: [String!], $state: [VulnerabilityState!], $sort: PipelineSecurityReportFindingSort) {
   project(fullPath: $projectPath) {
@@ -81,6 +185,7 @@ query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: 
           uuid
           title
           severity
+          originalSeverity
           reportType
           scanner {
             name
@@ -95,38 +200,39 @@ query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: 
             externalId
             url
           }
-          location {
-            ... on VulnerabilityLocationSast {
-              file
-              startLine
-              endLine
-              blobPath
-            }
-            ... on VulnerabilityLocationDast {
-              path
-            }
-            ... on VulnerabilityLocationDependencyScanning {
-              file
-              blobPath
-            }
-            ... on VulnerabilityLocationContainerScanning {
-              image
-            }
-            ... on VulnerabilityLocationSecretDetection {
-              file
-              startLine
-              endLine
-              blobPath
-            }
-          }
+          location {` + toolutil.VulnerabilityLocationSelection + `}
           state
+          stateComment
+          dismissedAt
+          dismissedBy {` + toolutil.UserCoreRefSelection + `}
+          dismissalReason
+          falsePositive
           evidence {
             summary
             source {
+              identifier
               name
               url
             }
+            request {` + httpRequestSelection + `}
+            response {` + httpResponseSelection + `}
+            supportingMessages {
+              name
+              request {` + httpRequestSelection + `}
+              response {` + httpResponseSelection + `}
+            }
           }
+          remediations {
+            summary
+            diff
+          }
+          links {` + toolutil.VulnerabilityLinkSelection + `}
+          assets {
+            name
+            type
+            url
+          }
+          findingTokenStatus {` + toolutil.VulnerabilityTokenStatusSelection + `}
           vulnerability {
             id
             state
@@ -159,30 +265,6 @@ type gqlIdentifier struct {
 	URL          string `json:"url"`
 }
 
-// gqlLocation is the location a finding reports. GitLab types startLine and
-// endLine as String on every location type in the pinned schema, and a live
-// instance sends them quoted; an int here made the whole response fail to
-// decode.
-type gqlLocation struct {
-	File      string `json:"file"`
-	Path      string `json:"path"`
-	Image     string `json:"image"`
-	StartLine string `json:"startLine"`
-	EndLine   string `json:"endLine"`
-	BlobPath  string `json:"blobPath"`
-}
-
-// lineNumber reads the line GitLab spells as a string. A value that is not a
-// number, which the schema allows, reads as no line rather than an error, since
-// a finding is worth reporting whether or not its line parsed.
-func lineNumber(s string) int {
-	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil {
-		return 0
-	}
-	return n
-}
-
 // lowercased spells filter values the way GitLab's finder looks them up.
 func lowercased(values []string) []string {
 	out := make([]string, len(values))
@@ -199,29 +281,85 @@ type gqlVulnerabilityRef struct {
 }
 
 type gqlFindingNode struct {
-	UUID          string               `json:"uuid"`
-	Title         string               `json:"title"`
-	Severity      string               `json:"severity"`
-	ReportType    string               `json:"reportType"`
-	Scanner       *gqlScanner          `json:"scanner"`
-	Description   string               `json:"description"`
-	Solution      string               `json:"solution"`
-	Identifiers   []gqlIdentifier      `json:"identifiers"`
-	Location      *gqlLocation         `json:"location"`
-	State         string               `json:"state"`
-	Evidence      *gqlEvidence         `json:"evidence"`
-	Vulnerability *gqlVulnerabilityRef `json:"vulnerability"`
+	UUID               string                                    `json:"uuid"`
+	Title              string                                    `json:"title"`
+	Severity           string                                    `json:"severity"`
+	OriginalSeverity   string                                    `json:"originalSeverity"`
+	ReportType         string                                    `json:"reportType"`
+	Scanner            *gqlScanner                               `json:"scanner"`
+	Description        string                                    `json:"description"`
+	Solution           string                                    `json:"solution"`
+	Identifiers        []gqlIdentifier                           `json:"identifiers"`
+	Location           *toolutil.GraphQLVulnerabilityLocation    `json:"location"`
+	State              string                                    `json:"state"`
+	StateComment       string                                    `json:"stateComment"`
+	DismissedAt        string                                    `json:"dismissedAt"`
+	DismissedBy        *toolutil.GraphQLUserCoreRef              `json:"dismissedBy"`
+	DismissalReason    string                                    `json:"dismissalReason"`
+	FalsePositive      *bool                                     `json:"falsePositive"`
+	Evidence           *gqlEvidence                              `json:"evidence"`
+	Remediations       []gqlRemediation                          `json:"remediations"`
+	Links              []toolutil.GraphQLVulnerabilityLink       `json:"links"`
+	Assets             []gqlAsset                                `json:"assets"`
+	FindingTokenStatus *toolutil.GraphQLVulnerabilityTokenStatus `json:"findingTokenStatus"`
+	Vulnerability      *gqlVulnerabilityRef                      `json:"vulnerability"`
 }
 
 // gqlEvidence holds the supporting evidence object returned for a finding.
 type gqlEvidence struct {
-	Summary string             `json:"summary"`
-	Source  *gqlEvidenceSource `json:"source"`
+	Summary            string                 `json:"summary"`
+	Source             *gqlEvidenceSource     `json:"source"`
+	Request            *gqlRequest            `json:"request"`
+	Response           *gqlResponse           `json:"response"`
+	SupportingMessages []gqlSupportingMessage `json:"supportingMessages"`
 }
 
 // gqlEvidenceSource names where a piece of evidence came from.
 type gqlEvidenceSource struct {
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+	URL        string `json:"url"`
+}
+
+// gqlHeader is one header of a recorded request or response.
+type gqlHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// gqlRequest is a recorded request, read with [httpRequestSelection].
+type gqlRequest struct {
+	Method  string      `json:"method"`
+	URL     string      `json:"url"`
+	Body    string      `json:"body"`
+	Headers []gqlHeader `json:"headers"`
+}
+
+// gqlResponse is a recorded response, read with [httpResponseSelection].
+type gqlResponse struct {
+	StatusCode   int         `json:"statusCode"`
+	ReasonPhrase string      `json:"reasonPhrase"`
+	Body         string      `json:"body"`
+	Headers      []gqlHeader `json:"headers"`
+}
+
+// gqlSupportingMessage is a further exchange recorded beside the evidence.
+type gqlSupportingMessage struct {
+	Name     string       `json:"name"`
+	Request  *gqlRequest  `json:"request"`
+	Response *gqlResponse `json:"response"`
+}
+
+// gqlRemediation is a fix the scanner proposed.
+type gqlRemediation struct {
+	Summary string `json:"summary"`
+	Diff    string `json:"diff"`
+}
+
+// gqlAsset is an artifact the scan attached to the finding.
+type gqlAsset struct {
 	Name string `json:"name"`
+	Type string `json:"type"`
 	URL  string `json:"url"`
 }
 
@@ -242,16 +380,27 @@ type gqlProjectPipeline struct {
 }
 
 // nodeToItem converts a raw GraphQL security finding node into a [FindingItem]
-// output struct, mapping scanner, identifiers, location, and vulnerability state.
+// output struct, mapping scanner, identifiers, location, evidence, and
+// vulnerability state.
 func nodeToItem(n gqlFindingNode) FindingItem {
 	item := FindingItem{
-		UUID:        n.UUID,
-		Title:       n.Title,
-		Severity:    n.Severity,
-		ReportType:  n.ReportType,
-		Description: n.Description,
-		Solution:    n.Solution,
-		State:       n.State,
+		UUID:             n.UUID,
+		Title:            n.Title,
+		Severity:         n.Severity,
+		OriginalSeverity: n.OriginalSeverity,
+		ReportType:       n.ReportType,
+		Description:      n.Description,
+		Solution:         n.Solution,
+		Location:         n.Location.Output(),
+		State:            n.State,
+		StateComment:     n.StateComment,
+		DismissedAt:      n.DismissedAt,
+		DismissedBy:      n.DismissedBy.Output(),
+		DismissalReason:  n.DismissalReason,
+		FalsePositive:    n.FalsePositive,
+		Evidence:         evidenceToItem(n.Evidence),
+		Links:            toolutil.VulnerabilityLinkOutputs(n.Links),
+		TokenStatus:      n.FindingTokenStatus.Output(),
 	}
 	if n.Scanner != nil {
 		item.Scanner = &ScannerItem{
@@ -263,41 +412,94 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 	for _, id := range n.Identifiers {
 		item.Identifiers = append(item.Identifiers, IdentifierItem(id))
 	}
-	if n.Location != nil {
-		loc := &LocationItem{
-			File:      n.Location.File,
-			StartLine: lineNumber(n.Location.StartLine),
-			EndLine:   lineNumber(n.Location.EndLine),
-			BlobPath:  n.Location.BlobPath,
-		}
-		// A location is one member of a union and each member spells its
-		// subject its own way: file for SAST, path for DAST, image for
-		// container scanning. Emptiness alone decides the fallback, since no
-		// member declares two of them and writing an empty value over an
-		// empty File is what skipping it already did.
-		if loc.File == "" {
-			loc.File = n.Location.Path
-		}
-		if loc.File == "" {
-			loc.File = n.Location.Image
-		}
-		item.Location = loc
+	for _, remediation := range n.Remediations {
+		item.Remediations = append(item.Remediations, remediationToItem(remediation))
 	}
-	if n.Evidence != nil {
-		evidence := &EvidenceItem{Summary: n.Evidence.Summary}
-		if n.Evidence.Source != nil {
-			evidence.Source = n.Evidence.Source.Name
-			evidence.SourceURL = n.Evidence.Source.URL
-		}
-		if *evidence != (EvidenceItem{}) {
-			item.Evidence = evidence
-		}
+	for _, asset := range n.Assets {
+		item.Assets = append(item.Assets, AssetItem(asset))
 	}
 	if n.Vulnerability != nil {
 		item.VulnID = n.Vulnerability.ID
 		item.VulnState = n.Vulnerability.State
 	}
 	return item
+}
+
+// remediationToItem converts a fix the scanner proposed, decoding its patch.
+//
+// GitLab's security report format defines a remediation's diff as a
+// base64-encoded patch compatible with git apply, in the Diff section of
+// doc/development/integrations/secure.md, and its GraphQL API passes the
+// report's value through without decoding it, so a caller handed the value as
+// GitLab sent it reads a blob where the field's name promises a patch. A value
+// that is not base64, or that does not decode to text, is published as GitLab
+// sent it: a report that wrote the patch unencoded is then still read as a
+// patch, and nothing is guessed at.
+func remediationToItem(r gqlRemediation) RemediationItem {
+	diff := r.Diff
+	if patch, err := base64.StdEncoding.DecodeString(r.Diff); err == nil && utf8.Valid(patch) {
+		diff = string(patch)
+	}
+	return RemediationItem{Summary: r.Summary, Diff: diff}
+}
+
+// evidenceToItem converts the evidence GitLab sent, and answers nil for
+// evidence that carries nothing, which GitLab sends for a finding whose report
+// recorded none: an empty object would read as evidence that says nothing.
+func evidenceToItem(e *gqlEvidence) *EvidenceItem {
+	if e == nil {
+		return nil
+	}
+	evidence := &EvidenceItem{
+		Summary:  e.Summary,
+		Request:  requestToItem(e.Request),
+		Response: responseToItem(e.Response),
+	}
+	if e.Source != nil {
+		evidence.Source = e.Source.Name
+		evidence.SourceID = e.Source.Identifier
+		evidence.SourceURL = e.Source.URL
+	}
+	for _, message := range e.SupportingMessages {
+		evidence.SupportingMessages = append(evidence.SupportingMessages, SupportingMessageItem{
+			Name:     message.Name,
+			Request:  requestToItem(message.Request),
+			Response: responseToItem(message.Response),
+		})
+	}
+	if reflect.ValueOf(evidence).Elem().IsZero() {
+		return nil
+	}
+	return evidence
+}
+
+// requestToItem converts a recorded request, and answers nil for none.
+func requestToItem(r *gqlRequest) *HTTPRequestItem {
+	if r == nil {
+		return nil
+	}
+	return &HTTPRequestItem{Method: r.Method, URL: r.URL, Headers: headersToItems(r.Headers), Body: r.Body}
+}
+
+// responseToItem converts a recorded response, and answers nil for none.
+func responseToItem(r *gqlResponse) *HTTPResponseItem {
+	if r == nil {
+		return nil
+	}
+	return &HTTPResponseItem{StatusCode: r.StatusCode, ReasonPhrase: r.ReasonPhrase, Headers: headersToItems(r.Headers), Body: r.Body}
+}
+
+// headersToItems converts recorded headers, and answers nil for none so the
+// field is left out rather than written as an empty list.
+func headersToItems(headers []gqlHeader) []HTTPHeaderItem {
+	if len(headers) == 0 {
+		return nil
+	}
+	out := make([]HTTPHeaderItem, 0, len(headers))
+	for _, header := range headers {
+		out = append(out, HTTPHeaderItem(header))
+	}
+	return out
 }
 
 // ListInput is the input for listing pipeline security report findings.

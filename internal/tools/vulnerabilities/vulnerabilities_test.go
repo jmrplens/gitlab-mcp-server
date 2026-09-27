@@ -5,6 +5,7 @@ package vulnerabilities
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -1065,6 +1066,45 @@ func TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept(t *testing.T
 	}
 }
 
+// TestFormatListMarkdown_ALinkedRowBeforeAnUnlinkedOne_StillAsksForTheLinks
+// verifies that the footer's instruction to keep the links is decided by
+// whether any row carried one, not by the last row: a page whose first
+// vulnerability has an address and whose second has none still has a link a
+// reader must not lose.
+func TestFormatListMarkdown_ALinkedRowBeforeAnUnlinkedOne_StillAsksForTheLinks(t *testing.T) {
+	out := ListOutput{Vulnerabilities: []Item{
+		{ID: "gid://gitlab/Vulnerability/1", Title: "Linked", Severity: "LOW", State: "DETECTED", WebURL: "https://gitlab.example.com/v/1"},
+		{ID: "gid://gitlab/Vulnerability/2", Title: "Unlinked", Severity: "LOW", State: "DETECTED"},
+	}}
+	if got := FormatListMarkdown(out); !strings.Contains(got, toolutil.HintPreserveLinks) {
+		t.Errorf("FormatListMarkdown() dropped the instruction to keep the links the first row carries:\n%s", got)
+	}
+}
+
+// TestFormatMutationMarkdown_UnnamedPersonAndUntitledReference verifies how a
+// card names a person GitLab sent with no display name, and a merge request it
+// sent with no title: by the username and by the reference alone, never with
+// an empty name or a dangling space.
+func TestFormatMutationMarkdown_UnnamedPersonAndUntitledReference(t *testing.T) {
+	got := FormatMutationMarkdown(MutationOutput{Vulnerability: Item{
+		ID:           "gid://gitlab/Vulnerability/3",
+		Title:        "t",
+		State:        "CONFIRMED",
+		ConfirmedBy:  &toolutil.UserCoreRefOutput{Username: "alice", WebURL: "https://gitlab.example.com/alice"},
+		MergeRequest: &ReferenceItem{IID: 7, WebURL: "https://gitlab.example.com/g/p/-/merge_requests/7"},
+	}}, "confirmed")
+	for _, row := range []string{
+		"- **Confirmed By**: [@alice](https://gitlab.example.com/alice)\n",
+		"- **Merge Request**: [!7](https://gitlab.example.com/g/p/-/merge_requests/7)\n",
+	} {
+		t.Run(row, func(t *testing.T) {
+			if !strings.Contains(got, row) {
+				t.Errorf("card is missing %q:\n%s", row, got)
+			}
+		})
+	}
+}
+
 // TestFormatListMarkdown_TitleAndPrimaryIdentifier verifies which identifier
 // earns a place beside the title in a list row.
 //
@@ -1137,6 +1177,7 @@ func TestFormatGetMarkdown_UntitledVulnerability(t *testing.T) {
 				"- **ID**: `gid://gitlab/Vulnerability/1`\n" +
 				"- **Severity**: 🔵 LOW\n" +
 				"- **State**: DETECTED\n" +
+				"- **Present On Default Branch**: ❌\n" +
 				"- **Has Issues**: ❌\n" +
 				"- **Has Merge Request**: ❌\n" +
 				"- **Has Remediations**: ❌\n" +
@@ -1185,6 +1226,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 		"- **Scanner**: semgrep (GitLab)\n" +
 		"- **Primary Identifier**: [CWE-89](https://cwe.mitre.org/89)\n" +
 		"- **Location**: `main.go:10-20`\n" +
+		"- **Present On Default Branch**: ❌\n" +
 		"- **Has Issues**: ❌\n" +
 		"- **Has Merge Request**: ❌\n" +
 		"- **Has Remediations**: ❌\n" +
@@ -1241,6 +1283,7 @@ func TestFormatGetMarkdown_StateDecidesTheHints(t *testing.T) {
 				"- **Title**: V\n" +
 				"- **Severity**: 🔵 LOW\n" +
 				"- **State**: " + tt.state + "\n" +
+				"- **Present On Default Branch**: ❌\n" +
 				"- **Has Issues**: ❌\n" +
 				"- **Has Merge Request**: ❌\n" +
 				"- **Has Remediations**: ❌\n" +
@@ -1311,6 +1354,7 @@ func TestFormatGetMarkdown_ProjectReference(t *testing.T) {
 				"- **Title**: V\n" +
 				"- **Severity**: 🔵 LOW\n" +
 				"- **State**: DETECTED\n" +
+				"- **Present On Default Branch**: ❌\n" +
 				"- **Has Issues**: ❌\n" +
 				"- **Has Merge Request**: ❌\n" +
 				"- **Has Remediations**: ❌\n" +
@@ -1362,6 +1406,7 @@ func TestFormatGetMarkdown_LocationLineRange(t *testing.T) {
 				"- **Severity**: 🔵 LOW\n" +
 				"- **State**: DETECTED\n" +
 				"- **Location**: `" + tt.want + "`\n" +
+				"- **Present On Default Branch**: ❌\n" +
 				"- **Has Issues**: ❌\n" +
 				"- **Has Merge Request**: ❌\n" +
 				"- **Has Remediations**: ❌\n" +
@@ -1395,6 +1440,7 @@ func TestFormatGetMarkdown_ScannerAuthoredDescription(t *testing.T) {
 		"- **Title**: V\n" +
 		"- **Severity**: 🔵 LOW\n" +
 		"- **State**: DETECTED\n" +
+		"- **Present On Default Branch**: ❌\n" +
 		"- **Has Issues**: ❌\n" +
 		"- **Has Merge Request**: ❌\n" +
 		"- **Has Remediations**: ❌\n" +
@@ -1460,6 +1506,7 @@ func TestFormatMutationMarkdown(t *testing.T) {
 		"- **Severity**: 🟡 MEDIUM\n" +
 		"- **State**: DISMISSED\n" +
 		"- **Dismissal Reason**: FALSE_POSITIVE\n" +
+		"- **Present On Default Branch**: ❌\n" +
 		"- **Has Issues**: ❌\n" +
 		"- **Has Merge Request**: ❌\n" +
 		"- **Has Remediations**: ❌\n" +
@@ -1693,7 +1740,7 @@ func TestNodeToItem_DastLocation(t *testing.T) {
 		Title:    "DAST finding",
 		Severity: "MEDIUM",
 		State:    "DETECTED",
-		Location: &gqlLocation{Path: "/api/v1/users"},
+		Location: &toolutil.GraphQLVulnerabilityLocation{Path: "/api/v1/users"},
 	}
 	item := nodeToItem(node)
 	if item.Location == nil {
@@ -1712,7 +1759,7 @@ func TestNodeToItem_ContainerLocation(t *testing.T) {
 		Title:    "Container finding",
 		Severity: "HIGH",
 		State:    "DETECTED",
-		Location: &gqlLocation{Image: "registry.example.com/app:latest"},
+		Location: &toolutil.GraphQLVulnerabilityLocation{Image: "registry.example.com/app:latest"},
 	}
 	item := nodeToItem(node)
 	if item.Location == nil {
@@ -1734,7 +1781,7 @@ func TestNodeToItem_ContainerLocation(t *testing.T) {
 func TestNodeToItem_LocationPrefersTheFileOverPathAndImage(t *testing.T) {
 	item := nodeToItem(gqlVulnerabilityNode{
 		ID: "gid://gitlab/Vulnerability/3",
-		Location: &gqlLocation{
+		Location: &toolutil.GraphQLVulnerabilityLocation{
 			File:  "app/models/user.rb",
 			Path:  "/api/v1/users",
 			Image: "registry.example.com/app:latest",
@@ -1800,6 +1847,7 @@ func TestFormatGetMarkdown_AllOptionalFields(t *testing.T) {
 		"- **Dismissed**: 1 Mar 2026 10:00 UTC\n" +
 		"- **Resolved**: 5 Mar 2026 12:00 UTC\n" +
 		"- **Dismissal Reason**: ACCEPTABLE_RISK\n" +
+		"- **Present On Default Branch**: ❌\n" +
 		"- **Has Issues**: ✅\n" +
 		"- **Has Merge Request**: ✅\n" +
 		"- **Has Remediations**: ❌\n" +
@@ -1832,6 +1880,7 @@ func TestFormatMutationMarkdown_WithPrimaryID(t *testing.T) {
 		"- **Severity**: 🟠 HIGH\n" +
 		"- **State**: CONFIRMED\n" +
 		"- **Primary Identifier**: CWE-89\n" +
+		"- **Present On Default Branch**: ❌\n" +
 		"- **Has Issues**: ❌\n" +
 		"- **Has Merge Request**: ❌\n" +
 		"- **Has Remediations**: ❌\n" +
@@ -1883,25 +1932,368 @@ func containsStr(s, sub string) bool {
 	return false
 }
 
-// TestLineNumber_ReadsGitLabsStringAndTakesNothingElseForALine pins how the
-// line a location carries is read. GitLab types startLine and endLine as
-// String, and the licensed e2e run found a live instance sending them quoted
-// while the response struct expected an int, which failed the whole decode.
-func TestLineNumber_ReadsGitLabsStringAndTakesNothingElseForALine(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want int
-	}{
-		{name: "a quoted number", in: "42", want: 42},
-		{name: "a number with spaces around it", in: " 7 ", want: 7},
-		{name: "an empty string", in: "", want: 0},
-		{name: "a value that is not a number", in: "n/a", want: 0},
+// triagedVulnNode is a vulnerability carrying every field a triager reads
+// beyond the ones sampleVulnGetNode has: who changed its state and what they
+// wrote, the CVSS and EPSS data, the report's links, a leaked token's status,
+// the issues and merge request linked to it, and a DAST location. Every
+// string and number is distinct, so a field filled from the one beside it
+// fails. The three default-branch booleans cannot all differ, so
+// presentOnDefaultBranch and removedFromCode share false here and
+// TestNodeToItem_DefaultBranchSignals_EachReadFromItsOwnField tells those two
+// apart; resolvedOnDefaultBranch, the one true, is what a vulnerability no
+// longer present on the default branch carries.
+const triagedVulnNode = `{
+  "id": "gid://gitlab/Vulnerability/90",
+  "uuid": "4b5c9e0d-2f3a-5e6b-8c7d-1a2b3c4d5e6f",
+  "title": "Reflected XSS",
+  "severity": "HIGH",
+  "state": "DISMISSED",
+  "stateComment": "only reachable by administrators",
+  "webUrl": "https://gitlab.example.com/g/p/-/security/vulnerabilities/90",
+  "description": "User input is reflected into the page.",
+  "reportType": "DAST",
+  "detectedAt": "2026-01-15T10:00:00Z",
+  "updatedAt": "2026-02-03T09:00:00Z",
+  "dismissedAt": "2026-02-02T12:00:00Z",
+  "dismissedBy": {"username": "carol", "name": "Carol", "webUrl": "https://gitlab.example.com/carol"},
+  "resolvedAt": "2026-02-01T12:00:00Z",
+  "resolvedBy": {"username": "bob", "name": "Bob", "webUrl": "https://gitlab.example.com/bob"},
+  "confirmedAt": "2026-01-20T12:00:00Z",
+  "confirmedBy": {"username": "alice", "name": "Alice", "webUrl": "https://gitlab.example.com/alice"},
+  "solution": "Encode the output.",
+  "hasRemediations": false,
+  "dismissalReason": "ACCEPTABLE_RISK",
+  "falsePositive": false,
+  "presentOnDefaultBranch": false,
+  "resolvedOnDefaultBranch": true,
+  "removedFromCode": false,
+  "userNotesCount": 3,
+  "primaryIdentifier": null,
+  "identifiers": [],
+  "cvss": [
+    {"vendor": "GitLab", "version": 3.1, "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N", "baseScore": 5.4, "overallScore": 5.5, "severity": "MEDIUM"},
+    {"vendor": "NVD", "version": 4.0, "vector": "CVSS:4.0/AV:N/AC:L", "baseScore": 6.1, "overallScore": 6.3, "severity": "HIGH"}
+  ],
+  "cveEnrichment": {"cve": "CVE-2026-1234", "epssScore": 0.97531, "isKnownExploit": true},
+  "links": [
+    {"name": "OWASP XSS", "url": "https://owasp.org/www-community/attacks/xss/"},
+    {"name": null, "url": "https://example.com/advisory"}
+  ],
+  "findingTokenStatus": {"status": "ACTIVE", "lastVerifiedAt": "2026-02-03T08:00:00Z", "createdAt": "2026-01-15T10:00:01Z", "updatedAt": "2026-02-03T08:00:02Z"},
+  "scanner": {"name": "ZAP", "vendor": "GitLab", "externalId": "zaproxy"},
+  "location": {"hostname": "https://app.example", "path": "/search?q=", "requestMethod": "GET", "param": "q"},
+  "project": {"id": "gid://gitlab/Project/1", "name": "p", "fullPath": "g/p"},
+  "issueLinks": {"nodes": [
+    {"linkType": "CREATED", "issue": {"iid": "12", "title": "Fix XSS in search", "state": "opened", "webUrl": "https://gitlab.example.com/g/p/-/issues/12"}},
+    {"linkType": "RELATED", "issue": null}
+  ]},
+  "mergeRequest": {"iid": "34", "title": "Encode search output", "state": "merged", "webUrl": "https://gitlab.example.com/g/p/-/merge_requests/34"}
+}`
+
+// triagedVulnItem is what [triagedVulnNode] must be published as.
+func triagedVulnItem() Item {
+	notFalsePositive := false
+	return Item{
+		ID:           "gid://gitlab/Vulnerability/90",
+		UUID:         "4b5c9e0d-2f3a-5e6b-8c7d-1a2b3c4d5e6f",
+		Title:        "Reflected XSS",
+		Severity:     "HIGH",
+		State:        "DISMISSED",
+		StateComment: "only reachable by administrators",
+		Description:  "User input is reflected into the page.",
+		ReportType:   "DAST",
+		Scanner:      &ScannerItem{Name: "ZAP", Vendor: "GitLab", ScannerID: "zaproxy"},
+		Location:     &LocationItem{File: "/search?q=", Hostname: "https://app.example", RequestMethod: "GET", Param: "q"},
+		CVSS: []CVSSItem{
+			{Vendor: "GitLab", Version: 3.1, Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N", BaseScore: 5.4, OverallScore: 5.5, Severity: "MEDIUM"},
+			{Vendor: "NVD", Version: 4.0, Vector: "CVSS:4.0/AV:N/AC:L", BaseScore: 6.1, OverallScore: 6.3, Severity: "HIGH"},
+		},
+		CVEEnrichment: &CVEEnrichmentItem{CVE: "CVE-2026-1234", EPSSScore: 0.97531, IsKnownExploit: true},
+		Links: []toolutil.VulnerabilityLinkOutput{
+			{Name: "OWASP XSS", URL: "https://owasp.org/www-community/attacks/xss/"},
+			{URL: "https://example.com/advisory"},
+		},
+		TokenStatus: &toolutil.VulnerabilityTokenStatusOutput{
+			Status: "ACTIVE", LastVerifiedAt: "2026-02-03T08:00:00Z", CreatedAt: "2026-01-15T10:00:01Z", UpdatedAt: "2026-02-03T08:00:02Z",
+		},
+		DetectedAt:              "2026-01-15T10:00:00Z",
+		UpdatedAt:               "2026-02-03T09:00:00Z",
+		DismissedAt:             "2026-02-02T12:00:00Z",
+		DismissedBy:             &toolutil.UserCoreRefOutput{Username: "carol", Name: "Carol", WebURL: "https://gitlab.example.com/carol"},
+		ResolvedAt:              "2026-02-01T12:00:00Z",
+		ResolvedBy:              &toolutil.UserCoreRefOutput{Username: "bob", Name: "Bob", WebURL: "https://gitlab.example.com/bob"},
+		ConfirmedAt:             "2026-01-20T12:00:00Z",
+		ConfirmedBy:             &toolutil.UserCoreRefOutput{Username: "alice", Name: "Alice", WebURL: "https://gitlab.example.com/alice"},
+		Project:                 &ProjectItem{ID: "gid://gitlab/Project/1", Name: "p", FullPath: "g/p"},
+		WebURL:                  "https://gitlab.example.com/g/p/-/security/vulnerabilities/90",
+		Solution:                "Encode the output.",
+		FalsePositive:           &notFalsePositive,
+		ResolvedOnDefaultBranch: true,
+		UserNotesCount:          3,
+		HasIssues:               true,
+		IssueLinks: []IssueLinkItem{
+			{LinkType: "CREATED", Issue: &ReferenceItem{IID: 12, Title: "Fix XSS in search", State: "opened", WebURL: "https://gitlab.example.com/g/p/-/issues/12"}},
+			{LinkType: "RELATED"},
+		},
+		HasMR:           true,
+		MergeRequest:    &ReferenceItem{IID: 34, Title: "Encode search output", State: "merged", WebURL: "https://gitlab.example.com/g/p/-/merge_requests/34"},
+		DismissalReason: "ACCEPTABLE_RISK",
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := lineNumber(tt.in); got != tt.want {
-				t.Errorf("lineNumber(%q) = %d, want %d", tt.in, got, tt.want)
+}
+
+// TestGet_TriageFields_ReachTheOutputWhole verifies that every field the
+// triage of issue 967 surfaced travels from GitLab's answer to the output,
+// compared as one value so a field left behind or filled from the one beside
+// it fails, through a document the mock has validated against the pinned schema.
+//
+// The false_positive flag GitLab sent as false is kept as false rather than
+// dropped, since false and "not assessed" are different answers; a link whose
+// name GitLab sent as null keeps its address; and an issue link whose issue
+// the caller may not read is still a link.
+func TestGet_TriageFields_ReachTheOutputWhole(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerability(id": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"vulnerability": `+triagedVulnNode+`}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := Get(context.Background(), client, GetInput{ID: "gid://gitlab/Vulnerability/90"})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if want := triagedVulnItem(); !reflect.DeepEqual(out.Vulnerability, want) {
+		t.Errorf("Vulnerability =\n%+v\nwant\n%+v", out.Vulnerability, want)
+	}
+}
+
+// TestNodeToItem_AbsentObjects_PublishNothing verifies that the objects GitLab
+// may leave out are published as absent rather than as empty values: no CVSS
+// list, no enrichment, no links, no token status, no merge request, and a
+// false-positive verdict GitLab did not give left unset.
+func TestNodeToItem_AbsentObjects_PublishNothing(t *testing.T) {
+	item := nodeToItem(gqlVulnerabilityNode{ID: "gid://gitlab/Vulnerability/5", CVSS: []gqlCVSS{}})
+	switch {
+	case item.CVSS != nil:
+		t.Errorf("CVSS = %+v, want nil for an empty list", item.CVSS)
+	case item.CVEEnrichment != nil:
+		t.Errorf("CVEEnrichment = %+v, want nil", item.CVEEnrichment)
+	case item.Links != nil:
+		t.Errorf("Links = %+v, want nil", item.Links)
+	case item.TokenStatus != nil:
+		t.Errorf("TokenStatus = %+v, want nil", item.TokenStatus)
+	case item.MergeRequest != nil || item.HasMR:
+		t.Errorf("MergeRequest = %+v, HasMR = %t, want neither", item.MergeRequest, item.HasMR)
+	case item.FalsePositive != nil:
+		t.Errorf("FalsePositive = %v, want nil when GitLab gave no verdict", *item.FalsePositive)
+	case item.ConfirmedBy != nil || item.DismissedBy != nil || item.ResolvedBy != nil:
+		t.Errorf("people = %+v %+v %+v, want nobody", item.ConfirmedBy, item.DismissedBy, item.ResolvedBy)
+	case item.IssueLinks != nil:
+		t.Errorf("IssueLinks = %+v, want nil", item.IssueLinks)
+	}
+}
+
+// TestNodeToItem_DefaultBranchSignals_EachReadFromItsOwnField verifies that
+// the three booleans GitLab computes about the default branch each reach their
+// own output field. Three booleans cannot all differ in one fixture, so each
+// case sets one of them alone: a field filled from either of the other two
+// reads false where the case wants true, or true where it wants false.
+func TestNodeToItem_DefaultBranchSignals_EachReadFromItsOwnField(t *testing.T) {
+	for _, tc := range []struct {
+		name                       string
+		node                       gqlVulnerabilityNode
+		present, resolved, removed bool
+	}{
+		{name: "present on the default branch alone", node: gqlVulnerabilityNode{PresentOnDefaultBranch: true}, present: true},
+		{name: "resolved on the default branch alone", node: gqlVulnerabilityNode{ResolvedOnDefaultBranch: true}, resolved: true},
+		{name: "removed from the code alone", node: gqlVulnerabilityNode{RemovedFromCode: true}, removed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			item := nodeToItem(tc.node)
+			if item.PresentOnDefaultBranch != tc.present || item.ResolvedOnDefaultBranch != tc.resolved ||
+				item.RemovedFromCode != tc.removed {
+				t.Errorf("present, resolved, removed = %t, %t, %t; want %t, %t, %t",
+					item.PresentOnDefaultBranch, item.ResolvedOnDefaultBranch, item.RemovedFromCode,
+					tc.present, tc.resolved, tc.removed)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_CodeSignals_EachFlagUnderItsOwnLabel verifies that the
+// two signals the card states only when they hold are each written under
+// their own label: a vulnerability GitLab no longer detects on the default
+// branch but still finds in the code must not read as removed from the code,
+// and the other way round.
+func TestFormatGetMarkdown_CodeSignals_EachFlagUnderItsOwnLabel(t *testing.T) {
+	const (
+		resolvedRow = "- **No longer detected on the default branch**\n"
+		removedRow  = "- **Removed from the code**\n"
+	)
+	for _, tc := range []struct {
+		name      string
+		item      Item
+		want, not string
+	}{
+		{name: "resolved on the default branch alone", item: Item{ID: "1", ResolvedOnDefaultBranch: true}, want: resolvedRow, not: removedRow},
+		{name: "removed from the code alone", item: Item{ID: "1", RemovedFromCode: true}, want: removedRow, not: resolvedRow},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatGetMarkdown(GetOutput{Vulnerability: tc.item})
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("the card lacks %q:\n%s", tc.want, got)
+			}
+			if strings.Contains(got, tc.not) {
+				t.Errorf("the card carries %q, which does not hold:\n%s", tc.not, got)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_TriageRowsAndCollections verifies the card a fully
+// triaged vulnerability renders: the people linked to their profiles beside
+// the time of each state change, the default-branch signals, the enrichment
+// and the token status as nested objects, the state comment quoted with the
+// scanner's prose, and the CVSS assessments, the report's links and the linked
+// issues as collections after the rows.
+func TestFormatGetMarkdown_TriageRowsAndCollections(t *testing.T) {
+	want := "## Vulnerability: Reflected XSS\n\n" +
+		"- **ID**: `gid://gitlab/Vulnerability/90`\n" +
+		"- **UUID**: `4b5c9e0d-2f3a-5e6b-8c7d-1a2b3c4d5e6f`\n" +
+		"- **Title**: Reflected XSS\n" +
+		"- **Severity**: 🟠 HIGH\n" +
+		"- **State**: DISMISSED\n" +
+		"- **Report Type**: DAST\n" +
+		"- **Scanner**: ZAP (GitLab)\n" +
+		"- **Location**: `/search?q=`\n" +
+		"- **Request Method**: GET\n" +
+		"- **Hostname**: https://app.example\n" +
+		"- **Parameter**: `q`\n" +
+		"- **Detected**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Updated**: 3 Feb 2026 09:00 UTC\n" +
+		"- **Confirmed**: 20 Jan 2026 12:00 UTC\n" +
+		"- **Confirmed By**: [Alice (@alice)](https://gitlab.example.com/alice)\n" +
+		"- **Dismissed**: 2 Feb 2026 12:00 UTC\n" +
+		"- **Dismissed By**: [Carol (@carol)](https://gitlab.example.com/carol)\n" +
+		"- **Resolved**: 1 Feb 2026 12:00 UTC\n" +
+		"- **Resolved By**: [Bob (@bob)](https://gitlab.example.com/bob)\n" +
+		"- **Dismissal Reason**: ACCEPTABLE_RISK\n" +
+		"- **Present On Default Branch**: ❌\n" +
+		"- **No longer detected on the default branch**\n" +
+		"- **False Positive**: ❌\n" +
+		"- **Has Issues**: ✅\n" +
+		"- **Has Merge Request**: ✅\n" +
+		"- **Merge Request**: [!34 Encode search output](https://gitlab.example.com/g/p/-/merge_requests/34)\n" +
+		"- **Has Remediations**: ❌\n" +
+		"- **User Notes**: 3\n" +
+		"- **CVE Enrichment**:\n" +
+		"  - **CVE**: `CVE-2026-1234`\n" +
+		"  - **EPSS Score**: 0.97531\n" +
+		"  - ⚠️ **Known exploited (CISA KEV)**\n" +
+		"- **Token Status**:\n" +
+		"  - **Status**: ACTIVE\n" +
+		"  - **Last Verified**: 3 Feb 2026 08:00 UTC\n" +
+		"- **Project**:\n" +
+		"  - **ID**: `gid://gitlab/Project/1`\n" +
+		"  - **Name**: p\n" +
+		"  - **Full Path**: g/p\n" +
+		"- **URL**: [https://gitlab.example.com/g/p/-/security/vulnerabilities/90](https://gitlab.example.com/g/p/-/security/vulnerabilities/90)\n" +
+		"- **State Comment**: only reachable by administrators\n" +
+		"- **Solution**: Encode the output.\n" +
+		"- **Description**: User input is reflected into the page.\n\n" +
+		"### CVSS\n\n" +
+		"| Vendor | Version | Base Score | Overall Score | Severity | Vector |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| GitLab | 3.1 | 5.4 | 5.5 | MEDIUM | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N` |\n" +
+		"| NVD | 4.0 | 6.1 | 6.3 | HIGH | `CVSS:4.0/AV:N/AC:L` |\n\n" +
+		"### Links\n\n" +
+		"| Name | URL |\n" +
+		"| --- | --- |\n" +
+		"| [OWASP XSS](https://owasp.org/www-community/attacks/xss/) | https://owasp.org/www-community/attacks/xss/ |\n" +
+		"| [https://example.com/advisory](https://example.com/advisory) | https://example.com/advisory |\n\n" +
+		"### Linked Issues\n\n" +
+		"| Issue | State | Link Type |\n" +
+		"| --- | --- | --- |\n" +
+		"| [#12 Fix XSS in search](https://gitlab.example.com/g/p/-/issues/12) | opened | CREATED |\n" +
+		"|  |  | RELATED |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'vulnerability.confirm' to confirm it as a real vulnerability\n" +
+		"- Use action 'vulnerability.resolve' to mark it resolved\n" +
+		"- Use action 'vulnerability.revert' to revert it to detected\n" +
+		hintListOthers
+	if got := FormatGetMarkdown(GetOutput{Vulnerability: triagedVulnItem()}); got != want {
+		t.Errorf("FormatGetMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatGetMarkdown_LocationOfEveryScanType verifies the location rows each
+// scan type adds: the class and method a SAST finding names, the package a
+// dependency or container scan names, the workload of a cluster image scan,
+// the crash a fuzzer recorded with its stack trace as a fenced block, and the
+// prose of a generic scanner quoted rather than inlined.
+func TestFormatGetMarkdown_LocationOfEveryScanType(t *testing.T) {
+	location := &LocationItem{
+		File: "src/parse.c", StartLine: 7, VulnerableClass: "Parser", VulnerableMethod: "parse",
+		OperatingSystem: "debian:12", ContainerRepositoryURL: "registry.example/app",
+		Dependency:         &toolutil.VulnerableDependencyOutput{PackageName: "openssl", PackagePath: "usr/lib", Version: "3.0.2"},
+		KubernetesResource: &toolutil.VulnerableKubernetesResourceOutput{Kind: "Deployment", Name: "web", Namespace: "prod", ContainerName: "nginx", AgentName: "prod-agent", ClusterID: "gid://gitlab/Clusters::Cluster/3"},
+		CrashType:          "Heap-buffer-overflow", CrashAddress: "0x7ffd", StacktraceSnippet: "#0 parse src/parse.c:7",
+		Description: "the parser\nof uploaded files",
+	}
+	want := "## Vulnerability: Overflow\n\n" +
+		"- **ID**: `gid://gitlab/Vulnerability/6`\n" +
+		"- **Title**: Overflow\n" +
+		"- **State**: DETECTED\n" +
+		"- **Location**: `src/parse.c:7`\n" +
+		"- **Vulnerable Class**: `Parser`\n" +
+		"- **Vulnerable Method**: `parse`\n" +
+		"- **Dependency**: `openssl@3.0.2`\n" +
+		"- **Dependency Path**: `usr/lib`\n" +
+		"- **Operating System**: debian:12\n" +
+		"- **Container Repository**: `registry.example/app`\n" +
+		"- **Kubernetes Resource**:\n" +
+		"  - **Kind**: Deployment\n" +
+		"  - **Namespace**: prod\n" +
+		"  - **Name**: web\n" +
+		"  - **Container**: nginx\n" +
+		"  - **Agent**: prod-agent\n" +
+		"  - **Cluster ID**: `gid://gitlab/Clusters::Cluster/3`\n" +
+		"- **Crash Type**: Heap-buffer-overflow\n" +
+		"- **Crash Address**: `0x7ffd`\n" +
+		"- **Present On Default Branch**: ❌\n" +
+		"- **Has Issues**: ❌\n" +
+		"- **Has Merge Request**: ❌\n" +
+		"- **Has Remediations**: ❌\n" +
+		"- **Location Description**:\n" +
+		"  > the parser\n" +
+		"  > of uploaded files\n\n" +
+		"### Stack Trace\n\n" +
+		"```\n#0 parse src/parse.c:7\n```\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'vulnerability.dismiss' to dismiss it as an acceptable risk or a false positive\n" +
+		"- Use action 'vulnerability.confirm' to confirm it as a real vulnerability\n" +
+		"- Use action 'vulnerability.resolve' to mark it resolved\n" +
+		hintListOthers
+	if got := FormatGetMarkdown(GetOutput{Vulnerability: Item{ID: "gid://gitlab/Vulnerability/6", Title: "Overflow", State: "DETECTED", Location: location}}); got != want {
+		t.Errorf("FormatGetMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestDependencyLabel_NamesTheVersionOnlyWhenTheReportGaveOne verifies how a
+// vulnerable package is named: the way a lockfile names it, with the version
+// after an at sign, and the package alone when the report named no version.
+func TestDependencyLabel_NamesTheVersionOnlyWhenTheReportGaveOne(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   toolutil.VulnerableDependencyOutput
+		want string
+	}{
+		{name: "with a version", in: toolutil.VulnerableDependencyOutput{PackageName: "lodash", Version: "4.17.20"}, want: "lodash@4.17.20"},
+		{name: "without a version", in: toolutil.VulnerableDependencyOutput{PackageName: "lodash"}, want: "lodash"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dependencyLabel(&tc.in); got != tc.want {
+				t.Errorf("dependencyLabel() = %q, want %q", got, tc.want)
 			}
 		})
 	}

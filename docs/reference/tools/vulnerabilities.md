@@ -40,7 +40,7 @@ With `GITLAB_MCP_TOOL_SURFACE=meta`, all 8 individual tools below are consolidat
 
 ### `gitlab_list_vulnerabilities`
 
-List project vulnerabilities with extensive filtering support. Returns a paginated list with severity, state, scanner, report type, primary identifier, and detected date.
+List project vulnerabilities with extensive filtering support. Returns a paginated list of vulnerabilities, each the object described under [Output fields](#output-fields) below.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -62,7 +62,7 @@ List project vulnerabilities with extensive filtering support. Returns a paginat
 
 ### `gitlab_get_vulnerability`
 
-Get full details of a single vulnerability by its GID. Returns complete vulnerability information including all identifiers, scanner details, code location, solution, linked issues, and merge requests.
+Get full details of a single vulnerability by its GID. Returns complete vulnerability information including all identifiers, CVSS assessments, EPSS and known-exploit data, scanner details, location, solution, report links, who changed its state and what they wrote, linked issues, and the merge request that fixes it.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -70,6 +70,41 @@ Get full details of a single vulnerability by its GID. Returns complete vulnerab
 | Parameter | Type   | Required | Description                                              |
 | --------- | ------ | :------: | -------------------------------------------------------- |
 | `id`      | string |   Yes    | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
+
+### Output fields
+
+The list, the get and the four state changes answer with the same vulnerability object. `id`, `title`, `severity`, `state` and `present_on_default_branch` are always written, as an empty string or `false` where GitLab sent null; any other field GitLab did not send is left out rather than written empty. Inside a nested object the keys that name it are written whenever the object is, so a linked issue or merge request whose `iid` GitLab did not send reads `0`.
+
+| Field                                             | Type   | Description                                                                                                                             |
+| ------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `uuid`                                      | string | The vulnerability's GID, and the uuid of its finding, which is how a pipeline's security finding names it                               |
+| `title`, `description`, `solution`                | string | The scanner's own text                                                                                                                  |
+| `severity`, `state`, `report_type`                | string | Severity, lifecycle state and the kind of scan that found it                                                                            |
+| `state_comment`                                   | string | The comment written with the latest state change, such as the reason for a dismissal                                                    |
+| `dismissal_reason`                                | string | Why it was dismissed, for a dismissed vulnerability                                                                                     |
+| `scanner`                                         | object | Scanner name, vendor and `scanner_id`, the id the `scanner` filter takes                                                                |
+| `primary_identifier`                              | object | The identifier the report ranks first: `name`, `external_type`, `external_id`, `url`                                                    |
+| `identifiers`                                     | array  | Every CVE, CWE and similar identifier, each with the same keys as `primary_identifier`                                                  |
+| `cvss`                                            | array  | Each vendor's CVSS assessment: `version`, `vector`, `base_score`, `overall_score`, `severity`                                           |
+| `cve_enrichment`                                  | object | `cve`, `epss_score` (the probability of exploitation) and `is_known_exploit` (listed in CISA KEV)                                       |
+| `location`                                        | object | Where it was found, in the terms of its scan type (see Notes)                                                                           |
+| `links`                                           | array  | References the security report attached: `name` and `url`                                                                               |
+| `token_status`                                    | object | For a leaked secret, whether it still works: `status` (`ACTIVE`, `INACTIVE`, `UNKNOWN`), `last_verified_at`, `created_at`, `updated_at` |
+| `detected_at`, `updated_at`                       | string | When it was first detected and last updated                                                                                             |
+| `confirmed_at`, `dismissed_at`, `resolved_at`     | string | When its state last changed to each                                                                                                     |
+| `confirmed_by`, `dismissed_by`, `resolved_by`     | object | Who made that change: `username`, `name`, `web_url`                                                                                     |
+| `present_on_default_branch`                       | bool   | Whether the default branch has it; `false` means it was found only on another ref                                                       |
+| `resolved_on_default_branch`, `removed_from_code` | bool   | Whether the default branch no longer has it, and whether the code no longer carries it                                                  |
+| `false_positive`                                  | bool   | GitLab's false-positive verdict, where the project has one                                                                              |
+| `has_remediations`                                | bool   | Whether a remediation is available                                                                                                      |
+| `has_issues`, `issue_links`                       | mixed  | Whether issues are linked, and each link's `link_type` (`CREATED`, `RELATED`) with the issue's `iid`, `title`, `state`, `web_url`       |
+| `has_merge_request`, `merge_request`              | mixed  | Whether a merge request fixes it, and that merge request's `iid`, `title`, `state`, `web_url`                                           |
+| `user_notes_count`                                | int    | How many notes people wrote on it                                                                                                       |
+| `project`, `web_url`                              | mixed  | The project it belongs to and its own page                                                                                              |
+
+GitLab refuses a whole document that names a field it does not have, so two kinds of field are not read. The fields GitLab's GraphQL reference marks Status: Experiment (reachability, malware, the due date, the detected pipelines, tracked refs and others), since GitLab may remove an experiment without notice. And the fields newer than GitLab 18.10 (`unverified`, added in 18.11), since the six actions share one selection and one such field would stop all of them on an older instance.
+
+The list, the get and the four state changes need GitLab 18.10 or later, the release that added the newest field they read (`removed_from_code`), and the security findings list needs 18.5 (`original_severity` and the token status's `last_verified_at`), each read from GitLab's versioned GraphQL reference.
 
 ---
 
@@ -152,7 +187,7 @@ Get vulnerability severity counts for a project. Returns counts per severity lev
 
 ### `gitlab_pipeline_security_summary`
 
-Get the security report summary for a specific pipeline. Returns scanner-level breakdown with vulnerability counts and scanned resource counts for each scanner type: SAST, DAST, Dependency Scanning, Container Scanning, Secret Detection, Coverage Fuzzing, API Fuzzing, and Cluster Image Scanning.
+Get the security report summary for a specific pipeline. Returns scanner-level breakdown with vulnerability counts and scanned resource counts for each scanner type: SAST, DAST, Dependency Scanning, Container Scanning, Secret Detection, Coverage Fuzzing, API Fuzzing, and Cluster Image Scanning. Each type also lists the `scans` that ran for it with their `status`, `errors` and `warnings`, which is what tells a scan that found nothing from one whose report was refused, and the first twenty `scanned_resources` a DAST or API fuzzing scan requested (`scanned_resources_csv_path` downloads them all).
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -182,7 +217,7 @@ Get the security report summary for a specific pipeline. Returns scanner-level b
 ## Notes
 
 - All identifiers use GitLab Global IDs (GIDs) in the format `gid://gitlab/Vulnerability/{numeric_id}`
-- Vulnerability location depends on the scanner type — SAST/Secret Detection return file/line, DAST returns URL path, Container Scanning returns image name
+- Vulnerability location depends on the scan type. `file` is always the subject: the file for SAST, secret detection, dependency scanning and coverage fuzzing, the request path for DAST, and the image for container and cluster image scanning. Beside it, SAST, secret detection and coverage fuzzing add `start_line`, `end_line`, `vulnerable_class` and `vulnerable_method`, DAST adds `hostname`, `request_method` and `param`, dependency and container scanning add the `dependency` (`package_name`, `package_path`, `version`), container scanning adds `operating_system` and `container_repository_url`, a cluster image scan adds the `kubernetes_resource` running the image, coverage fuzzing adds `crash_type`, `crash_address` and `stacktrace_snippet`, and a generic scanner writes a `description`
 - Severity badges are rendered with emoji indicators: 🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM, 🔵 LOW, ℹ️ INFO
 
 ## Related

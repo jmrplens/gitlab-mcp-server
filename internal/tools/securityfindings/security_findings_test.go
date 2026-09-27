@@ -715,7 +715,9 @@ func TestFormatListMarkdown_UnknownSeverity(t *testing.T) {
 
 // TestList_EvidenceShapes verifies how the VulnerabilityEvidence object maps
 // onto EvidenceItem: a full object carries summary and source, a null source
-// leaves only the summary, and an object with nothing in it produces no
+// leaves only the summary, the HTTP exchange a DAST scan recorded arrives with
+// its headers in order at the evidence and at each supporting message, any one
+// part alone is still evidence, and an object with nothing in it produces no
 // evidence at all rather than an empty one.
 func TestList_EvidenceShapes(t *testing.T) {
 	tests := []struct {
@@ -725,8 +727,8 @@ func TestList_EvidenceShapes(t *testing.T) {
 	}{
 		{
 			name:         "summary and source",
-			evidenceJSON: `{"summary": "GET /admin returned 200", "source": {"name": "ZAP rule 10202", "url": "https://zap.example/10202"}}`,
-			want:         &EvidenceItem{Summary: "GET /admin returned 200", Source: "ZAP rule 10202", SourceURL: "https://zap.example/10202"},
+			evidenceJSON: `{"summary": "GET /admin returned 200", "source": {"identifier": "assert:Response Body Analysis", "name": "ZAP rule 10202", "url": "https://zap.example/10202"}}`,
+			want:         &EvidenceItem{Summary: "GET /admin returned 200", Source: "ZAP rule 10202", SourceID: "assert:Response Body Analysis", SourceURL: "https://zap.example/10202"},
 		},
 		{
 			name:         "summary without source",
@@ -734,8 +736,35 @@ func TestList_EvidenceShapes(t *testing.T) {
 			want:         &EvidenceItem{Summary: "GET /admin returned 200"},
 		},
 		{
+			name: "the recorded exchange and a supporting message",
+			evidenceJSON: `{"summary": "", "source": null,
+				"request": {"method": "GET", "url": "https://app.example/admin", "body": "", "headers": [{"name": "Accept", "value": "text/html"}, {"name": "Cookie", "value": "s=1"}]},
+				"response": {"statusCode": 200, "reasonPhrase": "OK", "body": "<h1>Admin</h1>", "headers": []},
+				"supportingMessages": [{"name": "Recorded", "request": {"method": "GET", "url": "https://app.example/", "body": null, "headers": []}, "response": null}]}`,
+			want: &EvidenceItem{
+				Request: &HTTPRequestItem{
+					Method: "GET", URL: "https://app.example/admin",
+					Headers: []HTTPHeaderItem{{Name: "Accept", Value: "text/html"}, {Name: "Cookie", Value: "s=1"}},
+				},
+				Response: &HTTPResponseItem{StatusCode: 200, ReasonPhrase: "OK", Body: "<h1>Admin</h1>"},
+				SupportingMessages: []SupportingMessageItem{
+					{Name: "Recorded", Request: &HTTPRequestItem{Method: "GET", URL: "https://app.example/"}},
+				},
+			},
+		},
+		{
+			name:         "a response alone is still evidence",
+			evidenceJSON: `{"summary": "", "source": null, "response": {"statusCode": 500, "reasonPhrase": "", "body": "", "headers": []}}`,
+			want:         &EvidenceItem{Response: &HTTPResponseItem{StatusCode: 500}},
+		},
+		{
+			name:         "a source identifier alone is still evidence",
+			evidenceJSON: `{"summary": "", "source": {"identifier": "rule-1", "name": "", "url": null}}`,
+			want:         &EvidenceItem{SourceID: "rule-1"},
+		},
+		{
 			name:         "object with nothing in it",
-			evidenceJSON: `{"summary": "", "source": null}`,
+			evidenceJSON: `{"summary": "", "source": null, "request": null, "response": null, "supportingMessages": []}`,
 			want:         nil,
 		},
 	}
@@ -765,16 +794,118 @@ func TestList_EvidenceShapes(t *testing.T) {
 			if len(out.Findings) != 1 {
 				t.Fatalf("expected 1 finding, got %d", len(out.Findings))
 			}
-			got := out.Findings[0].Evidence
-			switch {
-			case tc.want == nil && got != nil:
-				t.Fatalf("Evidence = %+v, want nil", got)
-			case tc.want != nil && got == nil:
-				t.Fatalf("Evidence = nil, want %+v", tc.want)
-			case tc.want != nil && *got != *tc.want:
-				t.Fatalf("Evidence = %+v, want %+v", *got, *tc.want)
+			if got := out.Findings[0].Evidence; !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Evidence = %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// dockerfilePatch is a remediation's patch as git apply takes it, and
+// dockerfilePatchBase64 the same patch as a security report carries it and
+// GitLab's GraphQL API passes it on.
+const (
+	dockerfilePatch       = "--- a/Dockerfile\n+++ b/Dockerfile\n@@ -1 +1 @@\n-FROM debian:12.1\n+FROM debian:12.2\n"
+	dockerfilePatchBase64 = "LS0tIGEvRG9ja2VyZmlsZQorKysgYi9Eb2NrZXJmaWxlCkBAIC0xICsxIEBACi1GUk9NIGRlYmlhbjoxMi4xCitGUk9NIGRlYmlhbjoxMi4yCg=="
+)
+
+// TestRemediationToItem_DecodesThePatchAndPassesAnythingElseThrough verifies
+// that a remediation's diff is published as the patch it encodes: the report
+// format carries it in base64 and GitLab does not decode it. A value that is
+// not base64, such as a patch a report wrote unencoded, and one that decodes
+// to bytes that are not text, are both published exactly as GitLab sent them.
+func TestRemediationToItem_DecodesThePatchAndPassesAnythingElseThrough(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		diff string
+		want string
+	}{
+		{name: "a base64 patch is decoded", diff: dockerfilePatchBase64, want: dockerfilePatch},
+		{name: "a patch the report wrote unencoded is kept", diff: dockerfilePatch, want: dockerfilePatch},
+		{name: "base64 of bytes that are not text is kept as sent", diff: "//4=", want: "//4="},
+		{name: "no diff stays empty", diff: "", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := remediationToItem(gqlRemediation{Summary: "Upgrade", Diff: tc.diff})
+			if want := (RemediationItem{Summary: "Upgrade", Diff: tc.want}); got != want {
+				t.Errorf("remediationToItem() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+// TestList_TriageFields_ReachTheOutputWhole verifies that every field the
+// triage of issue 967 surfaced on a finding travels from GitLab's answer to
+// the output, compared as one value through a document the mock validated
+// against the pinned schema: the dismissal GitLab recorded, the severity
+// before an override, the remediation and its patch, the report's links and
+// assets, a leaked token's status, and a container location's package.
+//
+// A false-positive verdict GitLab gave as false stays false, since only a
+// project licensed for the detection gets a verdict at all and null means it
+// was never assessed.
+func TestList_TriageFields_ReachTheOutputWhole(t *testing.T) {
+	const node = `{
+  "uuid": "a1b2", "title": "OpenSSL overflow", "severity": "CRITICAL", "originalSeverity": "HIGH",
+  "reportType": "CONTAINER_SCANNING",
+  "scanner": {"name": "Trivy", "vendor": "GitLab", "externalId": "trivy"},
+  "description": "d", "solution": "s", "identifiers": [],
+  "location": {"image": "app:1", "operatingSystem": "debian:12", "containerRepositoryUrl": "registry.example/app",
+    "dependency": {"version": "3.0.2", "package": {"name": "openssl", "path": null}}},
+  "state": "DISMISSED", "stateComment": "base image is replaced next sprint",
+  "dismissedAt": "2026-02-02T12:00:00Z",
+  "dismissedBy": {"username": "carol", "name": "Carol", "webUrl": "https://gitlab.example/carol"},
+  "dismissalReason": "ACCEPTABLE_RISK",
+  "falsePositive": false,
+  "evidence": null,
+  "remediations": [{"summary": "Upgrade openssl to 3.0.3", "diff": "` + dockerfilePatchBase64 + `"}],
+  "links": [{"name": "Advisory", "url": "https://openssl.org/news/secadv"}],
+  "assets": [{"name": "scan log", "type": "http_session", "url": "https://gitlab.example/asset/1"}],
+  "findingTokenStatus": {"status": "INACTIVE", "lastVerifiedAt": "2026-02-01T00:00:00Z", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-02-01T00:00:01Z"},
+  "vulnerability": {"id": "gid://gitlab/Vulnerability/7", "state": "DISMISSED"}
+}`
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": {"pipeline": {"securityReportFindings": {
+				"nodes": [`+node+`],
+				"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""}}}}}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(context.Background(), client, ListInput{ProjectPath: "g/p", PipelineIID: "1"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(out.Findings))
+	}
+
+	notFalsePositive := false
+	want := FindingItem{
+		UUID: "a1b2", Title: "OpenSSL overflow", Severity: "CRITICAL", OriginalSeverity: "HIGH", ReportType: "CONTAINER_SCANNING",
+		Scanner:     &ScannerItem{Name: "Trivy", Vendor: "GitLab", ExternalID: "trivy"},
+		Description: "d", Solution: "s",
+		Location: &LocationItem{
+			File: "app:1", OperatingSystem: "debian:12", ContainerRepositoryURL: "registry.example/app",
+			Dependency: &toolutil.VulnerableDependencyOutput{PackageName: "openssl", Version: "3.0.2"},
+		},
+		State: "DISMISSED", StateComment: "base image is replaced next sprint",
+		DismissedAt:     "2026-02-02T12:00:00Z",
+		DismissedBy:     &toolutil.UserCoreRefOutput{Username: "carol", Name: "Carol", WebURL: "https://gitlab.example/carol"},
+		DismissalReason: "ACCEPTABLE_RISK",
+		FalsePositive:   &notFalsePositive,
+		Remediations:    []RemediationItem{{Summary: "Upgrade openssl to 3.0.3", Diff: dockerfilePatch}},
+		Links:           []toolutil.VulnerabilityLinkOutput{{Name: "Advisory", URL: "https://openssl.org/news/secadv"}},
+		Assets:          []AssetItem{{Name: "scan log", Type: "http_session", URL: "https://gitlab.example/asset/1"}},
+		TokenStatus: &toolutil.VulnerabilityTokenStatusOutput{
+			Status: "INACTIVE", LastVerifiedAt: "2026-02-01T00:00:00Z", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-02-01T00:00:01Z",
+		},
+		VulnID:    "gid://gitlab/Vulnerability/7",
+		VulnState: "DISMISSED",
+	}
+	if !reflect.DeepEqual(out.Findings[0], want) {
+		t.Errorf("Finding =\n%+v\nwant\n%+v", out.Findings[0], want)
 	}
 }
 
@@ -906,29 +1037,5 @@ func TestList_NullProject(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "missing/proj") {
 		t.Errorf("error = %q, want contains project path", err.Error())
-	}
-}
-
-// TestLineNumber_ReadsGitLabsStringAndTakesNothingElseForALine pins how the
-// line a location carries is read. GitLab types startLine and endLine as
-// String, and the licensed e2e run found a live instance sending them quoted
-// while the response struct expected an int, which failed the whole decode.
-func TestLineNumber_ReadsGitLabsStringAndTakesNothingElseForALine(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want int
-	}{
-		{name: "a quoted number", in: "42", want: 42},
-		{name: "a number with spaces around it", in: " 7 ", want: 7},
-		{name: "an empty string", in: "", want: 0},
-		{name: "a value that is not a number", in: "n/a", want: 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := lineNumber(tt.in); got != tt.want {
-				t.Errorf("lineNumber(%q) = %d, want %d", tt.in, got, tt.want)
-			}
-		})
 	}
 }
