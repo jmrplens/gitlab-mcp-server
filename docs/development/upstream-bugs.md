@@ -126,7 +126,7 @@ readable without opening the tracker:
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None taken |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
-| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field |
+| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field, one of them until the tag changes |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
@@ -2614,12 +2614,16 @@ tolerates their absence, since the listing runs without them today.
   both there.
 - **Merged**: no.
 - **Blocking**: partly. An update that names the pattern and the type works;
-  an update that changes only an access level is refused by GitLab, and no
-  spelling of that call this server sends today avoids it.
+  an update that leaves out either of them is refused by GitLab (measured for
+  one naming only the pattern, read from the source below for the rest, an
+  update that changes only an access level among them), and no spelling of
+  that call this server sends today avoids it.
 - **Workaround**: partial. The struct tag decides what `encoding/json` writes,
-  and the only way past it from a handler is a request option that rewrites
-  the body after client-go has marshalled it, which is possible (entry 54 says
-  how) and is not carried. `internal/tools/protectedpackages.Update` sets each
+  and a handler gets past it in one of two ways: a request option that
+  rewrites the body after client-go has marshalled it (entry 54 says how), or a
+  request the handler builds itself, as `internal/tools/features.Set` does for
+  [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
+  Neither is carried here. `internal/tools/protectedpackages.Update` sets each
   pointer only when the caller named a value, which is the safe side of that
   choice, and answers the refusal with a hint telling the caller to name
   `package_name_pattern` and `package_type` on every update. The protection
@@ -2649,8 +2653,20 @@ GitLab reads that null as blank rather than as "leave this one alone", and the
 rebuilt e2e suite measured it against a live instance: an update naming only
 the pattern is answered `422 Package type can't be blank`, which is why
 `TestPackage_ProtectionRules_Lifecycle` sends the type with every update. The
-mirror case was not measured, but it is the same null through the same
-whole-rule validation.
+other two cases, an update naming only the type and one changing only an
+access level, were not measured, and the source says what they meet. At
+GitLab 19.4.1-ee the PATCH hands the service
+`declared_params(include_missing: false)`
+([lib/api/project_packages_protection_rules.rb:123](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/project_packages_protection_rules.rb#L123)),
+so a null key arrives where a missing one would not. `UpdateRuleService`
+copies a present `package_name_pattern` into `pattern` as well
+([app/services/packages/protection/update_rule_service.rb:33](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/packages/protection/update_rule_service.rb#L33)),
+and the rule validates `package_name_pattern`, `package_type` and `pattern`
+for presence
+([app/models/packages/protection/rule.rb:35-40](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/models/packages/protection/rule.rb#L35-40)).
+An update naming only the type therefore fails on the pattern twice, as
+`package_name_pattern` and as `pattern`, and one changing only an access level
+fails on those and on the type together.
 
 GitLab's own record marks both parameters optional on the PATCH and required on
 the POST (`docs/development/gitlab-api-live.json`, `PATCH
@@ -4448,17 +4464,28 @@ written the same way.
   receives one. `label_id` is latent: a null would be refused beside another
   board list type, which neither the struct nor the handler offers today.
   `value` narrows an action: GitLab would store the null over the variable's
-  value, and the handler avoids that by requiring a value GitLab does not.
-  Entry 52 is the field of this class GitLab refuses outright.
+  value, and what keeps it from doing so is that the handler requires a value,
+  which GitLab does not, so an edit of the type alone cannot be made. Entries
+  [6](#setfeatureflagoptions-fields-lack-omitempty) and
+  [52](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update)
+  hold the fields of this class GitLab refuses outright: every feature flag
+  set sent through the SDK, and a package protection rule update that leaves
+  out either of its two fields.
 - **Workaround**: none needed for five. Two handlers never leave the field
-  unset, because they require it: `groupboards.CreateGroupBoardList` requires
-  `label_id` and `pipelineschedules.EditVariable` requires `value`, which is
-  what keeps the null from reaching GitLab and what costs the second one an
-  edit of the type alone. A workaround is possible from a handler, contrary
-  to what this entry first said: client-go runs the request options after it
-  has marshalled the body (`NewRequestToURL` in `gitlab.go`), and an option can
-  read the body and replace it, which is how client-go's own GraphQL
-  pagination option works. None is carried.
+  unset, because they require it, and neither requirement was written for this
+  defect. `groupboards.CreateGroupBoardList` requires `label_id`, the only
+  list type the struct models, so that requirement is not a workaround and
+  stays until client-go models the milestone, iteration and assignee lists. `pipelineschedules.EditVariable` has required `value` since
+  the domain was written, and the requirement is what keeps the null from
+  reaching GitLab and what costs the action an edit of the type alone. It
+  retires with the tag: `value` then becomes optional in the handler, in its
+  check and in the `required` of its input schema, as GitLab declares it. A
+  handler could also get past the tag today, contrary to what this entry first
+  said, in two ways: a request option, since client-go runs the request
+  options after it has marshalled the body (`NewRequestToURL` in `gitlab.go`)
+  and an option can read the body and replace it, which is how client-go's own
+  GraphQL pagination option works; or a request the handler builds itself, as
+  `features.Set` does for entry 6. Neither is carried.
 
 **Where**: seven option structs across client-go.
 
@@ -4480,31 +4507,49 @@ handler here that sends each:
 | `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    | `issuelinks.Create`                |
 | `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` | `pipelineschedules.EditVariable`   |
 
-Five of the handlers set the pointer only when the caller named a value, which
-is the safe side of the choice they have, and the null is what the tag adds
-when the caller did not. The other two, `groupboards.CreateGroupBoardList` and
+Six of the eight handlers set the pointer only when the caller named a value,
+which is the safe side of the choice they have. For five of them the null is
+what the tag adds when the caller did not; for `dependencies.CreateExport` it
+is not, because client-go fills in `"sbom"` when the pointer is nil, so no null
+is ever sent there. The other two, `groupboards.CreateGroupBoardList` and
 `pipelineschedules.EditVariable`, require the field and always set it.
 
 **What GitLab does with the null**, read from the GitLab 19.4.1-ee source (the
 release the live record was taken from) and, for `expires_at`, from the
-end-to-end suite as well. Line numbers are at that tag.
+end-to-end suite as well. The sources the table cites are linked below it,
+each pinned to that tag.
 
 | Param         | Route                        | How the route reads it                                                                                                                                                                                                                             | Null against the key left out                                                  | Blocking                                                 |
 | ------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | `export_type` | pipeline export              | never sent as null: client-go fills in `"sbom"` when the caller named none, which is the route's own default (`ee/lib/api/dependency_list_exports.rb:81`)                                                                                          | not reached                                                                    | No                                                       |
 | `label_id`    | group board list create      | EE replaces the CE `requires` with `exactly_one_of :label_id, :milestone_id, :iteration_id, :assignee_id` (`ee/lib/ee/api/boards_responses.rb:16`), and Grape 2.4.0 counts the keys present, a null included (`MultipleParamsBase#keys_in_common`) | differs beside another list type: refused as mutually exclusive                | Latent: the struct models no other list type             |
-| `expires_at`  | group and project member add | the raw `params` hash with the source added to it (`lib/api/members.rb:146`), read by the create service as `params[:expires_at]`                                                                                                                  | the same: nil either way, no expiry                                            | No                                                       |
+| `expires_at`  | group and project member add | the raw `params` hash with the source added to it (`lib/api/members.rb:146`), read by the create service as `params[:expires_at]` (`app/services/members/create_service.rb:112`)                                                                   | the same: nil either way, no expiry                                            | No                                                       |
 | `expires_at`  | group share                  | `expires_at: params[:expires_at]` (`lib/api/groups.rb:769`)                                                                                                                                                                                        | the same                                                                       | No                                                       |
 | `expires_at`  | project share                | `declared_params(include_missing: false)` (`lib/api/projects.rb:985`): the null is passed as nil and the missing key is not passed, and a new link has no expiry either way                                                                        | the same on a create                                                           | No                                                       |
 | `link_type`   | issue link create            | `declared_params[:link_type]` (`lib/api/issue_links.rb:68`), nil either way, so both take the documented default, `relates_to`                                                                                                                     | the same                                                                       | No                                                       |
 | `value`       | schedule variable edit       | `declared_params(include_missing: false)` (`lib/api/ci/pipeline_schedules.rb:378`), then `variable.assign_attributes(params)` (`app/services/ci/pipeline_schedules/variables_base_save_service.rb:9`), and nothing validates the value             | differs: the null is assigned over the stored value, the missing key leaves it | Narrows `pipeline.schedule_edit_variable` to value edits |
 
+Sources, at `v19.4.1-ee`, and Grape at 2.4.0, the release that tag's
+`Gemfile.lock` resolves:
+[`ee/lib/api/dependency_list_exports.rb:81`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/api/dependency_list_exports.rb#L81),
+[`ee/lib/ee/api/boards_responses.rb:16`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/ee/api/boards_responses.rb#L16),
+[`MultipleParamsBase#keys_in_common`](https://github.com/ruby-grape/grape/blob/v2.4.0/lib/grape/validations/validators/multiple_params_base.rb#L22),
+[`lib/api/members.rb:146`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/members.rb#L146),
+[`app/services/members/create_service.rb:112`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/members/create_service.rb#L112),
+[`lib/api/groups.rb:769`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/groups.rb#L769),
+[`lib/api/projects.rb:985`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/projects.rb#L985),
+[`lib/api/issue_links.rb:68`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/issue_links.rb#L68),
+[`lib/api/ci/pipeline_schedules.rb:378`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/ci/pipeline_schedules.rb#L378)
+and
+[`app/services/ci/pipeline_schedules/variables_base_save_service.rb:9`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/ci/pipeline_schedules/variables_base_save_service.rb#L9).
+
 The `expires_at` rows are also measured, on both Docker runtimes: the committed
 coverage record (`docs/development/e2e-coverage.json`, 2026-09-26, GitLab
 19.4.1 CE and 19.3.1-ee) holds `group.group_member_add`, `project.member_add`,
 `group.group_member_share` and `project.share_with_group` at L3, asserted on
-all three surfaces, and the four scenarios behind them
+all three surfaces, and the five scenarios behind them
 (`TestGroupMembers_Lifecycle_AddEditListAndRemove`,
+`TestGroupMembers_AddDeveloper_AnswersTheMembership`,
 `TestProjectMembers_Lifecycle_AddEditAndRemove`,
 `TestGroupSharing_TwoSurfaces_ShareAndUnshare` and
 `TestProjectSharing_WithGroup_ListsAndRemoves`) name no expiry, so each call
