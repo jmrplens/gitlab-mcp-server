@@ -20,9 +20,10 @@ import (
 //
 // It exists because nothing read the skips. The harness records each one with
 // its reason and the coverage record counts them, but a run is green whatever
-// they add up to, so a run of the CE image that skipped eleven scenarios read
-// as complete (issue 1014). A skip is the one outcome that says nothing about
-// the server, which makes it the one a green run can hide the most behind.
+// they add up to, so a run of the CE image that skipped eleven tests in seven
+// test functions read as complete (issue 1014). A skip is the one outcome that
+// says nothing about the server, which makes it the one a green run can hide
+// the most behind.
 //
 // It reads the go test -json stream rather than the shards the harness
 // writes, because the stream holds every skip whatever called it, t.Skip on

@@ -179,8 +179,9 @@
 // skip, because the stream holds every skip whatever called it while the
 // harness's skip lines hold only the ones it was told about. A skip is the one
 // verdict that says nothing about the server, so a run could pass while leaving
-// out whatever it liked, and the two complete runs of de1ab3b49 left out eleven
-// and ten scenarios that way (issue 1014). make test-e2e-ce and make
-// test-e2e-ee apply it through run-docker-e2e.sh, after the tests, and it
-// decides the status only of a run whose tests passed.
+// out whatever it liked: the two complete runs of de1ab3b49 ended with eleven
+// skipped tests in seven test functions on CE and ten in five on EE, and
+// nothing read them (issue 1014). make test-e2e-ce and make test-e2e-ee apply
+// it through run-docker-e2e.sh, after the tests, and it decides the status
+// only of a run whose tests passed.
 package main
