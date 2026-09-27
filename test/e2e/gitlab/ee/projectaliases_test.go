@@ -14,6 +14,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectaliases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -68,6 +69,32 @@ func TestProjectAliases_Lifecycle_CreatesReadsListsAndDeletes(t *testing.T) {
 		if !aliasListed(after.Aliases, name, project.ID) {
 			e.T.Errorf("the listing does not hold the created alias %q: %+v", name, after.Aliases)
 		}
+
+		// A second alias makes the instance's listing at least two pages long
+		// at one alias per page. The listing used to claim it returned the
+		// full set; GitLab answers twenty and stops. This scenario is the only
+		// one that creates an alias and its surfaces run one after another,
+		// so nothing moves an alias between the two reads.
+		pageName := e.Name("alias-page")
+		if _, _, err := e.Client().GL().ProjectAliases.CreateProjectAlias(&gl.CreateProjectAliasOptions{
+			Name: new(pageName), ProjectID: project.ID,
+		}, gl.WithContext(e.Ctx)); err != nil {
+			e.T.Fatalf("creating the alias %q: %v", pageName, err)
+		}
+		e.Defer("project alias "+pageName, func(ctx context.Context) error {
+			_, err := e.Client().GL().ProjectAliases.DeleteProjectAlias(pageName, gl.WithContext(ctx))
+			if err != nil && !fixture.IsStatus(err, http.StatusNotFound) {
+				return err
+			}
+			return nil
+		})
+		assertPagesOneAtATime(e, s, actionProjectAliasList, nil, func(out projectaliases.ListOutput) ([]string, toolutil.PaginationOutput) {
+			ids := make([]int64, 0, len(out.Aliases))
+			for _, alias := range out.Aliases {
+				ids = append(ids, alias.ID)
+			}
+			return idKeys(ids), out.Pagination
+		})
 
 		harness.DoVoid(s, actionProjectAliasDelete, map[string]any{"name": name})
 		refused := harness.Refused(s, actionProjectAliasGet, map[string]any{"name": name}, harness.FailureNotFound)

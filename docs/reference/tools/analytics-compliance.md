@@ -182,12 +182,12 @@ alternative names, providing a convenient shortcut. All operations require admin
 
 ### Tools
 
-| Tool                          | Description                          | Annotations |
-| ----------------------------- | ------------------------------------ | ----------- |
-| `gitlab_list_project_aliases` | List all project aliases             | Read-only   |
-| `gitlab_get_project_alias`    | Get a specific project alias by name | Read-only   |
-| `gitlab_create_project_alias` | Create a new project alias           | Create      |
-| `gitlab_delete_project_alias` | Delete a project alias by name       | Destructive |
+| Tool                          | Description                                                   | Annotations |
+| ----------------------------- | ------------------------------------------------------------- | ----------- |
+| `gitlab_list_project_aliases` | List project aliases, one page at a time (`page`, `per_page`) | Read-only   |
+| `gitlab_get_project_alias`    | Get a specific project alias by name                          | Read-only   |
+| `gitlab_create_project_alias` | Create a new project alias                                    | Create      |
+| `gitlab_delete_project_alias` | Delete a project alias by name                                | Destructive |
 
 ### Meta-tool
 
@@ -197,7 +197,7 @@ Actions: `list`, `get`, `create`, `delete` (canonical IDs `project_alias.list`, 
 
 ### Examples
 
-List all aliases:
+List the first page of aliases:
 
 ```json
 {
@@ -279,7 +279,12 @@ Delete an alias:
 
 #### List
 
-No parameters required.
+GitLab answers twenty aliases per page unless asked for more, and the response's `pagination` block says whether another page follows.
+
+| Parameter  | Type | Required | Description            |
+| ---------- | ---- | -------- | ---------------------- |
+| `page`     | int  | No       | Page number (1+)       |
+| `per_page` | int  | No       | Items per page (1–100) |
 
 #### Get / Delete
 

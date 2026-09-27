@@ -28,6 +28,7 @@ type StateInput struct {
 type RulesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
+	toolutil.PaginationInput
 }
 
 // ConfigInput defines parameters for getting approval configuration.
@@ -127,10 +128,12 @@ type StateOutput struct {
 	Rules                    []StateRuleOutput `json:"rules"`
 }
 
-// RulesOutput holds the list of approval rules for a merge request.
+// RulesOutput holds one page of a merge request's approval rules and the
+// pagination GitLab sent with it.
 type RulesOutput struct {
 	toolutil.HintableOutput
-	Rules []RuleOutput `json:"rules"`
+	Rules      []RuleOutput              `json:"rules"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // ConfigOutput holds what GitLab answers at
@@ -211,16 +214,18 @@ func rawStateRuleToOutput(r *mergeRequestApprovalRuleAPI) StateRuleOutput {
 }
 
 // rawListApprovalRules issues a raw REST GET against an MR approval-rules list
-// path, decoding the documented response (including the SDK-missing "overridden"
-// field) into a slice of [mergeRequestApprovalRuleAPI].
-func rawListApprovalRules(ctx context.Context, client *gitlabclient.Client, path string) ([]*mergeRequestApprovalRuleAPI, error) {
-	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+// path for the page opts names, decoding the documented response (including
+// the SDK-missing "overridden" field) into a slice of
+// [mergeRequestApprovalRuleAPI]. The response is returned so the caller can
+// read the pagination headers GitLab answered with.
+func rawListApprovalRules(ctx context.Context, client *gitlabclient.Client, path string, opts *gl.ListOptions) ([]*mergeRequestApprovalRuleAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var rules []*mergeRequestApprovalRuleAPI
-	_, err = client.GL().Do(req, &rules)
-	return rules, err
+	resp, err := client.GL().Do(req, &rules)
+	return rules, resp, err
 }
 
 // rawApprovalState issues a raw REST GET against an MR approval_state path,
@@ -315,7 +320,9 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 		return RulesOutput{}, toolutil.ErrRequiredInt64("mrApprovalRules", "merge_request_iid")
 	}
 	path := fmt.Sprintf("projects/%s/merge_requests/%d/approval_rules", gl.PathEscape(string(input.ProjectID)), input.MRIID)
-	rules, err := rawListApprovalRules(ctx, client, path)
+	opts := &gl.ListOptions{}
+	toolutil.ApplyListOptions(opts, input.PaginationInput, toolutil.KeysetPaginationInput{})
+	rules, resp, err := rawListApprovalRules(ctx, client, path, opts)
 	if err != nil {
 		if toolutil.IsNotFound(err) {
 			return RulesOutput{}, fmt.Errorf("mrApprovalRules: merge request approval rules require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
@@ -323,7 +330,7 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 		return RulesOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRules", err, http.StatusNotFound,
 			"verify project_id + merge_request_iid with merge_request.list; rules-per-MR require Premium/Ultimate")
 	}
-	out := RulesOutput{}
+	out := RulesOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range rules {
 		if r != nil {
 			out.Rules = append(out.Rules, rawRuleToOutput(r))

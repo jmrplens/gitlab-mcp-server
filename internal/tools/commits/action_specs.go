@@ -154,7 +154,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.Aliases = []string{"merge requests for commit", "mrs containing commit", "list commit merge requests", "which mr has commit"}
 		options.RelatedActions = []string{actionCommitGet, actionMRGet, actionMRChangesGet}
 		options.ParameterGuidance["sha"] = shaGuidance()
-		options.IndividualTool.Description = "List merge requests associated with a commit. Returns: compact MR rows with IID, project, title, state, draft flag, source/target branches, merge commit SHA, labels, author, web URL, and created, updated, merged and closed times. See also: gitlab_commit_get, gitlab_mr_get, gitlab_mr_changes_get."
+		options.IndividualTool.Description = "List merge requests associated with a commit. Returns: compact MR rows with IID, project, title, state, draft flag, source/target branches, merge commit SHA, labels, author, web URL, and created, updated, merged and closed times, with pagination metadata. See also: gitlab_commit_get, gitlab_mr_get, gitlab_mr_changes_get."
 	case "commit_cherry_pick":
 		options.Usage = "Cherry-pick a commit onto a target branch, optionally as a dry run to detect conflicts before creating the commit. Use this to port a single change to another branch."
 		options.Aliases = []string{"cherry-pick commit", "cherry pick", "apply commit to branch", "port commit"}

@@ -202,8 +202,7 @@ func FormatEmailListMarkdownString(o EmailListOutput) string {
 		return toolutil.EmptyMessage("email addresses")
 	}
 	var b strings.Builder
-	var pagination toolutil.PaginationOutput
-	toolutil.WriteListHeading(&b, "Email Addresses", len(o.Emails), pagination)
+	toolutil.WriteListHeading(&b, "Email Addresses", len(o.Emails), o.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed"))
 	for _, e := range o.Emails {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -212,7 +211,7 @@ func FormatEmailListMarkdownString(o EmailListOutput) string {
 			confirmationValue(e.ConfirmedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, pagination, false, hintCurrentUser)
+	toolutil.WriteListFooter(&b, o.Pagination, false, hintCurrentUser)
 	return b.String()
 }
 

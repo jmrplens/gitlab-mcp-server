@@ -24,9 +24,11 @@ type ServiceAccountOutput struct {
 	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
 }
 
-// ServiceAccountListOutput holds a list of service accounts.
+// ServiceAccountListOutput holds one page of the instance's service accounts
+// and the pagination GitLab sent with it.
 type ServiceAccountListOutput struct {
-	Accounts []ServiceAccountOutput `json:"accounts"`
+	Accounts   []ServiceAccountOutput    `json:"accounts"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // CreateServiceAccountInput holds parameters for creating a service account.
@@ -79,7 +81,7 @@ func CreateServiceAccount(ctx context.Context, client *gitlabclient.Client, inpu
 	return userOutput("create_service_account", user, captured)
 }
 
-// ListServiceAccounts lists all service accounts.
+// ListServiceAccounts lists one page of the instance's service accounts.
 func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input ListServiceAccountsInput) (ServiceAccountListOutput, error) {
 	opts := &gl.ListServiceAccountsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -89,7 +91,7 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	accounts, _, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
+	accounts, resp, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ServiceAccountListOutput{}, toolutil.WrapErrWithStatusHint("list_service_accounts", err, http.StatusForbidden,
 			"listing service accounts requires an admin token")
@@ -104,7 +106,7 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 			UnconfirmedEmail: a.UnconfirmedEmail,
 		})
 	}
-	return ServiceAccountListOutput{Accounts: out}, nil
+	return ServiceAccountListOutput{Accounts: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // UpdateServiceAccountInput holds parameters for updating an instance service account.
@@ -207,8 +209,7 @@ func FormatServiceAccountListMarkdownString(out ServiceAccountListOutput) string
 		return toolutil.EmptyMessage("service accounts")
 	}
 	var sb strings.Builder
-	var pagination toolutil.PaginationOutput
-	toolutil.WriteListHeading(&sb, "Service Accounts", len(out.Accounts), pagination)
+	toolutil.WriteListHeading(&sb, "Service Accounts", len(out.Accounts), out.Pagination)
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email"))
 	for _, a := range out.Accounts {
 		sb.WriteString(toolutil.MarkdownTableRow(
@@ -218,7 +219,7 @@ func FormatServiceAccountListMarkdownString(out ServiceAccountListOutput) string
 			toolutil.EscapeMdTableCell(a.Email),
 		))
 	}
-	toolutil.WriteListFooter(&sb, pagination, false, hintCreateServiceAccount)
+	toolutil.WriteListFooter(&sb, out.Pagination, false, hintCreateServiceAccount)
 	return sb.String()
 }
 

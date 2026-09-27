@@ -2053,10 +2053,12 @@ func capturedDependencies(capture *gitlabclient.ResponseCapture, decoded int) ([
 	return extras, nil
 }
 
-// DependenciesOutput holds a list of merge request dependencies.
+// DependenciesOutput holds one page of a merge request's dependencies and the
+// pagination GitLab sent with it.
 type DependenciesOutput struct {
 	toolutil.HintableOutput
-	Dependencies []DependencyOutput `json:"dependencies"`
+	Dependencies []DependencyOutput        `json:"dependencies"`
+	Pagination   toolutil.PaginationOutput `json:"pagination"`
 }
 
 // dependencyToOutput converts the GitLab API response to the tool output
@@ -2143,13 +2145,18 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 	return nil
 }
 
-// GetDependenciesInput defines parameters for listing merge request dependencies.
+// GetDependenciesInput defines parameters for listing merge request
+// dependencies, and the page of them to list. client-go's
+// GetMergeRequestDependencies takes no options struct, so the page travels as
+// a request option.
 type GetDependenciesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	toolutil.PaginationInput
 }
 
-// GetDependencies retrieves all dependencies (blockers) for a merge request.
+// GetDependencies retrieves one page of the dependencies (blockers) of a
+// merge request.
 func GetDependencies(ctx context.Context, client *gitlabclient.Client, input GetDependenciesInput) (DependenciesOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DependenciesOutput{}, err
@@ -2161,7 +2168,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 		return DependenciesOutput{}, toolutil.ErrRequiredInt64("mrGetDependencies", "merge_request_iid")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	deps, _, err := client.GL().MergeRequests.GetMergeRequestDependencies(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	deps, resp, err := client.GL().MergeRequests.GetMergeRequestDependencies(string(input.ProjectID), input.MRIID, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return DependenciesOutput{}, toolutil.WrapErrWithHint("mrGetDependencies", err,
@@ -2178,7 +2185,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 	for i := range deps {
 		out[i] = dependencyToOutput(&deps[i], extras[i])
 	}
-	return DependenciesOutput{Dependencies: out}, nil
+	return DependenciesOutput{Dependencies: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // mergeStatusHints maps GitLab detailed_merge_status values to human-readable

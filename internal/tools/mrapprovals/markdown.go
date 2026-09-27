@@ -135,7 +135,7 @@ func FormatRulesMarkdown(out RulesOutput) string {
 		return toolutil.EmptyMessage("approval rules")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "MR Approval Rules", len(out.Rules), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "MR Approval Rules", len(out.Rules), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Type", "Required", "Eligible"))
 	for _, r := range out.Rules {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -146,7 +146,7 @@ func FormatRulesMarkdown(out RulesOutput) string {
 			userList(r.EligibleApprovers),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, anyProfileLink(out.Rules),
+	toolutil.WriteListFooter(&b, out.Pagination, anyProfileLink(out.Rules),
 		toolutil.HintAction(actionApprovalRuleCreate, "add a rule"),
 		toolutil.HintAction(actionApprovalRuleUpdate, "change an existing rule"),
 		toolutil.HintAction(actionApprovalRuleDelete, "remove a rule"),
@@ -172,7 +172,7 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 		toolutil.HintAction(actionMRApprove, "approve this merge request"),
 		toolutil.HintAction(actionMRUnapprove, "withdraw your approval"),
 		toolutil.HintAction(actionApprovalState, "see how many approvals are required and left"),
-		toolutil.HintAction(actionApprovalRules, "see every configured rule"),
+		toolutil.HintAction(actionApprovalRules, "list the configured rules"),
 	)
 	return b.String()
 }

@@ -856,10 +856,14 @@ func SetStatus(ctx context.Context, client *gitlabclient.Client, input SetStatus
 // ListMergeRequestsByCommit
 // ---------------------------------------------------------------------------.
 
-// MRsByCommitInput defines parameters for listing merge requests associated with a commit.
+// MRsByCommitInput defines parameters for listing merge requests associated
+// with a commit, and the page of them to list. client-go's
+// ListMergeRequestsByCommit takes no options struct, so the page travels as a
+// request option.
 type MRsByCommitInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA,required"`
+	toolutil.PaginationInput
 }
 
 // BasicMROutput is one merge request a commit belongs to, as a compact row:
@@ -887,13 +891,16 @@ type BasicMROutput struct {
 	ClosedAt       string                    `json:"closed_at,omitempty"`
 }
 
-// MRsByCommitOutput holds the list of merge requests for a commit.
+// MRsByCommitOutput holds one page of the merge requests a commit belongs to
+// and the pagination GitLab sent with it.
 type MRsByCommitOutput struct {
 	toolutil.HintableOutput
-	MergeRequests []BasicMROutput `json:"merge_requests"`
+	MergeRequests []BasicMROutput           `json:"merge_requests"`
+	Pagination    toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListMRsByCommit retrieves merge requests associated with a commit.
+// ListMRsByCommit retrieves one page of the merge requests associated with a
+// commit.
 func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRsByCommitInput) (MRsByCommitOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return MRsByCommitOutput{}, err
@@ -901,7 +908,7 @@ func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRs
 	if input.ProjectID == "" {
 		return MRsByCommitOutput{}, errors.New("listMergeRequestsByCommit: project_id is required")
 	}
-	mrs, _, err := client.GL().Commits.ListMergeRequestsByCommit(string(input.ProjectID), input.SHA, gl.WithContext(ctx))
+	mrs, resp, err := client.GL().Commits.ListMergeRequestsByCommit(string(input.ProjectID), input.SHA, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return MRsByCommitOutput{}, toolutil.WrapErrWithStatusHint("listMergeRequestsByCommit", err, http.StatusNotFound,
 			"verify SHA with repository.commit_get. Returns MRs that include this commit")
@@ -927,7 +934,7 @@ func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRs
 			ClosedAt:       toolutil.RFC3339Ptr(mr.ClosedAt),
 		}
 	}
-	return MRsByCommitOutput{MergeRequests: out}, nil
+	return MRsByCommitOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------

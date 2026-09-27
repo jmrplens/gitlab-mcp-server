@@ -178,6 +178,47 @@ func TestListAllDomains_Success(t *testing.T) {
 	}
 }
 
+// TestListAllDomains_PageAndPerPage_ReachTheRequest holds that the page a
+// caller asks for is the page GitLab is asked for. client-go's
+// ListAllPagesDomains takes no options struct, and this action used to say it
+// listed every domain in one call while GitLab answered twenty and stopped.
+func TestListAllDomains_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/pages/domains")
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"domain":"test.io","url":"https://test.io","project_id":2}]`)
+	}))
+
+	out, err := ListAllDomains(context.Background(), client, ListAllDomainsInput{Page: 2, PerPage: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Domains) != 1 || out.Domains[0].Domain != "test.io" {
+		t.Errorf("domains = %+v, want the one domain of page 2", out.Domains)
+	}
+}
+
+// TestListAllDomains_NextPageHeader_PublishesThePaginationBlock holds that
+// the page GitLab answers is published as a page, so a caller holding the
+// first page of domains can tell a second exists and which to ask for.
+func TestListAllDomains_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/pages/domains")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"domain":"example.com","url":"https://example.com","project_id":1}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := ListAllDomains(context.Background(), client, ListAllDomainsInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestListDomains_Success verifies ListDomains when success.
 func TestListDomains_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1044,7 +1085,27 @@ func TestFormatAllDomainsMarkdown_NonEmpty(t *testing.T) {
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'project.pages_domain_get' to read one domain in full\n"+
-		"- Use action 'project.pages_domain_list_all' to list every Pages domain on the instance again\n")
+		"- Use action 'project.pages_domain_list_all' to list the Pages domains on the instance again\n")
+}
+
+// TestFormatAllDomainsMarkdown_APageOfALongerList verifies that a page which
+// is not the whole list says so: the total in the heading, the page between
+// the heading and the table, and the pagination line before the next steps.
+func TestFormatAllDomainsMarkdown_APageOfALongerList(t *testing.T) {
+	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{
+		Domains:    []DomainOutput{{Domain: testDomainA, URL: testDomainAURL, ProjectID: 1}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	})
+
+	assertPagesMarkdown(t, md, "## All Pages Domains (2)\n\n"+
+		"Showing 1 of 2 results (page 1 of 2)\n\n"+
+		pagesDomainTableHead+
+		"| "+testDomainA+" | ["+testDomainAURL+"]("+testDomainAURL+") | ❌ | ❌ | 1 |\n"+
+		"\nPage 1 of 2 | 2 items total | 1 per page\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- "+toolutil.HintPreserveLinks+"\n"+
+		"- Use action 'project.pages_domain_get' to read one domain in full\n"+
+		"- Use action 'project.pages_domain_list_all' to list the Pages domains on the instance again\n")
 }
 
 // ---------------------------------------------------------------------------

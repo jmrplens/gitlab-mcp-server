@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovalsettings"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -136,6 +137,16 @@ func TestMRApprovalRules_Lifecycle_ReadsStateAndManagesARule(t *testing.T) {
 			e.T.Errorf("approval_rule_update answered %+v, want rule %d renamed to %q requiring 2", updated, created.ID, name+"-updated")
 		}
 
+		// A second rule makes the request's rules two pages long at one rule
+		// per page. The request is this scenario's own and its surfaces run
+		// one after another, so nothing else writes to its rules between the
+		// two reads; the second rule goes again before the next surface runs.
+		second := harness.Do[mrapprovals.RuleOutput](s, actionMRApprovalRuleCreate, withParams(params, map[string]any{"name": e.Name("rule-page"), "approvals_required": 1}))
+		assertPagesOneAtATime(e, s, actionMRApprovalRules, params, func(out mrapprovals.RulesOutput) ([]string, toolutil.PaginationOutput) {
+			return idKeys(mrApprovalRuleIDs(out.Rules)), out.Pagination
+		})
+		harness.DoVoid(s, actionMRApprovalRuleDelete, withParams(params, map[string]any{"approval_rule_id": second.ID}))
+
 		harness.DoVoid(s, actionMRApprovalRuleDelete, withParams(params, map[string]any{"approval_rule_id": created.ID}))
 		remaining := harness.Do[mrapprovals.RulesOutput](s, actionMRApprovalRules, params)
 		if containsID(mrApprovalRuleIDs(remaining.Rules), created.ID) {
@@ -220,6 +231,24 @@ func TestMRDependencies_Lifecycle_BlocksThenUnblocksARequest(t *testing.T) {
 		if len(blocked.Dependencies) != 1 {
 			e.T.Errorf("the blocked request lists %d dependencies, want the one: %+v", len(blocked.Dependencies), blocked.Dependencies)
 		}
+
+		// A second blocker makes the dependent request's blockers two pages
+		// long at one per page; both requests are this surface's own, so
+		// nothing else writes to the list between the two reads.
+		secondBranch := fixture.NewBranch(e, blocking.project, e.Name("blocker"))
+		fixture.CommitFile(e, blocking.project, secondBranch.Name, "blocker.txt", "second blocker\n", "add the second blocker")
+		secondBlocker := fixture.NewMergeRequest(e, blocking.project, secondBranch.Name, blocking.project.DefaultBranch, "second blocker")
+		secondBlock := harness.Do[mergerequests.DependencyOutput](s, actionMRDependencyCreate, withParams(params, map[string]any{
+			"blocking_merge_request_id": secondBlocker.ID,
+		}))
+		assertPagesOneAtATime(e, s, actionMRDependenciesList, params, func(out mergerequests.DependenciesOutput) ([]string, toolutil.PaginationOutput) {
+			ids := make([]int64, 0, len(out.Dependencies))
+			for _, dependency := range out.Dependencies {
+				ids = append(ids, dependency.ID)
+			}
+			return idKeys(ids), out.Pagination
+		})
+		harness.DoVoid(s, actionMRDependencyDelete, withParams(params, map[string]any{"blocking_merge_request_id": secondBlock.ID}))
 
 		harness.DoVoid(s, actionMRDependencyDelete, withParams(params, map[string]any{"blocking_merge_request_id": created.ID}))
 		unblocked := harness.Do[mergerequests.DependenciesOutput](s, actionMRDependenciesList, params)

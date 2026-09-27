@@ -120,6 +120,48 @@ func TestListServiceAccounts_Success(t *testing.T) {
 	}
 }
 
+// TestListServiceAccounts_NextPageHeader_PublishesThePaginationBlock holds
+// that the page GitLab answers is published as a page, so a caller holding
+// the first page of service accounts can tell a second exists and which page
+// to ask for.
+func TestListServiceAccounts_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/service_accounts")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"username":"svc-1","name":"Service 1"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{})
+	if err != nil {
+		t.Fatalf("ListServiceAccounts() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
+// TestFormatServiceAccountListMarkdownString_APageOfALongerList verifies that
+// a page which is not the whole list says so: the total in the heading, the
+// page between the heading and the table, and the pagination line before the
+// next steps.
+func TestFormatServiceAccountListMarkdownString_APageOfALongerList(t *testing.T) {
+	out := ServiceAccountListOutput{
+		Accounts:   []ServiceAccountOutput{{ID: 1, Username: "svc-1", Name: "Service 1"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+
+	assertMarkdown(t, FormatServiceAccountListMarkdownString(out),
+		"## Service Accounts (2)\n\n"+
+			"Showing 1 of 2 results (page 1 of 2)\n\n"+
+			"| ID | Username | Name | Email |\n"+
+			"| --- | --- | --- | --- |\n"+
+			"| 1 | svc-1 | Service 1 |  |\n"+
+			"\nPage 1 of 2 | 2 items total | 1 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.create_service_account' to add a service account\n")
+}
+
 // TestCreateCurrentUserPAT_Success verifies CreateCurrentUserPAT returns the
 // new token (including the plaintext token field) when
 // POST /user/personal_access_tokens responds 201 Created.
@@ -210,11 +252,16 @@ func TestCreateServiceAccount_APIError(t *testing.T) {
 	}
 }
 
-// TestListServiceAccounts_AllOptions verifies ListServiceAccounts with all optional
-// parameters set (OrderBy, Sort, Page, PerPage).
+// TestListServiceAccounts_AllOptions verifies ListServiceAccounts with all
+// optional parameters set (OrderBy, Sort, Page, PerPage), and that each of
+// them reaches the request's query.
 func TestListServiceAccounts_AllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/service_accounts" {
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "desc")
+			testutil.AssertQueryParam(t, r, "page", "2")
+			testutil.AssertQueryParam(t, r, "per_page", "5")
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"svc-1","name":"Service 1"}]`)
 			return
 		}
@@ -224,7 +271,7 @@ func TestListServiceAccounts_AllOptions(t *testing.T) {
 	out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{
 		OrderBy: "id",
 		Sort:    "desc",
-		Page:    1, PerPage: 20,
+		Page:    2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("ListServiceAccounts() unexpected error: %v", err)

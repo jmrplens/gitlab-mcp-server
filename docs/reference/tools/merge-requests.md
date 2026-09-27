@@ -291,7 +291,7 @@ Remove a merge request dependency (blocker). The specified blocking MR will no l
 
 ### `gitlab_mr_dependencies_list`
 
-List all merge request dependencies (blockers) for a GitLab merge request. Returns the list of MRs that must be merged before this MR can be merged. Requires Premium or Ultimate license.
+List the merge request dependencies (blockers) for a GitLab merge request, one page at a time. Returns the MRs that must be merged before this MR can be merged, with pagination metadata. Standard pagination (`page`, `per_page`). Requires Premium or Ultimate license.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -309,7 +309,7 @@ Get the approval state of a GitLab merge request, including whether approval rul
 
 ### `gitlab_mr_approval_rules`
 
-List the approval rules configured for a GitLab merge request. Returns rule names, types, required approvals, current approvers, and eligible approvers.
+List the approval rules configured for a GitLab merge request. Returns rule names, types, required approvals, current approvers, and eligible approvers, with pagination metadata. Standard pagination (`page`, `per_page`).
 
 | Annotation | **Read** |
 | ---------- | -------- |

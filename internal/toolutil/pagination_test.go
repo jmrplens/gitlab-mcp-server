@@ -1,12 +1,17 @@
-// pagination_test.go contains unit tests for PaginationFromResponse and
-// DeleteResult. Tests cover nil response, fully populated headers, single-page
-// results, and the standard delete output builder.
+// pagination_test.go contains unit tests for PaginationFromResponse,
+// PaginationRequestOption and DeleteResult. Tests cover nil response, fully
+// populated headers, single-page results, the page and per_page a request
+// option carries onto a request, and the standard delete output builder.
 package toolutil
 
 import (
+	"net/http"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
@@ -311,4 +316,60 @@ func TestApplyListOptions_OnlyNonZero(t *testing.T) {
 		t.Errorf("zero inputs mutated opts: %+v", opts)
 	}
 	ApplyListOptions(nil, PaginationInput{Page: 1}, KeysetPaginationInput{}) // must not panic
+}
+
+// TestPaginationRequestOption_AddsWhatTheCallerAskedFor verifies the request
+// option carries a caller's page and per_page onto a request whose client-go
+// method has no options struct: a value left at zero is not sent, a value the
+// query already holds is replaced rather than repeated, and the rest of the
+// query client-go encoded survives.
+func TestPaginationRequestOption_AddsWhatTheCallerAskedFor(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		page  PaginationInput
+		want  url.Values
+	}{
+		{
+			name:  "nothing asked for sends neither parameter",
+			query: "state=all",
+			want:  url.Values{"state": {"all"}},
+		},
+		{
+			name:  "both asked for are both sent beside the existing query",
+			query: "state=all",
+			page:  PaginationInput{Page: 3, PerPage: 50},
+			want:  url.Values{"state": {"all"}, "page": {"3"}, "per_page": {"50"}},
+		},
+		{
+			name: "page alone leaves per_page to GitLab",
+			page: PaginationInput{Page: 2},
+			want: url.Values{"page": {"2"}},
+		},
+		{
+			name: "per_page alone leaves page to GitLab",
+			page: PaginationInput{PerPage: 1},
+			want: url.Values{"per_page": {"1"}},
+		},
+		{
+			name:  "a value already in the query is replaced rather than repeated",
+			query: "page=1&per_page=20",
+			page:  PaginationInput{Page: 4, PerPage: 100},
+			want:  url.Values{"page": {"4"}, "per_page": {"100"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := retryablehttp.NewRequest(http.MethodGet, "https://gitlab.example.com/api/v4/user/gpg_keys?"+tt.query, nil)
+			if err != nil {
+				t.Fatalf("NewRequest: %v", err)
+			}
+			if err = PaginationRequestOption(tt.page)(req); err != nil {
+				t.Fatalf("option returned %v, want nil", err)
+			}
+			if got := req.URL.Query(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("query = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

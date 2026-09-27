@@ -819,6 +819,51 @@ func TestListMRsByCommit_Success(t *testing.T) {
 	}
 }
 
+// TestListMRsByCommit_PageAndPerPage_ReachTheRequest holds that the page a
+// caller asks for is the page GitLab is asked for. client-go's
+// ListMergeRequestsByCommit takes no options struct, so until the input
+// carried page and per_page this action could only ever read GitLab's first
+// page of a commit's merge requests.
+func TestListMRsByCommit_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository/commits/abc123/merge_requests")
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":101,"iid":2,"title":"Second","state":"opened"}]`)
+	}))
+
+	out, err := ListMRsByCommit(context.Background(), client, MRsByCommitInput{
+		ProjectID: "42", SHA: testSHA,
+		Page: 2, PerPage: 1,
+	})
+	if err != nil {
+		t.Fatalf("ListMRsByCommit() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 1 || out.MergeRequests[0].IID != 2 {
+		t.Errorf("merge requests = %+v, want the one of page 2", out.MergeRequests)
+	}
+}
+
+// TestListMRsByCommit_NextPageHeader_PublishesThePaginationBlock holds that
+// the page GitLab answers is published as a page, so a caller holding the
+// first page of a commit's merge requests can tell a second exists.
+func TestListMRsByCommit_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository/commits/abc123/merge_requests")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":100,"iid":1,"title":"First","state":"merged"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := ListMRsByCommit(context.Background(), client, MRsByCommitInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("ListMRsByCommit() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestListMRsByCommit_EmptyProjectID verifies the ListMRsByCommit_EmptyProjectID handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -1479,6 +1524,26 @@ func TestGetGPGSignature_APIError(t *testing.T) {
 	_, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
+	}
+}
+
+// TestGetGPGSignature_RequestNotBuilt verifies that GetGPGSignature returns
+// the error client-go reports when it cannot build the signature request,
+// and sends nothing. Both path segments are escaped before the path is
+// joined, so the path itself cannot make the request fail; a default request
+// option of the client can, since client-go applies those to every request
+// it builds and stops at the first that refuses.
+func TestGetGPGSignature_RequestNotBuilt(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	errRefused := errors.New("request option refused")
+	refuse := func(*retryablehttp.Request) error { return errRefused }
+	if err := gl.WithRequestOptions(refuse)(client.GL()); err != nil {
+		t.Fatalf("installing the refusing request option: %v", err)
+	}
+
+	_, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if !errors.Is(err, errRefused) {
+		t.Fatalf("GetGPGSignature() error = %v, want it to wrap %v", err, errRefused)
 	}
 }
 
@@ -2479,6 +2544,34 @@ func TestFormatMRsByCommitMarkdown(t *testing.T) {
 		"| IID | Title | State | Source -> Target | Author | Merged |\n" +
 		"| --- | --- | --- | --- | --- | --- |\n" +
 		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | @dev | 3 Mar 2026 00:00 UTC |\n" +
+		commitMRsHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMRsByCommitMarkdown_APageOfALongerList pins what a page that is
+// not the whole list renders: the total in the heading, the page between the
+// heading and the table, and the pagination line before the next steps.
+func TestFormatMRsByCommitMarkdown_APageOfALongerList(t *testing.T) {
+	got := FormatMRsByCommitMarkdown(MRsByCommitOutput{
+		MergeRequests: []BasicMROutput{
+			{
+				IID: 1, Title: "Feature", State: "merged",
+				SourceBranch: "feat", TargetBranch: "main", Author: &toolutil.BasicUserOutput{Username: "dev"},
+				WebURL: "https://gitlab.example.com/-/merge_requests/1",
+			},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	})
+
+	want := "## Merge Requests for Commit (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| IID | Title | State | Source -> Target | Author | Merged |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | @dev |  |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
 		commitMRsHints
 
 	if got != want {

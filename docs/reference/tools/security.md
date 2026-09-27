@@ -234,7 +234,7 @@ Delete a metric image from a GitLab alert.
 
 ### `gitlab_list_impersonation_tokens`
 
-List all impersonation tokens for a GitLab user by user ID. Optionally filter by state.
+List the impersonation tokens of a GitLab user by user ID, one page at a time, with the pagination block GitLab answered with. Optionally filter by state.
 
 | Parameter  | Type   | Required | Description                                |
 | ---------- | ------ | :------: | ------------------------------------------ |

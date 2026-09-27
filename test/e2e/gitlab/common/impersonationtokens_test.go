@@ -15,7 +15,10 @@ import (
 	"testing"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/impersonationtokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -76,6 +79,33 @@ func TestImpersonationTokens_Lifecycle_CreateGetListRevoke(t *testing.T) {
 		if containsID(impersonationTokenIDs(active.Tokens), created.ID) {
 			e.T.Errorf("token %d is still listed as active after its revocation", created.ID)
 		}
+	})
+}
+
+// TestImpersonationTokens_List_PagesOneTokenAtATime gives one fixture user
+// two impersonation tokens and pages through them one at a time on every
+// surface. The listing used to answer a bare array with no pagination
+// block, so a caller holding the first page could neither tell a second
+// existed nor ask for it.
+func TestImpersonationTokens_List_PagesOneTokenAtATime(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.User {
+		user := fixture.NewUser(e, "imppage")
+		expiry := time.Now().Add(adminMintedTokenLifetime)
+		for _, name := range []string{e.Name("imppage-a"), e.Name("imppage-b")} {
+			if _, _, err := e.Client().GL().Users.CreateImpersonationToken(user.ID, &gl.CreateImpersonationTokenOptions{
+				Name: new(name), Scopes: &[]string{impersonationTokenScope}, ExpiresAt: &expiry,
+			}, gl.WithContext(e.Ctx)); err != nil {
+				e.T.Fatalf("minting the impersonation token %q for user %d: %v", name, user.ID, err)
+			}
+		}
+		return user
+	}, func(e *harness.Env, surface harness.Surface, user fixture.User) {
+		assertPagesOneAtATime(e, e.On(surface), actionUserListImpersonationTokens, map[string]any{"user_id": user.ID},
+			func(out impersonationtokens.ListOutput) ([]string, toolutil.PaginationOutput) {
+				return idKeys(impersonationTokenIDs(out.Tokens)), out.Pagination
+			})
 	})
 }
 

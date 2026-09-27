@@ -2,7 +2,9 @@ package toolutil
 
 import (
 	"fmt"
+	"strconv"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
@@ -45,6 +47,30 @@ func ApplyListOptions(opts *gl.ListOptions, page PaginationInput, keyset KeysetP
 	}
 	if keyset.PageToken != "" {
 		opts.PageToken = keyset.PageToken
+	}
+}
+
+// PaginationRequestOption carries a caller's page and per_page to a client-go
+// method that takes no options struct to put them in. client-go models
+// several of GitLab's paginated lists that way (a user's GPG keys and emails,
+// system hooks, project aliases, a commit's merge requests), and without this
+// such a method can only ever ask for GitLab's first page.
+//
+// A value the caller left at zero is not sent, so GitLab applies its own
+// default, exactly as [ApplyListOptions] leaves a zero out of a
+// [gl.ListOptions]. The option runs after client-go has encoded the request's
+// own query, so it adds to that query rather than replacing it.
+func PaginationRequestOption(page PaginationInput) gl.RequestOptionFunc {
+	return func(req *retryablehttp.Request) error {
+		query := req.URL.Query()
+		if page.Page > 0 {
+			query.Set("page", strconv.Itoa(page.Page))
+		}
+		if page.PerPage > 0 {
+			query.Set("per_page", strconv.Itoa(page.PerPage))
+		}
+		req.URL.RawQuery = query.Encode()
+		return nil
 	}
 }
 

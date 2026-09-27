@@ -18,6 +18,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/usergpgkeys"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -54,6 +55,14 @@ func TestUserGPGKeys_OwnAccount_AddGetListDelete(t *testing.T) {
 		if !containsID(gpgKeyIDs(listed.Keys), added.ID) {
 			e.T.Errorf("the run user's GPG keys do not hold the added key %d: %+v", added.ID, listed.Keys)
 		}
+
+		// A second key makes the listing two pages long at one key per page.
+		// No other scenario adds to or removes from the run user's keys,
+		// which is what lets the two pages be held to holding different ones.
+		addOwnGPGKey(e, newGPGPublicKey(e, "page-"+string(surface)))
+		assertPagesOneAtATime(e, s, actionUserGPGKeys, nil, func(out usergpgkeys.ListOutput) ([]string, toolutil.PaginationOutput) {
+			return idKeys(gpgKeyIDs(out.Keys)), out.Pagination
+		})
 
 		deleted := harness.Do[usergpgkeys.DeleteOutput](s, actionUserDeleteGPGKey, map[string]any{"key_id": added.ID})
 		if !deleted.Deleted || deleted.KeyID != added.ID {
@@ -104,6 +113,48 @@ func TestUserGPGKeys_ForUser_AddGetListDelete(t *testing.T) {
 		if containsID(gpgKeyIDs(after.Keys), added.ID) {
 			e.T.Errorf("GPG key %d of user %d is still listed after its delete", added.ID, user.ID)
 		}
+	})
+}
+
+// TestUserGPGKeys_ForUser_PagesOneKeyAtATime gives one fixture user two
+// GPG keys and pages through the user's keys one at a time on every surface.
+// The fixture user owns the whole list, so nothing another scenario does can
+// move a key between the two pages.
+func TestUserGPGKeys_ForUser_PagesOneKeyAtATime(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.User {
+		user := fixture.NewUser(e, "gpgpage")
+		for _, owner := range []string{user.Username + "-a", user.Username + "-b"} {
+			if _, _, err := e.Client().GL().Users.AddGPGKeyForUser(user.ID, &gl.AddGPGKeyOptions{
+				Key: new(newGPGPublicKey(e, owner)),
+			}, gl.WithContext(e.Ctx)); err != nil {
+				e.T.Fatalf("adding a GPG key to user %d: %v", user.ID, err)
+			}
+		}
+		return user
+	}, func(e *harness.Env, surface harness.Surface, user fixture.User) {
+		assertPagesOneAtATime(e, e.On(surface), actionUserGPGKeysForUser, map[string]any{"user_id": user.ID},
+			func(out usergpgkeys.ListOutput) ([]string, toolutil.PaginationOutput) {
+				return idKeys(gpgKeyIDs(out.Keys)), out.Pagination
+			})
+	})
+}
+
+// addOwnGPGKey adds a key to the run user through client-go and registers
+// its removal at the end of the scenario.
+func addOwnGPGKey(e *harness.Env, key string) {
+	e.T.Helper()
+	added, _, err := e.Client().GL().Users.AddGPGKey(&gl.AddGPGKeyOptions{Key: new(key)}, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("adding a GPG key to the run user: %v", err)
+	}
+	e.Defer("gpg key", func(ctx context.Context) error {
+		_, deleteErr := e.Client().GL().Users.DeleteGPGKey(added.ID, gl.WithContext(ctx))
+		if deleteErr != nil && !fixture.IsStatus(deleteErr, http.StatusNotFound) {
+			return deleteErr
+		}
+		return nil
 	})
 }
 

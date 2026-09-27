@@ -12,6 +12,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -133,6 +134,96 @@ func TestListForUser_Success(t *testing.T) {
 	}
 	if len(out.Keys) != 2 {
 		t.Fatalf("len(out.Keys) = %d, want 2", len(out.Keys))
+	}
+}
+
+// TestList_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for, on both routes. client-go's ListGPGKeys
+// and ListGPGKeysForUser take no options struct, so until the inputs carried
+// page and per_page both actions could only ever read GitLab's first page.
+func TestList_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		list func(*gitlabclient.Client, toolutil.PaginationInput) (ListOutput, error)
+	}{
+		{
+			name: "the current user's keys",
+			path: pathGPGKeys,
+			list: func(client *gitlabclient.Client, page toolutil.PaginationInput) (ListOutput, error) {
+				return List(context.Background(), client, ListInput{PaginationInput: page})
+			},
+		},
+		{
+			name: "a specific user's keys",
+			path: pathGPGKeysUser,
+			list: func(client *gitlabclient.Client, page toolutil.PaginationInput) (ListOutput, error) {
+				return ListForUser(context.Background(), client, ListForUserInput{UserID: 42, PaginationInput: page})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				testutil.AssertRequestPath(t, r, tt.path)
+				testutil.AssertQueryParam(t, r, "page", "2")
+				testutil.AssertQueryParam(t, r, "per_page", "1")
+				testutil.RespondJSON(w, http.StatusOK, `[`+gpgKeyEveryFieldJSON+`]`)
+			}))
+
+			out, err := tt.list(client, toolutil.PaginationInput{Page: 2, PerPage: 1})
+			if err != nil {
+				t.Fatalf("list error: %v", err)
+			}
+			if len(out.Keys) != 1 || out.Keys[0].ID != 7 {
+				t.Errorf("keys = %+v, want the one key of page 2", out.Keys)
+			}
+		})
+	}
+}
+
+// TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page on both routes, so a caller holding
+// the first page of keys can tell a second exists and which to ask for.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		list func(*gitlabclient.Client) (ListOutput, error)
+	}{
+		{
+			name: "the current user's keys",
+			path: pathGPGKeys,
+			list: func(client *gitlabclient.Client) (ListOutput, error) {
+				return List(context.Background(), client, ListInput{})
+			},
+		},
+		{
+			name: "a specific user's keys",
+			path: pathGPGKeysUser,
+			list: func(client *gitlabclient.Client) (ListOutput, error) {
+				return ListForUser(context.Background(), client, ListForUserInput{UserID: 42})
+			},
+		},
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, tt.path)
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+gpgKeyEveryFieldJSON+`]`,
+					testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+			}))
+
+			out, err := tt.list(client)
+			if err != nil {
+				t.Fatalf("list error: %v", err)
+			}
+			if out.Pagination != want {
+				t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+			}
+		})
 	}
 }
 
@@ -753,6 +844,26 @@ func TestFormatListMarkdownString_WithKeys(t *testing.T) {
 			"| --- | --- | --- |\n"+
 			"| 1 | `mQENBFoneKEY` | 15 Jan 2026 10:00 UTC |\n"+
 			"| 2 | `...TAILTAILTAILTAILTAILTAIL` |  |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get_gpg_key' to view full key details\n")
+}
+
+// TestFormatListMarkdownString_APageOfALongerList verifies that a page which
+// is not the whole list says so: the total in the heading, the page between
+// the heading and the table, and the pagination line before the next steps.
+func TestFormatListMarkdownString_APageOfALongerList(t *testing.T) {
+	out := ListOutput{
+		Keys:       []Output{{ID: 1, Key: shortArmoredKey, CreatedAt: "2026-01-15T10:00:00Z"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+
+	assertMarkdown(t, FormatListMarkdownString(out),
+		"## GPG Keys (2)\n\n"+
+			"Showing 1 of 2 results (page 1 of 2)\n\n"+
+			"| ID | Key (truncated) | Created At |\n"+
+			"| --- | --- | --- |\n"+
+			"| 1 | `mQENBFoneKEY` | 15 Jan 2026 10:00 UTC |\n"+
+			"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.get_gpg_key' to view full key details\n")
 }

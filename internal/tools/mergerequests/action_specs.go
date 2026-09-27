@@ -409,10 +409,10 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the dependency, the MR, and the project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
 		},
 		"dependencies_list": {
-			usage:       "List the blocking dependencies of a merge request (the MRs that must merge first).",
+			usage:       "List the blocking dependencies of a merge request (the MRs that must merge first), one page at a time with page and per_page.",
 			aliases:     []string{"list merge request dependencies", "list mr dependencies", "show mr blockers"},
 			related:     []string{"merge_request.dependency_create", "merge_request.dependency_delete"},
-			description: "List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states. See also: gitlab_mr_dependency_create, gitlab_mr_dependency_delete.",
+			description: "List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states, with pagination metadata. See also: gitlab_mr_dependency_create, gitlab_mr_dependency_delete.",
 		},
 	}
 }

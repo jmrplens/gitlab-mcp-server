@@ -47,6 +47,29 @@ func TestListForUser_Success(t *testing.T) {
 	}
 }
 
+// TestListForUser_NextPageHeader_PublishesThePaginationBlock holds that the
+// page GitLab answers is published as a page, so a caller holding the first
+// page of a user's addresses can tell a second exists and which to ask for.
+func TestListForUser_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathEmailsForUser {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"email":"test@example.com"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := ListForUser(context.Background(), client, ListForUserInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("ListForUser() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestListForUser_InvalidUserID verifies that ListForUser refuses user_id 0
 // itself. The mock forbids every request, so the refusal asserted here is the
 // handler's and not a 404 GitLab would have answered: with a mock that replies
@@ -679,6 +702,26 @@ func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 			"| --- | --- | --- |\n"+
 			"| 1 | confirmed@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
 			"| 2 | unconfirmed@example.com | ❌ awaiting confirmation |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get_email' to read one address\n")
+}
+
+// TestFormatListMarkdownString_APageOfALongerList verifies that a page which
+// is not the whole list says so: the total in the heading, the page between
+// the heading and the table, and the pagination line before the next steps.
+func TestFormatListMarkdownString_APageOfALongerList(t *testing.T) {
+	out := ListOutput{
+		Emails:     []Output{{ID: 1, Email: "confirmed@example.com", ConfirmedAt: "2026-01-15T10:00:00Z"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+
+	assertMarkdown(t, FormatListMarkdownString(out),
+		"## Emails (2)\n\n"+
+			"Showing 1 of 2 results (page 1 of 2)\n\n"+
+			"| ID | Email | Confirmed |\n"+
+			"| --- | --- | --- |\n"+
+			"| 1 | confirmed@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
+			"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.get_email' to read one address\n")
 }

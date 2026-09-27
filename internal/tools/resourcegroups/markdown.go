@@ -17,7 +17,7 @@ func FormatListMarkdown(out ListOutput) string {
 		return toolutil.EmptyMessage("resource groups")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Resource Groups", len(out.Groups), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "Resource Groups", len(out.Groups), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Key", "Process Mode"))
 	for _, g := range out.Groups {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -26,7 +26,7 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(g.ProcessMode),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		toolutil.HintAction(actionResourceGroupGet, "see one resource group in full"),
 		toolutil.HintAction(actionResourceGroupEdit, "change a group's process mode"),
 	)
@@ -58,7 +58,7 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 		return toolutil.EmptyMessage("upcoming jobs")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Upcoming Jobs", len(out.Jobs), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "Upcoming Jobs", len(out.Jobs), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage", "Ref", "Pipeline", "Created"))
 	for _, j := range out.Jobs {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -71,7 +71,7 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 			toolutil.FormatTime(j.CreatedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionJobGet, "see one of these jobs in full"),
 		toolutil.HintAction(actionJobTrace, "read a job's log"),
 		toolutil.HintAction(actionResourceGroupList, "see the other resource groups of this project"),

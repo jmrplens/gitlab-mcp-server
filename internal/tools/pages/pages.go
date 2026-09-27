@@ -33,8 +33,12 @@ type UnpublishPagesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 }
 
-// ListAllDomainsInput defines parameters for listing all Pages domains globally.
-type ListAllDomainsInput struct{}
+// ListAllDomainsInput defines the page of the instance's Pages domains to
+// list. GitLab pages GET /pages/domains, and client-go's ListAllPagesDomains
+// takes no options struct, so the page travels as a request option.
+type ListAllDomainsInput struct {
+	toolutil.PaginationInput
+}
 
 // ListDomainsInput defines parameters for listing Pages domains for a project.
 // It supports offset and keyset pagination (page_token/pagination) plus
@@ -131,10 +135,12 @@ type ListDomainsOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListAllDomainsOutput wraps a list of all Pages domains.
+// ListAllDomainsOutput wraps one page of the instance's Pages domains and the
+// pagination GitLab sent with it.
 type ListAllDomainsOutput struct {
 	toolutil.HintableOutput
-	Domains []DomainOutput `json:"domains"`
+	Domains    []DomainOutput            `json:"domains"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // ---------------------------------------------------------------------------
@@ -208,12 +214,12 @@ func UnpublishPages(ctx context.Context, client *gitlabclient.Client, input Unpu
 // Handlers — PagesDomainsService
 // ---------------------------------------------------------------------------.
 
-// ListAllDomains returns every Pages domain across the entire
+// ListAllDomains returns one page of the Pages domains across the entire
 // instance via the GitLab Pages domains admin API
 // (GET /pages/domains). Requires administrator access.
-func ListAllDomains(ctx context.Context, client *gitlabclient.Client, _ ListAllDomainsInput) (ListAllDomainsOutput, error) {
+func ListAllDomains(ctx context.Context, client *gitlabclient.Client, input ListAllDomainsInput) (ListAllDomainsOutput, error) {
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	domains, _, err := client.GL().PagesDomains.ListAllPagesDomains(gl.WithContext(ctx))
+	domains, resp, err := client.GL().PagesDomains.ListAllPagesDomains(gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListAllDomainsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_list_all", err, http.StatusForbidden,
 			"listing all Pages domains requires admin token")
@@ -223,7 +229,10 @@ func ListAllDomains(ctx context.Context, client *gitlabclient.Client, _ ListAllD
 		return ListAllDomainsOutput{}, toolutil.WrapErr("gitlab_pages_domain_list_all", err)
 	}
 
-	out := ListAllDomainsOutput{Domains: make([]DomainOutput, 0, len(domains))}
+	out := ListAllDomainsOutput{
+		Domains:    make([]DomainOutput, 0, len(domains)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
 	for i, d := range domains {
 		out.Domains = append(out.Domains, toDomainOutput(d, extras[i]))
 	}

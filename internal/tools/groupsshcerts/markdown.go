@@ -29,14 +29,15 @@ func FormatOutputMarkdown(o Output) string {
 	return b.String()
 }
 
-// FormatListMarkdown renders a group's SSH CA certificates as a Markdown
-// table. The endpoint is not paginated, so the heading counts what it sent.
+// FormatListMarkdown renders one page of a group's SSH CA certificates as a
+// Markdown table, with the pagination GitLab sent so a reader can tell the
+// page from the whole.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Certificates) == 0 {
 		return toolutil.EmptyMessage("SSH certificates")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "SSH Certificates", len(out.Certificates), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "SSH Certificates", len(out.Certificates), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Created"))
 	for _, c := range out.Certificates {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -45,7 +46,7 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.FormatTime(c.CreatedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		toolutil.HintAction(actionCreate, "add another certificate"),
 	)
 	return b.String()

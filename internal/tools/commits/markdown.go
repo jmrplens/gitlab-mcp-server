@@ -329,7 +329,7 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 		return toolutil.EmptyMessage("merge requests")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Merge Requests for Commit", len(out.MergeRequests), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "Merge Requests for Commit", len(out.MergeRequests), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source -> Target", "Author", "Merged"))
 	for _, mr := range out.MergeRequests {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -341,7 +341,7 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 			toolutil.FormatTime(mr.MergedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionMRGet, "view one merge request"),
 		toolutil.HintAction(actionMRChangesGet, "see its diff"),
 	)

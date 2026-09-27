@@ -134,6 +134,18 @@ func TestFormatListMarkdown(t *testing.T) {
 				"| 3 | Watched | "+testHookURL+" | executable | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
 				hookListHints)
 	})
+	t.Run("a page of a longer list", func(t *testing.T) {
+		assertRendered(t, hookText(t, FormatListMarkdown(ListOutput{
+			Hooks:      []HookItem{{ID: 3, URL: testHookURL, Name: "Watched", AlertStatus: "executable"}},
+			Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+		})),
+			"## System Hooks (2)\n\n"+
+				"Showing 1 of 2 results (page 1 of 2)\n\n"+
+				hookTableHeader+
+				"| 3 | Watched | "+testHookURL+" | executable | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
+				"\nPage 1 of 2 | 2 items total | 1 per page\n"+
+				hookListHints)
+	})
 	t.Run("empty", func(t *testing.T) {
 		assertRendered(t, hookText(t, FormatListMarkdown(ListOutput{})), "No system hooks found.\n")
 	})
@@ -287,7 +299,7 @@ func TestFormatTestMarkdown(t *testing.T) {
 			"GitLab sent its own fixed sample payload to the hook URL. This response carries that payload, not the receiver's status code, so it does not say whether the delivery arrived.\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'admin.system_hook_get' to read the hook's alert status, which does record repeated delivery failures\n"+
-			"- Use action 'admin.system_hook_list' to see every system hook on the instance\n")
+			"- Use action 'admin.system_hook_list' to list the system hooks on the instance\n")
 }
 
 // TestSystemHookFormattersAreRegistered verifies every output type resolves

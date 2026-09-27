@@ -283,7 +283,13 @@ Resource groups serialize concurrent jobs in a pipeline by sharing a single conc
 
 ### `gitlab_list_resource_groups`
 
-List the CI resource groups configured for a project. Returns each resource group's ID, key, process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency, and created and updated times.
+List the CI resource groups configured for a project. Returns each resource group's ID, key, process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency, and created and updated times, with pagination metadata.
+
+| Parameter    | Required | Description                    |
+| ------------ | -------- | ------------------------------ |
+| `project_id` | Yes      | Project ID or URL-encoded path |
+| `page`       | No       | Page number (1+)               |
+| `per_page`   | No       | Items per page (1–100)         |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -315,12 +321,14 @@ Update the process mode of one CI resource group by key. Returns the updated res
 
 ### `gitlab_list_resource_group_upcoming_jobs`
 
-List the upcoming CI jobs queued for one resource group by key. Returns a compact row per pending job, ordered as they will run under the resource group's process mode: ID, name, status, stage, ref, tag and allow-failure flags, the pipeline it belongs to, web URL, and creation time. The commit, project, user and the fields of a run, which a waiting job leaves empty, are what `job.get` returns.
+List the upcoming CI jobs queued for one resource group by key. Returns a compact row per pending job, ordered as they will run under the resource group's process mode: ID, name, status, stage, ref, tag and allow-failure flags, the pipeline it belongs to, web URL, and creation time, with pagination metadata. The commit, project, user and the fields of a run, which a waiting job leaves empty, are what `job.get` returns.
 
 | Parameter    | Required | Description                    |
 | ------------ | -------- | ------------------------------ |
 | `key`        | Yes      | Resource group key             |
 | `project_id` | Yes      | Project ID or URL-encoded path |
+| `page`       | No       | Page number (1+)               |
+| `per_page`   | No       | Items per page (1–100)         |
 
 | Annotation | **Read** |
 | ---------- | -------- |

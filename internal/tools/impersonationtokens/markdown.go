@@ -31,7 +31,7 @@ func FormatListMarkdownString(out ListOutput) string {
 		return toolutil.EmptyMessage("impersonation tokens")
 	}
 	var sb strings.Builder
-	toolutil.WriteListHeading(&sb, "Impersonation Tokens", len(out.Tokens), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&sb, "Impersonation Tokens", len(out.Tokens), out.Pagination)
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes", "Expires At"))
 	for _, t := range out.Tokens {
 		sb.WriteString(toolutil.MarkdownTableRow(
@@ -43,8 +43,8 @@ func FormatListMarkdownString(out ListOutput) string {
 			expiryCell(t.ExpiresAt),
 		))
 	}
-	toolutil.WriteHints(
-		&sb,
+	toolutil.WriteListFooter(
+		&sb, out.Pagination, false,
 		toolutil.HintAction(actionImpersonationTokenGet, "read one of these tokens in full"),
 		toolutil.HintAction(actionImpersonationTokenRevoke, "revoke one of these tokens"),
 	)

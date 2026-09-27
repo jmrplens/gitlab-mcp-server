@@ -146,14 +146,14 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag, and approvers. See also: gitlab_mr_approval_rules, gitlab_mr_approval_config, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_rules": {
-		Usage:   "List the approval rules configured on a merge request, including eligible approvers, assigned users, and groups. Use when inspecting or before editing the rules that gate an MR.",
+		Usage:   "List the approval rules configured on a merge request, including eligible approvers, assigned users, and groups, one page at a time with page and per_page. Use when inspecting or before editing the rules that gate an MR.",
 		Aliases: []string{"list mr approval rules", "show merge request approval rules", "merge request approvers"},
 		Related: []string{actionApprovalRuleCreate, actionApprovalRuleUpdate, actionApprovalState},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		Description: "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
+		Description: "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule, with pagination metadata. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
 	},
 	"gitlab_mr_approval_config": {
 		Usage:   "Read who has approved a merge request and whether the calling user can and has. Available on every tier. For how many approvals are required and left, use the approval state instead.",

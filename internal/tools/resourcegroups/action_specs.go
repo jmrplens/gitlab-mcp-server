@@ -115,7 +115,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 			related: []string{actionResourceGroupGet, actionResourceGroupList, actionJobList},
 			description: "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, " +
 				"status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, ordered as they will run " +
-				"under the resource group's process mode. " +
+				"under the resource group's process mode, with pagination metadata. " +
 				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.",
 		}
 	default: // specResourceGroupList
@@ -128,7 +128,8 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 			},
 			related: []string{actionResourceGroupGet, actionResourceGroupEdit, actionResourceGroupUpcomingJobs},
 			description: "List the CI resource groups configured for a project. Returns: each resource group's ID, key, " +
-				"process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency, and created and updated times. " +
+				"process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency, and created and updated times, " +
+				"with pagination metadata. " +
 				"See also: gitlab_get_resource_group, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.",
 		}
 	}

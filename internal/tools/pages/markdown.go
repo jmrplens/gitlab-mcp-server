@@ -87,15 +87,16 @@ func FormatDomainListMarkdown(out ListDomainsOutput) string {
 	)
 }
 
-// FormatAllDomainsMarkdown renders every Pages domain on the instance as a
-// table. The endpoint is not paginated, so the heading counts what it sent.
+// FormatAllDomainsMarkdown renders one page of the Pages domains on the
+// instance as a table, with the pagination GitLab sent so a reader can tell
+// the page from the whole.
 func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
 	if len(out.Domains) == 0 {
 		return toolutil.EmptyMessage("Pages domains")
 	}
-	return domainTable("All Pages Domains", out.Domains, toolutil.PaginationOutput{},
+	return domainTable("All Pages Domains", out.Domains, out.Pagination,
 		toolutil.HintAction(actionDomainGet, "read one domain in full"),
-		toolutil.HintAction(actionDomainListAll, "list every Pages domain on the instance again"),
+		toolutil.HintAction(actionDomainListAll, "list the Pages domains on the instance again"),
 	)
 }
 

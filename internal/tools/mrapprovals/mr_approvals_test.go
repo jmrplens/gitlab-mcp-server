@@ -1532,6 +1532,25 @@ func TestFormatRulesMarkdown_LinkedApprovers(t *testing.T) {
 	}
 }
 
+// TestFormatRulesMarkdown_APageOfALongerList verifies that a page which is
+// not the whole list says so: the total in the heading, the page between the
+// heading and the table, and the pagination line before the next steps.
+func TestFormatRulesMarkdown_APageOfALongerList(t *testing.T) {
+	out := RulesOutput{
+		Rules: []RuleOutput{
+			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, EligibleApprovers: []*BasicUserOutput{{Name: "Eve", Username: "eve"}}},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	}
+	want := "## MR Approval Rules (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" + rulesTableHead +
+		"| 10 | Team | regular | 1 | @eve |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" + rulesHints
+	if got := FormatRulesMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
 // TestFormatRulesMarkdown_Empty verifies that a merge request with no approval
 // rule renders the one-sentence empty message and no heading counting zero.
 func TestFormatRulesMarkdown_Empty(t *testing.T) {
@@ -1550,7 +1569,7 @@ const configHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'merge_request.approve' to approve this merge request\n" +
 	"- Use action 'merge_request.unapprove' to withdraw your approval\n" +
 	"- Use action 'merge_request.approval_state' to see how many approvals are required and left\n" +
-	"- Use action 'merge_request.approval_rules' to see every configured rule\n"
+	"- Use action 'merge_request.approval_rules' to list the configured rules\n"
 
 // TestFormatConfigMarkdown_Full verifies the whole rendering of the approvals
 // card: four rows and the guidance. The rows that used to print here read
@@ -1847,6 +1866,67 @@ func TestRules_OverriddenSurfaced(t *testing.T) {
 	}
 }
 
+// TestRules_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for. The rules are read with a raw request
+// of this package's own, which sent no query at all, so this action could
+// only ever read GitLab's first page of rules.
+func TestRules_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, testApprovalRulesPath)
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id": 2, "name": "second", "rule_type": "regular", "approvals_required": 1}]`)
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{
+		ProjectID: "42", MRIID: 1,
+		Page: 2, PerPage: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 || out.Rules[0].ID != 2 {
+		t.Errorf("rules = %+v, want the one rule of page 2", out.Rules)
+	}
+}
+
+// TestRules_NoPageAsked_SendsNoPaginationParameters holds that a caller who
+// asked for no particular page is sent to GitLab asking for none, so GitLab
+// applies its own default rather than a page of zero.
+func TestRules_NoPageAsked_SendsNoPaginationParameters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, testApprovalRulesPath)
+		if q := r.URL.Query(); q.Has("page") || q.Has("per_page") {
+			t.Errorf("query = %q, want no pagination parameters", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	if _, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestRules_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page, so a caller holding the first page
+// of rules can tell a second exists and which to ask for.
+func TestRules_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, testApprovalRulesPath)
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id": 1, "name": "first", "rule_type": "regular", "approvals_required": 1}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestCreateRule_OverriddenSurfaced verifies the raw create response surfaces
 // the documented "overridden" boolean.
 func TestCreateRule_OverriddenSurfaced(t *testing.T) {
@@ -1984,7 +2064,7 @@ func TestRawHelpers_NewRequestError(t *testing.T) {
 	ctx := context.Background()
 	const badPath = "projects/%zz/merge_requests/1/approval_rules"
 
-	if _, err := rawListApprovalRules(ctx, client, badPath); err == nil {
+	if _, _, err := rawListApprovalRules(ctx, client, badPath, &gl.ListOptions{}); err == nil {
 		t.Error("rawListApprovalRules: expected error for malformed path")
 	}
 	if _, err := rawApprovalState(ctx, client, badPath); err == nil {

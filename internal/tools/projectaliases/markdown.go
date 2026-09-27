@@ -20,7 +20,7 @@ func FormatOutputMarkdown(out Output) string {
 	c.Int("Project ID", out.ProjectID)
 	c.End(
 		toolutil.HintAction("project_alias.delete", "remove this alias"),
-		toolutil.HintAction("project_alias.list", "view all aliases"),
+		toolutil.HintAction("project_alias.list", "list the aliases"),
 	)
 	return b.String()
 }
@@ -35,8 +35,7 @@ func FormatListMarkdown(out ListOutput) string {
 		return toolutil.EmptyMessage("project aliases")
 	}
 	var b strings.Builder
-	var pagination toolutil.PaginationOutput
-	toolutil.WriteListHeading(&b, "Project Aliases", len(out.Aliases), pagination)
+	toolutil.WriteListHeading(&b, "Project Aliases", len(out.Aliases), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Project ID"))
 	for _, a := range out.Aliases {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -45,7 +44,7 @@ func FormatListMarkdown(out ListOutput) string {
 			strconv.FormatInt(a.ProjectID, 10),
 		))
 	}
-	toolutil.WriteListFooter(&b, pagination, false,
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		toolutil.HintAction("project_alias.get", "see one alias"))
 	return b.String()
 }

@@ -5,6 +5,8 @@ package groupsshcerts
 import (
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // keyOfThresholdLength is a CA public key of exactly the length the card still
@@ -198,6 +200,21 @@ func TestFormatListMarkdown(t *testing.T) {
 				"| 10 | deploy-key | 1 Jan 2026 00:00 UTC |\n" +
 				"| 20 | ci-bot | 15 Jun 2026 12:00 UTC |\n" +
 				"| 30 | backup-key |  |\n" +
+				certListHints,
+		},
+		{
+			name: "a page of a longer list says so above and below the table",
+			input: ListOutput{
+				Certificates: []Output{
+					{ID: 10, Title: "deploy-key", CreatedAt: "2026-01-01T00:00:00Z"},
+				},
+				Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 3, TotalPages: 3, NextPage: 2, HasMore: true},
+			},
+			want: "## SSH Certificates (3)\n\n" +
+				"Showing 1 of 3 results (page 1 of 3)\n\n" +
+				certTableHead +
+				"| 10 | deploy-key | 1 Jan 2026 00:00 UTC |\n" +
+				"\nPage 1 of 3 | 3 items total | 1 per page\n" +
 				certListHints,
 		},
 		{

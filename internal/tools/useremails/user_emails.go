@@ -26,10 +26,12 @@ type Output struct {
 	ConfirmedAt string `json:"confirmed_at,omitempty"`
 }
 
-// ListOutput holds a list of emails.
+// ListOutput holds one page of a user's email addresses and the pagination
+// GitLab sent with it.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Emails []Output `json:"emails"`
+	Emails     []Output                  `json:"emails"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // DeleteOutput confirms an email deletion.
@@ -95,12 +97,12 @@ func toOutput(e *gl.Email) Output {
 	return o
 }
 
-func toOutputList(emails []*gl.Email) ListOutput {
+func toOutputList(emails []*gl.Email, resp *gl.Response) ListOutput {
 	out := make([]Output, 0, len(emails))
 	for _, e := range emails {
 		out = append(out, toOutput(e))
 	}
-	return ListOutput{Emails: out}
+	return ListOutput{Emails: out, Pagination: toolutil.PaginationFromResponse(resp)}
 }
 
 // --- Handlers ---.
@@ -118,12 +120,12 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	emails, _, err := client.GL().Users.ListEmailsForUser(input.UserID, opts, gl.WithContext(ctx))
+	emails, resp, err := client.GL().Users.ListEmailsForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_emails_for_user", err, http.StatusNotFound,
 			"verify user_id with user.get; viewing other users' emails requires admin token")
 	}
-	return toOutputList(emails), nil
+	return toOutputList(emails, resp), nil
 }
 
 // Get retrieves a single email by ID.
@@ -219,8 +221,7 @@ func FormatListMarkdownString(out ListOutput) string {
 		return toolutil.EmptyMessage("emails")
 	}
 	var sb strings.Builder
-	var pagination toolutil.PaginationOutput
-	toolutil.WriteListHeading(&sb, "Emails", len(out.Emails), pagination)
+	toolutil.WriteListHeading(&sb, "Emails", len(out.Emails), out.Pagination)
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed"))
 	for _, e := range out.Emails {
 		sb.WriteString(toolutil.MarkdownTableRow(
@@ -231,7 +232,7 @@ func FormatListMarkdownString(out ListOutput) string {
 			confirmationValue(e.ConfirmedAt),
 		))
 	}
-	toolutil.WriteListFooter(&sb, pagination, false, hintGetEmail)
+	toolutil.WriteListFooter(&sb, out.Pagination, false, hintGetEmail)
 	return sb.String()
 }
 

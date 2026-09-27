@@ -12,7 +12,10 @@ import (
 	"context"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -79,6 +82,29 @@ func TestUserServiceAccounts_Instance_ListsCreatesAndUpdates(t *testing.T) {
 		if !found {
 			e.T.Errorf("the listing does not hold the created account %d: %+v", created.ID, after.Accounts)
 		}
+
+		// A second account makes the listing at least two pages long at one
+		// account per page. The pages are read oldest first: an account
+		// anyone creates between the two reads lands after both, so it cannot
+		// move the first page's account onto the second.
+		secondName := e.Name("sa-page")
+		second, _, err := e.Client().GL().Users.CreateServiceAccountUser(&gl.CreateServiceAccountUserOptions{
+			Name: new(secondName), Username: new(secondName),
+		}, gl.WithContext(e.Ctx))
+		if err != nil {
+			e.T.Fatalf("creating the service account %q: %v", secondName, err)
+		}
+		e.Defer("service account "+secondName, func(ctx context.Context) error {
+			return fixture.DeleteUser(ctx, e.Client(), second.ID)
+		})
+		assertPagesOneAtATime(e, s, actionUserListServiceAccounts, map[string]any{"order_by": "id", "sort": "asc"},
+			func(out users.ServiceAccountListOutput) ([]string, toolutil.PaginationOutput) {
+				ids := make([]int64, 0, len(out.Accounts))
+				for _, account := range out.Accounts {
+					ids = append(ids, account.ID)
+				}
+				return idKeys(ids), out.Pagination
+			})
 
 		updated := harness.Do[users.Output](s, actionUserUpdateServiceAccount, map[string]any{
 			"service_account_id": created.ID, "name": "Updated " + name,

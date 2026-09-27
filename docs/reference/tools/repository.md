@@ -235,7 +235,7 @@ Set the pipeline status of a commit. State can be: pending, running, success, fa
 
 ### `gitlab_commit_merge_requests`
 
-List merge requests associated with a commit. Returns a compact row per merge request: `iid`, project, title, state, draft flag, source and target branches, the merge commit SHA, labels, the author as a user object, web URL, and the created, updated, merged and closed times. The rest of a merge request is what `merge_request.get` returns.
+List merge requests associated with a commit. Returns a compact row per merge request: `iid`, project, title, state, draft flag, source and target branches, the merge commit SHA, labels, the author as a user object, web URL, and the created, updated, merged and closed times, with pagination metadata. Standard pagination (`page`, `per_page`). The rest of a merge request is what `merge_request.get` returns.
 
 | Annotation | **Read** |
 | ---------- | -------- |
