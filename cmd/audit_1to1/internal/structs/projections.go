@@ -284,6 +284,15 @@ func projectionOf(pkg *packages.Package, literal *ast.CompositeLit) (projectionS
 		if pair, isPair := element.(*ast.KeyValueExpr); isPair {
 			value = pair.Value
 		}
+		if _, _, local := localNamedStruct(pkg, pkg.TypesInfo.TypeOf(value)); local {
+			// A value of a struct of this package is an object of its own,
+			// built by a converter or a literal of its own, and says nothing
+			// about what this literal is read off: the argument a converter is
+			// handed is a selection on the client-go struct, and counting it
+			// read SetJiraOutput{Integration: toItem(&svc.Service)}, an
+			// envelope around the item, as a projection of the service.
+			continue
+		}
 		for named, st := range sourcesOf(pkg, value) {
 			counts[named]++
 			structsOf[named] = st

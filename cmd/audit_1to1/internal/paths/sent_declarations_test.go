@@ -364,6 +364,22 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the live record: %v", err)
 	}
+	knownCategories := map[string]bool{
+		categoryDocumentedNotSent:        true,
+		categoryOptionNeverPassed:        true,
+		categoryOptionTurnedOff:          true,
+		categoryOptionNeverRequested:     true,
+		categoryEntityPublishedElsewhere: true,
+		categorySDKRouteNeverCalled:      true,
+		categorySDKRouteFillsAnotherType: true,
+		categorySubclassCannotSatisfy:    true,
+		categoryAbilityNoRoleGrants:      true,
+		categoryConstantEmpty:            true,
+		categoryCompactRow:               true,
+		categoryAssociationNullOnScope:   true,
+		categoryConfirmationOnly:         true,
+		categoryReadForItsOwnUse:         true,
+	}
 	for _, declaration := range declaredUnsurfaced {
 		t.Run(declaration.key(), func(t *testing.T) {
 			if _, statErr := os.Stat(filepath.Join(root, declaration.Package)); statErr != nil {
@@ -374,18 +390,7 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 			if _, held := doc.Entities[declaration.Entity]; !held {
 				t.Errorf("entity %s is not in the live record", declaration.Entity)
 			}
-			known := declaration.Category == categoryDocumentedNotSent ||
-				declaration.Category == categoryOptionNeverPassed ||
-				declaration.Category == categoryOptionTurnedOff ||
-				declaration.Category == categoryOptionNeverRequested ||
-				declaration.Category == categoryEntityPublishedElsewhere ||
-				declaration.Category == categorySDKRouteNeverCalled ||
-				declaration.Category == categorySDKRouteFillsAnotherType ||
-				declaration.Category == categorySubclassCannotSatisfy ||
-				declaration.Category == categoryAbilityNoRoleGrants ||
-				declaration.Category == categoryConstantEmpty ||
-				declaration.Category == categoryCompactRow
-			if !known || declaration.Reason == "" || declaration.Field == "" {
+			if !knownCategories[declaration.Category] || declaration.Reason == "" || declaration.Field == "" {
 				t.Errorf("declaration %+v is missing its category, reason or field", declaration)
 			}
 		})

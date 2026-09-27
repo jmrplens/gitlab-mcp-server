@@ -316,6 +316,94 @@ func Dispatch(client *gl.Client) []ProjectItem {
 	}
 }
 
+// TestCollectProjections_AnEnvelopeAroundAConvertedItem_IsNotAProjection
+// verifies that a field holding an object of the package's own, built by a
+// converter handed a selection on the client-go struct, is not read as a field
+// read off that struct. The envelope carries one such field and nothing else,
+// so counting the converter's argument paired the envelope with the struct
+// and held it to every key of the entity; the item the converter builds is the
+// projection, and the only one.
+func TestCollectProjections_AnEnvelopeAroundAConvertedItem_IsNotAProjection(t *testing.T) {
+	pkg := checkedPackage(t, "example.com/x/internal/tools/integrations", `package integrations
+
+import gl "`+fixtureSDKPath+`"
+
+type ItemOutput struct {
+	ID   int64  `+"`json:\"id\"`"+`
+	Name string `+"`json:\"name\"`"+`
+}
+
+type SetOutput struct {
+	Item ItemOutput `+"`json:\"item\"`"+`
+}
+
+func toItem(p *gl.Project) ItemOutput {
+	return ItemOutput{ID: p.ID, Name: p.Name}
+}
+
+func Set(client *gl.Client) SetOutput {
+	project, _, _ := client.Groups.GetProject("g")
+	return SetOutput{Item: toItem(project)}
+}
+`)
+
+	got := CollectProjections(pkg)
+
+	want := []ProjectionPairing{{
+		Package: "integrations", MCPType: "ItemOutput", SDKType: "Project",
+		SDKFields: []string{"id", "name"},
+		Methods:   []string{"Groups.GetProject"},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("CollectProjections() = %+v, want the item alone, %+v", got, want)
+	}
+}
+
+// TestCollectProjections_RowsBuiltInsideAField_AreNotReadAsTheOuterSource
+// verifies a field holding a slice of the package's own literals is not read
+// through: the rows are read off a project and the page's title off an issue,
+// so counting the rows' fields as the page's would tie the two structs and
+// pair the page with neither. Each literal is paired with what it reads.
+func TestCollectProjections_RowsBuiltInsideAField_AreNotReadAsTheOuterSource(t *testing.T) {
+	pkg := checkedPackage(t, "example.com/x/internal/tools/pages", `package pages
+
+import gl "`+fixtureSDKPath+`"
+
+type RowOutput struct {
+	ID int64 `+"`json:\"id\"`"+`
+}
+
+type PageOutput struct {
+	Rows  []RowOutput `+"`json:\"rows\"`"+`
+	Title string      `+"`json:\"title\"`"+`
+}
+
+func Page(client *gl.Client) PageOutput {
+	project, _, _ := client.Groups.GetProject("g")
+	issues, _, _ := client.Milestones.GetMilestoneIssues("p", 1)
+	return PageOutput{Rows: []RowOutput{{ID: project.ID}}, Title: issues[0].Title}
+}
+`)
+
+	got := CollectProjections(pkg)
+
+	want := []ProjectionPairing{
+		{
+			Package: "pages", MCPType: "PageOutput", SDKType: "Issue",
+			SDKFields: []string{"author", "created_at", "id", "iid", "title"},
+			Methods:   []string{"Milestones.GetMilestoneIssues"},
+		},
+		{
+			Package: "pages", MCPType: "RowOutput", SDKType: "Project",
+			SDKFields: []string{"id", "name"},
+			Methods:   []string{"Groups.GetProject"},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("CollectProjections() = %+v, want %+v", got, want)
+	}
+}
+
 // TestCollectProjections_WhatIsNotAProjection_IsNotPaired verifies every shape
 // a literal can take that names no endpoint's answer: a struct read off two
 // structs equally, one read off nothing, one read off the pagination wrapper
