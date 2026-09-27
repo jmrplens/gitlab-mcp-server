@@ -2559,7 +2559,7 @@ func TestFormatMRsByCommitMarkdown_APageOfALongerList(t *testing.T) {
 		MergeRequests: []BasicMROutput{
 			{
 				IID: 1, Title: "Feature", State: "merged",
-				SourceBranch: "feat", TargetBranch: "main", Author: "dev",
+				SourceBranch: "feat", TargetBranch: "main", Author: &toolutil.BasicUserOutput{Username: "dev"},
 				WebURL: "https://gitlab.example.com/-/merge_requests/1",
 			},
 		},
@@ -2568,9 +2568,9 @@ func TestFormatMRsByCommitMarkdown_APageOfALongerList(t *testing.T) {
 
 	want := "## Merge Requests for Commit (2)\n\n" +
 		"Showing 1 of 2 results (page 1 of 2)\n\n" +
-		"| IID | Title | State | Source -> Target | Author |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | dev |\n" +
+		"| IID | Title | State | Source -> Target | Author | Merged |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | @dev |  |\n" +
 		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
 		commitMRsHints
 

@@ -466,11 +466,12 @@ func TestFormatLists_APageOfALongerList(t *testing.T) {
 			name: "upcoming jobs",
 			got:  FormatJobsMarkdown(ListUpcomingJobsOutput{Jobs: []JobItem{{ID: 10, Name: "deploy", Status: "pending", Stage: "deploy"}}, Pagination: page}),
 			want: "## Upcoming Jobs (2)\n\n" + pageLines +
-				"| ID | Name | Status | Stage |\n" +
-				"| --- | --- | --- | --- |\n" +
-				"| 10 | deploy | 🟡 pending | deploy |\n" +
+				"| ID | Name | Status | Stage | Ref | Pipeline | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| 10 | deploy | 🟡 pending | deploy |  |  |  |\n" +
 				footerLine +
 				"\n---\n💡 **Next steps:**\n" +
+				"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
 				"- Use action 'job.get' to see one of these jobs in full\n" +
 				"- Use action 'job.trace' to read a job's log\n" +
 				"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n",
