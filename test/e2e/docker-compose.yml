@@ -68,7 +68,7 @@ services:
       start_period: 120s
 
   gitlab-runner:
-    image: gitlab/gitlab-runner:latest
+    image: ${GITLAB_RUNNER_IMAGE:-gitlab/gitlab-runner:latest}
     depends_on:
       gitlab:
         condition: service_healthy

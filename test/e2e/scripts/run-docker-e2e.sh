@@ -30,6 +30,15 @@
 # container, or assumes the daemon shares this filesystem. Point
 # E2E_DOCKER_GITLAB_URL at the address the fixture is reached from.
 #
+# The GitLab and runner images are held to the registry without pulling on
+# every run: docker-images.sh asks which image each tag names today and pulls
+# only when that is not the image the daemon holds, removing the one it
+# replaced when nothing else holds it. `docker compose up` alone pulls only a
+# missing image, which is how a host kept testing a five-week-old GitLab while
+# every scenario gated on a newer release skipped. A registry that cannot be
+# reached keeps the local image with a warning. The release the run tested is
+# printed before the tests, read from the instance rather than from the tag.
+#
 # Environment, all optional:
 #   E2E_DOCKER_GITLAB_URL          http://localhost:8929
 #   E2E_DOCKER_BITBUCKET_URL       http:// and the GitLab URL's host on port 7990,
@@ -41,7 +50,10 @@
 #   GITLAB_MCP_TEST_E2E_CALLS_DIR  where the suite records its calls; cleared first, must be absolute
 #   E2E_COVER_DIR                  where the children write Go coverage data; cleared first, must be
 #                                  absolute, and only useful when the binary was built with -cover
-#   GITLAB_IMAGE                   the image for the runtime; the defaults above
+#   GITLAB_IMAGE                   the image for the runtime; the defaults above. A tag
+#                                  pins a release and is held to the registry the
+#                                  same way; a digest pins an image and is never asked
+#   GITLAB_RUNNER_IMAGE            the CI runner's image; gitlab/gitlab-runner:latest
 #   GOTESTSUM                      the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
 #   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
@@ -85,6 +97,8 @@ E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
 # shellcheck source=test/e2e/scripts/fixture-addresses.sh
 . "${SCRIPT_DIR}/fixture-addresses.sh"
 derive_fixture_addresses
+# shellcheck source=test/e2e/scripts/docker-images.sh
+. "${SCRIPT_DIR}/docker-images.sh"
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
 E2E_REPORT_NAME="${E2E_REPORT_NAME:-e2e-${RUNTIME}}"
 GOTESTSUM="${GOTESTSUM:-gotestsum}"
@@ -121,6 +135,9 @@ if [ "${RUNTIME}" = "ce" ]; then
 else
     export GITLAB_IMAGE="${GITLAB_IMAGE:-gitlab/gitlab-ee:latest}"
 fi
+# The compose file reads the same variable, so the image checked below is the
+# one the runner service starts.
+export GITLAB_RUNNER_IMAGE="${GITLAB_RUNNER_IMAGE:-gitlab/gitlab-runner:latest}"
 
 # The status the run ended with, read by the teardown. Unset until the tests
 # have run, so a failure during provisioning exits with the shell's own.
@@ -147,6 +164,13 @@ trap teardown EXIT
 
 echo "=== Cleaning up previous containers (if any) ==="
 "${DOWN[@]}" 2>/dev/null || true
+
+# After the cleanup, so a container of the previous stack no longer holds the
+# image a pull replaces, and before compose starts anything, so what it starts
+# is the image the tag names today.
+echo "=== Checking the GitLab and runner images against their registry ==="
+refresh_image "${GITLAB_IMAGE}"
+refresh_image "${GITLAB_RUNNER_IMAGE}"
 
 if [ "${WITH_BITBUCKET}" = "true" ]; then
     echo "=== Starting ephemeral GitLab CE and Bitbucket fixture ==="
@@ -195,6 +219,11 @@ if [ "${WITH_BITBUCKET}" = "true" ]; then
     "${SCRIPT_DIR}/setup-bitbucket.sh" "${E2E_DOCKER_BITBUCKET_URL}"
 fi
 
+# Read from the instance rather than off the tag, since a tag says what was
+# asked for and this says what answered, and printed inside the tee below as
+# well, so the saved output of a run names the release it tested.
+TESTED_VERSION="$(tested_gitlab_version "${E2E_DOCKER_GITLAB_URL}" "${REPO_ROOT}/test/e2e/.env.docker")" || TESTED_VERSION="unknown"
+
 echo "=== Running E2E tests (${RUNTIME}) ==="
 mkdir -p "${E2E_REPORT_DIR}"
 if [ -n "${GITLAB_MCP_TEST_E2E_CALLS_DIR:-}" ]; then
@@ -228,6 +257,7 @@ fi
 
 set +e
 (
+    echo "GitLab under test: ${TESTED_VERSION}, from ${GITLAB_IMAGE}"
     set -a
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/test/e2e/.env.docker"
