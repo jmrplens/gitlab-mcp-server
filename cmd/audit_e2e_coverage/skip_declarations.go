@@ -31,12 +31,11 @@ type skipDeclaration struct {
 
 // Skip categories. The set is small on purpose: a skip a complete run cannot
 // avoid is rare, and every category names what would have to change for its
-// entries to go.
+// entries to go. There is deliberately none for a fixture or a setting a run
+// chose to leave out: a complete run starts every fixture on both runtimes and
+// refuses to start without the external network, so such a skip is a run that
+// is not complete rather than one to excuse.
 const (
-	// skipCategoryFixtureOnOtherRuntime is a scenario whose fixture a
-	// complete run starts on the other runtime only, deliberately, where the
-	// scenario runs. It goes when that runtime starts the fixture too.
-	skipCategoryFixtureOnOtherRuntime = "fixture-on-other-runtime"
 	// skipCategoryGitLabDefect is GitLab answering wrongly on the release the
 	// run tested, where the scenario names the answer and skips. It goes on
 	// the first release that answers, when the gate reports it stale.
@@ -46,8 +45,7 @@ const (
 // declaredSkipCategories is the set a category must belong to, so a typo
 // does not invent a kind of skip.
 var declaredSkipCategories = map[string]bool{
-	skipCategoryFixtureOnOtherRuntime: true,
-	skipCategoryGitLabDefect:          true,
+	skipCategoryGitLabDefect: true,
 }
 
 // skipRuntimes are the runs -check-skips judges, one per Docker target.
@@ -66,30 +64,33 @@ const savedViewCreateRefusal = "the saved view create answered the experiment's 
 // matched no skip of the run it declares for: a declaration left behind after
 // its skip went is a claim a later reader would trust.
 //
-// Issue 1014 found eleven skips on the CE run and ten on the EE run of
-// de1ab3b49. Its fixes took eight of the first and six of the second: the
-// images are held to their tags, so the two service account reads that need
-// GitLab 19.4 run; the complete runs set E2E_EXTERNAL_NETWORK, so the four
-// importer scenarios that call a public URL run; and on CE the tier pin and
-// the work item lifecycle assert instead of skipping. What remains is declared
-// below: the saved view lifecycle on both runs, on each of its three surfaces,
-// and the Bitbucket Server import on EE.
+// The two complete runs of de1ab3b49 ended with eleven skipped tests in seven
+// test functions on CE and ten in five on EE, of which issue 1014 listed five
+// and three; the gate found the rest. Its fixes remove all but the saved view
+// lifecycle's: the images are held to their tags, so the two service account
+// reads that need GitLab 19.4 run; a complete run turns E2E_EXTERNAL_NETWORK
+// on, so the four importer tests that call a public URL run; both runtimes
+// start the Bitbucket fixture, so the Bitbucket Server import runs on EE too;
+// and on CE the tier pin and the work item lifecycle assert instead of
+// skipping. What remains is the saved view lifecycle on both runtimes, on each
+// of its three surfaces, declared below.
+//
+// Those two entries are GitLab's in the sense the category means: a 500 is an
+// exception GitLab did not handle, and the create it answered is one the
+// pinned schema accepts. What is not established is which exception, and so
+// whether client-go's document or this server's input sets it off and whether
+// another input GitLab accepts would avoid it; run-docker-e2e.sh now keeps
+// GitLab's exceptions log among the reports, which is where the next complete
+// run answers that. The entries go stale, and fail the gate, the first run the
+// create answers.
 var declaredSkips = []skipDeclaration{
-	{
-		Runtime:  "ee",
-		Package:  "common",
-		Test:     "TestAdmin_ExternalImporters/BitbucketServerImport",
-		Because:  "BITBUCKET_SERVER_URL is not set",
-		Category: skipCategoryFixtureOnOtherRuntime,
-		Reason:   "run-docker-e2e.sh starts the Bitbucket Data Center fixture under ce only, which keeps a second one-gigabyte JVM off the licensed run. The import is a Free action, and the ce run drives it against that fixture.",
-	},
 	{
 		Runtime:  "ce",
 		Package:  "common",
 		Test:     "TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete",
 		Because:  savedViewCreateRefusal,
 		Category: skipCategoryGitLabDefect,
-		Reason:   "GitLab's workItemSavedViewCreate mutation, an experiment since 18.7, answered 500 Internal server error on every surface on 19.3.0 (the CE run of de1ab3b49); the listing is held either way. Unmeasured on 19.4, where this entry goes stale if the create answers.",
+		Reason:   "GitLab's workItemSavedViewCreate mutation, an experiment since 18.7, answered a create the pinned schema accepts with 500 Internal server error on every surface on 19.3.0 (the CE run of de1ab3b49); the listing is held either way. The exception behind it was not read: the next run's e2e-ce-gitlab-exceptions.json names it, and says whether the input sets it off. Unmeasured on 19.4, where this entry goes stale if the create answers.",
 	},
 	{
 		Runtime:  "ee",
@@ -97,6 +98,6 @@ var declaredSkips = []skipDeclaration{
 		Test:     "TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete",
 		Because:  savedViewCreateRefusal,
 		Category: skipCategoryGitLabDefect,
-		Reason:   "GitLab's workItemSavedViewCreate mutation, an experiment since 18.7, answered 500 Internal server error on every surface on 19.3.1-ee (the EE run of de1ab3b49); the listing is held either way. Unmeasured on 19.4, where this entry goes stale if the create answers.",
+		Reason:   "GitLab's workItemSavedViewCreate mutation, an experiment since 18.7, answered a create the pinned schema accepts with 500 Internal server error on every surface on 19.3.1-ee (the EE run of de1ab3b49); the listing is held either way. The exception behind it was not read: the next run's e2e-ee-gitlab-exceptions.json names it, and says whether the input sets it off. Unmeasured on 19.4, where this entry goes stale if the create answers.",
 	},
 }

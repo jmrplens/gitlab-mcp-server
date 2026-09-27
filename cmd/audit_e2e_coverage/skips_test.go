@@ -47,7 +47,6 @@ func savedViewRefusal(elapsed string) string {
 // with it rather than with the live table, which is free to change as runs
 // change, while these runs never will.
 var recordedRunDeclarations = []skipDeclaration{
-	{Runtime: "ee", Package: "common", Test: "TestAdmin_ExternalImporters/BitbucketServerImport", Because: "BITBUCKET_SERVER_URL is not set", Category: skipCategoryFixtureOnOtherRuntime, Reason: "ce only"},
 	{Runtime: "ce", Package: "common", Test: savedViewLifecycle, Because: savedViewCreateRefusal, Category: skipCategoryGitLabDefect, Reason: "500 on 19.3.0"},
 	{Runtime: "ee", Package: "common", Test: savedViewLifecycle, Because: savedViewCreateRefusal, Category: skipCategoryGitLabDefect, Reason: "500 on 19.3.1-ee"},
 }
@@ -321,9 +320,10 @@ func staleTests(stale []skipDeclaration) []string {
 
 // TestJudgeSkips_RecordedRuns_DeclaredAndUndeclared verifies the gate on the
 // two recorded runs: the CE run's eight skips issue 1014 fixed are undeclared
-// and its saved view skips are declared, and the EE run's six likewise beside
-// the Bitbucket Server import. No declaration is stale, since a declaration
-// for the other runtime is not judged in this one.
+// and its saved view skips are declared, and the EE run's seven likewise, the
+// Bitbucket Server import among them, since both runtimes start its fixture
+// now. No declaration is stale, since a declaration for the other runtime is
+// not judged in this one.
 func TestJudgeSkips_RecordedRuns_DeclaredAndUndeclared(t *testing.T) {
 	cases := []struct {
 		runtime        string
@@ -347,15 +347,15 @@ func TestJudgeSkips_RecordedRuns_DeclaredAndUndeclared(t *testing.T) {
 		{
 			runtime: "ee",
 			wantExcused: []string{
-				"fixture-on-other-runtime TestAdmin_ExternalImporters/BitbucketServerImport",
 				"gitlab-defect " + savedViewLifecycle + "/dynamic",
 				"gitlab-defect " + savedViewLifecycle + "/individual",
 				"gitlab-defect " + savedViewLifecycle + "/meta",
 			},
 			wantUndeclared: []string{
-				"TestAdmin_ExternalImporters/BitbucketCloudImport", "TestAdmin_ExternalImporters/GistsImport",
-				"TestAdmin_ExternalImporters/GitHubImportAndCancel", "TestBitbucketCloudImport_Individual",
-				"TestGroupServiceAccounts_Get_ReadsTheAccountBackByID", "TestProjectServiceAccounts_Get_ReadsTheAccountBackByID",
+				"TestAdmin_ExternalImporters/BitbucketCloudImport", "TestAdmin_ExternalImporters/BitbucketServerImport",
+				"TestAdmin_ExternalImporters/GistsImport", "TestAdmin_ExternalImporters/GitHubImportAndCancel",
+				"TestBitbucketCloudImport_Individual", "TestGroupServiceAccounts_Get_ReadsTheAccountBackByID",
+				"TestProjectServiceAccounts_Get_ReadsTheAccountBackByID",
 			},
 		},
 	}
@@ -404,7 +404,7 @@ func TestJudgeSkips_Declarations(t *testing.T) {
 			name:         "a run with no skip leaves its runtime's declarations stale and not the other's",
 			runtime:      "ee",
 			declarations: recordedRunDeclarations,
-			wantStale:    []string{"ee TestAdmin_ExternalImporters/BitbucketServerImport", "ee " + savedViewLifecycle},
+			wantStale:    []string{"ee " + savedViewLifecycle},
 		},
 		{
 			name:    "a declared test skipping for another reason is undeclared, and its declaration stale",
@@ -420,7 +420,7 @@ func TestJudgeSkips_Declarations(t *testing.T) {
 			name:         "a second declaration of one skip is stale",
 			runtime:      "ce",
 			skips:        []recordedSkip{declared},
-			declarations: append(slices.Clone(recordedRunDeclarations), recordedRunDeclarations[1]),
+			declarations: append(slices.Clone(recordedRunDeclarations), recordedRunDeclarations[0]),
 			wantExcused:  []string{"gitlab-defect " + savedViewLifecycle + "/meta"},
 			wantStale:    []string{"ce " + savedViewLifecycle},
 		},
@@ -563,7 +563,11 @@ func TestRunCheckSkips_Outcomes(t *testing.T) {
 		},
 		{
 			name: "a declaration no skip matches fails and is named", results: covered, runtime: "ee",
-			declarations: recordedRunDeclarations, want: exitFindings,
+			declarations: append(slices.Clone(recordedRunDeclarations), skipDeclaration{
+				Runtime: "ee", Package: "common", Test: "TestAdmin_ExternalImporters/BitbucketServerImport",
+				Because: "BITBUCKET_SERVER_URL is not set", Category: skipCategoryGitLabDefect, Reason: "gone",
+			}),
+			want: exitFindings,
 			wantStdout: "skips: declared (gitlab-defect): common " + savedViewLifecycle + "/meta: " + savedViewRefusal("9ms") + "\n" +
 				"skips: 1 skipped on ee, 1 declared, 0 undeclared, 1 stale declarations\n",
 			wantStderr: "skips: stale declaration: ee common TestAdmin_ExternalImporters/BitbucketServerImport (because \"BITBUCKET_SERVER_URL is not set\"): no skip of this run matches it\n",

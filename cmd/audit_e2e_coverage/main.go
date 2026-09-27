@@ -106,8 +106,8 @@ func main() {
 	}
 	flag.StringVar(&opts.dir, "dir", "", "repository root (default: found from the working directory)")
 	flag.StringVar(&opts.calls, "calls", "", "shard directory written by the e2e suite, or a directory holding one per runtime")
-	flag.StringVar(&opts.results, "results", "", "go test -json stream (gotestsum --jsonfile) to join with the calls")
-	flag.StringVar(&opts.runtime, "runtime", "", "comma-separated runtimes to report and, with -check, to require: ce, ee, or edition/tier")
+	flag.StringVar(&opts.results, "results", "", "go test -json stream (gotestsum --jsonfile) to join with the calls; with -check-skips, the stream of the run whose skips are judged")
+	flag.StringVar(&opts.runtime, "runtime", "", "comma-separated runtimes to report and, with -check, to require: ce, ee, or edition/tier; with -check-skips, exactly ce or ee, the run judged")
 	flag.StringVar(&opts.baseline, "baseline", "", "shard directory to compare against, such as the old suite's, whose schema 1 shards it reads without their session lines; fails on any credit it reached that -calls does not")
 	flag.BoolVar(&opts.portMap, "port-map", false, "check that every old Test function has a Replaces: successor or a declared drop")
 	flag.BoolVar(&opts.static, "static", false, "run the push-time gate over the typed action ids of test/e2e/gitlab, without GitLab")

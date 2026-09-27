@@ -4,8 +4,9 @@
 #
 # Sourced by run-docker-e2e.sh, and by scripts/e2e_docker_images_test.py,
 # which drives these functions with a stand-in docker and curl answering what
-# a real daemon and registry answered. It defines functions and runs nothing,
-# so sourcing it changes no state.
+# a real daemon and registry answered. It defines functions and one setting,
+# registry_timeout_seconds, and runs nothing, so sourcing it changes no other
+# state.
 #
 # The reason it exists is that `docker compose up` pulls an image only when it
 # is missing. A host kept testing the GitLab release it first pulled, five
@@ -44,13 +45,29 @@ image_freshness() {
     fi
 }
 
+# registry_timeout_seconds bounds the question registry_digest asks. A
+# registry that refuses the connection, or whose name does not resolve,
+# answers at once; one on a path that drops packets would hold the run until
+# TCP gave up, instead of letting it keep the local image with a warning.
+registry_timeout_seconds=60
+
 # registry_digest prints the digest the registry's tag names now, without
 # pulling anything: `docker buildx imagetools inspect` reads the manifest from
 # the registry and answers Docker Hub anonymously. It fails when the registry
-# could not be asked or answered something that is not a digest.
+# could not be asked, did not answer within registry_timeout_seconds, or
+# answered something that is not a digest.
+#
+# The deadline is timeout(1)'s, where the host has it. A host without it
+# (macOS carries none unless coreutils is installed) asks with no deadline
+# rather than not at all, since a question left unasked is the stale image
+# this file exists to prevent.
 registry_digest() {
-    local reference="$1" digest
-    digest="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${reference}" 2>/dev/null)" || return 1
+    local reference="$1" digest ask
+    ask=(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${reference}")
+    if command -v timeout >/dev/null 2>&1; then
+        ask=(timeout "${registry_timeout_seconds}" "${ask[@]}")
+    fi
+    digest="$("${ask[@]}" 2>/dev/null)" || return 1
     if [[ ! ${digest} =~ ^sha256:[0-9a-f]{64}$ ]]; then
         return 1
     fi
@@ -95,6 +112,9 @@ refresh_image() {
             ;;
     esac
     echo "    ${reference}: the registry has a newer image (${digest}); pulling it"
+    # No deadline here, unlike the question above: the registry has just
+    # answered, and a GitLab image is gigabytes that a slow link can
+    # legitimately take a long time over, so no bound fits every host.
     if ! docker pull "${reference}"; then
         echo "WARN: ${reference}: the pull failed; keeping the local image ${local_id}" >&2
         return 0

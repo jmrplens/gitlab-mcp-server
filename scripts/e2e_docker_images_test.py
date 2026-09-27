@@ -23,8 +23,10 @@ Run with:
 """
 
 import os
+import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -62,6 +64,7 @@ STUB_KEYS = (
     "RM_FAILS",
     "CURL_ANSWER",
     "CURL_FAILS",
+    "NO_TIMEOUT",
 )
 
 # The stand-in docker: every call is appended to $STATE/calls, one per line,
@@ -109,6 +112,19 @@ docker() {
         *) echo "stand-in: unexpected docker $*" >&2; return 99 ;;
     esac
 }
+# The stand-in timeout(1) records the deadline and runs the command it
+# bounds, which is the stand-in docker above rather than the real one a real
+# timeout would exec. NO_TIMEOUT leaves the host without one: no function and
+# nothing on PATH, which is what a host without coreutils looks like.
+if [ -z "${NO_TIMEOUT}" ]; then
+    timeout() {
+        printf '%s\n' "timeout $1" >> "${STATE}/calls"
+        shift
+        "$@"
+    }
+else
+    PATH=/nonexistent
+fi
 curl() {
     printf '%s\n' "curl $*" >> "${STATE}/calls"
     [ -z "${CURL_FAILS}" ] || return 22
@@ -189,13 +205,57 @@ class ImageFreshnessTest(unittest.TestCase):
 
 
 class RegistryDigestTest(unittest.TestCase):
-    def test_the_recorded_answer_is_the_digest(self):
+    def test_the_recorded_answer_is_the_digest_asked_under_a_deadline(self):
+        # A registry on a path that drops packets would otherwise hold the run
+        # until TCP gave up, instead of letting it keep the local image.
         got = drive("registry_digest", CE_REFERENCE, REMOTE_DIGEST=CE_REGISTRY_DIGEST)
+        self.assertEqual((got["stdout"], got["status"]), (CE_REGISTRY_DIGEST, "status=0"))
+        self.assertEqual(
+            got["calls"],
+            ["timeout 60", f"docker buildx imagetools inspect --format {{{{.Manifest.Digest}}}} {CE_REFERENCE}"],
+        )
+
+    def test_a_host_without_timeout_still_asks(self):
+        # Asking with no deadline is the lesser harm: not asking at all is the
+        # stale image the check exists to prevent.
+        got = drive("registry_digest", CE_REFERENCE, REMOTE_DIGEST=CE_REGISTRY_DIGEST, NO_TIMEOUT="yes")
         self.assertEqual((got["stdout"], got["status"]), (CE_REGISTRY_DIGEST, "status=0"))
         self.assertEqual(
             got["calls"],
             [f"docker buildx imagetools inspect --format {{{{.Manifest.Digest}}}} {CE_REFERENCE}"],
         )
+
+    def test_a_question_the_deadline_ends_fails_quietly(self):
+        # The real timeout(1) against a docker that never answers, since the
+        # real one execs a program and never the stand-in function: it ends
+        # the question at the deadline, and the question fails quietly like
+        # any other the registry left unanswered, so the caller keeps the
+        # local image.
+        if shutil.which("timeout") is None:
+            self.skipTest("no timeout(1) here, so registry_digest asks with no deadline")
+        with tempfile.TemporaryDirectory() as bin_dir:
+            hanging = os.path.join(bin_dir, "docker")
+            with open(hanging, "w", encoding="utf-8") as handle:
+                handle.write("#!/bin/sh\nexec sleep 30\n")
+            os.chmod(hanging, 0o755)
+            env = dict(os.environ)
+            env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+            script = (
+                'set -euo pipefail; . "$1"; registry_timeout_seconds=1; '
+                'status=0; registry_digest "$2" || status=$?; echo "status=${status}"'
+            )
+            started = time.monotonic()
+            result = subprocess.run(
+                ["bash", "-c", script, "driver", SCRIPT, CE_REFERENCE],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=20,
+            )
+            elapsed = time.monotonic() - started
+        self.assertEqual((result.stdout, result.stderr), ("status=1\n", ""))
+        self.assertLess(elapsed, 10, "the deadline did not end the question")
 
     def test_an_answer_that_is_not_a_digest_fails(self):
         for answer in ("", "sha256:abc", "sha512:" + "0" * 64, CE_REGISTRY_DIGEST + "\nsha256:" + "0" * 64, "sha256:" + "A" * 64):
@@ -393,7 +453,10 @@ class RunnerWiringTest(unittest.TestCase):
         cleanup = text.index('"${DOWN[@]}" 2>/dev/null || true')
         gitlab = text.index('refresh_image "${GITLAB_IMAGE}"')
         runner = text.index('refresh_image "${GITLAB_RUNNER_IMAGE}"')
-        first_up = text.index(" up -d")
+        # The one start, which every runtime reaches with or without the
+        # Bitbucket profile.
+        first_up = text.index('"${UP[@]}"')
+        self.assertEqual(text.count('"${UP[@]}"'), 1)
         self.assertLess(cleanup, gitlab)
         self.assertLess(gitlab, first_up)
         self.assertLess(runner, first_up)
