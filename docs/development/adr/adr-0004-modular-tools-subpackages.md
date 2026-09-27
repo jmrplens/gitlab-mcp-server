@@ -48,7 +48,7 @@ Split `internal/tools/` into domain sub-packages: `internal/tools/branches/`, `i
 - **POS-001**: Package namespace eliminates domain prefixes (`branches.Output` vs `BranchOutput`)
 - **POS-002**: Independent compilation and testing per domain
 - **POS-003**: Clear ownership and discoverability
-- **POS-004**: Zero import cycles — sub-packages import `toolutil/`, never each other
+- **POS-004**: Zero import cycles: sub-packages import `toolutil/`, and each other only where one publishes a row another owns (see the amended POS-004 under Consequences)
 - **NEG-001**: More directories and files to navigate
 - **NEG-002**: Orchestration layer needed to wire all sub-packages into runtime tool surfaces
 

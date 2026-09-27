@@ -3101,7 +3101,7 @@ options or documented as answering an object.
   (`repositorysubmodules.submoduleCommitExtra`), and both context commit
   actions, which read the whole page from the captured response
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  into `mrcontextcommits.commitRow` and pass over client-go's own decode
+  into `mrcontextcommits.capturedCommit` and pass over client-go's own decode
   failure (`mrcontextcommits.misreadByClientGo`). Every handler that takes the
   commit from client-go (`repository.commit_list`, `repository.commit_get`,
   `repository.commit_create`, `repository.commit_cherry_pick` and
