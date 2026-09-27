@@ -122,17 +122,22 @@ func TestMilestoneOutput(t *testing.T) {
 
 // TestIssueRefOutput_Nil verifies the converter returns nil for a nil SDK issue.
 func TestIssueRefOutput_Nil(t *testing.T) {
-	if got := issueRefOutput(nil); got != nil {
+	if got := issueRefOutput(nil, toolutil.IssueBasicExtra{}); got != nil {
 		t.Errorf("issueRefOutput(nil) = %v, want nil", got)
 	}
 }
 
-// TestIssueRefOutput_Full verifies the converter mirrors the full gitlab.Issue
-// shape: every scalar, the dereferenced *string issue_type, and every nested
-// sub-object (author/assignees/assignee/closed_by/milestone/references/epic/
-// iteration/time_stats/task_completion_status/label_details/_links). It also
-// confirms nil elements in the assignees and label_details slices are skipped.
+// TestIssueRefOutput_Full verifies the converter carries every key IssueBasic
+// renders: every scalar, the dereferenced *string issue_type, every nested
+// sub-object (author/assignees/assignee/closed_by/milestone/time_stats/
+// task_completion_status), and the three keys the capture read. It also
+// confirms a nil element in the assignees slice is skipped.
+//
+// The SDK issue carries every key IssueBasic does not render as well, and the
+// comparison is against the whole struct, so none of them can reach the
+// output: a converter that read one back would need a field to put it in.
 func TestIssueRefOutput_Full(t *testing.T) {
+	blocking := int64(3)
 	got := issueRefOutput(&gl.Issue{
 		ID: 50, IID: 10, ExternalID: "ext-1", ProjectID: 42, Title: "Source",
 		Description: "desc", State: "opened", HealthStatus: "on_track",
@@ -145,56 +150,38 @@ func TestIssueRefOutput_Full(t *testing.T) {
 		IssueType:    new("incident"),
 		Author:       &gl.IssueAuthor{ID: 1, Username: "ann"},
 		Assignees:    []*gl.IssueAssignee{{ID: 2, Username: "bob"}, nil},
-		Assignee:     &gl.IssueAssignee{ID: 2, Username: "bob"}, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
+		Assignee:     &gl.IssueAssignee{ID: 2, Username: "bob"}, //nolint:staticcheck // deprecated SDK field: IssueBasic still renders the first assignee under this key
 		ClosedBy:     &gl.IssueCloser{ID: 3, Username: "carol"},
 		Milestone:    &gl.Milestone{ID: 5, Title: "M1"},
 		References:   &gl.IssueReferences{Short: "s", Relative: "r", Full: "f"},
-		LabelDetails: []*gl.LabelDetails{{ID: 11, Name: "bug", Color: "#f00"}, nil},
+		LabelDetails: []*gl.LabelDetails{{ID: 11, Name: "bug", Color: "#f00"}},
 		TimeStats: &gl.TimeStats{
 			HumanTimeEstimate: "1h", HumanTotalTimeSpent: "30m",
 			TimeEstimate: 3600, TotalTimeSpent: 1800,
 		},
 		TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 4, CompletedCount: 2},
 		Links:                &gl.IssueLinks{Self: "self", Notes: "notes", AwardEmoji: "ae", Project: "proj"},
-		Iteration: &gl.GroupIteration{
-			ID: 30, IID: 3, Sequence: 1, GroupID: 9, Title: "Sprint 1", State: 2, WebURL: "iw",
-			CreatedAt: timePtr(2026, time.January, 1), StartDate: isoTimePtr(2026, time.January, 1),
-			DueDate: isoTimePtr(2026, time.January, 14),
-		},
-		Epic: &gl.Epic{
-			ID: 60, IID: 6, GroupID: 9, Title: "Epic", State: "opened",
-			Author: &gl.EpicAuthor{ID: 4, Username: "dan"}, Labels: []string{"x"},
-			StartDate: isoTimePtr(2026, time.January, 1), DueDate: isoTimePtr(2026, time.March, 1),
-		},
-	})
+		Iteration:            &gl.GroupIteration{ID: 30, Title: "Sprint 1"},
+		Epic:                 &gl.Epic{ID: 60, IID: 6, Title: "Epic"},
+	}, toolutil.IssueBasicExtra{BlockingIssuesCount: &blocking, StartDate: "2026-01-05", Type: "INCIDENT"})
 	want := &IssueRefOutput{
-		ID: 50, IID: 10, ExternalID: "ext-1", ProjectID: 42, Title: "Source",
-		Description: "desc", State: "opened", HealthStatus: "on_track",
+		ID: 50, IID: 10, ProjectID: 42, Title: "Source",
+		Description: "desc", State: "opened",
 		Confidential: true, Labels: []string{"bug", "urgent"}, WebURL: "w",
 		CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
 		ClosedAt: "2026-01-03T00:00:00Z", DueDate: "2026-02-01",
-		Weight: 4, MovedToID: 77, Upvotes: 5, Downvotes: 1, DiscussionLocked: true,
-		Subscribed: true, UserNotesCount: 9, IssueLinkID: 99, MergeRequestCount: 2,
-		EpicIssueID: 88, ServiceDeskReplyTo: "reply@example.com", IssueType: "incident",
+		Weight: 4, Upvotes: 5, Downvotes: 1, DiscussionLocked: true,
+		UserNotesCount: 9, MergeRequestCount: 2, IssueType: "incident",
 		Author:               &UserOutput{ID: 1, Username: "ann"},
 		Assignees:            []*UserOutput{{ID: 2, Username: "bob"}},
 		Assignee:             &UserOutput{ID: 2, Username: "bob"},
 		ClosedBy:             &UserOutput{ID: 3, Username: "carol"},
 		Milestone:            &MilestoneOutput{ID: 5, Title: "M1"},
-		References:           &ReferencesOutput{Short: "s", Relative: "r", Full: "f"},
-		LabelDetails:         []*LabelDetailsOutput{{ID: 11, Name: "bug", Color: "#f00"}},
 		TimeStats:            &TimeStatsOutput{HumanTimeEstimate: "1h", HumanTotalTimeSpent: "30m", TimeEstimate: 3600, TotalTimeSpent: 1800},
 		TaskCompletionStatus: &TaskCompletionStatusOutput{Count: 4, CompletedCount: 2},
-		Links:                &LinksOutput{Self: "self", Notes: "notes", AwardEmoji: "ae", Project: "proj"},
-		Iteration: &IterationOutput{
-			ID: 30, IID: 3, Sequence: 1, GroupID: 9, Title: "Sprint 1", State: 2, WebURL: "iw",
-			CreatedAt: "2026-01-01T00:00:00Z", StartDate: "2026-01-01", DueDate: "2026-01-14",
-		},
-		Epic: &EpicOutput{
-			ID: 60, IID: 6, GroupID: 9, Title: "Epic", State: "opened",
-			Author: &UserOutput{ID: 4, Username: "dan"}, Labels: []string{"x"},
-			StartDate: "2026-01-01", DueDate: "2026-03-01",
-		},
+		BlockingIssuesCount:  &blocking,
+		StartDate:            "2026-01-05",
+		Type:                 "INCIDENT",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("issueRefOutput =\n%+v\nwant\n%+v", got, want)
@@ -205,17 +192,13 @@ func TestIssueRefOutput_Full(t *testing.T) {
 // optional nested objects, empty timestamps, and an empty issue_type (nil
 // *string branch).
 func TestIssueRefOutput_NilSubObjects(t *testing.T) {
-	got := issueRefOutput(&gl.Issue{ID: 1, IID: 2, Title: "Bare"})
+	got := issueRefOutput(&gl.Issue{ID: 1, IID: 2, Title: "Bare"}, toolutil.IssueBasicExtra{})
 	if got == nil {
 		t.Fatal("issueRefOutput = nil, want non-nil")
 	}
-	if got.Author != nil || got.Assignees != nil || got.Assignee != nil ||
-		got.ClosedBy != nil || got.Milestone != nil || got.References != nil ||
-		got.LabelDetails != nil || got.TimeStats != nil || got.TaskCompletionStatus != nil ||
-		got.Links != nil || got.Iteration != nil || got.Epic != nil ||
-		got.CreatedAt != "" || got.UpdatedAt != "" || got.ClosedAt != "" || got.DueDate != "" ||
-		got.IssueType != "" {
-		t.Errorf("issueRefOutput (bare) = %+v", got)
+	want := &IssueRefOutput{ID: 1, IID: 2, Title: "Bare"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("issueRefOutput (bare) = %+v, want %+v", got, want)
 	}
 }
 
@@ -228,29 +211,6 @@ func TestCloserOutput(t *testing.T) {
 	if got == nil || got.ID != 3 || got.Username != "carol" || got.State != "active" ||
 		got.WebURL != "u" || got.Name != "Carol" || got.AvatarURL != "a" {
 		t.Errorf("closerOutput = %+v", got)
-	}
-}
-
-// TestEpicAuthorOutput verifies the epic-author converter branches.
-func TestEpicAuthorOutput(t *testing.T) {
-	if got := epicAuthorOutput(nil); got != nil {
-		t.Errorf("epicAuthorOutput(nil) = %v, want nil", got)
-	}
-	got := epicAuthorOutput(&gl.EpicAuthor{ID: 4, State: "active", WebURL: "u", Name: "Dan", AvatarURL: "a", Username: "dan"})
-	if got == nil || got.ID != 4 || got.Username != "dan" || got.State != "active" ||
-		got.WebURL != "u" || got.Name != "Dan" || got.AvatarURL != "a" {
-		t.Errorf("epicAuthorOutput = %+v", got)
-	}
-}
-
-// TestLinksOutput verifies the _links converter branches.
-func TestLinksOutput(t *testing.T) {
-	if got := linksOutput(nil); got != nil {
-		t.Errorf("linksOutput(nil) = %v, want nil", got)
-	}
-	got := linksOutput(&gl.IssueLinks{Self: "s", Notes: "n", AwardEmoji: "ae", Project: "p"})
-	if got == nil || got.Self != "s" || got.Notes != "n" || got.AwardEmoji != "ae" || got.Project != "p" {
-		t.Errorf("linksOutput = %+v", got)
 	}
 }
 
@@ -274,81 +234,6 @@ func TestTaskCompletionStatusOutput(t *testing.T) {
 	got := taskCompletionStatusOutput(&gl.TasksCompletionStatus{Count: 4, CompletedCount: 2})
 	if got == nil || got.Count != 4 || got.CompletedCount != 2 {
 		t.Errorf("taskCompletionStatusOutput = %+v", got)
-	}
-}
-
-// TestLabelDetailsOutputs verifies the slice converter for empty, nil-element,
-// and populated inputs.
-func TestLabelDetailsOutputs(t *testing.T) {
-	if got := labelDetailsOutputs(nil); got != nil {
-		t.Errorf("labelDetailsOutputs(nil) = %v, want nil", got)
-	}
-	in := []*gl.LabelDetails{
-		{ID: 1, Name: "bug", Color: "#f00", Description: "d", DescriptionHTML: "h", TextColor: "#000"},
-		nil,
-		{ID: 2, Name: "ux"},
-	}
-	got := labelDetailsOutputs(in)
-	if len(got) != 2 {
-		t.Fatalf("labelDetailsOutputs len = %d, want 2", len(got))
-	}
-	if got[0].Name != "bug" || got[0].Color != "#f00" || got[0].DescriptionHTML != "h" ||
-		got[0].TextColor != "#000" || got[1].Name != "ux" {
-		t.Errorf("labelDetailsOutputs = %+v", got)
-	}
-}
-
-// TestIterationOutput verifies the iteration converter for nil and populated
-// input, including the ISO/RFC date fields.
-func TestIterationOutput(t *testing.T) {
-	if got := iterationOutput(nil); got != nil {
-		t.Errorf("iterationOutput(nil) = %v, want nil", got)
-	}
-	got := iterationOutput(&gl.GroupIteration{
-		ID: 30, IID: 3, Sequence: 1, GroupID: 9, Title: "Sprint 1", Description: "d",
-		State: 2, WebURL: "w", CreatedAt: timePtr(2026, time.January, 1),
-		UpdatedAt: timePtr(2026, time.January, 2), StartDate: isoTimePtr(2026, time.January, 1),
-		DueDate: isoTimePtr(2026, time.January, 14),
-	})
-	if got == nil || got.ID != 30 || got.IID != 3 || got.Sequence != 1 || got.GroupID != 9 ||
-		got.Title != "Sprint 1" || got.Description != "d" || got.State != 2 || got.WebURL != "w" ||
-		got.CreatedAt != "2026-01-01T00:00:00Z" || got.UpdatedAt != "2026-01-02T00:00:00Z" ||
-		got.StartDate != "2026-01-01" || got.DueDate != "2026-01-14" {
-		t.Errorf("iterationOutput = %+v", got)
-	}
-}
-
-// TestEpicOutput verifies the epic converter for nil and a fully populated SDK
-// epic, including the nested author and all date fields.
-func TestEpicOutput(t *testing.T) {
-	if got := epicOutput(nil); got != nil {
-		t.Errorf("epicOutput(nil) = %v, want nil", got)
-	}
-	got := epicOutput(&gl.Epic{
-		ID: 60, IID: 6, GroupID: 9, ParentID: 1, Title: "Epic", Description: "d",
-		State: "opened", Confidential: true, WebURL: "w", URL: "u",
-		Author: &gl.EpicAuthor{ID: 4, Username: "dan"}, Labels: []string{"x", "y"},
-		Upvotes: 3, Downvotes: 1, UserNotesCount: 5,
-		StartDate: isoTimePtr(2026, time.January, 1), StartDateIsFixed: true,
-		StartDateFixed: isoTimePtr(2026, time.January, 2), StartDateFromMilestones: isoTimePtr(2026, time.January, 3),
-		DueDate: isoTimePtr(2026, time.March, 1), DueDateIsFixed: true,
-		DueDateFixed: isoTimePtr(2026, time.March, 2), DueDateFromMilestones: isoTimePtr(2026, time.March, 3),
-		CreatedAt: timePtr(2026, time.January, 1), UpdatedAt: timePtr(2026, time.January, 2),
-		ClosedAt: timePtr(2026, time.January, 3),
-	})
-	want := &EpicOutput{
-		ID: 60, IID: 6, GroupID: 9, ParentID: 1, Title: "Epic", Description: "d",
-		State: "opened", Confidential: true, WebURL: "w", URL: "u",
-		Author: &UserOutput{ID: 4, Username: "dan"}, Labels: []string{"x", "y"},
-		Upvotes: 3, Downvotes: 1, UserNotesCount: 5,
-		StartDate: "2026-01-01", StartDateIsFixed: true, StartDateFixed: "2026-01-02",
-		StartDateFromMilestones: "2026-01-03", DueDate: "2026-03-01", DueDateIsFixed: true,
-		DueDateFixed: "2026-03-02", DueDateFromMilestones: "2026-03-03",
-		CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
-		ClosedAt: "2026-01-03T00:00:00Z",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("epicOutput =\n%+v\nwant\n%+v", got, want)
 	}
 }
 
@@ -433,8 +318,10 @@ func TestToRelationOutput_OneFlagAtATime(t *testing.T) {
 
 // TestIssueRefOutput_OneFlagAtATime pins each boolean of the issue on a link
 // to the SDK field it is read from, for the reason the relation converter has
-// its own such test: the full fixture beside it sets all three true, which is
-// exactly the shape that hides a swap between them.
+// its own such test: the full fixture beside it sets both true, which is
+// exactly the shape that hides a swap between them. The subscribed case holds
+// the flag IssueBasic never renders to nothing: an SDK issue carrying it true
+// converts to the zero value, since the output has no field to put it in.
 func TestIssueRefOutput_OneFlagAtATime(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -443,11 +330,11 @@ func TestIssueRefOutput_OneFlagAtATime(t *testing.T) {
 	}{
 		{"confidential", gl.Issue{Confidential: true}, IssueRefOutput{Confidential: true}},
 		{"discussion_locked", gl.Issue{DiscussionLocked: true}, IssueRefOutput{DiscussionLocked: true}},
-		{"subscribed", gl.Issue{Subscribed: true}, IssueRefOutput{Subscribed: true}},
+		{"subscribed is not rendered", gl.Issue{Subscribed: true}, IssueRefOutput{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := issueRefOutput(&tc.issue)
+			got := issueRefOutput(&tc.issue, toolutil.IssueBasicExtra{})
 			if got == nil || !reflect.DeepEqual(*got, tc.want) {
 				t.Errorf("issueRefOutput(%s only) = %+v, want %+v", tc.name, got, tc.want)
 			}
@@ -468,20 +355,26 @@ func TestToRelationOutput_NilSubObjects(t *testing.T) {
 }
 
 // TestToOutput_FullAndNilIssues verifies the single-link converter surfaces the
-// full source/target issue objects and tolerates missing endpoints.
+// source/target issue objects, pairs each with the captured keys of its own
+// position rather than the other's, and tolerates missing endpoints.
 func TestToOutput_FullAndNilIssues(t *testing.T) {
 	full := toOutput(&gl.IssueLink{
 		ID:          99,
 		LinkType:    "relates_to",
 		SourceIssue: &gl.Issue{ID: 50, IID: 10, ProjectID: 42, Title: "Source"},
 		TargetIssue: &gl.Issue{ID: 80, IID: 20, ProjectID: 43, Title: "Target"},
+	}, linkExtra{
+		SourceIssue: toolutil.IssueBasicExtra{Type: "ISSUE", StartDate: "2026-01-01"},
+		TargetIssue: toolutil.IssueBasicExtra{Type: "INCIDENT", StartDate: "2026-02-01"},
 	})
 	if full.SourceIssue == nil || full.SourceIssue.Title != "Source" || full.SourceIssue.IID != 10 ||
-		full.TargetIssue == nil || full.TargetIssue.Title != "Target" || full.TargetIssue.ProjectID != 43 {
+		full.SourceIssue.Type != "ISSUE" || full.SourceIssue.StartDate != "2026-01-01" ||
+		full.TargetIssue == nil || full.TargetIssue.Title != "Target" || full.TargetIssue.ProjectID != 43 ||
+		full.TargetIssue.Type != "INCIDENT" || full.TargetIssue.StartDate != "2026-02-01" {
 		t.Errorf("toOutput (full) = %+v", full)
 	}
 
-	bare := toOutput(&gl.IssueLink{ID: 1, LinkType: "blocks"})
+	bare := toOutput(&gl.IssueLink{ID: 1, LinkType: "blocks"}, linkExtra{})
 	if bare.SourceIssue != nil || bare.TargetIssue != nil {
 		t.Errorf("toOutput (bare) = %+v", bare)
 	}

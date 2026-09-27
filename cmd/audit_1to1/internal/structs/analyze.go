@@ -175,6 +175,10 @@ const (
 		"merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic " +
 		"with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option " +
 		"into a presenter option; exposed on the merge request list inputs, where it takes effect"
+	// skypeDiscarded is the reason the user create and modify inputs offer no
+	// skype, which client-go's options still carry.
+	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither " +
+		"POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
 	tagKeyJSON = "json"
 	// tagKeyURL is the tag go-querystring names a query parameter by, which
 	// client-go's Options structs carry beside their json tags.
@@ -749,6 +753,17 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"issuelinks.RelationOutput.type":                   docIssueLinksRelation,
 	"issuelinks.RelationOutput.upvotes":                docIssueLinksRelation,
 
+	// issuelinks: what API::Entities::IssueBasic sends on either issue of a
+	// link that client-go's Issue declares on no field of its own, read from
+	// the captured response of the get and create calls (ADR-0021,
+	// issuelinks.capturedLink). lib/api/entities/issue_link.rb renders both
+	// positions using IssueBasic, and doc/api/issue_links.md abbreviates the
+	// two objects, so the citation is the page that prints the basic issue's
+	// keys in full. Recorded in docs/development/upstream-bugs.md.
+	"issuelinks.IssueRefOutput.blocking_issues_count": docIssuesList,
+	"issuelinks.IssueRefOutput.start_date":            docIssuesList,
+	"issuelinks.IssueRefOutput.type":                  docIssuesList,
+
 	// memberroles: the twenty-five customizable permissions
 	// API::Entities::MemberRole sends that client-go's MemberRole declares no
 	// field for, read from the captured response (ADR-0021,
@@ -960,6 +975,12 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"deploymentmergerequests.ListInput.view":                      deploymentMergeRequestsInert,
 	"deploymentmergerequests.ListInput.with_labels_details":       deploymentMergeRequestsInert,
 	"deploymentmergerequests.ListInput.with_merge_status_recheck": deploymentMergeRequestsInert,
+	// An SDK options field GitLab discards: app/models/user.rb ignores the
+	// users.skype column since 18.4 and lib/api/users.rb declares no skype
+	// param on POST /users or PUT /users/:id, so Grape drops the key. Recorded
+	// in docs/development/upstream-bugs.md.
+	"users.CreateInput.skype": skypeDiscarded,
+	"users.ModifyInput.skype": skypeDiscarded,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

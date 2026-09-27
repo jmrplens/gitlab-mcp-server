@@ -54,9 +54,10 @@ type DeleteInput struct {
 	IssueLinkID int                  `json:"issue_link_id" jsonschema:"Issue link ID to remove,required"`
 }
 
-// Output represents a single issue link. It mirrors the gitlab.IssueLink struct
-// (id, source_issue, target_issue, link_type). SourceIssue and TargetIssue
-// surface the full SDK issue objects (1:1 audit policy, full nested objects).
+// Output represents a single issue link: the id, source_issue, target_issue
+// and link_type lib/api/entities/issue_link.rb renders. SourceIssue and
+// TargetIssue are the two issues as that entity presents them, IssueBasic,
+// which is less than the whole issue client-go types them as.
 type Output struct {
 	toolutil.HintableOutput
 	ID          int             `json:"id"`
@@ -137,15 +138,28 @@ type ListOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(link *gitlab.IssueLink) Output {
+// toOutput converts the GitLab API response to the tool output format, each
+// issue paired with the keys the capture read at its own position.
+func toOutput(link *gitlab.IssueLink, extra linkExtra) Output {
 	out := Output{
 		ID:          int(link.ID),
 		LinkType:    link.LinkType,
-		SourceIssue: issueRefOutput(link.SourceIssue),
-		TargetIssue: issueRefOutput(link.TargetIssue),
+		SourceIssue: issueRefOutput(link.SourceIssue, extra.SourceIssue),
+		TargetIssue: issueRefOutput(link.TargetIssue, extra.TargetIssue),
 	}
 	return out
+}
+
+// linkOutput finishes a handler that answers with one link: it reads the keys
+// client-go does not model off the captured answer and pairs them with what
+// the SDK decoded. A body the reader cannot hold is the operation's error
+// rather than a link with those keys silently missing.
+func linkOutput(op string, link *gitlab.IssueLink, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := capturedLink(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(link, extra), nil
 }
 
 // toRelationOutput converts the GitLab API response to the tool output format,
@@ -263,12 +277,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithMessage(toolGetIssueLink, err)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	link, _, err := client.GL().IssueLinks.GetIssueLink(string(input.ProjectID), int64(input.IssueIID), int64(input.IssueLinkID), gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(toolGetIssueLink, err, http.StatusNotFound,
 			"verify issue_link_id with issue.link_list; the link must belong to the specified issue")
 	}
-	return toOutput(link), nil
+	return linkOutput(toolGetIssueLink, link, captured)
 }
 
 // Create creates a new issue link between a source issue and a target issue
@@ -300,12 +315,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.LinkType = &input.LinkType
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	link, _, err := client.GL().IssueLinks.CreateIssueLink(string(input.ProjectID), int64(input.IssueIID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(toolCreateIssueLink, err, http.StatusBadRequest,
 			"link_type must be one of {relates_to, blocks, is_blocked_by}; verify target_project_id and target_issue_iid; cannot link issue to itself or create duplicate links")
 	}
-	return toOutput(link), nil
+	return linkOutput(toolCreateIssueLink, link, captured)
 }
 
 // Delete removes an existing issue link from a GitLab project via the

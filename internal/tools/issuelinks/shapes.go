@@ -75,18 +75,6 @@ func closerOutput(c *gitlab.IssueCloser) *UserOutput {
 	}
 }
 
-// epicAuthorOutput converts a *gitlab.EpicAuthor to a *UserOutput, or nil when
-// the SDK value is nil. EpicAuthor shares the user shape mirrored by UserOutput.
-func epicAuthorOutput(a *gitlab.EpicAuthor) *UserOutput {
-	if a == nil {
-		return nil
-	}
-	return &UserOutput{
-		ID: a.ID, State: a.State, WebURL: a.WebURL,
-		Name: a.Name, AvatarURL: a.AvatarURL, Username: a.Username,
-	}
-}
-
 // ReferencesOutput mirrors gitlab.IssueReferences (the issue references object).
 type ReferencesOutput struct {
 	Short    string `json:"short"`
@@ -137,23 +125,6 @@ func milestoneOutput(m *gitlab.Milestone) *MilestoneOutput {
 	}
 }
 
-// LinksOutput mirrors gitlab.IssueLinks (the issue _links object).
-type LinksOutput struct {
-	Self       string `json:"self"`
-	Notes      string `json:"notes"`
-	AwardEmoji string `json:"award_emoji"`
-	Project    string `json:"project"`
-}
-
-// linksOutput converts a *gitlab.IssueLinks to a *LinksOutput, or nil when the
-// SDK value is nil.
-func linksOutput(l *gitlab.IssueLinks) *LinksOutput {
-	if l == nil {
-		return nil
-	}
-	return &LinksOutput{Self: l.Self, Notes: l.Notes, AwardEmoji: l.AwardEmoji, Project: l.Project}
-}
-
 // TimeStatsOutput mirrors gitlab.TimeStats (the issue time-tracking object).
 type TimeStatsOutput struct {
 	HumanTimeEstimate   string `json:"human_time_estimate"`
@@ -191,122 +162,36 @@ func taskCompletionStatusOutput(t *gitlab.TasksCompletionStatus) *TaskCompletion
 	return &TaskCompletionStatusOutput{Count: t.Count, CompletedCount: t.CompletedCount}
 }
 
-// LabelDetailsOutput mirrors gitlab.LabelDetails (a label object with full
-// detail surfaced under the label_details key).
-type LabelDetailsOutput struct {
-	ID              int64  `json:"id"`
-	Name            string `json:"name"`
-	Color           string `json:"color"`
-	Description     string `json:"description"`
-	DescriptionHTML string `json:"description_html"`
-	TextColor       string `json:"text_color"`
-}
-
-// labelDetailsOutputs converts a slice of *gitlab.LabelDetails to a slice of
-// *LabelDetailsOutput, skipping nil elements and returning nil for an empty
-// input.
-func labelDetailsOutputs(details []*gitlab.LabelDetails) []*LabelDetailsOutput {
-	if len(details) == 0 {
-		return nil
-	}
-	out := make([]*LabelDetailsOutput, 0, len(details))
-	for _, d := range details {
-		if d == nil {
-			continue
-		}
-		out = append(out, &LabelDetailsOutput{
-			ID: d.ID, Name: d.Name, Color: d.Color, Description: d.Description,
-			DescriptionHTML: d.DescriptionHTML, TextColor: d.TextColor,
-		})
-	}
-	return out
-}
-
 // IterationOutput mirrors gitlab.GroupIteration (the iteration assigned to an
 // issue, EE only). Canonical shape shared via toolutil.
 type IterationOutput = toolutil.IterationOutput
 
-// iterationOutput converts a *gitlab.GroupIteration to a *IterationOutput, or
-// nil when the SDK value is nil.
-func iterationOutput(it *gitlab.GroupIteration) *IterationOutput {
-	return toolutil.NewIterationOutputFromGroupIteration(it)
-}
-
-// EpicOutput mirrors gitlab.Epic (the epic associated with an issue, EE only).
-type EpicOutput struct {
-	ID                      int64       `json:"id"`
-	IID                     int64       `json:"iid"`
-	GroupID                 int64       `json:"group_id"`
-	ParentID                int64       `json:"parent_id"`
-	Title                   string      `json:"title"`
-	Description             string      `json:"description"`
-	State                   string      `json:"state"`
-	Confidential            bool        `json:"confidential"`
-	WebURL                  string      `json:"web_url"`
-	URL                     string      `json:"url"`
-	Author                  *UserOutput `json:"author,omitempty"`
-	Labels                  []string    `json:"labels,omitempty"`
-	Upvotes                 int64       `json:"upvotes,omitempty"`
-	Downvotes               int64       `json:"downvotes,omitempty"`
-	UserNotesCount          int64       `json:"user_notes_count,omitempty"`
-	StartDate               string      `json:"start_date,omitempty"`
-	StartDateIsFixed        bool        `json:"start_date_is_fixed,omitempty"`
-	StartDateFixed          string      `json:"start_date_fixed,omitempty"`
-	StartDateFromMilestones string      `json:"start_date_from_milestones,omitempty"`
-	DueDate                 string      `json:"due_date,omitempty"`
-	DueDateIsFixed          bool        `json:"due_date_is_fixed,omitempty"`
-	DueDateFixed            string      `json:"due_date_fixed,omitempty"`
-	DueDateFromMilestones   string      `json:"due_date_from_milestones,omitempty"`
-	CreatedAt               string      `json:"created_at,omitempty"`
-	UpdatedAt               string      `json:"updated_at,omitempty"`
-	ClosedAt                string      `json:"closed_at,omitempty"`
-}
-
-// epicOutput converts a *gitlab.Epic to a *EpicOutput, or nil when the SDK
-// value is nil.
-func epicOutput(e *gitlab.Epic) *EpicOutput {
-	if e == nil {
-		return nil
-	}
-	return &EpicOutput{
-		ID: e.ID, IID: e.IID, GroupID: e.GroupID, ParentID: e.ParentID,
-		Title: e.Title, Description: e.Description, State: e.State,
-		Confidential: e.Confidential, WebURL: e.WebURL, URL: e.URL,
-		Author:                  epicAuthorOutput(e.Author),
-		Labels:                  e.Labels,
-		Upvotes:                 e.Upvotes,
-		Downvotes:               e.Downvotes,
-		UserNotesCount:          e.UserNotesCount,
-		StartDate:               toolutil.FormatISOTimePtr(e.StartDate),
-		StartDateIsFixed:        e.StartDateIsFixed,
-		StartDateFixed:          toolutil.FormatISOTimePtr(e.StartDateFixed),
-		StartDateFromMilestones: toolutil.FormatISOTimePtr(e.StartDateFromMilestones),
-		DueDate:                 toolutil.FormatISOTimePtr(e.DueDate),
-		DueDateIsFixed:          e.DueDateIsFixed,
-		DueDateFixed:            toolutil.FormatISOTimePtr(e.DueDateFixed),
-		DueDateFromMilestones:   toolutil.FormatISOTimePtr(e.DueDateFromMilestones),
-		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
-		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
-		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
-	}
-}
-
-// IssueRefOutput mirrors the full gitlab.Issue struct surfaced for the
-// source_issue and target_issue objects on a single issue link. Per the 1:1
-// audit policy (full nested objects) every field of the SDK Issue is surfaced
-// with the correct type: user-like objects (author/assignees/assignee/
-// closed_by) as *UserOutput, and milestone/references/epic/iteration/
-// time_stats/task_completion_status/label_details/_links as their full local
-// mirror objects. labels is surfaced as []string. The existing flattened
-// SourceIssueIID/SourceProjectID/TargetIssueIID/TargetProjectID scalars on
-// Output remain additive for ergonomic consumers.
+// IssueRefOutput is one of the two issues a link joins, source_issue or
+// target_issue, as lib/api/entities/issue_link.rb renders them: `using:
+// IssueBasic`, the entity every issue listing shares, and not the whole issue
+// the issues API answers with.
+//
+// It is deliberately not shaped like client-go's Issue, which is what
+// IssueLink types both positions as and where this type used to come from.
+// Twelve of the Issue's keys are ones IssueBasic never renders (external_id,
+// health_status, moved_to_id, label_details, references, subscribed, _links,
+// issue_link_id, epic_issue_id, epic, iteration and service_desk_reply_to),
+// and `subscribed`, published without omitempty, said false on every link for
+// something no response measured. The gap is recorded in
+// docs/development/upstream-bugs.md.
+//
+// The last three keys are what IssueBasic sends that client-go's Issue does not
+// model, read from the captured response beside the SDK's own decode
+// (ADR-0021) and described on [toolutil.IssueBasicExtra]. weight arrives only
+// where the issue weights feature is licensed; blocking_issues_count is
+// exposed by ee/lib/ee/api/entities/issue_basic.rb with no condition, so an
+// Enterprise Edition build sends it licensed or not and Community Edition
+// never does, which is why it is a pointer and carries no tier.
 type IssueRefOutput struct {
 	ID                   int64                       `json:"id"`
 	IID                  int64                       `json:"iid"`
-	ExternalID           string                      `json:"external_id,omitempty"`
 	State                string                      `json:"state"`
 	Description          string                      `json:"description,omitempty"`
-	HealthStatus         string                      `json:"health_status,omitempty" tier:"ultimate"`
 	Author               *UserOutput                 `json:"author,omitempty"`
 	Milestone            *MilestoneOutput            `json:"milestone,omitempty"`
 	ProjectID            int64                       `json:"project_id"`
@@ -317,73 +202,60 @@ type IssueRefOutput struct {
 	ClosedBy             *UserOutput                 `json:"closed_by,omitempty"`
 	Title                string                      `json:"title"`
 	CreatedAt            string                      `json:"created_at,omitempty"`
-	MovedToID            int64                       `json:"moved_to_id,omitempty"`
 	Labels               []string                    `json:"labels,omitempty"`
-	LabelDetails         []*LabelDetailsOutput       `json:"label_details,omitempty"`
 	Upvotes              int64                       `json:"upvotes,omitempty"`
 	Downvotes            int64                       `json:"downvotes,omitempty"`
 	DueDate              string                      `json:"due_date,omitempty"`
 	WebURL               string                      `json:"web_url"`
-	References           *ReferencesOutput           `json:"references,omitempty"`
 	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
 	Confidential         bool                        `json:"confidential"`
 	Weight               int64                       `json:"weight,omitempty" tier:"premium"`
 	DiscussionLocked     bool                        `json:"discussion_locked"`
 	IssueType            string                      `json:"issue_type,omitempty"`
-	Subscribed           bool                        `json:"subscribed"`
 	UserNotesCount       int64                       `json:"user_notes_count,omitempty"`
-	Links                *LinksOutput                `json:"_links,omitempty"`
-	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
 	MergeRequestCount    int64                       `json:"merge_requests_count,omitempty"`
-	EpicIssueID          int64                       `json:"epic_issue_id,omitempty" tier:"premium"`
-	Epic                 *EpicOutput                 `json:"epic,omitempty" tier:"premium"`
-	Iteration            *IterationOutput            `json:"iteration,omitempty" tier:"premium"`
 	TaskCompletionStatus *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
-	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
+	BlockingIssuesCount  *int64                      `json:"blocking_issues_count,omitempty"`
+	StartDate            string                      `json:"start_date,omitempty"`
+	Type                 string                      `json:"type,omitempty"`
 }
 
-// issueRefOutput converts a *gitlab.Issue to a *IssueRefOutput, or nil when the
-// SDK value is nil. It mirrors every field of the SDK Issue with the correct
-// type, dereferencing the SDK's *string IssueType into the issue_type scalar.
-func issueRefOutput(i *gitlab.Issue) *IssueRefOutput {
+// issueRefOutput converts one issue of a link to a *IssueRefOutput, or nil when
+// the SDK value is nil, pairing what the SDK decoded with the keys the capture
+// read for the same position. It dereferences the SDK's *string IssueType into
+// the issue_type scalar.
+func issueRefOutput(i *gitlab.Issue, extra toolutil.IssueBasicExtra) *IssueRefOutput {
 	if i == nil {
 		return nil
 	}
 	out := &IssueRefOutput{
-		ID: i.ID, IID: i.IID, ExternalID: i.ExternalID, State: i.State,
-		Description: i.Description, HealthStatus: i.HealthStatus,
+		ID: i.ID, IID: i.IID, State: i.State,
+		Description:          i.Description,
 		Author:               authorOutput(i.Author),
 		Milestone:            milestoneOutput(i.Milestone),
 		ProjectID:            i.ProjectID,
 		Assignees:            assigneeOutputs(i.Assignees),
-		Assignee:             assigneeOutput(i.Assignee), //nolint:staticcheck // SA1019: surfaced for 1:1 SDK fidelity
+		Assignee:             assigneeOutput(i.Assignee), //nolint:staticcheck // SA1019: IssueBasic still renders the first assignee under this key
 		UpdatedAt:            toolutil.FormatTimePtr(i.UpdatedAt),
 		ClosedAt:             toolutil.FormatTimePtr(i.ClosedAt),
 		ClosedBy:             closerOutput(i.ClosedBy),
 		Title:                i.Title,
 		CreatedAt:            toolutil.FormatTimePtr(i.CreatedAt),
-		MovedToID:            i.MovedToID,
 		Labels:               []string(i.Labels),
-		LabelDetails:         labelDetailsOutputs(i.LabelDetails),
 		Upvotes:              i.Upvotes,
 		Downvotes:            i.Downvotes,
 		DueDate:              toolutil.FormatISOTimePtr(i.DueDate),
 		WebURL:               i.WebURL,
-		References:           referencesOutput(i.References),
 		TimeStats:            timeStatsOutput(i.TimeStats),
 		Confidential:         i.Confidential,
 		Weight:               i.Weight,
 		DiscussionLocked:     i.DiscussionLocked,
-		Subscribed:           i.Subscribed,
 		UserNotesCount:       i.UserNotesCount,
-		Links:                linksOutput(i.Links),
-		IssueLinkID:          i.IssueLinkID,
 		MergeRequestCount:    i.MergeRequestCount,
-		EpicIssueID:          i.EpicIssueID,
-		Epic:                 epicOutput(i.Epic),
-		Iteration:            iterationOutput(i.Iteration),
 		TaskCompletionStatus: taskCompletionStatusOutput(i.TaskCompletionStatus),
-		ServiceDeskReplyTo:   i.ServiceDeskReplyTo,
+		BlockingIssuesCount:  extra.BlockingIssuesCount,
+		StartDate:            extra.StartDate,
+		Type:                 extra.Type,
 	}
 	if i.IssueType != nil {
 		out.IssueType = *i.IssueType

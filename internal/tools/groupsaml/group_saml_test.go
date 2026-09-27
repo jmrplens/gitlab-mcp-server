@@ -18,13 +18,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestToSAMLUserOutput_AllFields verifies the 1:1 user conversion surfaces every
-// standard user field, formats all timestamp and IP fields, maps the identities,
+// TestToSAMLUserOutput_AllFields verifies the user conversion surfaces every
+// key UserPublic renders, formats all timestamp fields, maps the identities,
 // scim_identities, custom_attributes, and created_by sub-objects, skips nil
 // slice element pointers while mapping valid ones, and copies every key of the
 // captured extra onto the output. The extra is checked here rather than in its
 // own test because a key added to toolutil.UserExtra and not copied would be a
-// schema field nothing fills.
+// schema field nothing fills. The SDK user also carries the six keys client-go
+// models and UserPublic never renders (skype, provider, extern_uid,
+// can_create_organization and the two sign-in addresses), and the comparison
+// against the whole struct holds that none of them is published.
 func TestToSAMLUserOutput_AllFields(t *testing.T) {
 	followers, following, followed := int64(12), int64(34), true
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
@@ -57,19 +60,17 @@ func TestToSAMLUserOutput_AllFields(t *testing.T) {
 		ID: 7, Username: "jdoe", Email: "j@example.com", Name: "Jane Doe", State: "active",
 		WebURL: "https://x/jdoe", AvatarURL: "https://x/a.png", IsAdmin: true, IsAuditor: true,
 		Bio: "bio", Location: "loc", JobTitle: "Eng", Organization: "Org",
-		Skype: "sk", Linkedin: "li", Twitter: "tw", Provider: "saml", ExternUID: "ext-uid-7",
+		Linkedin: "li", Twitter: "tw",
 		PublicEmail: "pub@example.com", WebsiteURL: "https://jdoe.dev",
 		TwoFactorEnabled: true, PrivateProfile: true,
-		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true, CanCreateOrganization: true,
+		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true,
 		Note: "vip", UsingLicenseSeat: true, ThemeID: 2, ColorSchemeID: 3,
 		NamespaceID: 88, SharedRunnersMinutesLimit: 400, ExtraSharedRunnersMinutesLimit: 100,
 		CreatedAt:        created.Format(time.RFC3339),
 		ConfirmedAt:      confirmed.Format(time.RFC3339),
 		LastActivityOn:   "2026-01-03",
 		CurrentSignInAt:  signIn.Format(time.RFC3339),
-		CurrentSignInIP:  "203.0.113.7",
 		LastSignInAt:     lastSignIn.Format(time.RFC3339),
-		LastSignInIP:     "203.0.113.8",
 		Identities:       []UserIdentityOutput{{Provider: "saml", ExternUID: "id-1"}},
 		SCIMIdentities:   []SCIMIdentityOutput{{ExternUID: "ext-1", GroupID: 9, Active: true}},
 		CustomAttributes: []CustomAttributeOutput{{Key: "dept", Value: "eng"}},
@@ -101,8 +102,8 @@ func TestToSAMLUserOutput_AllFields(t *testing.T) {
 // read the profile is told nothing, not that the user has no followers.
 func TestToSAMLUserOutput_NilOptionals(t *testing.T) {
 	out := toSAMLUserOutput(&gl.User{ID: 1, Username: "min"}, toolutil.UserExtra{})
-	if out.ConfirmedAt != "" || out.CurrentSignInIP != "" || out.LastSignInAt != "" || out.LastSignInIP != "" {
-		t.Errorf("expected empty optional time/IP fields, got %+v", out)
+	if out.ConfirmedAt != "" || out.CurrentSignInAt != "" || out.LastSignInAt != "" || out.LastActivityOn != "" {
+		t.Errorf("expected empty optional time fields, got %+v", out)
 	}
 	if out.CreatedBy != nil || out.Identities != nil || out.CustomAttributes != nil {
 		t.Errorf("expected nil slices/created_by, got %+v", out)

@@ -2003,6 +2003,18 @@ func TestRelatedMRsMarkdownRegistry(t *testing.T) {
 	}
 }
 
+// TestFormatRelatedMRsMarkdown_NoState checks the row of a merge request the
+// response sent no state for: the cell is empty rather than an emoji with
+// nothing beside it, and a whitespace-only state counts as none.
+func TestFormatRelatedMRsMarkdown_NoState(t *testing.T) {
+	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
+		MergeRequests: []RelatedMROutput{{IID: 4, Title: "Stateless", State: " ", SourceBranch: "a", TargetBranch: "b"}},
+	}, "Related MRs")
+	if !strings.Contains(md, "| !4 | Stateless |  |  | a -> b |\n") {
+		t.Errorf("FormatRelatedMRsMarkdown(no state) = %q, want an empty state cell", md)
+	}
+}
+
 // TestFormatRelatedMRsMarkdown_Empty verifies FormatRelatedMRsMarkdown when empty.
 func TestFormatRelatedMRsMarkdown_Empty(t *testing.T) {
 	want := "No merge requests found.\n"
@@ -4482,13 +4494,12 @@ func TestUpdate_InvalidUpdatedAt(t *testing.T) {
 
 // TestToOutput_AdditiveSubObjects verifies that ToOutput surfaces the additive
 // 1:1 sub-objects (label_details, iteration, _links, time_stats,
-// task_completion_status) and scalars (external_id, issue_link_id,
-// service_desk_reply_to) from the SDK issue.
+// task_completion_status) and the service_desk_reply_to scalar from the SDK
+// issue.
 func TestToOutput_AdditiveSubObjects(t *testing.T) {
 	issue := &gl.Issue{
 		ID:                   1,
 		IID:                  10,
-		ExternalID:           "EXT-7",
 		ServiceDeskReplyTo:   "sd@example.com",
 		LabelDetails:         []*gl.LabelDetails{{ID: 3, Name: "bug", Color: "#ff0000", TextColor: "#ffffff"}},
 		Iteration:            &gl.GroupIteration{ID: 8, IID: 2, Title: "Sprint 1", State: 1, WebURL: "https://gl/iter/2"},
@@ -4498,8 +4509,8 @@ func TestToOutput_AdditiveSubObjects(t *testing.T) {
 	}
 
 	out := ToOutput(issue, toolutil.IssueExtra{})
-	if out.ExternalID != "EXT-7" || out.ServiceDeskReplyTo != "sd@example.com" {
-		t.Errorf("scalars = %q/%q", out.ExternalID, out.ServiceDeskReplyTo)
+	if out.ServiceDeskReplyTo != "sd@example.com" {
+		t.Errorf("service_desk_reply_to = %q", out.ServiceDeskReplyTo)
 	}
 	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" || out.LabelDetails[0].Color != "#ff0000" {
 		t.Errorf("label_details = %+v", out.LabelDetails)
@@ -4525,7 +4536,7 @@ func TestToOutput_AdditiveSubObjects_NilSafe(t *testing.T) {
 	if out.LabelDetails != nil || out.Iteration != nil || out.Links != nil || out.TimeStats != nil || out.TaskCompletionStatus != nil {
 		t.Errorf("expected nil additive sub-objects, got %+v", out)
 	}
-	if out.ExternalID != "" || out.ServiceDeskReplyTo != "" {
+	if out.ServiceDeskReplyTo != "" {
 		t.Errorf("expected zero additive scalars")
 	}
 }
@@ -5529,7 +5540,7 @@ func TestGet_EveryScalar_LandsOnItsOwnField(t *testing.T) {
 			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"id":101,"iid":10,"external_id":"EXT-102","title":"Title 103","description":"Body 104",
+			"id":101,"iid":10,"title":"Title 103","description":"Body 104",
 			"state":"closed","health_status":"at_risk","project_id":105,
 			"created_at":"2026-01-06T00:00:00Z","updated_at":"2026-02-07T00:00:00Z","closed_at":"2026-03-08T00:00:00Z",
 			"due_date":"2026-04-09","moved_to_id":106,"upvotes":107,"downvotes":108,
@@ -5549,7 +5560,6 @@ func TestGet_EveryScalar_LandsOnItsOwnField(t *testing.T) {
 	}{
 		{"id", out.ID, int64(101)},
 		{"iid", out.IID, int64(10)},
-		{"external_id", out.ExternalID, "EXT-102"},
 		{"title", out.Title, "Title 103"},
 		{"description", out.Description, "Body 104"},
 		{"state", out.State, "closed"},

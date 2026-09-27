@@ -963,6 +963,11 @@ func TestBuildReport_AuditedPairFloors(t *testing.T) {
 
 	// Output-pair floors for the packages whose shapes are toolutil-shared:
 	// these are the ones that go blind first when a local converter is removed.
+	//
+	// issuelinks 14 → 10 when a link's two issues became the IssueBasic shape
+	// lib/api/entities/issue_link.rb renders: the epic, epic author, _links,
+	// label_details and iteration mirrors went with the keys only they filled,
+	// and their converters with them. Converter detection did not change.
 	outputFloors := map[string]int{
 		"boards":              8,
 		"branches":            4,
@@ -972,7 +977,7 @@ func TestBuildReport_AuditedPairFloors(t *testing.T) {
 		"groupmembers":        6,
 		"groups":              11,
 		"impersonationtokens": 2,
-		"issuelinks":          14,
+		"issuelinks":          10,
 		"members":             3,
 		"mergerequests":       5,
 		"resourceevents":      9,

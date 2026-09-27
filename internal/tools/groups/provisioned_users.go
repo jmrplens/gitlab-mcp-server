@@ -29,11 +29,16 @@ type ListProvisionedUsersInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// ProvisionedUserOutput mirrors gl.User 1:1 for users provisioned through
-// SAML/SCIM. Nested identities (identities, scim_identities, custom_attributes,
-// created_by) are surfaced as full local mirrors on their canonical json keys
-// (C-IMPORTS: replicated here rather than imported from sibling packages to
-// preserve the zero-import-cycle constraint).
+// ProvisionedUserOutput is a user provisioned through SAML or SCIM as
+// GET /groups/:id/provisioned_users answers with it: ee/lib/ee/api/groups.rb
+// presents the list with API::Entities::UserPublic, so the six keys
+// client-go's User models and that entity never renders (skype, extern_uid
+// and provider at the top level, can_create_organization, and the two
+// sign-in addresses only the administrator's user entity carries) are not
+// published. Nested identities (identities, scim_identities,
+// custom_attributes, created_by) are surfaced as full local mirrors on their
+// canonical json keys (C-IMPORTS: replicated here rather than imported from
+// sibling packages to preserve the zero-import-cycle constraint).
 type ProvisionedUserOutput struct {
 	ID                             int64                            `json:"id"`
 	Username                       string                           `json:"username"`
@@ -46,14 +51,11 @@ type ProvisionedUserOutput struct {
 	Bot                            bool                             `json:"bot,omitempty"`
 	Location                       string                           `json:"location,omitempty"`
 	PublicEmail                    string                           `json:"public_email,omitempty"`
-	Skype                          string                           `json:"skype,omitempty"`
 	Linkedin                       string                           `json:"linkedin,omitempty"`
 	Twitter                        string                           `json:"twitter,omitempty"`
 	WebsiteURL                     string                           `json:"website_url,omitempty"`
 	Organization                   string                           `json:"organization,omitempty"`
 	JobTitle                       string                           `json:"job_title,omitempty"`
-	ExternUID                      string                           `json:"extern_uid,omitempty"`
-	Provider                       string                           `json:"provider,omitempty"`
 	ThemeID                        int64                            `json:"theme_id,omitempty"`
 	LastActivityOn                 string                           `json:"last_activity_on,omitempty"`
 	ColorSchemeID                  int64                            `json:"color_scheme_id,omitempty"`
@@ -62,12 +64,9 @@ type ProvisionedUserOutput struct {
 	AvatarURL                      string                           `json:"avatar_url,omitempty"`
 	CanCreateGroup                 bool                             `json:"can_create_group,omitempty"`
 	CanCreateProject               bool                             `json:"can_create_project,omitempty"`
-	CanCreateOrganization          bool                             `json:"can_create_organization,omitempty"`
 	ProjectsLimit                  int64                            `json:"projects_limit,omitempty"`
 	CurrentSignInAt                string                           `json:"current_sign_in_at,omitempty"`
-	CurrentSignInIP                string                           `json:"current_sign_in_ip,omitempty"`
 	LastSignInAt                   string                           `json:"last_sign_in_at,omitempty"`
-	LastSignInIP                   string                           `json:"last_sign_in_ip,omitempty"`
 	ConfirmedAt                    string                           `json:"confirmed_at,omitempty"`
 	TwoFactorEnabled               bool                             `json:"two_factor_enabled,omitempty"`
 	Note                           string                           `json:"note,omitempty"`
@@ -152,14 +151,11 @@ func ProvisionedUserToOutput(u *gl.User, extra toolutil.UserExtra) ProvisionedUs
 		Bot:                            u.Bot,
 		Location:                       u.Location,
 		PublicEmail:                    u.PublicEmail,
-		Skype:                          u.Skype,
 		Linkedin:                       u.Linkedin,
 		Twitter:                        u.Twitter,
 		WebsiteURL:                     u.WebsiteURL,
 		Organization:                   u.Organization,
 		JobTitle:                       u.JobTitle,
-		ExternUID:                      u.ExternUID,
-		Provider:                       u.Provider,
 		ThemeID:                        u.ThemeID,
 		ColorSchemeID:                  u.ColorSchemeID,
 		IsAdmin:                        u.IsAdmin,
@@ -167,7 +163,6 @@ func ProvisionedUserToOutput(u *gl.User, extra toolutil.UserExtra) ProvisionedUs
 		AvatarURL:                      u.AvatarURL,
 		CanCreateGroup:                 u.CanCreateGroup,
 		CanCreateProject:               u.CanCreateProject,
-		CanCreateOrganization:          u.CanCreateOrganization,
 		ProjectsLimit:                  u.ProjectsLimit,
 		TwoFactorEnabled:               u.TwoFactorEnabled,
 		Note:                           u.Note,
@@ -202,14 +197,8 @@ func ProvisionedUserToOutput(u *gl.User, extra toolutil.UserExtra) ProvisionedUs
 	if u.CurrentSignInAt != nil {
 		out.CurrentSignInAt = u.CurrentSignInAt.Format(time.RFC3339)
 	}
-	if u.CurrentSignInIP != nil {
-		out.CurrentSignInIP = u.CurrentSignInIP.String()
-	}
 	if u.LastSignInAt != nil {
 		out.LastSignInAt = u.LastSignInAt.Format(time.RFC3339)
-	}
-	if u.LastSignInIP != nil {
-		out.LastSignInIP = u.LastSignInIP.String()
 	}
 	if u.ConfirmedAt != nil {
 		out.ConfirmedAt = u.ConfirmedAt.Format(time.RFC3339)

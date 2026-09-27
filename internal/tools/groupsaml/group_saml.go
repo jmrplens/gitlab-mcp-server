@@ -57,11 +57,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Links: out}, nil
 }
 
-// SAMLUserOutput represents a SAML-provisioned user of a top-level group. The
-// GitLab saml_users endpoint returns the standard user object, so this mirrors
-// the canonical user representation (gl.User) field-for-field. The groups
-// sub-packages cannot import each other (zero import cycles), so the shape is
-// replicated here rather than shared.
+// SAMLUserOutput represents a SAML-provisioned user of a top-level group, as
+// GET /groups/:id/saml_users answers with it: ee/lib/ee/api/groups.rb
+// presents the list with API::Entities::UserPublic, so the six keys
+// client-go's User models and that entity never renders (skype, extern_uid
+// and provider at the top level, can_create_organization, and the two
+// sign-in addresses only the administrator's user entity carries) are not
+// published. The groups sub-packages cannot import each other (zero import
+// cycles), so the shape is replicated here rather than shared.
 type SAMLUserOutput struct {
 	ID                             int64                   `json:"id"`
 	Username                       string                  `json:"username"`
@@ -77,11 +80,8 @@ type SAMLUserOutput struct {
 	Location                       string                  `json:"location,omitempty"`
 	JobTitle                       string                  `json:"job_title,omitempty"`
 	Organization                   string                  `json:"organization,omitempty"`
-	Skype                          string                  `json:"skype,omitempty"`
 	Linkedin                       string                  `json:"linkedin,omitempty"`
 	Twitter                        string                  `json:"twitter,omitempty"`
-	Provider                       string                  `json:"provider,omitempty"`
-	ExternUID                      string                  `json:"extern_uid,omitempty"`
 	CreatedAt                      string                  `json:"created_at,omitempty"`
 	ConfirmedAt                    string                  `json:"confirmed_at,omitempty"`
 	PublicEmail                    string                  `json:"public_email,omitempty"`
@@ -92,13 +92,10 @@ type SAMLUserOutput struct {
 	Locked                         bool                    `json:"locked"`
 	PrivateProfile                 bool                    `json:"private_profile"`
 	CurrentSignInAt                string                  `json:"current_sign_in_at,omitempty"`
-	CurrentSignInIP                string                  `json:"current_sign_in_ip,omitempty"`
 	LastSignInAt                   string                  `json:"last_sign_in_at,omitempty"`
-	LastSignInIP                   string                  `json:"last_sign_in_ip,omitempty"`
 	ProjectsLimit                  int64                   `json:"projects_limit"`
 	CanCreateProject               bool                    `json:"can_create_project"`
 	CanCreateGroup                 bool                    `json:"can_create_group"`
-	CanCreateOrganization          bool                    `json:"can_create_organization"`
 	Note                           string                  `json:"note,omitempty"`
 	UsingLicenseSeat               bool                    `json:"using_license_seat"`
 	ThemeID                        int64                   `json:"theme_id,omitempty"`
@@ -158,10 +155,9 @@ type BasicUserOutput struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
-// toSAMLUserOutput maps a GitLab API user into the MCP output, mirroring the
-// canonical gl.User representation so every standard user field is surfaced
-// 1:1, and filling from extra the keys client-go's User declares on no field of
-// its own (ADR-0021).
+// toSAMLUserOutput maps a GitLab API user into the MCP output, carrying every
+// key UserPublic renders that client-go's User models, and filling from extra
+// the keys client-go's User declares on no field of its own (ADR-0021).
 func toSAMLUserOutput(u *gl.User, extra toolutil.UserExtra) SAMLUserOutput {
 	out := SAMLUserOutput{
 		ID:                             u.ID,
@@ -178,11 +174,8 @@ func toSAMLUserOutput(u *gl.User, extra toolutil.UserExtra) SAMLUserOutput {
 		Location:                       u.Location,
 		JobTitle:                       u.JobTitle,
 		Organization:                   u.Organization,
-		Skype:                          u.Skype,
 		Linkedin:                       u.Linkedin,
 		Twitter:                        u.Twitter,
-		Provider:                       u.Provider,
-		ExternUID:                      u.ExternUID,
 		PublicEmail:                    u.PublicEmail,
 		WebsiteURL:                     u.WebsiteURL,
 		TwoFactorEnabled:               u.TwoFactorEnabled,
@@ -192,7 +185,6 @@ func toSAMLUserOutput(u *gl.User, extra toolutil.UserExtra) SAMLUserOutput {
 		ProjectsLimit:                  u.ProjectsLimit,
 		CanCreateProject:               u.CanCreateProject,
 		CanCreateGroup:                 u.CanCreateGroup,
-		CanCreateOrganization:          u.CanCreateOrganization,
 		Note:                           u.Note,
 		UsingLicenseSeat:               u.UsingLicenseSeat,
 		ThemeID:                        u.ThemeID,
@@ -223,14 +215,8 @@ func toSAMLUserOutput(u *gl.User, extra toolutil.UserExtra) SAMLUserOutput {
 	if u.CurrentSignInAt != nil {
 		out.CurrentSignInAt = u.CurrentSignInAt.Format(time.RFC3339)
 	}
-	if u.CurrentSignInIP != nil {
-		out.CurrentSignInIP = u.CurrentSignInIP.String()
-	}
 	if u.LastSignInAt != nil {
 		out.LastSignInAt = u.LastSignInAt.Format(time.RFC3339)
-	}
-	if u.LastSignInIP != nil {
-		out.LastSignInIP = u.LastSignInIP.String()
 	}
 	for _, identity := range u.Identities {
 		if identity == nil {

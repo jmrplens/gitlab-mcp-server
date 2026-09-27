@@ -278,6 +278,105 @@ func TestIssueLinkGet_Success(t *testing.T) {
 	}
 }
 
+// linkBodyBeyondIssueBasic is a link whose two issues carry, beside what
+// API::Entities::IssueBasic renders, every key of client-go's Issue that the
+// entity does not. GitLab never sends the second set on this route; the body
+// carries it so the SDK decodes it and the test can show that nothing of it
+// reaches the published link.
+const linkBodyBeyondIssueBasic = `{
+	"id":1,
+	"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened",
+		"type":"ISSUE","start_date":"2026-01-02","blocking_issues_count":2,
+		"external_id":"EXT-1","health_status":"on_track","moved_to_id":9,"subscribed":true,
+		"label_details":[{"id":1,"name":"bug"}],"references":{"short":"#5"},
+		"_links":{"self":"s"},"issue_link_id":7,"epic_issue_id":8,"epic":{"id":3},
+		"iteration":{"id":4},"service_desk_reply_to":"desk@e.com"},
+	"target_issue":{"id":80,"iid":8,"project_id":10,"title":"Target","state":"opened",
+		"type":"INCIDENT","start_date":"2026-02-03","blocking_issues_count":0},
+	"link_type":"blocks"
+}`
+
+// TestIssueLinkGet_PublishesWhatIssueBasicRendersAndNothingElse checks both
+// halves of the reshape through the handler: the three keys IssueBasic sends
+// and client-go does not model arrive at the position they were sent at, and
+// the twelve the entity never renders are absent from the published JSON even
+// when the SDK decoded them. A zero blocking count is published as zero on
+// the target, since an Enterprise build reports it and zero is an answer.
+func TestIssueLinkGet_PublishesWhatIssueBasicRendersAndNothingElse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/10/issues/5/links/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, linkBodyBeyondIssueBasic)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.SourceIssue == nil || out.TargetIssue == nil {
+		t.Fatalf("Get() = %+v, want both issues", out)
+	}
+	source, target := out.SourceIssue, out.TargetIssue
+	if source.Type != "ISSUE" || source.StartDate != "2026-01-02" ||
+		source.BlockingIssuesCount == nil || *source.BlockingIssuesCount != 2 {
+		t.Errorf("source issue captured keys = %q/%q/%v", source.Type, source.StartDate, source.BlockingIssuesCount)
+	}
+	if target.Type != "INCIDENT" || target.StartDate != "2026-02-03" ||
+		target.BlockingIssuesCount == nil || *target.BlockingIssuesCount != 0 {
+		t.Errorf("target issue captured keys = %q/%q/%v", target.Type, target.StartDate, target.BlockingIssuesCount)
+	}
+
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal Get() output: %v", err)
+	}
+	var published struct {
+		SourceIssue map[string]any `json:"source_issue"`
+	}
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("unmarshal Get() output: %v", err)
+	}
+	for _, key := range []string{
+		"external_id", "health_status", "moved_to_id", "label_details", "references", "subscribed",
+		"_links", "issue_link_id", "epic_issue_id", "epic", "iteration", "service_desk_reply_to",
+	} {
+		t.Run(key, func(t *testing.T) {
+			if value, ok := published.SourceIssue[key]; ok {
+				t.Errorf("source_issue published %s = %v, a key IssueBasic never renders", key, value)
+			}
+		})
+	}
+}
+
+// TestIssueLinkGet_CaptureUnreadable verifies the handler reports a body the
+// link reader cannot hold rather than serving a link with the captured keys
+// silently missing. GitLab cannot send this, so the mock is where it is
+// reachable: the SDK ignores the key and the reader is handed the same bytes
+// with it typed as something it is not.
+func TestIssueLinkGet_CaptureUnreadable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"source_issue":{"id":50,"blocking_issues_count":"two"},"link_type":"blocks"}`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
+	assertContains(t, err, toolGetIssueLink)
+}
+
+// TestIssueLinkCreate_CaptureUnreadable is the same refusal on the create
+// path, which reads the link GitLab answers the POST with through the same
+// reader: the link exists by then, and the error says the answer could not be
+// read rather than pretending the create failed at GitLab.
+func TestIssueLinkCreate_CaptureUnreadable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"target_issue":{"id":80,"start_date":7},"link_type":"relates_to"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID, IssueIID: 5, TargetProjectID: "20", TargetIssueIID: "12",
+	})
+	assertContains(t, err, toolCreateIssueLink)
+}
+
 // TestIssueLinkGet_MissingProjectID verifies that Get refuses a call naming no
 // project without reaching GitLab, and says which field it refused on.
 func TestIssueLinkGet_MissingProjectID(t *testing.T) {
@@ -809,7 +908,7 @@ func TestToOutput_FullFields(t *testing.T) {
 			ProjectID: 20,
 		},
 	}
-	out := toOutput(link)
+	out := toOutput(link, linkExtra{})
 
 	if out.ID != 42 {
 		t.Errorf("ID = %d, want 42", out.ID)
@@ -835,7 +934,7 @@ func TestToOutput_NilSourceIssue(t *testing.T) {
 			ProjectID: 20,
 		},
 	}
-	out := toOutput(link)
+	out := toOutput(link, linkExtra{})
 
 	if out.SourceIssue != nil {
 		t.Errorf("SourceIssue = %+v, want nil for nil source", out.SourceIssue)
@@ -855,7 +954,7 @@ func TestToOutput_NilTargetIssue(t *testing.T) {
 			ProjectID: 10,
 		},
 	}
-	out := toOutput(link)
+	out := toOutput(link, linkExtra{})
 
 	if out.TargetIssue != nil {
 		t.Errorf("TargetIssue = %+v, want nil for nil target", out.TargetIssue)
@@ -871,7 +970,7 @@ func TestToOutputBoth_Nil(t *testing.T) {
 		ID:       3,
 		LinkType: "relates_to",
 	}
-	out := toOutput(link)
+	out := toOutput(link, linkExtra{})
 
 	if out.ID != 3 {
 		t.Errorf("ID = %d, want 3", out.ID)

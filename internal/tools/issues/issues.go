@@ -83,14 +83,21 @@ type BasicOutput struct {
 	Upvotes           int64                     `json:"upvotes,omitempty"`
 	Downvotes         int64                     `json:"downvotes,omitempty"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
-	// scalars not previously exposed).
-	ExternalID           string                               `json:"external_id,omitempty"`
-	LabelDetails         []*toolutil.LabelDetailsOutput       `json:"label_details,omitempty"`
+	// scalars not previously exposed). Two of client-go's keys are not among
+	// them. external_id is filled only from the string id of an external
+	// tracker's issue, which no issues route and no search renders; the two
+	// merge request listings that can return one list such an issue apart,
+	// as the entity GitLab renders it. label_details is filled only where a
+	// route takes with_labels_details, which search and those two listings
+	// do not, so it sits on Output, whose routes do.
 	TimeStats            *TimeStatsOutput                     `json:"time_stats,omitempty"`
 	TaskCompletionStatus *toolutil.TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 	// What lib/api/entities/issue_basic.rb sends that client-go's Issue does
 	// not model, read from the captured response (ADR-0021).
-	BlockingIssuesCount *int64 `json:"blocking_issues_count,omitempty" tier:"premium"`
+	// blocking_issues_count carries no tier: ee/lib/ee/api/entities/
+	// issue_basic.rb exposes it under no licensed feature, so an Enterprise
+	// build sends it licensed or not, and a Community one sends nothing.
+	BlockingIssuesCount *int64 `json:"blocking_issues_count,omitempty"`
 	StartDate           string `json:"start_date,omitempty"`
 	Type                string `json:"type,omitempty"`
 }
@@ -115,6 +122,10 @@ type Output struct {
 	Epic               *toolutil.EpicOutput       `json:"epic,omitempty" tier:"premium"`
 	Iteration          *toolutil.IterationOutput  `json:"iteration,omitempty" tier:"premium"`
 	Links              *toolutil.IssueLinksOutput `json:"_links,omitempty"`
+	// LabelDetails is the labels array as label objects, which client-go's
+	// Issue.UnmarshalJSON re-keys here when a route renders them that way:
+	// only under with_labels_details, which the issue listings take.
+	LabelDetails []*toolutil.LabelDetailsOutput `json:"label_details,omitempty"`
 	// What only lib/api/entities/issue.rb adds, read from the captured
 	// response (ADR-0021).
 	EpicIID      *int64 `json:"epic_iid,omitempty" tier:"premium"`
@@ -300,8 +311,6 @@ func ToBasicOutput(issue *gl.Issue, extra toolutil.IssueBasicExtra) BasicOutput 
 	out.UserNotesCount = issue.UserNotesCount
 	out.Upvotes = issue.Upvotes
 	out.Downvotes = issue.Downvotes
-	out.ExternalID = issue.ExternalID
-	out.LabelDetails = toolutil.NewLabelDetailsOutputs(issue.LabelDetails)
 	out.TimeStats = timeStatsPtr(issue.TimeStats)
 	out.TaskCompletionStatus = toolutil.NewTaskCompletionStatusOutput(issue.TaskCompletionStatus)
 	out.BlockingIssuesCount = extra.BlockingIssuesCount
@@ -338,7 +347,8 @@ func issueListOutput(op string, issues []*gl.Issue, resp *gl.Response, captured 
 // ToBasicOutputs converts a page of issues as API::Entities::IssueBasic
 // renders them, one extra per issue in order. It is what a package outside
 // this one calls when its own route presents the basic entity rather than the
-// full issue: the merge request's closed and related issues, and search.
+// full issue: search, and the merge request's closed and related issues,
+// which convert a whole page before setting an external tracker's rows apart.
 func ToBasicOutputs(list []*gl.Issue, captured *gitlabclient.ResponseCapture) ([]BasicOutput, error) {
 	extras, err := toolutil.CapturedIssueBasics(captured, len(list))
 	if err != nil {
@@ -355,6 +365,7 @@ func ToBasicOutputs(list []*gl.Issue, captured *gitlabclient.ResponseCapture) ([
 // [ToBasicOutput] carries plus what only API::Entities::Issue adds.
 func ToOutput(issue *gl.Issue, extra toolutil.IssueExtra) Output {
 	out := Output{BasicOutput: ToBasicOutput(issue, extra.IssueBasicExtra)}
+	out.LabelDetails = toolutil.NewLabelDetailsOutputs(issue.LabelDetails)
 	out.HealthStatus = issue.HealthStatus
 	out.References = toolutil.NewReferencesOutput(issue.References)
 	out.Subscribed = issue.Subscribed

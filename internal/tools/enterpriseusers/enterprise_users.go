@@ -49,11 +49,13 @@ type DeleteInput struct {
 	HardDelete *bool                `json:"hard_delete,omitempty" jsonschema:"Permanently delete user instead of soft delete"`
 }
 
-// Output mirrors the top-level fields of gl.User returned by the GitLab
-// group_enterprise_users endpoints. Enterprise-user endpoints return full
-// User objects, so this shape reflects gl.User as completely as practical:
-// every top-level scalar plus the nested identities, SCIM identities, custom
-// attributes, and created_by sub-objects.
+// Output is a user as the group_enterprise_users endpoints answer with it.
+// ee/lib/api/group_enterprise_users.rb presents every one of them with
+// API::Entities::UserPublic, so the shape carries what that entity renders:
+// client-go's User decodes the answer, and the six keys that struct models
+// and UserPublic never sends (skype, extern_uid and provider at the top
+// level, can_create_organization, and the two sign-in addresses only the
+// administrator's user entity carries) are not published.
 type Output struct {
 	toolutil.HintableOutput
 	ID                             int64                   `json:"id"`
@@ -67,14 +69,11 @@ type Output struct {
 	Bot                            bool                    `json:"bot"`
 	Location                       string                  `json:"location,omitempty"`
 	PublicEmail                    string                  `json:"public_email,omitempty"`
-	Skype                          string                  `json:"skype,omitempty"`
 	Linkedin                       string                  `json:"linkedin,omitempty"`
 	Twitter                        string                  `json:"twitter,omitempty"`
 	WebsiteURL                     string                  `json:"website_url,omitempty"`
 	Organization                   string                  `json:"organization,omitempty"`
 	JobTitle                       string                  `json:"job_title,omitempty"`
-	ExternUID                      string                  `json:"extern_uid,omitempty"`
-	Provider                       string                  `json:"provider,omitempty"`
 	ThemeID                        int64                   `json:"theme_id,omitempty"`
 	LastActivityOn                 string                  `json:"last_activity_on,omitempty"`
 	ColorSchemeID                  int64                   `json:"color_scheme_id,omitempty"`
@@ -82,12 +81,9 @@ type Output struct {
 	IsAuditor                      bool                    `json:"is_auditor"`
 	CanCreateGroup                 bool                    `json:"can_create_group"`
 	CanCreateProject               bool                    `json:"can_create_project"`
-	CanCreateOrganization          bool                    `json:"can_create_organization"`
 	ProjectsLimit                  int64                   `json:"projects_limit"`
 	CurrentSignInAt                string                  `json:"current_sign_in_at,omitempty"`
-	CurrentSignInIP                string                  `json:"current_sign_in_ip,omitempty"`
 	LastSignInAt                   string                  `json:"last_sign_in_at,omitempty"`
-	LastSignInIP                   string                  `json:"last_sign_in_ip,omitempty"`
 	ConfirmedAt                    string                  `json:"confirmed_at,omitempty"`
 	TwoFactorEnabled               bool                    `json:"two_factor_enabled"`
 	Note                           string                  `json:"note,omitempty"`
@@ -168,21 +164,17 @@ func toOutput(u *gl.User, extra toolutil.UserExtra) Output {
 		Bot:                            u.Bot,
 		Location:                       u.Location,
 		PublicEmail:                    u.PublicEmail,
-		Skype:                          u.Skype,
 		Linkedin:                       u.Linkedin,
 		Twitter:                        u.Twitter,
 		WebsiteURL:                     u.WebsiteURL,
 		Organization:                   u.Organization,
 		JobTitle:                       u.JobTitle,
-		ExternUID:                      u.ExternUID,
-		Provider:                       u.Provider,
 		ThemeID:                        u.ThemeID,
 		ColorSchemeID:                  u.ColorSchemeID,
 		IsAdmin:                        u.IsAdmin,
 		IsAuditor:                      u.IsAuditor,
 		CanCreateGroup:                 u.CanCreateGroup,
 		CanCreateProject:               u.CanCreateProject,
-		CanCreateOrganization:          u.CanCreateOrganization,
 		ProjectsLimit:                  u.ProjectsLimit,
 		TwoFactorEnabled:               u.TwoFactorEnabled,
 		Note:                           u.Note,
@@ -222,12 +214,6 @@ func toOutput(u *gl.User, extra toolutil.UserExtra) Output {
 	}
 	if u.ConfirmedAt != nil {
 		o.ConfirmedAt = u.ConfirmedAt.Format(time.RFC3339)
-	}
-	if u.CurrentSignInIP != nil {
-		o.CurrentSignInIP = u.CurrentSignInIP.String()
-	}
-	if u.LastSignInIP != nil {
-		o.LastSignInIP = u.LastSignInIP.String()
 	}
 	return o
 }
