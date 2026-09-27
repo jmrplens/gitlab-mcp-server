@@ -150,6 +150,32 @@ func TestFormatOutputMarkdownString_BothScopes_NamesTheProject(t *testing.T) {
 	}
 }
 
+// TestScopeValue_NamesTheScopeByWhatGitLabSent drives every shape a to-do's
+// scope arrives in and holds what the card names it by: a path when GitLab
+// sent one, the name when it sent only that, and nothing when the to-do
+// carries neither a project nor a group, as the to-do about an expiring SSH
+// key does.
+func TestScopeValue_NamesTheScopeByWhatGitLabSent(t *testing.T) {
+	tests := []struct {
+		name string
+		todo Output
+		want string
+	}{
+		{name: "project path", todo: Output{Project: &BasicProjectOut{Name: "proj", PathWithNamespace: "org/proj"}}, want: "org/proj"},
+		{name: "project name alone", todo: Output{Project: &BasicProjectOut{Name: "proj"}}, want: "proj"},
+		{name: "group path", todo: Output{Group: &toolutil.NamespaceBasicOutput{Name: "Team", FullPath: "org/team"}}, want: "org/team"},
+		{name: "group name alone", todo: Output{Group: &toolutil.NamespaceBasicOutput{Name: "Team"}}, want: "Team"},
+		{name: "no scope", todo: Output{}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := scopeValue(tt.todo); got != tt.want {
+				t.Errorf("scopeValue() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFormatOutputMarkdownString_BodyAddsNoStructure verifies that a to-do
 // body carrying a heading and a list item adds neither to the document. The
 // body is whatever the comment that raised the to-do said, and it used to be

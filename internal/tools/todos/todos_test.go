@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -784,6 +785,34 @@ func TestActionSpecs_FilterVocabularies_AreAttachedToTheListActionAlone(t *testi
 			}
 			if want := []string{"action", "state", "type"}; !reflect.DeepEqual(paths, want) {
 				t.Errorf("overridden properties = %v, want %v", paths, want)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_FilterVocabularies_OfferWhatATransferHintAsksFor verifies
+// that the enums accept the filter project.transfer and group.transfer send a
+// model here with: the transfer_failed action a background transfer leaves
+// when it fails, on a Project or a Namespace target. An enum without them
+// refuses that call at the input schema, before GitLab is asked.
+func TestActionSpecs_FilterVocabularies_OfferWhatATransferHintAsksFor(t *testing.T) {
+	spec := specsByTool(t)["gitlab_todo_list"]
+	enums := map[string][]any{}
+	for _, override := range spec.InputSchemaOverrides {
+		enums[override.PropertyPath], _ = override.Values["enum"].([]any)
+	}
+	tests := []struct {
+		property string
+		value    string
+	}{
+		{property: "action", value: "transfer_failed"},
+		{property: "type", value: "Project"},
+		{property: "type", value: "Namespace"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.property+"="+tt.value, func(t *testing.T) {
+			if !slices.Contains(enums[tt.property], any(tt.value)) {
+				t.Errorf("%s enum = %v, want it to offer %q", tt.property, enums[tt.property], tt.value)
 			}
 		})
 	}
