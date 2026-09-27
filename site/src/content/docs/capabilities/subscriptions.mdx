@@ -112,7 +112,7 @@ An ending **you** caused carries no reason, because you caused it. Neither does 
 
 - **stdio**: works as-is on both protocol generations.
 - **HTTP, stateless mode (the default)**: the legacy `resources/subscribe` request is refused with an explanatory error — each stateless POST gets its own session that closes with the response, so a subscription it accepted could never be notified. Clients on protocol 2026-07-28 are unaffected: `subscriptions/listen` holds the request open, which stateless mode supports. Legacy subscribers need `--stateless=false`.
-- **Client quirks**: VS Code subscribes to every resource it reads and routes updates into its file-change pipeline; Cursor sends `resources/subscribe` even to servers that advertise `subscribe: false`; the Go SDK client fires `subscriptions/listen` without awaiting the response, so a refusal may never surface client-side.
+- **Client quirks**: VS Code subscribes to every resource it reads and routes updates into its file-change pipeline; Cursor sends `resources/subscribe` even to servers that advertise `subscribe: false`; the Go SDK client (v1.8.0) fires `subscriptions/listen` without awaiting the response, so it never sees a refusal, which any other client reads as the JSON-RPC error answering the listen, nor the result that ends a subscription.
 
 ## Error codes
 
@@ -126,5 +126,7 @@ A refused legacy `resources/subscribe` carries a deliberate JSON-RPC code — ne
 | Watchers per process at 512                                 | `-32000`, with `server-wide` in the message                               |
 | Transient GitLab failure on the first read                  | `-32603` (internal error)                                                 |
 | `resources/subscribe` on stateless HTTP                     | `-32600` — use `subscriptions/listen` instead                             |
+
+On protocol 2026-07-28 a refused `subscriptions/listen` carries the same codes, as the JSON-RPC error answering the listen itself, sent before any acknowledgment. This server's own per-credential rate limit (`--rate-limit-rps`), which is not the GitLab rate limit the table means, refuses either method earlier still, with `-42900`. The Go SDK client (v1.8.0) sees none of them on a listen, and a second `Subscribe` it makes to a refused URI sends nothing until `Unsubscribe`.
 
 <FAQ />

@@ -138,6 +138,9 @@ readable without opening the tracker:
 | 63 | client-go | [`ApproveOrRejectProjectDeployment` discards the approval GitLab records](#approveorrejectprojectdeployment-discards-the-approval-gitlab-records) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 64 | client-go | [`ShareProjectWithGroup` discards the link GitLab creates](#shareprojectwithgroup-discards-the-link-gitlab-creates) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 65 | client-go | [`GroupRelationStatus` misses the object count, and a relation's status does not decode](#grouprelationstatus-does-not-model-the-object-count-and-a-relations-status-does-not-decode) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 61 | go-sdk | [A result a middleware makes carries no `resultType`](#a-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No | None possible |
+| 62 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), open | No | No | None possible |
+| 63 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None possible |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -262,6 +265,19 @@ which is not tagged. Two upstream indexes are behind, the umbrella's
 description and the go-sdk index, and row 34's section and the go-sdk section
 say where. go-sdk v1.8.0 is still that SDK's newest tag and gitlab-org/gitlab
 19.5 is not cut, so every merge here that was unreleased still is.
+
+Rows 61 to 63 were added on 2026-09-27 from
+[issue 961](https://github.com/jmrplens/gitlab-mcp-server/issues/961), which
+first recorded them as findings F-20, F-21 and F-22 of the tenant policy
+specification; its fourth item is row 10. Their five fields were read off the
+trackers that day, and every link of the other go-sdk rows was read again with
+them: none has moved since the 25th, and v1.8.0 is still that SDK's newest tag,
+24 commits behind `main`, so every go-sdk merge here is still unreleased. Row
+63's section records one thing its tracker does not say, measured the same day:
+the pull request proposed for it does not reach a 404 whose body is a JSON-RPC
+error, and that is the 404 this server writes. Each of the three, and row 10,
+is now held by a test that fails on the change that retires it, named in its
+section.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -3005,10 +3021,17 @@ as the pull request for
 [modelcontextprotocol/go-sdk#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262);
 and it does not list
 [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299),
-filed on 2026-09-26, which does not link back to it either, so its last
+filed on 2026-09-25, which does not link back to it either, so its last
 sentence, that every issue does, no longer holds. Nobody waits on it, so
 bringing it up to date is bookkeeping rather than something owed to a
 reviewer.
+
+The three added on 2026-09-27 are not part of that batch. Each decides what a
+caller of this server sees when it is refused, and two of them were already
+reported upstream by other users when this server's specification found them,
+so they carry no issue of ours; the third,
+[modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299),
+was filed on 2026-09-25.
 
 ### No keep-alive interval for SSE streams on StreamableHTTPOptions
 
@@ -3400,6 +3423,14 @@ and the only output was the listen request's own result — no
 **Recorded in**: ADR-0015, so the gap is stated where the design is rather than
 only here.
 
+**Pinned by**: `TestListenEnd_WatchedResourceGone_CompletesTheListenAndSendsNoCancellation`
+in `test/e2e/stdio`, which is that reproduction on the real binary: it lets a
+listen be acknowledged, makes its issue answer 404, and asserts that the listen's
+own result carries `resource_gone` with the status and that no
+`notifications/cancelled` arrives before it or before the answer to a later call.
+The change that starts sending the notification fails it, with a message naming
+this entry, ADR-0015 and F-24 of the tenant policy specification.
+
 ### `Mcp-Name` is compared without decoding the base64 sentinel
 
 - **Reported**: yes, by another user, not by us:
@@ -3629,6 +3660,177 @@ specification and the SDK. [ADR-0015](adr/adr-0015-polled-resource-subscriptions
 recorded the overwrite half and understated it, saying a session with two
 listens sees the notification "on one of them"; the state after either close is
 neither, and the ADR now says so.
+
+### A result a middleware makes carries no `resultType`
+
+- **Reported**: yes, by another user, not by us:
+  [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225),
+  opened on 2026-09-01, names this server's case exactly: a receiving
+  middleware that answers a `tools/call` itself, as an authentication, rate
+  limit or entitlement gate does.
+- **In review**: yes, theirs,
+  [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226),
+  merged on 2026-09-14 as e40f35d.
+- **Merged**: **yes, unreleased.** The merge landed thirteen minutes before
+  v1.8.0 was published, but v1.8.0 is tagged on the commit v1.8.0-pre.2 was,
+  3f3b699, four commits before it, so the v1.8.0 pin does not carry it. No later
+  tag exists as of 2026-09-27.
+- **Blocking**: no. A client MUST read an absent `resultType` as `complete`,
+  which is what the refusal is. A client that validates each result against the
+  2026-07-28 schema rejects it instead.
+- **Workaround**: none possible. `CallToolResult` keeps `resultType` in an
+  unexported field behind an unexported setter (`mcp/protocol.go`), so the
+  middleware cannot label the result it builds, and the SDK's own labelling of a
+  `tools/call` result (`handleMultiRoundTripResult`, called from
+  `Server.callTool`) runs only in the dispatcher the refusal is made to avoid.
+  The bump to the first tag carrying e40f35d retires the entry.
+
+**What**: 2026-07-28 puts `resultType` on every result. go-sdk v1.8.0 labels a
+`tools/call`, `prompts/get` or `resources/read` result only inside its own
+dispatcher, because each of those can also be `input_required`; the result
+types that can only be complete embed a labelled field and are labelled after
+the middleware chain returns (`setCompleteResultType`), and `CallToolResult` is
+not one of them. The rate limiter's refusal of a `tools/call`
+(`rateLimitedResult` in `internal/toolutil/rate_limit.go`) is a tool-error
+result a middleware returns before that dispatcher runs, so at 2026-07-28 it
+reaches the client with no `resultType`, while a call the same server serves
+carries `"complete"`. The tenant policy specification records it as F-20, on
+row RTC-001.
+
+**How we found it**: writing the tenant policy specification of issue 565, which
+read every refusal channel against go-sdk v1.8.0. The upstream issue already
+existed.
+
+**Pinned by**: `TestRateLimitedToolCall_ModernRevision_CarriesNoResultTypeWhereTheServedOneDoes`
+in `test/e2e/http`, which asserts the absence on the real binary beside a served
+call that carries `"complete"`. It was run on 2026-09-27 against a go-sdk that
+carries e40f35d (the head of
+[modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300),
+which is based on a `main` that contains it) and failed there with the message
+that names this entry and F-20, so the bump that retires the entry cannot land
+without updating both.
+
+### A Go SDK client never sees a `subscriptions/listen` refusal
+
+- **Reported**: yes, by another user:
+  [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169),
+  opened on 2026-08-13, reports it from `Client.Connect`'s side, and a comment
+  on it of 2026-08-25, also not ours, reproduces it on an explicit
+  `ClientSession.Subscribe` whose server refuses the URI, which is this
+  server's case. It needs no issue of ours.
+- **In review**: yes, theirs,
+  [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170),
+  open since 2026-08-13 and conflicting with `main`. Its one review, on
+  2026-08-17, points out that it checks for a refusal without waiting for one,
+  so over any transport slower than an in-process one the client still reports
+  success; nothing has moved since. As written it observes only a refusal that
+  has already arrived, which covers a server answering the listen with a
+  non-2xx status and not a refusal delivered on a 200 event stream.
+- **Merged**: no.
+- **Blocking**: no. The refusal still takes effect: no watcher starts and no API
+  call is spent. What the client loses is being told.
+- **Workaround**: none possible. The refusal is already an in-band JSON-RPC
+  error answering the listen itself, sent before the acknowledgment, which is
+  the channel the specification gives it; the Go SDK client is the one that
+  does not read that answer.
+
+**What**: at 2026-07-28, `ClientSession.Subscribe` opens a
+`subscriptions/listen` through `callSubscriptionsListen` (`mcp/transport.go`),
+which sends the request and returns without awaiting its response, so
+`Subscribe` returns nil whatever the server answers. Every refusal this server
+makes on the listen path is therefore invisible to that client: the
+per-credential rate limit (`-42900`), both listen-stream ceilings and both
+watcher caps (`-32000`), and an unsubscribable or unreadable URI (`-32602`).
+`Subscribe` also records the URI as subscribed before it sends the listen, and
+nothing removes the record on a refusal, so a second `Subscribe` to the same URI
+returns nil and sends nothing until `Unsubscribe` is called. The same
+fire-and-forget drops the listen's completion result, so that client never
+learns why the server ended a subscription either. A legacy client, whose
+`Subscribe` sends `resources/subscribe` and awaits it, sees every one of these
+refusals, and so does any client that reads the listen's response. The tenant
+policy specification records it as F-21, on rows RTC-001 and HLD-001 to
+HLD-004.
+
+**How we found it**: the issue 565 SDK probe, a go-sdk client subscribing
+through a listen the server refused, which returned `err=<nil>`.
+
+**Pinned by**: `TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient`
+in `internal/tenancy/channels_integration_test.go`, which asserts over the three
+transports that the refusal reaches the wire before any acknowledgment, that a
+modern SDK client's `Subscribe` still returns nil, and that a legacy one sees
+the code. The release that reports the refusal fails it.
+
+### The Go SDK client starts no new session after a 404
+
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299),
+  on 2026-09-25. It offers two shapes, the client starting a new session on its
+  own with a hook for the state a new session loses, or the error staying
+  terminal and documented as needing one. Either changes or documents an
+  existing API, so it was filed for go-sdk's proposal process to choose.
+- **In review**: yes, theirs,
+  [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300),
+  opened by another contributor on 2026-09-26 on the first shape, with no review
+  yet. It does not reach this server's 404, as measured below.
+- **Merged**: no.
+- **Blocking**: no, and only under `--stateless=false`, the one mode that mints
+  session IDs. The 404 it follows is ADM-007's, answered to a session presented
+  by a credential other than its owner's, and to one whose owner's pooled entry
+  was evicted since, which is the case a long-lived client of a stateful
+  deployment can meet without doing anything unusual. Reconnecting recovers it.
+- **Workaround**: none possible. 404 is the answer the 2025-11-25 transport
+  prescribes for a session the server will not serve, and it is the client that
+  must start over.
+
+**What**: 2025-11-25 says a client that receives 404 to a request carrying a
+session ID MUST start a new session by sending `initialize` without one. The
+gate's refusal of a foreign session answers exactly that 404
+(`checkSessionOwnership` in `cmd/server/auth_gate.go`), and its comment counts
+on the client to make the refusal heal itself. go-sdk v1.8.0's streamable
+client starts no new session, and how it fails instead depends on the body. For
+a bare 404 it fails the connection with `ErrSessionMissing` and leaves starting
+over to the application;
+[modelcontextprotocol/go-sdk#715](https://github.com/modelcontextprotocol/go-sdk/issues/715),
+closed, exported that error rather than acting on it. For a 404 whose body is a
+JSON-RPC error, which is what this server writes, it does not even conclude
+that the session is gone: `checkResponse` (`mcp/streamable.go`) decodes the
+body into a JSON-RPC error before it looks at the status, and returns that
+error wrapped as a rejection that keeps the connection. The application is shown
+the gate's own words, "Start a new session by sending initialize without a
+session ID", while the client keeps the dead session ID and sends every later
+call on it, to be refused the same way. The tenant policy specification records
+it as F-22, on row ADM-007.
+
+**Measured on 2026-09-27** with the test below, against this server's binary,
+in four configurations:
+
+| go-sdk client                                                                                                    | This server's 404 (JSON-RPC body)                 | With `MCPGODEBUG=noprotocolerrorbody=1` |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------- |
+| v1.8.0                                                                                                           | the body's error; connection kept; no new session | `ErrSessionMissing`; connection failed  |
+| head of [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300) (`d3d7b33`) | the body's error; connection kept; no new session | new session; both calls served          |
+
+The second column is the one this server's callers are in, and the fix as
+proposed leaves it unchanged, because it starts a new session only on
+`ErrSessionMissing`, which a 404 carrying a JSON-RPC body never produces. The
+switch that turns the body decoding off shows the body is the only thing in the
+way. The other remedy would be this server writing its 404 with no JSON-RPC
+body, which ADM-007's row rules out by declaring the refusal's code and text,
+and which the transport does not ask for: the MUST keys on the status, not on
+the body.
+
+**How we found it**: the issue 565 SDK probe's session-close case, which
+answered a go-sdk client from a go-sdk server whose 404 body is plain text and
+so saw `ErrSessionMissing`. Driving the same client against this server's gate
+showed the second path.
+
+**Pinned by**: `TestSessionNotFound_GoSDKClient_KeepsTheRefusedSessionAndStartsNoOther`
+in `test/e2e/http`, which drives a go-sdk client against the real binary with
+`--stateless=false`, switches its credential under the live session, and
+asserts that both later calls are refused on the old session ID, that no second
+`initialize` is sent, and that the error is the body's JSON-RPC error and not
+`ErrSessionMissing`. Each assertion fails with a message naming this entry, the
+gate's comment and ADM-007. It passes in both configurations of the middle
+column and fails in both of the last, which is how the table was measured.
 
 ## OpenAI Codex (`openai/codex`)
 
