@@ -1777,6 +1777,67 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	}
 }
 
+// TestCreateServer_MetaParameterSchema_IsAppliedOnlyWhereMetaToolsAreBuilt
+// covers which surfaces set the meta-tool input-schema mode. It is process
+// state the meta dispatchers read as they register, so a meta server has to
+// set it to its own configuration first, and an individual server, which
+// registers no dispatcher, must leave whatever another server set alone.
+func TestCreateServer_MetaParameterSchema_IsAppliedOnlyWhereMetaToolsAreBuilt(t *testing.T) {
+	cases := []struct {
+		name    string
+		surface string
+		before  string
+		want    string
+	}{
+		{name: "meta sets its mode", surface: config.ToolSurfaceMeta, before: config.MetaParamSchemaOpaque, want: config.MetaParamSchemaFull},
+		{name: "individual leaves it", surface: config.ToolSurfaceIndividual, before: config.MetaParamSchemaCompact, want: config.MetaParamSchemaCompact},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(tools.SetMetaParamSchemaScoped(tc.before))
+
+			mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:     tc.surface,
+				MetaParamSchema: config.MetaParamSchemaFull,
+			})
+
+			if got := tools.MetaParamSchema(); got != tc.want {
+				t.Errorf("meta parameter schema after a %s server = %q, want %q", tc.surface, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCreateServer_AnnouncesTheRateLimitOnlyWhenItIsOn covers the startup line
+// an operator reads to learn whether calls are limited. A rate of zero means
+// no limit, which is the stdio default, and announcing "rate limit enabled"
+// there would describe a deployment that is not running.
+func TestCreateServer_AnnouncesTheRateLimitOnlyWhenItIsOn(t *testing.T) {
+	cases := []struct {
+		name string
+		rps  float64
+		want bool
+	}{
+		{name: "no rate", rps: 0},
+		{name: "a rate", rps: 2.5, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := captureLogMessages(t)
+
+			mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+				ToolSurface:    config.ToolSurfaceDynamic,
+				RateLimitRPS:   tc.rps,
+				RateLimitBurst: 5,
+			})
+
+			if got := logged("rate limit enabled"); got != tc.want {
+				t.Errorf("rate limit announced = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCreateServer_DynamicToolSurface verifies that the default low-token
 // dynamic surface exposes find and execute plus surface-aware catalog resources.
 func TestCreateServer_DynamicToolSurface(t *testing.T) {
@@ -3051,6 +3112,39 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	}
 }
 
+// TestRunStdio_ASignalDuringStartup_IsAStopRatherThanAFailure covers the one
+// outcome of the startup work that is deliberately not reported. A signal
+// cancels the startup work along with serving, and the error that produces
+// describes the shutdown rather than anything wrong with the build: a stop the
+// operator asked for has to leave with a clean status, not as a failed unit.
+// The startup is held until the signal and then fails, so the only thing
+// separating the two answers is whether the signal is what ended serving.
+func TestRunStdio_ASignalDuringStartup_IsAStopRatherThanAFailure(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
+	failDynamicCatalog(t, nil)
+	heldOpenStdin(t)
+	restoreGate := stdioStartupGate
+	stdioStartupGate = func(ctx context.Context) { <-ctx.Done() }
+	t.Cleanup(func() { stdioStartupGate = restoreGate })
+
+	ctx, sendSignal := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runStdio(ctx) }()
+	sendSignal()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("runStdio() = %v, want nil: the startup failed because the signal cancelled it", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("runStdio did not return after the signal")
+	}
+}
+
 // TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted covers the same
 // failure on the wire: the request that triggered the build is answered with
 // the retry-able refusal rather than an empty catalog, and the next request
@@ -3474,6 +3568,151 @@ func TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate(t *tes
 				t.Errorf("tier = %s, want free detected from an instance with no license endpoint", serverCfg.Tier)
 			}
 			assertStartupIdentity(t, identity.resolved.Load(), tc.wantIdentity)
+		})
+	}
+}
+
+// TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance covers
+// the other side of the tier decision: a tier the operator pinned is used
+// verbatim and the instance's license is never read, even on an instance that
+// answers every request. The license names a third tier, so the detected case
+// beside it proves the fixture's license is the one detection reads and the
+// pinned case is not passing for want of one.
+func TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance(t *testing.T) {
+	cases := []struct {
+		name       string
+		pinned     bool
+		want       edition.Tier
+		wantAsking bool
+	}{
+		{name: "pinned", pinned: true, want: edition.Ultimate},
+		{name: "detected", want: edition.Premium, wantAsking: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var licenseReads atomic.Int64
+			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v4/version":
+					testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+				case "/api/v4/user":
+					testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+				case "/api/v4/license":
+					licenseReads.Add(1)
+					testutil.RespondJSON(w, http.StatusOK, `{"plan":"premium"}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(gitlab.Close)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				Tier:           edition.Ultimate,
+				TierExplicit:   tc.pinned,
+				IgnoreScopes:   true,
+				DisableRetries: true,
+			}
+			client, err := gitlabclient.NewClient(cfg)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			serverCfg := cfg.ServerConfig()
+			shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			if serverCfg.Tier != tc.want {
+				t.Errorf("tier = %s, want %s", serverCfg.Tier, tc.want)
+			}
+			if asked := licenseReads.Load() > 0; asked != tc.wantAsking {
+				t.Errorf("license read = %t, want %t", asked, tc.wantAsking)
+			}
+		})
+	}
+}
+
+// TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot covers the
+// scope step of stdio startup. A token GitLab reports as read_api is served the
+// read-only catalog (ADR-0018); a token whose scopes cannot be read is served
+// everything and the operator is told why at debug level; and a deployment
+// that ignores scopes does not ask at all.
+func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.T) {
+	cases := []struct {
+		name         string
+		ignore       bool
+		answers      bool
+		wantScopes   []string
+		wantReadOnly bool
+		wantAsked    bool
+		wantNote     bool
+	}{
+		{name: "a read_api token", answers: true, wantScopes: []string{"read_api"}, wantReadOnly: true, wantAsked: true},
+		{name: "scopes that cannot be read", wantAsked: true, wantNote: true},
+		{name: "scopes ignored", ignore: true, answers: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var scopeReads atomic.Int64
+			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v4/version":
+					testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+				case "/api/v4/user":
+					testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+				case "/api/v4/personal_access_tokens/self":
+					scopeReads.Add(1)
+					if !tc.answers {
+						http.NotFound(w, r)
+						return
+					}
+					testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"reader","scopes":["read_api"]}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(gitlab.Close)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				TierExplicit:   true,
+				IgnoreScopes:   tc.ignore,
+				DisableRetries: true,
+			}
+			client, err := gitlabclient.NewClient(cfg)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			serverCfg := cfg.ServerConfig()
+			shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+			logged := captureLogMessages(t)
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			if !slices.Equal(serverCfg.TokenScopes, tc.wantScopes) {
+				t.Errorf("token scopes = %v, want %v", serverCfg.TokenScopes, tc.wantScopes)
+			}
+			if serverCfg.ReadOnly != tc.wantReadOnly {
+				t.Errorf("read-only = %t, want %t", serverCfg.ReadOnly, tc.wantReadOnly)
+			}
+			if asked := scopeReads.Load() > 0; asked != tc.wantAsked {
+				t.Errorf("scopes asked = %t, want %t", asked, tc.wantAsked)
+			}
+			if noted := logged("PAT scope detection unavailable"); noted != tc.wantNote {
+				t.Errorf("unavailable-scopes note logged = %t, want %t", noted, tc.wantNote)
+			}
 		})
 	}
 }
@@ -7157,6 +7396,52 @@ func TestServeHTTP_StatefulOptOut_SessionHeaderPresent(t *testing.T) {
 		t.Fatal("stateful opt-out must set Mcp-Session-Id, got empty")
 	}
 	closeMCPSession(t, "http://"+addr, sessionID)
+}
+
+// TestServeHTTP_Stateful_TheSessionAnswersTheCredentialThatOpenedIt covers the
+// request after initialize, which is the whole of a stateful session's use.
+// The gate refuses a session ID whose owner it cannot name, so the server has
+// to record the owner as the session is opened; a server that did not would
+// issue a session ID and then answer 404 to every request carrying it.
+func TestServeHTTP_Stateful_TheSessionAnswersTheCredentialThatOpenedIt(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, false)
+	cfg.Stateless = false
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	initResp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`)
+	_ = readAndCloseBody(t, initResp)
+	sessionID := initResp.Header.Get(hdrMCPSessionID)
+	if initResp.StatusCode != http.StatusOK || sessionID == "" {
+		t.Fatalf("initialize status = %d, session = %q, want 200 and a session ID", initResp.StatusCode, sessionID)
+	}
+	defer closeMCPSession(t, "http://"+addr, sessionID)
+
+	inSession := func(body string) *http.Response {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		req.Header.Set("PRIVATE-TOKEN", testToken)
+		req.Header.Set(hdrMCPSessionID, sessionID)
+		req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		return resp
+	}
+	_ = readAndCloseBody(t, inSession(`{"jsonrpc":"2.0","method":"notifications/initialized"}`))
+
+	resp := inSession(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	body := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "gitlab_find_action") {
+		t.Errorf("tools/list in the session: status = %d, body = %q, want 200 and the catalog", resp.StatusCode, body)
+	}
 }
 
 // headerRoundTripper injects a static header set into every outgoing request.
