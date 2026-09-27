@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -400,6 +401,56 @@ func TestAdmit_WarmsEveryCredentialAndReportsTheFirstFailure(t *testing.T) {
 			t.Errorf("admit returned %d connections, want the one that was made", len(conns))
 		}
 	})
+}
+
+// answering returns a [scriptedConn] answer that fails the nth call with the
+// nth error of script, and serves every call once script is spent.
+func answering(script []error) func(string, int) error {
+	return func(_ string, seen int) error {
+		if seen <= len(script) {
+			return script[seen-1]
+		}
+		return nil
+	}
+}
+
+// TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands verifies how a
+// credential's warm-up listing meets a refusal. The listing bucket the whole
+// process shares refuses a herd of credentials past its burst and says to retry
+// after a short backoff, so that refusal is asked again until the listing is
+// served, the way a client asks; any other refusal or failure is returned at
+// once, and so is the rate refusal when the context has ended.
+func TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands(t *testing.T) {
+	t.Parallel()
+	refused := fmt.Errorf("tools/list: %w", rpcError{Code: rateLimitCode, Message: "rate limit exceeded for tools/list; retry after a short backoff"})
+	busy := fmt.Errorf("tools/list: %w", rpcError{Code: serverBusyCode, Message: "busy"})
+	broken := errors.New("connection reset")
+	ended, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, tc := range []struct {
+		name      string
+		ctx       context.Context
+		script    []error
+		wantErr   error
+		wantCalls int64
+	}{
+		{name: "served at once", ctx: t.Context(), wantCalls: 1},
+		{name: "a rate refusal is asked again until served", ctx: t.Context(), script: []error{refused, refused}, wantCalls: 3},
+		{name: "another refusal stands", ctx: t.Context(), script: []error{busy}, wantErr: busy, wantCalls: 1},
+		{name: "a failure stands", ctx: t.Context(), script: []error{broken}, wantErr: broken, wantCalls: 1},
+		{name: "a rate refusal stands once the context has ended", ctx: ended, script: []error{refused}, wantErr: refused, wantCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			conn := &scriptedConn{answer: answering(tc.script)}
+			if err := coldList(tc.ctx, conn); !errors.Is(err, tc.wantErr) {
+				t.Errorf("coldList = %v, want %v", err, tc.wantErr)
+			}
+			if got := conn.calls.Load(); got != tc.wantCalls {
+				t.Errorf("%d calls, want %d", got, tc.wantCalls)
+			}
+		})
+	}
 }
 
 // seriesFixture is what walkSteps needs besides a target: a sampler over
