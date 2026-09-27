@@ -422,6 +422,44 @@ const (
 		"internal/tools/mrchanges serves the diff through ListMergeRequestDiffs on /diffs, and the request inventory records no request to /changes at all."
 )
 
+// The entities the closes-issues route and the two create_todo routes are read
+// on.
+const (
+	mrNoteEntity = "API::Entities::MRNote"
+	todoEntity   = "API::Entities::Todo"
+)
+
+// reasonClosesIssuesPresentsIssues answers the note the closes-issues route is
+// annotated with.
+const reasonClosesIssuesPresentsIssues = "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents " +
+	"Entities::IssueBasic beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and " +
+	"never a note. Recorded in docs/development/upstream-bugs.md for the documentation merge request."
+
+// reasonTodoGroupOnProjectRoutes answers the group of the to-do the two
+// create_todo routes present.
+const reasonTodoGroupOnProjectRoutes = "lib/api/entities/todo.rb exposes group only `if: ->(todo, _) { todo.group_id }`, and " +
+	"app/models/todo.rb validates a to-do's project absent whenever it has a group (lines 87 and 88), so a to-do belongs to a " +
+	"project or to a group and never both. POST /projects/:id/issues/:issue_iid/todo and POST " +
+	"/projects/:id/merge_requests/:merge_request_iid/todo (lib/api/todos.rb) mark a to-do on an issuable of the project the route " +
+	"names, and TodoService#mark_todo gives it that project (app/services/todo_service.rb), so no to-do these routes present " +
+	"carries the key. A group's to-dos are user.todo_list's."
+
+// reasonIssueTodoConfirmation answers the target and project of the to-do an
+// issue's create_todo answers with.
+const reasonIssueTodoConfirmation = "POST /projects/:id/issues/:issue_iid/todo presents Entities::Todo (lib/api/todos.rb), whose " +
+	"target is the whole issue the caller named in issue_iid, rendered through Entities::Issue, and whose project is the project " +
+	"the caller named in project_id, rendered through Entities::ProjectIdentity. issue.create_todo answers with the to-do's own " +
+	"keys, its author and the issue's title and URL as target_title and target_url; issue.get returns the issue and project.get " +
+	"the project."
+
+// reasonMergeRequestTodoConfirmation is the same answer for a merge request.
+const reasonMergeRequestTodoConfirmation = "POST /projects/:id/merge_requests/:merge_request_iid/todo presents Entities::Todo " +
+	"(lib/api/todos.rb), whose target is the whole merge request the caller named in merge_request_iid, rendered through " +
+	"Entities::MergeRequest, and whose project is the project the caller named in project_id, rendered through " +
+	"Entities::ProjectIdentity. merge_request.create_todo answers with the to-do's own keys, its author, the merge request's " +
+	"title and URL as target_title and target_url and the project's name as project_name; merge_request.get returns the merge " +
+	"request and project.get the project."
+
 // reasonRenderHTMLNeverPassed answers the two rendered-markup keys on the types
 // whose routes cannot ask for them.
 //
@@ -725,13 +763,39 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	},
 
 	// The third case of a desc annotation naming an entity the handler does
-	// not present, after the two already recorded upstream.
+	// not present, after the two already recorded upstream. Both packages
+	// reading the route are answered: the issue package renders its rows and
+	// the merge request package calls it.
+	{Package: issuesPkg, Entity: mrNoteEntity, Field: "note", Category: categoryDocumentedNotSent, Reason: reasonClosesIssuesPresentsIssues},
+	{Package: mergeRequestsPkg, Entity: mrNoteEntity, Field: "note", Category: categoryDocumentedNotSent, Reason: reasonClosesIssuesPresentsIssues},
+
+	// avatar_path on the participants of an issue and of a merge request, the
+	// member family's answer for the same entity: neither route passes
+	// only_path (lib/api/issues.rb presents them with current_user and project,
+	// lib/api/merge_requests.rb with nothing).
+	{Package: issuesPkg, Entity: userBasicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: mergeRequestsPkg, Entity: userBasicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+
+	// The to-do an issue or a merge request answers a create_todo with. Its
+	// group is never sent on these routes, and its target and project are the
+	// objects the caller named.
+	{Package: issuesPkg, Entity: todoEntity, Field: "group", Category: categoryAssociationNullOnScope, Reason: reasonTodoGroupOnProjectRoutes},
+	{Package: mergeRequestsPkg, Entity: todoEntity, Field: "group", Category: categoryAssociationNullOnScope, Reason: reasonTodoGroupOnProjectRoutes},
+	{Package: issuesPkg, Entity: todoEntity, Field: "target", Category: categoryConfirmationOnly, Reason: reasonIssueTodoConfirmation},
+	{Package: issuesPkg, Entity: todoEntity, Field: "project", Category: categoryConfirmationOnly, Reason: reasonIssueTodoConfirmation},
+	{Package: mergeRequestsPkg, Entity: todoEntity, Field: "target", Category: categoryConfirmationOnly, Reason: reasonMergeRequestTodoConfirmation},
+	{Package: mergeRequestsPkg, Entity: todoEntity, Field: "project", Category: categoryConfirmationOnly, Reason: reasonMergeRequestTodoConfirmation},
+
+	// A merge request's reviewer, whose user this server publishes one level
+	// up beside the review.
 	{
-		Package: issuesPkg, Entity: "API::Entities::MRNote", Field: "note",
-		Category: categoryDocumentedNotSent,
-		Reason: "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents Entities::IssueBasic " +
-			"beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and never a " +
-			"note. Recorded in docs/development/upstream-bugs.md for the documentation merge request.",
+		Package: mergeRequestsPkg, Type: "ReviewerOutput", Entity: "API::Entities::MergeRequestReviewer", Field: "user",
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/merge_request_reviewer.rb exposes the reviewer as user, a UserBasic, beside the review's state and " +
+			"created_at. mergerequests.ReviewerOutput publishes every key of that user GitLab sends on the route one level up (id, " +
+			"username, name, state, locked, public_email, avatar_url and web_url; avatar_path and custom_attributes are gated by " +
+			"options GET /projects/:id/merge_requests/:merge_request_iid/reviewers never passes), and the review's state as " +
+			"review_state, since the user's state takes the key.",
 	},
 
 	// organization_id on the two hook types, which is the one condition here

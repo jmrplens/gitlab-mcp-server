@@ -24,8 +24,13 @@ func FormatTodoMarkdown(t TodoOutput) string {
 	c.Field("Action", t.ActionName)
 	c.Field("Target Type", t.TargetType)
 	c.Field("Target", t.TargetTitle)
+	if t.Author != nil {
+		c.Markdown("Author", toolutil.MdUserLink(t.Author.Username, t.Author.WebURL))
+	}
+	c.Field("Body", t.Body)
 	c.Field("State", t.State)
 	c.Time("Created", t.CreatedAt)
+	c.Time("Updated", t.UpdatedAt)
 	c.URL(t.TargetURL)
 	c.End(
 		toolutil.HintAction(actionTodoMarkDone, "mark this todo as completed"),
@@ -173,11 +178,13 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Participants", len(out.Participants), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name"))
+	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name", "State", "Locked"))
 	for _, p := range out.Participants {
 		b.WriteString(toolutil.MarkdownTableRow(
-			toolutil.MdUserHandle(p.Username),
+			toolutil.MdUserLink(p.Username, p.WebURL),
 			toolutil.EscapeMdTableCell(p.Name),
+			toolutil.EscapeMdTableCell(p.State),
+			toolutil.BoolEmoji(p.Locked),
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,

@@ -292,6 +292,27 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 	}
 }
 
+// TestTypedShapeCheck_ABorrowedType_IsPassedOver verifies that a type another
+// tools package declares, returned under a package that names it in a field,
+// is neither compared nor counted here even when something pairs it: its own
+// package judges it, and judging it again under the package that borrows it
+// would hold one domain's shape to another domain's endpoints.
+func TestTypedShapeCheck_ABorrowedType_IsPassedOver(t *testing.T) {
+	stubTypeGrainInputs(t, structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs:     []structs.OutputPairing{{Package: "mergerequests", MCPType: "mrapprovals.ConfigOutput", SDKType: "MergeRequestApprovals"}},
+	}, nil, approvalRoutes)
+
+	check := typedCheckOf("", approvalOperations, []publishedType{{
+		Package: "internal/tools/mergerequests", Name: "mrapprovals.ConfigOutput", Fields: []string{"invented"},
+		Inner: true, Borrowed: true,
+	}})
+
+	if want := (TypedShapeCheck{Ran: true}); !reflect.DeepEqual(check, want) {
+		t.Errorf("check = %+v, want %+v", check, want)
+	}
+}
+
 // TestTypedShapeCheck_ALooseMatch_IsNotAccepted verifies that the loose lookup
 // the package grain leans on is refused here. Accepting a literal segment of
 // ours where GitLab has a placeholder is evidence about a fixture value in the

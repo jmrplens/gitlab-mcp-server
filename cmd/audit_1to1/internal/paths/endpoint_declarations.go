@@ -228,7 +228,10 @@ func (d endpointDeclaration) covers(endpoint Endpoint) bool {
 func matchesDeclaredShape(shape, recorded []string) bool {
 	for i, want := range shape {
 		if want == declaredRest {
-			return i <= len(recorded)
+			// Every segment before this one matched a recorded segment, so
+			// the recorded path is at least as long as the shape up to here
+			// and whatever follows is the rest.
+			return true
 		}
 		if i >= len(recorded) {
 			return false

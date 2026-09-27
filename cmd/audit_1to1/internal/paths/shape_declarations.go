@@ -240,6 +240,8 @@ var declaredShapeFields = []shapeDeclaration{
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "name", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "avatar_url", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "web_url", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "locked", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "public_email", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "review_state", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 
 	// The project starrers, whose route annotates a user and presents the star.

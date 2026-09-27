@@ -1036,19 +1036,44 @@ type CreateTodoInput struct {
 }
 
 // TodoOutput represents a to-do item created from an issue.
+//
+// POST /projects/:id/issues/:issue_iid/todo presents lib/api/entities/todo.rb.
+// The to-do carries its own keys, its author and the instant it last changed;
+// the issue it points at is the one the caller named, kept here as its title
+// and URL, and the project it belongs to is the one the caller named too, so
+// both are left to issue.get and project.get rather than repeated on a
+// confirmation. A to-do raised on a project's issue belongs to no group, so the
+// entity's group is never sent on this route.
 type TodoOutput struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	ActionName  string `json:"action_name"`
-	TargetType  string `json:"target_type"`
-	TargetTitle string `json:"target_title"`
-	TargetURL   string `json:"target_url"`
-	Body        string `json:"body,omitempty"`
-	State       string `json:"state"`
-	CreatedAt   string `json:"created_at,omitempty"`
+	ID          int64                     `json:"id"`
+	ActionName  string                    `json:"action_name"`
+	TargetType  string                    `json:"target_type"`
+	TargetTitle string                    `json:"target_title"`
+	TargetURL   string                    `json:"target_url"`
+	Author      *toolutil.UserBasicOutput `json:"author,omitempty"`
+	Body        string                    `json:"body,omitempty"`
+	State       string                    `json:"state"`
+	CreatedAt   string                    `json:"created_at,omitempty"`
+	UpdatedAt   string                    `json:"updated_at,omitempty"`
 }
 
-// CreateTodo creates a to-do item for the authenticated user on the specified issue.
+// todoExtra is what lib/api/entities/todo.rb sends that client-go's Todo does
+// not model, read from the captured response (ADR-0021): when the to-do last
+// changed, and the two keys of the author's UserBasic that BasicUser lacks.
+// Both gaps are recorded in docs/development/upstream-bugs.md.
+type todoExtra struct {
+	UpdatedAt *time.Time              `json:"updated_at"`
+	Author    toolutil.UserBasicExtra `json:"author"`
+}
+
+// CreateTodo creates a to-do item for the authenticated user on the specified
+// issue.
+//
+// GitLab answers 304 Not Modified, with no body, when the caller already has a
+// pending to-do on the issue. client-go does not treat that status as an error
+// and then fails to decode the empty body, which used to reach the caller as a
+// bare end-of-input error; it is reported as the pending to-do it is.
 func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTodoInput) (TodoOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return TodoOutput{}, err
@@ -1059,29 +1084,53 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	if input.IssueIID <= 0 {
 		return TodoOutput{}, toolutil.ErrRequiredInt64("issueCreateTodo", "issue_iid")
 	}
-	todo, _, err := client.GL().Issues.CreateTodo(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	todo, resp, err := client.GL().Issues.CreateTodo(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotModified {
+			err = &gl.ErrorResponse{Response: resp.Response, Message: "a pending todo for this issue already exists"}
+			return TodoOutput{}, toolutil.WrapErrWithHint("issueCreateTodo", err,
+				"a pending todo for this issue already exists for the authenticated user. Use user.todo_list to inspect it")
+		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return TodoOutput{}, toolutil.WrapErrWithHint("issueCreateTodo", err,
 				hintConfirmIssueExists)
 		}
 		return TodoOutput{}, toolutil.WrapErrWithMessage("issueCreateTodo", err)
 	}
+	var extra todoExtra
+	if err = captured.Decode(&extra); err != nil {
+		return TodoOutput{}, toolutil.WrapErr("issueCreateTodo", err)
+	}
 	out := TodoOutput{
 		ID:         todo.ID,
 		ActionName: string(todo.ActionName),
 		TargetType: string(todo.TargetType),
+		TargetURL:  todo.TargetURL,
+		Author:     userBasicOutput(todo.Author, extra.Author),
 		Body:       todo.Body,
 		State:      todo.State,
+		CreatedAt:  toolutil.FormatTimePtr(todo.CreatedAt),
+		UpdatedAt:  toolutil.FormatTimePtr(extra.UpdatedAt),
 	}
 	if todo.Target != nil {
 		out.TargetTitle = todo.Target.Title
-		out.TargetURL = todo.Target.WebURL
-	}
-	if todo.CreatedAt != nil {
-		out.CreatedAt = todo.CreatedAt.Format(time.RFC3339)
 	}
 	return out, nil
+}
+
+// userBasicOutput converts a user client-go decodes into BasicUser to the
+// whole of lib/api/entities/user_basic.rb, with the two keys BasicUser does not
+// model taken from what the captured answer carried for the same user. It
+// returns nil for a user the answer did not carry.
+func userBasicOutput(u *gl.BasicUser, extra toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
+	if u == nil {
+		return nil
+	}
+	return &toolutil.UserBasicOutput{
+		ID: u.ID, Username: u.Username, PublicEmail: extra.PublicEmail, Name: u.Name,
+		State: u.State, Locked: extra.Locked, AvatarURL: u.AvatarURL, WebURL: u.WebURL,
+	}
 }
 
 // Time tracking & related types.
@@ -1235,12 +1284,20 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 	return timeStatsToOutput(ts), nil
 }
 
-// ParticipantOutput represents a participant in an issue.
+// ParticipantOutput represents a participant in an issue: the whole of
+// lib/api/entities/user_basic.rb, which GET
+// /projects/:id/issues/:issue_iid/participants presents. locked and
+// public_email are read from the captured response, since client-go decodes
+// the participants into BasicUser, which models neither.
 type ParticipantOutput struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	WebURL   string `json:"web_url"`
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	State       string `json:"state,omitempty"`
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	WebURL      string `json:"web_url"`
 }
 
 // ParticipantsOutput holds a list of issue participants.
@@ -1260,18 +1317,27 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 	if input.IssueIID <= 0 {
 		return ParticipantsOutput{}, toolutil.ErrRequiredInt64("issueGetParticipants", "issue_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, _, err := client.GL().Issues.GetParticipants(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
 		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("issueGetParticipants", err, http.StatusNotFound,
 			hintVerifyIssue)
 	}
+	extras, err := toolutil.CapturedUserBasics(captured, len(users))
+	if err != nil {
+		return ParticipantsOutput{}, toolutil.WrapErr("issueGetParticipants", err)
+	}
 	out := make([]ParticipantOutput, len(users))
 	for i, u := range users {
 		out[i] = ParticipantOutput{
-			ID:       u.ID,
-			Username: u.Username,
-			Name:     u.Name,
-			WebURL:   u.WebURL,
+			ID:          u.ID,
+			Username:    u.Username,
+			Name:        u.Name,
+			State:       u.State,
+			Locked:      extras[i].Locked,
+			PublicEmail: extras[i].PublicEmail,
+			AvatarURL:   u.AvatarURL,
+			WebURL:      u.WebURL,
 		}
 	}
 	return ParticipantsOutput{Participants: out}, nil

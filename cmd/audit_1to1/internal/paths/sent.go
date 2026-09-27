@@ -1,7 +1,10 @@
 package paths
 
 import (
+	"cmp"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 )
@@ -164,14 +167,8 @@ func notModelledBySDK(fields []UnsurfacedField) int {
 // sortUnsurfaced orders the findings the way a reader reads them: down the
 // tree, then by type, then by field.
 func sortUnsurfaced(found []UnsurfacedField) {
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].Package != found[j].Package {
-			return found[i].Package < found[j].Package
-		}
-		if found[i].Type != found[j].Type {
-			return found[i].Type < found[j].Type
-		}
-		return found[i].Field < found[j].Field
+	slices.SortFunc(found, func(a, b UnsurfacedField) int {
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Type, b.Type), strings.Compare(a.Field, b.Field))
 	})
 }
 
@@ -223,7 +220,9 @@ func sentCheck(conditions *conditionIndex, sources responseSources, published []
 	// second half is what reaches a shared shape a package names without
 	// declaring (`diffs: []toolutil.DiffOutput`): it is the row of the list
 	// exactly as a local row type is, and leaving it out reported a package
-	// as failing to surface the fields of its own rows.
+	// as failing to surface the fields of its own rows. A row another tools
+	// package declares (`commits: []commits.Output`) arrives here as a type of
+	// its own, marked borrowed, and counts the same way.
 	publishedBy := map[string]map[string]bool{}
 	for _, publishedType := range published {
 		fields := publishedBy[publishedType.Package]

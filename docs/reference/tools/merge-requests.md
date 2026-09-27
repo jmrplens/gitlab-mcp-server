@@ -110,7 +110,7 @@ Cancel the 'merge when pipeline succeeds' (auto-merge) setting on a GitLab merge
 
 ### `gitlab_mr_approve`
 
-Approve a GitLab merge request. Adds the authenticated user's approval to the merge request's approval list.
+Approve a GitLab merge request. Adds the authenticated user's approval to the merge request's approval list. Returns the approval state: whether it is approved, the approvals required and given, the approvers with when each approved, and whether the caller has approved and may approve.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
@@ -171,14 +171,14 @@ Create a new pipeline for a GitLab merge request. Triggers a CI/CD pipeline run 
 
 ### `gitlab_mr_participants`
 
-List all participants (users who have interacted) in a GitLab merge request. Returns user ID, username, name, state, and profile URL.
+List all participants (users who have interacted) in a GitLab merge request. Returns user ID, username, name, state, locked flag, public email, avatar and profile URL.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_mr_reviewers`
 
-List all reviewers assigned to a GitLab merge request. Returns reviewer user details plus review state and assignment date.
+List all reviewers assigned to a GitLab merge request. Returns reviewer user details (locked flag and public email included) plus review state and assignment date.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -264,7 +264,7 @@ Get time tracking statistics for a GitLab merge request including estimated time
 
 ### `gitlab_mr_create_todo`
 
-Create a to-do item on a GitLab merge request for the authenticated user. Adds the MR to the user's to-do list for later follow-up.
+Create a to-do item on a GitLab merge request for the authenticated user. Adds the MR to the user's to-do list for later follow-up. Returns the to-do's action, the merge request's title and URL, the project's name, the author, the body, the state, and when it was created and last updated.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

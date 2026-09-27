@@ -2,6 +2,7 @@ package paths
 
 import (
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -416,9 +417,10 @@ func TestQualifiedName_OnlyAnotherPackagesTypeAsWritten_IsNamed(t *testing.T) {
 // package declares, flattened there, and is nested when the package nests it.
 // A type declared from a package this tree does not hold, which is every type
 // from outside this repository, stays the scalar it was read as and publishes
-// nothing. A field typed as another tools package's type is not resolved,
-// since that is how two domain packages would come to publish each other's
-// shapes.
+// nothing. A field typed as another tools package's type is not resolved into
+// the type that names it, since that is how two domain packages would come to
+// publish each other's shapes; the type it names comes back beside the
+// package's own, borrowed and inner, for the sent direction alone.
 func TestPublishedTypes_AnAliasOfAnotherToolsPackagesType_IsThatType(t *testing.T) {
 	root := writePackage(t, "labels", `package labels
 
@@ -465,9 +467,165 @@ type Row struct {
 		}, Wraps: []string{"Output"}},
 		{Package: "internal/tools/labels", Name: "Output", Fields: []string{"id", "name", "row"}, Inner: true, Payload: true},
 		{Package: "internal/tools/labels", Name: "RowOutput", Fields: []string{"other"}},
+		{Package: "internal/tools/labels", Name: "labeldata.Row", Fields: []string{"color"}, Inner: true, Borrowed: true},
 	}
 	if !reflect.DeepEqual(labels, want) {
 		t.Errorf("publishedTypes() = %+v, want %+v", labels, want)
+	}
+}
+
+// TestPublishedTypes_AFieldOfAnotherToolsPackagesType_IsBorrowed verifies what
+// the sent direction reads a merge request's commit list by: a type another
+// tools package declares that a field of the package names, through a slice,
+// a pointer or a map, or that the package embeds, comes back under the package
+// as that type, borrowed and inner, with the fields its own package flattens
+// it to. A type from outside the tree, one publishing nothing, a shared shape
+// (which is resolved where it is named) and a type a handler only returns are
+// not borrowed.
+func TestPublishedTypes_AFieldOfAnotherToolsPackagesType_IsBorrowed(t *testing.T) {
+	root := writePackage(t, "mergerequests", `package mergerequests
+
+type CommitsOutput struct {
+	Commits    []commits.Output            `+"`json:\"commits\"`"+`
+	Pipeline   *pipelines.Output           `+"`json:\"pipeline\"`"+`
+	ByName     map[string]statuses.Output  `+"`json:\"by_name\"`"+`
+	Raw        []gitlab.Commit             `+"`json:\"raw\"`"+`
+	Empty      commits.Empty               `+"`json:\"empty\"`"+`
+	Pagination toolutil.PaginationOutput   `+"`json:\"pagination\"`"+`
+}
+
+type DetailOutput struct {
+	notes.Row
+}
+
+func CreatePipeline() (pipelines.Created, error) { return pipelines.Created{}, nil }
+`)
+	writeToolsPackage(t, root, "commits", `package commits
+
+type Output struct {
+	ID    string `+"`json:\"id\"`"+`
+	Title string `+"`json:\"title\"`"+`
+}
+
+type Empty struct{}
+`)
+	writeToolsPackage(t, root, "pipelines", `package pipelines
+
+type Output struct {
+	Status string `+"`json:\"status\"`"+`
+}
+
+type Created struct {
+	BeforeSHA string `+"`json:\"before_sha\"`"+`
+}
+`)
+	writeToolsPackage(t, root, "statuses", `package statuses
+
+type Output struct {
+	State string `+"`json:\"state\"`"+`
+}
+`)
+	writeToolsPackage(t, root, "notes", `package notes
+
+type Row struct {
+	Body string `+"`json:\"body\"`"+`
+}
+`)
+	writeShared(t, root, "package toolutil\n\ntype PaginationOutput struct {\n\tPage int `json:\"page\"`\n}\n")
+
+	var borrowed []publishedType
+	for _, published := range publishedTypes(root) {
+		if published.Package == "internal/tools/mergerequests" && published.Borrowed {
+			borrowed = append(borrowed, published)
+		}
+	}
+
+	want := []publishedType{
+		{Package: "internal/tools/mergerequests", Name: "commits.Output", Fields: []string{"id", "title"}, Inner: true, Borrowed: true},
+		{Package: "internal/tools/mergerequests", Name: "notes.Row", Fields: []string{"body"}, Inner: true, Borrowed: true},
+		{Package: "internal/tools/mergerequests", Name: "pipelines.Output", Fields: []string{"status"}, Inner: true, Borrowed: true},
+		{Package: "internal/tools/mergerequests", Name: "statuses.Output", Fields: []string{"state"}, Inner: true, Borrowed: true},
+	}
+	if !reflect.DeepEqual(borrowed, want) {
+		t.Errorf("borrowed types = %+v, want %+v", borrowed, want)
+	}
+}
+
+// parseStruct parses a struct declaring the one field line given, which is how
+// a case about a field's tag and names is written as the source it is about.
+func parseStruct(t *testing.T, field string) *ast.StructType {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", "package fixture\n\ntype Sample struct {\n\t"+field+"\n}\n", 0)
+	if err != nil {
+		t.Fatalf("parse the fixture: %v", err)
+	}
+	spec, isType := file.Decls[0].(*ast.GenDecl).Specs[0].(*ast.TypeSpec)
+	if !isType {
+		t.Fatalf("the fixture declares no type")
+	}
+	structType, isStruct := spec.Type.(*ast.StructType)
+	if !isStruct {
+		t.Fatalf("the fixture declares no struct")
+	}
+	return structType
+}
+
+// TestBorrowedTypes_FollowsWhatEncodingJSONWrites verifies which fields of a
+// struct can lend it another package's type: only one encoding/json writes, so
+// a field tagged "-", an untagged named field and a field whose every name is
+// unexported lend nothing, while an embed lends its type tagged or not. A local
+// type and a shared shape are not another package's to lend.
+func TestBorrowedTypes_FollowsWhatEncodingJSONWrites(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		want  []string
+	}{
+		{name: "a tagged exported field", field: "Rows []other.Row `json:\"rows\"`", want: []string{"other.Row"}},
+		{name: "a tagged pointer", field: "Row *other.Row `json:\"row\"`", want: []string{"other.Row"}},
+		{name: "two names, one of them exported", field: "a, B other.Row `json:\"b\"`", want: []string{"other.Row"}},
+		{name: "a field tagged to be skipped", field: "Rows []other.Row `json:\"-\"`"},
+		{name: "an untagged named field", field: "Rows []other.Row"},
+		{name: "a tagged unexported field", field: "rows []other.Row `json:\"rows\"`"},
+		{name: "an untagged embed", field: "other.Row", want: []string{"other.Row"}},
+		{name: "an embed tagged with a name", field: "other.Row `json:\"row\"`", want: []string{"other.Row"}},
+		{name: "a local type", field: "Rows []Row `json:\"rows\"`"},
+		{name: "a shared shape", field: "Page toolutil.PaginationOutput `json:\"page\"`"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			structType := parseStruct(t, testCase.field)
+			if got := borrowedTypes(structType); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("borrowedTypes() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestBorrowedName_OnlyAnotherPackagesTypeAtTheCore_IsNamed verifies how a
+// field's type is unwrapped to the type it lends: through pointers, slices and
+// a map's value, to another package's type as written, and to nothing for a
+// local name, a shared shape or a type that names no package.
+func TestBorrowedName_OnlyAnotherPackagesTypeAtTheCore_IsNamed(t *testing.T) {
+	other := &ast.SelectorExpr{X: &ast.Ident{Name: "commits"}, Sel: &ast.Ident{Name: "Output"}}
+	cases := []struct {
+		name string
+		expr ast.Expr
+		want string
+	}{
+		{name: "another package's type", expr: other, want: "commits.Output"},
+		{name: "a slice of pointers to it", expr: &ast.ArrayType{Elt: &ast.StarExpr{X: other}}, want: "commits.Output"},
+		{name: "a map's value", expr: &ast.MapType{Key: &ast.Ident{Name: "string"}, Value: other}, want: "commits.Output"},
+		{name: "a local name", expr: &ast.Ident{Name: "Output"}},
+		{name: "a shared shape", expr: &ast.SelectorExpr{X: &ast.Ident{Name: "toolutil"}, Sel: &ast.Ident{Name: "NoteOutput"}}},
+		{name: "an expression that names no type", expr: &ast.InterfaceType{Methods: &ast.FieldList{}}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := borrowedName(testCase.expr); got != testCase.want {
+				t.Errorf("borrowedName() = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }
 
@@ -926,5 +1084,38 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 	}
 	if oneFamily(nil, func(string, string) bool { return true }) {
 		t.Error("an empty set was reported as one family")
+	}
+}
+
+// TestOneFamily_ReachesThroughAChainAndStopsAtTwoGroups verifies the walk the
+// envelope rule leans on: a set is one family when every type reaches every
+// other through a chain of relations, even where two of them are related only
+// through a third, and is not when it splits into two groups or names one type
+// twice.
+//
+// The chain is the case that needs the walk at all. A is related to B and B to
+// C, never A to C directly, so only a second pass from B reaches C; a walk that
+// looked at the first type's neighbors alone, or that stopped queuing, would
+// call the chain two groups.
+func TestOneFamily_ReachesThroughAChainAndStopsAtTwoGroups(t *testing.T) {
+	edges := map[[2]string]bool{{"A", "B"}: true, {"B", "C"}: true, {"X", "Y"}: true}
+	related := func(a, b string) bool { return edges[[2]string{a, b}] || edges[[2]string{b, a}] }
+	tests := []struct {
+		name  string
+		types []string
+		want  bool
+	}{
+		{name: "one type", types: []string{"A"}, want: true},
+		{name: "a chain through a middle type", types: []string{"A", "B", "C"}, want: true},
+		{name: "the chain named from its middle", types: []string{"B", "C", "A"}, want: true},
+		{name: "two groups side by side", types: []string{"A", "B", "X", "Y"}, want: false},
+		{name: "a type named twice", types: []string{"A", "B", "A"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := oneFamily(tt.types, related); got != tt.want {
+				t.Errorf("oneFamily(%v) = %v, want %v", tt.types, got, tt.want)
+			}
+		})
 	}
 }

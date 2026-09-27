@@ -2,7 +2,9 @@ package paths
 
 import (
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -48,7 +50,7 @@ func observed(root string, rows []requestinventory.Row, actions []requestinvento
 	for _, owner := range coverage.UnmappedOwners {
 		owners = append(owners, SilentOwner{Package: owner.Package, Status: statusUnmapped, Actions: owner.Actions})
 	}
-	sort.Slice(owners, func(i, j int) bool { return owners[i].Package < owners[j].Package })
+	slices.SortFunc(owners, func(a, b SilentOwner) int { return strings.Compare(a.Package, b.Package) })
 	return coverage, owners
 }
 

@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"cmp"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -60,6 +61,25 @@ type publishedType struct {
 	// envelope whose payload it judges from an output type it cannot judge at
 	// all: both carry no pairing of their own, and only the second is a skip.
 	Wraps []string
+	// Borrowed is true for a type another package under internal/tools
+	// declares that a struct of this package publishes a field of, returned
+	// under the package that names it: a merge request's commit list is
+	// `commits: []commits.Output`. Name is then the type as the package
+	// qualifies it and Fields are that type's, flattened where it is declared.
+	// The package publishes those fields to every caller of the action, so the
+	// sent direction counts them as the package's, which is the one thing the
+	// entry is for: it is always Inner, so the type grain passes it over and
+	// the package grain's unpublished direction never holds it to the
+	// package's endpoints. Its own package judges it at both grains.
+	//
+	// A type a handler returns whole, without a field of the package naming
+	// it, is not borrowed. The guided creation flows of elicitationtools are
+	// the case: they return the issue, merge request, project and release
+	// outputs of those four packages as they are, publish nothing else, and
+	// are judged by nothing for that reason (see [sentCheck]); borrowing their
+	// results would hold a package that owns none of the four creation routes
+	// to every answer the four owners already give about them.
+	Borrowed bool
 }
 
 // nestedType is one output type reached through a field of another.
@@ -123,8 +143,16 @@ func recordDir(root string) string {
 // each as publishing no field of the entity its every route answers with.
 // Every package under internal/tools is read as such a library too, keyed the
 // way a domain package qualifies it (labeldata.Output), and only an alias or
-// a defined type resolves through it: a field typed as another tools package's
-// type still publishes its own name and nothing under it.
+// a defined type resolves through it as a type of the package: a field typed
+// as another tools package's type still publishes its own name and nothing
+// under it, since resolving it there would hold one domain's shape to another
+// domain's endpoints. What such a field names is returned beside the package's
+// own types instead, marked borrowed (see [publishedType.Borrowed]), which is
+// what lets the sent direction see that a merge request's commit list
+// publishes a commit's fields. A package imported
+// under another name than its directory's is not recognized, and neither is a
+// field of a shape a borrowed type takes from internal/toolutil, since a shape
+// library is flattened within itself.
 //
 // A package that does not parse contributes nothing rather than failing the
 // scope, for the reason [publishedTypesIn] records.
@@ -151,11 +179,8 @@ func publishedTypes(root string) []publishedType {
 		}
 		out = append(out, publishedTypesIn(filepath.Join(base, entry.Name()), toolsDir+"/"+entry.Name(), shared, sharedNested)...)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Package != out[j].Package {
-			return out[i].Package < out[j].Package
-		}
-		return out[i].Name < out[j].Name
+	slices.SortFunc(out, func(a, b publishedType) int {
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Name, b.Name))
 	})
 	return out
 }
@@ -250,6 +275,14 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 		}
 		out = append(out, published)
 	}
+	for _, name := range slices.Sorted(maps.Keys(parsed.borrowed)) {
+		shape, known := shared[name]
+		if !known || len(shape.Fields) == 0 {
+			// A type from outside this repository, or one publishing nothing.
+			continue
+		}
+		out = append(out, publishedType{Package: pkg, Name: name, Fields: shape.Fields, Inner: true, Borrowed: true})
+	}
 	return out
 }
 
@@ -303,6 +336,12 @@ type parsedPackage struct {
 	// returned holds every type an exported function of the package returns,
 	// which is what a handler does with its response.
 	returned map[string]bool
+	// borrowed holds every type another package declares that a struct of this
+	// package publishes a field of or embeds, qualified as written
+	// (commits.Output). A shared shape is left out, since [namedType] already
+	// resolves it where it is named; a type [publishedTypesIn] cannot resolve,
+	// such as every client-go type, is kept here and dropped there.
+	borrowed map[string]bool
 }
 
 // parsePackage reads every non-test Go file of one directory.
@@ -315,7 +354,7 @@ func parsePackage(dir string) parsedPackage {
 		nested: map[string]bool{}, enveloped: map[string]bool{}, wraps: map[string][]string{},
 		alternatives: map[string][]string{},
 		scalars:      map[string]bool{}, aliases: map[string]string{}, qualified: map[string]string{},
-		returned: map[string]bool{},
+		returned: map[string]bool{}, borrowed: map[string]bool{},
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -410,7 +449,14 @@ func oneFamily(types []string, related func(a, b string) bool) bool {
 		current := queue[0]
 		queue = queue[1:]
 		for name := range distinct {
-			if !reached[name] && related(current, name) {
+			// Two tests rather than one conjunction: joined, the reached
+			// check reads as a guard a mutation may drop, and without it
+			// every related name is queued again on every pass and the walk
+			// never ends.
+			if reached[name] {
+				continue
+			}
+			if related(current, name) {
 				reached[name] = true
 				queue = append(queue, name)
 			}
@@ -593,9 +639,7 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 				return false
 			}
 			fields, fieldTypes, embeds := jsonTags(structType)
-			for _, name := range fieldTypes {
-				parsed.nested[name] = true
-			}
+			noteNamedTypes(structType, fieldTypes, parsed)
 			payloads := envelopePayloads(fields, fieldTypes)
 			if len(fields) == 0 {
 				payloads = embeddedPayload(embeds)
@@ -620,6 +664,19 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 	return found
 }
 
+// noteNamedTypes records, for one struct, the types it names that the package
+// has to know about: every locally declared or shared type a field carries,
+// which is thereby nested, and every type of another package it publishes a
+// field of or embeds, which the package borrows.
+func noteNamedTypes(structType *ast.StructType, fieldTypes map[string]string, parsed *parsedPackage) {
+	for _, name := range fieldTypes {
+		parsed.nested[name] = true
+	}
+	for _, name := range borrowedTypes(structType) {
+		parsed.borrowed[name] = true
+	}
+}
+
 // noteReturned records the types an exported function returns. A method is
 // left out, since its receiver says the function belongs to a type rather
 // than to the package, and so is an unexported function, which is a
@@ -631,6 +688,58 @@ func noteReturned(fn *ast.FuncDecl, returned map[string]bool) {
 	for _, result := range fn.Type.Results.List {
 		if name := namedType(result.Type); name != "" {
 			returned[name] = true
+		}
+	}
+}
+
+// borrowedTypes names the types of other packages a struct publishes a field
+// of or embeds, under the rules [jsonTags] reads a struct by: a field tagged
+// "-", an unexported field and an untagged named field publish nothing, and an
+// embed publishes its fields whether or not it is tagged with a name.
+func borrowedTypes(structType *ast.StructType) []string {
+	var names []string
+	for _, field := range structType.Fields.List {
+		name, tagged := jsonName(field)
+		if name == "-" || (len(field.Names) > 0 && (!tagged || !anyExported(field.Names))) {
+			continue
+		}
+		if borrowed := borrowedName(field.Type); borrowed != "" {
+			names = append(names, borrowed)
+		}
+	}
+	return names
+}
+
+// anyExported reports whether one of a field's names is exported, which is
+// what makes encoding/json write it.
+func anyExported(names []*ast.Ident) bool {
+	for _, ident := range names {
+		if ident.IsExported() {
+			return true
+		}
+	}
+	return false
+}
+
+// borrowedName unwraps a field's type the way [namedType] does and names the
+// type at its core when another package declares it, qualified as written, or
+// returns "" for a local name, a shared shape (which [namedType] resolves) and
+// anything that is not a type name at all.
+func borrowedName(expr ast.Expr) string {
+	for {
+		switch typed := expr.(type) {
+		case *ast.StarExpr:
+			expr = typed.X
+		case *ast.ArrayType:
+			expr = typed.Elt
+		case *ast.MapType:
+			expr = typed.Value
+		default:
+			name := qualifiedName(expr)
+			if strings.HasPrefix(name, sharedPrefix) {
+				return ""
+			}
+			return name
 		}
 	}
 }

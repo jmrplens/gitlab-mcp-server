@@ -620,6 +620,33 @@ func TestNewOperationIndex_TwoRoutesSharingAShape_UnionTheirKeysAndKeepTheFirstE
 	}
 }
 
+// TestEntityOf_ARouteMissingEitherHalf_AttributesNothing verifies that an
+// attribution is made only where the route names both an entity and the keys
+// it sends. A route naming no entity would attribute every key to the empty
+// name, which the merge would then keep as a first answer; and one naming an
+// entity with no keys has nothing to attribute, which is nil rather than an
+// empty map a reader would take for a route that answered.
+func TestEntityOf_ARouteMissingEitherHalf_AttributesNothing(t *testing.T) {
+	tests := []struct {
+		name     string
+		entity   string
+		response []string
+	}{
+		{name: "no entity", response: []string{"id"}},
+		{name: "no keys", entity: firstEntity},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := entityOf(tt.entity, tt.response); got != nil {
+				t.Errorf("entityOf(%q, %v) = %v, want nil", tt.entity, tt.response, got)
+			}
+		})
+	}
+	if got := entityOf(firstEntity, []string{"id"}); got["id"] != firstEntity || len(got) != 1 {
+		t.Errorf("entityOf(%q, [id]) = %v, want id attributed to it", firstEntity, got)
+	}
+}
+
 // TestOperationIndexLookup_AnEmptyIdentifier_IsNotTemplatedIntoAPlaceholder
 // verifies the one segment the loose lookup refuses to stand in for.
 //

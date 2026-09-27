@@ -1732,7 +1732,7 @@ them would have been wrong:
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
 
-**Four more gaps were recorded and held back** by the batching the maintainer
+**Five more gaps were recorded and held back** by the batching the maintainer
 asked for above, and went out on 2026-09-27 as commit 29 of
 `gitlab-org/api/client-go!3063`, which also deprecates
 `LicenseTemplate.Featured` rather than removing it, and leaves
@@ -1740,6 +1740,17 @@ asked for above, and went out on 2026-09-27 as commit 29 of
 field this server now reads from the captured response, so each carries a
 live workaround until a release carries the commit:
 
+- `BasicUser` is missing `public_email` and `locked`, both exposed with no
+  condition by `lib/api/entities/user_basic.rb`, which is what every route
+  decoding into `BasicUser` renders (`locked` through `access_locked?`). The
+  participants of an issue and of a merge request, a merge request's reviewers
+  (nested under `user`) and approvers (nested under `approved_by[].user`), and
+  the author of the to-do an issue or a merge request answers `create_todo`
+  with all decode into it. This server publishes both keys on every one of
+  them, reading them off the captured answer (`toolutil.CapturedUserBasics`,
+  `toolutil.CapturedNestedUserBasics`, and the handlers' own reads in
+  `internal/tools/issues` and `internal/tools/mergerequests`); the package
+  pipeline's user below is the same gap met earlier.
 - `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
   keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
   into `BasicUser`, which is missing the `public_email` and `locked` of the
@@ -1769,6 +1780,16 @@ live workaround until a release carries the commit:
   `lib/api/entities/access_requester.rb` inherits. The conditional ones,
   `created_by`, `email`, both identities, `override` and `member_role`, belong
   in the same merge request as a second group.
+
+**One more is recorded and not yet sent**: the merge request above does not
+carry it, and it is read from the captured response in the meantime.
+
+- `Todo` has no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
+  condition, and no `group`, which it exposes on a to-do raised in a group
+  (`if: ->(todo, _) { todo.group_id }`). `internal/tools/todos` reads both off
+  the to-do list's captured answer (`toolutil.CapturedTodos`), and the issue
+  and merge request `create_todo` handlers read `updated_at`; a to-do those two
+  routes create belongs to a project and never carries `group`.
 
 That lead has since been measured and is
 [its own entry](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends):

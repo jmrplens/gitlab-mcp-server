@@ -355,7 +355,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		usage:       "Create a to-do item for the authenticated user on an issue so it appears in their GitLab to-do list.",
 		aliases:     []string{"add issue todo", "create todo for issue", "add issue to my todo list", "mark issue as todo"},
 		related:     []string{actionIssueGet, actionIssueList},
-		description: "Create a to-do for an issue. Returns: the created to-do item with action, target, and state. See also: gitlab_issue_get.",
+		description: "Create a to-do for an issue. Returns: the created to-do item with action, target title and URL, author, body, state and created and updated times. See also: gitlab_issue_get.",
 	},
 	"gitlab_issue_time_estimate_set": {
 		usage:       "Set the time estimate for an issue using a human duration such as 3h30m or 1d.",
@@ -391,7 +391,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		usage:       "List the users participating in an issue (author, assignees, commenters, and subscribers).",
 		aliases:     []string{"list issue participants", "who is on this issue", "show issue participants", "issue participant list"},
 		related:     []string{actionIssueGet, actionIssueNoteList},
-		description: "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_note_list.",
+		description: "List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL. See also: gitlab_issue_get, gitlab_issue_note_list.",
 	},
 	"gitlab_issue_mrs_closing": {
 		usage:       "List merge requests that will close this issue when merged (those referencing it with a closing keyword).",
