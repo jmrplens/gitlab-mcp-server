@@ -475,9 +475,9 @@ and the workaround this server carries until it ships.
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
 | Source (`.go`, non-test) |     1,357 |       311,029 |
-| Unit tests (`_test.go`)  |       931 |       619,720 |
+| Unit tests (`_test.go`)  |       931 |       619,722 |
 | End-to-end tests         |       497 |       104,045 |
-| **Total**                | **2,785** | **1,034,794** |
+| **Total**                | **2,785** | **1,034,796** |
 
 ### Functions
 
@@ -523,7 +523,7 @@ and the workaround this server carries until it ships.
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
 | Longest source file | `cmd/server/main.go`. 4,810 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 14,729 lines |
+| Longest test file   | `cmd/server/main_test.go`. 14,731 lines |
 
 ### Because why not
 

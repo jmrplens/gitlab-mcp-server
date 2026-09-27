@@ -3585,6 +3585,8 @@ func stdoutLines(t *testing.T) (lines <-chan string, stop func()) {
 			// closes the channel this drains.
 			_ = writer.Close()
 			for range delivered {
+				// Discard what was still buffered: the reading goroutine
+				// can only finish, and close the channel, once it is taken.
 			}
 			_ = reader.Close()
 		})
