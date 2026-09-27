@@ -3496,6 +3496,7 @@ func TestRunStdio_AListingBeforeTheCatalogIsReady_WaitsForIt(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- runStdio(t.Context()) }()
 
+	// sequential: one session's handshake, written in the order the protocol requires
 	for _, message := range []string{
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`,
 		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
@@ -6372,9 +6373,11 @@ func TestServeHTTP_OAuthMode_APoolRefusal_ChallengesLikeTheGuard(t *testing.T) {
 		`resource_metadata="` + oauth.MetadataURLFor(cfg.PublicURL) + `"`,
 		`error="invalid_token"`,
 	} {
-		if !strings.Contains(challenge, want) {
-			t.Errorf("WWW-Authenticate = %q, want it to carry %s", challenge, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(challenge, want) {
+				t.Errorf("WWW-Authenticate = %q, want it to carry %s", challenge, want)
+			}
+		})
 	}
 }
 
