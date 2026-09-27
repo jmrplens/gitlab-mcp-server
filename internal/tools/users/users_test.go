@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -1589,7 +1591,11 @@ func TestListContributionEvents_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `[{
 				"id":200,"project_id":5,"action_name":"pushed",
 				"target_id":10,"target_iid":11,"target_type":"Issue",
-				"target_title":"target title","created_at":"2026-03-15T09:00:00Z"
+				"target_title":"target title","created_at":"2026-03-15T09:00:00Z",
+				"author_id":9,"author_username":"ann","imported":true,"imported_from":"github",
+				"author":{"id":9,"username":"ann","name":"Ann","state":"active"},
+				"push_data":{"commit_count":2,"action":"pushed","ref_type":"branch","ref":"main","commit_title":"Fix it"},
+				"wiki_page":{"format":"markdown","slug":"home","title":"Home","wiki_page_meta_id":4}
 			}]`)
 		case "/api/v4/projects/5":
 			testutil.RespondJSON(w, http.StatusOK, `{"id":5,"web_url":"https://gitlab.example.com/g/p"}`)
@@ -1605,18 +1611,30 @@ func TestListContributionEvents_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 	if len(out.Events) != 1 {
 		t.Fatalf("got %d events, want 1", len(out.Events))
 	}
+	// The event is the whole of the entity, the same one the current user's
+	// contribution listing publishes: this package used to keep nine keys of
+	// it and drop the author, the push, the wiki page and the import origin.
 	want := ContributionEventOutput{
-		ID:          200,
-		ProjectID:   5,
-		ActionName:  "pushed",
-		TargetID:    10,
-		TargetIID:   11,
-		TargetType:  "Issue",
-		TargetTitle: "target title",
-		TargetURL:   "https://gitlab.example.com/g/p/-/issues/11",
-		CreatedAt:   "2026-03-15T09:00:00Z",
+		ID:             200,
+		ProjectID:      5,
+		ActionName:     "pushed",
+		TargetID:       10,
+		TargetIID:      11,
+		TargetType:     "Issue",
+		TargetTitle:    "target title",
+		TargetURL:      "https://gitlab.example.com/g/p/-/issues/11",
+		CreatedAt:      "2026-03-15T09:00:00Z",
+		AuthorID:       9,
+		AuthorUsername: "ann",
+		Imported:       true,
+		ImportedFrom:   "github",
+		Author:         &events.UserOutput{ID: 9, Username: "ann", Name: "Ann", State: "active"},
+		PushData: &events.ContributionEventPushDataOutput{
+			CommitCount: 2, Action: "pushed", RefType: "branch", Ref: "main", CommitTitle: "Fix it",
+		},
+		WikiPage: &events.WikiPageOutput{Format: "markdown", Slug: "home", Title: "Home", WikiPageMetaID: 4},
 	}
-	if out.Events[0] != want {
+	if !reflect.DeepEqual(out.Events[0], want) {
 		t.Errorf("event = %+v, want %+v", out.Events[0], want)
 	}
 }

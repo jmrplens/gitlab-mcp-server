@@ -84,7 +84,7 @@ func Read(ctx context.Context, client *gitlabclient.Client, input ReadInput) (Re
 	if err != nil {
 		return ReadOutput{}, toolutil.WrapErrWithStatusHint("readRepositorySubmodule",
 			fmt.Errorf("file %q in submodule %q (project %q, commit %s): %w",
-				input.FilePath, input.SubmodulePath, resolvedProject, commitSHA[:minLen(8, len(commitSHA))], err),
+				input.FilePath, input.SubmodulePath, resolvedProject, shortSHA(commitSHA), err),
 			http.StatusNotFound, "verify project_id, ref, submodule_path, and file_path are correct")
 	}
 
@@ -149,27 +149,20 @@ func resolveSubmoduleProject(ctx context.Context, client *gitlabclient.Client, p
 }
 
 // getSubmoduleCommitSHA retrieves the commit SHA that the submodule pointer
-// references by looking up the tree entry of type "commit".
+// references by looking up the tree entry of type "commit" in the submodule's
+// parent directory, page after page as [matchTreeCommits] does and for the
+// same reason: a submodule GitLab lists past the first page of its directory
+// used to be refused as not found.
 //
 // ref is always named: [Read] resolves an empty one to the HEAD alias before
 // any of this runs, so there is no second check for it here.
 func getSubmoduleCommitSHA(ctx context.Context, client *gitlabclient.Client, projectID, ref, submodulePath string) (string, error) {
-	dir := parentDir(submodulePath)
-	opts := &gl.ListTreeOptions{}
-	opts.PerPage = 100
-	opts.Ref = new(ref)
-	if dir != "" {
-		opts.Path = new(dir)
-	}
-
-	nodes, _, err := client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return "", toolutil.WrapErrWithStatusHint("readRepositorySubmodule",
-			fmt.Errorf("could not list tree for submodule path %q: %w", submodulePath, err),
-			http.StatusNotFound, "verify the submodule_path exists in the project tree at the given ref")
-	}
-
-	for _, n := range nodes {
+	for n, err := range treeNodes(ctx, client, projectID, ref, parentDir(submodulePath)) {
+		if err != nil {
+			return "", toolutil.WrapErrWithStatusHint("readRepositorySubmodule",
+				fmt.Errorf("could not list tree for submodule path %q: %w", submodulePath, err),
+				http.StatusNotFound, "verify the submodule_path exists in the project tree at the given ref")
+		}
 		if n.Path == submodulePath && n.Type == "commit" {
 			return n.ID, nil
 		}
@@ -184,12 +177,4 @@ func listSubmodulePaths(entries []SubmoduleEntry) string {
 		paths[i] = e.Path
 	}
 	return strings.Join(paths, ", ")
-}
-
-// minLen returns the smaller of a and b.
-func minLen(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

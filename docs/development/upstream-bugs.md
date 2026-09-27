@@ -1732,7 +1732,7 @@ them would have been wrong:
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
 
-**Five more gaps were recorded and held back** by the batching the maintainer
+**Six more gaps were recorded and held back** by the batching the maintainer
 asked for above, and went out on 2026-09-27 as commit 29 of
 `gitlab-org/api/client-go!3063`, which also deprecates
 `LicenseTemplate.Featured` rather than removing it, and leaves
@@ -1751,6 +1751,10 @@ live workaround until a release carries the commit:
   `toolutil.CapturedNestedUserBasics`, and the handlers' own reads in
   `internal/tools/issues` and `internal/tools/mergerequests`); the package
   pipeline's user below is the same gap met earlier.
+- `ServiceAccount` has no `public_email`, which the `UserSafe` that
+  `lib/api/entities/service_account.rb` inherits exposes with no condition.
+  The instance service account list and update in `internal/tools/users` read
+  it off the captured answer.
 - `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
   keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
   into `BasicUser`, which is missing the `public_email` and `locked` of the
@@ -1781,8 +1785,8 @@ live workaround until a release carries the commit:
   `created_by`, `email`, both identities, `override` and `member_role`, belong
   in the same merge request as a second group.
 
-**One more is recorded and not yet sent**: the merge request above does not
-carry it, and it is read from the captured response in the meantime.
+**Three more are recorded and not yet sent**: the merge request above does not
+carry them, and each is read from the captured response in the meantime.
 
 - `Todo` has no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
   condition, and no `group`, which it exposes on a to-do raised in a group
@@ -1790,6 +1794,20 @@ carry it, and it is read from the captured response in the meantime.
   the to-do list's captured answer (`toolutil.CapturedTodos`), and the issue
   and merge request `create_todo` handlers read `updated_at`; a to-do those two
   routes create belongs to a project and never carries `group`.
+- `SubmoduleCommit`, what `UpdateSubmodule` returns, models thirteen of the
+  eighteen keys `PUT /projects/:id/repository/submodules/:submodule` sends with
+  no condition (`lib/api/submodules.rb` presents the new commit through
+  `lib/api/entities/commit_detail.rb`). The other five are `web_url`,
+  `trailers` and `extended_trailers`, from the `Commit` entity it extends, and
+  `project_id` and `last_pipeline`, its own. `internal/tools/repositorysubmodules`
+  reads the five off the captured answer, `extended_trailers` as the map of
+  lists GitLab sends rather than as client-go's `Commit` spells it.
+- `TreeNode` has no `last_commit` and `ListTreeOptions` no `with_last_commit`,
+  the parameter GitLab 19.3 added to `GET /projects/:id/repository/tree` and
+  the key `lib/api/entities/tree_object.rb` then exposes on each entry, a
+  whole commit. `repository.tree` offers the parameter through a request
+  option that adds it to the query client-go encoded, and reads the commit off
+  the captured answer.
 
 That lead has since been measured and is
 [its own entry](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends):

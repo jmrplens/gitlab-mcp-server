@@ -105,6 +105,6 @@ var submoduleActionMeta = map[string]submoduleActionMetaEntry{
 		usage:       "Move a submodule pointer to a new commit SHA, creating a commit on the target branch in the parent repository. Provide project_id, the submodule path, branch, and commit_sha. Add commit_message to override the generated message. Use when bumping a submodule to a newer revision.",
 		aliases:     []string{"update submodule pointer", "bump submodule commit", "set submodule reference", "point submodule at a new sha"},
 		related:     []string{actionListSubmodules, actionReadSubmoduleFile, actionCommitGet},
-		description: "Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.",
+		description: "Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, status, project_id, trailers, last_pipeline, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.",
 	},
 }

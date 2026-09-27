@@ -984,6 +984,23 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 
+	// The tree the submodule package lists to find the commit a submodule is
+	// pinned at, and the project the two contribution listings read to link
+	// each event. The license and custom attribute keys of that project stay
+	// answered by the option declarations above, which come first.
+	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::TreeObject", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleTreeLookup},
+	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
+	{Package: usersPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
+
+	// The date a user was last active, which the entity sends twice.
+	{
+		Package: usersPkg, Type: "UserActivityOutput", Entity: "API::Entities::UserActivity", Field: "last_activity_at",
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/user_activity.rb exposes last_activity_on and then exposes it again as last_activity_at, " +
+			"commented Back-compat, so the two keys carry the same date on every response. users.UserActivityOutput " +
+			"publishes that date once, as last_activity_on.",
+	},
+
 	// The project starrers, whose route annotates a user and presents the star.
 	{
 		Package: projectsPkg, Type: "StarrerOutput", Entity: userBasicEntity, Field: declaredSegment, Category: categoryDocumentedNotSent,
@@ -1008,6 +1025,19 @@ const reasonPositionPreCheck = "the package lists a merge request's diffs throug
 	"toolutil.MergeRequestDiffsForPositionCheck only to tell a caller that a line is outside them before GitLab refuses the " +
 	"note with a bare 400 or 500, and returns nothing of the answer. mr_review.changes_get is the action that answers with a " +
 	"merge request's file diffs."
+
+// reasonSubmoduleTreeLookup answers the tree the submodule package lists.
+const reasonSubmoduleTreeLookup = "internal/tools/repositorysubmodules lists the directory each submodule sits in " +
+	"(GET /projects/:id/repository/tree, every page of it) only to find the tree node of type commit at the submodule's " +
+	"path, whose id is the commit the parent repository pins, and publishes that id as commit_sha and nothing else of " +
+	"the answer. repository.tree is the action that answers with a tree."
+
+// reasonEventProjectLookup answers the project the two contribution listings
+// read for each event.
+const reasonEventProjectLookup = "the package reads each event's project (GET /projects/:id, once per distinct project, " +
+	"through events.EnrichContributionEventURLs and toolutil.ResolveProjectWebURLs) only to build the event's target_url " +
+	"from the project's web_url, and returns nothing else of the answer. project.get is the action that answers with a " +
+	"project."
 
 // compactRow declares the keys one compact row leaves to the action returning
 // the whole object, one declaration per key.

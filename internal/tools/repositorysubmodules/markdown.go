@@ -1,6 +1,7 @@
 package repositorysubmodules
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,12 +10,11 @@ import (
 )
 
 // shortSHA is a git object id abbreviated to the eight characters a reader
-// compares by, or the whole id when it is shorter.
+// compares by, or the whole id when it is shorter. The bound is a min rather
+// than a comparison, because at exactly eight characters both branches of one
+// give the same string and no test can tell a `>` from a `>=`.
 func shortSHA(sha string) string {
-	if len(sha) > 8 {
-		return sha[:8]
-	}
-	return sha
+	return sha[:min(len(sha), 8)]
 }
 
 // FormatListMarkdown renders the submodules of a repository as a Markdown
@@ -89,6 +89,10 @@ func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
 	c.Time("Committed", out.CommittedDate)
 	c.Text("Message", out.Message)
 	c.Field("Status", out.Status)
+	if p := out.LastPipeline; p != nil {
+		c.Link("Pipeline", "#"+strconv.FormatInt(p.ID, 10), p.WebURL)
+	}
+	c.URL(out.WebURL)
 	c.End(
 		toolutil.HintAction(actionListSubmodules, "see every submodule of this repository"),
 		toolutil.HintAction(actionReadSubmoduleFile, "read a file at the new commit"),

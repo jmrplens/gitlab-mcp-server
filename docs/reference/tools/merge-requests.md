@@ -391,14 +391,14 @@ Update the merge request approval settings of a project. Set only the fields you
 
 ### `gitlab_list_mr_context_commits`
 
-List context commits associated with a merge request.
+List context commits associated with a merge request. Returns each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL, the short SHA linked to the commit in the table. GitLab keeps no parents for a pinned commit, so `parent_ids` is empty here and filled on the answer to `gitlab_create_mr_context_commits`.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_create_mr_context_commits`
 
-Add context commits to a merge request.
+Add context commits to a merge request. Returns the commits pinned, with the same keys as the listing plus each commit's parents.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

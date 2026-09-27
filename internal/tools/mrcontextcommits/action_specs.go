@@ -71,7 +71,7 @@ func contextCommitOptions(individualTool string) toolutil.ActionSpecOptions {
 			"get extra commits added to mr review",
 		}
 		options.RelatedActions = []string{actionMergeRequestGet, actionMergeRequestCommits, actionContextCommitsCreate, actionContextCommitsDelete}
-		options.IndividualTool.Description = "List the context commits pinned to a merge request for review. Returns: commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits."
+		options.IndividualTool.Description = "List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits."
 	case "gitlab_create_mr_context_commits":
 		options.Usage = "Attach one or more existing repository commit SHAs to a merge request as context commits, adding them to the review without changing the MR's source/target branches. Resolve SHAs with " + actionCommitList + " or " + actionMergeRequestCommits + " first."
 		options.Aliases = []string{
@@ -82,7 +82,7 @@ func contextCommitOptions(individualTool string) toolutil.ActionSpecOptions {
 			"include additional commits in mr context",
 		}
 		options.RelatedActions = []string{actionContextCommitsList, actionContextCommitsDelete, actionCommitList, actionMergeRequestCommits}
-		options.IndividualTool.Description = "Attach existing repository commit SHAs to a merge request as context commits. Returns: the resulting context commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get."
+		options.IndividualTool.Description = "Attach existing repository commit SHAs to a merge request as context commits. Returns: each pinned commit's full and short SHA, title and message, author and committer with their dates, parents, trailers and web URL. See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get."
 	case "gitlab_delete_mr_context_commits":
 		options.Usage = "Remove specified context commits from a merge request by SHA, detaching them from the review without deleting the underlying repository commits. List context commits first to confirm which SHAs are currently pinned."
 		options.Aliases = []string{

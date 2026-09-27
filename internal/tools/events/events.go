@@ -193,17 +193,20 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for _, e := range events {
-		out.Events = append(out.Events, toContributionEventOutput(e))
+		out.Events = append(out.Events, ToContributionEventOutput(e))
 	}
 
-	enrichContributionEventURLs(ctx, client, out.Events)
+	EnrichContributionEventURLs(ctx, client, out.Events)
 
 	return out, nil
 }
 
-// toContributionEventOutput converts the GitLab API response to the tool
-// output format.
-func toContributionEventOutput(e *gl.ContributionEvent) ContributionEventOutput {
+// ToContributionEventOutput converts one event of a contribution listing to
+// the tool output format. It is exported because a user's contribution events
+// (internal/tools/users) are the same entity on another route, and the two
+// listings used to publish it through two converters, one of them missing
+// eight of its keys.
+func ToContributionEventOutput(e *gl.ContributionEvent) ContributionEventOutput {
 	o := ContributionEventOutput{
 		ID:             e.ID,
 		ProjectID:      e.ProjectID,
@@ -569,8 +572,9 @@ func formatAuthor(username string) string {
 	return "@" + username
 }
 
-// enrichContributionEventURLs resolves project web URLs and sets TargetURL on each event.
-func enrichContributionEventURLs(ctx context.Context, client *gitlabclient.Client, events []ContributionEventOutput) {
+// EnrichContributionEventURLs resolves project web URLs and sets TargetURL on
+// each event, for either contribution listing ([ToContributionEventOutput]).
+func EnrichContributionEventURLs(ctx context.Context, client *gitlabclient.Client, events []ContributionEventOutput) {
 	ids := make([]int64, 0, len(events))
 	for i := range events {
 		ids = append(ids, events[i].ProjectID)

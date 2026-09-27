@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/url"
 	"strings"
@@ -166,13 +167,14 @@ func resolveProjectPath(rawURL string) string {
 // "[user[:password]@]host:path". A bare "git@" is left alone: it is the ssh
 // account every such remote is written with and identifies nobody, while a
 // userinfo carrying a colon carries a password.
+//
+// With no "@" the userinfo is empty, read as authority[:0], so one test
+// decides both cases: a comparison of the index against zero would treat an
+// "@" in first place the same way on either side of it.
 func withoutSCPUserinfo(remote string) string {
 	authority, _, _ := strings.Cut(remote, "/")
 	at := strings.LastIndex(authority, "@")
-	if at < 0 {
-		return remote
-	}
-	if !strings.Contains(authority[:at], ":") {
+	if !strings.Contains(authority[:max(at, 0)], ":") {
 		return remote
 	}
 	return remote[at+1:]
@@ -228,34 +230,49 @@ func buildSubmoduleIndex(entries []SubmoduleEntry) (pathIndex map[string]*Submod
 	return pathIndex, dirSet
 }
 
-// matchTreeCommits fetches a single directory from the repository tree and fills in
-// CommitSHA for any submodule entries whose path matches a "commit" tree node.
+// matchTreeCommits lists a single directory of the repository tree, every page
+// of it, and fills in CommitSHA for any submodule entries whose path matches a
+// "commit" tree node.
+//
+// It follows the pages GitLab announces, through client-go's own pagination
+// iterator, because a directory holding more entries than one page does is
+// ordinary (a vendor directory, a monorepo's root), and a submodule sorted onto
+// a later page used to be reported with no commit at all.
 //
 // ref is always named: [List] resolves an empty one to the HEAD alias before
 // any of this runs, so there is no second check for it here.
 func matchTreeCommits(ctx context.Context, client *gitlabclient.Client, projectID, ref, dir string, pathIndex map[string]*SubmoduleEntry) {
-	opts := &gl.ListTreeOptions{}
-	opts.PerPage = 100
-	opts.Ref = new(ref)
-	if dir != "" {
-		opts.Path = new(dir)
-	}
-	nodes, _, err := client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return
-	}
-	for _, n := range nodes {
+	for n, err := range treeNodes(ctx, client, projectID, ref, dir) {
+		if err != nil {
+			return
+		}
 		if entry, ok := pathIndex[n.Path]; ok && n.Type == "commit" {
 			entry.CommitSHA = n.ID
 		}
 	}
 }
 
-// parentDir returns the parent directory of path, or "" for root-level paths.
-func parentDir(path string) string {
-	idx := strings.LastIndex(path, "/")
-	if idx < 0 {
-		return ""
+// treeNodes lists one directory of the repository tree at ref, a hundred
+// entries a page, and yields every entry of every page GitLab announces.
+// Paging is client-go's [gl.Scan2], which asks for the next page for as long
+// as GitLab's answer names one; a consumer that stops early stops the listing.
+func treeNodes(ctx context.Context, client *gitlabclient.Client, projectID, ref, dir string) iter.Seq2[*gl.TreeNode, error] {
+	opts := &gl.ListTreeOptions{}
+	opts.PerPage = 100
+	opts.Ref = new(ref)
+	if dir != "" {
+		opts.Path = new(dir)
 	}
-	return path[:idx]
+	return gl.Scan2(func(page gl.PaginationOptionFunc) ([]*gl.TreeNode, *gl.Response, error) {
+		return client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx), page)
+	})
+}
+
+// parentDir returns the parent directory of path, or "" for root-level paths.
+// A path with no separator and one whose only separator leads it both have
+// the root as their parent, so the index is floored at zero rather than
+// compared, which would give the same answer for the two on either side of
+// the comparison and leave nothing a test could hold it to.
+func parentDir(path string) string {
+	return path[:max(strings.LastIndex(path, "/"), 0)]
 }

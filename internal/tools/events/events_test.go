@@ -446,7 +446,7 @@ func TestFormatAuthor(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// toContributionEventOutput.
+// ToContributionEventOutput.
 
 // TestCovtoContributionEventOutput_NilCreatedAt verifies the CovtoContributionEventOutput_NilCreatedAt handler.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -465,7 +465,7 @@ func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 		CreatedAt:      nil,
 		AuthorUsername: "covUser",
 	}
-	out := toContributionEventOutput(e)
+	out := ToContributionEventOutput(e)
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)
 	}
@@ -492,7 +492,7 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 		CreatedAt:      &ts,
 		AuthorUsername: "covUser",
 	}
-	out := toContributionEventOutput(e)
+	out := ToContributionEventOutput(e)
 	if !strings.Contains(out.CreatedAt, "2026-03-07") {
 		t.Errorf("expected date in CreatedAt, got %q", out.CreatedAt)
 	}
@@ -899,7 +899,7 @@ func TestToContributionEventOutput_FullMirror(t *testing.T) {
 		Author: gl.BasicUser{ID: 5, Username: "u", Name: "User", State: "active", CreatedAt: &ts, AvatarURL: "a", WebURL: "w"},
 	}
 
-	out := toContributionEventOutput(e)
+	out := ToContributionEventOutput(e)
 	assertTrue(t, out.PushData != nil && out.PushData.CommitCount == 3 && out.PushData.CommitTitle == "fix", "push_data")
 	assertTrue(t, out.Author != nil && out.Author.ID == 5 && out.Author.CreatedAt != "", "author")
 	assertContributionNote(t, out.Note)
@@ -929,7 +929,7 @@ func assertTrue(t *testing.T, cond bool, label string) {
 // TestToContributionEventOutput_EmptySubObjects verifies that zero-valued sub
 // objects are omitted (nil) so the output stays clean.
 func TestToContributionEventOutput_EmptySubObjects(t *testing.T) {
-	out := toContributionEventOutput(&gl.ContributionEvent{ID: 1})
+	out := ToContributionEventOutput(&gl.ContributionEvent{ID: 1})
 	if out.PushData != nil {
 		t.Errorf("expected nil push_data, got %+v", out.PushData)
 	}

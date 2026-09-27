@@ -642,6 +642,57 @@ func TestList_TreeNodeThatIsNotACommit_LeavesTheSubmoduleUnpinned(t *testing.T) 
 	}
 }
 
+// oneSubmoduleGitmodules is a .gitmodules naming one submodule at lib.
+const oneSubmoduleGitmodules = `{"file_name": ".gitmodules", "encoding": "text",
+	"content": "[submodule \"lib\"]\n\tpath = lib\n\turl = git@host:group/lib.git\n", "ref": "main"}`
+
+// TestList_TreeListing_FollowsEveryPageOfTheDirectory verifies that a submodule
+// GitLab lists on the second page of its directory is still found, and that
+// the second page is asked for by the number the first announced.
+//
+// The listing asked for one page of a hundred entries and never looked at the
+// pagination headers, so a submodule in a directory with more entries than
+// that was reported with no commit, exactly as one that pins nothing.
+func TestList_TreeListing_FollowsEveryPageOfTheDirectory(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		pages []string
+	)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/") {
+			testutil.RespondJSON(w, http.StatusOK, oneSubmoduleGitmodules)
+			return
+		}
+		page := r.URL.Query().Get("page")
+		mu.Lock()
+		pages = append(pages, page)
+		mu.Unlock()
+		if page == "" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id": "b10bb10b", "name": "README", "type": "blob", "path": "README", "mode": "100644"}]`,
+				testutil.PaginationHeaders{Page: "1", NextPage: "2"})
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"id": "c0ffee00", "name": "lib", "type": "commit", "path": "lib", "mode": "160000"}]`,
+			testutil.PaginationHeaders{Page: "2"})
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Count != 1 || out.Submodules[0].CommitSHA != "c0ffee00" {
+		t.Errorf("submodules = %+v, want lib pinned at c0ffee00 from the second page", out.Submodules)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"", "2"}; !slices.Equal(pages, want) {
+		t.Errorf("tree pages asked = %q, want %q", pages, want)
+	}
+}
+
 // TestParseGitmodules_ExtraKeysAndMalformedLines_AreIgnored verifies that a
 // .gitmodules section carrying keys beyond path and url, and a line with no
 // separator at all, leaves the entry those two keys built.

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -19,23 +20,50 @@ import (
 
 // TreeInput defines parameters for listing files in a repository tree.
 type TreeInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id"          jsonschema:"Project ID or URL-encoded path,required"`
-	Path      string               `json:"path,omitempty"      jsonschema:"Path inside the repository to list (default: root)"`
-	Ref       string               `json:"ref,omitempty"       jsonschema:"Branch name, tag, or commit SHA (default: default branch)"`
-	Recursive bool                 `json:"recursive,omitempty" jsonschema:"List files recursively through subdirectories"`
-	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order keyset-paginated results by: 'id', 'name', 'path', or 'type' (only used with pagination='keyset')"`
-	Sort      string               `json:"sort,omitempty"      jsonschema:"Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')"`
+	ProjectID      toolutil.StringOrInt `json:"project_id"          jsonschema:"Project ID or URL-encoded path,required"`
+	Path           string               `json:"path,omitempty"      jsonschema:"Path inside the repository to list (default: root)"`
+	Ref            string               `json:"ref,omitempty"       jsonschema:"Branch name, tag, or commit SHA (default: default branch)"`
+	Recursive      bool                 `json:"recursive,omitempty" jsonschema:"List files recursively through subdirectories. Cannot be combined with with_last_commit"`
+	WithLastCommit bool                 `json:"with_last_commit,omitempty" jsonschema:"Include, as last_commit, the most recent commit that changed each entry (GitLab 19.3 or later, and an older instance ignores it). Cannot be combined with recursive"`
+	OrderBy        string               `json:"order_by,omitempty"  jsonschema:"Column to order keyset-paginated results by: 'id', 'name', 'path', or 'type' (only used with pagination='keyset')"`
+	Sort           string               `json:"sort,omitempty"      jsonschema:"Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
 
 // TreeNodeOutput represents a file or directory in the repository tree.
+// LastCommit is set only when the caller asked for it with with_last_commit,
+// which is the one condition under which lib/api/entities/tree_object.rb
+// renders it.
 type TreeNodeOutput struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type"`
-	Path string `json:"path"`
-	Mode string `json:"mode"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Path       string          `json:"path"`
+	Mode       string          `json:"mode"`
+	LastCommit *commits.Output `json:"last_commit,omitempty"`
+}
+
+// treeObjectExtra is the key of lib/api/entities/tree_object.rb that
+// client-go's TreeNode does not model: the commit that last changed the entry,
+// rendered through the commit entity when the request passed with_last_commit.
+type treeObjectExtra struct {
+	LastCommit *gl.Commit `json:"last_commit"`
+}
+
+// withLastCommitParam asks the tree route for each entry's last commit when
+// want is set. The parameter arrived in GitLab 19.3 and client-go's
+// ListTreeOptions does not model it, so it is added to the query client-go
+// encoded; unset, the request is left as it was.
+func withLastCommitParam(want bool) gl.RequestOptionFunc {
+	return func(req *retryablehttp.Request) error {
+		if want {
+			query := req.URL.Query()
+			query.Set("with_last_commit", "true")
+			req.URL.RawQuery = query.Encode()
+		}
+		return nil
+	}
 }
 
 // TreeOutput holds a paginated list of tree nodes.
@@ -52,6 +80,9 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	}
 	if input.ProjectID == "" {
 		return TreeOutput{}, errors.New("repositoryTree: project_id is required. Use project.list to find the ID first, then pass it as project_id")
+	}
+	if input.Recursive && input.WithLastCommit {
+		return TreeOutput{}, errors.New("repositoryTree: with_last_commit cannot be combined with recursive, which GitLab refuses. List one directory at a time with its path to see the last commit of its entries")
 	}
 
 	opts := &gl.ListTreeOptions{}
@@ -72,7 +103,11 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
-	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx))
+	var captured *gitlabclient.ResponseCapture
+	if input.WithLastCommit {
+		ctx, captured = gitlabclient.WithResponseCapture(ctx)
+	}
+	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx), withLastCommitParam(input.WithLastCommit))
 	if err != nil {
 		return TreeOutput{}, toolutil.WrapErrWithStatusHint("repositoryTree", err, http.StatusNotFound,
 			"verify project_id and ref (branch/tag/SHA) with branch.list or tag.list; check the path exists in the tree")
@@ -86,6 +121,20 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 			Type: n.Type,
 			Path: n.Path,
 			Mode: n.Mode,
+		}
+	}
+	if captured != nil {
+		// The SDK decoded the same array into nodes, so rows holds one entry
+		// per node, in the same order.
+		var rows []treeObjectExtra
+		if err = captured.Decode(&rows); err != nil {
+			return TreeOutput{}, toolutil.WrapErr("repositoryTree", err)
+		}
+		for i, row := range rows {
+			if row.LastCommit != nil {
+				last := commits.ToOutput(row.LastCommit)
+				out[i].LastCommit = &last
+			}
 		}
 	}
 	return TreeOutput{Tree: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
