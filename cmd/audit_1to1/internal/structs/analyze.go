@@ -1185,7 +1185,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		}
 		reports = append(reports, pr)
 	}
-	sort.Slice(reports, func(i, j int) bool { return reports[i].Package < reports[j].Package })
+	slices.SortFunc(reports, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) })
 	// Judged after the loop and over every package, including the clean ones
 	// -gaps-only is about to drop from the report: a declaration that answers a
 	// candidate in a package with no finding left is doing its job.
@@ -1327,7 +1327,7 @@ func outputGroups(pairs map[[2]string]structPair) []outputGroup {
 	for _, grp := range byName {
 		out = append(out, *grp)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].mcpName < out[j].mcpName })
+	slices.SortFunc(out, func(a, b outputGroup) int { return strings.Compare(a.mcpName, b.mcpName) })
 	return out
 }
 
@@ -1437,11 +1437,8 @@ func sortedPairs(pairs map[[2]string]structPair) []structPair {
 	for _, pair := range pairs {
 		out = append(out, pair)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].mcpName != out[j].mcpName {
-			return out[i].mcpName < out[j].mcpName
-		}
-		return out[i].sdkName < out[j].sdkName
+	slices.SortFunc(out, func(a, b structPair) int {
+		return cmp.Or(strings.Compare(a.mcpName, b.mcpName), strings.Compare(a.sdkName, b.sdkName))
 	})
 	return out
 }
