@@ -109,7 +109,9 @@ func registerEnvBackedFlags() {
 // the startup warnings.
 func applyEnvBackedFlags() {
 	for _, entry := range envBackedFlags {
-		if entry.value == nil || !isFlagPassed(entry.flagName) {
+		// A flag is passed only once registerEnvBackedFlags has registered
+		// it, which is also what fills value, so a passed flag always has one.
+		if !isFlagPassed(entry.flagName) {
 			continue
 		}
 		// The error is ignored for the same reason os.Setenv's error exists at
