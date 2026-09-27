@@ -1,9 +1,14 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	apimetric "go.opentelemetry.io/otel/metric"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
@@ -299,5 +304,49 @@ func TestObserveAuthBlocks_RegistersWithoutTelemetry(t *testing.T) {
 	observeAuthBlocks(&c)
 	if strings.Contains(logged.String(), "not being exported") {
 		t.Errorf("a registration that succeeded logged a failure: %s", logged.String())
+	}
+}
+
+// refusingCounterMeterProvider hands out a meter that will not create an
+// observable counter, the instrument the refusal counts are exported as.
+type refusingCounterMeterProvider struct {
+	apimetric.MeterProvider
+	err error
+}
+
+func (p refusingCounterMeterProvider) Meter(string, ...apimetric.MeterOption) apimetric.Meter {
+	return refusingCounterMeter{Meter: noopmetric.Meter{}, err: p.err}
+}
+
+type refusingCounterMeter struct {
+	apimetric.Meter
+	err error
+}
+
+func (m refusingCounterMeter) Int64ObservableCounter(
+	string, ...apimetric.Int64ObservableCounterOption,
+) (apimetric.Int64ObservableCounter, error) {
+	return nil, m.err
+}
+
+// TestObserveAuthBlocks_ARefusedRegistration_IsLoggedNotReturned covers the
+// failure observeAuthBlocks deliberately keeps to itself. A provider that
+// refuses the counter costs the refusal series and nothing else, so the
+// handler still starts; what must not happen is the loss going unsaid, since
+// an operator would then read an absent series as a deployment that has never
+// refused anybody.
+func TestObserveAuthBlocks_ARefusedRegistration_IsLoggedNotReturned(t *testing.T) {
+	refused := errors.New("the provider refused this instrument")
+	previous := otel.GetMeterProvider()
+	otel.SetMeterProvider(refusingCounterMeterProvider{MeterProvider: noopmetric.NewMeterProvider(), err: refused})
+	t.Cleanup(func() { otel.SetMeterProvider(previous) })
+	logged := testutil.CaptureSlog(t)
+
+	var c authBlockCounters
+	observeAuthBlocks(&c)
+
+	if !strings.Contains(logged.String(), "authentication block metrics are not being exported") ||
+		!strings.Contains(logged.String(), refused.Error()) {
+		t.Errorf("the refused registration was not reported with its cause.\nlogged: %s", logged.String())
 	}
 }

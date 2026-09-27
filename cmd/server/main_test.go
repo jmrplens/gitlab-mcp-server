@@ -792,6 +792,30 @@ func TestServeHTTPOn_TheServeLoopFails_IsReportedAsAServerError(t *testing.T) {
 	}
 }
 
+// TestServeHTTPOn_AnUnloadableCertificatePair_RefusesToStart covers the load
+// of the pair --tls-cert and --tls-key name. A pair that cannot be loaded
+// stops the server before it binds, saying why, rather than leaving it to the
+// accept loop, which would serve TLS with no certificate and report the
+// missing file only as a server error once serving had begun.
+func TestServeHTTPOn_AnUnloadableCertificatePair_RefusesToStart(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	dir := t.TempDir()
+	cfg := statelessTestConfig(gitlab.URL, false)
+	cfg.TLSCertFile = filepath.Join(dir, "missing.pem")
+	cfg.TLSKeyFile = filepath.Join(dir, "missing.key")
+	ctx, cancel := context.WithTimeout(t.Context(), testHTTPLivenessTimeout)
+	defer cancel()
+
+	serveErr := serveHTTPOn(ctx, cfg, "127.0.0.1:0", nil, defaultHTTPIdleTimeout)
+
+	if !errors.Is(serveErr, os.ErrNotExist) || !strings.Contains(serveErr.Error(), "loading the TLS certificate and key") {
+		t.Errorf("serveHTTPOn() = %v, want the missing pair reported as a startup failure", serveErr)
+	}
+	if serveErr != nil && strings.Contains(serveErr.Error(), "mcp server error") {
+		t.Errorf("serveHTTPOn() = %v; the missing pair was found only after serving began", serveErr)
+	}
+}
+
 // selfSignedTLSPair mints a certificate for the loopback address and writes
 // it and its key as the PEM pair --tls-cert and --tls-key expect, returning
 // both paths and the parsed certificate so a client can trust exactly it.

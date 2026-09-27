@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -328,5 +329,26 @@ func TestDiscoveryCard_DeclaresTheVersionsTheDeploymentServes(t *testing.T) {
 					got, protocolVersionStatelessOnly)
 			}
 		})
+	}
+}
+
+// TestDiscoveryCard_AnEncodingFailure_IsReturnedWrapped drives the one error
+// buildDiscoveryCard can return. Nothing the card is built from makes
+// encoding/json refuse it, so the encoder is swapped for one that fails after
+// writing part of a document. What is held is that the refusal reaches the
+// caller, which answers the route with a 503, wrapped with what was being
+// encoded, and that no half-rendered card travels beside it.
+func TestDiscoveryCard_AnEncodingFailure_IsReturnedWrapped(t *testing.T) {
+	refused := errors.New("the encoder refused the card")
+	original := marshalDiscoveryCard
+	marshalDiscoveryCard = func(any, string, string) ([]byte, error) { return []byte("{"), refused }
+	t.Cleanup(func() { marshalDiscoveryCard = original })
+
+	out, err := buildDiscoveryCard(&config.Config{PublicURL: "https://mcp.example.com"})
+	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "marshaling the server card") {
+		t.Errorf("buildDiscoveryCard() error = %v, want the encoder's refusal wrapped as a card marshaling failure", err)
+	}
+	if out != nil {
+		t.Errorf("buildDiscoveryCard() = %q beside its error, want no card", out)
 	}
 }
