@@ -188,6 +188,10 @@ const (
 	projectParamGitLabDropped = "not declared by POST /projects or PUT /projects/:id in GitLab 19.3.1 " +
 		"(lib/api/helpers/projects_helpers.rb at v19.3.1-ee) or 19.4.1 (gitlab-api-live.json), so GitLab drops " +
 		"the value; client-go keeps the field"
+	// mrApprovalRulesOffsetOnly is the reason the approval rules list offers
+	// no ordering or keyset field of the gl.ListOptions it pages with.
+	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page " +
+		"and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
 	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or " +
@@ -991,6 +995,15 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// SDK options fields the endpoint does not accept (generic ListOptions plumbing).
 	"groupsshcerts.ListInput.order_by": "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
 	"groupsshcerts.ListInput.sort":     "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
+	// The merge request approval rules list pages through a gl.ListOptions the
+	// handler's own raw request encodes, and GET /projects/:id/merge_requests/
+	// :merge_request_iid/approval_rules declares page and per_page and nothing
+	// else of it (gitlab-api-live.json, 19.4.1-ee), so neither the ordering nor
+	// the keyset fields would reach anything.
+	"mrapprovals.RulesInput.order_by":   mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.sort":       mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.pagination": mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.page_token": mrApprovalRulesOffsetOnly,
 
 	// SDK options fields the route declares and never reads. The deployment
 	// merge request list takes merge_requests_base_params and presents
