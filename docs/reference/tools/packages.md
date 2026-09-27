@@ -80,7 +80,7 @@ GitLab reads only a package whose status is `default` or `deprecated` here, and 
 
 ### `gitlab_package_file_list`
 
-List files within a specific package. Returns file ID, name, size, and SHA256 for each file with pagination.
+List files within a specific package. Returns each file under the keys GitLab sends: `id` (the `package_file_id` `gitlab_package_file_delete` takes), `package_id`, `file_name`, `size`, `file_sha256`, `file_md5`, `file_sha1` and `created_at`, with pagination.
 
 | Annotation | **Read** |
 | ---------- | -------- |
