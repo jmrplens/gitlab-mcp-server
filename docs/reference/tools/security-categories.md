@@ -82,6 +82,12 @@ Delete a custom security category and its associated security attributes.
 
 > **Destructive**: Protected by confirmation prompt because associated security attributes are also deleted.
 
+| Output field            | Type   | Description                                                                            |
+| ----------------------- | ------ | -------------------------------------------------------------------------------------- |
+| `status`                | string | `success`                                                                              |
+| `message`               | string | Confirmation naming the deleted category                                               |
+| `deleted_attribute_ids` | array  | Numeric IDs of the security attributes GitLab deleted with the category; `[]` for none |
+
 ---
 
 ## Tool Summary

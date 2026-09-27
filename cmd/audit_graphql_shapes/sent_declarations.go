@@ -59,7 +59,9 @@ const (
 	// stakes every action sharing the selection on the experiment rather than
 	// only the one field. The pin cannot say it for the reason
 	// categoryDeprecated's evidence is prose, and the evidence is the same
-	// kind: the field's entry in GitLab's GraphQL API reference.
+	// kind: the field's entry in GitLab's GraphQL API reference. It is the rule
+	// for a field a document starts to select: the CI catalog documents keep
+	// five experiments they published long before, and say why beside them.
 	categoryExperiment = "experiment-upstream"
 	// categoryNewerThanFloor is a field GitLab added after the oldest release
 	// the documents sharing the selection are held to. GitLab refuses a whole
@@ -108,13 +110,21 @@ const (
 	// serves no tool for, so surfacing it inside another domain's response
 	// would start that domain in the wrong place.
 	categoryOutsideSurface = "outside-this-servers-surface"
+	// categoryRestated is a field whose value the caller already holds: a
+	// mutation payload handing back the argument that named its target, or an
+	// object reached again by walking from a child back to the parent the
+	// same response carries. Selecting it would publish the same value twice.
+	categoryRestated = "restates-a-known-value"
+	// categoryTierAboveDomain is a field GitLab serves only above the tier the
+	// domain is served at, most often one it defines in ee/ on a type every
+	// edition has. A Community instance refuses a whole document naming a
+	// field it does not define, so selecting it in a document every edition is
+	// sent would stop the action on every Free instance. The pin cannot say
+	// it, being an Enterprise schema that records no tier, so the evidence is
+	// prose: the ee/ file that defines the field, or the licensed feature its
+	// resolver checks.
+	categoryTierAboveDomain = "tier-gated-above-this-domain"
 )
-
-// One more category is wanted and is not written down until the first finding
-// needs one, because a category nothing uses is a vocabulary rather than a
-// decision: tier-gated-above-this-domain for a field GitLab serves only above
-// the tier the domain is gated at. It needs prose evidence for the same reason
-// categoryDeprecated does: the tier is not in the pin.
 
 // Where the packages these findings are filed against live, spelled once. A
 // finding names the package the decoding struct is declared in, so the note
@@ -310,8 +320,9 @@ func epicIssueDeclarations() []sentDeclaration {
 // on purpose, each with the reason. It is what [auditRun.declarations] carries
 // on a real run. The two GraphQL-only security domains and the shapes they
 // share keep their answers in [securitySentDeclarations], which is most of the
-// table.
-var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
+// table. The branch rules, CI catalog, custom emoji and security attribute and
+// category domains keep theirs in [domainSentDeclarations].
+var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), domainSentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
 
 // epicSentDeclarations answers the epic domains' findings, and those of the
 // shared note wrapper every epic note and discussion mutation goes through.

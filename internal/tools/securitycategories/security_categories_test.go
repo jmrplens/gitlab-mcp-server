@@ -678,18 +678,25 @@ func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 }
 
 // TestDelete_Success verifies that Delete sends the category GID to the
-// securityCategoryDestroy mutation and reports a successful deletion.
+// securityCategoryDestroy mutation and reports a successful deletion with the
+// attributes GitLab deleted along with the category.
 //
-// The mock asserts the encoded GraphQL ID and returns an empty errors array. The
-// test expects a success status and a message that names the deleted category.
+// The mock records the encoded GraphQL ID and answers with two deleted
+// attribute GIDs. The test expects a success status, a message that names the
+// deleted category, and both attributes by their numeric IDs.
 func TestDelete_Success(t *testing.T) {
+	var sentID any
 	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
 		"securityCategoryDestroy": func(w http.ResponseWriter, r *http.Request) {
-			input := graphQLInput(t, r)
-			if input["id"] != "gid://gitlab/Security::Category/7" {
-				t.Fatalf("id = %#v", input["id"])
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
 			}
-			testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryDestroy":{"errors":[]}}`)
+			if input, ok := vars["input"].(map[string]any); ok {
+				sentID = input["id"]
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryDestroy":{
+				"deletedAttributesGid":["gid://gitlab/Security::Attribute/11","gid://gitlab/Security::Attribute/12"],"errors":[]}}`)
 		},
 	})
 
@@ -698,8 +705,82 @@ func TestDelete_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
+	if sentID != "gid://gitlab/Security::Category/7" {
+		t.Errorf("id = %#v, want the category's global ID", sentID)
+	}
 	if out.Status != "success" || !strings.Contains(out.Message, "security category 7") {
-		t.Fatalf("Delete() output = %#v", out)
+		t.Errorf("Delete() output = %#v", out)
+	}
+	if want := []int64{11, 12}; !slices.Equal(out.DeletedAttributeIDs, want) {
+		t.Errorf("DeletedAttributeIDs = %v, want %v", out.DeletedAttributeIDs, want)
+	}
+}
+
+// TestDelete_NoAttributesDeleted_ReportsAnEmptyList verifies that a category
+// GitLab deleted without attributes, whether it sends an empty list or null,
+// is published with an empty list rather than null, so the answer says none
+// went with it.
+func TestDelete_NoAttributesDeleted_ReportsAnEmptyList(t *testing.T) {
+	for name, deleted := range map[string]string{"empty": `[]`, "null": `null`} {
+		t.Run(name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				"securityCategoryDestroy": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryDestroy":{"deletedAttributesGid":`+deleted+`,"errors":[]}}`)
+				},
+			})
+			out, err := Delete(context.Background(), testutil.NewTestClient(t, handler), DeleteInput{CategoryID: 7})
+			if err != nil {
+				t.Fatalf("Delete() error = %v", err)
+			}
+			if out.DeletedAttributeIDs == nil || len(out.DeletedAttributeIDs) != 0 {
+				t.Errorf("DeletedAttributeIDs = %#v, want an empty, non-nil list", out.DeletedAttributeIDs)
+			}
+		})
+	}
+}
+
+// TestDelete_MalformedDeletedAttributeGID_ReturnsAParseError verifies that a
+// deleted attribute GitLab names by something other than a global ID is
+// reported rather than published as a zero ID.
+func TestDelete_MalformedDeletedAttributeGID_ReturnsAParseError(t *testing.T) {
+	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+		"securityCategoryDestroy": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryDestroy":{"deletedAttributesGid":["not-a-gid"],"errors":[]}}`)
+		},
+	})
+	_, err := Delete(context.Background(), testutil.NewTestClient(t, handler), DeleteInput{CategoryID: 7})
+	if err == nil || !strings.Contains(err.Error(), "parse deleted security attribute id") {
+		t.Fatalf("Delete() error = %v, want a parse error naming the deleted attribute id", err)
+	}
+}
+
+// TestFormatDeleteOutputMarkdown pins the card of a deleted category, with the
+// attributes deleted with it and with none.
+func TestFormatDeleteOutputMarkdown(t *testing.T) {
+	const hints = "\n---\n\U0001F4A1 **Next steps:**\n- Use action 'security_category.create' to define a replacement category\n"
+	tests := []struct {
+		name string
+		ids  []int64
+		want string
+	}{
+		{"with attributes", []int64{11, 12}, "## Security Category Deleted\n\n" +
+			"- **Result**: Successfully deleted security category 7 and its attributes.\n" +
+			"- **Attributes deleted with it**: 11, 12\n" + hints},
+		{"without attributes", []int64{}, "## Security Category Deleted\n\n" +
+			"- **Result**: Successfully deleted security category 7 and its attributes.\n" +
+			"- **Attributes deleted with it**: none\n" + hints},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatDeleteOutputMarkdown(DeleteOutput{
+				Status:              "success",
+				Message:             "Successfully deleted security category 7 and its attributes.",
+				DeletedAttributeIDs: tt.ids,
+			})
+			if got != tt.want {
+				t.Errorf("FormatDeleteOutputMarkdown()\n got %q\nwant %q", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -20,6 +20,7 @@ type ResourceItem struct {
 	FullPath            string   `json:"full_path"`
 	WebPath             string   `json:"web_path,omitempty"`
 	StarCount           int      `json:"star_count"`
+	StarrersPath        string   `json:"starrers_path,omitempty"`
 	Last30DayUsageCount int      `json:"last_30_day_usage_count"`
 	Archived            bool     `json:"archived"`
 	Topics              []string `json:"topics,omitempty"`
@@ -30,8 +31,12 @@ type ResourceItem struct {
 }
 
 // ResourceDetail extends ResourceItem with version and component information.
+// The README is the latest version's, in its Markdown source and as GitLab
+// renders it: GitLab resolves a version's README for one version per request,
+// so the older versions listed here carry none.
 type ResourceDetail struct {
 	ResourceItem
+	Readme     string          `json:"readme,omitempty"`
 	ReadmeHTML string          `json:"readme_html,omitempty"`
 	Versions   []VersionItem   `json:"versions,omitempty"`
 	Components []ComponentItem `json:"components,omitempty"`
@@ -39,33 +44,116 @@ type ResourceDetail struct {
 
 // VersionItem represents a released version of a catalog resource.
 type VersionItem struct {
+	ID         string          `json:"id"`
 	Name       string          `json:"name"`
 	ReleasedAt string          `json:"released_at,omitempty"`
 	CreatedAt  string          `json:"created_at,omitempty"`
 	Semver     string          `json:"semver,omitempty"`
 	Path       string          `json:"path,omitempty"`
+	Author     *VersionAuthor  `json:"author,omitempty"`
+	Commit     *VersionCommit  `json:"commit,omitempty"`
 	Components []ComponentItem `json:"components,omitempty"`
+}
+
+// VersionAuthor is the user who published a version. The avatar URL is the
+// one GitLab sends, which may be a path relative to the instance.
+type VersionAuthor struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	WebURL    string `json:"web_url"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
+// VersionCommit is the commit a version was released from.
+type VersionCommit struct {
+	SHA     string `json:"sha"`
+	ShortID string `json:"short_id"`
+	Title   string `json:"title,omitempty"`
+	WebURL  string `json:"web_url"`
 }
 
 // ComponentItem represents a single CI/CD component within a catalog resource.
 type ComponentItem struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
-	IncludePath string      `json:"include_path"`
-	Inputs      []InputItem `json:"inputs,omitempty"`
+	ID                  string      `json:"id"`
+	Name                string      `json:"name"`
+	Description         string      `json:"description,omitempty"`
+	IncludePath         string      `json:"include_path"`
+	Last30DayUsageCount *int        `json:"last_30_day_usage_count,omitempty"`
+	Inputs              []InputItem `json:"inputs,omitempty"`
 }
 
 // InputItem represents an input parameter for a component.
+//
+// A default and the options are values of the input's own type, which GitLab
+// sends as the JSON it is: a string, a number, a boolean or an array. They are
+// published as that value rather than as its text, so a boolean input's false
+// default reaches the caller as false.
 type InputItem struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type,omitempty"`
-	Required    bool   `json:"required"`
-	Default     string `json:"default,omitempty"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Type        string      `json:"type,omitempty"`
+	Required    bool        `json:"required"`
+	Default     any         `json:"default,omitempty"`
+	Options     any         `json:"options,omitempty"`
+	Regex       string      `json:"regex,omitempty"`
+	Rules       []InputRule `json:"rules,omitempty"`
+}
+
+// InputRule is a conditional rule of an input: when its expression holds,
+// the input takes this default and offers these options instead.
+type InputRule struct {
+	If      string `json:"if,omitempty"`
+	Default any    `json:"default,omitempty"`
+	Options []any  `json:"options,omitempty"`
 }
 
 // GraphQL queries.
+//
+// GitLab refuses a whole document that names a field it does not have, so the
+// newest field a document selects is the oldest release it works on. Measured
+// against GitLab's versioned GraphQL references, the get document needs GitLab
+// 18.10 (a component's description), as it did before it read the README
+// source, the author, the commit and an input's rules (18.6 the newest of
+// them), and the listing now needs 18.1 (a resource's archived flag) where it
+// needed 18.10 for the components it read and dropped.
+//
+// Both documents select five fields GitLab's GraphQL reference still marks
+// Status: Experiment, knowingly: a resource's webPath (16.1), latestReleasedAt
+// (16.5), fullPath (16.11) and last30DayUsageCount (17.0), and a version's
+// releasedAt (16.7), the last in the get alone. The rule the branch rules
+// package states, that an experiment is left out because GitLab refuses a
+// whole document once one is removed, is a rule for a field a document starts
+// to select. These five were published before it was written, each is listed
+// in every versioned reference from 16.11 (17.0 for last30DayUsageCount) to
+// 19.4, and fullPath is the value the get action finds a resource by, so
+// leaving them out would take published fields away to guard against a
+// removal nothing in the releases since has pointed to. A catalog field that
+// is an experiment and not yet selected is still left out.
 
+// resourceSelection is what both documents select of a catalog resource
+// itself.
+const resourceSelection = `id
+    name
+    description
+    icon
+    fullPath
+    webPath
+    starCount
+    starrersPath
+    last30DayUsageCount
+    archived
+    topics
+    verificationLevel
+    visibilityLevel
+    latestReleasedAt`
+
+// queryListResources reads each resource and the name of its latest version,
+// which is all a listing publishes of it. It used to select that version's
+// rendered README and every component with its inputs as well, and drop them:
+// measured on gitlab.com on 2026-09-26, a page of twenty resources was 3 MB
+// and twenty seconds that way and is 13 KB and seven seconds this way, with
+// the same latest versions.
 const queryListResources = `
 query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceSort, $first: Int, $after: String, $last: Int, $before: String) {
   ciCatalogResources(
@@ -78,45 +166,10 @@ query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceS
     before: $before
   ) {
     nodes {
-      id
-      name
-      description
-      icon
-      fullPath
-      webPath
-      starCount
-      last30DayUsageCount
-      archived
-      topics
-      verificationLevel
-      visibilityLevel
-      latestReleasedAt
+      ` + resourceSelection + `
       versions(first: 1) {
         nodes {
           name
-          releasedAt
-          createdAt
-          semver {
-            major
-            minor
-            patch
-          }
-          path
-          readmeHtml
-          components {
-            nodes {
-              name
-              description
-              includePath
-              inputs {
-                name
-                description
-                type
-                required
-                default
-              }
-            }
-          }
         }
       }
     }
@@ -130,24 +183,19 @@ query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceS
 }
 `
 
+// queryGetResource reads one resource with its last ten versions, and the
+// latest version a second time, under an alias, for its README: GitLab
+// resolves CiCatalogResourceVersion.readme for one version per request and
+// answers the rest with an error, so the README cannot be asked of the ten.
+// Measured on gitlab.com on 2026-09-26 the document scores 83 against the
+// complexity limit of 200 GitLab allows an anonymous caller.
 const queryGetResource = `
 query($id: CiCatalogResourceID, $fullPath: ID) {
   ciCatalogResource(id: $id, fullPath: $fullPath) {
-    id
-    name
-    description
-    icon
-    fullPath
-    webPath
-    starCount
-    last30DayUsageCount
-    archived
-    topics
-    verificationLevel
-    visibilityLevel
-    latestReleasedAt
+    ` + resourceSelection + `
     versions(first: 10) {
       nodes {
+        id
         name
         releasedAt
         createdAt
@@ -157,21 +205,48 @@ query($id: CiCatalogResourceID, $fullPath: ID) {
           patch
         }
         path
-        readmeHtml
+        author {
+          id
+          username
+          name
+          webUrl
+          avatarUrl
+        }
+        commit {
+          sha
+          shortId
+          title
+          webUrl
+        }
         components {
           nodes {
+            id
             name
             description
             includePath
+            last30DayUsageCount
             inputs {
               name
               description
               type
               required
               default
+              options
+              regex
+              rules {
+                if
+                default
+                options
+              }
             }
           }
         }
+      }
+    }
+    latestVersion: versions(first: 1) {
+      nodes {
+        readme
+        readmeHtml
       }
     }
   }
@@ -180,34 +255,91 @@ query($id: CiCatalogResourceID, $fullPath: ID) {
 
 // GraphQL response structs.
 
+// gqlInputRule decodes a conditional rule of an input. Its values are
+// arbitrary JSON, so they decode into any.
+type gqlInputRule struct {
+	If      string `json:"if"`
+	Default any    `json:"default"`
+	Options []any  `json:"options"`
+}
+
+// gqlInput decodes an input. The default and the options are CiInputsValue,
+// arbitrary JSON: a string pointer failed the whole call on the first boolean
+// or number default, which the catalog's own components/sast carries.
 type gqlInput struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	Type        *string `json:"type"`
-	Required    bool    `json:"required"`
-	Default     *string `json:"default"`
+	Name        string         `json:"name"`
+	Description *string        `json:"description"`
+	Type        *string        `json:"type"`
+	Required    bool           `json:"required"`
+	Default     any            `json:"default"`
+	Options     any            `json:"options"`
+	Regex       string         `json:"regex"`
+	Rules       []gqlInputRule `json:"rules"`
 }
 
 type gqlComponent struct {
-	Name        string     `json:"name"`
-	Description *string    `json:"description"`
-	IncludePath string     `json:"includePath"`
-	Inputs      []gqlInput `json:"inputs"`
+	ID                  string     `json:"id"`
+	Name                string     `json:"name"`
+	Description         *string    `json:"description"`
+	IncludePath         string     `json:"includePath"`
+	Last30DayUsageCount *int       `json:"last30DayUsageCount"`
+	Inputs              []gqlInput `json:"inputs"`
+}
+
+// gqlVersionAuthor decodes the user who published a version.
+type gqlVersionAuthor struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	WebURL    string `json:"webUrl"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+// gqlVersionCommit decodes the commit a version was released from.
+type gqlVersionCommit struct {
+	SHA     string `json:"sha"`
+	ShortID string `json:"shortId"`
+	Title   string `json:"title"`
+	WebURL  string `json:"webUrl"`
 }
 
 type gqlVersion struct {
+	ID         string             `json:"id"`
 	Name       string             `json:"name"`
 	ReleasedAt *string            `json:"releasedAt"`
 	CreatedAt  *string            `json:"createdAt"`
 	Semver     *gqlSemver         `json:"semver"`
 	Path       *string            `json:"path"`
-	ReadmeHTML *string            `json:"readmeHtml"`
+	Author     *gqlVersionAuthor  `json:"author"`
+	Commit     *gqlVersionCommit  `json:"commit"`
 	Components *gqlComponentNodes `json:"components"`
+}
+
+// gqlVersionName decodes a version as the listing reads it: its name.
+type gqlVersionName struct {
+	Name string `json:"name"`
+}
+
+// gqlVersionNameNodes holds the one version a listing reads per resource.
+type gqlVersionNameNodes struct {
+	Nodes []gqlVersionName `json:"nodes"`
+}
+
+// gqlVersionReadme decodes the latest version's README, read under an alias
+// because GitLab answers it for one version per request.
+type gqlVersionReadme struct {
+	Readme     *string `json:"readme"`
+	ReadmeHTML *string `json:"readmeHtml"`
+}
+
+// gqlVersionReadmeNodes holds the latest version the alias reads.
+type gqlVersionReadmeNodes struct {
+	Nodes []gqlVersionReadme `json:"nodes"`
 }
 
 // gqlSemver mirrors CiCatalogResourceSemver, which the schema models as a
 // major/minor/patch object rather than a scalar. All three components are
-// nullable in the schema, so they decode as pointers — a partial semver must
+// nullable in the schema, so they decode as pointers: a partial semver must
 // not collapse into a misleading "0.0.0".
 type gqlSemver struct {
 	Major *int `json:"major"`
@@ -220,21 +352,36 @@ type gqlComponentNodes struct {
 	Nodes []gqlComponent `json:"nodes"`
 }
 
+// gqlResourceFields are the fields of a catalog resource both documents
+// select.
+type gqlResourceFields struct {
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Description         *string  `json:"description"`
+	Icon                *string  `json:"icon"`
+	FullPath            string   `json:"fullPath"`
+	WebPath             string   `json:"webPath"`
+	StarCount           int      `json:"starCount"`
+	StarrersPath        string   `json:"starrersPath"`
+	Last30DayUsageCount int      `json:"last30DayUsageCount"`
+	Archived            bool     `json:"archived"`
+	Topics              []string `json:"topics"`
+	VerificationLevel   *string  `json:"verificationLevel"`
+	VisibilityLevel     *string  `json:"visibilityLevel"`
+	LatestReleasedAt    *string  `json:"latestReleasedAt"`
+}
+
+// gqlResourceListNode is a catalog resource as the listing selects it.
+type gqlResourceListNode struct {
+	gqlResourceFields
+	Versions *gqlVersionNameNodes `json:"versions"`
+}
+
+// gqlResourceNode is a catalog resource as the get document selects it.
 type gqlResourceNode struct {
-	ID                  string           `json:"id"`
-	Name                string           `json:"name"`
-	Description         *string          `json:"description"`
-	Icon                *string          `json:"icon"`
-	FullPath            string           `json:"fullPath"`
-	WebPath             string           `json:"webPath"`
-	StarCount           int              `json:"starCount"`
-	Last30DayUsageCount int              `json:"last30DayUsageCount"`
-	Archived            bool             `json:"archived"`
-	Topics              []string         `json:"topics"`
-	VerificationLevel   *string          `json:"verificationLevel"`
-	VisibilityLevel     *string          `json:"visibilityLevel"`
-	LatestReleasedAt    *string          `json:"latestReleasedAt"`
-	Versions            *gqlVersionNodes `json:"versions"`
+	gqlResourceFields
+	Versions      *gqlVersionNodes       `json:"versions"`
+	LatestVersion *gqlVersionReadmeNodes `json:"latestVersion"`
 }
 
 // gqlVersionNodes holds a list of version nodes.
@@ -244,22 +391,25 @@ type gqlVersionNodes struct {
 
 // gqlCatalogConnection holds the paginated list of CI catalog resource nodes.
 type gqlCatalogConnection struct {
-	Nodes    []gqlResourceNode           `json:"nodes"`
+	Nodes    []gqlResourceListNode       `json:"nodes"`
 	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
 }
 
-// nodeToResourceItem converts a raw GraphQL CI catalog resource node into a
-// [ResourceItem] output struct, extracting optional fields only when present.
-func nodeToResourceItem(n gqlResourceNode) ResourceItem {
+// item converts the fields both documents select into a [ResourceItem],
+// extracting optional fields only when present, with the latest version's
+// name the caller read.
+func (n gqlResourceFields) item(latestVersionName string) ResourceItem {
 	item := ResourceItem{
 		ID:                  n.ID,
 		Name:                n.Name,
 		FullPath:            n.FullPath,
 		WebPath:             n.WebPath,
 		StarCount:           n.StarCount,
+		StarrersPath:        n.StarrersPath,
 		Last30DayUsageCount: n.Last30DayUsageCount,
 		Archived:            n.Archived,
 		Topics:              n.Topics,
+		LatestVersionName:   latestVersionName,
 	}
 	if n.Description != nil {
 		item.Description = *n.Description
@@ -276,32 +426,45 @@ func nodeToResourceItem(n gqlResourceNode) ResourceItem {
 	if n.LatestReleasedAt != nil {
 		item.LatestReleasedAt = *n.LatestReleasedAt
 	}
-	if n.Versions != nil && len(n.Versions.Nodes) > 0 {
-		item.LatestVersionName = n.Versions.Nodes[0].Name
-	}
 	return item
 }
 
-// nodeToResourceDetail converts a raw GraphQL CI catalog resource node into a
-// [ResourceDetail] output struct, including README HTML, components, and version history.
+// nodeToResourceItem converts a listed catalog resource into a
+// [ResourceItem], naming its latest version when it has one.
+func nodeToResourceItem(n gqlResourceListNode) ResourceItem {
+	var latest string
+	if n.Versions != nil && len(n.Versions.Nodes) > 0 {
+		latest = n.Versions.Nodes[0].Name
+	}
+	return n.item(latest)
+}
+
+// nodeToResourceDetail converts a catalog resource the get document read into
+// a [ResourceDetail]: its versions, the latest version's components, and the
+// latest version's README from the alias that reads it.
 func nodeToResourceDetail(n gqlResourceNode) ResourceDetail {
-	detail := ResourceDetail{
-		ResourceItem: nodeToResourceItem(n),
+	var versions []VersionItem
+	if n.Versions != nil {
+		for _, v := range n.Versions.Nodes {
+			versions = append(versions, versionToItem(v))
+		}
 	}
-	if n.Versions == nil {
-		return detail
+	var latest string
+	detail := ResourceDetail{Versions: versions}
+	// The newest version carries the component set shown at detail level,
+	// since the schema moved it from the resource to its versions.
+	if len(versions) > 0 {
+		latest = versions[0].Name
+		detail.Components = versions[0].Components
 	}
-	for i, v := range n.Versions.Nodes {
-		item := versionToItem(v)
-		detail.Versions = append(detail.Versions, item)
-		// The newest version carries the resource's README and the
-		// component set shown at detail level — the schema moved both
-		// from the resource to its versions.
-		if i == 0 {
-			if v.ReadmeHTML != nil {
-				detail.ReadmeHTML = *v.ReadmeHTML
-			}
-			detail.Components = item.Components
+	detail.ResourceItem = n.item(latest)
+	if n.LatestVersion != nil && len(n.LatestVersion.Nodes) > 0 {
+		readme := n.LatestVersion.Nodes[0]
+		if readme.Readme != nil {
+			detail.Readme = *readme.Readme
+		}
+		if readme.ReadmeHTML != nil {
+			detail.ReadmeHTML = *readme.ReadmeHTML
 		}
 	}
 	return detail
@@ -311,6 +474,7 @@ func nodeToResourceDetail(n gqlResourceNode) ResourceDetail {
 // flattening the semver object and the component connection.
 func versionToItem(v gqlVersion) VersionItem {
 	item := VersionItem{
+		ID:   v.ID,
 		Name: v.Name,
 	}
 	if v.ReleasedAt != nil {
@@ -328,6 +492,23 @@ func versionToItem(v gqlVersion) VersionItem {
 	if v.Path != nil {
 		item.Path = *v.Path
 	}
+	if v.Author != nil {
+		item.Author = &VersionAuthor{
+			ID:        v.Author.ID,
+			Username:  v.Author.Username,
+			Name:      v.Author.Name,
+			WebURL:    v.Author.WebURL,
+			AvatarURL: v.Author.AvatarURL,
+		}
+	}
+	if v.Commit != nil {
+		item.Commit = &VersionCommit{
+			SHA:     v.Commit.SHA,
+			ShortID: v.Commit.ShortID,
+			Title:   v.Commit.Title,
+			WebURL:  v.Commit.WebURL,
+		}
+	}
 	return item
 }
 
@@ -337,31 +518,42 @@ func convertComponents(gqlComps []gqlComponent) []ComponentItem {
 	items := make([]ComponentItem, 0, len(gqlComps))
 	for _, c := range gqlComps {
 		comp := ComponentItem{
-			Name:        c.Name,
-			IncludePath: c.IncludePath,
+			ID:                  c.ID,
+			Name:                c.Name,
+			IncludePath:         c.IncludePath,
+			Last30DayUsageCount: c.Last30DayUsageCount,
 		}
 		if c.Description != nil {
 			comp.Description = *c.Description
 		}
 		for _, inp := range c.Inputs {
-			item := InputItem{
-				Name:     inp.Name,
-				Required: inp.Required,
-			}
-			if inp.Description != nil {
-				item.Description = *inp.Description
-			}
-			if inp.Type != nil {
-				item.Type = *inp.Type
-			}
-			if inp.Default != nil {
-				item.Default = *inp.Default
-			}
-			comp.Inputs = append(comp.Inputs, item)
+			comp.Inputs = append(comp.Inputs, inputToItem(inp))
 		}
 		items = append(items, comp)
 	}
 	return items
+}
+
+// inputToItem converts one input with its conditional rules. The default and
+// the options pass through as the JSON values GitLab sent.
+func inputToItem(inp gqlInput) InputItem {
+	item := InputItem{
+		Name:     inp.Name,
+		Required: inp.Required,
+		Default:  inp.Default,
+		Options:  inp.Options,
+		Regex:    inp.Regex,
+	}
+	if inp.Description != nil {
+		item.Description = *inp.Description
+	}
+	if inp.Type != nil {
+		item.Type = *inp.Type
+	}
+	for _, rule := range inp.Rules {
+		item.Rules = append(item.Rules, InputRule(rule))
+	}
+	return item
 }
 
 // List.

@@ -19,7 +19,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 					"branch rule overview",
 				},
 				Tags:           []string{"branch", "rules", "graphql"},
-				Usage:          "Audit a project's aggregated branch protection rules in one call: each rule's matched branch pattern, default/protected flags, matching branch count, allow-force-push and code-owner-approval settings, approval rules, and external status checks. Use this when reviewing branch protection posture across a project. Pages forward only: this GitLab connection takes first and after, and rejects last and before. For the protected-branch REST records (allowed-to-push/merge access levels) use branch.list_protected or branch.get_protected instead.",
+				Usage:          "Audit a project's aggregated branch protection rules in one call: each rule's matched branch pattern, default/protected flags, matching branch count, who may push, merge and unprotect (roles and deploy keys, and on Premium and above the users and groups granted), allow-force-push and code-owner-approval settings, the security-policy flags, approval rules with their eligible approvers, and external status checks. Use this when reviewing branch protection posture across a project. Pages forward only: this GitLab connection takes first and after, and rejects last and before. For one protected branch's REST record, with the numeric ids of its grants, use branch.get_protected.",
 				RelatedActions: []string{"branch.list_protected", "branch.get_protected", "project.get"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
 					"project_path": {
@@ -33,7 +33,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				IndividualTool: toolutil.IndividualToolSpec{
 					Name:        "gitlab_list_branch_rules",
 					Title:       toolutil.TitleFromName("gitlab_list_branch_rules"),
-					Description: "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.",
+					Description: "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its id, matched pattern, default and protected flags, matching branch count, branch protection settings (who may push, merge and unprotect, allow force push, code-owner approval required, security-policy flags), approval rules with eligible approvers, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.",
 				},
 			}),
 	}

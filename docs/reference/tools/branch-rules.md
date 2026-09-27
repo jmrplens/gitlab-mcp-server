@@ -21,6 +21,7 @@ This tool complements the existing REST-based branch protection tools (`gitlab_b
 ### Common Questions
 
 > "What branch rules are configured for my project?"
+> "Who can push to or merge into `main`?"
 > "Which branches require code owner approval?"
 > "How many approval rules are on the main branch?"
 > "Are there any external status checks configured?"
@@ -52,41 +53,65 @@ List branch rules for a project. Returns a paginated list of all branch rules wi
 
 ### Output fields
 
-Each branch rule includes:
+Each branch rule includes the fields below. A Community Edition instance, or one without a Premium or Ultimate license, is asked only for the fields every edition defines, and every field marked Premium or Ultimate is then absent rather than `false`, since the instance was never asked. A Premium or Ultimate instance older than GitLab 18.8 is answered the same way for the four security-policy flags and a status check's `hmac` (see the notes below). The tier is the licensed feature the field reports on; GitLab's GraphQL schema declares none.
 
-| Field                     | Type   | Description                                       |
-| ------------------------- | ------ | ------------------------------------------------- |
-| `name`                    | string | Branch name or pattern (e.g. `main`, `release/*`) |
-| `is_default`              | bool   | Whether this is the default branch                |
-| `is_protected`            | bool   | Whether the branch is protected                   |
-| `matching_branches_count` | int    | Number of branches matching this rule             |
-| `created_at`              | string | Rule creation timestamp                           |
-| `updated_at`              | string | Rule last update timestamp                        |
-| `branch_protection`       | object | Protection settings (see below)                   |
-| `approval_rules`          | array  | Associated approval rules (see below)             |
-| `external_status_checks`  | array  | External status checks (see below)                |
+| Field                     | Type   | Tier     | Description                                                                       |
+| ------------------------- | ------ | -------- | --------------------------------------------------------------------------------- |
+| `id`                      | string | Free     | Global ID of the rule; absent for the rules GitLab derives (such as all branches) |
+| `name`                    | string | Free     | Branch name or pattern (e.g. `main`, `release/*`)                                 |
+| `is_default`              | bool   | Free     | Whether this is the default branch                                                |
+| `is_protected`            | bool   | Free     | Whether the branch is protected                                                   |
+| `matching_branches_count` | int    | Free     | Number of branches matching this rule                                             |
+| `created_at`              | string | Free     | Rule creation timestamp                                                           |
+| `updated_at`              | string | Free     | Rule last update timestamp                                                        |
+| `branch_protection`       | object | Free     | Protection settings (see below)                                                   |
+| `approval_rules`          | array  | Premium  | Associated approval rules (see below)                                             |
+| `external_status_checks`  | array  | Ultimate | External status checks (see below)                                                |
 
 ### Branch protection settings
 
-| Field                          | Type | Description                             |
-| ------------------------------ | ---- | --------------------------------------- |
-| `allow_force_push`             | bool | Whether force push is allowed           |
-| `code_owner_approval_required` | bool | Whether code owner approval is required |
+| Field                                         | Type  | Tier     | Description                                                             |
+| --------------------------------------------- | ----- | -------- | ----------------------------------------------------------------------- |
+| `allow_force_push`                            | bool  | Free     | Whether force push is allowed                                           |
+| `push_access_levels`                          | array | Free     | Who may push (see the grants below); a push grant may name a deploy key |
+| `merge_access_levels`                         | array | Free     | Who may merge                                                           |
+| `unprotect_access_levels`                     | array | Premium  | Who may unprotect the branch                                            |
+| `code_owner_approval_required`                | bool  | Premium  | Whether code owner approval is required                                 |
+| `modification_blocked_by_policy`              | bool  | Ultimate | Whether a security policy prevents changing the protection              |
+| `protected_from_push_by_security_policy`      | bool  | Ultimate | Whether a security policy prevents push and force push                  |
+| `warn_modification_blocked_by_policy`         | bool  | Ultimate | Whether a warn-mode security policy would prevent changing it           |
+| `warn_protected_from_push_by_security_policy` | bool  | Ultimate | Whether a warn-mode security policy would prevent push                  |
+
+### Grants
+
+Each entry of `push_access_levels`, `merge_access_levels` and `unprotect_access_levels` is one grant:
+
+| Field                      | Type   | Tier    | Description                                                                                              |
+| -------------------------- | ------ | ------- | -------------------------------------------------------------------------------------------------------- |
+| `access_level`             | int    | Free    | GitLab access level of the grant (`0` no one, `30` developer, `40` maintainer, `60` admin)               |
+| `access_level_description` | string | Free    | GitLab's own reading of the grant: the role's name, or the user's or group's                             |
+| `user`                     | object | Premium | The user granted (`id`, `username`, `name`, `public_email`, `avatar_url`, `web_url`, `web_path`)         |
+| `group`                    | object | Premium | The group granted (`id`, `name`, `web_url`, `avatar_url`); its web URL spells its whole path             |
+| `deploy_key`               | object | Free    | Push grants only: the deploy key granted (`id`, `title`, `expires_at`, and the `user` it is assigned to) |
 
 ### Approval rules
 
-| Field                | Type   | Description                              |
-| -------------------- | ------ | ---------------------------------------- |
-| `name`               | string | Approval rule name                       |
-| `approvals_required` | int    | Number of required approvals             |
-| `type`               | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`) |
+| Field                | Type   | Description                                                                                                                                                                                     |
+| -------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | string | Global ID of the approval rule                                                                                                                                                                  |
+| `name`               | string | Approval rule name                                                                                                                                                                              |
+| `approvals_required` | int    | Number of required approvals                                                                                                                                                                    |
+| `type`               | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`)                                                                                                                                                        |
+| `eligible_approvers` | array  | Users eligible to approve, in the same user shape as a grant, the `id` included: GitLab identifies an approver by a global ID, which is published as the same numeric id a grant's user carries |
 
 ### External status checks
 
-| Field          | Type   | Description                 |
-| -------------- | ------ | --------------------------- |
-| `name`         | string | Check name                  |
-| `external_url` | string | URL of the external service |
+| Field          | Type   | Description                                                                    |
+| -------------- | ------ | ------------------------------------------------------------------------------ |
+| `id`           | string | Global ID of the status check                                                  |
+| `name`         | string | Check name                                                                     |
+| `external_url` | string | URL of the external service                                                    |
+| `hmac`         | bool   | Whether an HMAC secret signs the requests; absent on a release older than 18.8 |
 
 ---
 
@@ -100,9 +125,12 @@ Each branch rule includes:
 
 ## Notes
 
-- Branch rules are read-only via GraphQL — to modify branch protections, use the REST-based `gitlab_branch_protect` and `gitlab_protected_branch_update` tools
+- Branch rules are read-only via GraphQL: to modify branch protections, use the REST-based `gitlab_branch_protect` and `gitlab_protected_branch_update` tools
 - The `matching_branches_count` field shows how many actual branches match wildcard patterns (e.g. `release/*`)
-- Approval rules are only available on GitLab Premium/Ultimate, and external status checks on Ultimate
+- Approval rules, unprotect grants and user and group grants are only available on GitLab Premium/Ultimate; external status checks and the security-policy flags on Ultimate
+- The grant lists, an approval rule's eligible approvers and the lists under a rule are read from their first page, which GitLab sizes at up to 100 entries
+- GitLab refuses a whole GraphQL document that names a field it does not have, so the newest field a document selects is the oldest release it works on. The listing works from GitLab 16.11 on every edition: a Premium or Ultimate instance is asked first for everything above, and when it is older than 18.8 and refuses the four security-policy flags or a status check's `hmac` (added between 17.3 and 18.8), it is asked again without those five, which are then absent rather than `false`. That costs one extra request on such an instance, and a release from 17.3 to 18.7 is not asked for the one or two of the five it already serves
+- Left out on purpose: the fields GitLab still marks as experiments (a rule's and a protection's group-level flag, a rule's squash option, the custom role a grant names), an approval rule's coverage threshold, which GitLab added in 19.2, and a granted group's parent, which took the Premium and Ultimate document past the complexity GitLab accepts at a page of 100 (it scores 226 of 250 without it, measured on GitLab.com)
 
 ## Related
 

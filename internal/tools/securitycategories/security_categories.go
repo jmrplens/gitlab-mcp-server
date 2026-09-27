@@ -58,9 +58,13 @@ const (
 				errors
 			}
 		}`
+	// securityCategoryDestroyMutation asks for the attributes GitLab deleted
+	// with the category, which nothing else tells a caller. The category's
+	// own id is the one the caller sent, and is not asked back.
 	securityCategoryDestroyMutation = `
 		mutation DestroySecurityCategory($input: SecurityCategoryDestroyInput!) {
 			securityCategoryDestroy(input: $input) {
+				deletedAttributesGid
 				errors
 			}
 		}`
@@ -94,6 +98,16 @@ type AttributeSummary struct {
 	Color         string `json:"color"`
 	Description   string `json:"description,omitempty"`
 	EditableState string `json:"editable_state,omitempty"`
+}
+
+// DeleteOutput confirms a deleted security category and names the security
+// attributes GitLab deleted with it: a category takes its attributes along, so
+// an attribute ID the caller still holds may no longer exist.
+type DeleteOutput struct {
+	toolutil.HintableOutput
+	Status              string  `json:"status"`
+	Message             string  `json:"message"`
+	DeletedAttributeIDs []int64 `json:"deleted_attribute_ids"`
 }
 
 // Output represents a GitLab security category.
@@ -159,7 +173,8 @@ type securityCategoryUpdateResponse struct {
 }
 
 type securityCategoryDestroyPayload struct {
-	Errors []string `json:"errors"`
+	DeletedAttributesGID []string `json:"deletedAttributesGid"`
+	Errors               []string `json:"errors"`
 }
 
 type securityCategoryDestroyData struct {
@@ -293,21 +308,43 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return categoryNodeOutput(category)
 }
 
-// Delete deletes a GitLab security category and its associated attributes.
-func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
+// Delete deletes a GitLab security category and its associated attributes,
+// and reports the attributes GitLab deleted with it.
+func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (DeleteOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return toolutil.DeleteOutput{}, err
+		return DeleteOutput{}, err
 	}
 	if err := validatePositiveID(input.CategoryID, "category_id"); err != nil {
-		return toolutil.DeleteOutput{}, err
+		return DeleteOutput{}, err
 	}
-	if err := destroySecurityCategory(ctx, client, input.CategoryID); err != nil {
-		return toolutil.DeleteOutput{}, toolutil.WrapErrWithHint("delete security category", err, "verify category_id; deleting a category also deletes its associated security attributes")
+	deleted, err := destroySecurityCategory(ctx, client, input.CategoryID)
+	if err != nil {
+		return DeleteOutput{}, toolutil.WrapErrWithHint("delete security category", err, "verify category_id; deleting a category also deletes its associated security attributes")
 	}
-	return toolutil.DeleteOutput{
-		Status:  "success",
-		Message: fmt.Sprintf("Successfully deleted security category %d and its attributes.", input.CategoryID),
+	attributeIDs, err := attributeIDsFromGIDs(deleted)
+	if err != nil {
+		return DeleteOutput{}, err
+	}
+	return DeleteOutput{
+		Status:              "success",
+		Message:             fmt.Sprintf("Successfully deleted security category %d and its attributes.", input.CategoryID),
+		DeletedAttributeIDs: attributeIDs,
 	}, nil
+}
+
+// attributeIDsFromGIDs reads the numeric ids out of the attribute global ids
+// GitLab reports deleted, as an empty list rather than nil when there are
+// none, so a category that held no attribute reads as having taken none along.
+func attributeIDsFromGIDs(gids []string) ([]int64, error) {
+	ids := make([]int64, 0, len(gids))
+	for _, gid := range gids {
+		_, id, err := toolutil.ParseGID(gid)
+		if err != nil {
+			return nil, fmt.Errorf("parse deleted security attribute id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func createSecurityCategory(ctx context.Context, client *gitlabclient.Client, namespaceID int64, opts *gl.CreateSecurityCategoryOptions) (*categoryNode, error) {
@@ -374,7 +411,9 @@ func updateSecurityCategory(ctx context.Context, client *gitlabclient.Client, ca
 	return payload.SecurityCategory, nil
 }
 
-func destroySecurityCategory(ctx context.Context, client *gitlabclient.Client, categoryID int64) error {
+// destroySecurityCategory deletes one category and returns the global ids of
+// the attributes GitLab deleted with it.
+func destroySecurityCategory(ctx context.Context, client *gitlabclient.Client, categoryID int64) ([]string, error) {
 	var result securityCategoryDestroyResponse
 	query := gl.GraphQLQuery{
 		Query:     securityCategoryDestroyMutation,
@@ -382,14 +421,17 @@ func destroySecurityCategory(ctx context.Context, client *gitlabclient.Client, c
 	}
 	_, err := client.GL().GraphQL.Do(query, &result, gl.WithContext(ctx))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if topLevelErr := toolutil.GraphQLTopLevelError("securityCategoryDestroy", result.Errors); topLevelErr != nil {
-		return topLevelErr
+		return nil, topLevelErr
 	}
 	payload := result.Data.SecurityCategoryDestroy
 	if payload == nil {
-		return gl.ErrNotFound
+		return nil, gl.ErrNotFound
 	}
-	return toolutil.GraphQLMutationError("securityCategoryDestroy", payload.Errors)
+	if mutationErr := toolutil.GraphQLMutationError("securityCategoryDestroy", payload.Errors); mutationErr != nil {
+		return nil, mutationErr
+	}
+	return payload.DeletedAttributesGID, nil
 }

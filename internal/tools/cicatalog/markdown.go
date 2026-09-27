@@ -1,6 +1,8 @@
 package cicatalog
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -10,6 +12,10 @@ import (
 // descriptionCellRunes is how much of a resource description one table cell
 // carries before it is cut.
 const descriptionCellRunes = 60
+
+// usage30dLabel names the thirty-day usage count wherever a resource, a version
+// or a component shows it, so the list column and the card rows read alike.
+const usage30dLabel = "Usage (30d)"
 
 // FormatListMarkdown renders a page of catalog resources as a Markdown table.
 //
@@ -25,7 +31,7 @@ func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "CI/CD Catalog Resources", len(out.Resources), toolutil.PaginationOutput{})
 	b.WriteString(toolutil.MarkdownTableHeader(
-		"Name", "Path", "Description", "Stars", "Usage (30d)", "Verification", "Latest Version", "Released",
+		"Name", "Path", "Description", "Stars", usage30dLabel, "Verification", "Latest Version", "Released",
 	))
 	for _, r := range out.Resources {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -67,6 +73,9 @@ func FormatGetMarkdown(out GetOutput) string {
 	writeCatalogResourceSummary(c, r)
 	writeCatalogResourceComponents(c, r.Components)
 	writeCatalogResourceVersions(c, r.Versions)
+	// The README is the maintainer's Markdown, fenced so it reads as the
+	// document it is rather than as headings and lists of this response.
+	c.Fence("README (Latest Version)", "markdown", r.Readme)
 	c.End(
 		toolutil.HintAction(actionTemplateLint, "check a configuration that includes this component"),
 		toolutil.HintAction(actionCatalogList, "browse the catalog for others"),
@@ -90,7 +99,9 @@ func writeCatalogResourceSummary(c *toolutil.Card, r ResourceDetail) {
 	// FormatListMarkdown.
 	c.Code("Web Path", r.WebPath)
 	c.Count("Stars", int64(r.StarCount))
-	c.Count("Usage (30d)", int64(r.Last30DayUsageCount))
+	// A relative path too, for the same reason as the web path.
+	c.Code("Starrers Path", r.StarrersPath)
+	c.Count(usage30dLabel, int64(r.Last30DayUsageCount))
 	c.Field("Verification", r.VerificationLevel)
 	c.Field("Visibility", r.VisibilityLevel)
 	c.Field("Topics", strings.Join(r.Topics, ", "))
@@ -114,35 +125,116 @@ func writeCatalogResourceComponents(c *toolutil.Card, components []ComponentItem
 
 func writeCatalogResourceComponent(section *toolutil.Card, component ComponentItem) {
 	card := section.Section(component.Name)
+	card.Code("ID", component.ID)
 	card.Text("Description", component.Description)
 	card.Code("Include", component.IncludePath)
+	// Nil is a count GitLab did not send; zero is a component nobody used.
+	if component.Last30DayUsageCount != nil {
+		card.Int(usage30dLabel, int64(*component.Last30DayUsageCount))
+	}
 	if len(component.Inputs) == 0 {
 		return
 	}
-	table := card.Table("", "Input", "Type", "Required", "Default", "Description")
+	table := card.Table("", "Input", "Type", "Required", "Default", "Options", "Regex", "Description")
+	var rules []ruleRow
 	for _, input := range component.Inputs {
 		table.Row(
 			toolutil.MdCodeSpanCell(input.Name),
 			toolutil.EscapeMdTableCell(input.Type),
 			toolutil.BoolEmoji(input.Required),
-			toolutil.EscapeMdTableCell(input.Default),
+			toolutil.EscapeMdTableCell(inputValueText(input.Default)),
+			toolutil.EscapeMdTableCell(inputValueText(input.Options)),
+			toolutil.MdCodeSpanCell(input.Regex),
 			toolutil.EscapeMdTableCell(input.Description),
 		)
+		for _, rule := range input.Rules {
+			rules = append(rules, ruleRow{input: input.Name, rule: rule})
+		}
 	}
+	if len(rules) == 0 {
+		return
+	}
+	ruleTable := card.Table("Input Rules", "Input", "If", "Default", "Options")
+	for _, row := range rules {
+		ruleTable.Row(
+			toolutil.MdCodeSpanCell(row.input),
+			toolutil.MdCodeSpanCell(row.rule.If),
+			toolutil.EscapeMdTableCell(inputValueText(row.rule.Default)),
+			toolutil.EscapeMdTableCell(ruleOptionsText(row.rule.Options)),
+		)
+	}
+}
+
+// ruleOptionsText renders the options a rule offers, and nothing for a rule
+// that offers none: a nil list would reach inputValueText as a typed nil
+// inside the interface, which is not the nil its first case catches, and read
+// as JSON null.
+func ruleOptionsText(options []any) string {
+	if len(options) == 0 {
+		return ""
+	}
+	return inputValueText(options)
+}
+
+// ruleRow is one conditional rule and the input it belongs to.
+type ruleRow struct {
+	input string
+	rule  InputRule
+}
+
+// inputValueText renders an input's default or options as text for a cell:
+// a string as itself, nothing for a value GitLab did not send, and any other
+// value as the JSON it arrived as, so a boolean reads false and a list reads
+// as the list it is.
+func inputValueText(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		// Nothing decoded from a GitLab answer lands here: it is only ever a
+		// value encoding/json wrote. A caller building the output by hand can
+		// hand it anything, and fmt shows that rather than nothing.
+		return fmt.Sprint(value)
+	}
+	return string(encoded)
 }
 
 func writeCatalogResourceVersions(c *toolutil.Card, versions []VersionItem) {
 	if len(versions) == 0 {
 		return
 	}
-	table := c.Table("Released Versions", "Version", "Released", "Components")
+	table := c.Table("Released Versions", "Version", "Released", "Author", "Commit", "Components")
 	for _, version := range versions {
 		table.Row(
 			toolutil.EscapeMdTableCell(version.Name),
 			toolutil.FormatTime(version.ReleasedAt),
+			versionAuthorCell(version.Author),
+			versionCommitCell(version.Commit),
 			toolutil.EscapeMdTableCell(strings.Join(catalogVersionComponentNames(version), ", ")),
 		)
 	}
+}
+
+// versionAuthorCell links the user who published a version by username, or
+// writes nothing when GitLab sent no author.
+func versionAuthorCell(author *VersionAuthor) string {
+	if author == nil {
+		return ""
+	}
+	return toolutil.MdTitleLink("@"+author.Username, author.WebURL)
+}
+
+// versionCommitCell links the commit a version was released from by its short
+// SHA, or writes nothing when GitLab sent no commit.
+func versionCommitCell(commit *VersionCommit) string {
+	if commit == nil {
+		return ""
+	}
+	return toolutil.MdTitleLink(commit.ShortID, commit.WebURL)
 }
 
 func catalogVersionComponentNames(version VersionItem) []string {

@@ -37,7 +37,7 @@ With `GITLAB_MCP_TOOL_SURFACE=meta`, both individual tools below are consolidate
 
 ### `gitlab_list_catalog_resources`
 
-Search and list CI/CD Catalog resources. Supports text search, scope filtering, and multiple sort orders. Returns a paginated list with resource name, description, star/fork counts, and latest version.
+Search and list CI/CD Catalog resources. Supports text search, scope filtering, and multiple sort orders. Returns a paginated list with each resource's fields as the detail below lists them, up to `latest_released_at`, and the name of its latest version (`latest_version_name`). A listing reads nothing else of a version: its components, inputs and README are what the get action is for.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -68,35 +68,69 @@ Get full details of a CI/CD Catalog resource by GID or project full path. Return
 
 ### Output fields (detail)
 
-| Field                     | Type   | Description                                                                     |
-| ------------------------- | ------ | ------------------------------------------------------------------------------- |
-| `id`                      | string | Resource GID                                                                    |
-| `name`                    | string | Resource name                                                                   |
-| `description`             | string | Resource description                                                            |
-| `icon`                    | string | Resource icon                                                                   |
-| `full_path`               | string | Project full path                                                               |
-| `web_path`                | string | Path to the resource in GitLab (relative to the instance)                       |
-| `star_count`              | int    | Number of stars                                                                 |
-| `last_30_day_usage_count` | int    | Unique projects that used a component in the last 30 days                       |
-| `archived`                | bool   | Whether the hosting project is archived                                         |
-| `topics`                  | array  | Project topics                                                                  |
-| `verification_level`      | string | Catalog verification level (e.g. `UNVERIFIED`, `GITLAB_MAINTAINED`)             |
-| `visibility_level`        | string | Project visibility (`private`, `internal`, `public`)                            |
-| `latest_released_at`      | string | Date of latest release                                                          |
-| `readme_html`             | string | Rendered README of the newest version                                           |
-| `versions`                | array  | Released versions with components (name, released_at, created_at, semver, path) |
-| `components`              | array  | Components in the newest version                                                |
+| Field                     | Type   | Description                                                                 |
+| ------------------------- | ------ | --------------------------------------------------------------------------- |
+| `id`                      | string | Resource GID                                                                |
+| `name`                    | string | Resource name                                                               |
+| `description`             | string | Resource description                                                        |
+| `icon`                    | string | Resource icon                                                               |
+| `full_path`               | string | Project full path                                                           |
+| `web_path`                | string | Path to the resource in GitLab (relative to the instance)                   |
+| `star_count`              | int    | Number of stars                                                             |
+| `starrers_path`           | string | Path to the page listing who starred the project (relative to the instance) |
+| `last_30_day_usage_count` | int    | Unique projects that used a component in the last 30 days                   |
+| `archived`                | bool   | Whether the hosting project is archived                                     |
+| `topics`                  | array  | Project topics                                                              |
+| `verification_level`      | string | Catalog verification level (e.g. `UNVERIFIED`, `GITLAB_MAINTAINED`)         |
+| `visibility_level`        | string | Project visibility (`private`, `internal`, `public`)                        |
+| `latest_released_at`      | string | Date of latest release                                                      |
+| `latest_version_name`     | string | Name of the newest version                                                  |
+| `readme`                  | string | README of the newest version, as its Markdown source                        |
+| `readme_html`             | string | README of the newest version, as GitLab renders it                          |
+| `versions`                | array  | Up to ten released versions (see below)                                     |
+| `components`              | array  | Components in the newest version                                            |
+
+GitLab resolves a version's README for one version per request and refuses it for any other, so the README is read once, for the newest version, and the older versions carry none.
+
+### Version structure
+
+| Field         | Type   | Description                                                               |
+| ------------- | ------ | ------------------------------------------------------------------------- |
+| `id`          | string | Version GID                                                               |
+| `name`        | string | Version name                                                              |
+| `released_at` | string | Release date                                                              |
+| `created_at`  | string | Creation date                                                             |
+| `semver`      | string | `major.minor.patch`, when GitLab sends all three                          |
+| `path`        | string | Path to the release (relative to the instance)                            |
+| `author`      | object | User who published it (`id`, `username`, `name`, `web_url`, `avatar_url`) |
+| `commit`      | object | Commit it was released from (`sha`, `short_id`, `title`, `web_url`)       |
+| `components`  | array  | Components of that version                                                |
 
 ### Component structure
 
 Each component includes:
 
-| Field          | Type   | Description                                                   |
-| -------------- | ------ | ------------------------------------------------------------- |
-| `name`         | string | Component name                                                |
-| `description`  | string | Component description                                         |
-| `include_path` | string | Path to include in `.gitlab-ci.yml`                           |
-| `inputs`       | array  | Input parameters (name, type, required, default, description) |
+| Field                     | Type   | Description                                                          |
+| ------------------------- | ------ | -------------------------------------------------------------------- |
+| `id`                      | string | Component GID                                                        |
+| `name`                    | string | Component name                                                       |
+| `description`             | string | Component description                                                |
+| `include_path`            | string | Path to include in `.gitlab-ci.yml`                                  |
+| `last_30_day_usage_count` | int    | Unique projects that included this version of it in the last 30 days |
+| `inputs`                  | array  | Input parameters (see below)                                         |
+
+### Input structure
+
+| Field         | Type   | Description                                                                                                |
+| ------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| `name`        | string | Input name                                                                                                 |
+| `type`        | string | `STRING`, `NUMBER`, `BOOLEAN` or `ARRAY`                                                                   |
+| `required`    | bool   | Whether the input has no default                                                                           |
+| `default`     | any    | Default value, as the JSON value of the input's type (a boolean input's default is `false`, not `"false"`) |
+| `options`     | any    | Values the input may take, when it restricts them                                                          |
+| `regex`       | string | Pattern the value must match, when it has one                                                              |
+| `rules`       | array  | Conditional rules: `if` (the expression), and the `default` and `options` that apply when it holds         |
+| `description` | string | Input description                                                                                          |
 
 ---
 
@@ -115,6 +149,9 @@ Each component includes:
 - Resource versions correspond to GitLab releases on the underlying project
 - Component `include_path` values can be used directly in `.gitlab-ci.yml` `include:` directives
 - Up to 10 most recent versions are returned in the detail view
+- The projects using a resource's components (`projectComponentUsages`) are not part of the detail view: GitLab defines the field in its Enterprise edition alone, so a Community instance would refuse the whole detail query for naming it, and it answers the field only on Premium and above, only to maintainers of the resource project and for one resource per request; it was also added in 18.11 as an experiment
+- Five fields both tools read are ones GitLab's GraphQL reference still marks as experiments: a resource's `full_path`, `web_path`, `latest_released_at` and `last_30_day_usage_count`, and a version's `released_at`. They are read on purpose: each is listed unchanged in every GitLab release from 16.11 (17.0 for the usage count) to 19.4, and `full_path` is what the detail view finds a resource by. A catalog field GitLab adds as an experiment is not read until GitLab declares it generally available
+- GitLab refuses a whole GraphQL document that names a field it does not have, so the newest field a document selects is the oldest release it works on: the detail view needs GitLab 18.10 (a component's description) and the listing 18.1 (a resource's archived flag)
 
 ## Related
 

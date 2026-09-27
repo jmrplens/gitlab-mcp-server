@@ -121,7 +121,7 @@ var catalogActionMeta = map[string]catalogActionMetaEntry{
 		aliases: []string{"browse ci/cd catalog", "list cicd components", "search component catalog", "find reusable pipeline components", "list catalog resources"},
 		related: []string{actionCatalogGet, actionTemplateLint, "pipeline.create"},
 		description: "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. " +
-			"Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. " +
+			"Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. " +
 			"See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.",
 		overrides: []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", catalogScopeValues...),
@@ -133,7 +133,7 @@ var catalogActionMeta = map[string]catalogActionMetaEntry{
 		aliases: []string{"get catalog resource", "show cicd component details", "inspect catalog component inputs", "fetch component project versions"},
 		related: []string{actionCatalogList, actionTemplateLint, "project.get"},
 		description: "Get a single CI/CD Catalog resource by GID or full path. " +
-			"Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. " +
+			"Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. " +
 			"See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.",
 	},
 }
