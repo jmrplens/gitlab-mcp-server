@@ -386,26 +386,47 @@ func TestTools_Success_ExpectedOutput(t *testing.T) {
 	}
 }
 
-// TestDSL_WithResponseFormat_ReturnsRawBody verifies that [DSL] forwards the
-// requested response format and returns the Orbit DSL response verbatim.
-//
-// The test mocks a text/plain response from /api/v4/orbit/schema/dsl and checks
-// that the output contains the expected DSL content and response format.
-func TestDSL_WithResponseFormat_ReturnsRawBody(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestMethod(t, r, http.MethodGet)
-		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema/dsl")
-		testutil.AssertQueryParam(t, r, "response_format", "llm")
-		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("@dsl\nquery_type: traversal\n"))
-	}))
-
-	out, err := DSL(context.Background(), client, DSLInput{ResponseFormat: "llm"})
-	if err != nil {
-		t.Fatalf("DSL() error: %v", err)
+// TestDSL_EachResponseFormat_PublishesTheDSLItself verifies what [DSL] makes of
+// each answer GitLab gives. The llm grammar arrives as a JSON string under
+// application/json, which is how GitLab.com answered it when the Orbit record
+// was taken (docs/development/orbit-responses.json, orbit.dsl (llm)), and is
+// published as the grammar's text rather than as one quoted line of escapes.
+// An llm body that is not a JSON string is published as it came, and the raw
+// JSON Schema document is never decoded, since its text is what a reader
+// wants, whether raw was asked for or left to GitLab's default. A requested
+// format reaches GitLab as response_format, and none is sent otherwise.
+func TestDSL_EachResponseFormat_PublishesTheDSLItself(t *testing.T) {
+	cases := []struct {
+		name        string
+		format      string
+		contentType string
+		body        string
+		want        string
+	}{
+		{name: "llm, as GitLab sends it", format: "llm", contentType: "application/json", body: `"@dsl\nquery_type: traversal\n"`, want: "@dsl\nquery_type: traversal\n"},
+		{name: "llm, as text", format: "llm", contentType: "text/plain", body: "@dsl\nquery_type: traversal\n", want: "@dsl\nquery_type: traversal\n"},
+		{name: "raw", format: "raw", contentType: "application/json", body: `{"$defs":{},"version":"12.1.8"}`, want: `{"$defs":{},"version":"12.1.8"}`},
+		{name: "raw, a JSON string left alone", format: "raw", contentType: "application/json", body: `"kept"`, want: `"kept"`},
+		{name: "no format, which GitLab answers raw", contentType: "application/json", body: `"kept"`, want: `"kept"`},
 	}
-	if out.ResponseFormat != "llm" || !strings.Contains(out.Content, "@dsl") {
-		t.Fatalf("DSL() = %+v, want llm raw DSL content", out)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema/dsl")
+				testutil.AssertQueryParam(t, r, "response_format", tc.format)
+				w.Header().Set("Content-Type", tc.contentType)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+
+			out, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: tc.format}})
+			if err != nil {
+				t.Fatalf("DSL() error: %v", err)
+			}
+			if out.ResponseFormat != tc.format || out.Content != tc.want {
+				t.Errorf("DSL() = %+v, want format %q and content %q", out, tc.format, tc.want)
+			}
+		})
 	}
 }
 

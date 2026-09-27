@@ -74,8 +74,9 @@ type DSLOutput struct {
 	// ResponseFormat echoes the response_format that produced Content
 	// ("raw" for the JSON Schema body, "llm" for the text grammar).
 	ResponseFormat string `json:"response_format,omitempty"`
-	// Content is the DSL body verbatim, encoded as JSON or text
-	// depending on ResponseFormat.
+	// Content is the DSL: for raw, the JSON Schema document as GitLab
+	// sent it; for llm, the grammar text, decoded from the JSON string
+	// GitLab sends it in.
 	Content string `json:"content,omitempty"`
 }
 
@@ -492,12 +493,14 @@ func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (Tool
 	return convertTools(tools), nil
 }
 
-// DSL retrieves the Orbit query DSL grammar or LLM-friendly schema
-// verbatim from GitLab.com.
+// DSL retrieves the Orbit query DSL grammar or LLM-friendly schema from
+// GitLab.com.
 //
 // Endpoint: GET /api/v4/orbit/schema/dsl. With response_format="raw"
-// the body is a JSON Schema document; with response_format="llm" it
-// is a compact text grammar suitable for inclusion in an LLM prompt.
+// the body is a JSON Schema document, published as it came; with
+// response_format="llm" it is a compact text grammar suitable for
+// inclusion in an LLM prompt, which GitLab sends as a JSON string and
+// [llmGrammar] reads the text out of.
 func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DSLOutput{}, err
@@ -515,7 +518,28 @@ func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLO
 	if err != nil {
 		return DSLOutput{}, wrapOrbitErr("orbit_dsl", err)
 	}
+	if hasFormat && *format == gl.OrbitResponseFormatLLM {
+		content = llmGrammar(content)
+	}
 	return DSLOutput{ResponseFormat: responseFormatName(format), Content: content}, nil
+}
+
+// llmGrammar reads the llm grammar out of the body GitLab answers it in.
+//
+// get_query_dsl (ee/lib/analytics/knowledge_graph/grpc_client.rb) returns
+// the grammar as a Ruby String and ee/lib/api/orbit/data.rb presents it,
+// which Grape renders as a JSON string under application/json: the grammar
+// in quotes, every newline escaped (docs/development/orbit-responses.json
+// records orbit.dsl (llm) as a string at the root). client-go's GetDsl
+// hands that body over as it came, so publishing it whole gave a model one
+// quoted line of escapes. A body that is not a JSON string is kept as it
+// came, which is what a route answering the grammar as text would send.
+func llmGrammar(body string) string {
+	var grammar string
+	if err := json.Unmarshal([]byte(body), &grammar); err != nil {
+		return body
+	}
+	return grammar
 }
 
 // Query executes a read-only Orbit Knowledge Graph query on GitLab.com.

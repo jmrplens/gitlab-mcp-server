@@ -94,8 +94,9 @@ var declaredOrbitFields = []orbitDeclaration{
 		Package: orbitPkg, Output: "DSLOutput", Path: "content", Category: categoryOrbitWholeBody,
 		Reason: "GET /orbit/schema/dsl answers with the DSL itself: a JSON Schema document for raw, a JSON string for llm " +
 			"(get_query_dsl in ee/lib/analytics/knowledge_graph/grpc_client.rb). client-go's GetDsl returns the body as a " +
-			"string and DSL publishes it whole as content, since the document's keys are its own properties and not a " +
-			"response shape; the record keeps the raw body verbatim for the same reason.",
+			"string; DSL publishes the raw document whole as content, since its keys are its own properties and not a " +
+			"response shape, and the llm string's text, decoded by llmGrammar. The record keeps the raw body verbatim for " +
+			"the same reason.",
 	},
 	{
 		Package: orbitPkg, Output: "DSLOutput", Path: "response_format", Category: categoryServerDerived,

@@ -15,7 +15,7 @@
 
 The Orbit domain exposes GitLab's experimental Knowledge Graph API for GitLab.com. It is registered only when the MCP server is connected to `https://gitlab.com` and the Enterprise/Premium catalog is enabled; self-managed GitLab instances and non-enterprise catalogs do not advertise these tools. GitLab may still return `404 Not Found` when the `knowledge_graph` feature flag is disabled, `403 Forbidden` when the token cannot access a Knowledge Graph-enabled namespace or project, or `503 Service Unavailable` when the Orbit backend is unavailable.
 
-The upstream Orbit API is moving quickly. This MCP surface follows the latest GitLab client and CLI coverage, including `graph_status`; GitLab's public API reference may lag behind that endpoint. For schema formatting, the live API currently uses the `format` query parameter, while this server also accepts `response_format` as an input alias for compatibility with public documentation wording.
+The upstream Orbit API is moving quickly. This MCP surface follows the latest GitLab client and CLI coverage, including `graph_status`; GitLab's public API reference may lag behind that endpoint. Every Orbit route that takes a response format declares it as `response_format`. The schema action accepts it under either `format` or `response_format` and always sends it to GitLab as `response_format`, because GitLab answers a `format` query parameter with `406 Not Acceptable`: Grape reserves that name for the representation it renders.
 
 On the default dynamic surface, these operations are the `orbit.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
@@ -83,7 +83,7 @@ Get the Orbit MCP tool manifest served by GitLab.com. Use this before `gitlab_or
 
 ### `gitlab_orbit_dsl`
 
-Get the Orbit query DSL from `GET /api/v4/orbit/schema/dsl`. Optional `response_format` accepts `raw` for a JSON Schema document or `llm` for the Orbit LLM grammar returned verbatim.
+Get the Orbit query DSL from `GET /api/v4/orbit/schema/dsl`. Optional `response_format` accepts `raw` for a JSON Schema document, published as GitLab sent it, or `llm` for the Orbit LLM grammar. GitLab sends the grammar as a JSON string, and the server publishes the text inside it, with real line breaks, rather than the quoted and escaped string.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -101,7 +101,7 @@ Execute a read-only Orbit Knowledge Graph query. The `query` parameter must be a
 
 ### How the 4 query types work
 
-`gitlab_orbit_query` accepts a single `query` object whose `query_type` selects one of four variants. The full JSON Schema is served live by `/api/v4/orbit/dsl`; the table below shows the smallest accepted shape for each variant, which the live tests at `test/e2e/orbit/live_test.go` exercise against the `plens1` namespace.
+`gitlab_orbit_query` accepts a single `query` object whose `query_type` selects one of four variants. The full JSON Schema is served live by `/api/v4/orbit/schema/dsl`; the table below shows the smallest accepted shape for each variant, which the live tests at `test/e2e/orbit/live_test.go` exercise against the `plens1` namespace.
 
 | Variant        | Required shape                                                                                                                         | Purpose                                              |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
