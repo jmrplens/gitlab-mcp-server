@@ -21,11 +21,12 @@ const (
 	// of megabytes of JSON and gitlab.com takes seconds to produce it.
 	FetchTimeout = 3 * time.Minute
 	// MinimumTypes is the floor a GitLab schema has to clear before anything
-	// is judged against it. gitlab.com answered with 4331 types on the day of
-	// the pin and an unlicensed gitlab/gitlab-ee:latest with 4233, and the
-	// figure grows release over release, so a count well under that is not a
-	// GitLab schema: the introspection was truncated, or the instance answering
-	// is not the GitLab this server targets.
+	// is judged against it. gitlab.com answered with 4331 types at 19.4.0-pre
+	// and 4475 at 19.5.0-pre, an unlicensed gitlab/gitlab-ee:latest with 4233
+	// on the day of the first, and the figure grows release over release, so a
+	// count well under that is not a GitLab schema: the introspection was
+	// truncated, or the instance answering is not the GitLab this server
+	// targets.
 	//
 	// The consequence of accepting one is the same wherever it happens. A pin
 	// taken from a truncated answer narrows what every later gate promises, and
@@ -64,7 +65,7 @@ func TruncatedAnswer(types int) bool { return types < MinimumTypes }
 // introspection-shaped operation with its own canned full __schema payload and
 // ignores the selection set entirely. Asking gitlab.com for
 // `{ metadata { version } __type(name: "Vulnerability") { name } }` returns the
-// whole schema, 4331 types, carrying description, isDeprecated and
+// whole schema, every one of its types, carrying description, isDeprecated and
 // deprecationReason keys nothing here requested; gitlab.gnome.org,
 // invent.kde.org and salsa.debian.org all behave the same way. The query is
 // written correctly anyway, because the day an instance starts honoring it is

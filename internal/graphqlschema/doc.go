@@ -17,12 +17,29 @@
 // what GitLab changed; git stores two revisions of the text in about half the
 // space it needs for two gzip streams, which it can neither delta nor diff.
 //
+// # Which release the pin names
+//
+// The pin is always gitlab.com's: it is the one instance that serves the whole
+// Enterprise schema to any credential, and cmd/gen_graphql_schema --check
+// refuses a pin of anything else. gitlab.com runs the next minor's
+// pre-release, so the version source.json records is one no self-managed
+// instance runs yet, and one minor ahead of the released gitlab-ee image the
+// REST record (docs/development/gitlab-api-live.json) is taken from. The gap
+// is accepted rather than closed, and the REST record is re-pinned when that
+// release ships. What it costs is one direction of the promise: a field GitLab
+// removes leaves gitlab.com first, so the newer pin is the one that refuses a
+// document which stopped working, while a field the pre-release adds is
+// accepted here and refused by an instance a release behind. That second half
+// is answered where a domain states the oldest GitLab its document needs, not
+// by the pin.
+//
 // # Cost
 //
-// Parsing the schema takes around 200 ms for 4331 types, so it happens once
-// per process behind a [sync.Once] and never per call. Validating one document
-// against the loaded schema costs tens of microseconds, which is what makes
-// running it inside the shared test transport affordable.
+// Parsing the schema takes around 200 ms for the four and a half thousand or
+// so types source.json counts, so it happens once per process behind a
+// [sync.Once] and never per call. Validating one document against the loaded
+// schema costs tens of microseconds, which is what makes running it inside the
+// shared test transport affordable.
 //
 // # What it cannot see
 //

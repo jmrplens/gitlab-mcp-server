@@ -1,12 +1,19 @@
 // Command gen_graphql_schema pins a GitLab GraphQL schema into the repository.
 //
 // It introspects a live instance, converts the answer to SDL, and writes the
-// compressed schema and a provenance record into internal/graphqlschema, where
+// schema as text and a provenance record into internal/graphqlschema, where
 // the test transport and cmd/audit_graphql_documents both read it. gitlab.com
 // answers introspection to anyone, so no token is needed for the schema
 // itself; a token is only read from GITLAB_TOKEN so the record can name the
 // version the instance reports, which GitLab refuses to tell an anonymous
 // caller.
+//
+// The version it records is gitlab.com's, which is always the next minor's
+// pre-release and so one minor ahead of the released image the REST record
+// is taken from. That is accepted rather than worked around: --check refuses a
+// pin of any other instance, and the package documentation of
+// [github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema] says what
+// the gap costs.
 //
 // Generating needs the network, so it is not a CI gate. --check is: it loads
 // the committed files from disk and fails when the schema does not parse or
