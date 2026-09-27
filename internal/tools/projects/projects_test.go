@@ -9589,7 +9589,7 @@ func TestActionSpecs_PushRuleGuidance_NamesTheRegexOnAddAndEditOnly(t *testing.T
 // TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions pins the
 // property decorateProjectMeta relies on: every entry of the metadata table
 // carries at least one alias, one related action and a description, so the
-// table never overwrites the default alias a spec starts with with nothing.
+// table never overwrites a spec's default alias with nothing.
 // decorateProjectMeta copies the three without a guard only while this holds.
 func TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions(t *testing.T) {
 	for tool, meta := range projectActionMeta {

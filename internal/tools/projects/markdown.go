@@ -43,7 +43,7 @@ func FormatMarkdown(p Output) string {
 // says under the project's rows, which describe where it still is. It is one
 // literal rather than a concatenation, whose operators a mutation run reports
 // as not covered, a constant carrying no statement.
-const transferQueuedNote = "GitLab accepted this transfer and moves the project in the background, and the move had not been applied when this server stopped waiting for it: the rows above show where the project still is. Do not send the transfer again while it is queued, because GitLab refuses a second one until the first finishes. If the move fails, GitLab leaves a to-do item saying so for the user who asked for it."
+const transferQueuedNote = "GitLab accepted this transfer and moves the project in the background, and the move had been neither applied nor reported failed when this server stopped waiting for it: the rows above show where the project still is. Do not send the transfer again: GitLab runs a second transfer as well while the first is queued, and refuses it while the first runs. A move that fails is reported only as a pending to-do item of action transfer_failed for the user who asked for it, and GitLab adds none while an item from an earlier failure of this project is still pending, so a pending item may be this failure."
 
 // FormatTransferMarkdown renders what a project transfer answered. A move
 // that landed is the project's own card, in its new namespace; one the wait

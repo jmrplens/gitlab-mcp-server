@@ -570,7 +570,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 		}
 		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
 	case "gitlab_group_transfer":
-		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends. GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move. If it has not landed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab refuses while one is under way."
+		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends. GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed. If it has neither landed nor failed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs."
 		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}
 		options.RelatedActions = []string{actionGroupTransferLocs, actionGroupGet, actionGroupSubgroups}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -580,7 +580,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"parent_id is the destination. group_id is the group being moved. Omit parent_id to make the group top-level."},
 			},
 		}
-		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
+		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
 	default:
 		return applyGroupPushRuleMetadata(individualTool, options)
 	}

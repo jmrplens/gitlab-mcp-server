@@ -1,6 +1,7 @@
 package groups
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,9 +34,28 @@ const (
 
 // landingBound is the wait a test that expects the move to land gives it. The
 // move lands on the second or third read, a few milliseconds in, so the bound
-// is generous for a correct handler, and small enough that a broken one which
-// never sees the move land fails the test in seconds rather than hanging it.
+// is generous for a correct handler. It is only a backstop: a test that
+// expects the move to land calls the handler with
+// [groupTransferGitLab.landingContext], which ends as soon as the handler
+// reads past the scripted reads, so a handler that never sees the move land
+// fails the test at that read rather than at the bound.
 const landingBound = 2 * time.Second
+
+// groupTransferDate is the Date header a test's transfer answer carries when
+// the test dates a to-do item against it.
+const groupTransferDate = "Sun, 27 Sep 2026 10:00:00 GMT"
+
+// groupTransferAnsweredAt is the instant [groupTransferDate] names.
+var groupTransferAnsweredAt = time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
+
+// failedGroupTransferTodos is a to-do listing holding the item GitLab leaves
+// when the transfer of group 99 under group 42 fails, created a second after
+// the transfer was answered, beside the item of a descendant's failure, which
+// the group's listing carries too.
+var failedGroupTransferTodos = fmt.Sprintf(`[`+
+	`{"id":6,"action_name":"transfer_failed","target_type":"Namespace","target":{"id":100},"body":"parent/child/sub","created_at":%[1]q},`+
+	`{"id":5,"action_name":"transfer_failed","target_type":"Namespace","target":{"id":99},"body":"parent/child","created_at":%[1]q}]`,
+	groupTransferAnsweredAt.Add(time.Second).Format(time.RFC3339))
 
 // fastTransferWait makes TransferSubGroup read back every millisecond for at
 // most bound, and restores the package's timing when the test ends.
@@ -48,17 +68,35 @@ func fastTransferWait(t *testing.T, bound time.Duration) {
 
 // groupTransferGitLab is a GitLab whose transfer answers with one group and
 // whose reads of group 99 answer with the others in order, repeating the last.
-// It counts the reads and records what each transfer and read sent.
+// Its to-do listing answers todos, or no items when that is empty, and a
+// non-empty date is the Date header of the transfer's answer. It counts the
+// reads and the listings, and records what each transfer and read sent.
 type groupTransferGitLab struct {
 	t        *testing.T
 	answer   string
+	date     string
 	reads    []string
+	todos    string
 	onRead   func()
+	stop     context.CancelFunc
 	readHits atomic.Int64
+	todoHits atomic.Int64
 
 	mu          sync.Mutex
 	bodies      []string
 	readQueries []string
+}
+
+// landingContext is the context a test that expects the move to land calls
+// the handler with. It ends when the handler reads the group more times than
+// the test scripted, which a correct handler never does, since the last
+// scripted read is where the move lands or the failure is reported.
+func (g *groupTransferGitLab) landingContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	g.stop = cancel
+	return ctx
 }
 
 // sent returns the transfer bodies and the read queries, in order.
@@ -77,7 +115,13 @@ func (g *groupTransferGitLab) handler() http.HandlerFunc {
 			g.mu.Lock()
 			g.bodies = append(g.bodies, string(raw))
 			g.mu.Unlock()
+			if g.date != "" {
+				w.Header().Set("Date", g.date)
+			}
 			testutil.RespondJSON(w, http.StatusOK, g.answer)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/todos":
+			g.todoHits.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, cmp.Or(g.todos, "[]"))
 		case r.Method == http.MethodGet && r.URL.Path == pathGroup99:
 			n := g.readHits.Add(1)
 			g.mu.Lock()
@@ -85,6 +129,9 @@ func (g *groupTransferGitLab) handler() http.HandlerFunc {
 			g.mu.Unlock()
 			if g.onRead != nil {
 				g.onRead()
+			}
+			if g.stop != nil && n > int64(len(g.reads)) {
+				g.stop()
 			}
 			if len(g.reads) == 0 {
 				g.t.Errorf("read %d of group 99, want none", n)
@@ -121,15 +168,15 @@ func TestTransferSubGroup_AnswerAlreadyInPlace_IsReturnedWithoutReadingBack(t *t
 			gitlab := &groupTransferGitLab{t: t, answer: tt.answer}
 			client := testutil.NewTestClient(t, gitlab.handler())
 
-			out, err := TransferSubGroup(context.Background(), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: tt.parentID})
+			out, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: tt.parentID})
 			if err != nil {
 				t.Fatalf("TransferSubGroup() error = %v", err)
 			}
 			if out.TransferQueued || out.ID != 99 {
 				t.Errorf("TransferSubGroup() = group %d queued %v, want group 99 applied", out.ID, out.TransferQueued)
 			}
-			if got := gitlab.readHits.Load(); got != 0 {
-				t.Errorf("reads = %d, want none: the answer already showed the group in place", got)
+			if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 0 || listings != 0 {
+				t.Errorf("reads = %d and to-do listings = %d, want none: the answer already showed the group in place", reads, listings)
 			}
 			if bodies, _ := gitlab.sent(); len(bodies) != 1 || !jsonEqual(bodies[0], tt.wantBody) {
 				t.Errorf("transfer bodies = %q, want exactly %s", bodies, tt.wantBody)
@@ -151,7 +198,8 @@ func jsonEqual(a, b string) bool {
 // 19.4 behavior: the transfer answers with the group where it still is, the
 // first reads find it there, and the answer is the read that found it under
 // the parent, not the transfer's own. The reads ask for no projects, which
-// the transfer's own answer never carries.
+// the transfer's own answer never carries, and each read that did not find
+// the move also asked whether GitLab reported it failed.
 func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 	fastTransferWait(t, landingBound)
 	gitlab := &groupTransferGitLab{t: t, answer: groupAtTopLevel, reads: []string{
@@ -160,7 +208,7 @@ func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, gitlab.handler())
 	parent := int64(42)
 
-	out, err := TransferSubGroup(context.Background(), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
+	out, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
 	if err != nil {
 		t.Fatalf("TransferSubGroup() error = %v", err)
 	}
@@ -170,8 +218,66 @@ func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 	if got := gitlab.readHits.Load(); got != 3 {
 		t.Errorf("reads = %d, want 3: two before the move and the one that found it", got)
 	}
+	if got := gitlab.todoHits.Load(); got != 2 {
+		t.Errorf("to-do listings = %d, want 2: one after each read that did not find the move", got)
+	}
 	if _, queries := gitlab.sent(); len(queries) == 0 || queries[0] != "with_projects=false" {
 		t.Errorf("read queries = %q, want with_projects=false", queries)
+	}
+}
+
+// TestTransferSubGroup_MoveFailsInTheBackground_AnswersTheFailure verifies
+// that a transfer the worker refuses, which GitLab reports only as a to-do
+// item on the group, ends the wait at the first read that finds the item,
+// with an error naming the destination, and that the item of a descendant's
+// failure, which the group's listing also carries, is not taken for it.
+func TestTransferSubGroup_MoveFailsInTheBackground_AnswersTheFailure(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	gitlab := &groupTransferGitLab{
+		t: t, answer: groupAtTopLevel, date: groupTransferDate,
+		reads: []string{groupAtTopLevel}, todos: failedGroupTransferTodos,
+	}
+	client := testutil.NewTestClient(t, gitlab.handler())
+	parent := int64(42)
+
+	_, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
+	if err == nil {
+		t.Fatal("TransferSubGroup() error = nil, want the failure GitLab reported")
+	}
+	if msg := err.Error(); !strings.HasPrefix(msg, "groupTransferSubGroup: ") ||
+		!strings.Contains(msg, "the transfer to parent/child failed") || !strings.Contains(msg, hintSubGroupTransferFailed) {
+		t.Errorf("TransferSubGroup() error = %q, want the destination the to-do item names and the hint %q", msg, hintSubGroupTransferFailed)
+	}
+	if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 1 || listings != 1 {
+		t.Errorf("reads = %d and to-do listings = %d, want 1 each: the first listing found the failure", reads, listings)
+	}
+}
+
+// TestTransferSubGroup_ReadFails_KeepsWaiting verifies that a read GitLab
+// fails to serve neither ends the wait nor leads to a to-do listing: the next
+// read finds the group moved.
+func TestTransferSubGroup_ReadFails_KeepsWaiting(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	var reads atomic.Int64
+	gitlab := &groupTransferGitLab{t: t, answer: groupAtTopLevel, reads: []string{groupUnderParent}}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathGroup99 && reads.Add(1) == 1 {
+			testutil.RespondJSON(w, http.StatusBadGateway, `{"message":"502 Bad Gateway"}`)
+			return
+		}
+		gitlab.handler()(w, r)
+	}))
+	parent := int64(42)
+
+	out, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
+	if err != nil {
+		t.Fatalf("TransferSubGroup() error = %v", err)
+	}
+	if out.TransferQueued || out.ParentID != 42 {
+		t.Errorf("TransferSubGroup() = queued %v under %d, want applied under 42", out.TransferQueued, out.ParentID)
+	}
+	if got := gitlab.todoHits.Load(); got != 0 {
+		t.Errorf("to-do listings = %d, want none: a failed read says nothing about the move", got)
 	}
 }
 
@@ -180,19 +286,27 @@ func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 // path the caller named, which is the path the move is taking away.
 func TestTransferSubGroup_ReadByPath_ReadsBackByTheAnsweredID(t *testing.T) {
 	fastTransferWait(t, landingBound)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
 	var readPath atomic.Value
+	var reads atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			testutil.RespondJSON(w, http.StatusOK, groupAtTopLevel)
 		default:
+			// The first read finds the move, so a second one is a handler
+			// that did not see it, which ends the call rather than the bound.
+			if reads.Add(1) > 1 {
+				stop()
+			}
 			readPath.Store(r.URL.Path)
 			testutil.RespondJSON(w, http.StatusOK, groupUnderParent)
 		}
 	}))
 	parent := int64(42)
 
-	out, err := TransferSubGroup(context.Background(), nil, client, TransferSubGroupInput{GroupID: "child", ParentID: &parent})
+	out, err := TransferSubGroup(ctx, nil, client, TransferSubGroupInput{GroupID: "child", ParentID: &parent})
 	if err != nil {
 		t.Fatalf("TransferSubGroup() error = %v", err)
 	}
@@ -212,7 +326,7 @@ func TestTransferSubGroup_PromotionLandsLater_AnswersTheTopLevelGroup(t *testing
 	gitlab := &groupTransferGitLab{t: t, answer: groupUnderParent, reads: []string{groupUnderParent, groupAtTopLevel}}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
-	out, err := TransferSubGroup(context.Background(), nil, client, TransferSubGroupInput{GroupID: "99"})
+	out, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99"})
 	if err != nil {
 		t.Fatalf("TransferSubGroup() error = %v", err)
 	}
@@ -243,7 +357,7 @@ func TestTransferSubGroup_UnderAnotherParent_HasNotLanded(t *testing.T) {
 			gitlab := &groupTransferGitLab{t: t, answer: groupUnderOtherParent, reads: []string{groupUnderOtherParent, tt.landed}}
 			client := testutil.NewTestClient(t, gitlab.handler())
 
-			out, err := TransferSubGroup(context.Background(), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: tt.parentID})
+			out, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: tt.parentID})
 			if err != nil {
 				t.Fatalf("TransferSubGroup() error = %v", err)
 			}
@@ -334,9 +448,13 @@ func TestTransferSubGroup_Guards(t *testing.T) {
 
 // TestTransferSubGroup_Refusal_IsHintedByWhatGitLabSaid drives each refusal
 // GitLab gives a group transfer (app/services/groups/transfer_service.rb and
-// the route's own) and holds the hint each gets. A transfer under way, a group
-// already under that parent and a group already at the top level are told to
-// wait and read the group back, and only a path collision is told to rename.
+// the route's own) and holds the hint each gets. A transfer that cannot start
+// is told it may be running or the group marked for deletion, a group already
+// under that parent or at the top level that there is nothing left to move,
+// all three to read the group back; only a path collision is told to rename,
+// and the refusal over customer relations contacts, which also says "enough
+// permissions", is told about the permission it names rather than the Owner
+// role.
 func TestTransferSubGroup_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -350,11 +468,11 @@ func TestTransferSubGroup_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 		},
 		{
 			name: "already under the parent", status: http.StatusBadRequest,
-			message: "Transfer failed: Group is already associated to the parent group.", want: hintSubGroupTransferUnderWay,
+			message: "Transfer failed: Group is already associated to the parent group.", want: hintSubGroupTransferInPlace,
 		},
 		{
 			name: "already at the top level", status: http.StatusBadRequest,
-			message: "Group is already a root group.", want: hintSubGroupTransferUnderWay,
+			message: "Group is already a root group.", want: hintSubGroupTransferInPlace,
 		},
 		{
 			name: "path taken", status: http.StatusBadRequest,
@@ -366,7 +484,7 @@ func TestTransferSubGroup_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 		},
 		{
 			name: "no permission over the contacts", status: http.StatusBadRequest,
-			message: "Group contains contacts/organizations and you don't have enough permissions to move them to the new root group.", want: hintSubGroupTransferPermission,
+			message: "Group contains contacts/organizations and you don't have enough permissions to move them to the new root group.", want: hintSubGroupTransferCRM,
 		},
 		{
 			name: "into its own subgroup", status: http.StatusBadRequest,
@@ -375,7 +493,6 @@ func TestTransferSubGroup_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 		{name: "forbidden", status: http.StatusForbidden, message: "403 Forbidden", want: hintSubGroupTransferPermission},
 		{name: "not found", status: http.StatusNotFound, message: "404 Group Not Found", want: hintSubGroupTransferNotFound},
 	}
-	all := []string{hintSubGroupTransferPermission, hintSubGroupTransferNotFound, hintSubGroupTransferUnderWay, hintSubGroupTransferCollision, hintSubGroupTransferRefused}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -388,7 +505,7 @@ func TestTransferSubGroup_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("TransferSubGroup() error = %q, want the hint %q", err, tt.want)
 			}
-			for _, other := range all {
+			for _, other := range allSubGroupTransferHints {
 				if other != tt.want && strings.Contains(err.Error(), other) {
 					t.Errorf("TransferSubGroup() error = %q, carries the hint %q as well", err, other)
 				}
@@ -417,10 +534,18 @@ func TestTransferSubGroup_RefusalUnderAnotherStatus_CarriesNoTransferHint(t *tes
 	}
 }
 
+// allSubGroupTransferHints is every hint a refused or failed group transfer
+// can carry, so a test can hold that a refusal carries its own hint and none
+// of the others.
+var allSubGroupTransferHints = []string{
+	hintSubGroupTransferPermission, hintSubGroupTransferCRM, hintSubGroupTransferNotFound, hintSubGroupTransferUnderWay,
+	hintSubGroupTransferInPlace, hintSubGroupTransferCollision, hintSubGroupTransferRefused, hintSubGroupTransferFailed,
+}
+
 // subGroupTransferHintIn returns the first of the transfer hints err
 // carries, or "" when it carries none.
 func subGroupTransferHintIn(err error) string {
-	for _, hint := range []string{hintSubGroupTransferPermission, hintSubGroupTransferNotFound, hintSubGroupTransferUnderWay, hintSubGroupTransferCollision, hintSubGroupTransferRefused} {
+	for _, hint := range allSubGroupTransferHints {
 		if strings.Contains(err.Error(), hint) {
 			return hint
 		}

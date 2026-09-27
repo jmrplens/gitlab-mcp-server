@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,9 +35,25 @@ const (
 
 // landingBound is the wait a test that expects the move to land gives it. The
 // move lands on the second or third read, a few milliseconds in, so the bound
-// is generous for a correct handler, and small enough that a broken one which
-// never sees the move land fails the test in seconds rather than hanging it.
+// is generous for a correct handler. It is only a backstop: a test that
+// expects the move to land calls the handler with
+// [transferGitLab.landingContext], which ends as soon as the handler reads
+// past the scripted reads, so a handler that never sees the move land fails
+// the test at that read rather than at the bound.
 const landingBound = 2 * time.Second
+
+// transferDate is the Date header a test's transfer answer carries when the
+// test dates a to-do item against it, and transferAnsweredAt the same instant.
+const transferDate = "Sun, 27 Sep 2026 10:00:00 GMT"
+
+// transferAnsweredAt is the instant [transferDate] names.
+var transferAnsweredAt = time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
+
+// failedTransferTodos is a to-do listing holding the item GitLab leaves when
+// the transfer of project 42 to newns fails, created a second after the
+// transfer was answered.
+var failedTransferTodos = fmt.Sprintf(`[{"id":5,"action_name":"transfer_failed","target_type":"Project","state":"pending",`+
+	`"target":{"id":42},"body":"newns/moving","created_at":%q}]`, transferAnsweredAt.Add(time.Second).Format(time.RFC3339))
 
 // fastTransferWait makes Transfer read back every millisecond for at most
 // bound, and restores the package's timing when the test ends.
@@ -48,17 +65,35 @@ func fastTransferWait(t *testing.T, bound time.Duration) {
 }
 
 // transferGitLab is a GitLab whose transfer answers with one project and whose
-// reads of project 42 answer with the others in order, repeating the last. It
-// counts the reads and records the namespace each transfer asked for.
+// reads of project 42 answer with the others in order, repeating the last. Its
+// to-do listing answers todos, or no items when that is empty, and a non-empty
+// date is the Date header of the transfer's answer. It counts the reads and
+// the listings, and records the namespace each transfer asked for.
 type transferGitLab struct {
 	t        *testing.T
 	answer   string
+	date     string
 	reads    []string
+	todos    string
 	onRead   func(n int64)
+	stop     context.CancelFunc
 	readHits atomic.Int64
+	todoHits atomic.Int64
 
 	mu         sync.Mutex
 	namespaces []string
+}
+
+// landingContext is the context a test that expects the move to land calls
+// the handler with. It ends when the handler reads the project more times
+// than the test scripted, which a correct handler never does, since the last
+// scripted read is where the move lands or the failure is reported.
+func (g *transferGitLab) landingContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	g.stop = cancel
+	return ctx
 }
 
 // asked returns the namespaces the transfers asked for, in order.
@@ -83,11 +118,20 @@ func (g *transferGitLab) handler() http.HandlerFunc {
 			g.mu.Lock()
 			g.namespaces = append(g.namespaces, body.Namespace)
 			g.mu.Unlock()
+			if g.date != "" {
+				w.Header().Set("Date", g.date)
+			}
 			testutil.RespondJSON(w, http.StatusOK, g.answer)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/todos":
+			g.todoHits.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, cmp.Or(g.todos, "[]"))
 		case r.Method == http.MethodGet && r.URL.Path == pathProject42:
 			n := g.readHits.Add(1)
 			if g.onRead != nil {
 				g.onRead(n)
+			}
+			if g.stop != nil && n > int64(len(g.reads)) {
+				g.stop()
 			}
 			if len(g.reads) == 0 {
 				g.t.Errorf("read %d of project 42, want none", n)
@@ -121,15 +165,15 @@ func TestTransfer_AnswerAlreadyInTheDestination_IsReturnedWithoutReadingBack(t *
 			gitlab := &transferGitLab{t: t, answer: projectInGroupNamespace}
 			client := testutil.NewTestClient(t, gitlab.handler())
 
-			out, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "42", Namespace: tt.namespace})
+			out, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: tt.namespace})
 			if err != nil {
 				t.Fatalf("Transfer() error = %v", err)
 			}
 			if out.TransferQueued || out.PathWithNamespace != "newns/moving" {
 				t.Errorf("Transfer() = queued %v at %q, want applied at newns/moving", out.TransferQueued, out.PathWithNamespace)
 			}
-			if got := gitlab.readHits.Load(); got != 0 {
-				t.Errorf("reads = %d, want none: the answer already showed the destination", got)
+			if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 0 || listings != 0 {
+				t.Errorf("reads = %d and to-do listings = %d, want none: the answer already showed the destination", reads, listings)
 			}
 			if asked := gitlab.asked(); len(asked) != 1 || asked[0] != tt.namespace {
 				t.Errorf("transfer asked for namespaces %q, want exactly %q", asked, tt.namespace)
@@ -141,7 +185,9 @@ func TestTransfer_AnswerAlreadyInTheDestination_IsReturnedWithoutReadingBack(t *
 // TestTransfer_MoveLandsLater_AnswersTheMovedProject holds the GitLab 19.4
 // behavior: the transfer answers with the project where it still is, the
 // first reads find it there, and the answer is the read that found it in the
-// destination, not the transfer's own.
+// destination, not the transfer's own. Each read that did not find it moved
+// also asked whether GitLab reported the move failed, and the one that found
+// it did not.
 func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 	fastTransferWait(t, landingBound)
 	gitlab := &transferGitLab{t: t, answer: projectInUserNamespace, reads: []string{
@@ -149,7 +195,7 @@ func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 	}}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
-	out, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+	out, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
 	if err != nil {
 		t.Fatalf("Transfer() error = %v", err)
 	}
@@ -162,6 +208,58 @@ func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 	if got := gitlab.readHits.Load(); got != 3 {
 		t.Errorf("reads = %d, want 3: two before the move and the one that found it", got)
 	}
+	if got := gitlab.todoHits.Load(); got != 2 {
+		t.Errorf("to-do listings = %d, want 2: one after each read that did not find the move", got)
+	}
+}
+
+// TestTransfer_MoveFailsInTheBackground_AnswersTheFailure holds what GitLab
+// 19.4 does with a transfer its worker refuses, a name collision among them:
+// the project stays where it was and the only report is a to-do item. The
+// first read that finds the item ends the wait with an error naming the
+// destination and the checks the worker runs, rather than a queued answer
+// after the whole bound.
+func TestTransfer_MoveFailsInTheBackground_AnswersTheFailure(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	gitlab := &transferGitLab{
+		t: t, answer: projectInUserNamespace, date: transferDate,
+		reads: []string{projectInUserNamespace}, todos: failedTransferTodos,
+	}
+	client := testutil.NewTestClient(t, gitlab.handler())
+
+	_, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+	if err == nil {
+		t.Fatal("Transfer() error = nil, want the failure GitLab reported")
+	}
+	if msg := err.Error(); !strings.HasPrefix(msg, "projectTransfer: ") ||
+		!strings.Contains(msg, "the transfer to newns/moving failed") || !strings.Contains(msg, hintTransferFailed) {
+		t.Errorf("Transfer() error = %q, want the destination the to-do item names and the hint %q", msg, hintTransferFailed)
+	}
+	if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 1 || listings != 1 {
+		t.Errorf("reads = %d and to-do listings = %d, want 1 each: the first listing found the failure", reads, listings)
+	}
+}
+
+// TestTransfer_ItemFromAnEarlierFailure_IsNotThisOne verifies that a pending
+// item GitLab left for an earlier failed transfer of the project does not end
+// the wait: the move of this transfer lands on the next read.
+func TestTransfer_ItemFromAnEarlierFailure_IsNotThisOne(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	earlier := fmt.Sprintf(`[{"id":4,"target":{"id":42},"body":"newns/moving","created_at":%q}]`,
+		transferAnsweredAt.Add(-time.Hour).Format(time.RFC3339))
+	gitlab := &transferGitLab{
+		t: t, answer: projectInUserNamespace, date: transferDate,
+		reads: []string{projectInUserNamespace, projectInGroupNamespace}, todos: earlier,
+	}
+	client := testutil.NewTestClient(t, gitlab.handler())
+
+	out, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+	if err != nil {
+		t.Fatalf("Transfer() error = %v, want the move that landed", err)
+	}
+	if out.TransferQueued || out.PathWithNamespace != "newns/moving" {
+		t.Errorf("Transfer() = queued %v at %q, want applied at newns/moving", out.TransferQueued, out.PathWithNamespace)
+	}
 }
 
 // TestTransfer_ReadByPath_ReadsBackByTheAnsweredID verifies that the read
@@ -169,18 +267,26 @@ func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 // path the caller named, which is the path the move is taking away.
 func TestTransfer_ReadByPath_ReadsBackByTheAnsweredID(t *testing.T) {
 	fastTransferWait(t, landingBound)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
 	var readPath atomic.Value
+	var reads atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:
 			testutil.RespondJSON(w, http.StatusOK, projectInUserNamespace)
 		default:
+			// The first read finds the move, so a second one is a handler
+			// that did not see it, which ends the call rather than the bound.
+			if reads.Add(1) > 1 {
+				stop()
+			}
 			readPath.Store(r.URL.Path)
 			testutil.RespondJSON(w, http.StatusOK, projectInGroupNamespace)
 		}
 	}))
 
-	out, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "alice/moving", Namespace: "newns"})
+	out, err := Transfer(ctx, nil, client, TransferInput{ProjectID: "alice/moving", Namespace: "newns"})
 	if err != nil {
 		t.Fatalf("Transfer() error = %v", err)
 	}
@@ -220,20 +326,30 @@ func TestTransfer_MoveNeverLands_AnswersQueuedWithTheTransferAnswer(t *testing.T
 // serve does not end the wait: the next read finds the moved project.
 func TestTransfer_ReadFails_KeepsWaiting(t *testing.T) {
 	fastTransferWait(t, landingBound)
-	var reads atomic.Int64
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	var reads, listings atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
+		switch {
+		case r.Method == http.MethodPut:
 			testutil.RespondJSON(w, http.StatusOK, projectInUserNamespace)
-			return
+		case r.URL.Path == "/api/v4/todos":
+			listings.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		default:
+			switch reads.Add(1) {
+			case 1:
+				testutil.RespondJSON(w, http.StatusBadGateway, `{"message":"502 Bad Gateway"}`)
+			case 2:
+				testutil.RespondJSON(w, http.StatusOK, projectInGroupNamespace)
+			default:
+				stop()
+				testutil.RespondJSON(w, http.StatusOK, projectInGroupNamespace)
+			}
 		}
-		if reads.Add(1) == 1 {
-			testutil.RespondJSON(w, http.StatusBadGateway, `{"message":"502 Bad Gateway"}`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, projectInGroupNamespace)
 	}))
 
-	out, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "42", Namespace: "7"})
+	out, err := Transfer(ctx, nil, client, TransferInput{ProjectID: "42", Namespace: "7"})
 	if err != nil {
 		t.Fatalf("Transfer() error = %v", err)
 	}
@@ -242,6 +358,34 @@ func TestTransfer_ReadFails_KeepsWaiting(t *testing.T) {
 	}
 	if got := reads.Load(); got != 2 {
 		t.Errorf("reads = %d, want 2: the failed one and the one that found the move", got)
+	}
+	if got := listings.Load(); got != 0 {
+		t.Errorf("to-do listings = %d, want none: a failed read says nothing about the move", got)
+	}
+}
+
+// TestTransfer_ListingFails_KeepsWaiting verifies that a to-do listing GitLab
+// fails to serve does not end the wait either: it is not a report that the
+// move failed, and the next read finds the project moved.
+func TestTransfer_ListingFails_KeepsWaiting(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	var listings atomic.Int64
+	gitlab := &transferGitLab{t: t, answer: projectInUserNamespace, reads: []string{projectInUserNamespace, projectInGroupNamespace}}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/todos" {
+			listings.Add(1)
+			testutil.RespondJSON(w, http.StatusBadGateway, `{"message":"502 Bad Gateway"}`)
+			return
+		}
+		gitlab.handler()(w, r)
+	}))
+
+	out, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+	if err != nil {
+		t.Fatalf("Transfer() error = %v", err)
+	}
+	if out.TransferQueued || out.PathWithNamespace != "newns/moving" || listings.Load() != 1 {
+		t.Errorf("Transfer() = queued %v at %q after %d listings, want applied at newns/moving after one", out.TransferQueued, out.PathWithNamespace, listings.Load())
 	}
 }
 
@@ -274,7 +418,7 @@ func TestTransfer_AnswerWithoutNamespace_IsReadBack(t *testing.T) {
 	}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
-	out, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+	out, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
 	if err != nil {
 		t.Fatalf("Transfer() error = %v", err)
 	}
@@ -293,7 +437,7 @@ func TestTransfer_NumericNamespace_MatchesByIDNotByPath(t *testing.T) {
 	gitlab := &transferGitLab{t: t, answer: pathSeven, reads: []string{pathSeven, projectInGroupNamespace}}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
-	out, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "42", Namespace: "7"})
+	out, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "7"})
 	if err != nil {
 		t.Fatalf("Transfer() error = %v", err)
 	}
@@ -355,11 +499,20 @@ func TestTransfer_MissingInput_IsRefusedBeforeAnyRequest(t *testing.T) {
 	}
 }
 
+// allTransferHints is every hint a refused or failed transfer can carry, so a
+// test can hold that a refusal carries its own hint and none of the others.
+var allTransferHints = []string{
+	hintTransferPermission, hintTransferNamespace, hintTransferNotFound, hintTransferUnderWay,
+	hintTransferInPlace, hintTransferCollision, hintTransferRefused, hintTransferFailed,
+}
+
 // TestTransfer_Refusal_IsHintedByWhatGitLabSaid drives each refusal GitLab
 // gives a transfer (app/services/projects/transfer_service.rb and the route's
-// own) and holds the hint each gets. A transfer under way and a project
-// already in the namespace are told to wait and read the project back, and
-// only a name or path collision is told to rename.
+// own) and holds the hint each gets. A transfer that cannot start is told it
+// may be running or the project marked for deletion, a project already in the
+// namespace that there is nothing left to move, both to read the project
+// back, and only a name or path collision is told to rename. A 404 is hinted
+// by which of the two lookups failed.
 func TestTransfer_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -373,7 +526,7 @@ func TestTransfer_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 		},
 		{
 			name: "already in the namespace", status: http.StatusBadRequest,
-			message: "Project is already in this namespace.", want: hintTransferUnderWay,
+			message: "Project is already in this namespace.", want: hintTransferInPlace,
 		},
 		{
 			name: "name or path taken", status: http.StatusBadRequest,
@@ -397,6 +550,8 @@ func TestTransfer_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 		},
 		{name: "forbidden", status: http.StatusForbidden, message: "403 Forbidden", want: hintTransferPermission},
 		{name: "namespace not found", status: http.StatusNotFound, message: "404 Namespace Not Found", want: hintTransferNamespace},
+		{name: "project not found", status: http.StatusNotFound, message: "404 Project Not Found", want: hintTransferNotFound},
+		{name: "not found, with no message", status: http.StatusNotFound, want: hintTransferNamespace},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -410,12 +565,27 @@ func TestTransfer_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("Transfer() error = %q, want the hint %q", err, tt.want)
 			}
-			for _, other := range []string{hintTransferPermission, hintTransferNamespace, hintTransferUnderWay, hintTransferCollision, hintTransferRefused} {
+			for _, other := range allTransferHints {
 				if other != tt.want && strings.Contains(err.Error(), other) {
 					t.Errorf("Transfer() error = %q, carries the hint %q as well", err, other)
 				}
 			}
 		})
+	}
+}
+
+// TestTransfer_NotFoundWithoutAJSONBody_IsHintedAsTheNamespace verifies that
+// a 404 whose body is not GitLab's JSON, a proxy's page for instance, names
+// neither lookup and is hinted as the namespace, the one a caller most often
+// gets wrong, rather than failing to hint at all.
+func TestTransfer_NotFoundWithoutAJSONBody_IsHintedAsTheNamespace(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, "<html>Project Not Found</html>")
+	}))
+	_, err := Transfer(context.Background(), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+	if err == nil || !strings.Contains(err.Error(), hintTransferNamespace) {
+		t.Errorf("Transfer() error = %v, want the namespace hint", err)
 	}
 }
 
@@ -440,7 +610,7 @@ func TestTransfer_RefusalUnderAnotherStatus_CarriesNoTransferHint(t *testing.T) 
 			if err == nil {
 				t.Fatal("Transfer() error = nil, want the failure")
 			}
-			for _, hint := range []string{hintTransferPermission, hintTransferNamespace, hintTransferUnderWay, hintTransferCollision, hintTransferRefused} {
+			for _, hint := range allTransferHints {
 				if strings.Contains(err.Error(), hint) {
 					t.Errorf("Transfer() error = %q, want no transfer hint under status %d", err, tt.status)
 				}
