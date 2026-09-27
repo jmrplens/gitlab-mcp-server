@@ -400,11 +400,26 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 // TASK-023: GetPipelineVariables, GetPipelineTestReport, GetPipelineTestReportSummary, GetLatestPipeline, CreatePipeline, UpdatePipelineMetadata.
 
-// VariableOutput represents a single pipeline variable.
+// VariableOutput represents a single pipeline variable: every key
+// lib/api/entities/ci/variable.rb sends for a Ci::PipelineVariable. Raw says
+// whether GitLab leaves variable references in the value unexpanded; the
+// entity sends it because the model has a raw column, and client-go's
+// PipelineVariable has no field for it, so it is read off the captured
+// response (ADR-0021). The entity's hidden, protected, masked,
+// environment_scope and description wait on the presented object responding
+// to them, which a pipeline variable does not, so GitLab never sends them
+// here.
 type VariableOutput struct {
 	Key          string `json:"key"`
 	Value        string `json:"value"`
 	VariableType string `json:"variable_type"`
+	Raw          bool   `json:"raw"`
+}
+
+// variableExtra is the key of lib/api/entities/ci/variable.rb that client-go's
+// PipelineVariable does not model.
+type variableExtra struct {
+	Raw bool `json:"raw"`
 }
 
 // VariablesOutput holds a list of pipeline variables.
@@ -424,10 +439,17 @@ func GetVariables(ctx context.Context, client *gitlabclient.Client, input GetInp
 	if input.PipelineID <= 0 {
 		return VariablesOutput{}, toolutil.ErrRequiredInt64("pipelineGetVariables", "pipeline_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	vars, _, err := client.GL().Pipelines.GetPipelineVariables(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return VariablesOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetVariables", err, http.StatusNotFound,
 			"verify pipeline_id with pipeline.list. Reading variables requires Maintainer+ role on the project")
+	}
+	// The SDK decoded the same array into vars, so extras holds one entry per
+	// variable, in the same order.
+	var extras []variableExtra
+	if err = captured.Decode(&extras); err != nil {
+		return VariablesOutput{}, toolutil.WrapErr("pipelineGetVariables", err)
 	}
 	out := make([]VariableOutput, len(vars))
 	for i, v := range vars {
@@ -435,6 +457,7 @@ func GetVariables(ctx context.Context, client *gitlabclient.Client, input GetInp
 			Key:          v.Key,
 			Value:        v.Value,
 			VariableType: string(v.VariableType),
+			Raw:          extras[i].Raw,
 		}
 	}
 	return VariablesOutput{Variables: out}, nil
@@ -710,14 +733,15 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		opts.Variables = &vars
 	}
-	if len(input.Inputs) > 0 {
-		inputs, err := toolutil.BuildPipelineInputs(input.Inputs)
-		if err != nil {
-			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineCreate", err,
-				"pipeline inputs must be string, number, boolean, or array of strings")
-		}
-		opts.Inputs = inputs
+	// No input converts to an empty map, which the option's omitempty leaves
+	// out of the request exactly as it leaves out a nil one, so a guard on the
+	// length could not be observed.
+	inputs, err := toolutil.BuildPipelineInputs(input.Inputs)
+	if err != nil {
+		return DetailOutput{}, toolutil.WrapErrWithHint("pipelineCreate", err,
+			"pipeline inputs must be string, number, boolean, or array of strings")
 	}
+	opts.Inputs = inputs
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Pipelines.CreatePipeline(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {

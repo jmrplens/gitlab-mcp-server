@@ -68,7 +68,7 @@ Interactively create a GitLab project with step-by-step user prompts via MCP eli
 
 ### `gitlab_server_status`
 
-Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.
+Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version and revision, whether the instance runs the Enterprise Edition, its GitLab agent server for Kubernetes (whether it is enabled, its version and its two addresses), authentication status, current user, and response time. Use this to diagnose connection issues. The connectivity half reads `GET /metadata`, which answers what the deprecated `GET /version` does and the edition and agent server besides; the response time measures that one call.
 
 | Annotation | **Read** |
 | ---------- | -------- |

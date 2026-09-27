@@ -2,6 +2,9 @@ package projectimportexport
 
 import (
 	"fmt"
+	"maps"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,6 +51,33 @@ func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
 	c.Field("Type", out.ImportType)
 	c.Code("Correlation ID", out.CorrelationID)
 	c.Text("Error", out.ImportError)
+	if len(out.FailedRelations) > 0 {
+		t := c.Table("Failed Relations", "Relation", "Line", "Exception", "Source", "Failed At")
+		for _, r := range out.FailedRelations {
+			t.Row(
+				toolutil.EscapeMdTableCell(r.RelationName),
+				strconv.FormatInt(r.LineNumber, 10),
+				toolutil.EscapeMdTableCell(r.ExceptionClass),
+				toolutil.EscapeMdTableCell(r.Source),
+				toolutil.FormatTime(r.CreatedAt),
+			)
+		}
+	}
+	// A GitHub import counts what it has fetched and what it has imported,
+	// per object type; the rows are sorted so the table reads the same on
+	// every call.
+	if len(out.Stats) > 0 {
+		t := c.Table("Import Statistics", "Stage", "Object", "Count")
+		for _, stage := range slices.Sorted(maps.Keys(out.Stats)) {
+			for _, object := range slices.Sorted(maps.Keys(out.Stats[stage])) {
+				t.Row(
+					toolutil.EscapeMdTableCell(stage),
+					toolutil.EscapeMdTableCell(object),
+					strconv.FormatInt(out.Stats[stage][object], 10),
+				)
+			}
+		}
+	}
 	c.End("Monitor import progress by checking status periodically")
 	return toolutil.ToolResultWithMarkdown(b.String())
 }

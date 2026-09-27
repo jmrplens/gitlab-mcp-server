@@ -134,6 +134,11 @@ func toOutput(s *gitlab.PipelineSchedule) Output {
 	return out
 }
 
+// schedulePath is the REST path of one pipeline schedule.
+func schedulePath(projectID string, scheduleID int) string {
+	return fmt.Sprintf("projects/%s/pipeline_schedules/%d", gitlab.PathEscape(projectID), scheduleID)
+}
+
 // rawGetSchedule issues a raw REST GET against a single pipeline schedule path,
 // decoding the documented superset (including the SDK-missing
 // `variables[].raw` boolean) into a [rawScheduleAPI]. The SDK
@@ -141,8 +146,12 @@ func toOutput(s *gitlab.PipelineSchedule) Output {
 // single-schedule reads that return the documented `variables[]` array. A single
 // Do(&superset) unmarshal naturally tolerates instances that omit `raw`, leaving
 // it at its zero value.
-func rawGetSchedule(ctx context.Context, client *gitlabclient.Client, projectID string, scheduleID int) (*rawScheduleAPI, error) {
-	path := fmt.Sprintf("projects/%s/pipeline_schedules/%d", gitlab.PathEscape(projectID), scheduleID)
+//
+// It takes the path rather than the identifiers, as the raw helpers of the
+// other packages do, so the one way client-go's NewRequest refuses a GET, a
+// path url.PathUnescape cannot read, can be driven: schedulePath escapes every
+// identifier a caller supplies, so no real input reaches that branch.
+func rawGetSchedule(ctx context.Context, client *gitlabclient.Client, path string) (*rawScheduleAPI, error) {
 	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gitlab.RequestOptionFunc{gitlab.WithContext(ctx)})
 	if err != nil {
 		return nil, err
@@ -209,7 +218,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
+	s, err := rawGetSchedule(ctx, client, schedulePath(string(input.ProjectID), input.ScheduleID))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get pipeline schedule", err, http.StatusNotFound,
 			"verify schedule_id with pipeline.schedule_list. schedule_id is the database ID, not a name")
@@ -363,7 +372,7 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 
 	// Fetch the schedule after triggering to return current state, using the raw
 	// superset path so the documented variables[].raw field is preserved.
-	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
+	s, err := rawGetSchedule(ctx, client, schedulePath(string(input.ProjectID), input.ScheduleID))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("get pipeline schedule after run", err)
 	}
@@ -404,12 +413,37 @@ func TakeOwnership(ctx context.Context, client *gitlabclient.Client, input TakeO
 
 // Schedule Variables.
 
-// VariableOutput represents a pipeline schedule variable.
+// VariableOutput represents a pipeline schedule variable: every key
+// lib/api/entities/ci/variable.rb sends for a Ci::PipelineScheduleVariable.
+// Raw says whether GitLab leaves variable references in the value unexpanded;
+// the entity sends it because the model has a raw column, and client-go's
+// PipelineVariable, which the variable routes decode into, has no field for
+// it, so it is read off the captured response (ADR-0021). The entity's hidden,
+// protected, masked, environment_scope and description wait on the presented
+// object responding to them, which a schedule variable does not, so GitLab
+// never sends them here.
 type VariableOutput struct {
 	toolutil.HintableOutput
 	Key          string `json:"key"`
 	Value        string `json:"value"`
 	VariableType string `json:"variable_type"`
+	Raw          bool   `json:"raw"`
+}
+
+// variableExtra is the key of lib/api/entities/ci/variable.rb that client-go's
+// PipelineVariable does not model.
+type variableExtra struct {
+	Raw bool `json:"raw"`
+}
+
+// variableOutput converts the variable a create or an edit answered with, the
+// raw flag read off the captured answer beside client-go's decode.
+func variableOutput(op string, v *gitlab.PipelineVariable, captured *gitlabclient.ResponseCapture) (VariableOutput, error) {
+	var extra variableExtra
+	if err := captured.Decode(&extra); err != nil {
+		return VariableOutput{}, toolutil.WrapErr(op, err)
+	}
+	return VariableOutput{Key: v.Key, Value: v.Value, VariableType: string(v.VariableType), Raw: extra.Raw}, nil
 }
 
 // CreateVariableInput defines parameters for creating a pipeline schedule variable.
@@ -444,6 +478,7 @@ func CreateVariable(ctx context.Context, client *gitlabclient.Client, input Crea
 		opts.VariableType = new(gitlab.VariableTypeValue(input.VariableType))
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	v, _, err := client.GL().PipelineSchedules.CreatePipelineScheduleVariable(
 		string(input.ProjectID), int64(input.ScheduleID), opts, gitlab.WithContext(ctx),
 	)
@@ -459,7 +494,7 @@ func CreateVariable(ctx context.Context, client *gitlabclient.Client, input Crea
 		return VariableOutput{}, toolutil.WrapErrWithStatusHint("create_pipeline_schedule_variable", err, http.StatusNotFound,
 			hintVerifyScheduleID)
 	}
-	return VariableOutput{Key: v.Key, Value: v.Value, VariableType: string(v.VariableType)}, nil
+	return variableOutput("create_pipeline_schedule_variable", v, captured)
 }
 
 // EditVariableInput defines parameters for editing a pipeline schedule variable.
@@ -493,6 +528,7 @@ func EditVariable(ctx context.Context, client *gitlabclient.Client, input EditVa
 		opts.VariableType = new(gitlab.VariableTypeValue(input.VariableType))
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	v, _, err := client.GL().PipelineSchedules.EditPipelineScheduleVariable(
 		string(input.ProjectID), int64(input.ScheduleID), input.Key, opts, gitlab.WithContext(ctx),
 	)
@@ -504,7 +540,7 @@ func EditVariable(ctx context.Context, client *gitlabclient.Client, input EditVa
 		return VariableOutput{}, toolutil.WrapErrWithStatusHint("edit_pipeline_schedule_variable", err, http.StatusNotFound,
 			"verify the variable key exists on this schedule with pipeline.schedule_get")
 	}
-	return VariableOutput{Key: v.Key, Value: v.Value, VariableType: string(v.VariableType)}, nil
+	return variableOutput("edit_pipeline_schedule_variable", v, captured)
 }
 
 // DeleteVariableInput defines parameters for deleting a pipeline schedule variable.

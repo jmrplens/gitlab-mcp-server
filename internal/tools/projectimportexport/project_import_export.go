@@ -214,20 +214,53 @@ type ImportFromFileInput struct {
 	OverrideParams *ImportOverrideParamsInput `json:"override_params,omitempty" jsonschema:"Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])"`
 }
 
-// ImportStatusOutput is the output for import operations.
+// ImportStatusOutput is the output for import operations: every key
+// lib/api/entities/project_import_status.rb sends. FailedRelations are the
+// relations the import could not bring over, at most a hundred, and Stats is
+// what a GitHub import has fetched and imported so far, per object type,
+// which GitLab sends as null for any other import. client-go's ImportStatus
+// models neither, and both are read by the raw decode this package already
+// makes.
 type ImportStatusOutput struct {
 	toolutil.HintableOutput
-	ID                int64  `json:"id"`
-	Description       string `json:"description"`
-	Name              string `json:"name"`
-	NameWithNamespace string `json:"name_with_namespace"`
-	Path              string `json:"path"`
-	PathWithNamespace string `json:"path_with_namespace"`
-	CreatedAt         string `json:"created_at,omitempty"`
-	ImportStatus      string `json:"import_status"`
-	ImportType        string `json:"import_type,omitempty"`
-	CorrelationID     string `json:"correlation_id,omitempty"`
-	ImportError       string `json:"import_error,omitempty"`
+	ID                int64                       `json:"id"`
+	Description       string                      `json:"description"`
+	Name              string                      `json:"name"`
+	NameWithNamespace string                      `json:"name_with_namespace"`
+	Path              string                      `json:"path"`
+	PathWithNamespace string                      `json:"path_with_namespace"`
+	CreatedAt         string                      `json:"created_at,omitempty"`
+	ImportStatus      string                      `json:"import_status"`
+	ImportType        string                      `json:"import_type,omitempty"`
+	CorrelationID     string                      `json:"correlation_id,omitempty"`
+	ImportError       string                      `json:"import_error,omitempty"`
+	FailedRelations   []FailedRelationOutput      `json:"failed_relations"`
+	Stats             map[string]map[string]int64 `json:"stats,omitempty"`
+}
+
+// FailedRelationOutput is one relation an import could not bring over, as
+// lib/api/entities/project_import_failed_relation.rb renders it: when and
+// where it failed, the exception's class, and the relation and line it was
+// reading. The entity also exposes exception_message through a block that
+// returns nil whatever the relation, so it is never filled and is not
+// published.
+type FailedRelationOutput struct {
+	ID             int64  `json:"id"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	ExceptionClass string `json:"exception_class"`
+	Source         string `json:"source"`
+	RelationName   string `json:"relation_name"`
+	LineNumber     int64  `json:"line_number"`
+}
+
+// failedRelationAPI is one failed relation as the raw decode reads it.
+type failedRelationAPI struct {
+	ID             int64      `json:"id"`
+	CreatedAt      *time.Time `json:"created_at"`
+	ExceptionClass string     `json:"exception_class"`
+	Source         string     `json:"source"`
+	RelationName   string     `json:"relation_name"`
+	LineNumber     int64      `json:"line_number"`
 }
 
 // importStatusAPI is a raw-decode superset of the documented import-status
@@ -236,20 +269,23 @@ type ImportStatusOutput struct {
 // so it never captures the documented `created_at` attribute. Decoding into this
 // superset reads the documented `created_at` first and falls back to the legacy
 // `create_at` spelling, so the value is surfaced regardless of which spelling the
-// instance returns. All other fields mirror gl.ImportStatus 1:1.
+// instance returns. The other fields mirror gl.ImportStatus 1:1, and the two it
+// does not model, failed_relations and stats, are read here too.
 type importStatusAPI struct {
-	ID                int64      `json:"id"`
-	Description       string     `json:"description"`
-	Name              string     `json:"name"`
-	NameWithNamespace string     `json:"name_with_namespace"`
-	Path              string     `json:"path"`
-	PathWithNamespace string     `json:"path_with_namespace"`
-	CreatedAt         *time.Time `json:"created_at"`
-	CreateAt          *time.Time `json:"create_at"`
-	ImportStatus      string     `json:"import_status"`
-	ImportType        string     `json:"import_type"`
-	CorrelationID     string     `json:"correlation_id"`
-	ImportError       string     `json:"import_error"`
+	ID                int64                       `json:"id"`
+	Description       string                      `json:"description"`
+	Name              string                      `json:"name"`
+	NameWithNamespace string                      `json:"name_with_namespace"`
+	Path              string                      `json:"path"`
+	PathWithNamespace string                      `json:"path_with_namespace"`
+	CreatedAt         *time.Time                  `json:"created_at"`
+	CreateAt          *time.Time                  `json:"create_at"`
+	ImportStatus      string                      `json:"import_status"`
+	ImportType        string                      `json:"import_type"`
+	CorrelationID     string                      `json:"correlation_id"`
+	ImportError       string                      `json:"import_error"`
+	FailedRelations   []failedRelationAPI         `json:"failed_relations"`
+	Stats             map[string]map[string]int64 `json:"stats"`
 }
 
 // rawImportStatusToOutput maps the raw-decode superset onto ImportStatusOutput,
@@ -266,6 +302,18 @@ func rawImportStatusToOutput(s *importStatusAPI) ImportStatusOutput {
 		ImportType:        s.ImportType,
 		CorrelationID:     s.CorrelationID,
 		ImportError:       s.ImportError,
+		FailedRelations:   make([]FailedRelationOutput, len(s.FailedRelations)),
+		Stats:             s.Stats,
+	}
+	for i, r := range s.FailedRelations {
+		out.FailedRelations[i] = FailedRelationOutput{
+			ID:             r.ID,
+			CreatedAt:      toolutil.RFC3339Ptr(r.CreatedAt),
+			ExceptionClass: r.ExceptionClass,
+			Source:         r.Source,
+			RelationName:   r.RelationName,
+			LineNumber:     r.LineNumber,
+		}
 	}
 	if created := s.CreatedAt; created != nil {
 		out.CreatedAt = created.Format(time.RFC3339)

@@ -330,7 +330,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 				CommonConfusions: []string{"Group shares accept only 10/20/30/40. 5, 15, 25, and 60 are rejected."},
 			},
 		},
-		description: "Share a group with another group at a chosen access level. Returns: the shared group's id, name, path, and web URL. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
+		description: "Share a group with another group at a chosen access level. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level and expiry. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
 	},
 	"gitlab_group_unshare": {
 		usage:   "Stop sharing a group with another group by group_id plus share_group_id. Destructive: requires confirmation. Use this to revoke a previously created group share.",

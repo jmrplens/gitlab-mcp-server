@@ -2,7 +2,9 @@ package sdk
 
 import (
 	"go/types"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
@@ -56,7 +58,7 @@ func collectSDKServices(clientGo *types.Package) ([]sdkService, error) {
 			APIMethods: len(shared.APIMethodNames(named)),
 		})
 	}
-	sort.Slice(services, func(i, j int) bool { return services[i].Service < services[j].Service })
+	slices.SortFunc(services, func(a, b sdkService) int { return strings.Compare(a.Service, b.Service) })
 	return services, nil
 }
 

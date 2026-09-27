@@ -72,14 +72,38 @@ type SCIMIdentityOutput = toolutil.SCIMIdentityOutput
 // toolutil.
 type MemberRoleOutput = toolutil.MemberRoleOutput
 
-// ShareOutput represents the result of sharing with a group.
+// ShareOutput is the group that was shared, as POST /groups/:id/share answers
+// with it (lib/api/groups.rb presents the whole Entities::GroupDetail): the
+// keys that name the group, and the groups it is now shared with, which is
+// what the write changed. The new share is one of those entries, with the
+// access level and expiry GitLab recorded for it. The rest of the group, its
+// settings, counts and links, is group.get's, which returns the whole group.
 type ShareOutput struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Description string `json:"description,omitempty"`
-	WebURL      string `json:"web_url"`
+	ID               int64                   `json:"id"`
+	Name             string                  `json:"name"`
+	Path             string                  `json:"path"`
+	FullName         string                  `json:"full_name,omitempty"`
+	FullPath         string                  `json:"full_path,omitempty"`
+	Description      string                  `json:"description,omitempty"`
+	Visibility       string                  `json:"visibility,omitempty"`
+	WebURL           string                  `json:"web_url"`
+	SharedWithGroups []SharedWithGroupOutput `json:"shared_with_groups"`
+}
+
+// SharedWithGroupOutput is one entry of shared_with_groups, as
+// lib/api/entities/shared_group_with_group.rb renders it: the group the
+// shared group is shared with, the access its members gain, when the share
+// expires, and the custom role it grants on an instance with custom roles
+// enabled. Mirrored here rather than imported from internal/tools/groups, the
+// way this package keeps its other shapes (C-IMPORTS).
+type SharedWithGroupOutput struct {
+	GroupID          int64  `json:"group_id"`
+	GroupName        string `json:"group_name"`
+	GroupFullPath    string `json:"group_full_path"`
+	GroupAccessLevel int64  `json:"group_access_level"`
+	ExpiresAt        string `json:"expires_at,omitempty"`
+	MemberRoleID     int64  `json:"member_role_id,omitempty" tier:"ultimate"`
 }
 
 // BillableMemberOutput mirrors gl.BillableGroupMember 1:1 (Enterprise
@@ -449,12 +473,37 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 			"verify group_id and share_group_id with group.get. share_group_id must be a numeric group ID, not a path")
 	}
 	return ShareOutput{
-		ID:          g.ID,
-		Name:        g.Name,
-		Path:        g.Path,
-		Description: g.Description,
-		WebURL:      g.WebURL,
+		ID:               g.ID,
+		Name:             g.Name,
+		Path:             g.Path,
+		FullName:         g.FullName,
+		FullPath:         g.FullPath,
+		Description:      g.Description,
+		Visibility:       string(g.Visibility),
+		WebURL:           g.WebURL,
+		SharedWithGroups: sharedWithGroupsOutput(g.SharedWithGroups),
 	}, nil
+}
+
+// sharedWithGroupsOutput converts the groups a group is shared with. It is
+// never nil: the key is sent on every answer to a share, and an empty list
+// says the group is shared with nobody the caller can see, which a missing key
+// would not.
+func sharedWithGroupsOutput(links []gl.SharedWithGroup) []SharedWithGroupOutput {
+	out := make([]SharedWithGroupOutput, len(links))
+	for i, link := range links {
+		out[i] = SharedWithGroupOutput{
+			GroupID:          link.GroupID,
+			GroupName:        link.GroupName,
+			GroupFullPath:    link.GroupFullPath,
+			GroupAccessLevel: link.GroupAccessLevel,
+			MemberRoleID:     link.MemberRoleID,
+		}
+		if link.ExpiresAt != nil {
+			out[i].ExpiresAt = link.ExpiresAt.String()
+		}
+	}
+	return out
 }
 
 // UnshareGroup removes a group share.

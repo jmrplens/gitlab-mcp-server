@@ -71,12 +71,10 @@ func pipelineStatusCell(status string) string {
 	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
 }
 
-// shortSHA is the abbreviation a commit SHA is shown by in a table cell.
+// shortSHA is the abbreviation a commit SHA is shown by in a table cell: its
+// first eight characters, or the whole of a shorter one.
 func shortSHA(sha string) string {
-	if len(sha) > 8 {
-		return sha[:8]
-	}
-	return sha
+	return sha[:min(len(sha), 8)]
 }
 
 // FormatDetailMarkdown renders one pipeline as the card of a single object.
@@ -165,12 +163,13 @@ func FormatVariablesMarkdown(out VariablesOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Pipeline Variables", len(out.Variables), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("Key", "Value", "Type"))
+	b.WriteString(toolutil.MarkdownTableHeader("Key", "Value", "Type", "Raw"))
 	for _, v := range out.Variables {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(v.Key),
 			toolutil.EscapeMdTableCell(v.Value),
 			toolutil.EscapeMdTableCell(v.VariableType),
+			toolutil.BoolEmoji(v.Raw),
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,

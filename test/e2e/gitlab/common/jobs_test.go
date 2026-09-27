@@ -18,6 +18,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -266,8 +267,9 @@ type tokenScopeFixture struct {
 	group   fixture.Group
 }
 
-// inboundProjectIDs returns the project IDs of an inbound allowlist.
-func inboundProjectIDs(listed []jobtokenscope.AllowlistProjectItem) []int64 {
+// inboundProjectIDs returns the project IDs of an inbound allowlist, whose
+// rows are the basic project GitLab renders there.
+func inboundProjectIDs(listed []projects.BasicOutput) []int64 {
 	ids := make([]int64, 0, len(listed))
 	for _, project := range listed {
 		ids = append(ids, project.ID)

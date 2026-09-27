@@ -433,10 +433,10 @@ func TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn(t *testing.T) {
 			Pagination: toolutil.PaginationOutput{TotalItems: 2},
 		})
 		want := "## Package Files (2)\n\n" +
-			"| ID | File Name | Size (bytes) | SHA256 |\n" +
-			"| --- | --- | --- | --- |\n" +
-			"| 1 | short.bin | 0 | `" + exactly12 + "` |\n" +
-			"| 2 | long.bin | 0 | `abcdef123456...` |\n" +
+			"| ID | File Name | Size (bytes) | SHA256 | Pipelines |\n" +
+			"| --- | --- | --- | --- | --- |\n" +
+			"| 1 | short.bin | 0 | `" + exactly12 + "` |  |\n" +
+			"| 2 | long.bin | 0 | `abcdef123456...` |  |\n" +
 			"\n2 items total\n" + fileListHints
 		if got != want {
 			t.Errorf("FormatFileListMarkdown() =\n%q\nwant:\n%q", got, want)
@@ -691,13 +691,51 @@ func TestFormatFileListMarkdown_LongSHA(t *testing.T) {
 	}
 	got := FormatFileListMarkdown(out)
 	want := "## Package Files (1)\n\n" +
-		"| ID | File Name | Size (bytes) | SHA256 |\n" +
-		"| --- | --- | --- | --- |\n" +
-		"| 1 | pkg.tar.gz | 2048 | `0123456789ab...` |\n" +
+		"| ID | File Name | Size (bytes) | SHA256 | Pipelines |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | pkg.tar.gz | 2048 | `0123456789ab...` |  |\n" +
 		"\n1 items total\n" + fileListHints
 	if got != want {
 		t.Errorf("FormatFileListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
+}
+
+// TestFormatFileListMarkdown_Pipelines verifies the pipelines column: every
+// pipeline that built a file is summarized in one cell, linked when GitLab
+// gave its page, and the instruction to keep the table's links is written only
+// when some cell carries one.
+func TestFormatFileListMarkdown_Pipelines(t *testing.T) {
+	t.Run("a linked pipeline beside an unlinked one", func(t *testing.T) {
+		got := FormatFileListMarkdown(FileListOutput{
+			Files: []FileListItem{{
+				PackageFileID: 1, FileName: "pkg.tar.gz", Size: 2048, SHA256: "abc",
+				Pipelines: []toolutil.PackagePipelineOutput{
+					{ID: 7, Status: "success", Ref: "main", WebURL: "https://gitlab.example.com/p/-/pipelines/7"},
+					{ID: 8, Status: "failed", Ref: "v1"},
+				},
+			}},
+			Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		})
+		const row = "| 1 | pkg.tar.gz | 2048 | `abc` | [7 success main](https://gitlab.example.com/p/-/pipelines/7), 8 failed v1 |\n"
+		if !strings.Contains(got, row) {
+			t.Errorf("FormatFileListMarkdown() missing %q:\n%s", row, got)
+		}
+		if !strings.Contains(got, toolutil.HintPreserveLinks) {
+			t.Errorf("FormatFileListMarkdown() lacks the instruction to keep the pipeline links:\n%s", got)
+		}
+	})
+	t.Run("an unlinked pipeline alone", func(t *testing.T) {
+		got := FormatFileListMarkdown(FileListOutput{
+			Files: []FileListItem{
+				{PackageFileID: 1, FileName: "a.bin", SHA256: "abc", Pipelines: []toolutil.PackagePipelineOutput{{ID: 8, Status: "failed", Ref: "v1"}}},
+				{PackageFileID: 2, FileName: "b.bin", SHA256: "def"},
+			},
+			Pagination: toolutil.PaginationOutput{TotalItems: 2},
+		})
+		if strings.Contains(got, toolutil.HintPreserveLinks) {
+			t.Errorf("FormatFileListMarkdown() asks to keep links a table without any does not carry:\n%s", got)
+		}
+	})
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.

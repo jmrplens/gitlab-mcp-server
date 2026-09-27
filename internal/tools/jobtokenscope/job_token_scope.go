@@ -7,6 +7,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -17,21 +18,41 @@ type GetAccessSettingsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 }
 
-// AccessSettingsOutput is the output for job token access settings.
+// AccessSettingsOutput is the output for job token access settings: both keys
+// lib/api/entities/project_job_token_scope.rb sends. InboundEnabled says
+// whether only the projects on the allowlist may reach this project with a job
+// token. OutboundEnabled says whether this project's own job token is limited
+// to the projects it names, the older outbound scope GitLab deprecated and
+// planned to remove in 18.0 and still sends; client-go's
+// JobTokenAccessSettings has no field for it, so it is read off the captured
+// response (ADR-0021).
 type AccessSettingsOutput struct {
 	toolutil.HintableOutput
-	InboundEnabled bool `json:"inbound_enabled"`
+	InboundEnabled  bool `json:"inbound_enabled"`
+	OutboundEnabled bool `json:"outbound_enabled"`
+}
+
+// accessSettingsExtra is the key of the job token scope entity client-go's
+// JobTokenAccessSettings does not model.
+type accessSettingsExtra struct {
+	OutboundEnabled bool `json:"outbound_enabled"`
 }
 
 // GetAccessSettings returns the CI/CD job token access settings for a project.
 func GetAccessSettings(ctx context.Context, client *gitlabclient.Client, input GetAccessSettingsInput) (AccessSettingsOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	settings, _, err := client.GL().JobTokenScope.GetProjectJobTokenAccessSettings(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return AccessSettingsOutput{}, toolutil.WrapErrWithStatusHint("get_job_token_access_settings", err, http.StatusNotFound,
 			"verify project_id with project.get; CI/CD job token settings are at project level")
 	}
+	var extra accessSettingsExtra
+	if err = captured.Decode(&extra); err != nil {
+		return AccessSettingsOutput{}, toolutil.WrapErr("get_job_token_access_settings", err)
+	}
 	return AccessSettingsOutput{
-		InboundEnabled: settings.InboundEnabled,
+		InboundEnabled:  settings.InboundEnabled,
+		OutboundEnabled: extra.OutboundEnabled,
 	}, nil
 }
 
@@ -65,18 +86,17 @@ type ListInboundAllowlistInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// AllowlistProjectItem is a project on the inbound allowlist.
-type AllowlistProjectItem struct {
-	ID                int64  `json:"id"`
-	Name              string `json:"name"`
-	PathWithNamespace string `json:"path_with_namespace"`
-	WebURL            string `json:"web_url"`
-}
-
-// ListInboundAllowlistOutput is the output for listing inbound allowlist projects.
+// ListInboundAllowlistOutput is the output for listing inbound allowlist
+// projects. GitLab renders each of them as Entities::BasicProjectDetails
+// (lib/api/project_job_token_scope.rb), which is internal/tools/projects'
+// BasicOutput, so every row carries what that entity sends: the names and
+// paths, the web and clone URLs, visibility, default branch, topics, counts
+// and the namespace. The license pair and the custom attributes the same shape
+// can carry wait on presenter options this route never passes, so they stay
+// empty and are omitted here.
 type ListInboundAllowlistOutput struct {
 	toolutil.HintableOutput
-	Projects   []AllowlistProjectItem    `json:"projects"`
+	Projects   []projects.BasicOutput    `json:"projects"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -99,19 +119,14 @@ func applyAllowlistListOptions(opts *gl.ListOptions, page toolutil.PaginationInp
 func ListInboundAllowlist(ctx context.Context, client *gitlabclient.Client, input ListInboundAllowlistInput) (ListInboundAllowlistOutput, error) {
 	opts := &gl.GetJobTokenInboundAllowListOptions{}
 	applyAllowlistListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
-	projects, resp, err := client.GL().JobTokenScope.GetProjectJobTokenInboundAllowList(string(input.ProjectID), opts, gl.WithContext(ctx))
+	allowed, resp, err := client.GL().JobTokenScope.GetProjectJobTokenInboundAllowList(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListInboundAllowlistOutput{}, toolutil.WrapErrWithStatusHint("list_job_token_inbound_allowlist", err, http.StatusNotFound,
 			"verify project_id; allowlist may be empty if inbound scope is disabled")
 	}
-	items := make([]AllowlistProjectItem, 0, len(projects))
-	for _, p := range projects {
-		items = append(items, AllowlistProjectItem{
-			ID:                p.ID,
-			Name:              p.Name,
-			PathWithNamespace: p.PathWithNamespace,
-			WebURL:            p.WebURL,
-		})
+	items := make([]projects.BasicOutput, 0, len(allowed))
+	for _, p := range allowed {
+		items = append(items, projects.ToBasicOutput(p))
 	}
 	return ListInboundAllowlistOutput{
 		Projects:   items,

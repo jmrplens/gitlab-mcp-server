@@ -75,6 +75,7 @@ var declaredServices = map[string]declaration{
 	"GroupClusters":    {supersededUpstream, certificateClusters},
 	"InstanceClusters": {supersededUpstream, certificateClusters},
 	"ProjectClusters":  {supersededUpstream, certificateClusters},
+	"Version":          {supersededUpstream, "GET /version is 'deprecated in 15.5. We recommend you instead use the Metadata API' (lib/api/metadata.rb), which serves the same Entities::Metadata on GET /metadata; client-go's Version struct decodes two of its four keys and Metadata all of them. internal/tools/health and internal/tools/metadata call Metadata.GetMetadata instead, and internal/gitlab's connectivity ping reads /version with a request of its own rather than through this service"},
 
 	// UNWRAPPED_TRACKED
 	// (none: SecurityDependencyFirewall was the last one, and

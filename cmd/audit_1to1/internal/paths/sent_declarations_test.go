@@ -128,6 +128,47 @@ func TestCompactRow_EveryKey_IsItsOwnDeclarationNamingTheRest(t *testing.T) {
 	}
 }
 
+// TestConfirmation_EveryKey_IsItsOwnDeclarationInTheConfirmationCategory
+// verifies that a write's confirmation is written down the way a compact row
+// is, one type-named declaration per key with the whole list in each reason,
+// and in the category that says the keys belong to a write's answer rather
+// than to a list row.
+func TestConfirmation_EveryKey_IsItsOwnDeclarationInTheConfirmationCategory(t *testing.T) {
+	got := confirmation("internal/tools/groupmembers", "ShareOutput", "API::Entities::GroupDetail", "The confirmation keeps the names.", "archived", "parent_id")
+
+	const reason = "The confirmation keeps the names. The keys it leaves out: archived, parent_id."
+	want := []sentDeclaration{
+		{Package: "internal/tools/groupmembers", Type: "ShareOutput", Entity: "API::Entities::GroupDetail", Field: "archived", Category: categoryConfirmationOnly, Reason: reason},
+		{Package: "internal/tools/groupmembers", Type: "ShareOutput", Entity: "API::Entities::GroupDetail", Field: "parent_id", Category: categoryConfirmationOnly, Reason: reason},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("confirmation() = %+v, want %+v", got, want)
+	}
+}
+
+// TestDeclaredConfirmations_ShareOutput_EveryKeyNamesTheTypeAndOneField holds
+// the share's declarations to the same rule the compact rows keep: each names
+// ShareOutput and one key, so none of them answers another type of the package
+// or a key GitLab adds to the group later, and each of the seven presenter
+// options the route never passes is declared in that category rather than as
+// a confirmation, since no answer to a share can carry it.
+func TestDeclaredConfirmations_ShareOutput_EveryKeyNamesTheTypeAndOneField(t *testing.T) {
+	neverPassed := 0
+	for _, declaration := range declaredConfirmations() {
+		t.Run(declaration.key(), func(t *testing.T) {
+			if declaration.Type != "ShareOutput" || declaration.Field == declaredSegment {
+				t.Errorf("declaration %+v names no single key of ShareOutput", declaration)
+			}
+		})
+		if declaration.Category == categoryOptionNeverPassed {
+			neverPassed++
+		}
+	}
+	if neverPassed != 7 {
+		t.Errorf("never-passed option declarations = %d, want 7", neverPassed)
+	}
+}
+
 // TestDeclaredCompactRows_NoRow_IsASplat verifies the rule the compact-row
 // category rests on across the whole table: every declaration of it names one
 // type and one key, so a key GitLab adds to the entity surfaces as a finding

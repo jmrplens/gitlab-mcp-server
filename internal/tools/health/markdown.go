@@ -48,6 +48,14 @@ func FormatMarkdownString(s Output) string {
 	// a version and no revision.
 	c.Field("Version", s.GitLabVersion)
 	c.Field("Revision", s.GitLabRevision)
+	c.BoolPtr("Enterprise Edition", s.GitLabEnterprise)
+	if kas := s.GitLabKAS; kas != nil {
+		k := c.Sub("Agent Server for Kubernetes")
+		k.Bool("Enabled", kas.Enabled)
+		k.Field("Version", kas.Version)
+		k.Field("External URL", kas.ExternalURL)
+		k.Field("Kubernetes API Proxy URL", kas.ExternalK8SProxyURL)
+	}
 	c.Bool("Authenticated", s.Authenticated)
 	c.Markdown("User", toolutil.MdUserHandle(s.Username))
 	c.Count("User ID", s.UserID)

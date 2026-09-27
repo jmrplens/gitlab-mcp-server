@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -326,7 +327,13 @@ func TestRemoveMember_MissingGroupID(t *testing.T) {
 func TestShareGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":5,"name":"MyGroup","path":"mygroup","web_url":"https://gl/groups/mygroup"}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{
+"id":5,"name":"MyGroup","path":"mygroup","full_name":"Parent / MyGroup","full_path":"parent/mygroup",
+"visibility":"internal","web_url":"https://gl/groups/mygroup",
+"shared_with_groups":[
+ {"group_id":10,"group_name":"Partners","group_full_path":"partners","group_access_level":30,"expires_at":"2026-12-31","member_role_id":7},
+ {"group_id":11,"group_name":"Auditors","group_full_path":"org/auditors","group_access_level":20,"expires_at":null}
+]}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
@@ -338,11 +345,45 @@ func TestShareGroup_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ID != 5 {
-		t.Errorf("id = %d, want 5", out.ID)
+	want := ShareOutput{
+		ID:         5,
+		Name:       "MyGroup",
+		Path:       "mygroup",
+		FullName:   "Parent / MyGroup",
+		FullPath:   "parent/mygroup",
+		Visibility: "internal",
+		WebURL:     "https://gl/groups/mygroup",
+		SharedWithGroups: []SharedWithGroupOutput{
+			{GroupID: 10, GroupName: "Partners", GroupFullPath: "partners", GroupAccessLevel: 30, ExpiresAt: "2026-12-31", MemberRoleID: 7},
+			{GroupID: 11, GroupName: "Auditors", GroupFullPath: "org/auditors", GroupAccessLevel: 20},
+		},
 	}
-	if out.Name != "MyGroup" {
-		t.Errorf("name = %q, want MyGroup", out.Name)
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("ShareGroup() =\n%+v\nwant\n%+v", out, want)
+	}
+}
+
+// TestShareGroup_SharedWithNobodyVisible_PublishesAnEmptyList asserts that an
+// answer naming no share the caller can see is published as an empty list
+// rather than a missing key, since GitLab sends the key on every answer and
+// the list is what says who the group is shared with.
+func TestShareGroup_SharedWithNobodyVisible_PublishesAnEmptyList(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":5,"name":"MyGroup","path":"mygroup","web_url":"https://gl/groups/mygroup","shared_with_groups":[]}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"shared_with_groups":[]`) {
+		t.Errorf("ShareOutput marshaled to %s, want an empty shared_with_groups list", encoded)
 	}
 }
 
@@ -482,6 +523,42 @@ func TestFormatShareMarkdown(t *testing.T) {
 		"- **ID**: 5\n" +
 		"- **Name**: MyGroup\n" +
 		"- **Path**: mygroup\n" +
+		shareHints
+	if got != want {
+		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatShareMarkdown_SharedWithGroups verifies the card of a share whose
+// group is now shared with two groups: the group's own rows, then one table
+// row per share with its access level named and numbered, the custom role
+// beside it when the share carries one, and a pipe in a path escaped rather
+// than read as a column.
+func TestFormatShareMarkdown_SharedWithGroups(t *testing.T) {
+	got := FormatShareMarkdown(ShareOutput{
+		ID:         5,
+		Name:       "MyGroup",
+		Path:       "mygroup",
+		FullPath:   "parent/mygroup",
+		Visibility: "internal",
+		WebURL:     "https://gl/groups/mygroup",
+		SharedWithGroups: []SharedWithGroupOutput{
+			{GroupID: 10, GroupFullPath: "partners", GroupAccessLevel: 30, ExpiresAt: "2026-12-31", MemberRoleID: 7},
+			{GroupID: 11, GroupFullPath: "org/a|b", GroupAccessLevel: 20},
+		},
+	})
+	want := "## Group Shared\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: MyGroup\n" +
+		"- **Path**: mygroup\n" +
+		"- **Full Path**: parent/mygroup\n" +
+		"- **Visibility**: internal\n" +
+		"- **URL**: [https://gl/groups/mygroup](https://gl/groups/mygroup)\n" +
+		"\n### Shared With\n\n" +
+		"| Group | Group ID | Access Level | Expires |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| partners | 10 | Developer (30), member role 7 | " + toolutil.FormatTime("2026-12-31") + " |\n" +
+		"| org/a&#124;b | 11 | Reporter (20) |  |\n" +
 		shareHints
 	if got != want {
 		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)

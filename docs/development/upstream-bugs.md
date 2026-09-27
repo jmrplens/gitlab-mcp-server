@@ -1769,7 +1769,12 @@ live workaround until a release carries the commit:
   and `toolutil.CapturedPackages`, under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
   and publishes no `created_at` for the user; a bump carrying the five retires
-  the read.
+  the read. A package file renders the same pipeline entity under `pipelines`
+  (`lib/api/entities/package_file.rb`, real pipelines this time), and
+  client-go's `PackageFile` decodes them into its full `Pipeline`, which
+  carries the pipeline's own keys and the same short `BasicUser`;
+  `package.file_list` reads the user's two keys off the captured answer, and
+  the `BasicUser` fix above retires that read too.
 - `PendingInvite` has no `invite_token`, which
   `lib/api/entities/invitation.rb` exposes with no condition. The same struct
   declares an `ID` the entity does not expose, which the audit already reports
@@ -1785,7 +1790,7 @@ live workaround until a release carries the commit:
   `created_by`, `email`, both identities, `override` and `member_role`, belong
   in the same merge request as a second group.
 
-**Three more are recorded and not yet sent**: the merge request above does not
+**Six more are recorded and not yet sent**: the merge request above does not
 carry them, and each is read from the captured response in the meantime.
 
 - `Todo` has no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
@@ -1808,6 +1813,31 @@ carry them, and each is read from the captured response in the meantime.
   whole commit. `repository.tree` offers the parameter through a request
   option that adds it to the query client-go encoded, and reads the commit off
   the captured answer.
+- `JobTokenAccessSettings`, what `GetProjectJobTokenAccessSettings` returns,
+  has no `outbound_enabled`, which `lib/api/entities/project_job_token_scope.rb`
+  exposes with no condition beside `inbound_enabled`: the older outbound
+  scope, which GitLab deprecated and planned to remove in 18.0 and still
+  sends. `job.token_scope_get` reads it off the captured answer.
+- `PipelineVariable`, what both `GetPipelineVariables` and the three pipeline
+  schedule variable writes decode into, has no `raw`, which
+  `lib/api/entities/ci/variable.rb` sends for a `Ci::PipelineVariable` and a
+  `Ci::PipelineScheduleVariable` because both tables carry the column. The
+  entity's other conditional keys (`hidden`, `protected`, `masked`,
+  `environment_scope`, `description`) wait on `respond_to?`, which neither
+  model does, so `raw` is the only one the struct is short of on these
+  routes. `pipeline.variables` and the schedule variable create and edit read
+  it off the captured answer.
+- `ImportStatus`, what `ImportFromFile` and `ImportStatus` return, tags its
+  timestamp `create_at` where `lib/api/entities/project_identity.rb` sends
+  `created_at`, so the field never decodes, and has no `failed_relations`
+  (at most a hundred `ProjectImportFailedRelation`s) and no `stats` (a GitHub
+  import's fetched and imported counts, null for every other import), both
+  exposed with no condition by `lib/api/entities/project_import_status.rb`.
+  `internal/tools/projectimportexport` already reads both status routes
+  through a raw decode for the timestamp, and now reads the other two keys
+  there as well. The failed relation's `exception_message` is rendered by a
+  block that returns nil for every relation, so a struct for it should leave
+  that key out.
 
 That lead has since been measured and is
 [its own entry](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends):

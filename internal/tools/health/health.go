@@ -14,21 +14,41 @@ import (
 )
 
 // Output represents the health/connectivity status of the MCP server.
+//
+// The gitlab_ keys are what GET /metadata answered, the whole of
+// lib/api/entities/metadata.rb under names of this report's own: the version,
+// the revision, whether the instance runs the Enterprise Edition, and its
+// Kubernetes agent server. The edition is a pointer so that a check which
+// never reached the instance says nothing about it, rather than reporting the
+// Community Edition.
 type Output struct {
 	toolutil.HintableOutput
-	Status           string `json:"status"`
-	MCPServerVersion string `json:"mcp_server_version,omitempty"`
-	Author           string `json:"author,omitempty"`
-	Department       string `json:"department,omitempty"`
-	Repository       string `json:"repository,omitempty"`
-	GitLabURL        string `json:"gitlab_url"`
-	GitLabVersion    string `json:"gitlab_version,omitempty"`
-	GitLabRevision   string `json:"gitlab_revision,omitempty"`
-	Authenticated    bool   `json:"authenticated"`
-	Username         string `json:"username,omitempty"`
-	UserID           int64  `json:"user_id,omitempty"`
-	ResponseTimeMS   int64  `json:"response_time_ms"`
-	Error            string `json:"error,omitempty"`
+	Status           string     `json:"status"`
+	MCPServerVersion string     `json:"mcp_server_version,omitempty"`
+	Author           string     `json:"author,omitempty"`
+	Department       string     `json:"department,omitempty"`
+	Repository       string     `json:"repository,omitempty"`
+	GitLabURL        string     `json:"gitlab_url"`
+	GitLabVersion    string     `json:"gitlab_version,omitempty"`
+	GitLabRevision   string     `json:"gitlab_revision,omitempty"`
+	GitLabEnterprise *bool      `json:"gitlab_enterprise,omitempty"`
+	GitLabKAS        *KASOutput `json:"gitlab_kas,omitempty"`
+	Authenticated    bool       `json:"authenticated"`
+	Username         string     `json:"username,omitempty"`
+	UserID           int64      `json:"user_id,omitempty"`
+	ResponseTimeMS   int64      `json:"response_time_ms"`
+	Error            string     `json:"error,omitempty"`
+}
+
+// KASOutput is the kas object of lib/api/entities/metadata.rb: whether the
+// instance runs the GitLab agent server for Kubernetes, where agents reach it
+// and where its Kubernetes API proxy listens, and its version. The two
+// addresses are spelled in snake case here, as metadata.get spells them.
+type KASOutput struct {
+	Enabled             bool   `json:"enabled"`
+	ExternalURL         string `json:"external_url,omitempty"`
+	ExternalK8SProxyURL string `json:"external_k8s_proxy_url,omitempty"`
+	Version             string `json:"version,omitempty"`
 }
 
 // Input is an empty struct for the status tool (no parameters needed).
@@ -94,6 +114,12 @@ func withoutUserinfo(text string, user *url.Userinfo) string {
 
 // Check verifies GitLab connectivity, authentication, and retrieves
 // server version and current user info for diagnostic purposes.
+//
+// The connectivity half asks GET /metadata rather than GET /version.
+// lib/api/metadata.rb serves both with the same entity and has marked the
+// second deprecated since GitLab 15.5, and client-go decodes the whole entity
+// only for the first: its Version struct carries the version and revision and
+// drops the edition and the agent server the same answer sends.
 func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -114,7 +140,7 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 
 	start := time.Now()
 
-	v, _, err := client.GL().Version.GetVersion(gl.WithContext(ctx))
+	meta, _, err := client.GL().Metadata.GetMetadata(gl.WithContext(ctx))
 	out.ResponseTimeMS = time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -123,8 +149,15 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 		return out, nil
 	}
 
-	out.GitLabVersion = v.Version
-	out.GitLabRevision = v.Revision
+	out.GitLabVersion = meta.Version
+	out.GitLabRevision = meta.Revision
+	out.GitLabEnterprise = new(meta.Enterprise)
+	out.GitLabKAS = &KASOutput{
+		Enabled:             meta.KAS.Enabled,
+		ExternalURL:         meta.KAS.ExternalURL,
+		ExternalK8SProxyURL: meta.KAS.ExternalK8SProxyURL,
+		Version:             meta.KAS.Version,
+	}
 
 	u, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
 	if err != nil {
