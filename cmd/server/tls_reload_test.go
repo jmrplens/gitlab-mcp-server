@@ -169,8 +169,11 @@ func TestCertReloader_UnchangedFilesAreReadOnce(t *testing.T) {
 func TestStampOf_ReadsEachFilesOwnSizeAndTime(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-	certTime := time.Date(2026, 9, 1, 10, 0, 0, 111, time.UTC)
-	keyTime := time.Date(2026, 9, 2, 11, 30, 0, 222, time.UTC)
+	// The sub-second parts are nonzero so a stamp that kept whole seconds
+	// would fail, and whole multiples of 100 ns because NTFS records file
+	// times at that granularity and rounds anything finer away.
+	certTime := time.Date(2026, 9, 1, 10, 0, 0, 11_100, time.UTC)
+	keyTime := time.Date(2026, 9, 2, 11, 30, 0, 22_200, time.UTC)
 	writePEM(t, certPath, []byte("twenty-five bytes of cert"), certTime)
 	writePEM(t, keyPath, []byte("key"), keyTime)
 
