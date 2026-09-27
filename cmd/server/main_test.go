@@ -197,11 +197,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	t.Helper()
 	cacheable := cfg.ExcludeTools == nil && cfg.TokenScopes == nil && cfg.GitLabURL == ""
 	if !cacheable {
-		server, err := createServer(t.Context(), client, cfg)
-		if err != nil {
-			t.Fatalf("createServer() error: %v", err)
-		}
-		return server
+		return createServerWithin(t, client, cfg)
 	}
 	key := createdServerKey{
 		toolSurface:            cfg.ToolSurface,
@@ -222,12 +218,46 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	if server, ok := createdServers[key]; ok {
 		return server
 	}
-	server, err := createServer(t.Context(), sharedCreateServerClient(t), cfg)
-	if err != nil {
-		t.Fatalf("createServer() error: %v", err)
-	}
+	server := createServerWithin(t, sharedCreateServerClient(t), cfg)
 	createdServers[key] = server
 	return server
+}
+
+// serverBuildBound is how long a test waits for createServer before calling
+// the build deadlocked. An honest build takes seconds, race detector included.
+const serverBuildBound = 3 * time.Minute
+
+// createServerWithin is createServer failing the test, rather than hanging
+// it, when the build does not return within serverBuildBound.
+//
+// Registration speaks MCP to the server it is building, on contexts with no
+// deadline, so a fault in the readiness gate deadlocks the build rather than
+// failing it, and the test waits for the binary's own timeout. That hides every
+// assertion after it: a mutation run, which stops at the first failure, reads
+// the timeout as TIMED OUT, and the readiness tests that name the fault within
+// ten seconds never run because a test sorted before them never returns.
+func createServerWithin(t *testing.T, client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server {
+	t.Helper()
+	type built struct {
+		server *mcp.Server
+		err    error
+	}
+	ctx := t.Context()
+	done := make(chan built, 1)
+	go func() {
+		server, err := createServer(ctx, client, cfg)
+		done <- built{server: server, err: err}
+	}()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("createServer() error: %v", result.err)
+		}
+		return result.server
+	case <-time.After(serverBuildBound):
+		t.Fatalf("createServer() did not return within %s: registration is deadlocked", serverBuildBound)
+		return nil
+	}
 }
 
 // newTestMCPServer returns a shared MCP server with the full individual tool

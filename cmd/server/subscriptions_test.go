@@ -33,7 +33,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // pipelineBackend is a mock GitLab whose pipeline status can be changed
@@ -703,6 +705,82 @@ func TestSubscribe_ActiveSession_WatcherStaysFast(t *testing.T) {
 	}
 }
 
+// TestSubscriptionShape_Attach_ClientActivityRenewsALegacyWatch verifies the
+// renewal a session-era subscriber depends on is installed on the server and
+// reaches the watch.
+//
+// The end-to-end test above can no longer tell: the SDK client subscribes
+// through subscriptions/listen, whose open stream renews its own watch, so a
+// server that never renewed on activity would pass it. A legacy
+// resources/subscribe has no stream, and traffic on its session is the only
+// evidence its subscriber is still there. So the watch is taken the legacy way,
+// left to demote, and one tool call on the same session must bring it back.
+func TestSubscriptionShape_Attach_ClientActivityRenewsALegacyWatch(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	opts := fastOptions()
+	// Long enough that the watch cannot demote again between the call that
+	// renews it and the count read after it.
+	opts.Lease = 500 * time.Millisecond
+	shape, runtime := newTestSubscriptions(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), opts)
+	t.Cleanup(runtime.manager.Close)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "attached", Version: "1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "noop"},
+		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{}, nil, nil
+		})
+	shape.attach(t.Context(), server, staticRuntime(runtime))
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "1"}, nil).Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+
+	if subErr := runtime.manager.Subscribe(t.Context(), serverSession, "gitlab://project/42/pipeline/99"); subErr != nil {
+		t.Fatalf("Subscribe: %v", subErr)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for runtime.manager.DemotedCount() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the silent legacy watch never demoted, so there is nothing for activity to renew")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	if _, callErr := client.CallTool(t.Context(), &mcp.CallToolParams{Name: "noop"}); callErr != nil {
+		t.Fatalf("CallTool: %v", callErr)
+	}
+	if got := runtime.manager.DemotedCount(); got != 0 {
+		t.Errorf("%d watch(es) still demoted after a tool call on the subscribing session, want 0", got)
+	}
+}
+
+// TestRenewOnActivity_ARequestBoundToNoCredential_PassesThrough verifies the
+// renewal middleware answers a request it has no watchers for exactly as the
+// handler did.
+//
+// A request nothing attributed to a credential resolves no runtime, and it is
+// still a request some other layer answers or refuses; renewal has nothing to
+// add to it and must neither swallow nor replace what the handler returned.
+func TestRenewOnActivity_ARequestBoundToNoCredential_PassesThrough(t *testing.T) {
+	want := &mcp.CallToolResult{}
+	refused := errors.New("refused further in")
+	handler := renewOnActivity(staticRuntime(nil))(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		return want, refused
+	})
+
+	got, err := handler(t.Context(), "tools/call", &mcp.ServerRequest[*mcp.CallToolParams]{Session: &mcp.ServerSession{}})
+	if got != want || !errors.Is(err, refused) {
+		t.Errorf("renewOnActivity returned (%v, %v), want the handler's own (%v, %v)", got, err, want, refused)
+	}
+}
+
 // TestKeepalive_IsNotRenewalActivity is the negative half of the renewal
 // contract.
 //
@@ -965,6 +1043,25 @@ func TestSubscriptionShape_Handlers_ARequestBoundToNoCredential_IsRefused(t *tes
 	if runtime.manager.Len() != 0 {
 		t.Errorf("watchers = %d after two refusals, want 0", runtime.manager.Len())
 	}
+
+	t.Run("the refusal says what the other surfaces say", func(t *testing.T) {
+		// The same cause reaches a tool, a resource and a prompt as
+		// toolutil's refusal, so an operator meeting it on two surfaces must
+		// read one fact: an internal error, since nothing the client sent is
+		// wrong, and the same clauses with only the noun changed. An invalid
+		// request here would send the caller to fix a request that is fine.
+		sibling, ok := errors.AsType[*jsonrpc.Error](toolutil.UnattributedRequestError())
+		if !ok {
+			t.Fatal("toolutil's refusal is not a *jsonrpc.Error to compare with")
+		}
+		if errUnboundSubscribe.Code != sibling.Code {
+			t.Errorf("code = %d, want %d, the code the other surfaces answer with", errUnboundSubscribe.Code, sibling.Code)
+		}
+		want := strings.Replace(toolutil.UnattributedRequestMessage, "this request", "this subscription", 1)
+		if errUnboundSubscribe.Message != want {
+			t.Errorf("message = %q, want %q", errUnboundSubscribe.Message, want)
+		}
+	})
 
 	t.Run("an abandoned request is answered with why it ended", func(t *testing.T) {
 		// The one legitimate cause of the same state: a POST the client
@@ -1317,6 +1414,9 @@ func TestWatchMeta_DescribesTheWatch(t *testing.T) {
 				"state":          "active",
 				"pollIntervalMs": int64(15000),
 				"renewBy":        "2026-08-24T19:30:00Z",
+				// Published so a client knows it has nothing to do to keep the
+				// watch: any request on the session renews it.
+				"renewedByActivity": true,
 			},
 		},
 		{
@@ -1660,6 +1760,26 @@ func TestClosableListenURIs_MixedStream_IsLeftAlone(t *testing.T) {
 			name:   "no notifications block",
 			method: methodSubscriptionsListen,
 			req:    listenReq(nil),
+			want:   false,
+		},
+		{
+			// The guards ahead of the notifications block: a listen whose
+			// request carries no params, or arrives as some other request type,
+			// is answered as not closable rather than dereferenced.
+			name:   "no params",
+			method: methodSubscriptionsListen,
+			req:    &mcp.SubscriptionsListenRequest{},
+			want:   false,
+		},
+		{
+			name:   "a request of another type",
+			method: methodSubscriptionsListen,
+			req:    &mcp.CallToolRequest{},
+			want:   false,
+		},
+		{
+			name:   "no request at all",
+			method: methodSubscriptionsListen,
 			want:   false,
 		},
 		{
@@ -2243,6 +2363,51 @@ func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
 	if got := bridge.activeRenewals(); got != 0 {
 		t.Errorf("%d renewal ticker(s) still running after the stream ended", got)
 	}
+	// Its claim goes with it. The ticker forgets the stream before it stops
+	// counting itself, so by now the set is empty; a claim left behind is one
+	// entry per listen the server ever answered.
+	bridge.mu.Lock()
+	claims := len(bridge.renewing)
+	bridge.mu.Unlock()
+	if claims != 0 {
+		t.Errorf("%d renewal claim(s) left after the stream ended, want none", claims)
+	}
+}
+
+// TestSessionBridge_ReleaseSession_DropsOnlyThatSessionsHolds verifies a
+// disconnect releases the holds of the session that left and no other.
+//
+// A hold is what keeps a watch alive while a second listen of the same session
+// still waits on it. Dropping another session's holds on a disconnect puts that
+// session back in the state the holds exist to prevent: its first stream to end
+// stops a watch its second stream is still open on. Keeping the departed
+// session's holds is a map entry per URI per session for the life of the
+// process.
+func TestSessionBridge_ReleaseSession_DropsOnlyThatSessionsHolds(t *testing.T) {
+	t.Parallel()
+	bridge := newSessionBridge(nil)
+	departed, staying := new(mcp.ServerSession), new(mcp.ServerSession)
+	const uri = "gitlab://project/42/pipeline/99"
+	first, second := &listenStream{cancel: func() {}}, &listenStream{cancel: func() {}}
+	bridge.hold(departed, uri, first)
+	bridge.hold(staying, uri, first)
+	bridge.hold(staying, uri, second)
+
+	bridge.releaseSession(departed)
+
+	bridge.mu.Lock()
+	_, departedKept := bridge.holds[watchHold{session: departed, uri: uri}]
+	stayingHolders := len(bridge.holds[watchHold{session: staying, uri: uri}])
+	bridge.mu.Unlock()
+	if departedKept {
+		t.Error("the session that disconnected still holds its watch")
+	}
+	if stayingHolders != 2 {
+		t.Errorf("the session still connected has %d holder(s) left, want its 2", stayingHolders)
+	}
+	if bridge.release(staying, uri, first) {
+		t.Error("releasing one of two streams stopped the watch the other is still waiting on")
+	}
 }
 
 // TestListenLimit_CapsConcurrentStreams verifies that concurrent
@@ -2376,6 +2541,90 @@ func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
 	}
 }
 
+// TestListenLimit_RefusalNamesTheCeilingThatWasReached verifies the refusal
+// tells an operator which of the two ceilings to raise, with its own number.
+//
+// The two ceilings differ in value here, and each case fills exactly one of
+// them, because a refusal naming the other scope or the other limit sends the
+// operator to a setting that changes nothing: the per-credential one is
+// GITLAB_MCP_MAX_LISTEN_STREAMS, the process one is not configurable at all.
+// It also holds that a refused stream leaves both counts where they were.
+func TestListenLimit_RefusalNamesTheCeilingThatWasReached(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		perCredential int
+		perProcess    int
+		heldByCaller  int64
+		heldProcess   int64
+		want          string
+	}{
+		{"the_per_credential_ceiling", 3, 7, 3, 0, "(per-credential limit 3)"},
+		{"the_process_ceiling", 7, 3, 0, 3, "(server-wide limit 3)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limits := listenLimits{
+				perCredential: tc.perCredential,
+				perProcess:    tc.perProcess,
+				processOpen:   &listenCounter{},
+			}
+			limits.processOpen.open.Store(tc.heldProcess)
+			credential := &listenCounter{}
+			credential.open.Store(tc.heldByCaller)
+			handler := limits.middleware(staticCounter(credential))(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+				t.Error("a stream past a ceiling reached the handler")
+				return &mcp.CallToolResult{}, nil
+			})
+
+			_, err := handler(t.Context(), methodSubscriptionsListen, nil)
+			wireErr, ok := errors.AsType[*jsonrpc.Error](err)
+			if !ok {
+				t.Fatalf("refusal = %v, want a *jsonrpc.Error", err)
+			}
+			if !strings.Contains(wireErr.Message, tc.want) {
+				t.Errorf("message = %q, want it to name %q", wireErr.Message, tc.want)
+			}
+			if got := credential.count(); got != tc.heldByCaller {
+				t.Errorf("per-credential count after the refusal = %d, want %d", got, tc.heldByCaller)
+			}
+			if got := limits.processOpen.count(); got != tc.heldProcess {
+				t.Errorf("process count after the refusal = %d, want %d", got, tc.heldProcess)
+			}
+		})
+	}
+}
+
+// TestListenLimit_AnEndedStream_GivesBothSlotsBack verifies a stream that has
+// ended holds nothing against either ceiling.
+//
+// The per-credential count is also what tells the pool a credential is busy,
+// so a slot that outlives its stream keeps that credential from ever being
+// idle-swept, and at a ceiling of one it refuses the credential's next listen
+// for a stream that is already gone.
+func TestListenLimit_AnEndedStream_GivesBothSlotsBack(t *testing.T) {
+	limits := listenLimits{
+		perCredential: 1,
+		perProcess:    1,
+		processOpen:   &listenCounter{},
+	}
+	credential := &listenCounter{}
+	handler := limits.middleware(staticCounter(credential))(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		return &mcp.CallToolResult{}, nil
+	})
+
+	// sequential: the second stream is admitted only if the first gave its slots back.
+	for _, stream := range []string{"the first stream", "the stream after it"} {
+		if _, err := handler(t.Context(), methodSubscriptionsListen, nil); err != nil {
+			t.Fatalf("%s was refused: %v", stream, err)
+		}
+		if got := credential.count(); got != 0 {
+			t.Errorf("after %s ended the credential holds %d slot(s), want 0", stream, got)
+		}
+		if got := limits.processOpen.count(); got != 0 {
+			t.Errorf("after %s ended the process holds %d slot(s), want 0", stream, got)
+		}
+	}
+}
+
 // TestListenLimit_OtherMethodsAreNotCounted verifies that the cap applies to
 // subscriptions/listen alone: an ordinary request must not consume a slot, or
 // a busy server would start refusing subscriptions for reasons unrelated to
@@ -2427,6 +2676,48 @@ func TestNewSubscriptionShape_TakesTheProcessWatcherCeiling(t *testing.T) {
 		shape := newSubscriptionShape(client, cfg, opts)
 		if shape.opts.SharedWatchers != opts.SharedWatchers {
 			t.Error("the caller's gate was replaced, so a test cannot reach the ceiling without opening 512 subscriptions")
+		}
+	})
+}
+
+// TestNewSubscriptionShape_PollSpansTakeTheMiddlewaresResourceRule verifies a
+// watcher's poll span describes its resource by the rule the MCP spans use.
+//
+// A subscribe span and the polls it causes are read side by side, so a poll
+// recording nothing about the URI while the subscribe records it, or the
+// reverse under a stricter policy, splits one watch into two stories. Under a
+// policy the server cannot use there is no rule at all, and the shape must
+// still build rather than dereference the missing one.
+func TestNewSubscriptionShape_PollSpansTakeTheMiddlewaresResourceRule(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	client := subscriptionGitLabClient(t, gitlab.URL)
+	const uri = "gitlab://project/42/pipeline/99"
+
+	t.Run("a usable policy", func(t *testing.T) {
+		t.Setenv(telemetry.EnvIdentityName, "full")
+		resetIdentityKeyring(t)
+		redactor := telemetryResources()
+		if redactor == nil {
+			t.Fatal("the full policy produced no resource rule to compare with")
+		}
+
+		shape := newSubscriptionShape(client, subscriptionCfg(config.CapabilitySurfaceFull), subscriptions.Options{})
+		if shape.opts.ResourceAttributes == nil {
+			t.Fatal("the poll spans were given no resource rule")
+		}
+		got, want := shape.opts.ResourceAttributes(uri), redactor.ResourceAttributes(uri)
+		if len(want) == 0 || !slices.Equal(got, want) {
+			t.Errorf("a poll span records %v about %s, the middleware %v", got, uri, want)
+		}
+	})
+
+	t.Run("an unusable policy", func(t *testing.T) {
+		t.Setenv(telemetry.EnvIdentityName, "hashed-with-pepper")
+		resetIdentityKeyring(t)
+
+		shape := newSubscriptionShape(client, subscriptionCfg(config.CapabilitySurfaceFull), subscriptions.Options{})
+		if shape.opts.ResourceAttributes != nil {
+			t.Error("a poll span was given a resource rule under a policy the server could not use")
 		}
 	})
 }
@@ -2974,6 +3265,61 @@ func TestWatchEnd_Meta_OmitsAStatusThereIsNone(t *testing.T) {
 			}
 			if status != tt.wantStatus {
 				t.Errorf("status = %v, want %v", status, tt.wantStatus)
+			}
+		})
+	}
+}
+
+// TestWatchEnd_EachReasonCarriesItsOwnAdvice holds every ending's detail to the
+// reason it travels with.
+//
+// The detail is what a client that does not know the reason word acts on, so
+// advice filed under the wrong reason is wrong advice: a revoked credential
+// told that it "is still valid" retries a token GitLab will refuse, and an
+// evicted one told to re-authenticate discards a working one. Each detail is
+// held to the phrase that says what to do, and to carrying no other ending's.
+func TestWatchEnd_EachReasonCarriesItsOwnAdvice(t *testing.T) {
+	endings := map[string]*watchEnd{
+		endCredentialEvicted: endOfCredentialEviction,
+		endCredentialReset:   endOfCredentialReset,
+		endCredentialRevoked: endOfCredentialRevocation,
+		endResourceGone:      resourceGoneEnd(nil),
+		endLifetimeReached:   endOfLifetime,
+		endWatcherEvicted:    endOfWatcherEviction,
+		endShutdown:          endOfShutdown,
+	}
+	advice := map[string]string{
+		endCredentialEvicted: "still valid",
+		endCredentialReset:   "rebuild it",
+		endCredentialRevoked: "re-authenticate",
+		endResourceGone:      "check access",
+		endLifetimeReached:   "maximum lifetime",
+		endWatcherEvicted:    "make room",
+		endShutdown:          "shutting down",
+	}
+	if len(endings) != len(watchEndReasons) {
+		t.Fatalf("%d endings checked for %d published reasons", len(endings), len(watchEndReasons))
+	}
+	for _, reason := range watchEndReasons {
+		t.Run(reason, func(t *testing.T) {
+			end := endings[reason]
+			if end == nil {
+				t.Fatalf("no ending is checked for %q", reason)
+			}
+			if end.reason != reason {
+				t.Errorf("the ending checked for %q carries reason %q", reason, end.reason)
+			}
+			if !strings.Contains(end.detail, advice[reason]) {
+				t.Errorf("detail %q does not say %q", end.detail, advice[reason])
+			}
+			var borrowed []string
+			for other, phrase := range advice {
+				if other != reason && strings.Contains(end.detail, phrase) {
+					borrowed = append(borrowed, other)
+				}
+			}
+			if len(borrowed) > 0 {
+				t.Errorf("detail %q carries the advice for %v", end.detail, borrowed)
 			}
 		})
 	}
