@@ -4666,13 +4666,15 @@ func matchesAllTerms(haystack string, terms []string) bool {
 // person searching for one usually types the name they saw in a client, and
 // the canonical ID because that is what they will pass to
 // gitlab_execute_action.
+//
+// The domain and the action name are not listed apart: the catalog refuses an
+// action whose ID is anything but the two joined by a dot, and a term never
+// spans a space, so a term found in either half is found in the ID.
 func actionSearchText(action actioncatalog.Action) string {
 	parts := []string{
 		string(action.ID),
 		action.IndividualTool.Name,
 		action.ToolName,
-		action.Domain,
-		action.Name,
 		actionSearchDescription(action),
 	}
 	parts = append(parts, action.Aliases...)

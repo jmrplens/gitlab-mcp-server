@@ -5487,6 +5487,8 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 		{name: "an alias", terms: []string{"issues.search"}, want: []string{"issue.list"}},
 		{name: "a tag", terms: []string{"triage"}, want: []string{"issue.list"}},
 		{name: "words from the description", terms: []string{"list", "project"}, want: []string{"issue.list"}},
+		{name: "the domain alone, through the ID", terms: []string{"issue"}, want: []string{"issue.list"}},
+		{name: "the action name alone, through the ID", terms: []string{"get"}, want: []string{"project.get"}},
 		{name: "every term must match", terms: []string{"issue", "nothing-matches-this"}, want: nil},
 		{name: "a term matching both", terms: []string{"gitlab_"}, want: []string{"issue.list", "project.get"}},
 	}
@@ -5501,6 +5503,29 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 				t.Errorf("matchCatalogActions(%v) = %v, want %v", tt.terms, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestBuildToolSearchCatalog_EveryIDJoinsItsDomainAndName holds the premise
+// the search text rests on: the domain and the action name are searched only
+// through the canonical ID, which is right only while every action the search
+// reads carries an ID made of exactly those two halves. The catalog enforces
+// that as it is built, and this reads the catalog a search actually builds, at
+// the tier that carries the most actions, so a builder that stops enforcing it
+// fails here rather than in a search that quietly stops finding a domain.
+func TestBuildToolSearchCatalog_EveryIDJoinsItsDomainAndName(t *testing.T) {
+	catalog, err := buildToolSearchCatalog(edition.Ultimate)
+	if err != nil {
+		t.Fatalf("buildToolSearchCatalog: %v", err)
+	}
+	actions := catalog.Actions()
+	if len(actions) == 0 {
+		t.Fatal("the search catalog carries no actions")
+	}
+	for _, action := range actions {
+		if want := actioncatalog.ActionID(action.Domain + "." + action.Name); action.ID != want {
+			t.Errorf("action ID %q, want %q from its domain %q and name %q", action.ID, want, action.Domain, action.Name)
+		}
 	}
 }
 
