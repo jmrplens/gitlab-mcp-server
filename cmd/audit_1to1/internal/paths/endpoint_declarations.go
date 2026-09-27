@@ -44,11 +44,6 @@ const (
 	// or a curl example and never as the `METHOD /path` line this matches.
 	categoryDocumentedInProse = "documented-in-prose"
 
-	// categoryDocumentedWithoutScope is an endpoint whose page writes the
-	// endpoint line without the parent it lives under, so the shape on the
-	// page is one segment shorter than the one anybody can send.
-	categoryDocumentedWithoutScope = "documented-without-scope"
-
 	// categoryUndocumentedMethod is an endpoint the documentation spells out
 	// for another method than the one we use.
 	categoryUndocumentedMethod = "undocumented-method"
@@ -84,20 +79,6 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 		Reason: "client-go addresses the project integrations through /services/, the spelling GitLab replaced with " +
 			"/integrations/ and still serves. integrations.md documents only the new one, so every integration " +
 			"endpoint we reach looks undocumented. The request works; the day it stops, client-go is where it changes.",
-	},
-	{
-		Shape:    "/projects/*/attestations/*",
-		Methods:  []string{"GET"},
-		Category: categoryDocumentedWithoutScope,
-		Reason: "attestations.md writes its endpoints as `GET /:id/attestations/:subject_digest`, leaving the " +
-			"projects scope out of the line while its own curl example spells /api/v4/projects/72356192/... " +
-			"The endpoint we send is the one the example shows.",
-	},
-	{
-		Shape:    "/projects/*/attestations/*/download",
-		Methods:  []string{"GET"},
-		Category: categoryDocumentedWithoutScope,
-		Reason:   "the download half of the same page, written the same way.",
 	},
 	{
 		Shape:    "/projects/*/repository/files/*/raw",
