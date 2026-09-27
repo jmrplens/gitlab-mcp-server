@@ -2375,6 +2375,141 @@ nested type only in the unpublished direction.
 **Effort**: small. Five fields on `JobPipeline`, `IID` an `int64`, `Source` and
 `WebURL` strings and the two timestamps `*time.Time`.
 
+### AwardEmoji does not model the image URL of a custom emoji
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. Every `internal/tools/awardemoji` handler returning
+  awards reads it from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `capturedOutput` and `capturedListOutput`; it retires when the struct
+  carries it.
+
+**What**: `lib/api/entities/award_emoji.rb` at 19.4.1-ee exposes `url` with no
+condition, the image of a custom emoji and null for a standard one.
+`AwardEmoji` in client-go v3.14.0's `award_emojis.go` stops at
+`awardable_type`, so every award read or created through the SDK arrives
+without it, and a custom emoji is a name with nothing to show.
+
+**How we found it**: the package grain of the sent dimension
+(`shapes.sent.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971).
+
+**Effort**: small. One `string` field.
+
+### Diff does not model why a file diff arrives without its text
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. The commit diff and the comparison read the three flags
+  from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  into `toolutil.DiffExtra`; it retires when the struct carries them.
+
+**What**: `lib/api/entities/diff.rb` at 19.4.1-ee exposes `collapsed`,
+`too_large` and `generated_file` on every file diff, with no condition. `Diff`
+in client-go v3.14.0's `commits.go` models none of the three, so a diff GitLab
+left out for its size decodes as a change with an empty `diff`, which is
+indistinguishable from a file whose content did not change. `MergeRequestDiff`
+in `merge_requests.go` already carries all three.
+
+**How we found it**: the package grain of the sent dimension, during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971).
+
+**Effort**: small. Three `bool` fields.
+
+### ApproveOrRejectProjectDeployment discards the approval GitLab records
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `environment.deployment_approve_or_reject` reads the
+  approval from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md));
+  it retires when the method returns it.
+
+**What**: `POST /projects/:id/deployments/:deployment_id/approval` answers with
+`Entities::Deployments::Approval` (`ee/lib/api/entities/deployments/approval.rb`
+at 19.4.1-ee: the user, the status, the time and the comment).
+`ApproveOrRejectProjectDeployment` in client-go v3.14.0's `deployments.go`
+decodes into `none` and returns only the `*Response`, so a caller cannot see
+what was recorded without reading the deployment again.
+
+**How we found it**: the type grain of the sent dimension, once
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971) paired
+the compact rows a handler builds with the endpoints of the methods it calls.
+
+**Effort**: small. Return a `*DeploymentApproval` (the struct the deployment's
+own `approvals` list already decodes into) beside the response.
+
+### ShareProjectWithGroup discards the link GitLab creates
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `project.share_with_group` reads the link from the
+  captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md));
+  it retires when the method returns it.
+
+**What**: `POST /projects/:id/share` answers 201 with `Entities::ProjectGroupLink`
+(`lib/api/entities/project_group_link.rb` at 19.4.1-ee: `id`, `project_id`,
+`group_id`, `group_access` and `expires_at`, and, from the EE prepend,
+`member_role_id` when the project may carry a custom role on the link).
+`ShareProjectWithGroup` in client-go v3.14.0's `projects.go` decodes into
+`none` and returns only the `*Response`, so the link's id, the one a later
+update of the share needs, is not available to a caller.
+
+**How we found it**: the package grain of the sent dimension, during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971).
+
+**Effort**: small. A `ProjectGroupLink` struct of six fields returned beside
+the response, which changes the method's signature and so belongs in a major.
+
+### GroupRelationStatus does not model the object count, and a relation's status does not decode
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes for both.
+  `group.group_relations_list_status` reads `total_objects_count` from the
+  captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  through `grouprelationsexport.capturedExportStatuses`, and with `relation`
+  set issues the request itself (`grouprelationsexport.getRelationStatus`,
+  with client-go's own options) and decodes the one object. Both retire when
+  the SDK carries the field and a method answering with one status.
+
+**What**: two gaps in client-go v3.14.0's `group_relations_export.go`.
+`lib/api/entities/bulk_imports/export_status.rb` at 19.4.1-ee exposes
+`total_objects_count` with no condition, and `GroupRelationStatus` stops at
+`batches`. The second is a defect rather than a gap: `GET
+/groups/:id/export_relations/status` answers with an array, and with
+`relation` set `lib/api/group_export.rb` presents that one export as an object
+(`present export, with: Entities::BulkImports::ExportStatus`), or a 404 when
+there is none. `ListExportStatus` decodes every answer into
+`[]*GroupRelationStatus`, so the relation filter its own options offer fails
+with a decode error on every instance. `lib/api/project_export.rb` answers the
+project route the same way, which the SDK's project relations export would
+meet too.
+
+**How we found it**: the package grain of the sent dimension named
+`total_objects_count` during
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971), and
+reading the route to confirm it showed the object answer, which the unit test
+had been mocking as an array.
+
+**Effort**: small. One `int64` field, and a `GetExportStatus(gid, relation)`
+returning one `*GroupRelationStatus`, with `Relation` dropped from the list's
+options or documented as answering an object.
+
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 Nine of the entries here were filed upstream together on 2026-09-13, one issue

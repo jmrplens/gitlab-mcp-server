@@ -2963,8 +2963,9 @@ type ShareProjectInput struct {
 // ShareProjectOutput holds the result of sharing a project: the sentence this
 // server composes, and the link GitLab created (Entities::ProjectGroupLink),
 // which client-go's ShareProjectWithGroup does not decode and is read from the
-// captured response (ADR-0021). member_role_id is sent when the project can
-// carry a custom role on the link, which is an Ultimate feature.
+// captured response (ADR-0021); the gap is recorded in
+// docs/development/upstream-bugs.md. member_role_id is sent when the project
+// can carry a custom role on the link, which is an Ultimate feature.
 type ShareProjectOutput struct {
 	toolutil.HintableOutput
 	Message      string `json:"message"`
