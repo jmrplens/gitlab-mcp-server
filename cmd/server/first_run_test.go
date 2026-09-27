@@ -90,6 +90,14 @@ func TestFirstRunGuidance_NamesWhatItNeeds(t *testing.T) {
 	if strings.Contains(got, "/guides/") {
 		t.Errorf("the screen links into /guides/, a path the documentation site does not serve:\n%s", got)
 	}
+	// Each value in its own place: the banner names the version, and the
+	// command line to copy names the program, spelled the way it runs here.
+	if first, _, _ := strings.Cut(got, "\n"); first != "gitlab-mcp-server 2.7.5" {
+		t.Errorf("first line = %q, want the program and its version", first)
+	}
+	if want := executableName() + " --help"; !strings.Contains(got, want) {
+		t.Errorf("the screen does not offer %q to copy:\n%s", want, got)
+	}
 }
 
 // TestIsInteractiveTerminal_IsFalseForAPipe is the invariant that separates a
@@ -152,15 +160,19 @@ func TestExecutableName_WhenTheLookupFails_NamesTheProject(t *testing.T) {
 	cases := []struct {
 		name   string
 		lookup func() (string, error)
+		want   string
 	}{
-		{name: "the lookup errors", lookup: func() (string, error) { return "", errors.New("procfs is not mounted") }},
-		{name: "the lookup answers an empty path", lookup: func() (string, error) { return "", nil }},
+		{name: "the lookup errors", lookup: func() (string, error) { return "", errors.New("procfs is not mounted") }, want: "gitlab-mcp-server"},
+		{name: "the lookup answers an empty path", lookup: func() (string, error) { return "", nil }, want: "gitlab-mcp-server"},
+		// The case the fallback exists beside: a renamed download or a
+		// launcher is told the name that will actually work.
+		{name: "the lookup answers the running binary", lookup: func() (string, error) { return "/opt/tools/glmcp", nil }, want: "/opt/tools/glmcp"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			osExecutable = tc.lookup
-			if got := executableName(); got != "gitlab-mcp-server" {
-				t.Errorf("executableName() = %q, want the project name as the fallback", got)
+			if got := executableName(); got != tc.want {
+				t.Errorf("executableName() = %q, want %q", got, tc.want)
 			}
 		})
 	}

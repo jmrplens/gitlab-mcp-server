@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -95,7 +96,34 @@ func TestStartTelemetry_DisabledReturnsAUsableStop(t *testing.T) {
 	if provider.Enabled() {
 		t.Error("provider reports itself enabled with the switch off")
 	}
+	// A stop that went cleanly says nothing: the warning is for a provider
+	// that failed to flush, and printing it on every ordinary exit would
+	// teach an operator to read past it.
+	logged := captureLogMessages(t)
 	stop(boundedShutdown(t))
+	if logged("telemetry did not shut down cleanly") {
+		t.Error("a clean stop was reported as a failed one")
+	}
+}
+
+// TestTelemetryEnabled_AFlagNotPassedLeavesTheEnvironmentTheAnswer covers the
+// state the binary is always in: main registers --telemetry on every run, so
+// the flag's pointer is never nil there, and only whether the operator typed
+// it decides whether its default may overrule GITLAB_MCP_TELEMETRY.
+func TestTelemetryEnabled_AFlagNotPassedLeavesTheEnvironmentTheAnswer(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv(telemetry.EnvSwitchName, "true")
+
+	previous := telemetryFlag
+	t.Cleanup(func() { telemetryFlag = previous })
+	telemetryFlag = flag.Bool("telemetry", false, "")
+	if err := flag.CommandLine.Parse(nil); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+
+	if !telemetryEnabled() {
+		t.Error("an unpassed --telemetry defaulting to false overruled GITLAB_MCP_TELEMETRY=true")
+	}
 }
 
 // TestStartTelemetry_SurvivesAnUnreachableCollector is the decision this project
@@ -430,6 +458,14 @@ func TestStartTelemetry_TheEnabledAnnouncement_SurvivesAWarnLogLevel(t *testing.
 	telemetryFlag = nil
 
 	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
+	// No collector credential anywhere, so the plaintext-credential warning
+	// has nothing to be about and must stay out of the log.
+	for _, name := range []string{
+		"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+		"OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_LOGS_HEADERS",
+	} {
+		t.Setenv(name, "")
+	}
 
 	var mu sync.Mutex
 	var messages []string
@@ -456,6 +492,11 @@ func TestStartTelemetry_TheEnabledAnnouncement_SurvivesAWarnLogLevel(t *testing.
 	defer mu.Unlock()
 	if !slices.Contains(messages, "telemetry enabled") {
 		t.Errorf("the startup announcement was suppressed at LOG_LEVEL=warn; captured %v", messages)
+	}
+	for _, message := range messages {
+		if strings.HasPrefix(message, "a collector credential is configured against a plaintext endpoint") {
+			t.Errorf("the plaintext-credential warning was logged with no credential configured; captured %v", messages)
+		}
 	}
 }
 

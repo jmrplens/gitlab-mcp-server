@@ -73,6 +73,61 @@ func TestMetadataDocument_BehavesLikeAnHTTPDocument(t *testing.T) {
 	}
 }
 
+// TestDiscoveryCacheControl_LetsAnyCacheKeepTheDocumentForAnHour pins the
+// lifetime itself, which the table above can only compare with the constant
+// that set it. The document is public by construction and changes only when
+// the operator restarts with other flags, so a shared cache may keep it, and
+// an hour is the lifetime the server card is published with.
+func TestDiscoveryCacheControl_LetsAnyCacheKeepTheDocumentForAnHour(t *testing.T) {
+	t.Parallel()
+
+	if discoveryCacheControl != "public, max-age=3600" {
+		t.Errorf("discoveryCacheControl = %q, want public for an hour", discoveryCacheControl)
+	}
+	if discoveryCacheControl != cacheControlPublic1h {
+		t.Errorf("discoveryCacheControl = %q and the server card uses %q; the two public documents should age alike",
+			discoveryCacheControl, cacheControlPublic1h)
+	}
+}
+
+// TestMetadataDocument_ExposesTheValidatorOnlyWhereNothingElseDid covers the
+// Access-Control-Expose-Headers the wrapper publishes so a cross-origin
+// script can read the ETag back. corsMiddleware writes a longer list first
+// for a trusted origin, ETag among the names, and replacing it would cost
+// that origin every other header it names; with nothing written, the wrapper
+// has to name the validator itself or no script can revalidate.
+func TestMetadataDocument_ExposesTheValidatorOnlyWhereNothingElseDid(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		outer string
+		want  string
+	}{
+		{name: "nothing exposed yet", want: hdrETag},
+		{name: "a trusted origin's list is kept", outer: "Mcp-Session-Id, ETag", want: "Mcp-Session-Id, ETag"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := metadataDocument(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte("{}"))
+			}))
+			rec := httptest.NewRecorder()
+			if tt.outer != "" {
+				rec.Header().Set(headerExposeHeaders, tt.outer)
+			}
+
+			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody))
+
+			if got := rec.Header().Get(headerExposeHeaders); got != tt.want {
+				t.Errorf("%s = %q, want %q", headerExposeHeaders, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestMetadataDocument_HEAD_DoesNotMutateTheCallersRequest covers the clone the
 // HEAD path makes.
 //
@@ -127,6 +182,12 @@ func TestMetadataDocument_CarriesAValidatorAndAnswersAConditionalFetch(t *testin
 	}
 	if got := first.Header().Get(hdrContentType); got != mimeJSON {
 		t.Errorf("Content-Type = %q, want %q; the buffering must not let ServeContent sniff it", got, mimeJSON)
+	}
+	// The document has no modification time a client could reason about, and
+	// any instant sent here would differ between replicas and invite a
+	// comparison the tag exists to make unnecessary.
+	if got := first.Header().Get("Last-Modified"); got != "" {
+		t.Errorf("Last-Modified = %q, want none beside the tag", got)
 	}
 
 	conditional := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody)

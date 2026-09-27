@@ -363,6 +363,64 @@ func TestSanitizedInput_OverlongLineIsRefusedAndTheStreamResynchronises(t *testi
 	}
 }
 
+// TestSanitizedInput_AFinalLineWithoutANewlineIsHeldToTheSameCap covers the
+// one line whose length carries no delimiter to discount. Only a newline is
+// framing, so a final line the client never terminated is charged every byte
+// it has: at the cap it is delivered, one past it is refused, exactly as the
+// terminated lines above are.
+func TestSanitizedInput_AFinalLineWithoutANewlineIsHeldToTheSameCap(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		line        string
+		wantRefused bool
+	}{
+		{"at_the_cap", `{"jsonrpc":"2.0","id":22,"method":"ping"}`, false},
+		{"one_over_the_cap", `{"jsonrpc":"2.0","id":222,"method":"ping"}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			reader, _ := resilientStdioWith(strings.NewReader(tc.line), &out,
+				stdioLimits{maxLineBytes: 41, maxDepth: maxInboundJSONDepth})
+
+			forwarded, err := io.ReadAll(reader)
+			if err != nil && !errors.Is(err, io.EOF) {
+				t.Fatalf("reading: %v", err)
+			}
+			if delivered := string(forwarded) == tc.line; delivered == tc.wantRefused {
+				t.Errorf("a final %d-byte line under a 41-byte cap was delivered = %v, want %v", len(tc.line), delivered, !tc.wantRefused)
+			}
+			if tc.wantRefused {
+				assertJSONRPCRefusal(t, out.Bytes(), -32600, "41")
+			}
+		})
+	}
+}
+
+// TestRefuseUnreadable_ZeroDepthDisablesTheCheck pins what the zero value of
+// maxDepth means, as its field says: no depth check at all, rather than a
+// ceiling of nothing that every object exceeds.
+func TestRefuseUnreadable_ZeroDepthDisablesTheCheck(t *testing.T) {
+	if refusal, refused := refuseUnreadable(`{"jsonrpc":"2.0","id":1,"method":"ping","params":{"a":[1]}}`, 0); refused {
+		t.Errorf("a depth of zero refused an ordinary message with %q", refusal)
+	}
+}
+
+// TestRefuseUnreadable_ABlankLineIsDroppedSilently pins the contract the
+// function's comment states for framing: a blank line is dropped with no
+// answer, whatever whitespace it is made of, the empty line included. Read
+// happens never to pass the empty one, and the function must not depend on
+// that, since a line is blank to a client for the same reason either way.
+func TestRefuseUnreadable_ABlankLineIsDroppedSilently(t *testing.T) {
+	for _, line := range []string{"", " ", "\t\r\n ", "\r"} {
+		t.Run(strconv.Quote(line), func(t *testing.T) {
+			refusal, refused := refuseUnreadable(line, maxInboundJSONDepth)
+			if !refused || refusal != nil {
+				t.Errorf("refuseUnreadable(%q) = (%q, %v), want it dropped with no answer", line, refusal, refused)
+			}
+		})
+	}
+}
+
 // TestSanitizedInput_UnterminatedLineIsBounded verifies that a flood with no
 // newline in it is refused at the cap instead of being accumulated.
 //
@@ -384,6 +442,9 @@ func TestSanitizedInput_UnterminatedLineIsBounded(t *testing.T) {
 		t.Errorf("%d bytes of an unterminated flood reached the SDK", len(forwarded))
 	}
 	assertJSONRPCRefusal(t, out.Bytes(), -32600, "4096")
+	// The refusal says how to get past it, which a client whose legitimate
+	// message is simply large has no other way to learn.
+	assertJSONRPCRefusal(t, out.Bytes(), -32600, "GITLAB_MCP_STDIO_MAX_LINE_BYTES")
 }
 
 // TestRefuseUnreadable_RefusesOverNestedLines verifies that a line whose JSON
@@ -449,6 +510,18 @@ func TestStdioLimitsFromEnv(t *testing.T) {
 				t.Errorf("maxDepth = %d, want %d", got.maxDepth, maxInboundJSONDepth)
 			}
 		})
+	}
+}
+
+// TestStdioLimitsFromEnv_ReadsTheDocumentedVariable sets the line cap under
+// the name the configuration reference and the refusal message give an
+// operator, spelled out rather than through the constant the reader uses, so
+// a renamed constant cannot take the documented name with it unnoticed.
+func TestStdioLimitsFromEnv_ReadsTheDocumentedVariable(t *testing.T) {
+	t.Setenv("GITLAB_MCP_STDIO_MAX_LINE_BYTES", "65536")
+
+	if got := stdioLimitsFromEnv().maxLineBytes; got != 65536 {
+		t.Errorf("maxLineBytes = %d with GITLAB_MCP_STDIO_MAX_LINE_BYTES=65536, want 65536", got)
 	}
 }
 

@@ -66,6 +66,19 @@ func TestCanonicalBinaryName_PlatformVariantsCompareEqual(t *testing.T) {
 	}
 }
 
+// TestShutdownGracePeriod_IsTheFiveSecondsTheReferenceDocuments pins how long
+// --shutdown waits before force-killing. docs/reference/cli.md promises five
+// seconds to the updaters that call it before replacing the binary, and the
+// running-peer test below only checks that a clean exit beats the period,
+// whatever the period is.
+func TestShutdownGracePeriod_IsTheFiveSecondsTheReferenceDocuments(t *testing.T) {
+	t.Parallel()
+
+	if shutdownGracePeriod != 5*time.Second {
+		t.Errorf("shutdownGracePeriod = %s, want the 5s the CLI reference documents", shutdownGracePeriod)
+	}
+}
+
 // TestCountAlive_CountsOnlyProcessesStillRunning covers the poll's predicate.
 //
 // It decides when the graceful phase is over, so a count that never reaches

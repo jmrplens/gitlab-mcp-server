@@ -2,12 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 )
 
 // decodeDiscoveryCard builds the card for cfg and returns it as a map, failing
@@ -41,8 +45,16 @@ func TestDiscoveryCard_HoldsTheConstraintsTheExtensionDeclares(t *testing.T) {
 
 	card := decodeDiscoveryCard(t, &config.Config{})
 
-	if got, _ := card["$schema"].(string); got != discoveryCardSchema {
-		t.Errorf("$schema = %q, want the one string the extension's pattern allows, %q", got, discoveryCardSchema)
+	// The pattern is the extension's own, copied from schema.ts, so the
+	// constant is held to what a checker accepts rather than to itself.
+	schemaPattern := regexp.MustCompile(`^https://static\.modelcontextprotocol\.io/schemas/v1/server-card\.schema\.json$`)
+	if got, _ := card["$schema"].(string); !schemaPattern.MatchString(got) {
+		t.Errorf("$schema = %q, want the one string the extension's pattern allows", got)
+	}
+	// The binary's own version, not the manifest's: a card answers for the
+	// process serving it.
+	if got, _ := card["version"].(string); got != version {
+		t.Errorf("version = %q, want this binary's %q", got, version)
 	}
 
 	name, _ := card["name"].(string)
@@ -100,6 +112,7 @@ func TestDiscoveryCard_AgreesWithServerJSON(t *testing.T) {
 	}
 	var manifest struct {
 		Name        string `json:"name"`
+		Title       string `json:"title"`
 		Description string `json:"description"`
 		WebsiteURL  string `json:"websiteUrl"`
 		Repository  struct {
@@ -120,6 +133,7 @@ func TestDiscoveryCard_AgreesWithServerJSON(t *testing.T) {
 		want  string
 	}{
 		{field: "name", card: card["name"], want: manifest.Name},
+		{field: "title", card: card["title"], want: manifest.Title},
 		{field: "description", card: card["description"], want: manifest.Description},
 		{field: "websiteUrl", card: card["websiteUrl"], want: manifest.WebsiteURL},
 		{field: "repository.url", card: repository["url"], want: manifest.Repository.URL},
@@ -203,11 +217,15 @@ func TestDiscoveryCard_CredentialHeaderFollowsTheAuthMode(t *testing.T) {
 		name       string
 		cfg        *config.Config
 		wantHeader string
+		// wantBearer is whether the placeholder shows the Bearer scheme,
+		// which is the value's shape in one header and wrong in the other.
+		wantBearer bool
 	}{
 		{
 			name:       "oauth mode asks for Authorization",
 			cfg:        &config.Config{PublicURL: "https://mcp.example.com", AuthMode: config.AuthModeOAuth},
 			wantHeader: "Authorization",
+			wantBearer: true,
 		},
 		{
 			name:       "legacy mode asks for PRIVATE-TOKEN",
@@ -219,17 +237,7 @@ func TestDiscoveryCard_CredentialHeaderFollowsTheAuthMode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			card := decodeDiscoveryCard(t, tt.cfg)
-			remotes, _ := card["remotes"].([]any)
-			if len(remotes) != 1 {
-				t.Fatalf("remotes = %v, want exactly one", card["remotes"])
-			}
-			remote, _ := remotes[0].(map[string]any)
-			headers, _ := remote["headers"].([]any)
-			if len(headers) != 1 {
-				t.Fatalf("headers = %v, want exactly one", remote["headers"])
-			}
-			header, _ := headers[0].(map[string]any)
+			header := onlyCredentialHeader(t, decodeDiscoveryCard(t, tt.cfg))
 			if got, _ := header["name"].(string); got != tt.wantHeader {
 				t.Errorf("header name = %q, want %q", got, tt.wantHeader)
 			}
@@ -241,6 +249,83 @@ func TestDiscoveryCard_CredentialHeaderFollowsTheAuthMode(t *testing.T) {
 			}
 			if secret, _ := header["isSecret"].(bool); !secret {
 				t.Error("isSecret = false for a credential header")
+			}
+			placeholder, _ := header["placeholder"].(string)
+			if got := strings.HasPrefix(placeholder, "Bearer "); got != tt.wantBearer {
+				t.Errorf("placeholder = %q, shows the Bearer scheme = %v, want %v", placeholder, got, tt.wantBearer)
+			}
+			if !strings.Contains(placeholder, "glpat-") {
+				t.Errorf("placeholder = %q, want a token's shape a user can recognize", placeholder)
+			}
+			description, _ := header["description"].(string)
+			assertNamesEachScopeForWhatItUnlocks(t, description)
+		})
+	}
+}
+
+// onlyCredentialHeader returns the one header of the card's one remote, and
+// fails the test when the card declares any other number of either.
+func onlyCredentialHeader(t *testing.T, card map[string]any) map[string]any {
+	t.Helper()
+	remotes, _ := card["remotes"].([]any)
+	if len(remotes) != 1 {
+		t.Fatalf("remotes = %v, want exactly one", card["remotes"])
+	}
+	remote, _ := remotes[0].(map[string]any)
+	headers, _ := remote["headers"].([]any)
+	if len(headers) != 1 {
+		t.Fatalf("headers = %v, want exactly one", remote["headers"])
+	}
+	header, _ := headers[0].(map[string]any)
+	return header
+}
+
+// assertNamesEachScopeForWhatItUnlocks holds the credential header's
+// description to the two scopes it names. The door admits the minimum scope
+// and writes need api, so each is named for the thing it unlocks; told the
+// other way round, a user would mint a write token to read.
+func assertNamesEachScopeForWhatItUnlocks(t *testing.T, description string) {
+	t.Helper()
+	for _, want := range []string{
+		"Scope " + oauth.MinimumScope + " is enough to",
+		oauth.ScopeAPI + " is needed to write",
+	} {
+		if !strings.Contains(description, want) {
+			t.Errorf("description = %q, want it to say %q", description, want)
+		}
+	}
+}
+
+// TestDiscoveryCard_DeclaresTheVersionsTheDeploymentServes pins the remote's
+// supportedProtocolVersions to what the protocol version middleware accepts
+// for the same --stateless, which is what the extension asks a card to
+// reflect. A stateful deployment answers 2026-07-28 with 400, so a card
+// declaring it there would send a client to a revision it is then refused.
+func TestDiscoveryCard_DeclaresTheVersionsTheDeploymentServes(t *testing.T) {
+	t.Parallel()
+
+	for _, stateless := range []bool{true, false} {
+		t.Run(fmt.Sprintf("stateless=%v", stateless), func(t *testing.T) {
+			t.Parallel()
+
+			card := decodeDiscoveryCard(t, &config.Config{PublicURL: "https://mcp.example.com", Stateless: stateless})
+			remotes, _ := card["remotes"].([]any)
+			if len(remotes) != 1 {
+				t.Fatalf("remotes = %v, want exactly one", card["remotes"])
+			}
+			remote, _ := remotes[0].(map[string]any)
+			declared, _ := remote["supportedProtocolVersions"].([]any)
+			var got []string
+			for _, v := range declared {
+				s, _ := v.(string)
+				got = append(got, s)
+			}
+			if want := supportedProtocolVersionsFor(stateless); !slices.Equal(got, want) {
+				t.Errorf("supportedProtocolVersions = %v, want %v", got, want)
+			}
+			if slices.Contains(got, protocolVersionStatelessOnly) != stateless {
+				t.Errorf("supportedProtocolVersions = %v; %s must be declared exactly when the deployment is stateless",
+					got, protocolVersionStatelessOnly)
 			}
 		})
 	}

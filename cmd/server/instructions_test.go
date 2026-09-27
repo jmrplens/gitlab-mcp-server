@@ -175,6 +175,31 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 	}
 }
 
+// TestBuildInstructions_EachOperationIsNamedInItsOwnStep pins which operation
+// each numbered step names. The resolution test above proves every name
+// exists, which two steps swapping their operations would not disturb, while
+// the model reading them would publish before linking or search where it was
+// told to list. The individual surface is used because its names differ in
+// every pair that could trade places.
+func TestBuildInstructions_EachOperationIsNamedInItsOwnStep(t *testing.T) {
+	text := buildInstructions(config.ToolSurfaceIndividual, config.CapabilitySurfaceFull, mcpotel.TransportPipe, false, false)
+	for _, step := range []string{
+		"2. Call gitlab_discover_project with that URL",
+		"3. Alternatively, use gitlab_project_list (owned=true) or gitlab_search_projects to find projects by name.",
+		"1. Call gitlab_project_get to retrieve the project metadata",
+		"1. Preferred: Use gitlab_package_publish_and_link to upload a file",
+		"2. Alternative: Use gitlab_package_publish first, then use the 'url' field from its response as the URL for gitlab_release_link_create.",
+		"Provide 'ref' (branch or SHA) in gitlab_release_create",
+		"Only use gitlab_issue_get_by_id when",
+	} {
+		t.Run(step, func(t *testing.T) {
+			if !strings.Contains(text, step) {
+				t.Errorf("the instructions do not carry the step %q", step)
+			}
+		})
+	}
+}
+
 // TestBuildInstructions_ReadOnly_DropsTheMutatingGuidance verifies that a
 // read-only surface is not told to make calls it has removed.
 //

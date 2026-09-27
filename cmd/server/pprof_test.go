@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -129,7 +130,16 @@ func TestStartPprofListener_ServesProfilesOnLoopbackAndStops(t *testing.T) {
 		}
 	})
 
+	t.Run("the handlers registered beside the index", func(t *testing.T) {
+		checkPprofHandlersBesideTheIndex(t, l.addr)
+	})
+
 	l.stop()
+	// A stop is the ordinary end of the accept loop, not a failure to report:
+	// the error line is reserved for a loop that died on its own.
+	if logged("pprof listener stopped") {
+		t.Error("stopping the listener logged it as a failure")
+	}
 	req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+l.addr+"/debug/pprof/heap", http.NoBody)
 	if reqErr != nil {
 		t.Fatalf("build request: %v", reqErr)
@@ -137,6 +147,31 @@ func TestStartPprofListener_ServesProfilesOnLoopbackAndStops(t *testing.T) {
 	if resp, getErr := http.DefaultClient.Do(req); getErr == nil {
 		_ = resp.Body.Close()
 		t.Error("the listener still answered after stop")
+	}
+}
+
+// checkPprofHandlersBesideTheIndex asks a running listener for the four
+// handlers the index cannot stand in for. The index answers only the
+// runtime's named profiles, so each of these is served because it was
+// registered, and answers 404 the moment it is not.
+func checkPprofHandlersBesideTheIndex(t *testing.T, addr string) {
+	t.Helper()
+	for _, tc := range []struct {
+		path string
+		want func([]byte) bool
+	}{
+		{path: "/debug/pprof/cmdline", want: func(b []byte) bool { return strings.Contains(string(b), os.Args[0]) }},
+		{path: "/debug/pprof/symbol", want: func(b []byte) bool { return strings.HasPrefix(string(b), "num_symbols:") }},
+		{path: "/debug/pprof/trace?seconds=0.05", want: func(b []byte) bool { return len(b) > 0 }},
+		// A second is the shortest CPU profile the handler takes.
+		{path: "/debug/pprof/profile?seconds=1", want: func(b []byte) bool { return len(b) > 1 && b[0] == 0x1f && b[1] == 0x8b }},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			status, body := getPprof(t, "http://"+addr+tc.path)
+			if status != http.StatusOK || !tc.want(body) {
+				t.Errorf("%s answered %d with %d bytes, want its own profile", tc.path, status, len(body))
+			}
+		})
 	}
 }
 
