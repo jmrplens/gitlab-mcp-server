@@ -1903,6 +1903,50 @@ func TestCreateServer_TheToolManifestAdvertisesSubscriptionsOnlyWhereServed(t *t
 	}
 }
 
+// TestCreateServer_MetaManifest_NamesOnlyRegisteredTools holds the property
+// the meta route filter in register used to be the guard for: the
+// gitlab://tools manifest of a narrowed meta server names no tool the server
+// does not register, so a model reading it is never sent to a dispatcher that
+// is not there. Read-only, an exclusion by group name and the Free tier each
+// remove dispatchers, and all three are applied to the catalog before
+// registration, which is why that filter found nothing and was removed; this
+// is what fails if a future pass removes one after registration instead.
+func TestCreateServer_MetaManifest_NamesOnlyRegisteredTools(t *testing.T) {
+	server := mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{
+		ToolSurface:  config.ToolSurfaceMeta,
+		Tier:         edition.Free,
+		ReadOnly:     true,
+		ExcludeTools: []string{"gitlab_issue"},
+	})
+	session := newInMemorySession(t, server)
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	registered := make(map[string]bool, len(listed.Tools))
+	for _, tool := range listed.Tools {
+		registered[tool.Name] = true
+	}
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+	if err != nil || len(result.Contents) == 0 {
+		t.Fatalf("read gitlab://tools: %v", err)
+	}
+	var manifest resources.ToolSurfaceManifest
+	if decodeErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); decodeErr != nil {
+		t.Fatalf("decode gitlab://tools: %v", decodeErr)
+	}
+
+	if registered["gitlab_issue"] || len(manifest.Entries) == 0 {
+		t.Fatalf("the fixture is not narrowed as intended: gitlab_issue registered = %t, %d entries",
+			registered["gitlab_issue"], len(manifest.Entries))
+	}
+	for _, entry := range manifest.Entries {
+		if !registered[entry.Tool] {
+			t.Errorf("manifest entry %s names tool %q, which this server does not register", entry.ID, entry.Tool)
+		}
+	}
+}
+
 // TestCreateServer_AnnouncesTheRateLimitOnlyWhenItIsOn covers the startup line
 // an operator reads to learn whether calls are limited. A rate of zero means
 // no limit, which is the stdio default, and announcing "rate limit enabled"
@@ -4036,9 +4080,9 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 // mark on the hook every startup goes through.
 //
 // Registration speaks MCP to the server it is building: it counts the
-// registered tools, applies the exclusion and visibility passes, filters the
-// meta routes and builds the gitlab://tools manifest, each over an in-memory
-// session that travels the same receiving middlewares a client's requests do.
+// registered tools, applies the exclusion and visibility passes and builds the
+// gitlab://tools manifest, each over an in-memory session that travels the
+// same receiving middlewares a client's requests do.
 // Once tools/list is metered, those listings are charged to the deployment's
 // own bucket unless connectInspectionServer marks them, and on the tightest
 // configuration an operator can pass the second one is refused: the manifest
@@ -4068,7 +4112,6 @@ func TestCreateServer_StartupInspectionIsNotChargedToTheCatalogBucket(t *testing
 	for _, message := range []string{
 		"failed to build tool manifest resource",
 		"failed to count registered tools",
-		"failed to filter meta-schema routes to visible tools",
 	} {
 		t.Run(message, func(t *testing.T) {
 			if logged(message) {
