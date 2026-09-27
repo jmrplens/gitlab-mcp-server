@@ -1718,9 +1718,10 @@ func TestSubscriptionRuntime_WatchStops_EndsTheStream(t *testing.T) {
 //
 // The specification says a server that tears a subscription down should
 // answer the client's open subscriptions/listen request rather than go
-// quiet, and the SDK gives application code no way to send that answer
-// directly: SubscriptionsListenResult embeds an unexported type. The only
-// route is to end the SDK's own handler, and this checks that doing so
+// quiet, and the SDK gives application code no way to send that answer for a
+// stream its handler has acknowledged: a SubscriptionsListenResult built by
+// application code is sent only in place of that handler. The only route is
+// to end the SDK's own handler, and this checks that doing so
 // produces a result rather than a cancellation error — if it ever stopped
 // working, the server would look like it had crashed mid-subscription
 // instead of having finished cleanly.

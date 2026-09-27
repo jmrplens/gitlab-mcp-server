@@ -26,12 +26,15 @@ const (
 //
 // It is checked against the SDK rather than asserted by it:
 // channels_integration_test.go drives go-sdk in process through every row
-// whose method the SDK owns, in each era the row holds in, and fails, naming
-// the row, when a listed channel is not carried or a channel it can attempt
-// there is carried and not listed. The rows for [MethodGate], [MethodStartup]
-// and [MethodEviction] describe this server's own layers and are not driven.
-// An SDK upgrade that changes what is carried therefore fails its own pull
-// request, which edits this table in the same change.
+// whose method the SDK owns, in both eras, over the in-memory transport and
+// over the streamable HTTP handler answering with an event stream and with a
+// JSON body, and fails, naming the row, when a listed channel is not carried
+// in an era the row holds in, or a channel it attempts is carried and the
+// matrix does not list it for that method and era. The rows for [MethodGate]
+// and [MethodStartup] describe this server's own layers and are not driven,
+// and neither is [MethodEviction], whose row is driven through
+// [MethodExpiry]. An SDK upgrade that changes what is carried therefore fails
+// its own pull request, which edits this table in the same change.
 type Carriage struct {
 	// Methods are the MCP methods, or the pseudo-methods [MethodGate],
 	// [MethodStartup], [MethodEviction] and [MethodExpiry].

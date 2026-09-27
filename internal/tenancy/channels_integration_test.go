@@ -1,10 +1,12 @@
 // channels_integration_test.go holds the carried-channel matrix,
 // tenancy.Carriages(), to the go-sdk this module pins. It drives the SDK in
-// process, over its in-memory transport and over httptest, in the protocol
-// era each row names, and fails when a row lists a channel the SDK does not
-// carry or the SDK carries a refusal channel the row does not list. The pull
-// request that bumps go-sdk is therefore the one that fails when a channel
-// moves, and the failure names the row to edit.
+// process, in both protocol eras, over its in-memory transport and over its
+// streamable HTTP handler on httptest answering with an event stream and with
+// a JSON body, and fails when a row lists a channel the SDK does not carry in
+// an era the row holds in, or the SDK carries a channel this file attempts
+// that the matrix does not list for that method and era. The pull request that
+// bumps go-sdk is therefore the one that fails when a channel moves, and the
+// failure names the row to edit.
 //
 // It also holds the facts the rows rest on without being rows: which codes a
 // refusal keeps on the wire, the only statuses the SDK gives an in-band error,
@@ -17,6 +19,7 @@
 package tenancy_test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -33,6 +36,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -53,6 +57,7 @@ const (
 // The MCP methods this file sends, or watches for, by name.
 const (
 	methodInitialize   = "initialize"
+	methodInitialized  = "notifications/initialized"
 	methodToolsList    = "tools/list"
 	methodToolsCall    = "tools/call"
 	methodSubscribe    = "resources/subscribe"
@@ -108,6 +113,11 @@ const (
 	// matrixFix ends every matrix failure: the matrix is data about the SDK,
 	// so the pull request that changed the SDK is the one that changes it.
 	matrixFix = "Carriages() no longer describes the go-sdk this module builds against: the fix is an edit to internal/tenancy/channels.go in this same pull request, with the Refusal channels section of docs/development/tenant-policy-spec.md beside it."
+
+	// reachFix follows matrixFix on a failure that kept a row from being
+	// observed at all, since what changed may be how a client reaches the
+	// method rather than what reaches the client.
+	reachFix = "If what changed is how a client reaches the method rather than what reaches the client, the fix is to this file instead."
 )
 
 // sdkModule is the module whose behavior this file holds the matrix to.
@@ -147,12 +157,126 @@ func bothEras() []tenancy.Era {
 	return erasOf(tenancy.EraAny)
 }
 
+// holdsIn reports whether a row for era row holds in era e.
+func holdsIn(row, e tenancy.Era) bool {
+	return slices.Contains(erasOf(row), e)
+}
+
 // eraName is the protocol revision an era is driven as.
 func eraName(e tenancy.Era) string {
 	if e == tenancy.EraModern {
 		return modernVersion
 	}
 	return legacyVersion
+}
+
+// transport is what carries a wire client's messages to the server and back.
+type transport int
+
+const (
+	// inMemory is the SDK's in-memory transport, which carries what stdio
+	// carries.
+	inMemory transport = iota
+	// eventStream is the SDK's streamable HTTP handler answering a call with
+	// an event stream, which is how cmd/server answers by default.
+	eventStream
+	// jsonBody is the same handler answering a call with one JSON body, which
+	// is what cmd/server's --json-response asks for.
+	jsonBody
+)
+
+// transports is every transport a row is driven over.
+func transports() []transport {
+	return []transport{inMemory, eventStream, jsonBody}
+}
+
+// httpTransports is every transport that is the streamable HTTP handler.
+func httpTransports() []transport {
+	return []transport{eventStream, jsonBody}
+}
+
+// String names a transport the way a subtest and a failure do.
+func (tr transport) String() string {
+	switch tr {
+	case eventStream:
+		return "http-sse"
+	case jsonBody:
+		return "http-json"
+	default:
+		return "memory"
+	}
+}
+
+// overHTTP reports whether tr is the SDK's streamable HTTP handler.
+func (tr transport) overHTTP() bool {
+	return tr != inMemory
+}
+
+// reaches reports whether method can be driven over tr. Expiry is the
+// handler's session timeout, which the in-memory transport does not have.
+func (tr transport) reaches(method string) bool {
+	return method != tenancy.MethodExpiry || tr.overHTTP()
+}
+
+// handlerOptions are the options the streamable handler serves a client of
+// era e with: stateless at 2026-07-28, which is how cmd/server serves that
+// revision by default, and a stateful session at 2025-11-25, which is the
+// only way a client of that revision receives a notification.
+func (tr transport) handlerOptions(e tenancy.Era) *mcp.StreamableHTTPOptions {
+	return &mcp.StreamableHTTPOptions{Stateless: e == tenancy.EraModern, JSONResponse: tr == jsonBody}
+}
+
+// route is how a test reaches the server it drives: the era it speaks and the
+// transport it speaks it over, and, while a matrix row is being held, which
+// one, so that a failure on the way to an observation names that row.
+type route struct {
+	era       tenancy.Era
+	transport transport
+	held      *heldRow
+}
+
+// heldRow is the matrix row a subtest is holding to the SDK, and the method
+// it is driving the row through.
+type heldRow struct {
+	sdk    string
+	row    tenancy.Carriage
+	method string
+}
+
+// expected is what the held row asks of its method in the route's era, in the
+// words a failure quotes.
+func (r route) expected() string {
+	h := r.held
+	if holdsIn(h.row.Era, r.era) {
+		return "what the row lists (" + channelList(h.row.Channels) + ")"
+	}
+	return "no channel the matrix leaves out, since the row holds only at " + eraName(h.row.Era)
+}
+
+// fatalf ends the test on a failure that kept an observation from being made.
+// While a matrix row is held it names the row, the method, the era, the
+// transport, what the row expects and what was observed instead, and says
+// where the fix goes; outside the matrix it says only what failed.
+func (r route) fatalf(t *testing.T, format string, args ...any) {
+	t.Helper()
+	observed := fmt.Sprintf(format, args...)
+	if r.held == nil {
+		t.Fatal(observed)
+	}
+	h := r.held
+	t.Fatalf("row %s, %s at %s over %s: expected %s, and with %s observed that %s, so what the SDK carries for the row could not be observed. %s %s",
+		rowLabel(h.row), h.method, eraName(r.era), r.transport, r.expected(), h.sdk, observed, matrixFix, reachFix)
+}
+
+// waitFor waits for done to close, and fails the test naming what was waited
+// for when wireWait runs out first.
+func (r route) waitFor(t *testing.T, done <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(wireWait):
+		r.fatalf(t, "nothing ended the wait of %s for %s", wireWait, what)
+	}
 }
 
 // rowLabel names a matrix row the way a failure quotes it.
@@ -204,9 +328,65 @@ func narrowing(c tenancy.Channel) bool {
 
 // sdkOwns reports whether go-sdk is what carries a method's refusals. The
 // gate, startup and eviction are this server's own layers, which the SDK
-// never sees, so driving the SDK says nothing about their rows.
+// never sees, so driving the SDK says nothing about them: the gate and
+// startup rows are not driven, and the eviction method is not driven either,
+// its row being driven through the expiry method it shares with it.
 func sdkOwns(method string) bool {
 	return method != tenancy.MethodGate && method != tenancy.MethodStartup && method != tenancy.MethodEviction
+}
+
+// unattempted are the channels of the register no request is refused on
+// here, each with why. The direction "the SDK carries a channel the row leaves
+// out" is held only for a channel a request is attempted on, so each entry is
+// a gap stated rather than one passed over, and a channel the register adds
+// fails TestCarriages_EveryChannel_IsAttemptedOnARequestOrSaysWhyNot until it
+// is attempted or entered here.
+func unattempted() map[tenancy.Channel]string {
+	return map[tenancy.Channel]string{
+		tenancy.Gate:         "A gate status is written by the handler in front of the SDK, which never sees the request, and the SDK answers an in-band error with no status of its own but 400 and 404 (TestInBandErrors_OverStreamableHTTP_TakeOnlyTheStatusesTheSDKMaps).",
+		tenancy.Startup:      "A refusal to start is the process's own, and no method carries it.",
+		tenancy.SessionClose: "The SDK lets a server close a session in answer to any request, and the register never refuses a method that way: a closed session ends the session rather than answering a method, so the matrix gives it to the expiry and eviction row, and it is attempted on expiry alone.",
+	}
+}
+
+// offEraCarriage is a channel go-sdk carries for a method in the era its row
+// leaves out, where the matrix is right to leave it out.
+type offEraCarriage struct {
+	method   string
+	era      tenancy.Era
+	channels []tenancy.Channel
+	reason   string
+}
+
+// offEraCarriages declares every channel the SDK carries for a method outside
+// the era its row is confined to. Anything else carried there fails, so a bump
+// that re-enables a method in the era it was removed from fails its own pull
+// request; and a declaration the SDK stops bearing out fails too, so that the
+// table only ever says what the SDK does.
+func offEraCarriages() []offEraCarriage {
+	return []offEraCarriage{{
+		method:   methodListen,
+		era:      tenancy.EraLegacy,
+		channels: []tenancy.Channel{tenancy.RPC, tenancy.ListenEnd},
+		reason: "go-sdk serves subscriptions/listen on an initialized 2025-11-25 session like any method the session knows, so a middleware's error and an ended stream both reach the client there. " +
+			"No client of 2025-11-25 sends it: the method is 2026-07-28's replacement for resources/subscribe, and a 2025-11-25 client subscribes with that. " +
+			"A refusal declared for it at 2025-11-25 would reach no caller, which is why the row confines it to 2026-07-28 and Validate refuses such a declaration.",
+	}}
+}
+
+// declaredOffEra is what offEraCarriages declares for method in era, by
+// channel, with the reason.
+func declaredOffEra(method string, e tenancy.Era) map[tenancy.Channel]string {
+	declared := map[tenancy.Channel]string{}
+	for _, d := range offEraCarriages() {
+		if d.method != method || d.era != e {
+			continue
+		}
+		for _, c := range d.channels {
+			declared[c] = d.reason
+		}
+	}
+	return declared
 }
 
 // report is one attempt at a channel: whether the channel reached the client
@@ -221,12 +401,15 @@ type report struct {
 type observation map[tenancy.Channel]report
 
 // TestCarriages_DrivenThroughTheSDK_CarryExactlyWhatEachRowLists drives every
-// row of the carried-channel matrix whose method go-sdk owns, in each era the
-// row holds in, and holds it both ways: every channel the row lists reaches
-// the client, and no channel this file can attempt on that method, which is
-// every refusal channel the SDK could answer a method with and the narrowings
-// of the two tool methods, reaches it unless the matrix lists it for that
-// method and era.
+// row of the carried-channel matrix whose method go-sdk owns, in both eras and
+// over every transport, and holds it both ways. In an era the row holds in,
+// every channel it lists reaches the client. In either era, no channel this
+// file attempts on that method, which is every refusal channel the SDK could
+// answer a request with and the narrowings of the two tool methods, reaches
+// the client unless the matrix lists it for that method and era or
+// offEraCarriages declares it; so a row confined to one era is held in the
+// other as well, and a bump that re-enables a method where its row says it is
+// gone fails here.
 //
 // A channel is attempted the way a server would use it, and it counts as
 // carried only when what the server sent arrives intact: an in-band error with
@@ -243,36 +426,79 @@ func TestCarriages_DrivenThroughTheSDK_CarryExactlyWhatEachRowLists(t *testing.T
 			if !sdkOwns(method) {
 				continue
 			}
-			for _, e := range erasOf(row.Era) {
-				driven++
-				t.Run(method+"@"+eraName(e), func(t *testing.T) {
-					checkCarriage(t, sdk, row, method, e)
-				})
+			for _, e := range bothEras() {
+				for _, tr := range transports() {
+					if !tr.reaches(method) {
+						continue
+					}
+					driven++
+					r := route{era: e, transport: tr, held: &heldRow{sdk: sdk, row: row, method: method}}
+					t.Run(fmt.Sprintf("%s@%s/%s", method, eraName(e), tr), func(t *testing.T) {
+						checkCarriage(t, r)
+					})
+				}
 			}
 		}
 	}
 	if driven == 0 {
 		t.Fatal("no row of Carriages() names a method go-sdk owns, so nothing held the matrix to the SDK")
 	}
+	checkOnlyGateAndStartupGoUndriven(t)
 }
 
-// checkCarriage holds one method of one row, in one era, to what the SDK
-// carried for it.
-func checkCarriage(t *testing.T, sdk string, row tenancy.Carriage, method string, e tenancy.Era) {
+// checkOnlyGateAndStartupGoUndriven holds what the comment on Carriage and the
+// Refusal channels section say is left out: the gate and startup rows are not
+// driven, and every other row is driven through at least one of its methods,
+// which is how the eviction method's row is held through expiry.
+func checkOnlyGateAndStartupGoUndriven(t *testing.T) {
 	t.Helper()
-	seen := observe(t, method, e)
-	for _, want := range row.Channels {
-		got, attempted := seen[want]
-		if attempted && got.carried {
+	for _, row := range tenancy.Carriages() {
+		if slices.ContainsFunc(row.Methods, sdkOwns) {
 			continue
 		}
-		t.Errorf("row %s, %s at %s: the row lists the %s channel, and %s did not carry it (expected %s, observed %s).%s %s",
-			rowLabel(row), method, eraName(e), want, sdk, want, arrivedOrNothing(got, attempted), whyNotAttempted(want, attempted), matrixFix)
+		for _, method := range row.Methods {
+			if method != tenancy.MethodGate && method != tenancy.MethodStartup {
+				t.Errorf("row %s is driven through none of its methods, and %s is neither the gate nor startup: the comment on Carriage in internal/tenancy/channels.go and the Refusal channels section of docs/development/tenant-policy-spec.md say only the gate and startup rows go undriven. Pair the method with one this test drives, or say in both places that its row is not driven.",
+					rowLabel(row), method)
+			}
+		}
 	}
+}
+
+// checkCarriage holds one method of one row, in one era and over one
+// transport, to what the SDK carried for it.
+func checkCarriage(t *testing.T, r route) {
+	t.Helper()
+	h := r.held
+	seen := observe(t, r)
+	holds := holdsIn(h.row.Era, r.era)
+	if holds {
+		for _, want := range h.row.Channels {
+			got, attempted := seen[want]
+			if attempted && got.carried {
+				continue
+			}
+			t.Errorf("row %s, %s at %s over %s: the row lists the %s channel, and %s did not carry it (expected %s, observed %s).%s %s",
+				rowLabel(h.row), h.method, eraName(r.era), r.transport, want, h.sdk, want, arrivedOrNothing(got, attempted), whyNotAttempted(want, attempted), matrixFix)
+		}
+	}
+	declared := declaredOffEra(h.method, r.era)
 	for _, c := range channels() {
-		if got := seen[c]; got.carried && !tenancy.Carries(method, e, c) {
-			t.Errorf("row %s, %s at %s: %s carried the %s channel (observed %s), and the matrix lists only %s for this method in this era. %s",
-				rowLabel(row), method, eraName(e), sdk, c, got.arrived, channelList(row.Channels), matrixFix)
+		got := seen[c]
+		reason, isDeclared := declared[c]
+		switch {
+		case isDeclared && (holds || tenancy.Carries(h.method, r.era, c)):
+			t.Errorf("offEraCarriages declares the %s channel for %s at %s, and the row %s now holds in that era or the matrix lists the channel there: delete the declaration, which answers only a channel the matrix leaves out of an era its row does not hold in.",
+				c, h.method, eraName(r.era), rowLabel(h.row))
+		case isDeclared && !got.carried:
+			t.Errorf("offEraCarriages declares that %s carries the %s channel for %s at %s over %s, outside the era its row %s holds in, and it no longer does (observed %s): delete the declaration, whose reason was %q.",
+				h.sdk, c, h.method, eraName(r.era), r.transport, rowLabel(h.row), arrivedOrNothing(got, true), reason)
+		case got.carried && !isDeclared && !tenancy.Carries(h.method, r.era, c) && holds:
+			t.Errorf("row %s, %s at %s over %s: %s carried the %s channel (observed %s), and the matrix lists only %s for this method in this era. %s",
+				rowLabel(h.row), h.method, eraName(r.era), r.transport, h.sdk, c, got.arrived, channelList(h.row.Channels), matrixFix)
+		case got.carried && !isDeclared && !tenancy.Carries(h.method, r.era, c):
+			t.Errorf("row %s, %s at %s over %s: %s carried the %s channel (observed %s) in an era the row leaves out, where the matrix lists nothing for this method. Either the row holds in this era now, and the fix is to widen it in internal/tenancy/channels.go in this same pull request, or no client of %s sends the method, and the fix is to declare the channel in offEraCarriages in this file with that reason.",
+				rowLabel(h.row), h.method, eraName(r.era), r.transport, h.sdk, c, got.arrived, eraName(r.era))
 		}
 	}
 }
@@ -289,38 +515,68 @@ func arrivedOrNothing(got report, attempted bool) string {
 // whyNotAttempted explains a listed channel this file never attempts on a
 // method, which is itself the answer: the SDK cannot carry it there.
 func whyNotAttempted(c tenancy.Channel, attempted bool) string {
-	switch {
-	case attempted:
+	if attempted {
 		return ""
-	case c == tenancy.Gate:
-		return " A gate status is written by the handler in front of the SDK, which answers an in-band error with no status of its own but 400 and 404 (TestInBandErrors_OverStreamableHTTP_TakeOnlyTheStatusesTheSDKMaps)."
-	case c == tenancy.Startup:
-		return " A refusal to start is the process's own, and no method carries it."
-	case c == tenancy.SessionClose:
-		return " A closed session ends the session rather than answering a method: the expiry and eviction rows carry it."
-	case narrowing(c):
+	}
+	if reason, ok := unattempted()[c]; ok {
+		return " " + reason
+	}
+	if narrowing(c) {
 		return " This test has no observer for that narrowing on this method: add one to narrowingObservers before a row lists it."
-	default:
-		return " This test attempts no refusal on that channel for this method."
+	}
+	return " This test attempts no refusal on that channel for this method."
+}
+
+// TestCarriages_EveryChannel_IsAttemptedOnARequestOrSaysWhyNot holds the
+// qualifier on the direction "the SDK carries a channel the row leaves out":
+// it is held only for a channel some request is attempted on, so every
+// channel of the register must be attempted, as a refusal or as a narrowing,
+// or be declared in unattempted with its reason. Without this a channel added
+// to the register would be one no row could be caught leaving out.
+func TestCarriages_EveryChannel_IsAttemptedOnARequestOrSaysWhyNot(t *testing.T) {
+	onRequests := map[tenancy.Channel]bool{}
+	for _, a := range attempts() {
+		onRequests[a.channel] = true
+	}
+	for key := range narrowingObservers() {
+		onRequests[key.channel] = true
+	}
+	declared := unattempted()
+	for _, c := range channels() {
+		t.Run(c.String(), func(t *testing.T) {
+			reason, isDeclared := declared[c]
+			switch {
+			case onRequests[c] && isDeclared:
+				t.Errorf("%s is attempted on a request and unattempted() also says it is not (%q): delete the declaration.", c, reason)
+			case !onRequests[c] && !isDeclared:
+				t.Errorf("%s is a channel of the register that no request is refused on here and unattempted() does not explain, so a row could leave it out while go-sdk carries it and nothing would fail: attempt it in attempts() or narrowingObservers(), or declare in unattempted() why it is not attempted, and say so in the Refusal channels section of docs/development/tenant-policy-spec.md.", c)
+			}
+		})
+	}
+	for c := range declared {
+		if !slices.Contains(channels(), c) {
+			t.Errorf("unattempted() declares %s, which is not a channel of the register: delete the declaration.", c)
+		}
 	}
 }
 
-// observe attempts, for one method in one era, every refusal channel this file
-// knows how to attempt there, and every narrowing it can observe there.
-func observe(t *testing.T, method string, e tenancy.Era) observation {
+// observe attempts, for one method in one era over one transport, every
+// refusal channel this file knows how to attempt there, and every narrowing it
+// can observe there.
+func observe(t *testing.T, r route) observation {
 	t.Helper()
 	var seen observation
-	switch method {
+	switch r.held.method {
 	case tenancy.MethodExpiry:
-		seen = observeExpiry(t, e)
+		seen = observeExpiry(t, r)
 	case methodUpdated:
-		seen = observeNotification(t, e)
+		seen = observeNotification(t, r)
 	default:
-		seen = observeRequest(t, method, e)
+		seen = observeRequest(t, r)
 	}
 	for key, observer := range narrowingObservers() {
-		if key.method == method {
-			seen[key.channel] = observer(t, e)
+		if key.method == r.held.method {
+			seen[key.channel] = observer(t, r)
 		}
 	}
 	return seen
@@ -328,15 +584,15 @@ func observe(t *testing.T, method string, e tenancy.Era) observation {
 
 // observeRequest makes every attempt on a request method, each on a server of
 // its own.
-func observeRequest(t *testing.T, method string, e tenancy.Era) observation {
+func observeRequest(t *testing.T, r route) observation {
 	t.Helper()
-	params, ok := requestParams(method)
+	params, ok := requestParams(r.held.method)
 	if !ok {
-		t.Fatalf("a row names %s, which this test has no request for: add its params to requestParams so that the row is held to the SDK", method)
+		t.Fatalf("a row names %s, which this test has no request for: add its params to requestParams so that the row is held to the SDK", r.held.method)
 	}
 	seen := observation{}
 	for _, a := range attempts() {
-		seen[a.channel] = a.run(t, method, e, params)
+		seen[a.channel] = a.run(t, r, params)
 	}
 	return seen
 }
@@ -426,13 +682,14 @@ func attempts() []attempt {
 	}
 }
 
-// run drives one attempt on one method in one era, on a server of its own.
-func (a attempt) run(t *testing.T, method string, e tenancy.Era, params map[string]any) report {
+// run drives one attempt on the held row's method, on a server of its own.
+func (a attempt) run(t *testing.T, r route, params map[string]any) report {
 	t.Helper()
+	method := r.held.method
 	s, _ := newMatrixServer(nil)
 	s.AddReceivingMiddleware(a.middleware(method))
 	s.AddSendingMiddleware(endOnAcknowledgment)
-	w := connect(t, s, e)
+	w := connect(t, s, r)
 	if method != methodInitialize {
 		w.handshake(t)
 	}
@@ -640,8 +897,8 @@ type narrowingKey struct {
 // driven, so a row that drops one fails as surely as a row that adds one, and
 // a row listing a narrowing with no observer here fails, so that a new one is
 // held before it is relied on.
-func narrowingObservers() map[narrowingKey]func(*testing.T, tenancy.Era) report {
-	return map[narrowingKey]func(*testing.T, tenancy.Era) report{
+func narrowingObservers() map[narrowingKey]func(*testing.T, route) report {
+	return map[narrowingKey]func(*testing.T, route) report{
 		{tenancy.Absent, methodToolsList}:   observeAbsentFromListing,
 		{tenancy.Absent, methodToolsCall}:   observeAbsentFromCall,
 		{tenancy.Withheld, methodToolsCall}: observeWithheld,
@@ -652,10 +909,10 @@ func narrowingObservers() map[narrowingKey]func(*testing.T, tenancy.Era) report 
 // observeAbsentFromListing lists the tools, removes one, and lists them again:
 // the narrowing is carried when the second listing is a result without the
 // tool the first one had.
-func observeAbsentFromListing(t *testing.T, e tenancy.Era) report {
+func observeAbsentFromListing(t *testing.T, r route) report {
 	t.Helper()
 	s, _ := newMatrixServer(nil)
-	w := dial(t, s, e)
+	w := dial(t, s, r)
 	before := w.call(t, methodToolsList, nil)
 	s.RemoveTools(narrowedTool)
 	after := w.call(t, methodToolsList, nil)
@@ -666,11 +923,11 @@ func observeAbsentFromListing(t *testing.T, e tenancy.Era) report {
 // observeAbsentFromCall calls a tool the server does not serve: the narrowing
 // is carried when the answer is an in-band error naming the tool and no
 // handler ran.
-func observeAbsentFromCall(t *testing.T, e tenancy.Era) report {
+func observeAbsentFromCall(t *testing.T, r route) report {
 	t.Helper()
 	s, counts := newMatrixServer(nil)
 	s.RemoveTools(narrowedTool)
-	w := dial(t, s, e)
+	w := dial(t, s, r)
 	ex := w.call(t, methodToolsCall, toolCall(narrowedTool))
 	we, ok := ex.wireError()
 	carried := ok && strings.Contains(we.Message, strconv.Quote(narrowedTool)) && counts.narrowedCalls.Load() == 0
@@ -678,24 +935,24 @@ func observeAbsentFromCall(t *testing.T, e tenancy.Era) report {
 }
 
 // observeWithheld calls the tool whose answer names the cause of a narrowing.
-func observeWithheld(t *testing.T, e tenancy.Era) report {
+func observeWithheld(t *testing.T, r route) report {
 	t.Helper()
-	return observeToolAnswer(t, e, withheldTool, withheldText)
+	return observeToolAnswer(t, r, withheldTool, withheldText)
 }
 
 // observeUnknown calls the tool whose answer calls the action unknown.
-func observeUnknown(t *testing.T, e tenancy.Era) report {
+func observeUnknown(t *testing.T, r route) report {
 	t.Helper()
-	return observeToolAnswer(t, e, unknownTool, unknownText)
+	return observeToolAnswer(t, r, unknownTool, unknownText)
 }
 
 // observeToolAnswer calls a tool that answers with a result flagged as an
 // error: the narrowing is carried when that result reaches the client with its
 // text as written.
-func observeToolAnswer(t *testing.T, e tenancy.Era, tool, text string) report {
+func observeToolAnswer(t *testing.T, r route, tool, text string) report {
 	t.Helper()
 	s, _ := newMatrixServer(nil)
-	w := dial(t, s, e)
+	w := dial(t, s, r)
 	ex := w.call(t, methodToolsCall, toolCall(tool))
 	result, ok := ex.result()
 	return report{carried: ok && result["isError"] == true && textOf(result) == text, arrived: ex.describe()}
@@ -719,7 +976,7 @@ func listsTool(ex exchange, name string) bool {
 // at all, and reads what the client received before a notification sent after
 // it. A notification has no result, so the flag, completion and ending
 // attempts have nothing to act on.
-func observeNotification(t *testing.T, e tenancy.Era) observation {
+func observeNotification(t *testing.T, r route) observation {
 	t.Helper()
 	inBand := func() (mcp.Result, error) {
 		return nil, &jsonrpc.Error{Code: tenancy.CodeTooManyRequests, Message: refusalText}
@@ -728,8 +985,8 @@ func observeNotification(t *testing.T, e tenancy.Era) observation {
 		return nil, nil //nolint:nilnil // the attempt is a server that sends nothing at all
 	}
 	return observation{
-		tenancy.RPC:    refuseNotification(t, e, inBand, carriesProbeError),
-		tenancy.Silent: refuseNotification(t, e, dropped, leavesNoTrace),
+		tenancy.RPC:    refuseNotification(t, r, inBand, carriesProbeError),
+		tenancy.Silent: refuseNotification(t, r, dropped, leavesNoTrace),
 	}
 }
 
@@ -738,7 +995,7 @@ func observeNotification(t *testing.T, e tenancy.Era) observation {
 // judges what the client read up to the second. Notifications on one
 // connection arrive in the order they were sent, so the second arriving means
 // the first would have arrived before it.
-func refuseNotification(t *testing.T, e tenancy.Era, refuse func() (mcp.Result, error), judge func([]jsonrpc.Message) bool) report {
+func refuseNotification(t *testing.T, r route, refuse func() (mcp.Result, error), judge func([]jsonrpc.Message) bool) report {
 	t.Helper()
 	s, _ := newMatrixServer(nil)
 	s.AddSendingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
@@ -749,7 +1006,7 @@ func refuseNotification(t *testing.T, e tenancy.Era, refuse func() (mcp.Result, 
 			return next(ctx, method, req)
 		}
 	})
-	w := dial(t, s, e)
+	w := dial(t, s, r)
 	w.subscribeTo(t, refusedURI, sentinelURI)
 
 	sent := make(chan struct{})
@@ -760,10 +1017,10 @@ func refuseNotification(t *testing.T, e tenancy.Era, refuse func() (mcp.Result, 
 		}
 	}()
 	read, arrived := w.readUntil(t, isUpdateFor(sentinelURI))
-	waitFor(t, sent, "the server to finish sending its resources/updated notifications")
+	r.waitFor(t, sent, "the server to finish sending its resources/updated notifications")
 	if !arrived {
-		t.Fatalf("at %s the client received no resources/updated notification for %s, so whether the refused one reached it cannot be judged; read: %s",
-			eraName(e), sentinelURI, describeMessages(read))
+		r.fatalf(t, "the client received no resources/updated notification for %s, sent after the refused one, so whether the refused one reached it cannot be judged (read: %s)",
+			sentinelURI, describeMessages(read))
 	}
 	return report{carried: judge(read), arrived: describeMessages(read)}
 }
@@ -810,14 +1067,14 @@ func isUpdateFor(uri string) func(jsonrpc.Message) bool {
 // request naming the expired session gets afterwards. A session the SDK never
 // issues cannot expire, which is what a 2026-07-28 request, carrying no
 // session, is expected to show.
-func observeExpiry(t *testing.T, e tenancy.Era) observation {
+func observeExpiry(t *testing.T, r route) observation {
 	t.Helper()
 	s, _ := newMatrixServer(nil)
-	url := serveHTTP(t, s, &mcp.StreamableHTTPOptions{
-		Stateless: e == tenancy.EraModern, JSONResponse: true, SessionTimeout: sessionTimeout,
-	})
+	opts := r.transport.handlerOptions(r.era)
+	opts.SessionTimeout = sessionTimeout
+	url := serveHTTP(t, s, opts)
 	var opened answer
-	if e == tenancy.EraModern {
+	if r.era == tenancy.EraModern {
 		opened = post(t, url, modernHeaders(methodToolsList), rpcMessage(1, methodToolsList, modernMeta(nil)))
 	} else {
 		opened = post(t, url, nil, rpcMessage(1, methodInitialize, initializeParams()))
@@ -826,13 +1083,13 @@ func observeExpiry(t *testing.T, e tenancy.Era) observation {
 	if sid == "" {
 		return observation{tenancy.SessionClose: {arrived: "no Mcp-Session-Id was issued, so there is no session to expire: " + opened.describe()}}
 	}
-	waitForSessionsToEnd(t, s)
-	return classifyAfterExpiry(askAfterExpiry(t, url, sid, e))
+	waitForSessionsToEnd(t, r, s)
+	return classifyAfterExpiry(askAfterExpiry(t, url, sid, r.era))
 }
 
 // waitForSessionsToEnd waits for every session the server holds to end, which
 // on an idle stateful session only the SDK's timeout does.
-func waitForSessionsToEnd(t *testing.T, s *mcp.Server) {
+func waitForSessionsToEnd(t *testing.T, r route, s *mcp.Server) {
 	t.Helper()
 	for session := range s.Sessions() {
 		ended := make(chan struct{})
@@ -840,7 +1097,7 @@ func waitForSessionsToEnd(t *testing.T, s *mcp.Server) {
 			defer close(ended)
 			_ = session.Wait()
 		}()
-		waitFor(t, ended, fmt.Sprintf("an idle session to be ended by the SDK's %s timeout", sessionTimeout))
+		r.waitFor(t, ended, fmt.Sprintf("the SDK's %s idle timeout to end the session it issued", sessionTimeout))
 	}
 }
 
@@ -865,7 +1122,7 @@ func askAfterExpiry(t *testing.T, url, sid string, e tenancy.Era) answer {
 // session arrived on: a 404 that is not a JSON-RPC error is the session close,
 // a JSON-RPC error is an in-band refusal, and no answer is silence.
 func classifyAfterExpiry(got answer) observation {
-	_, isRPC := decodeRPCError(got.body)
+	_, isRPC := got.rpcError()
 	silent := got.err != nil || strings.TrimSpace(got.body) == ""
 	return observation{
 		tenancy.SessionClose: {carried: got.status == http.StatusNotFound && !isRPC, arrived: got.describe()},
@@ -957,31 +1214,42 @@ func refuseWith(method string, err error) mcp.Middleware {
 	return answerWith(method, func() (mcp.Result, error) { return nil, err })
 }
 
-// wireClient is a JSON-RPC client over the SDK's in-memory transport that
-// interprets nothing: what it reads is what the server wrote. A goroutine
-// pumps every message into inbox, so the server is never blocked on a client
-// that is not reading yet.
+// wireClient is a JSON-RPC client that interprets nothing: what it reads is
+// what the server wrote, over the SDK's in-memory transport or over its
+// streamable HTTP handler. A goroutine pumps every message into inbox, so the
+// server is never blocked on a client that is not reading yet.
 type wireClient struct {
 	conn  mcp.Connection
 	inbox chan jsonrpc.Message
-	era   tenancy.Era
+	route route
 	next  float64
 }
 
-// connect connects a wire client to s in era e, without a handshake.
-func connect(t *testing.T, s *mcp.Server, e tenancy.Era) *wireClient {
+// open connects to s over the route's transport and returns the client end of
+// the connection.
+func (r route) open(t *testing.T, s *mcp.Server) mcp.Connection {
 	t.Helper()
+	if r.transport.overHTTP() {
+		return newHTTPConn(serveHTTP(t, s, r.transport.handlerOptions(r.era)), r.era)
+	}
 	serverEnd, clientEnd := mcp.NewInMemoryTransports()
 	session, err := s.Connect(context.Background(), serverEnd, nil)
 	if err != nil {
-		t.Fatalf("connect the server: %v", err)
+		r.fatalf(t, "the server end of the in-memory transport did not connect: %v", err)
 	}
+	t.Cleanup(func() { _ = session.Close() })
 	conn, err := clientEnd.Connect(context.Background())
 	if err != nil {
-		_ = session.Close()
-		t.Fatalf("connect the client: %v", err)
+		r.fatalf(t, "the client end of the in-memory transport did not connect: %v", err)
 	}
-	w := &wireClient{conn: conn, inbox: make(chan jsonrpc.Message, 256), era: e}
+	return conn
+}
+
+// connect connects a wire client to s along r, without a handshake.
+func connect(t *testing.T, s *mcp.Server, r route) *wireClient {
+	t.Helper()
+	conn := r.open(t, s)
+	w := &wireClient{conn: conn, inbox: make(chan jsonrpc.Message, 256), route: r}
 	pumpCtx, stop := context.WithCancel(context.Background())
 	pumped := make(chan struct{})
 	go func() {
@@ -1002,17 +1270,16 @@ func connect(t *testing.T, s *mcp.Server, e tenancy.Era) *wireClient {
 	t.Cleanup(func() {
 		stop()
 		_ = conn.Close()
-		_ = session.Close()
 		<-pumped
 	})
 	return w
 }
 
-// dial connects a wire client to s in era e and opens the session the way a
-// client of that era does.
-func dial(t *testing.T, s *mcp.Server, e tenancy.Era) *wireClient {
+// dial connects a wire client to s along r and opens the session the way a
+// client of the route's era does.
+func dial(t *testing.T, s *mcp.Server, r route) *wireClient {
 	t.Helper()
-	w := connect(t, s, e)
+	w := connect(t, s, r)
 	w.handshake(t)
 	return w
 }
@@ -1021,13 +1288,13 @@ func dial(t *testing.T, s *mcp.Server, e tenancy.Era) *wireClient {
 // 2026-07-28, where every request carries its own protocol version.
 func (w *wireClient) handshake(t *testing.T) {
 	t.Helper()
-	if w.era != tenancy.EraLegacy {
+	if w.route.era != tenancy.EraLegacy {
 		return
 	}
 	if ex := w.call(t, methodInitialize, initializeParams()); ex.response == nil || ex.response.Error != nil {
-		t.Fatalf("the %s handshake failed: %s", legacyVersion, ex.describe())
+		w.route.fatalf(t, "the %s handshake was answered %s", legacyVersion, ex.describe())
 	}
-	w.send(t, &jsonrpc.Request{Method: "notifications/initialized", Params: json.RawMessage(`{}`)})
+	w.send(t, &jsonrpc.Request{Method: methodInitialized, Params: json.RawMessage(`{}`)})
 }
 
 // modernMeta returns params with the _meta a 2026-07-28 request carries.
@@ -1050,7 +1317,7 @@ func (w *wireClient) send(t *testing.T, msg jsonrpc.Message) {
 	ctx, cancel := context.WithTimeout(context.Background(), wireWait)
 	defer cancel()
 	if err := w.conn.Write(ctx, msg); err != nil {
-		t.Fatalf("write %T: %v", msg, err)
+		w.route.fatalf(t, "writing %s to the server failed: %v", describeMessages([]jsonrpc.Message{msg}), err)
 	}
 }
 
@@ -1060,7 +1327,7 @@ func (w *wireClient) start(t *testing.T, method string, params map[string]any) j
 	if params == nil {
 		params = map[string]any{}
 	}
-	if w.era == tenancy.EraModern {
+	if w.route.era == tenancy.EraModern {
 		params = modernMeta(params)
 	}
 	raw, err := json.Marshal(params)
@@ -1131,16 +1398,16 @@ func (w *wireClient) readUntil(t *testing.T, done func(jsonrpc.Message) bool) ([
 // 2026-07-28, which the server acknowledges and then keeps open.
 func (w *wireClient) subscribeTo(t *testing.T, uris ...string) {
 	t.Helper()
-	if w.era == tenancy.EraModern {
+	if w.route.era == tenancy.EraModern {
 		w.start(t, methodListen, listenParams(uris...))
 		if read, acknowledged := w.readUntil(t, isMethod(methodAcknowledged)); !acknowledged {
-			t.Fatalf("the listen for %v was not acknowledged: %s", uris, describeMessages(read))
+			w.route.fatalf(t, "the subscriptions/listen for %v was never acknowledged (read: %s)", uris, describeMessages(read))
 		}
 		return
 	}
 	for _, uri := range uris {
 		if ex := w.call(t, methodSubscribe, map[string]any{"uri": uri}); ex.response == nil || ex.response.Error != nil {
-			t.Fatalf("the subscription to %s failed: %s", uri, ex.describe())
+			w.route.fatalf(t, "the resources/subscribe to %s was answered %s", uri, ex.describe())
 		}
 	}
 }
@@ -1244,15 +1511,328 @@ func clip(s string) string {
 	return s[:most] + "..."
 }
 
-// waitFor waits for done to close, and fails the test naming what was waited
-// for when wireWait runs out first.
-func waitFor(t *testing.T, done <-chan struct{}, what string) {
-	t.Helper()
+// httpConn is the client end of the SDK's streamable HTTP handler, written to
+// interpret nothing, the way the in-memory transport's client end does not: it
+// posts each message with the headers a client of its era sends, and hands
+// over every JSON-RPC message an answer carries, whether the answer is one
+// JSON body or an event stream, and whatever its status. An answer carrying
+// none, which is what the SDK's plain-text refusals are, is handed over as an
+// error answering the call it was sent for, holding the status and the body,
+// so that a wait for that answer ends and a failure quotes it; that error is
+// never a *jsonrpc.Error, so no refusal counts as carried on its strength.
+//
+// go-sdk's own StreamableClientTransport is not used because it cannot be
+// driven message by message: it learns a 2025-11-25 session's protocol
+// version and opens the standalone event stream only when a ClientSession
+// tells it the session is initialized, which a wire client never does.
+type httpConn struct {
+	url string
+	era tenancy.Era
+
+	// ctx ends when the connection closes, and with it every request the
+	// connection has open.
+	ctx      context.Context
+	cancel   context.CancelFunc
+	incoming chan jsonrpc.Message
+	answers  sync.WaitGroup
+
+	mu        sync.Mutex
+	sessionID string
+}
+
+// newHTTPConn opens the client end of a connection to the streamable handler
+// at url, for a client of era e.
+func newHTTPConn(url string, e tenancy.Era) *httpConn {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &httpConn{url: url, era: e, ctx: ctx, cancel: cancel, incoming: make(chan jsonrpc.Message)}
+}
+
+// SessionID is the session the handler issued, empty when it issued none.
+func (c *httpConn) SessionID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sessionID
+}
+
+// Read hands over the next message any answer carried.
+func (c *httpConn) Read(ctx context.Context) (jsonrpc.Message, error) {
 	select {
-	case <-done:
-	case <-time.After(wireWait):
-		t.Fatalf("waited %s for %s", wireWait, what)
+	case msg := <-c.incoming:
+		return msg, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-c.ctx.Done():
+		return nil, io.EOF
 	}
+}
+
+// Write posts one message. A notification is posted and its 202 awaited
+// before Write returns, since the next message may depend on the handler
+// having taken it; a call is posted and answered on a goroutine of its own,
+// since its answer may be a stream that stays open.
+func (c *httpConn) Write(ctx context.Context, msg jsonrpc.Message) error {
+	req, ok := msg.(*jsonrpc.Request)
+	if !ok {
+		return fmt.Errorf("the HTTP wire client sends requests and notifications, not %T", msg)
+	}
+	body, err := jsonrpc.EncodeMessage(req)
+	if err != nil {
+		return err
+	}
+	if !req.IsCall() {
+		return c.notify(ctx, req, body)
+	}
+	return c.call(req, body)
+}
+
+// call posts a call and reads its answer on a goroutine of its own. The
+// request is made with the connection's context rather than with Write's,
+// which ends as Write returns, since the answer may be a stream that stays
+// open for as long as the connection does.
+func (c *httpConn) call(req *jsonrpc.Request, body []byte) error {
+	post, err := c.newRequest(c.ctx, http.MethodPost, body, req)
+	if err != nil {
+		return err
+	}
+	c.answers.Go(func() { c.answer(req.ID, post) })
+	return nil
+}
+
+// Close ends every request the connection has open and waits for the
+// goroutines reading their answers.
+func (c *httpConn) Close() error {
+	c.cancel()
+	c.answers.Wait()
+	return nil
+}
+
+// notify posts a notification, which the handler accepts with a 202 and no
+// body. Once a 2025-11-25 session is initialized it opens the standalone
+// event stream, the way a client of that revision does, since the handler
+// sends every notification no request asked for on that stream and on no
+// other.
+func (c *httpConn) notify(ctx context.Context, req *jsonrpc.Request, body []byte) error {
+	post, err := c.newRequest(ctx, http.MethodPost, body, req)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(post)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s was answered HTTP %d %q, not 202", req.Method, resp.StatusCode, clip(string(data)))
+	}
+	if req.Method == methodInitialized {
+		return c.openStandaloneStream()
+	}
+	return nil
+}
+
+// openStandaloneStream opens the GET stream of a 2025-11-25 session and
+// returns once the handler has answered it. The handler registers the stream
+// before it sends the headers, so a notification sent after this returns is
+// written to it rather than dropped for want of a stream.
+func (c *httpConn) openStandaloneStream() error {
+	get, err := c.newRequest(c.ctx, http.MethodGet, nil, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(get)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK || mediaType(resp.Header) != "text/event-stream" {
+		data, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return fmt.Errorf("the standalone event stream was answered HTTP %d %s %q", resp.StatusCode, resp.Header.Get("Content-Type"), clip(string(data)))
+	}
+	c.answers.Go(func() {
+		defer resp.Body.Close()
+		scanEvents(resp.Body, func(data []byte) bool {
+			c.deliverBody(data)
+			return true
+		})
+	})
+	return nil
+}
+
+// newRequest builds a request carrying the headers a client of the era sends:
+// at 2026-07-28 the protocol version, the method and, where the method names
+// a tool, a prompt or a resource, that name; at 2025-11-25 the protocol
+// version once initialize has negotiated it, and the session the handler
+// issued.
+func (c *httpConn) newRequest(ctx context.Context, method string, body []byte, msg *jsonrpc.Request) (*http.Request, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.url, reader)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	switch {
+	case c.era == tenancy.EraModern && msg != nil:
+		for name, value := range modernHeaders(msg.Method) {
+			req.Header.Set(name, value)
+		}
+		if name, ok := mcpName(msg); ok {
+			req.Header.Set("Mcp-Name", name)
+		}
+	case c.era == tenancy.EraModern:
+		req.Header.Set("MCP-Protocol-Version", modernVersion)
+	case msg == nil || msg.Method != methodInitialize:
+		req.Header.Set("MCP-Protocol-Version", legacyVersion)
+	}
+	if sid := c.SessionID(); sid != "" {
+		req.Header.Set("Mcp-Session-Id", sid)
+	}
+	return req, nil
+}
+
+// mcpName is the Mcp-Name header a 2026-07-28 request carries: the tool or
+// prompt it names, or the resource it reads.
+func mcpName(msg *jsonrpc.Request) (string, bool) {
+	var params struct {
+		Name string `json:"name"`
+		URI  string `json:"uri"`
+	}
+	if json.Unmarshal(msg.Params, &params) != nil {
+		return "", false
+	}
+	switch msg.Method {
+	case methodToolsCall, "prompts/get":
+		return params.Name, true
+	case "resources/read":
+		return params.URI, true
+	default:
+		return "", false
+	}
+}
+
+// answer sends one call and hands over what its answer carries.
+func (c *httpConn) answer(id jsonrpc.ID, post *http.Request) {
+	resp, err := http.DefaultClient.Do(post)
+	if err != nil {
+		if c.ctx.Err() == nil {
+			c.deliver(&jsonrpc.Response{ID: id, Error: httpAnswerError{err: err}})
+		}
+		return
+	}
+	defer resp.Body.Close()
+	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
+		c.mu.Lock()
+		if c.sessionID == "" {
+			c.sessionID = sid
+		}
+		c.mu.Unlock()
+	}
+	if mediaType(resp.Header) == "text/event-stream" {
+		scanEvents(resp.Body, func(data []byte) bool {
+			c.deliverBody(data)
+			return true
+		})
+		return
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err == nil && c.deliverBody(data) {
+		return
+	}
+	c.deliver(&jsonrpc.Response{ID: id, Error: httpAnswerError{
+		status: resp.StatusCode, contentType: resp.Header.Get("Content-Type"), body: string(data), err: err,
+	}})
+}
+
+// deliverBody hands over the JSON-RPC messages a body or an event carries, one
+// or a batch, and reports whether it carried any.
+func (c *httpConn) deliverBody(data []byte) bool {
+	if msg, err := jsonrpc.DecodeMessage(data); err == nil {
+		c.deliver(msg)
+		return true
+	}
+	var batch []json.RawMessage
+	if json.Unmarshal(data, &batch) != nil || len(batch) == 0 {
+		return false
+	}
+	msgs := make([]jsonrpc.Message, 0, len(batch))
+	for _, raw := range batch {
+		msg, err := jsonrpc.DecodeMessage(raw)
+		if err != nil {
+			return false
+		}
+		msgs = append(msgs, msg)
+	}
+	for _, msg := range msgs {
+		c.deliver(msg)
+	}
+	return true
+}
+
+// deliver hands one message to Read, or drops it once the connection closed.
+func (c *httpConn) deliver(msg jsonrpc.Message) {
+	select {
+	case c.incoming <- msg:
+	case <-c.ctx.Done():
+	}
+}
+
+// httpAnswerError is an HTTP answer to a call that carried no JSON-RPC
+// message, or the failure to get one, handed over as the error answering that
+// call.
+type httpAnswerError struct {
+	status      int
+	contentType string
+	body        string
+	err         error
+}
+
+// Error says what the answer was, in the words a failure quotes.
+func (a httpAnswerError) Error() string {
+	if a.status == 0 {
+		return fmt.Sprintf("no HTTP answer: %v", a.err)
+	}
+	return fmt.Sprintf("HTTP %d %s %q, which carries no JSON-RPC message", a.status, a.contentType, clip(a.body))
+}
+
+// scanEvents calls each with the data of every event an event stream carries,
+// in order, until the stream ends or each returns false. An event with no data,
+// such as a priming event, is passed over.
+func scanEvents(body io.Reader, each func([]byte) bool) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), mcp.DefaultMaxEventSize)
+	var data []string
+	flush := func() bool {
+		if len(data) == 0 {
+			return true
+		}
+		event := strings.Join(data, "\n")
+		data = data[:0]
+		return each([]byte(event))
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case line == "":
+			if !flush() {
+				return
+			}
+		case strings.HasPrefix(line, "data:"):
+			data = append(data, strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
+		}
+	}
+	flush()
+}
+
+// mediaType is a response's content type without its parameters.
+func mediaType(h http.Header) string {
+	value, _, _ := strings.Cut(h.Get("Content-Type"), ";")
+	return strings.TrimSpace(value)
 }
 
 // answer is what an HTTP request to the SDK's streamable handler got back.
@@ -1348,6 +1928,20 @@ func decodeRPCError(body string) (*jsonrpc.Error, bool) {
 	return envelope.Error, decoded && envelope.Error != nil
 }
 
+// rpcError reads the JSON-RPC error an HTTP answer carries, from its JSON body
+// or from the first message of its event stream.
+func (a answer) rpcError() (*jsonrpc.Error, bool) {
+	body := a.body
+	if a.header != nil && mediaType(a.header) == "text/event-stream" {
+		body = ""
+		scanEvents(strings.NewReader(a.body), func(data []byte) bool {
+			body = string(data)
+			return false
+		})
+	}
+	return decodeRPCError(body)
+}
+
 // inBand reports whether a channel is an answer the SDK carries in the
 // response to the request itself.
 func inBand(c tenancy.Channel) bool {
@@ -1356,11 +1950,11 @@ func inBand(c tenancy.Channel) bool {
 
 // TestRegisterRefusals_InBand_ReachTheClientIntact makes every in-band refusal
 // the register declares, on each method and in each era the matrix carries it
-// for, and holds it to reaching the client as written: an in-band error with
-// its code and its text, a tool result flagged as an error with its text, a
-// completion with no values. The text begins with the row's Prefix, which is
-// what a client may recognize a refusal by, so a prefix the SDK rewrote fails
-// here too.
+// for, over every transport, and holds it to reaching the client as written:
+// an in-band error with its code and its text, a tool result flagged as an
+// error with its text, a completion with no values. The text begins with the
+// row's Prefix, which is what a client may recognize a refusal by, so a prefix
+// the SDK rewrote fails here too.
 func TestRegisterRefusals_InBand_ReachTheClientIntact(t *testing.T) {
 	sdk := sdkName()
 	held := 0
@@ -1374,10 +1968,12 @@ func TestRegisterRefusals_InBand_ReachTheClientIntact(t *testing.T) {
 					if !tenancy.Carries(method, e, r.Channel) {
 						continue
 					}
-					held++
-					t.Run(fmt.Sprintf("%s.%d/%s@%s", d.ID, i, method, eraName(e)), func(t *testing.T) {
-						checkInBandRefusal(t, sdk, d.ID, r, method, e)
-					})
+					for _, tr := range transports() {
+						held++
+						t.Run(fmt.Sprintf("%s.%d/%s@%s/%s", d.ID, i, method, eraName(e), tr), func(t *testing.T) {
+							checkInBandRefusal(t, sdk, d.ID, r, method, route{era: e, transport: tr})
+						})
+					}
 				}
 			}
 		}
@@ -1387,9 +1983,9 @@ func TestRegisterRefusals_InBand_ReachTheClientIntact(t *testing.T) {
 	}
 }
 
-// checkInBandRefusal makes one declared refusal of one method in one era, the
-// way the layers make it, and holds what reached the client to it.
-func checkInBandRefusal(t *testing.T, sdk, id string, r tenancy.Refusal, method string, e tenancy.Era) {
+// checkInBandRefusal makes one declared refusal of one method, along one
+// route, the way the layers make it, and holds what reached the client to it.
+func checkInBandRefusal(t *testing.T, sdk, id string, r tenancy.Refusal, method string, rt route) {
 	t.Helper()
 	params, ok := requestParams(method)
 	if !ok {
@@ -1398,14 +1994,14 @@ func checkInBandRefusal(t *testing.T, sdk, id string, r tenancy.Refusal, method 
 	text := r.Prefix + id + " refused this request"
 	s, _ := newMatrixServer(nil)
 	s.AddReceivingMiddleware(answerWith(method, inBandAnswer(r, text)))
-	w := connect(t, s, e)
+	w := connect(t, s, rt)
 	if method != methodInitialize {
 		w.handshake(t)
 	}
 	ex := w.call(t, method, params)
 	if !arrivedIntact(ex, r, text) {
-		t.Errorf("%s refuses %s at %s on the %s channel with code %d and text %q, and %s delivered %s. The register declares a refusal the SDK no longer carries as written: edit the row in internal/tenancy in this same pull request, and Carriages() in internal/tenancy/channels.go if the channel itself moved.",
-			id, method, eraName(e), r.Channel, r.Code, text, sdk, ex.describe())
+		t.Errorf("%s refuses %s at %s over %s on the %s channel with code %d and text %q, and %s delivered %s. The register declares a refusal the SDK no longer carries as written: edit the row in internal/tenancy in this same pull request, and Carriages() in internal/tenancy/channels.go if the channel itself moved.",
+			id, method, eraName(rt.era), rt.transport, r.Channel, r.Code, text, sdk, ex.describe())
 	}
 }
 
@@ -1442,9 +2038,9 @@ func arrivedIntact(ex exchange, r tenancy.Refusal, text string) bool {
 // the three rewrites the Refusal channels section rests on when it says an
 // in-band error carries a JSON-RPC code and never -32601: a plain Go error
 // reaches the client as code 0, a wrapped JSON-RPC error keeps its code and
-// takes the outer text, and a -32601 loses its text to the SDK's own. After
-// each, the session answers the next request, so a refusal costs the caller
-// one request and not the session.
+// takes the outer text, and a -32601 loses its text to the SDK's own, over
+// every transport. After each, the session answers the next request, so a
+// refusal costs the caller one request and not the session.
 func TestMiddlewareErrors_OnTheWire_KeepTheirCodeUnlessTheSDKRewritesThem(t *testing.T) {
 	sdk := sdkName()
 	cases := []struct {
@@ -1466,20 +2062,22 @@ func TestMiddlewareErrors_OnTheWire_KeepTheirCodeUnlessTheSDKRewritesThem(t *tes
 		},
 	}
 	for _, e := range bothEras() {
-		for _, tc := range cases {
-			t.Run(eraName(e)+"/"+tc.name, func(t *testing.T) {
-				s, _ := newMatrixServer(nil)
-				s.AddReceivingMiddleware(refuseWith(methodToolsList, tc.err))
-				w := dial(t, s, e)
-				refused := w.call(t, methodToolsList, nil)
-				if we, ok := refused.wireError(); !ok || we.Code != tc.code || we.Message != tc.message {
-					t.Errorf("at %s a middleware refusing tools/list with %v reached the client as %s, want error %d %q (%s). The Refusal channels section of docs/development/tenant-policy-spec.md, and the codes Validate allows, rest on this: edit them in this same pull request.",
-						eraName(e), tc.err, refused.describe(), tc.code, tc.message, sdk)
-				}
-				if next := w.call(t, methodToolsCall, toolCall(okTool)); next.response == nil || next.response.Error != nil {
-					t.Errorf("at %s the session did not answer the request after a refusal (%s): %s", eraName(e), sdk, next.describe())
-				}
-			})
+		for _, tr := range transports() {
+			for _, tc := range cases {
+				t.Run(eraName(e)+"/"+tr.String()+"/"+tc.name, func(t *testing.T) {
+					s, _ := newMatrixServer(nil)
+					s.AddReceivingMiddleware(refuseWith(methodToolsList, tc.err))
+					w := dial(t, s, route{era: e, transport: tr})
+					refused := w.call(t, methodToolsList, nil)
+					if we, ok := refused.wireError(); !ok || we.Code != tc.code || we.Message != tc.message {
+						t.Errorf("at %s over %s a middleware refusing tools/list with %v reached the client as %s, want error %d %q (%s). The Refusal channels section of docs/development/tenant-policy-spec.md, and the codes Validate allows, rest on this: edit them in this same pull request.",
+							eraName(e), tr, tc.err, refused.describe(), tc.code, tc.message, sdk)
+					}
+					if next := w.call(t, methodToolsCall, toolCall(okTool)); next.response == nil || next.response.Error != nil {
+						t.Errorf("at %s over %s the session did not answer the request after a refusal (%s): %s", eraName(e), tr, sdk, next.describe())
+					}
+				})
+			}
 		}
 	}
 }
@@ -1518,25 +2116,28 @@ func sdkStatus(code int64) int {
 
 // TestInBandErrors_OverStreamableHTTP_TakeOnlyTheStatusesTheSDKMaps holds the
 // statement that once the SDK handler runs, the only statuses an in-band error
-// can produce are 404 and 400, and those only at 2026-07-28. It is why no row
+// can produce are 404 and 400, and those only at 2026-07-28, whether the
+// handler answers with an event stream or with a JSON body. It is why no row
 // but the gate's carries a status: 401, 403, 413, 429 and 503 exist only in
 // front of the SDK.
 func TestInBandErrors_OverStreamableHTTP_TakeOnlyTheStatusesTheSDKMaps(t *testing.T) {
 	sdk := sdkName()
 	for _, e := range bothEras() {
-		for _, code := range statusCodes() {
-			t.Run(fmt.Sprintf("%s/%d", eraName(e), code), func(t *testing.T) {
-				want := http.StatusOK
-				if e == tenancy.EraModern {
-					want = sdkStatus(code)
-				}
-				got := refuseOverHTTP(t, e, code)
-				we, ok := decodeRPCError(got.body)
-				if got.status != want || !ok || we.Code != code {
-					t.Errorf("at %s a middleware refusing tools/list with code %d was answered %s, want HTTP %d carrying error %d (%s). The Refusal channels section of docs/development/tenant-policy-spec.md says an in-band error takes no status but 404 and 400, at 2026-07-28 alone, and Carriages() gives the gate row alone a status: edit both in this same pull request.",
-						eraName(e), code, got.describe(), want, code, sdk)
-				}
-			})
+		for _, tr := range httpTransports() {
+			for _, code := range statusCodes() {
+				t.Run(fmt.Sprintf("%s/%s/%d", eraName(e), tr, code), func(t *testing.T) {
+					want := http.StatusOK
+					if e == tenancy.EraModern {
+						want = sdkStatus(code)
+					}
+					got := refuseOverHTTP(t, e, tr, code)
+					we, ok := got.rpcError()
+					if got.status != want || !ok || we.Code != code {
+						t.Errorf("at %s over %s a middleware refusing tools/list with code %d was answered %s, want HTTP %d carrying error %d (%s). The Refusal channels section of docs/development/tenant-policy-spec.md says an in-band error takes no status but 404 and 400, at 2026-07-28 alone, and Carriages() gives the gate row alone a status: edit both in this same pull request.",
+							eraName(e), tr, code, got.describe(), want, code, sdk)
+					}
+				})
+			}
 		}
 	}
 }
@@ -1544,7 +2145,7 @@ func TestInBandErrors_OverStreamableHTTP_TakeOnlyTheStatusesTheSDKMaps(t *testin
 // refuseOverHTTP refuses a tools/list with code through the SDK's streamable
 // handler, stateless at 2026-07-28 and on a session at 2025-11-25, and returns
 // the answer. Code 0 is a plain Go error.
-func refuseOverHTTP(t *testing.T, e tenancy.Era, code int64) answer {
+func refuseOverHTTP(t *testing.T, e tenancy.Era, tr transport, code int64) answer {
 	t.Helper()
 	var refusal error = &jsonrpc.Error{Code: code, Message: refusalText}
 	if code == 0 {
@@ -1552,7 +2153,7 @@ func refuseOverHTTP(t *testing.T, e tenancy.Era, code int64) answer {
 	}
 	s, _ := newMatrixServer(nil)
 	s.AddReceivingMiddleware(refuseWith(methodToolsList, refusal))
-	url := serveHTTP(t, s, &mcp.StreamableHTTPOptions{Stateless: e == tenancy.EraModern, JSONResponse: true})
+	url := serveHTTP(t, s, tr.handlerOptions(e))
 	if e == tenancy.EraModern {
 		return post(t, url, modernHeaders(methodToolsList), rpcMessage(2, methodToolsList, modernMeta(nil)))
 	}
@@ -1570,24 +2171,26 @@ func refuseOverHTTP(t *testing.T, e tenancy.Era, code int64) answer {
 func TestLoadShedding_EmptyInputRequests_BusyAtLegacyAndRetriedAtModern(t *testing.T) {
 	sdk := sdkName()
 	fix := "No row carries load shedding for that reason; if a row is to use it now, it is decided in the Refusal channels section of docs/development/tenant-policy-spec.md and in Carriages() in this same pull request."
-	t.Run(legacyVersion+" on the wire", func(t *testing.T) {
-		s, counts := newMatrixServer(nil)
-		ex := dial(t, s, tenancy.EraLegacy).call(t, methodToolsCall, toolCall(busyTool))
-		if we, ok := ex.wireError(); !ok || we.Code != 0 || we.Message != busyText || counts.busyCalls.Load() != 1 {
-			t.Errorf("at %s a shed call was answered %s after %d handler call(s), want error 0 %q after one (%s). %s",
-				legacyVersion, ex.describe(), counts.busyCalls.Load(), busyText, sdk, fix)
-		}
-	})
-	t.Run(modernVersion+" on the wire", func(t *testing.T) {
-		s, counts := newMatrixServer(nil)
-		ex := dial(t, s, tenancy.EraModern).call(t, methodToolsCall, toolCall(busyTool))
-		result, ok := ex.result()
-		requests, isMap := result["inputRequests"].(map[string]any)
-		if !ok || result["resultType"] != "input_required" || !isMap || len(requests) != 0 || counts.busyCalls.Load() != 1 {
-			t.Errorf("at %s a shed call was answered %s after %d handler call(s), want an input_required result with no input requests after one (%s). %s",
-				modernVersion, ex.describe(), counts.busyCalls.Load(), sdk, fix)
-		}
-	})
+	for _, tr := range transports() {
+		t.Run(legacyVersion+" on the wire over "+tr.String(), func(t *testing.T) {
+			s, counts := newMatrixServer(nil)
+			ex := dial(t, s, route{era: tenancy.EraLegacy, transport: tr}).call(t, methodToolsCall, toolCall(busyTool))
+			if we, ok := ex.wireError(); !ok || we.Code != 0 || we.Message != busyText || counts.busyCalls.Load() != 1 {
+				t.Errorf("at %s over %s a shed call was answered %s after %d handler call(s), want error 0 %q after one (%s). %s",
+					legacyVersion, tr, ex.describe(), counts.busyCalls.Load(), busyText, sdk, fix)
+			}
+		})
+		t.Run(modernVersion+" on the wire over "+tr.String(), func(t *testing.T) {
+			s, counts := newMatrixServer(nil)
+			ex := dial(t, s, route{era: tenancy.EraModern, transport: tr}).call(t, methodToolsCall, toolCall(busyTool))
+			result, ok := ex.result()
+			requests, isMap := result["inputRequests"].(map[string]any)
+			if !ok || result["resultType"] != "input_required" || !isMap || len(requests) != 0 || counts.busyCalls.Load() != 1 {
+				t.Errorf("at %s over %s a shed call was answered %s after %d handler call(s), want an input_required result with no input requests after one (%s). %s",
+					modernVersion, tr, ex.describe(), counts.busyCalls.Load(), sdk, fix)
+			}
+		})
+	}
 	t.Run(modernVersion+" through the SDK client", func(t *testing.T) {
 		s, counts := newMatrixServer(nil)
 		cs := sdkSession(t, s, tenancy.EraModern)
@@ -1640,16 +2243,24 @@ const (
 	// typedNilMarker starts the line the child prints, so that the parent finds
 	// it among the test framework's own output.
 	typedNilMarker = "typed nil answered:"
+	// typedNilRecovered starts the line the child prints when its outermost
+	// middleware recovered a panic.
+	typedNilRecovered = "typed nil recovered by a middleware:"
 )
 
 // TestTypedNilResult_FromAMiddleware_NullAtLegacyAndAPanicAtModern holds what
 // go-sdk does with a receiving middleware that answers with a typed nil result
 // and no error: at 2025-11-25 it sends a null result, and at 2026-07-28 it
-// dereferences the nil in setCompleteResultType, after the middleware chain
-// has returned, where no middleware can recover it, and the process ends. The
-// register's refusals are therefore errors, never a nil result, on every
-// channel. Each era is answered in a child process of this test binary, so the
-// panic ends the child and not the suite.
+// dereferences the nil after the middleware chain has returned, where no
+// middleware can recover it, and the process ends. The register's refusals are
+// therefore errors, never a nil result, on every channel.
+//
+// Each era is answered in a child process of this test binary, so the panic
+// ends the child and not the suite. The child's outermost receiving middleware
+// recovers any panic the chain raises, which is what makes "no middleware can
+// recover it" a fact this test observes rather than a place in the SDK it
+// names: v1.8.0 dereferences the nil in setCompleteResultType, and a bump that
+// moves the dereference without moving it into the chain still passes.
 func TestTypedNilResult_FromAMiddleware_NullAtLegacyAndAPanicAtModern(t *testing.T) {
 	if revision := os.Getenv(typedNilChild); revision != "" {
 		answerTypedNil(t, revision)
@@ -1665,15 +2276,21 @@ func TestTypedNilResult_FromAMiddleware_NullAtLegacyAndAPanicAtModern(t *testing
 	})
 	t.Run(modernVersion, func(t *testing.T) {
 		status, out := runTypedNilChild(t, modernVersion)
-		if status == 0 || !strings.Contains(out, "nil pointer dereference") || !strings.Contains(out, "setCompleteResultType") {
-			t.Errorf("at %s a typed nil result exited %d and printed:\n%s\nwant the process to panic in setCompleteResultType (%s). go-sdk no longer ends the process on it: the spec's Refusal channels section and the refusals the layers return may relax that rule in this same pull request.",
+		switch {
+		case strings.Contains(out, typedNilRecovered):
+			t.Errorf("at %s a typed nil result panicked inside the middleware chain, where the child's outermost middleware recovered it (%s), exit %d:\n%s\nThe spec's Refusal channels section says nothing can recover it: edit that sentence in this same pull request. A refusal must still be an error, since the recovered call answers nothing the register declares.",
+				modernVersion, sdk, status, out)
+		case status == 0 || !strings.Contains(out, "panic: ") || !strings.Contains(out, "nil pointer dereference"):
+			t.Errorf("at %s a typed nil result exited %d and printed:\n%s\nwant the process to end on a nil pointer dereference no middleware recovered (%s). go-sdk no longer ends the process on it: the spec's Refusal channels section and the refusals the layers return may relax that rule in this same pull request.",
 				modernVersion, status, out, sdk)
 		}
 	})
 }
 
 // answerTypedNil is the child: it answers one tools/list with a typed nil
-// result in revision and prints what the client read.
+// result in revision and prints what the client read. Its outermost receiving
+// middleware, added last and so wrapping every other, recovers a panic raised
+// anywhere in the chain and says so.
 func answerTypedNil(t *testing.T, revision string) {
 	t.Helper()
 	e := tenancy.EraLegacy
@@ -1685,7 +2302,18 @@ func answerTypedNil(t *testing.T, revision string) {
 		var none *mcp.ListToolsResult
 		return none, nil
 	}))
-	ex := dial(t, s, e).call(t, methodToolsList, nil)
+	s.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (res mcp.Result, err error) {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					fmt.Println(typedNilRecovered, recovered)
+					res, err = nil, fmt.Errorf("recovered: %v", recovered)
+				}
+			}()
+			return next(ctx, method, req)
+		}
+	})
+	ex := dial(t, s, route{era: e}).call(t, methodToolsList, nil)
 	fmt.Println(typedNilMarker, ex.describe())
 }
 
@@ -1729,35 +2357,38 @@ func runTypedNilChild(t *testing.T, revision string) (int, string) {
 // streams by context rather than by building the result.
 func TestSubscriptionsListenResult_BuiltByApplicationCode_AnswersOnlyInPlaceOfTheSDKHandler(t *testing.T) {
 	sdk := sdkName()
-	t.Run("a middleware's own result answers a listen before anything is subscribed", func(t *testing.T) {
-		s, counts := newMatrixServer(nil)
-		s.AddReceivingMiddleware(answerWith(methodListen, func() (mcp.Result, error) {
-			return &mcp.SubscriptionsListenResult{Meta: mcp.Meta{endReasonKey: endReason}}, nil
-		}))
-		ex := dial(t, s, tenancy.EraModern).call(t, methodListen, listenParams(resourceURI))
-		result, ok := ex.result()
-		if !ok || ex.acknowledged() || metaOf(result)[endReasonKey] != endReason || result["resultType"] != "complete" || counts.subscribes.Load() != 0 {
-			t.Errorf("a listen answered by a middleware with a SubscriptionsListenResult it built reached the client as %s after %d subscribe(s), want that result, complete, with nothing acknowledged or subscribed (%s). cmd/server's listenStreams ends streams on the strength of what the SDK does with this result: re-read it in this same pull request.",
-				ex.describe(), counts.subscribes.Load(), sdk)
-		}
-	})
-	t.Run("an acknowledged stream ends with the SDK's own result once its handler's context ends", func(t *testing.T) {
-		s, counts := newMatrixServer(nil)
-		s.AddReceivingMiddleware(attempt{tenancy.ListenEnd, endedStream}.middleware(methodListen))
-		s.AddSendingMiddleware(endOnAcknowledgment)
-		w := dial(t, s, tenancy.EraModern)
-		id := w.start(t, methodListen, listenParams(resourceURI))
-		ex := w.await(t, id)
-		result, ok := ex.result()
-		meta := metaOf(result)
-		// The id is compared as JSON writes it: the SDK holds a numeric id as
-		// an int64, and a JSON number decodes as a float64.
-		if !ok || !ex.acknowledged() || result["resultType"] != "complete" || fmt.Sprint(meta[mcp.MetaKeySubscriptionID]) != fmt.Sprint(id.Raw()) ||
-			meta[endReasonKey] != endReason || counts.subscribes.Load() != 1 || counts.unsubscribes.Load() != 1 {
-			t.Errorf("a listen whose handler's context ended after the acknowledgment reached the client as %s after %d subscribe(s) and %d unsubscribe(s), want the SDK's complete result carrying its subscription id %v and the stamped reason, after one of each (%s). This is how cmd/server's listenStreams ends a stream, and the ListenEnd channel of Carriages() rests on it: re-read both in this same pull request.",
-				ex.describe(), counts.subscribes.Load(), counts.unsubscribes.Load(), id.Raw(), sdk)
-		}
-	})
+	for _, tr := range transports() {
+		r := route{era: tenancy.EraModern, transport: tr}
+		t.Run("a middleware's own result answers a listen before anything is subscribed over "+tr.String(), func(t *testing.T) {
+			s, counts := newMatrixServer(nil)
+			s.AddReceivingMiddleware(answerWith(methodListen, func() (mcp.Result, error) {
+				return &mcp.SubscriptionsListenResult{Meta: mcp.Meta{endReasonKey: endReason}}, nil
+			}))
+			ex := dial(t, s, r).call(t, methodListen, listenParams(resourceURI))
+			result, ok := ex.result()
+			if !ok || ex.acknowledged() || metaOf(result)[endReasonKey] != endReason || result["resultType"] != "complete" || counts.subscribes.Load() != 0 {
+				t.Errorf("over %s a listen answered by a middleware with a SubscriptionsListenResult it built reached the client as %s after %d subscribe(s), want that result, complete, with nothing acknowledged or subscribed (%s). cmd/server's listenStreams ends streams on the strength of what the SDK does with this result: re-read it in this same pull request.",
+					tr, ex.describe(), counts.subscribes.Load(), sdk)
+			}
+		})
+		t.Run("an acknowledged stream ends with the SDK's own result once its handler's context ends over "+tr.String(), func(t *testing.T) {
+			s, counts := newMatrixServer(nil)
+			s.AddReceivingMiddleware(attempt{tenancy.ListenEnd, endedStream}.middleware(methodListen))
+			s.AddSendingMiddleware(endOnAcknowledgment)
+			w := dial(t, s, r)
+			id := w.start(t, methodListen, listenParams(resourceURI))
+			ex := w.await(t, id)
+			result, ok := ex.result()
+			meta := metaOf(result)
+			// The id is compared as JSON writes it: the SDK holds a numeric id as
+			// an int64, and a JSON number decodes as a float64.
+			if !ok || !ex.acknowledged() || result["resultType"] != "complete" || fmt.Sprint(meta[mcp.MetaKeySubscriptionID]) != fmt.Sprint(id.Raw()) ||
+				meta[endReasonKey] != endReason || counts.subscribes.Load() != 1 || counts.unsubscribes.Load() != 1 {
+				t.Errorf("over %s a listen whose handler's context ended after the acknowledgment reached the client as %s after %d subscribe(s) and %d unsubscribe(s), want the SDK's complete result carrying its subscription id %v and the stamped reason, after one of each (%s). This is how cmd/server's listenStreams ends a stream, and the ListenEnd channel of Carriages() rests on it: re-read both in this same pull request.",
+					tr, ex.describe(), counts.subscribes.Load(), counts.unsubscribes.Load(), id.Raw(), sdk)
+			}
+		})
+	}
 }
 
 // TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient holds
@@ -1784,13 +2415,15 @@ func TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient(t *tes
 		}},
 	}
 	for _, server := range servers {
-		t.Run(server.name+" on the wire", func(t *testing.T) {
-			ex := dial(t, server.build(), tenancy.EraModern).call(t, methodListen, listenParams(resourceURI))
-			if we, ok := ex.wireError(); !ok || we.Code != tenancy.CodeServerBusyLegacy || ex.acknowledged() {
-				t.Errorf("a refused listen reached the client as %s, want error %d with no acknowledgment before it (%s). %s",
-					ex.describe(), tenancy.CodeServerBusyLegacy, sdk, fix)
-			}
-		})
+		for _, tr := range transports() {
+			t.Run(server.name+" on the wire over "+tr.String(), func(t *testing.T) {
+				ex := dial(t, server.build(), route{era: tenancy.EraModern, transport: tr}).call(t, methodListen, listenParams(resourceURI))
+				if we, ok := ex.wireError(); !ok || we.Code != tenancy.CodeServerBusyLegacy || ex.acknowledged() {
+					t.Errorf("over %s a refused listen reached the client as %s, want error %d with no acknowledgment before it (%s). %s",
+						tr, ex.describe(), tenancy.CodeServerBusyLegacy, sdk, fix)
+				}
+			})
+		}
 		t.Run(server.name+" through the SDK client", func(t *testing.T) {
 			cs := sdkSession(t, server.build(), tenancy.EraModern)
 			if err := cs.Subscribe(context.Background(), &mcp.SubscribeParams{URI: resourceURI}); err != nil {

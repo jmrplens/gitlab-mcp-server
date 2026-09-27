@@ -117,9 +117,14 @@ make the worst case something an operator can predict.
   `notifications/cancelled`.** The 2026-07-28 cancellation page says a server
   "**MUST** send `notifications/cancelled` referencing a `subscriptions/listen`
   request ID when it tears down that subscription stream". This server does not,
-  and cannot: `SubscriptionsListenResult` embeds an unexported type, so
-  application code cannot construct the message, and the SDK exposes no other
-  way to send one. What a client does get **when a watch retires** is the
+  and cannot: go-sdk sends `notifications/cancelled` only for a call of its own
+  that it abandons, and `ServerSession` has no method that sends one for a
+  request the client made. This record used to give the reason as
+  `SubscriptionsListenResult` embedding an unexported type, which was wrong
+  twice: that type is the listen's result rather than the notification, and
+  application code can build one, though the SDK sends it only in place of its
+  own handler, before anything is acknowledged. What a client does get **when a
+  watch retires** is the
   graceful completion result the SDK writes as that handler's context ends,
   which tells a conforming client the stream is over, so the practical gap is
   small. It is recorded here rather than left unstated because it is a MUST that
