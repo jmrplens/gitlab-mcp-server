@@ -427,6 +427,20 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # below says what to do then.
 E2E_GITLAB_TIMEOUT ?= 3600s
 
+# What the two Docker runs of the rebuilt suite, test-e2e-ce and test-e2e-ee,
+# are given because they are the complete runs: the ones whose record says
+# what the suite covers, and so the ones nothing may quietly leave out.
+#
+# E2E_EXTERNAL_NETWORK lets the scenarios that call a public URL (the GitHub,
+# Gists and Bitbucket Cloud importers) run. The harness keeps it opt-in, since
+# such a test fails for reasons that have nothing to do with this server, and
+# a run left without it skipped four scenarios while reading as complete. The
+# host running a complete run has Internet, so it is on here unless the caller
+# set it: an offline host says E2E_EXTERNAL_NETWORK=false in the environment
+# or on the make command line. The process environment outranks every dotenv
+# file the harness reads, so a value in .env does not reach these two targets.
+e2e_complete_run_env = E2E_EXTERNAL_NETWORK="$${E2E_EXTERNAL_NETWORK:-true}"
+
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
 # Instrumented under COVER=1: the binary every documented run drives is the one
 # built here, so this is where -cover has to enter. The target is .PHONY, so an
@@ -437,6 +451,7 @@ e2e-server-binary:
 
 ## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
+	$(e2e_complete_run_env) \
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
@@ -446,6 +461,7 @@ test-e2e-ce: ensure-gotestsum e2e-server-binary
 
 ## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code, run the common and ee packages of the rebuilt suite, tear down.
 test-e2e-ee: ensure-gotestsum e2e-server-binary
+	$(e2e_complete_run_env) \
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
