@@ -135,12 +135,12 @@ type fakeHead struct{ dir string }
 
 // git answers the one git command a recording runs.
 func (h fakeHead) git(_ context.Context, _ string, args ...string) ([]byte, error) {
-	if !slices.Equal(args, []string{"show", committedRevision}) {
+	if !slices.Equal(args, []string{"show", committedRevision()}) {
 		return nil, fmt.Errorf("unexpected git %q", args)
 	}
 	raw, err := os.ReadFile(orbitrecord.Path(h.dir))
 	if err != nil {
-		return nil, fmt.Errorf("git show %s: fatal: path does not exist in 'HEAD'", committedRevision)
+		return nil, fmt.Errorf("git show %s: fatal: path does not exist in 'HEAD'", committedRevision())
 	}
 	return raw, nil
 }

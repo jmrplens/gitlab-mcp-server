@@ -13,14 +13,14 @@ import (
 // committedRevision names the record as HEAD holds it. The path is relative to
 // the directory git runs in, which is the record's own, so it names the same
 // file whichever directory -dir points at inside the repository.
-const committedRevision = "HEAD:./" + orbitrecord.FileName
+func committedRevision() string { return "HEAD:./" + orbitrecord.FileName }
 
 // committedRecord reads the record as HEAD holds it in the repository cfg.dir
 // belongs to. A directory outside any repository, a record HEAD does not hold
 // yet, and a machine with no git all come back as the error they are, which
 // the caller reports as having nothing to compare with.
 func committedRecord(ctx context.Context, cfg genRun) (orbitrecord.Document, error) {
-	raw, err := cfg.git(ctx, cfg.dir, "show", committedRevision)
+	raw, err := cfg.git(ctx, cfg.dir, "show", committedRevision())
 	if err != nil {
 		return orbitrecord.Document{}, err
 	}
