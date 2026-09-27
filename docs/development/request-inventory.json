@@ -1240,6 +1240,12 @@
       "package": "internal/tools",
       "kind": "rest",
       "method": "GET",
+      "path": "/metadata"
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
       "path": "/personal_access_tokens",
       "query": [
         "user_id"
@@ -1624,12 +1630,6 @@
       "kind": "rest",
       "method": "GET",
       "path": "/user"
-    },
-    {
-      "package": "internal/tools",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/version"
     },
     {
       "package": "internal/tools/accessrequests",
@@ -5419,13 +5419,13 @@
       "package": "internal/tools/dynamiccatalog",
       "kind": "rest",
       "method": "GET",
-      "path": "/user"
+      "path": "/metadata"
     },
     {
       "package": "internal/tools/dynamiccatalog",
       "kind": "rest",
       "method": "GET",
-      "path": "/version"
+      "path": "/user"
     },
     {
       "package": "internal/tools/elicitationtools",
@@ -8851,7 +8851,7 @@
         "group_id"
       ],
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 1
       }
     },
     {
@@ -8878,6 +8878,28 @@
       "identifiers": {
         ":group_id": 2
       }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/child/transfer",
+      "body": [
+        "group_id"
+      ]
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/todos",
+      "query": [
+        "action",
+        "group_id",
+        "per_page",
+        "state",
+        "type"
+      ]
     },
     {
       "package": "internal/tools/groupsaml",
@@ -9558,13 +9580,13 @@
       "package": "internal/tools/health",
       "kind": "rest",
       "method": "GET",
-      "path": "/user"
+      "path": "/metadata"
     },
     {
       "package": "internal/tools/health",
       "kind": "rest",
       "method": "GET",
-      "path": "/version"
+      "path": "/user"
     },
     {
       "package": "internal/tools/impersonationtokens",
@@ -9774,7 +9796,7 @@
       "package": "internal/tools/integrations",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/groups/:group_id/integrations/custom.issue-tracker",
+      "path": "/groups/:group_id/integrations/custom-issue-tracker",
       "identifiers": {
         ":group_id": 1
       }
@@ -9783,7 +9805,7 @@
       "package": "internal/tools/integrations",
       "kind": "rest",
       "method": "GET",
-      "path": "/groups/:group_id/integrations/custom.issue-tracker",
+      "path": "/groups/:group_id/integrations/custom-issue-tracker",
       "identifiers": {
         ":group_id": 1
       }
@@ -9792,7 +9814,7 @@
       "package": "internal/tools/integrations",
       "kind": "rest",
       "method": "PUT",
-      "path": "/groups/:group_id/integrations/custom.issue-tracker",
+      "path": "/groups/:group_id/integrations/custom-issue-tracker",
       "body": [
         "webhook"
       ],
@@ -13375,7 +13397,7 @@
       "path": "/orbit/schema",
       "query": [
         "expand",
-        "format"
+        "response_format"
       ]
     },
     {
@@ -15288,6 +15310,19 @@
       "package": "internal/tools/projects",
       "kind": "rest",
       "method": "GET",
+      "path": "/todos",
+      "query": [
+        "action",
+        "per_page",
+        "project_id",
+        "state",
+        "type"
+      ]
+    },
+    {
+      "package": "internal/tools/projects",
+      "kind": "rest",
+      "method": "GET",
       "path": "/users/:user_id/contributed_projects",
       "identifiers": {
         ":user_id": 1
@@ -16250,7 +16285,8 @@
         "per_page",
         "recursive",
         "ref",
-        "sort"
+        "sort",
+        "with_last_commit"
       ],
       "identifiers": {
         ":project_id": 2
@@ -16351,6 +16387,7 @@
       "method": "GET",
       "path": "/projects/:project_id/repository/tree",
       "query": [
+        "page",
         "path",
         "per_page",
         "ref"
@@ -19084,6 +19121,20 @@
       "identifiers": {
         ":project_id": 2
       }
+    },
+    {
+      "package": "internal/tools/waitpoll",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/todos",
+      "query": [
+        "action",
+        "group_id",
+        "per_page",
+        "project_id",
+        "state",
+        "type"
+      ]
     },
     {
       "package": "internal/tools/wikis",

@@ -15,7 +15,7 @@ import (
 // in them, so no rule here could see a field this server sends as null on every
 // call.
 //
-// The defect it was built against is `package_protection_rule.update`.
+// The defect it was built against is `package.protection_rule_update`.
 // client-go's UpdatePackageProtectionRulesOptions declares package_name_pattern
 // and package_type without omitempty, so encoding/json writes both keys
 // whatever the handler filled in, and a caller changing only the minimum access

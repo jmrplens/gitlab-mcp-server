@@ -888,9 +888,9 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_group_share_with_group: Share a GitLab group with another group (Groups API).
 - gitlab_group_shared_projects_list: List projects shared with a GitLab group.
 - gitlab_group_shared_with_list: List groups shared with a GitLab group (group-to-group shares).
-- gitlab_group_transfer: Transfer a GitLab group under a new parent (or to top level).
+- gitlab_group_transfer: Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move.
 - gitlab_group_transfer_locations: List candidate parent groups for transferring a GitLab group.
-- gitlab_group_transfer_project: Transfer a project into a GitLab group namespace.
+- gitlab_group_transfer_project: Transfer a project into a GitLab group namespace (administrators only).
 - gitlab_group_unarchive: Unarchive a GitLab group (restore write access).
 - gitlab_group_unshare: Revoke an existing group-to-group share (destructive, requires confirmation).
 - gitlab_group_unshare_from_group: Revoke a group-to-group share (Groups API).
@@ -1146,14 +1146,14 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_mr_note_get: Get a single merge request note by its ID.
 - gitlab_mr_note_update: Update a merge request note's body.
 - gitlab_mr_notes_list: List all notes (comments) on a merge request. Returns: notes with author, body, system/internal flags, and pagination metadata.
-- gitlab_mr_participants: List the participants of a merge request. Returns: participating users with username, name, and state.
+- gitlab_mr_participants: List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email.
 - gitlab_mr_pipelines: List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL.
 - gitlab_mr_raw_diffs: Get the raw unified-diff output for a merge request in plain-text git-apply format.
 - gitlab_mr_rebase: Rebase a merge request's source branch onto its target.
 - gitlab_mr_related_issues: List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata.
 - gitlab_mr_reset_spent_time: Reset a merge request's spent time.
 - gitlab_mr_reset_time_estimate: Clear a merge request's time estimate.
-- gitlab_mr_reviewers: List the reviewers of a merge request. Returns: reviewer users with username, name, and review state.
+- gitlab_mr_reviewers: List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time.
 - gitlab_mr_set_time_estimate: Set a merge request's time estimate.
 - gitlab_mr_state_event_get: Get a single state event for a merge request. Returns: the event with the state value and the acting user.
 - gitlab_mr_state_event_list: List state events for a merge request. Returns: state events with the state value, the acting user, and pagination metadata.
@@ -1318,7 +1318,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_project_star: Star a project.
 - gitlab_project_start_housekeeping: Start housekeeping for a project.
 - gitlab_project_start_mirroring: Trigger a pull-mirror sync.
-- gitlab_project_transfer: Transfer a project to another namespace.
+- gitlab_project_transfer: Transfer a project to another namespace, waiting up to 45 seconds for GitLab to apply the move.
 - gitlab_project_unarchive: Unarchive a project.
 - gitlab_project_unstar: Unstar a project.
 - gitlab_project_update: Update a project's settings.
