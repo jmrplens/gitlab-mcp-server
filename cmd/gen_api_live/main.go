@@ -375,6 +375,10 @@ var createScriptFile = func() (scriptFile, error) { return os.CreateTemp("", "in
 // rather than a concession.
 const stagedScriptMode os.FileMode = 0o644
 
+// stagingScriptErr prefixes each way staging the script can fail, so the four
+// read as the one step they are.
+const stagingScriptErr = "staging the introspection script: %w"
+
 // dockerRun boots the image, waits for Rails, runs the script inside and
 // returns its output.
 //
@@ -417,17 +421,17 @@ func dockerRun(image string, keep bool) ([]byte, origin, error) {
 
 	script, err := createScriptFile()
 	if err != nil {
-		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", err)
+		return nil, origin{}, fmt.Errorf(stagingScriptErr, err)
 	}
 	defer func() { _ = os.Remove(script.Name()) }()
 	if _, writeErr := script.WriteString(introspectScript); writeErr != nil {
-		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", writeErr)
+		return nil, origin{}, fmt.Errorf(stagingScriptErr, writeErr)
 	}
 	if chmodErr := script.Chmod(stagedScriptMode); chmodErr != nil {
-		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", chmodErr)
+		return nil, origin{}, fmt.Errorf(stagingScriptErr, chmodErr)
 	}
 	if closeErr := script.Close(); closeErr != nil {
-		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", closeErr)
+		return nil, origin{}, fmt.Errorf(stagingScriptErr, closeErr)
 	}
 	if out, copyErr := docker.command(ctx, "cp", script.Name(), containerName+":/tmp/introspect.rb").CombinedOutput(); copyErr != nil {
 		return nil, origin{}, fmt.Errorf("copying the introspection script in: %w: %s", copyErr, strings.TrimSpace(string(out)))
