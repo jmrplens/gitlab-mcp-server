@@ -6648,7 +6648,7 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 		SessionTimeout: config.DefaultSessionTimeout,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
-		// to build the full individual catalog — which, under the race
+		// to build the full individual catalog, which, under the race
 		// detector, costs longer than any sane client timeout.
 		ToolSurface: config.ToolSurfaceDynamic,
 	}
@@ -6667,7 +6667,7 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Legacy mode has no metadata endpoint — the catch-all handler will respond
+	// Legacy mode has no metadata endpoint, so the catch-all handler will respond
 	// but not with a valid OAuth metadata JSON.
 	if resp.StatusCode == http.StatusOK {
 		var meta map[string]any
