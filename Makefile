@@ -2038,8 +2038,8 @@ audit-graphql-documents:
 check-graphql-shapes:
 	go run ./cmd/audit_graphql_shapes/
 
-## audit-graphql-shapes: same gate, listing every pairing judged and every
-## selection nothing reads.
+## audit-graphql-shapes: same gate, listing every pairing judged, every
+## selection nothing reads and every position left unjudged.
 audit-graphql-shapes:
 	go run ./cmd/audit_graphql_shapes/ -v
 

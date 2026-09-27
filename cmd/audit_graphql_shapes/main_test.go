@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -86,8 +88,9 @@ type Subscription { ping: String! }
 `
 
 // fixtureModule writes a throwaway module holding the stand-in gql package
-// and one package per entry, and returns its root. A source's "@@" is a
-// backtick.
+// and one package per entry, and returns its root. An entry's name is the
+// package's directory, which may be nested, and its file is named after the
+// last element. A source's "@@" is a backtick.
 func fixtureModule(t *testing.T, packages map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -103,7 +106,7 @@ func fixtureModule(t *testing.T, packages map[string]string) string {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatalf("prepare the fixture: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, name+".go"), []byte(source), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, path.Base(name)+".go"), []byte(source), 0o600); err != nil {
 			t.Fatalf("prepare the fixture: %v", err)
 		}
 	}
@@ -113,11 +116,11 @@ func fixtureModule(t *testing.T, packages map[string]string) string {
 // schemaFile writes an SDL where -schema can read it.
 func schemaFile(t *testing.T, sdl string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "schema.graphql")
-	if err := os.WriteFile(path, []byte(sdl), 0o600); err != nil {
+	file := filepath.Join(t.TempDir(), "schema.graphql")
+	if err := os.WriteFile(file, []byte(sdl), 0o600); err != nil {
 		t.Fatalf("write the schema: %v", err)
 	}
-	return path
+	return file
 }
 
 // walkDeadline bounds one run of the audit over a fixture module. Every
@@ -604,7 +607,7 @@ func TestRun_FixtureWhereDecodersDisagree_NamesEveryDisagreementAndFails(t *test
 		"    - data.project.mystery: Mystery is a scalar this audit has no serialization for",
 		"    - data.project.extra: decoded from a field the document never selects, so it is always empty",
 		"    ~ data.project.meta: selected and never decoded",
-		"audit_graphql_shapes: 11 disagreement(s) in 2 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
+		"audit_graphql_shapes: 11 disagreement(s) in 2 pairing(s), 0 unpaired or unreadable, 0 stale declaration(s) (",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
@@ -1113,7 +1116,7 @@ func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWould
 		"    - data.project.stars: Int! is sent as a JSON integer and is decoded into json.Number" + option,
 		"    - data.project.severity: Severity! is sent as a JSON string and is decoded into json.Number" + option,
 		"    - data.project.counted: BigInt! is sent as a JSON string and is decoded into tagged.count" + option,
-		"audit_graphql_shapes: 13 disagreement(s) in 4 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
+		"audit_graphql_shapes: 13 disagreement(s) in 4 pairing(s), 0 unpaired or unreadable, 0 stale declaration(s) (",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
@@ -1129,6 +1132,392 @@ func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWould
 		t.Run(accepted, func(t *testing.T) {
 			if strings.Contains(errOut, accepted) {
 				t.Errorf("run() reports %q, which encoding/json decodes:\n%s", accepted, errOut)
+			}
+		})
+	}
+}
+
+// receiverFixture is a decoder typed by the type parameter of a generic type
+// its wrapper is a method of: called on an instance straight away, and through
+// a sibling method whose receiver names the parameter differently and hands
+// the document on. The type of the one field the document selects is written
+// in place of STARS, and anything written in place of MORE is appended.
+const receiverFixture = `package receiver
+
+import "fixture/gql"
+
+const getProject = @@
+query { project(fullPath: "x") { stars } }
+@@
+
+type projectNode struct {
+	Stars STARS @@json:"stars"@@
+}
+
+type client[T any] struct {
+	service gql.Service
+}
+
+func (c *client[T]) fetch(query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = c.service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+
+func (c *client[U]) relay(query string) {
+	c.fetch(query)
+}
+
+func get(service gql.Service) {
+	(&client[projectNode]{service: service}).fetch(getProject)
+	(&client[projectNode]{service: service}).relay(getProject)
+}
+MORE`
+
+// unboundParameterSources leave a decoder's type parameter bound by no caller
+// in the two ways a method can and the one way a generic function shares with
+// it: a sibling method naming the document itself, so the parameter is bound
+// to the sibling's own and the walk ends there, and a method or a function
+// that retries with a document of its own, on its own receiver or under its
+// own type parameter, which binds the parameter to itself.
+const unboundParameterSources = `
+func (c *client[U]) refresh() {
+	c.fetch(getProject)
+}
+
+type retrier[T any] struct {
+	service gql.Service
+}
+
+func (r *retrier[T]) fetch(query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = r.service.Do(gql.GraphQLQuery{Query: query}, &resp)
+	if resp.Data.Project == nil {
+		r.fetch(getProject)
+	}
+}
+
+func fetchAs[T any](service gql.Service, query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: query}, &resp)
+	if resp.Data.Project == nil {
+		fetchAs[T](service, getProject)
+	}
+}
+`
+
+// pairFixture is a decoder typed by the second of two receiver type
+// parameters, called on an instance whose first type argument cannot hold the
+// object. Only the pairing the declaration spells binds the decoder to the
+// node: paired the other way round, the object would be judged into bool. The
+// type of the one field the document selects is written in place of STARS.
+const pairFixture = `package pair
+
+import "fixture/gql"
+
+const getProject = @@
+query { project(fullPath: "x") { stars } }
+@@
+
+type projectNode struct {
+	Stars STARS @@json:"stars"@@
+}
+
+type client[K any, T any] struct {
+	service gql.Service
+}
+
+func (c *client[K, T]) fetch(query string) {
+	var resp struct {
+		Data struct {
+			Project *T @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = c.service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+
+func get(service gql.Service) {
+	(&client[bool, projectNode]{service: service}).fetch(getProject)
+}
+`
+
+// receiverSource writes receiverFixture and pairFixture with the field type
+// given, and the methods given appended to the first.
+func receiverSource(stars, more string) map[string]string {
+	return map[string]string{
+		"receiver": strings.NewReplacer("STARS", stars, "MORE", more).Replace(receiverFixture),
+		"pair":     strings.ReplaceAll(pairFixture, "STARS", stars),
+	}
+}
+
+// TestRun_FixtureWhoseDecoderIsTypedByAGenericReceiver_JudgesTheTypeTheReceiverNames
+// verifies that a wrapper that is a method of a generic type has its decoder
+// judged as the type the receiver it is called on names.
+//
+// A method has no type parameters of its own and go/types records no instance
+// for a method selector, so a binding read only from the call's instance left
+// every such decoder typed by a parameter nothing binds: the run passed a
+// string field for an Int, counting the position as a selection nothing reads.
+// The binding is read off the receiver instead, both where the call is made on
+// an instance and where a sibling method, whose receiver names the parameter
+// U, hands the document on to be named by its own caller. A receiver with two
+// parameters pairs them with its type arguments in the order the type
+// declares them, which is what binds the decoder to the node rather than to
+// the bool beside it. Once the field is an int every pairing agrees, and
+// nothing is left for the summary to count as unread or unjudged.
+func TestRun_FixtureWhoseDecoderIsTypedByAGenericReceiver_JudgesTheTypeTheReceiverNames(t *testing.T) {
+	t.Run("a field that cannot hold what GitLab sends fails the run", func(t *testing.T) {
+		status, out, errOut := runFixture(t, receiverSource("string", ""), true)
+
+		if status != 1 {
+			t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		for _, want := range []string{
+			"fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:31)\n" +
+				"    - data.project.stars: Int! is sent as a JSON integer and is decoded into string\n",
+			"fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:32)\n" +
+				"    - data.project.stars: Int! is sent as a JSON integer and is decoded into string\n",
+			"fixture/pair getProject (pair/pair.go:23, handed over at pair/pair.go:27)\n" +
+				"    - data.project.stars: Int! is sent as a JSON integer and is decoded into string\n",
+			"\naudit_graphql_shapes: 3 disagreement(s) in 3 pairing(s), 0 unpaired or unreadable, 0 stale declaration(s) (",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(errOut, want) {
+					t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+				}
+			})
+		}
+	})
+	t.Run("a field that holds it passes with nothing counted as unread", func(t *testing.T) {
+		status, out, errOut := runFixture(t, receiverSource("int", ""), true)
+
+		if status != 0 {
+			t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		for _, want := range []string{
+			"    ok  fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:31)\n",
+			"    ok  fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:32)\n",
+			"    ok  fixture/pair getProject (pair/pair.go:23, handed over at pair/pair.go:27)\n",
+			"\naudit_graphql_shapes: 3 pairing(s) agree with their documents, 0 selection(s) nothing reads (",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(out, want) {
+					t.Errorf("run() stdout lacks %q:\n%s", want, out)
+				}
+			})
+		}
+		if strings.Contains(out, "unjudged") {
+			t.Errorf("run() reports a position left unjudged although the receiver binds it:\n%s", out)
+		}
+	})
+}
+
+// unjudgedNote is the line -v writes under a pairing for a position typed by
+// a parameter no caller binds.
+const unjudgedNote = "    ~ data.project: typed by a parameter no caller binds, so it is left unjudged\n"
+
+// unboundPairings are the headings of the three pairings unboundParameterSources
+// adds, each holding one position left unjudged.
+var unboundPairings = []string{
+	"fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:36)\n",
+	"fixture/receiver getProject (receiver/receiver.go:49, handed over at receiver/receiver.go:51)\n",
+	"fixture/receiver getProject (receiver/receiver.go:61, handed over at receiver/receiver.go:63)\n",
+}
+
+// unjudgedSummary is what both summaries say of those three.
+const unjudgedSummary = ", 3 position(s) in 3 pairing(s) left unjudged, typed by a parameter no caller binds ("
+
+// TestRun_FixtureWhoseTypeParameterNothingBinds_CountsItApartAndPasses
+// verifies what becomes of a position typed by a parameter no caller binds:
+// it is noted under -v, it does not fail the run, and the summary counts it on
+// its own rather than among the selections nothing reads, and leaves the
+// pairing holding it out of those that agree.
+//
+// Those are different statements. A selection nothing reads was judged and
+// found unread; a position typed by an unbound parameter was never judged, and
+// a summary that adds the two, or counts the pairing among those that agree,
+// tells a reader the run looked at a decoder it did not. The retriers are the
+// second reason the positions are held here: a method that retries on its own
+// receiver, and a generic function that retries under its own type parameter,
+// bind the parameter to itself, which a walk following bindings followed
+// forever (the function's did before the method's was bound at all), so the
+// run is also held to ending there with a note.
+func TestRun_FixtureWhoseTypeParameterNothingBinds_CountsItApartAndPasses(t *testing.T) {
+	status, out, errOut := runFixture(t, receiverSource("int", unboundParameterSources), true)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	wants := []string{
+		"    ok  fixture/receiver getProject (receiver/receiver.go:23, handed over at receiver/receiver.go:31)\n",
+		"\naudit_graphql_shapes: 3 pairing(s) agree with their documents, 0 selection(s) nothing reads" + unjudgedSummary,
+	}
+	for _, heading := range unboundPairings {
+		wants = append(wants, heading+unjudgedNote)
+	}
+	for _, want := range wants {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("run() stdout lacks %q:\n%s", want, out)
+			}
+		})
+	}
+}
+
+// TestRun_FailingFixtureWithATypeParameterNothingBinds_SaysSoOnTheFailingSummary
+// verifies that a failing run counts the positions it left unjudged on the
+// summary it ends with, as a passing run does, with -v and without it.
+//
+// A failing run is the one CI stops on, read without -v, and its summary is
+// the last line it prints: a decoder it never judged must be named there too,
+// or a reader fixing the disagreements it lists is told nothing about the
+// pairings it could not look at. The count stays apart from the calls and
+// documents that could not be paired or read, which fail the run, while these
+// do not; -v adds the note under each pairing on stdout, and without it stdout
+// carries nothing at all.
+func TestRun_FailingFixtureWithATypeParameterNothingBinds_SaysSoOnTheFailingSummary(t *testing.T) {
+	const summary = "\naudit_graphql_shapes: 3 disagreement(s) in 6 pairing(s), 0 unpaired or unreadable, 0 stale declaration(s)" + unjudgedSummary
+
+	t.Run("without -v", func(t *testing.T) {
+		status, out, errOut := runFixture(t, receiverSource("string", unboundParameterSources), false)
+
+		if status != 1 {
+			t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		if out != "" {
+			t.Errorf("run() stdout = %q, want nothing without -v", out)
+		}
+		if !strings.Contains(errOut, summary) {
+			t.Errorf("run() stderr lacks %q:\n%s", summary, errOut)
+		}
+		if strings.Contains(errOut, unjudgedNote) {
+			t.Errorf("run() stderr names an unjudged position without -v:\n%s", errOut)
+		}
+	})
+	t.Run("with -v", func(t *testing.T) {
+		status, out, errOut := runFixture(t, receiverSource("string", unboundParameterSources), true)
+
+		if status != 1 {
+			t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		if !strings.Contains(errOut, summary) {
+			t.Errorf("run() stderr lacks %q:\n%s", summary, errOut)
+		}
+		for _, heading := range unboundPairings {
+			t.Run(heading, func(t *testing.T) {
+				if !strings.Contains(out, heading+unjudgedNote) {
+					t.Errorf("run() stdout lacks %q:\n%s", heading+unjudgedNote, out)
+				}
+			})
+		}
+	})
+}
+
+// numberFixture decodes every kind of scalar the judge distinguishes into
+// encoding/json.Number, through a pointer and through an alias too, and one
+// into a type defined from it. Among the string scalars it holds one of each
+// reading: the built-in ID and a BigInt, whose text may be a number, and a
+// global ID and a time, whose text never is, the last two under a ",string"
+// option as well.
+const numberFixture = `package number
+
+import (
+	"encoding/json"
+
+	"fixture/gql"
+)
+
+const getProject = @@
+query { project(fullPath: "x") { id gid createdAt stars score runtime size archived severity counted: stars aliased: score stamp: createdAt key: gid } }
+@@
+
+type count json.Number
+
+type num = json.Number
+
+type node struct {
+	ID       json.Number  @@json:"id"@@
+	Gid      json.Number  @@json:"gid"@@
+	Created  json.Number  @@json:"createdAt"@@
+	Stars    json.Number  @@json:"stars"@@
+	Score    *json.Number @@json:"score"@@
+	Runtime  json.Number  @@json:"runtime"@@
+	Size     json.Number  @@json:"size"@@
+	Archived json.Number  @@json:"archived"@@
+	Severity json.Number  @@json:"severity"@@
+	Counted  count        @@json:"counted"@@
+	Aliased  num          @@json:"aliased"@@
+	Stamp    int64        @@json:"stamp,string"@@
+	Key      json.Number  @@json:"key,string"@@
+}
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Project *node @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &resp)
+}
+`
+
+// TestRun_FixtureDecodingIntoJSONNumber_JudgesWhatEncodingJSONWouldDo verifies
+// that json.Number is held to what encoding/json does with it rather than to
+// its kind.
+//
+// It is a string kind, and a judge reading kinds alone refused it every
+// number GitLab sends, which is what the type exists to decode: measured on Go
+// 1.27.1, under both JSON engines, it takes a JSON integer and a JSON number
+// with a fraction as the text they were written in, and it takes a JSON
+// string only when the string's text is a number. So an Int, a Float and a
+// Duration are held, through a pointer or an alias alike, and so is a BigInt,
+// a number sent as a string, and the built-in ID, whose form GraphQL leaves
+// to the server; an enum value is refused, being a name, and so is a boolean.
+// So are a global ID and a time, whose text is a URI and an ISO 8601 stamp and
+// never a number, which is also why a ",string" option refuses them: the
+// option reads the same literal out of the string that json.Number does. A
+// type defined from json.Number is no longer the type encoding/json
+// recognizes, and refuses a number as any string does.
+func TestRun_FixtureDecodingIntoJSONNumber_JudgesWhatEncodingJSONWouldDo(t *testing.T) {
+	status, out, errOut := runFixture(t, map[string]string{"number": numberFixture}, true)
+
+	if status != 1 {
+		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	const text = ", which takes a JSON string only when its text is a number\n"
+	const option = ` under a ",string" option, which reads only a number or a boolean written as a JSON string's text` + "\n"
+	for _, want := range []string{
+		"fixture/number getProject (number/number.go:39)\n",
+		"    - data.project.gid: VulnerabilityID! is sent as a JSON string and is decoded into json.Number" + text,
+		"    - data.project.createdAt: Time! is sent as a JSON string and is decoded into json.Number" + text,
+		"    - data.project.archived: Boolean! is sent as a JSON boolean and is decoded into json.Number\n",
+		"    - data.project.severity: Severity! is sent as a JSON string and is decoded into json.Number" + text,
+		"    - data.project.counted: Int! is sent as a JSON integer and is decoded into number.count\n",
+		"    - data.project.stamp: Time! is sent as a JSON string and is decoded into int64" + option,
+		"    - data.project.key: VulnerabilityID! is sent as a JSON string and is decoded into json.Number" + option,
+		"\naudit_graphql_shapes: 7 disagreement(s) in 1 pairing(s), 0 unpaired or unreadable, 0 stale declaration(s) (",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errOut, want) {
+				t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+			}
+		})
+	}
+	for _, accepted := range []string{"data.project.id:", "data.project.stars:", "data.project.score:", "data.project.runtime:", "data.project.size:", "data.project.aliased:"} {
+		t.Run(accepted, func(t *testing.T) {
+			if strings.Contains(errOut+out, accepted) {
+				t.Errorf("run() reports %q, which encoding/json decodes into json.Number:\nstdout:\n%s\nstderr:\n%s", accepted, out, errOut)
 			}
 		})
 	}
@@ -1300,7 +1689,7 @@ func TestRun_AProblemWithNoDisagreement_StillFails(t *testing.T) {
 	if status != 1 {
 		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
 	}
-	if want := "0 disagreement(s) in 1 pairing(s), 1 unpaired or unjudged, 0 stale declaration(s)"; !strings.Contains(errOut, want) {
+	if want := "0 disagreement(s) in 1 pairing(s), 1 unpaired or unreadable, 0 stale declaration(s)"; !strings.Contains(errOut, want) {
 		t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
 	}
 }
@@ -1342,4 +1731,184 @@ func TestRelative_APathThatCannotBeMadeRelative_IsLeftAsItIs(t *testing.T) {
 	if got := relative(position, t.TempDir()); got != position.Filename+":11" {
 		t.Errorf("relative(a relative path) = %q, want %q", got, position.Filename+":11")
 	}
+}
+
+// underInternal moves fixture packages under internal/, which is the one tree
+// the command's own patterns read.
+func underInternal(sources map[string]string) map[string]string {
+	moved := make(map[string]string, len(sources))
+	for name, source := range sources {
+		moved["internal/"+name] = source
+	}
+	return moved
+}
+
+// commandFixture is a module holding the receiver fixtures under internal/,
+// where every pairing agrees, and one package beside internal/ that would fail
+// the run if the command read it.
+func commandFixture(t *testing.T) string {
+	t.Helper()
+	sources := underInternal(receiverSource("int", ""))
+	sources["stray"] = strings.ReplaceAll(pairFixture, "STARS", "string")
+	return fixtureModule(t, sources)
+}
+
+// TestRunMain_EveryFlagReachesTheRun verifies what main hands the run from
+// the command line: -dir names the tree, -v lists what agreed, -schema names
+// the file that judges, -report names where the sent list is written, the
+// patterns are ./internal/... alone, and the declarations are the committed
+// table.
+//
+// The last is why the run fails. A fixture module has none of the sends the
+// committed declarations answer, so every one of them is stale there, which is
+// exactly what a run handed the real table and not a fixture's must report;
+// a command wired to no table would pass. The package beside internal/ is the
+// patterns' witness: it disagrees with its document, so a run reading it
+// would name it.
+func TestRunMain_EveryFlagReachesTheRun(t *testing.T) {
+	if len(declaredSent) == 0 {
+		t.Fatal("declaredSent is empty, so a run handed it cannot be told from one handed nothing")
+	}
+	schema := schemaFile(t, testSchema)
+	report := filepath.Join(t.TempDir(), "sent.json")
+	var out, errOut bytes.Buffer
+
+	status := runMain([]string{"-dir", commandFixture(t), "-v", "-schema", schema, "-report", report}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("runMain() = %d, want 1 for the stale declarations; stdout:\n%s\nstderr:\n%s", status, out.String(), errOut.String())
+	}
+	for _, testCase := range []struct{ name, stream, want string }{
+		{
+			name: "-dir and -v", stream: out.String(),
+			want: "    ok  fixture/internal/pair getProject (internal/pair/pair.go:23, handed over at internal/pair/pair.go:27)\n",
+		},
+		{name: "-report", stream: out.String(), want: " -> " + report + "\n"},
+		{name: "-schema", stream: errOut.String(), want: " types from " + schema + ", not the pinned schema)\n"},
+		{
+			name: "the committed declarations", stream: errOut.String(),
+			want: fmt.Sprintf("0 disagreement(s) in 3 pairing(s), 0 unpaired or unreadable, %d stale declaration(s) (", len(declaredSent)),
+		},
+		{name: "a stale declaration by its key", stream: errOut.String(), want: "sent_declarations.go: " + declaredSent[0].key() + " is declared"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if !strings.Contains(testCase.stream, testCase.want) {
+				t.Errorf("the stream lacks %q:\n%s", testCase.want, testCase.stream)
+			}
+		})
+	}
+	if strings.Contains(out.String()+errOut.String(), "stray") {
+		t.Errorf("runMain() read a package outside ./internal/...:\nstdout:\n%s\nstderr:\n%s", out.String(), errOut.String())
+	}
+	if _, err := os.Stat(report); err != nil {
+		t.Errorf("runMain() did not write the report -report names: %v", err)
+	}
+}
+
+// TestRunMain_ACommandLineItCannotRead_EndsAsTheFlagPackageWould verifies the
+// two statuses a command line decides before anything runs: -h asks for the
+// usage and is answered with it and 0, and a flag nobody defined is refused
+// with 2, both on stderr and neither with a run.
+func TestRunMain_ACommandLineItCannotRead_EndsAsTheFlagPackageWould(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		args       []string
+		wantStatus int
+		wantErr    string
+	}{
+		{name: "-h", args: []string{"-h"}, wantStatus: 0, wantErr: "  -schema string\n"},
+		{name: "an unknown flag", args: []string{"-nope"}, wantStatus: 2, wantErr: "flag provided but not defined: -nope\n"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+
+			status := runMain(testCase.args, &out, &errOut)
+
+			if status != testCase.wantStatus {
+				t.Errorf("runMain(%q) = %d, want %d", testCase.args, status, testCase.wantStatus)
+			}
+			if !strings.Contains(errOut.String(), testCase.wantErr) {
+				t.Errorf("runMain(%q) stderr lacks %q:\n%s", testCase.args, testCase.wantErr, errOut.String())
+			}
+			if out.Len() != 0 {
+				t.Errorf("runMain(%q) wrote to stdout:\n%s", testCase.args, out.String())
+			}
+		})
+	}
+}
+
+// TestMain_HandsRunMainTheProcessAndExitsWithItsStatus verifies the one thing
+// main does: it hands runMain the process's arguments after the program name,
+// its standard output and its standard error in that order, and exits with
+// what runMain returns. Each case is held on both streams, since handed over
+// the other way round the text is not lost, only moved, and the streams are
+// read when main runs, so replacing them here is what main sees.
+func TestMain_HandsRunMainTheProcessAndExitsWithItsStatus(t *testing.T) {
+	previousExit, previousArgs := exitProcess, os.Args
+	previousStdout, previousStderr := os.Stdout, os.Stderr
+	t.Cleanup(func() {
+		exitProcess, os.Args = previousExit, previousArgs
+		os.Stdout, os.Stderr = previousStdout, previousStderr
+	})
+	root := commandFixture(t)
+	for _, testCase := range []struct {
+		name       string
+		args       []string
+		wantStatus int
+		wantOut    string
+		wantErr    string
+	}{
+		{
+			name: "a run", args: []string{"-dir", root, "-v", "-schema", schemaFile(t, testSchema)}, wantStatus: 1,
+			wantOut: "    ok  fixture/internal/pair getProject (", wantErr: " stale declaration(s) (",
+		},
+		{name: "an unknown flag", args: []string{"-nope"}, wantStatus: 2, wantErr: "flag provided but not defined: -nope\n"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var statuses []int
+			exitProcess = func(status int) { statuses = append(statuses, status) }
+			dir := t.TempDir()
+			stdout, stderr := createStream(t, filepath.Join(dir, "stdout")), createStream(t, filepath.Join(dir, "stderr"))
+			os.Args = append([]string{"audit_graphql_shapes"}, testCase.args...)
+			os.Stdout, os.Stderr = stdout, stderr
+
+			main()
+
+			os.Stdout, os.Stderr = previousStdout, previousStderr
+			if len(statuses) != 1 || statuses[0] != testCase.wantStatus {
+				t.Errorf("main() exited with %v, want [%d]", statuses, testCase.wantStatus)
+			}
+			out, errOut := readStream(t, stdout), readStream(t, stderr)
+			if (testCase.wantOut == "" && out != "") || !strings.Contains(out, testCase.wantOut) {
+				t.Errorf("main() stdout = %q, want it to hold %q and nothing if that is empty", out, testCase.wantOut)
+			}
+			if !strings.Contains(errOut, testCase.wantErr) {
+				t.Errorf("main() stderr lacks %q:\n%s", testCase.wantErr, errOut)
+			}
+		})
+	}
+}
+
+// createStream creates an empty file to stand in for one of the process's
+// streams.
+func createStream(t *testing.T, name string) *os.File {
+	t.Helper()
+	file, err := os.Create(name) //#nosec G304 -- a file under the test's own temporary directory
+	if err != nil {
+		t.Fatalf("prepare %s: %v", name, err)
+	}
+	return file
+}
+
+// readStream closes a stand-in stream and returns what was written to it.
+func readStream(t *testing.T, file *os.File) string {
+	t.Helper()
+	if err := file.Close(); err != nil {
+		t.Fatalf("close %s: %v", file.Name(), err)
+	}
+	written, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatalf("read %s: %v", file.Name(), err)
+	}
+	return string(written)
 }

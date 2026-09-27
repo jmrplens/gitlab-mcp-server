@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // oracleNone is what this dimension has to say about a tier and about a
@@ -126,18 +128,19 @@ func summarizeSent(found []sentField) sentSummary {
 		if !field.declared() {
 			summary.Undeclared++
 		}
+		// A class is one of the three classOf returns and a promise one of the
+		// two sentOf returns, so what is neither of the others is the last.
 		switch field.Class {
 		case sentLeaf:
 			summary.Leaf++
 		case sentObject:
 			summary.Object++
-		case sentCollection:
+		default:
 			summary.Collection++
 		}
-		switch field.Sent {
-		case sentAlways:
+		if field.Sent == sentAlways {
 			summary.Always++
-		case sentNullable:
+		} else {
 			summary.Nullable++
 		}
 	}
@@ -146,11 +149,14 @@ func summarizeSent(found []sentField) sentSummary {
 }
 
 // writeSentReport writes the report where -report names.
+//
+// Rendering it cannot fail: a report holds strings, integers, and slices and
+// structs of them, none of which encoding/json refuses, so a render error
+// would be a defect in this command rather than anything a run could meet,
+// and it stops the run where it happens instead of reading as a write the
+// operator could retry.
 func writeSentReport(path string, report sentReport) error {
-	encoded, err := json.MarshalIndent(report, "", "  ")
-	if err != nil {
-		return fmt.Errorf("render the sent report: %w", err)
-	}
+	encoded := cmdutil.Must(json.MarshalIndent(report, "", "  "))
 	if written := os.WriteFile(path, append(encoded, '\n'), 0o600); written != nil {
 		return fmt.Errorf("write the sent report: %w", written)
 	}
