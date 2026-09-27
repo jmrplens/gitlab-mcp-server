@@ -45,6 +45,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -62,6 +66,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	healthtool "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -1776,6 +1781,76 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	serverInfo := initializeTestServer(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+}
+
+// TestCreateServer_TheHandshakeCarriesEachIdentityFieldInItsPlace covers the
+// Implementation a client renders in place of the identifier. The title, the
+// description, the website and the version are all strings, and a client or a
+// registry shows each where it belongs, so every one is compared with its own
+// constant.
+func TestCreateServer_TheHandshakeCarriesEachIdentityFieldInItsPlace(t *testing.T) {
+	session := newInMemorySession(t, mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic}))
+	info := session.InitializeResult().ServerInfo
+
+	for _, field := range []struct{ name, got, want string }{
+		{"name", info.Name, serverName},
+		{"title", info.Title, serverDisplayTitle},
+		{"description", info.Description, projectDescription},
+		{"websiteUrl", info.WebsiteURL, projectWebsite},
+		{"version", info.Version, version},
+	} {
+		t.Run(field.name, func(t *testing.T) {
+			if field.got != field.want {
+				t.Errorf("serverInfo.%s = %q, want %q", field.name, field.got, field.want)
+			}
+		})
+	}
+}
+
+// TestCreateServer_SpansNameTheSurfaceAndTheTransportApart covers the two
+// constant attributes every MCP span carries: which tool surface served the
+// call and which transport it came over. Both are short strings set side by
+// side, so the test serves the meta surface over a pipe, where neither value
+// could be mistaken for the other.
+func TestCreateServer_SpansNameTheSurfaceAndTheTransportApart(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previous)
+		_ = provider.Shutdown(context.Background())
+	})
+
+	server, err := createServer(t.Context(), newMockGitLabClient(t), &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta},
+		withTransport(mcpotel.TransportPipe))
+	if err != nil {
+		t.Fatalf("createServer: %v", err)
+	}
+	session := newInMemorySession(t, server)
+	if _, listErr := session.ListTools(t.Context(), nil); listErr != nil {
+		t.Fatalf("ListTools: %v", listErr)
+	}
+
+	checked := 0
+	for _, span := range recorder.Ended() {
+		attrs := map[attribute.Key]string{}
+		for _, kv := range span.Attributes() {
+			attrs[kv.Key] = kv.Value.Emit()
+		}
+		surface, ok := attrs[mcpotel.AttrToolSurface]
+		if !ok {
+			continue
+		}
+		checked++
+		if surface != config.ToolSurfaceMeta || attrs[mcpotel.AttrNetworkTransport] != mcpotel.TransportPipe {
+			t.Errorf("span %q: surface %q, transport %q; want %q over %q",
+				span.Name(), surface, attrs[mcpotel.AttrNetworkTransport], config.ToolSurfaceMeta, mcpotel.TransportPipe)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no span carried the tool surface; the telemetry middleware recorded nothing")
 	}
 }
 
@@ -5824,10 +5899,30 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 	}
 }
 
+// refusalBound is how long a test expecting runHTTP to refuse its
+// configuration lets it run. A refusal returns before anything listens, so
+// the bound is never reached on a correct tree; it exists for the tree where
+// the refusal is gone.
+const refusalBound = 5 * time.Second
+
+// runHTTPExpectingRefusal runs runHTTP under a context that ends on its own,
+// for a test asserting that a configuration is refused. With an unbounded
+// context, a configuration accepted by mistake is served until the test
+// binary's own deadline, so the test reports a timeout of the whole package
+// rather than the acceptance it exists to catch, and every test after it goes
+// unrun. Bounded, the same acceptance ends the serve and returns nil, which the
+// caller's own `err == nil` check reports by name.
+func runHTTPExpectingRefusal(t *testing.T, hcfg *httpConfig) error {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), refusalBound)
+	defer cancel()
+	return runHTTP(ctx, hcfg)
+}
+
 // TestRunHTTP_InvalidAuthMode verifies that runHTTP rejects an unsupported
 // auth-mode value.
 func TestRunHTTP_InvalidAuthMode(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "saml",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
@@ -5849,7 +5944,7 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 // makes free instance selection tolerable for a local single-user deployment
 // does not open it for a deployment forwarding bearer tokens.
 func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:         "",
 		allowAnyGitLabURL: true,
 		// The hatch is only admitted on a listener nobody else can reach, so
@@ -5871,7 +5966,7 @@ func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
 // TestRunHTTP_OAuthCacheTTL_BelowMin verifies that runHTTP rejects an
 // oauth-cache-ttl below the minimum allowed value.
 func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
 		publicURL:      "http://localhost:8080",
@@ -5890,7 +5985,7 @@ func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
 // TestRunHTTP_OAuthCacheTTL_AboveMax verifies that runHTTP rejects an
 // oauth-cache-ttl above the maximum allowed value.
 func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
 		publicURL:      "http://localhost:8080",
@@ -5909,7 +6004,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 // TestRunHTTP_SessionTimeoutExceedsMax verifies that runHTTP rejects a
 // session-timeout that exceeds the maximum.
 func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: 48 * time.Hour,
@@ -5925,7 +6020,7 @@ func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
 // TestRunHTTP_RevalidateIntervalExceedsMax verifies that runHTTP rejects a
 // revalidate-interval that exceeds the maximum.
 func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:          "https://gitlab.example.com",
 		maxHTTPClients:     config.DefaultMaxHTTPClients,
 		sessionTimeout:     config.DefaultSessionTimeout,
@@ -5941,7 +6036,7 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 
 // TestRunHTTP_InvalidGitLabURL verifies that runHTTP rejects a non-HTTP(S) URL.
 func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "ftp://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -7175,7 +7270,7 @@ func TestSSEWriteDeadlineMiddleware_PassesThrough(t *testing.T) {
 // TestRunHTTP_NegativeIdleTimeout_Rejected verifies that runHTTP rejects a
 // negative --http-idle-timeout with an actionable error.
 func TestRunHTTP_NegativeIdleTimeout_Rejected(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:       "https://gitlab.example.com",
 		maxHTTPClients:  config.DefaultMaxHTTPClients,
 		sessionTimeout:  config.DefaultSessionTimeout,
@@ -9448,7 +9543,7 @@ func TestCreateServer_GatewayCompatInvalidValue(t *testing.T) {
 // fail at startup, before the listener comes up.
 func TestRunHTTP_InvalidDescriptionSubstitutions(t *testing.T) {
 	t.Setenv(gatewaycompat.EnvVar, "abc")
-	err := runHTTP(context.Background(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -10434,7 +10529,7 @@ func TestRunHTTP_RefusesABadConfigurationBeforeBinding(t *testing.T) {
 			hcfg.maxHTTPClients = config.DefaultMaxHTTPClients
 			hcfg.sessionTimeout = config.DefaultSessionTimeout
 
-			err := runHTTP(t.Context(), hcfg)
+			err := runHTTPExpectingRefusal(t, hcfg)
 
 			if err == nil {
 				t.Fatal("runHTTP started with a configuration it must refuse")
@@ -10723,6 +10818,45 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 				tt.verify(t)
 			}
 		})
+	}
+}
+
+// TestMain_PublishesTheServerIdentityToTheHealthTool covers what main hands
+// the health tool before it starts a transport: the version, the author and
+// the repository a caller of that tool is shown. Each is a distinct value, so
+// one read from its neighbour is a mismatch. An HTTP start naming no instance
+// is the shortest path through main that publishes them.
+func TestMain_PublishesTheServerIdentityToTheHealthTool(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv(config.EnvFileVar, "")
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv("GITLAB_MCP_TELEMETRY", "")
+
+	var exits []int
+	originalExit, originalArgs := exitProcess, os.Args
+	originalLogger, originalBase := slog.Default(), baseLogHandler
+	exitProcess = func(code int) { exits = append(exits, code) }
+	os.Args = []string{"gitlab-mcp-server", "-http"}
+	t.Cleanup(func() {
+		exitProcess, os.Args = originalExit, originalArgs
+		slog.SetDefault(originalLogger)
+		baseLogHandler = originalBase
+		toolutil.SetLocalFilesystemAccess(true)
+	})
+
+	main()
+
+	if !slices.Equal(exits, []int{1}) {
+		t.Fatalf("exit codes = %v, want [1] from an HTTP start naming no instance", exits)
+	}
+	out, err := healthtool.Check(t.Context(), newMockGitLabClient(t), healthtool.Input{})
+	if err != nil {
+		t.Fatalf("health check: %v", err)
+	}
+	if out.MCPServerVersion != version || out.Author != projectAuthor || out.Repository != projectRepository || out.Department != projectDepartment {
+		t.Errorf("health identity = version %q, author %q, repository %q, department %q; want %q, %q, %q, %q",
+			out.MCPServerVersion, out.Author, out.Repository, out.Department, version, projectAuthor, projectRepository, projectDepartment)
 	}
 }
 
@@ -11599,7 +11733,7 @@ func TestListenerIsHostLocal_AName_IsJudgedByWhatItResolvesTo(t *testing.T) {
 // rather than only in the helper, so a deployment cannot reach a listener
 // through some other path.
 func TestRunHTTP_RefusesWithoutAnInstance(t *testing.T) {
-	err := runHTTP(t.Context(), &httpConfig{
+	err := runHTTPExpectingRefusal(t, &httpConfig{
 		addr:           "127.0.0.1:0",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
