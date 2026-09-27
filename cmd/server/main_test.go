@@ -1837,7 +1837,7 @@ func TestCreateServer_SpansNameTheSurfaceAndTheTransportApart(t *testing.T) {
 	for _, span := range recorder.Ended() {
 		attrs := map[attribute.Key]string{}
 		for _, kv := range span.Attributes() {
-			attrs[kv.Key] = kv.Value.Emit()
+			attrs[kv.Key] = kv.Value.String()
 		}
 		surface, ok := attrs[mcpotel.AttrToolSurface]
 		if !ok {
@@ -3626,11 +3626,33 @@ func TestBuildServerCard_InMemoryFailures_AreWrapped(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.arrange(t)
-			_, err := buildServerCard(t.Context(), cfg)
+			err := buildServerCardWithin(t, cfg, testHTTPLivenessTimeout)
 			if !errors.Is(err, forced) || !strings.Contains(err.Error(), tc.name) {
 				t.Errorf("buildServerCard() = %v, want the %s failure named", err, tc.name)
 			}
 		})
+	}
+}
+
+// buildServerCardWithin runs buildServerCard and fails the test if it has not
+// returned within bound. A builder that carried on past a failed server
+// connect would hand its client an in-memory pipe nobody reads, and a write
+// to that pipe waits forever whatever its context says; unbounded, the test
+// would sit there until the package timeout and report that instead of the
+// step that was not stopped at.
+func buildServerCardWithin(t *testing.T, cfg *config.Config, bound time.Duration) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := buildServerCard(t.Context(), cfg)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(bound):
+		t.Fatalf("buildServerCard did not return within %s", bound)
+		return nil
 	}
 }
 
@@ -3807,27 +3829,7 @@ func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
 		{name: "oauth with every budget on and applications pinned", oauth: true, budgets: true, pinned: true, wantLoops: 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &config.Config{
-				GitLabURL:     "https://gitlab.example.com",
-				Tier:          edition.Free,
-				TierExplicit:  true,
-				IgnoreScopes:  true,
-				Stateless:     true,
-				AuthMode:      config.AuthModeLegacy,
-				PublicURL:     "https://mcp.example.com",
-				OAuthCacheTTL: config.DefaultOAuthCacheTTL,
-			}
-			if tc.oauth {
-				cfg.AuthMode = config.AuthModeOAuth
-			}
-			if tc.budgets {
-				cfg.AuthFailureLimit, cfg.AuthFailureWindow = 10, time.Minute
-				cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow = 50, 10*time.Minute
-				cfg.TrustedProxyHeader, cfg.TrustedProxies = "X-Forwarded-For", []string{"127.0.0.1"}
-			}
-			if tc.pinned {
-				cfg.OAuthClientUIDs = []string{"pinned-application-uid"}
-			}
+			cfg := sweepTestConfig(tc.oauth, tc.budgets, tc.pinned)
 			logged := captureLogMessages(t)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -3849,14 +3851,49 @@ func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
 			if noted := logged("admitting only tokens issued to the pinned OAuth applications"); noted != tc.pinned {
 				t.Errorf("pinned-applications note logged = %t, want %t", noted, tc.pinned)
 			}
-			deadline := time.Now().Add(testHTTPLivenessTimeout)
-			for cleanupLoopsStartedBy(self) > 0 {
-				if time.Now().After(deadline) {
-					t.Fatal("a sweep loop outlived its context")
-				}
-				time.Sleep(time.Millisecond)
-			}
+			waitForCleanupLoopsToEnd(t, self)
 		})
+	}
+}
+
+// sweepTestConfig is the deployment the sweep test registers handlers for:
+// legacy or oauth, with every authentication budget off or on, and with or
+// without pinned OAuth applications.
+func sweepTestConfig(oauthMode, budgets, pinned bool) *config.Config {
+	cfg := &config.Config{
+		GitLabURL:     "https://gitlab.example.com",
+		Tier:          edition.Free,
+		TierExplicit:  true,
+		IgnoreScopes:  true,
+		Stateless:     true,
+		AuthMode:      config.AuthModeLegacy,
+		PublicURL:     "https://mcp.example.com",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
+	}
+	if oauthMode {
+		cfg.AuthMode = config.AuthModeOAuth
+	}
+	if budgets {
+		cfg.AuthFailureLimit, cfg.AuthFailureWindow = 10, time.Minute
+		cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow = 50, 10*time.Minute
+		cfg.TrustedProxyHeader, cfg.TrustedProxies = "X-Forwarded-For", []string{"127.0.0.1"}
+	}
+	if pinned {
+		cfg.OAuthClientUIDs = []string{"pinned-application-uid"}
+	}
+	return cfg
+}
+
+// waitForCleanupLoopsToEnd fails the test unless every sweep loop the given
+// goroutine started ends once its context has.
+func waitForCleanupLoopsToEnd(t *testing.T, goroutineID string) {
+	t.Helper()
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for cleanupLoopsStartedBy(goroutineID) > 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("a sweep loop outlived its context")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -4026,24 +4063,7 @@ func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var scopeReads atomic.Int64
-			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/api/v4/version":
-					testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
-				case "/api/v4/user":
-					testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
-				case "/api/v4/personal_access_tokens/self":
-					scopeReads.Add(1)
-					if !tc.answers {
-						http.NotFound(w, r)
-						return
-					}
-					testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"reader","scopes":["read_api"]}`)
-				default:
-					http.NotFound(w, r)
-				}
-			}))
-			t.Cleanup(gitlab.Close)
+			gitlab := scopeReportingGitLab(t, tc.answers, &scopeReads)
 			cfg := &config.Config{
 				GitLabURL:      gitlab.URL,
 				GitLabToken:    testToken,
@@ -4052,15 +4072,7 @@ func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.
 				IgnoreScopes:   tc.ignore,
 				DisableRetries: true,
 			}
-			client, err := gitlabclient.NewClient(cfg)
-			if err != nil {
-				t.Fatalf("NewClient: %v", err)
-			}
-			serverCfg := cfg.ServerConfig()
-			shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
-			if err != nil {
-				t.Fatalf("newServerShell: %v", err)
-			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
 			logged := captureLogMessages(t)
 
 			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
@@ -4081,6 +4093,48 @@ func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.
 			}
 		})
 	}
+}
+
+// scopeReportingGitLab answers what stdio startup asks, counting each read of
+// the token's own scopes into reads. When answers is false the scope lookup is
+// answered 404, which is what an instance that cannot report them sends.
+func scopeReportingGitLab(t *testing.T, answers bool, reads *atomic.Int64) *httptest.Server {
+	t.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+		case r.URL.Path == "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		case r.URL.Path == "/api/v4/personal_access_tokens/self" && answers:
+			reads.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"reader","scopes":["read_api"]}`)
+		case r.URL.Path == "/api/v4/personal_access_tokens/self":
+			reads.Add(1)
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	return gitlab
+}
+
+// newStdioStartupShell builds what prepareStdioCatalog is handed on the stdio
+// path: the client for cfg, the server configuration taken from it, and the
+// server shell over both.
+func newStdioStartupShell(t *testing.T, cfg *config.Config) (*gitlabclient.Client, *config.ServerConfig, *serverShell) {
+	t.Helper()
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	serverCfg := cfg.ServerConfig()
+	shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	return client, serverCfg, shell
 }
 
 // stdioStartupGitLab answers the two requests stdio startup makes, with the
@@ -5170,6 +5224,36 @@ func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
 	}
 }
 
+// TestMatchCatalogActions_EachColumnCarriesItsOwnValue covers the row a match
+// becomes rather than which actions match: the canonical ID, the way the
+// surface names the call, and the summary each sit in their own column. The
+// printed table carries all three on one line, so a test reading the output
+// for a substring cannot tell a call form printed under DESCRIPTION from one
+// printed under TOOL.
+func TestMatchCatalogActions_EachColumnCarriesItsOwnValue(t *testing.T) {
+	action := actioncatalog.Action{
+		ID:             "issue.list",
+		ToolName:       "gitlab_issue",
+		Domain:         "issue",
+		Name:           "list",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list", Description: "List issues in a project."},
+	}
+
+	matches := matchCatalogActions([]actioncatalog.Action{action}, []string{"issue"}, config.ToolSurfaceMeta)
+
+	if len(matches) != 1 {
+		t.Fatalf("matchCatalogActions() = %v, want the one action", matches)
+	}
+	want := toolSearchMatch{
+		action:      "issue.list",
+		tool:        "gitlab_issue action=list",
+		description: "List issues in a project.",
+	}
+	if matches[0] != want {
+		t.Errorf("match = %+v, want %+v", matches[0], want)
+	}
+}
+
 // TestActionSearchDescription_FallsBackToUsage covers an action with no
 // individual tool description, which the meta-only ones have.
 func TestActionSearchDescription_FallsBackToUsage(t *testing.T) {
@@ -5848,6 +5932,237 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 	}
 }
 
+// newMockGitLabServerWithUsers is newMockGitLabServerWithUser for more than
+// one credential: each token in ids is a user of its own, and any other token
+// is refused the way GitLab refuses it.
+func newMockGitLabServerWithUsers(t *testing.T, ids map[string]int) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set(hdrContentType, mimeJSON)
+			_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "test"})
+		case "/api/v4/user":
+			token := r.Header.Get("PRIVATE-TOKEN")
+			if token == "" {
+				token, _ = strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			}
+			id, ok := ids[token]
+			if !ok {
+				http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set(hdrContentType, mimeJSON)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":       id,
+				"username": fmt.Sprintf("user%d", id),
+				"name":     fmt.Sprintf("User %d", id),
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// stopOAuthServer cancels an oauthAddr server and waits for it to return,
+// for a test that registers it with defer so a failed assertion still stops
+// the listener.
+func stopOAuthServer(t *testing.T, cancel context.CancelFunc, errCh <-chan error) {
+	t.Helper()
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Errorf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Error("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_OAuthMode_TheChallengeAndTheMetadataNameEachLinkInItsPlace
+// covers what an oauth deployment tells a client that has not authorized
+// yet: the 401 challenge, and the RFC 9728 document the challenge points at.
+// The challenge recommends the scope the whole surface needs rather than the
+// minimum the door admits, and points at the metadata document rather than at
+// the documentation page; the document publishes each page the operator named
+// under its own field. Every value differs from the others, so one read from
+// the wrong place is a mismatch.
+func TestServeHTTP_OAuthMode_TheChallengeAndTheMetadataNameEachLinkInItsPlace(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:             mockGL.URL,
+		MaxHTTPClients:        config.DefaultMaxHTTPClients,
+		SessionTimeout:        config.DefaultSessionTimeout,
+		ToolSurface:           config.ToolSurfaceDynamic,
+		AuthMode:              "oauth",
+		PublicURL:             "http://localhost:8080",
+		OAuthCacheTTL:         config.DefaultOAuthCacheTTL,
+		ResourceDocumentation: "https://docs.example.com/oauth-application",
+		ResourcePolicyURI:     "https://example.com/data-policy",
+		ResourceTermsURI:      "https://example.com/terms-of-service",
+	}
+	advertised := oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)
+	if advertised == oauth.MinimumScope {
+		t.Fatalf("a writing deployment advertises %q, the scope the door demands; the case needs the two apart", advertised)
+	}
+	metadataURL := oauth.MetadataURLFor(cfg.PublicURL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	addr, errCh := oauthAddr(t, ctx, cfg)
+	defer stopOAuthServer(t, cancel, errCh)
+
+	t.Run("the challenge", func(t *testing.T) {
+		body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		respBody := readAndCloseBody(t, resp)
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d (%s), want 401", resp.StatusCode, respBody)
+		}
+		challenge := resp.Header.Get("WWW-Authenticate")
+		for _, want := range []string{`scope="` + advertised + `"`, `resource_metadata="` + metadataURL + `"`} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(challenge, want) {
+					t.Errorf("WWW-Authenticate = %q, want it to carry %s", challenge, want)
+				}
+			})
+		}
+	})
+
+	t.Run("the metadata document", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			"http://"+addr+strings.TrimPrefix(metadataURL, cfg.PublicURL), nil)
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("metadata request failed: %v", err)
+		}
+		payload := readAndCloseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d (%s), want 200", resp.StatusCode, payload)
+		}
+		var meta map[string]any
+		if decodeErr := json.Unmarshal([]byte(payload), &meta); decodeErr != nil {
+			t.Fatalf("decode metadata: %v", decodeErr)
+		}
+		for field, want := range map[string]string{
+			"resource_documentation": cfg.ResourceDocumentation,
+			"resource_policy_uri":    cfg.ResourcePolicyURI,
+			"resource_tos_uri":       cfg.ResourceTermsURI,
+		} {
+			t.Run(field, func(t *testing.T) {
+				if got := meta[field]; got != want {
+					t.Errorf("%s = %v, want %q", field, got, want)
+				}
+			})
+		}
+	})
+}
+
+// TestServeHTTP_OAuthMode_Stateful_TheSessionAnswersOnlyTheBearerThatOpenedIt
+// covers a stateful oauth deployment past the door, where the gate stands
+// behind the bearer guard.
+//
+// The guard verifies the Bearer credential, so the gate must serve the
+// request as that credential even when a PRIVATE-TOKEN header rides along:
+// reading that header instead would build a pool entry for a token nobody
+// verified. And a GET or DELETE naming a session is a live operation on it,
+// reading its stream or ending it, so on a stateful deployment the gate holds
+// both to the credential that opened the session, as it holds a POST. A
+// second user, verified in its own right, is therefore refused the session,
+// and the owner keeps it.
+func TestServeHTTP_OAuthMode_Stateful_TheSessionAnswersOnlyTheBearerThatOpenedIt(t *testing.T) {
+	const owner, stranger = "owner-oauth-token", "stranger-oauth-token"
+	mockGL := newMockGitLabServerWithUsers(t, map[string]int{owner: 42, stranger: 43})
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		AuthMode:       "oauth",
+		PublicURL:      "http://localhost:8080",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		Stateless:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	addr, errCh := oauthAddr(t, ctx, cfg)
+	defer stopOAuthServer(t, cancel, errCh)
+
+	send := func(t *testing.T, method, token, sessionID, body string, extra http.Header) *http.Response {
+		t.Helper()
+		reqCtx, stop := context.WithTimeout(t.Context(), testHTTPLivenessTimeout)
+		t.Cleanup(stop)
+		var reader io.Reader = http.NoBody
+		if body != "" {
+			reader = strings.NewReader(body)
+		}
+		req, err := http.NewRequestWithContext(reqCtx, method, "http://"+addr, reader)
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		req.Header.Set("Authorization", "Bearer "+token)
+		if sessionID != "" {
+			req.Header.Set(hdrMCPSessionID, sessionID)
+			req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+		}
+		for key, values := range extra {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
+		}
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s as %s: %v", method, token, err)
+		}
+		return resp
+	}
+
+	initResp := send(t, http.MethodPost, owner, "",
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`,
+		http.Header{"Private-Token": {"a-token-nobody-verified"}})
+	initBody := readAndCloseBody(t, initResp)
+	sessionID := initResp.Header.Get(hdrMCPSessionID)
+	if initResp.StatusCode != http.StatusOK || sessionID == "" {
+		t.Fatalf("initialize as the verified bearer, an unverified PRIVATE-TOKEN beside it: status = %d, session = %q (%s); want 200 and a session",
+			initResp.StatusCode, sessionID, initBody)
+	}
+	defer func() {
+		closeResp := send(t, http.MethodDelete, owner, sessionID, "", nil)
+		_, _ = io.Copy(io.Discard, closeResp.Body)
+		_ = closeResp.Body.Close()
+	}()
+	initializedResp := send(t, http.MethodPost, owner, sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`, nil)
+	_, _ = io.Copy(io.Discard, initializedResp.Body)
+	_ = initializedResp.Body.Close()
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run("a "+method+" by another user", func(t *testing.T) {
+			resp := send(t, method, stranger, sessionID, "", nil)
+			// Closed unread: a stream opened by mistake would never end.
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Errorf("status = %d, want 404: the session belongs to another credential", resp.StatusCode)
+			}
+		})
+	}
+
+	resp := send(t, http.MethodPost, owner, sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`, nil)
+	body := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "gitlab_find_action") {
+		t.Errorf("tools/list by the owner afterwards: status = %d, body = %q; want 200 and the catalog", resp.StatusCode, body)
+	}
+}
+
 // TestServeHTTP_LegacyMode_NoMetadataEndpoint verifies that legacy mode
 // does NOT serve the /.well-known/oauth-protected-resource endpoint.
 func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
@@ -6405,6 +6720,153 @@ func TestBuildServerCard_CarriesSubscriptionsOnlyWhereTheyAreServed(t *testing.T
 			}
 		})
 	}
+}
+
+// cardTitled is the part of a server card entry this file compares with the
+// live listing: the name it is keyed by, and the two texts a directory shows.
+type cardTitled struct {
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// assertCardTexts holds each card entry to the live entry of the same name,
+// title and description each in its own place. The case is empty unless at
+// least one live entry has a title that differs from its description, since
+// otherwise exchanging the two would change nothing.
+func assertCardTexts(t *testing.T, card []cardTitled, live map[string]cardTitled) {
+	t.Helper()
+	if len(card) != len(live) {
+		t.Errorf("card lists %d entries, the server %d", len(card), len(live))
+	}
+	distinct := 0
+	for _, entry := range live {
+		if entry.Title != entry.Description {
+			distinct++
+		}
+	}
+	if distinct == 0 {
+		t.Fatal("no live entry has a title that differs from its description; the case cannot tell them apart")
+	}
+	for _, entry := range card {
+		want, ok := live[entry.Name]
+		if !ok {
+			t.Errorf("card entry %q is not in the live listing", entry.Name)
+			continue
+		}
+		if entry != want {
+			t.Errorf("card entry = %+v, live = %+v", entry, want)
+		}
+	}
+}
+
+// TestBuildServerCard_EachPrimitiveKeepsItsTitleAndDescription covers the
+// copy the card makes of each listing. Tools, resources, resource templates,
+// prompts and prompt arguments are each copied field by field into the card's
+// own types, and a directory renders the title as a heading and the
+// description as the text under it, so each entry is held to what the server
+// itself lists under the same name.
+func TestBuildServerCard_EachPrimitiveKeepsItsTitleAndDescription(t *testing.T) {
+	cfg := &config.Config{
+		ToolSurface:       config.ToolSurfaceMeta,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		SkipTLSVerify:     true,
+	}
+	data, err := buildServerCard(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard: %v", err)
+	}
+	var card struct {
+		Tools             []cardTitled `json:"tools"`
+		Resources         []cardTitled `json:"resources"`
+		ResourceTemplates []cardTitled `json:"resourceTemplates"`
+		Prompts           []cardPrompt `json:"prompts"`
+	}
+	if decodeErr := json.Unmarshal(data, &card); decodeErr != nil {
+		t.Fatalf("decode card: %v", decodeErr)
+	}
+
+	session := newInMemorySession(t, mustCreateServer(t, newMockGitLabClient(t), cfg.ServerConfig()))
+	ctx := t.Context()
+
+	t.Run("tools", func(t *testing.T) {
+		listed, listErr := session.ListTools(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListTools: %v", listErr)
+		}
+		live := map[string]cardTitled{}
+		for _, tool := range listed.Tools {
+			live[tool.Name] = cardTitled{Name: tool.Name, Title: tool.Title, Description: tool.Description}
+		}
+		assertCardTexts(t, card.Tools, live)
+	})
+	t.Run("resources", func(t *testing.T) {
+		listed, listErr := session.ListResources(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListResources: %v", listErr)
+		}
+		live := map[string]cardTitled{}
+		for _, resource := range listed.Resources {
+			live[resource.Name] = cardTitled{Name: resource.Name, Title: resource.Title, Description: resource.Description}
+		}
+		assertCardTexts(t, card.Resources, live)
+	})
+	t.Run("resource templates", func(t *testing.T) {
+		listed, listErr := session.ListResourceTemplates(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListResourceTemplates: %v", listErr)
+		}
+		live := map[string]cardTitled{}
+		for _, template := range listed.ResourceTemplates {
+			live[template.Name] = cardTitled{Name: template.Name, Title: template.Title, Description: template.Description}
+		}
+		assertCardTexts(t, card.ResourceTemplates, live)
+	})
+	t.Run("prompts and their arguments", func(t *testing.T) {
+		listed, listErr := session.ListPrompts(ctx, nil)
+		if listErr != nil {
+			t.Fatalf("ListPrompts: %v", listErr)
+		}
+		prompts, arguments := livePromptTexts(listed.Prompts)
+		cardPrompts, cardArguments := cardPromptTexts(card.Prompts)
+		assertCardTexts(t, cardPrompts, prompts)
+		assertCardTexts(t, cardArguments, arguments)
+	})
+}
+
+// cardPrompt is a prompt as the server card writes it, with its arguments.
+type cardPrompt struct {
+	cardTitled
+	Arguments []cardTitled `json:"arguments"`
+}
+
+// livePromptTexts keys the listed prompts by name and their arguments by
+// prompt and argument name together, since two prompts may share an argument
+// name.
+func livePromptTexts(listed []*mcp.Prompt) (prompts, arguments map[string]cardTitled) {
+	prompts, arguments = map[string]cardTitled{}, map[string]cardTitled{}
+	for _, prompt := range listed {
+		prompts[prompt.Name] = cardTitled{Name: prompt.Name, Title: prompt.Title, Description: prompt.Description}
+		for _, argument := range prompt.Arguments {
+			key := prompt.Name + "/" + argument.Name
+			arguments[key] = cardTitled{Name: key, Title: argument.Title, Description: argument.Description}
+		}
+	}
+	return prompts, arguments
+}
+
+// cardPromptTexts flattens the card's prompts the way livePromptTexts keys the
+// listing, so the two can be compared entry by entry.
+func cardPromptTexts(card []cardPrompt) (prompts, arguments []cardTitled) {
+	prompts = make([]cardTitled, 0, len(card))
+	for _, prompt := range card {
+		prompts = append(prompts, prompt.cardTitled)
+		for _, argument := range prompt.Arguments {
+			argument.Name = prompt.Name + "/" + argument.Name
+			arguments = append(arguments, argument)
+		}
+	}
+	return prompts, arguments
 }
 
 // TestBuildServerCard_IndividualMode verifies that [buildServerCard] returns
@@ -7324,8 +7786,8 @@ func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 
 // TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField holds the whole
 // flag-to-configuration mapping, not a sample of it. Every value that is not a
-// boolean differs from all of its siblings, so a field filled from its
-// neighbour (the two authentication budgets, the three metadata links, the
+// boolean differs from all of its siblings, so a field filled from the one
+// beside it (the two authentication budgets, the three metadata links, the
 // certificate and its key) is a mismatch here. The booleans cannot all
 // differ, so each is driven on its own and the whole struct compared, which is
 // what tells a swap between two of them from a correct mapping.
@@ -7606,6 +8068,39 @@ func TestServeHTTP_Stateless_GETMethodNotAllowed(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_Stateless_GETAndDELETE_AreAnsweredWithoutACredential covers
+// the half of the stateless contract the test above cannot see, since it
+// sends a valid credential: GET and DELETE address no session on a stateless
+// deployment, so the gate lets them through unauthenticated and the answer is
+// the transport's 405 whatever they carry. Gated, the same requests would be
+// answered 401, telling a client to authenticate for a method that can never
+// succeed.
+func TestServeHTTP_Stateless_GETAndDELETE_AreAnsweredWithoutACredential(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, false))
+	defer shutdown()
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), method, "http://"+addr+"/", nil)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			resp, err := testHTTPClient.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			body := readAndCloseBody(t, resp)
+			if resp.StatusCode != http.StatusMethodNotAllowed {
+				t.Errorf("%s without a credential: status = %d (%s), want 405", method, resp.StatusCode, body)
+			}
+			if challenge := resp.Header.Get("WWW-Authenticate"); challenge != "" {
+				t.Errorf("%s without a credential carried a challenge %q; nothing here can be authorized", method, challenge)
+			}
+		})
+	}
+}
+
 // TestServeHTTP_Stateless_JSONResponseContentType verifies that combining
 // --stateless with --json-response yields plain application/json bodies with a
 // parseable JSON-RPC result instead of an SSE stream.
@@ -7874,7 +8369,9 @@ func TestServeHTTP_Stateful_TheSessionAnswersTheCredentialThatOpenedIt(t *testin
 		}
 		return resp
 	}
-	_ = readAndCloseBody(t, inSession(`{"jsonrpc":"2.0","method":"notifications/initialized"}`))
+	initializedResp := inSession(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	_, _ = io.Copy(io.Discard, initializedResp.Body)
+	_ = initializedResp.Body.Close()
 
 	resp := inSession(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
 	body := readAndCloseBody(t, resp)
@@ -10824,7 +11321,7 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 // TestMain_PublishesTheServerIdentityToTheHealthTool covers what main hands
 // the health tool before it starts a transport: the version, the author and
 // the repository a caller of that tool is shown. Each is a distinct value, so
-// one read from its neighbour is a mismatch. An HTTP start naming no instance
+// one read from the field beside it is a mismatch. An HTTP start naming no instance
 // is the shortest path through main that publishes them.
 func TestMain_PublishesTheServerIdentityToTheHealthTool(t *testing.T) {
 	withFreshFlagSet(t)
@@ -12700,6 +13197,28 @@ func TestTelemetryShutdownTimeout_IsABoundRatherThanZero(t *testing.T) {
 	if telemetryShutdownTimeout > time.Minute {
 		t.Errorf("telemetryShutdownTimeout = %v, want at most a minute: a process that will not exit is worse than telemetry that did not flush",
 			telemetryShutdownTimeout)
+	}
+}
+
+// TestStdioStartupDrainTimeout_OutlastsTheWorkItWaitsFor pins the drain's
+// default, which the tests of runStdio shorten and so cannot see.
+//
+// When serving ends, the startup work is cancelled first, so what the drain
+// waits for is at most a catalog build a moment from finishing. A drain that
+// collapsed to zero would not wait at all: the select would choose at random
+// between a startup that had finished and a timer that had already fired, so a
+// catalog failure would be reported on some runs and not on others, and on
+// the rest the startup goroutine would outlive runStdio and keep logging. It
+// is also what a person pressing Ctrl-C waits on, so it stays below the
+// budget an HTTP deployment gives its own in-flight requests.
+func TestStdioStartupDrainTimeout_OutlastsTheWorkItWaitsFor(t *testing.T) {
+	if stdioStartupDrainTimeout < time.Second {
+		t.Errorf("stdioStartupDrainTimeout = %s, want at least a second: a cancelled catalog build takes a few hundred milliseconds to return",
+			stdioStartupDrainTimeout)
+	}
+	if stdioStartupDrainTimeout >= httpShutdownTimeout {
+		t.Errorf("stdioStartupDrainTimeout = %s, want below the %s httpShutdownTimeout: it is a backstop, not a budget",
+			stdioStartupDrainTimeout, httpShutdownTimeout)
 	}
 }
 
