@@ -85,7 +85,7 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 // megabytes, which is why [BuildActionCatalog] pays it once per configuration.
 func buildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
 	tier := opts.effectiveTier()
-	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, tier.IsEnterprise()), opts.SpecGroups)
+	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client), opts.SpecGroups)
 	specGroups = filterActionSpecGroupsByTier(specGroups, tier)
 	catalog := actioncatalog.NewCatalog()
 	for _, specGroup := range specGroups {
@@ -250,7 +250,10 @@ func mergeActionSpecGroupOverrides(baseGroups, overrideGroups []ActionSpecGroup)
 	if len(overrideGroups) == 0 {
 		return baseGroups
 	}
-	mergedByTool := make(map[string]ActionSpecGroup, len(baseGroups)+len(overrideGroups))
+	// Sized for the base alone, which is the whole collected catalog; the few
+	// overrides a caller passes fit its slack. A map's size is a hint no caller
+	// can observe, so a sum here was arithmetic whose mutants no test can kill.
+	mergedByTool := make(map[string]ActionSpecGroup, len(baseGroups))
 	invalidGroups := make([]ActionSpecGroup, 0)
 	for _, group := range baseGroups {
 		toolName := strings.TrimSpace(group.ToolName)

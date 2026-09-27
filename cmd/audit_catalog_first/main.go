@@ -341,6 +341,18 @@ func domainCoverageFor(source domainSource, actionCoverage map[string]packageAct
 	return coverage
 }
 
+// assertCoverageInvariants refuses the report when any row breaks one of the
+// four catalog-first rules, naming every broken rule of every row in one
+// sorted refusal.
+//
+// The third rule reads three flags, and what they catch together is narrower
+// than any one of them: with no RegisterTools, [domainCoverageFor] raises
+// HasIndividualTools only for ordinary GitLab catalog actions or an ActionSpecs
+// function, and the function would raise HasMetaSpecs too. So the row it
+// refuses is a package the catalog credits with ordinary GitLab actions while
+// the package declares no ActionSpecs function and contributes no specs, and
+// the message says that rather than naming a RegisterTools the condition
+// requires the package not to have.
 func assertCoverageInvariants(domains []domainCoverage) error {
 	var gaps []string
 	for _, domain := range domains {
@@ -351,7 +363,7 @@ func assertCoverageInvariants(domains []domainCoverage) error {
 			gaps = append(gaps, domain.Package+" still defines package-level RegisterMeta")
 		}
 		if !domain.HasRegisterTools && domain.HasIndividualTools && !domain.HasMetaSpecs {
-			gaps = append(gaps, domain.Package+" has GitLab-client RegisterTools without canonical ActionSpecs")
+			gaps = append(gaps, domain.Package+" has ordinary GitLab catalog actions without canonical ActionSpecs")
 		}
 		if domain.SurfaceClassification == "individual-only" {
 			gaps = append(gaps, domain.Package+" is individual-only; ordinary GitLab actions must be catalog-backed")
@@ -954,7 +966,7 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	client := clientForAudit()
 
 	coverage := make(map[string]packageActionCoverage)
-	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client, true))
+	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client))
 	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
 
 	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
@@ -1127,6 +1139,14 @@ func classifySurface(source domainSource, coverage domainCoverage) string {
 	}
 }
 
+// coverageNotes writes the human-readable notes of one report row.
+//
+// The RegisterTools note is keyed on the RegisterTools the source walk found,
+// not on HasStandaloneOnlyTools: that flag is also raised for a package the
+// catalog knows only through utility surface actions, which has no
+// RegisterTools at all (elicitationtools and projectdiscovery), and the note
+// then claimed one for them. Such a row is described by the utility/controller
+// note above it and gets no note of its own.
 func coverageNotes(source domainSource, coverage domainCoverage) []string {
 	notes := make([]string, 0, 4)
 	if source.HasDynamicCatalogRegistration {
@@ -1138,7 +1158,7 @@ func coverageNotes(source domainSource, coverage domainCoverage) []string {
 	if coverage.UtilitySurfaceActionCount > 0 {
 		notes = append(notes, fmt.Sprintf("%d utility/controller actions are outside ordinary GitLab API action counting", coverage.UtilitySurfaceActionCount))
 	}
-	if coverage.HasStandaloneOnlyTools {
+	if source.HasRegisterTools && !isGitLabClientType(source.ClientType) {
 		notes = append(notes, "RegisterTools does not use a GitLab client constructor")
 	}
 	if source.HasRegisterTools && !coverage.RegisteredInRegisterAll {

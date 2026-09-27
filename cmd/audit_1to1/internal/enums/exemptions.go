@@ -184,7 +184,9 @@ var projectFeatureAccessLevels = []string{
 // projectFeatureAccessLevelExemptions excuses the public constant on every
 // feature access level of the project create and update inputs.
 func projectFeatureAccessLevelExemptions() map[string]string {
-	out := make(map[string]string, 2*len(projectFeatureAccessLevels))
+	// No size hint: a hint is invisible to every caller, so the arithmetic
+	// one carried was code no test could hold to anything.
+	out := map[string]string{}
 	for _, field := range projectFeatureAccessLevels {
 		out["projects.CreateInput."+field+"=public"] = featureAccessLevelPublic
 		out["projects.UpdateInput."+field+"=public"] = featureAccessLevelPublic

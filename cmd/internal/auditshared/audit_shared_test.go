@@ -217,37 +217,33 @@ func TestNewStubGitLabClient_Token_SendsTheTokenItWasGiven(t *testing.T) {
 	}
 }
 
-// TestCachedActionSpecs_RepeatedCalls_ShareOneCollectionPerFlag verifies the
-// cache collects the catalog once per enterprise flag: each flag's repeated
-// call hands back that flag's own backing slice, and the two flags are cached
-// apart rather than sharing one entry, which is what the sync.Map key is for.
+// TestCachedActionSpecs_RepeatedCalls_ShareOneCollection verifies the cache
+// collects the catalog once per process: a second call hands back the very
+// same backing slice, and that slice holds every tier's specs, Premium and
+// Ultimate ones included, since nothing is gated until a catalog is built.
 //
-// What it deliberately does not assert is that the two collections differ.
-// Every one of the 46 builders in internal/tools/action_specs.go declares the
-// flag as `_ bool`, so CollectActionSpecs returns the same catalog either way
-// and the edition tags are gated later by the tier filter. A test comparing
-// the two sizes would therefore either pin that equality as intended or fail;
-// the flag's journey past this cache cannot be observed from here at all.
-func TestCachedActionSpecs_RepeatedCalls_ShareOneCollectionPerFlag(t *testing.T) {
+// The tier half is what the cache can be wrong about now that it has no tier
+// key: a collection cached below Ultimate would hand every later caller a
+// catalog missing the licensed actions the discovery and 1:1 audits judge.
+func TestCachedActionSpecs_RepeatedCalls_ShareOneCollection(t *testing.T) {
 	client, cleanup := NewStubGitLabClient("stub-token")
 	t.Cleanup(cleanup)
 
-	enterprise := CachedActionSpecs(client, true)
-	if len(enterprise) == 0 {
-		t.Fatal("CachedActionSpecs(enterprise) returned no groups")
+	groups := CachedActionSpecs(client)
+	if len(groups) == 0 {
+		t.Fatal("CachedActionSpecs() returned no groups")
 	}
-	if again := CachedActionSpecs(client, true); len(again) != len(enterprise) || &again[0] != &enterprise[0] {
-		t.Fatal("CachedActionSpecs(enterprise) second call did not return the cached slice")
+	if again := CachedActionSpecs(client); len(again) != len(groups) || &again[0] != &groups[0] {
+		t.Fatal("CachedActionSpecs() second call did not return the cached slice")
 	}
-	free := CachedActionSpecs(client, false)
-	if len(free) == 0 || len(free) > len(enterprise) {
-		t.Fatalf("CachedActionSpecs(free) = %d groups, enterprise = %d; want 0 < free <= enterprise", len(free), len(enterprise))
+	tiers := make(map[edition.Tier]int)
+	for _, group := range groups {
+		for _, spec := range group.Actions {
+			tiers[edition.TierFromEdition(spec.Edition)]++
+		}
 	}
-	if &free[0] == &enterprise[0] {
-		t.Fatal("both flags returned one backing slice, want one cache entry per flag")
-	}
-	if again := CachedActionSpecs(client, false); len(again) != len(free) || &again[0] != &free[0] {
-		t.Fatal("CachedActionSpecs(free) second call did not return the cached slice")
+	if tiers[edition.Free] == 0 || tiers[edition.Premium] == 0 || tiers[edition.Ultimate] == 0 {
+		t.Fatalf("specs per tier = %v, want Free, Premium and Ultimate ones in the one collection", tiers)
 	}
 }
 
@@ -285,7 +281,7 @@ func TestCachedIndividualDescriptions_CatalogSpecs_EveryIndividualToolIsProjecte
 	projected := CachedIndividualDescriptions(client)
 	checked := make(map[edition.Tier]int)
 	var missing []string
-	for _, group := range CachedActionSpecs(client, true) {
+	for _, group := range CachedActionSpecs(client) {
 		for _, spec := range group.Actions {
 			name := strings.TrimSpace(spec.IndividualTool.Name)
 			if name == "" {

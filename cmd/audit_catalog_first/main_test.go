@@ -271,7 +271,7 @@ func TestAssertCoverageInvariants_Scenarios_NameEachBrokenRule(t *testing.T) {
 	}{
 		{name: "package-local RegisterTools", domains: []domainCoverage{{Package: "alpha", HasRegisterTools: true, HasIndividualTools: true}}, want: prefix + "alpha still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs"},
 		{name: "package-level RegisterMeta", domains: []domainCoverage{{Package: "beta", HasRegisterMeta: true, HasMetaSpecs: true}}, want: prefix + "beta still defines package-level RegisterMeta"},
-		{name: "individual tools without ActionSpecs", domains: []domainCoverage{{Package: "gamma", HasIndividualTools: true, SurfaceClassification: "surface-backed"}}, want: prefix + "gamma has GitLab-client RegisterTools without canonical ActionSpecs"},
+		{name: "ordinary GitLab actions without ActionSpecs", domains: []domainCoverage{{Package: "gamma", HasIndividualTools: true, OrdinaryGitLabActionCount: 2, SurfaceClassification: "surface-backed"}}, want: prefix + "gamma has ordinary GitLab catalog actions without canonical ActionSpecs"},
 		{name: "individual-only classification", domains: []domainCoverage{{Package: "delta", HasMetaSpecs: true, SurfaceClassification: "individual-only"}}, want: prefix + "delta is individual-only; ordinary GitLab actions must be catalog-backed"},
 		{name: "spec-backed row", domains: []domainCoverage{{Package: "epsilon", HasIndividualTools: true, HasMetaSpecs: true, SurfaceClassification: "spec-backed"}}},
 		{
@@ -1734,13 +1734,16 @@ func TestClassifySurface_Scenarios_OrdersRules(t *testing.T) {
 }
 
 // TestCoverageNotes_Scenarios_ExplainsRegistrationState verifies the notes
-// name an unreferenced RegisterTools, a delegated RegisterMeta, and a domain
-// without any surface, and that a RegisterTools the root file does reference
-// is worth no note at all.
+// name an unreferenced RegisterTools, a RegisterTools taking no GitLab client,
+// a delegated RegisterMeta, and a domain without any surface, and that a
+// RegisterTools the root file does reference is worth no note at all.
 //
-// That last case is what the note is for: it reports the mismatch, so a
-// package register.go names must produce silence, or the note says nothing
-// about which of the two states a reader is looking at.
+// That silence is what the reference note is for: it reports the mismatch, so
+// a package register.go names must produce none, or the note says nothing
+// about which of the two states a reader is looking at. The constructor note
+// is held to the same standard: a row raising the standalone flag through its
+// utility surface, with no RegisterTools behind it, carries only the utility
+// note.
 func TestCoverageNotes_Scenarios_ExplainsRegistrationState(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1748,8 +1751,19 @@ func TestCoverageNotes_Scenarios_ExplainsRegistrationState(t *testing.T) {
 		coverage domainCoverage
 		want     []string
 	}{
-		{name: "unreferenced RegisterTools", source: domainSource{HasRegisterTools: true}, want: []string{"RegisterTools is not referenced from internal/tools/register.go"}},
-		{name: "referenced RegisterTools", source: domainSource{HasRegisterTools: true}, coverage: domainCoverage{RegisteredInRegisterAll: true, SurfaceClassification: "spec-backed"}},
+		{name: "unreferenced RegisterTools", source: domainSource{HasRegisterTools: true, ClientType: "*gitlabclient.Client"}, want: []string{"RegisterTools is not referenced from internal/tools/register.go"}},
+		{name: "referenced RegisterTools", source: domainSource{HasRegisterTools: true, ClientType: "*gitlabclient.Client"}, coverage: domainCoverage{RegisteredInRegisterAll: true, SurfaceClassification: "spec-backed"}},
+		{
+			name:     "referenced RegisterTools taking no GitLab client",
+			source:   domainSource{HasRegisterTools: true, ClientType: "*mcp.Server"},
+			coverage: domainCoverage{RegisteredInRegisterAll: true, HasStandaloneOnlyTools: true, SurfaceClassification: "standalone-only"},
+			want:     []string{"RegisterTools does not use a GitLab client constructor"},
+		},
+		{
+			name:     "standalone flag raised by a utility surface alone",
+			coverage: domainCoverage{HasStandaloneOnlyTools: true, UtilitySurfaceActionCount: 1, SurfaceClassification: "surface-backed"},
+			want:     []string{"1 utility/controller actions are outside ordinary GitLab API action counting"},
+		},
 		{name: "delegated RegisterMeta", source: domainSource{HasRegisterMeta: true}, coverage: domainCoverage{DelegatedMeta: true}, want: []string{"delegated RegisterMeta is referenced from internal/tools/register_meta.go"}},
 		{name: "no surface", coverage: domainCoverage{SurfaceClassification: noGitLabSurface}, want: []string{"no GitLab action surface discovered from source or catalog metadata"}},
 	}
@@ -2377,7 +2391,9 @@ func TestDomainCoverageFor_SourceFlags_AreCarriedOneAtATime(t *testing.T) {
 //
 // Every earlier row either had no catalog entry at all or had every count
 // raised, so the two flags read true for any package the catalog named. The
-// last note is what the standalone flag writes, RegisterTools or not.
+// standalone flag is raised here with no RegisterTools behind it, so the notes
+// stop at the utility/controller one: the RegisterTools note this row used to
+// carry claimed a function neither of those packages has.
 func TestDomainCoverageFor_SurfaceOnlyPackage_ClaimsNoSpecsAndNoCatalogEntries(t *testing.T) {
 	actionCoverage := map[string]packageActionCoverage{
 		"surfaceonly": {
@@ -2403,11 +2419,44 @@ func TestDomainCoverageFor_SurfaceOnlyPackage_ClaimsNoSpecsAndNoCatalogEntries(t
 		Notes: []string{
 			"3 explicit surface specs: runtime-utility",
 			"3 utility/controller actions are outside ordinary GitLab API action counting",
-			"RegisterTools does not use a GitLab client constructor",
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("domainCoverageFor() = %+v, want %+v", got, want)
+	}
+}
+
+// TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor
+// verifies the constructor note follows the RegisterTools the walk found and
+// not the standalone flag.
+//
+// This row raises that flag through its utility surface actions while its
+// RegisterTools does take a GitLab client, which is the one shape where the
+// flag and the note disagree: keyed on the flag, the note said the function
+// used no GitLab client when it did. The note that it is not referenced from
+// register.go is still written, since nothing names the package there.
+func TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor(t *testing.T) {
+	actionCoverage := map[string]packageActionCoverage{
+		"clientsurface": {
+			UtilitySurfaceActionCount: 2,
+			SurfaceSpecCount:          2,
+			SurfaceKindCounts:         map[string]int{"runtime-utility": 2},
+		},
+	}
+	source := domainSource{Package: "clientsurface", HasRegisterTools: true, ClientType: "*gitlabclient.Client"}
+
+	got := domainCoverageFor(source, actionCoverage, nil, nil)
+
+	if !got.HasStandaloneOnlyTools {
+		t.Fatalf("HasStandaloneOnlyTools = false, want the utility surface to raise it (row %+v)", got)
+	}
+	want := []string{
+		"2 explicit surface specs: runtime-utility",
+		"2 utility/controller actions are outside ordinary GitLab API action counting",
+		"RegisterTools is not referenced from internal/tools/register.go",
+	}
+	if !reflect.DeepEqual(got.Notes, want) {
+		t.Errorf("notes = %q, want %q", got.Notes, want)
 	}
 }
 

@@ -2,7 +2,7 @@ package metadata
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
@@ -59,7 +59,7 @@ func buildReport(gapsOnly bool) report {
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)
-	packagesOut := collectPackages(auditshared.CachedActionSpecs(client, true), projected, gapsOnly)
+	packagesOut := collectPackages(auditshared.CachedActionSpecs(client), projected, gapsOnly)
 	return report{
 		SchemaVersion: shared.SchemaVersion,
 		Summary:       summarize(packagesOut),
@@ -88,10 +88,10 @@ func collectPackages(groups []tools.ActionSpecGroup, projected map[string]string
 		if gapsOnly && len(pr.Findings) == 0 {
 			continue
 		}
-		sort.Slice(pr.Findings, func(i, j int) bool { return pr.Findings[i].Action < pr.Findings[j].Action })
+		slices.SortFunc(pr.Findings, func(a, b actionFinding) int { return strings.Compare(a.Action, b.Action) })
 		packagesOut = append(packagesOut, *pr)
 	}
-	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
+	slices.SortFunc(packagesOut, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) })
 	return packagesOut
 }
 

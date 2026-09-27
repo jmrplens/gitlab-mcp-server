@@ -930,7 +930,7 @@ func collectValidHintTools(t *testing.T, entries []os.DirEntry, metaSrc string) 
 	// would falsely fail validation because the tool is gated to
 	// GitLab.com Enterprise.
 	if dotcomClient, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false); err == nil {
-		for _, group := range CollectActionSpecs(dotcomClient, true) {
+		for _, group := range CollectActionSpecs(dotcomClient) {
 			for _, spec := range group.Actions {
 				if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
 					validTools[name] = true
@@ -959,7 +959,7 @@ func collectValidHintActions(entries []os.DirEntry, metaSrc string) map[string]b
 	// Mirror collectValidHintTools: include the GitLab.com catalog's
 	// action names so hints like `action 'orbit.query'` validate.
 	if dotcomClient, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false); err == nil {
-		for _, group := range CollectActionSpecs(dotcomClient, true) {
+		for _, group := range CollectActionSpecs(dotcomClient) {
 			for _, spec := range group.Actions {
 				if actionName := strings.TrimSpace(spec.Name); actionName != "" {
 					validActions[actionName] = true

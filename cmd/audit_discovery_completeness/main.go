@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,8 +22,9 @@ import (
 const schemaVersion = 1
 
 // osExit is os.Exit behind a variable, so a test can drive the command line
-// main assembles and read the code the -check gate asks the process to exit
-// with. The sibling audits keep the same seam.
+// main assembles and read the code it asks the process to exit with: the
+// -check gate's, and the 1 of a -severity it cannot read or a report it could
+// not write. The sibling audits keep the same seam.
 var osExit = os.Exit
 
 // variantSuffixes are stripped from action stems when clustering sibling actions.
@@ -180,7 +182,9 @@ func main() {
 
 	threshold, err := parseSeverity(*severityFlag)
 	if err != nil {
-		cmdutil.Fatalf("invalid -severity: %v", err)
+		fmt.Fprintf(os.Stderr, "invalid -severity: %v\n", err)
+		osExit(1)
+		return
 	}
 
 	rep := buildReport(*gapsOnly, *minAliases)
@@ -193,13 +197,12 @@ func main() {
 		return
 	}
 
-	content, err := json.MarshalIndent(rep, "", "  ")
-	if err != nil {
-		cmdutil.Fatalf("marshal report: %v", err)
-	}
-	content = append(content, '\n')
+	// The report is built of strings, integers, booleans and slices of structs
+	// holding them, so marshaling the value built above cannot fail.
+	content := append(cmdutil.Must(json.MarshalIndent(rep, "", "  ")), '\n')
 	if writeErr := docgen.WriteReport(*outputPath, content); writeErr != nil {
-		cmdutil.Fatalf("write report: %v", writeErr)
+		fmt.Fprintf(os.Stderr, "write report: %v\n", writeErr)
+		osExit(1)
 	}
 }
 
@@ -262,7 +265,7 @@ func buildReport(gapsOnly bool, minAliases int) report {
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)
-	groups := auditshared.CachedActionSpecs(client, true)
+	groups := auditshared.CachedActionSpecs(client)
 	allClusters := collectAllClusters(groups)
 
 	packagesOut := buildPackageReports(groups, allClusters, projected, minAliases, gapsOnly)
@@ -324,10 +327,10 @@ func buildPackageReports(groups []tools.ActionSpecGroup, allClusters []clusterRe
 		if gapsOnly && len(pr.Findings) == 0 {
 			continue
 		}
-		sort.Slice(pr.Findings, func(i, j int) bool { return pr.Findings[i].Action < pr.Findings[j].Action })
+		slices.SortFunc(pr.Findings, func(a, b actionFinding) int { return strings.Compare(a.Action, b.Action) })
 		packagesOut = append(packagesOut, *pr)
 	}
-	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
+	slices.SortFunc(packagesOut, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) })
 	return packagesOut
 }
 
@@ -335,11 +338,8 @@ func buildPackageReports(groups []tools.ActionSpecGroup, allClusters []clusterRe
 // deterministic JSON output.
 func sortClusters(allClusters []clusterRecord) []clusterRecord {
 	clustersOut := append([]clusterRecord(nil), allClusters...)
-	sort.Slice(clustersOut, func(i, j int) bool {
-		if clustersOut[i].Package != clustersOut[j].Package {
-			return clustersOut[i].Package < clustersOut[j].Package
-		}
-		return clustersOut[i].Stem < clustersOut[j].Stem
+	slices.SortFunc(clustersOut, func(a, b clusterRecord) int {
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Stem, b.Stem))
 	})
 	return clustersOut
 }
@@ -520,10 +520,7 @@ func isListOrDetailContent(spec toolutil.ActionSpec) bool {
 func highestSeverity(flags []string, inCluster bool, clusterMembers []string) string {
 	highest := severityInfo
 	for _, f := range flags {
-		r := severityRank(severityFor(f, inCluster, clusterMembers))
-		if r < highest {
-			highest = r
-		}
+		highest = min(highest, severityRank(severityFor(f, inCluster, clusterMembers)))
 	}
 	switch highest {
 	case severityError:
@@ -852,9 +849,6 @@ func emptyParamDescriptions(schema map[string]any) []string {
 // a structured enum lets the model and MCP clients constrain the value
 // authoritatively instead of parsing prose.
 func enumCandidates(schema map[string]any) []string {
-	if len(schema) == 0 {
-		return nil
-	}
 	var out []string
 	walkSchemaProperties(schema, "", map[uintptr]bool{}, func(name, childPath string, child map[string]any) {
 		if isEnumCandidate(name, child) {
@@ -1010,14 +1004,16 @@ func schemaPointer(schema map[string]any) uintptr {
 
 // resolveSchemaRef follows a single-level $ref of the form "#/$defs/Name".
 func resolveSchemaRef(schema map[string]any) map[string]any {
-	ref, isRef := schema["$ref"].(string)
-	if !isRef || !strings.HasPrefix(ref, "#/$defs/") {
+	// A $ref that is not a string reads as "", which carries no prefix.
+	ref, _ := schema["$ref"].(string)
+	name, isDefsRef := strings.CutPrefix(ref, "#/$defs/")
+	if !isDefsRef {
 		return schema
 	}
 	// The root schema (not the child) holds $defs, but we also accept local
 	// definitions to be tolerant of nested forms.
 	if defs, hasDefs := schema["$defs"].(map[string]any); hasDefs {
-		if d, hasDef := defs[strings.TrimPrefix(ref, "#/$defs/")].(map[string]any); hasDef {
+		if d, hasDef := defs[name].(map[string]any); hasDef {
 			return d
 		}
 	}

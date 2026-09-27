@@ -81,6 +81,13 @@ func main() {
 // mode it ran reported a clean tree, 1 when that mode found a violation or
 // failed, and 2 when the flags themselves did not parse.
 //
+// Failing includes reading less than it was pointed at, in every mode. The
+// report judges no name, so a non-compliant one leaves its code at 0, but a
+// root it could not walk or a file that did not parse makes it exit 1 once the
+// report and the summary are printed: a report that silently stops short of a
+// tree reads as a clean one to anything that checks the status, which is how
+// -check-files and -apply already treat a tree they could not read.
+//
 // The flag set is ContinueOnError rather than the package-level ExitOnError
 // one, so a bad flag is a code this function returns instead of an os.Exit the
 // seam above never sees. flag has already printed the error and the usage by
@@ -125,13 +132,24 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// errIncompleteReport is what run returns after printing a report that is
+// missing a tree or a file it was pointed at, each already named on stderr.
+var errIncompleteReport = errors.New("report incomplete: a tree or file named above could not be read")
+
 // run executes the audit workflow against the supplied directories. It writes
 // CSV rows to stdout, and to stderr a line for each tree or file it could not
-// read followed by a human-readable summary.
+// read followed by a human-readable summary. The report is printed whole
+// either way; when something could not be read, run then returns
+// errIncompleteReport, so the exit code says the report stops short.
 func run(args []string, stdout, stderr io.Writer) error {
 	var entries []testEntry
+	complete := true
 	for _, dir := range args {
-		entries = append(entries, scanDir(dir, stderr)...)
+		dirEntries, dirComplete := scanDir(dir, stderr)
+		entries = append(entries, dirEntries...)
+		if !dirComplete {
+			complete = false
+		}
 	}
 
 	// The header is the first row rather than a write of its own: it is far
@@ -166,6 +184,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 			fmt.Fprintf(stderr, "  %-16s %d\n", p+":", c)
 		}
 	}
+	if !complete {
+		return errIncompleteReport
+	}
 	return nil
 }
 
@@ -174,34 +195,40 @@ func run(args []string, stdout, stderr io.Writer) error {
 // rows already collected and the remaining roots to be scanned: the report is
 // still printed, and the line on stderr says which tree it stops short of.
 // stderr is the writer run was handed, as it is for -apply's own walk, so the
-// line reaches whoever the caller pointed the report's stderr at.
-func scanDir(dir string, stderr io.Writer) []testEntry {
-	var results []testEntry
+// line reaches whoever the caller pointed the report's stderr at. complete is
+// false when the walk stopped short or a file under it did not parse.
+func scanDir(dir string, stderr io.Writer) (entries []testEntry, complete bool) {
+	complete = true
 	err := testsource.WalkFiles([]string{filepath.Clean(dir)}, testsource.TestFiles, func(path string) error {
-		results = append(results, scanFile(path, stderr)...)
+		fileEntries, parsed := scanFile(path, stderr)
+		entries = append(entries, fileEntries...)
+		if !parsed {
+			complete = false
+		}
 		return nil
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "walk %s: %v\n", filepath.Clean(dir), err)
+		return entries, false
 	}
-	return results
+	return entries, complete
 }
 
 // scanFile parses a single test file and classifies each Test* function. A
-// file that does not parse contributes no rows and one line on stderr.
-func scanFile(path string, stderr io.Writer) []testEntry {
+// file that does not parse contributes no rows and one line on stderr, and
+// reports parsed false.
+func scanFile(path string, stderr io.Writer) (entries []testEntry, parsed bool) {
 	cleanPath := filepath.Clean(path)
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, cleanPath, nil, 0)
 	if err != nil {
 		fmt.Fprintf(stderr, "parse %s: %v\n", cleanPath, err)
-		return nil
+		return nil, false
 	}
 
 	// Use forward-slash paths for consistent CSV output.
 	relPath := filepath.ToSlash(cleanPath)
 
-	var results []testEntry
 	for _, decl := range node.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -218,9 +245,9 @@ func scanFile(path string, stderr io.Writer) []testEntry {
 		}
 
 		entry.Pattern, entry.SuggestedName = classify(name)
-		results = append(results, entry)
+		entries = append(entries, entry)
 	}
-	return results
+	return entries, true
 }
 
 // classify determines the naming pattern and suggests a corrected name.

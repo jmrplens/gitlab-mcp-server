@@ -43,7 +43,7 @@ func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 			// The catalog applies the central tier filter; align the raw collected
 			// specs to the same effective tier so route parity is comparable.
 			tier := edition.TierForEnterprise(tc.enterprise)
-			for _, specGroup := range filterActionSpecGroupsByTier(CollectActionSpecs(tc.client, tc.enterprise), tier) {
+			for _, specGroup := range filterActionSpecGroupsByTier(CollectActionSpecs(tc.client), tier) {
 				t.Run(specGroup.ToolName, func(t *testing.T) {
 					catalogGroup, ok := catalog.Group(specGroup.ToolName)
 					if !ok {
@@ -63,7 +63,7 @@ func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 
 // TestCollectedActionSpecs_KnownGuidancePreserved covers CollectedActionSpecs with table-driven subtests for known guidance preserved.
 func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
-	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(newGitLabDotComClient(t), true))
+	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(newGitLabDotComClient(t)))
 	if err != nil {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestCollectedActionSpecs_DeclareCatalogOwnership(t *testing.T) {
 	var missingActionOwners []string
 	var unknownActionOwners []string
 
-	for _, group := range CollectActionSpecs(newGitLabDotComClient(t), true) {
+	for _, group := range CollectActionSpecs(newGitLabDotComClient(t)) {
 		groupOwner := strings.TrimSpace(group.OwnerPackage)
 		if groupOwner == "" {
 			missingGroupOwners = append(missingGroupOwners, group.ToolName)
@@ -258,7 +258,7 @@ func TestEnterpriseGroupBuilders_CarryTheirOwnDescription(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			groups := tc.build(nil, true)
+			groups := tc.build(nil)
 			if len(groups) != 1 {
 				t.Fatalf("%s builder returned %d groups, want exactly one", tc.name, len(groups))
 			}
@@ -509,7 +509,7 @@ func TestIndividualToolProjection_RepresentativeDomainParity(t *testing.T) {
 		toolsByName[tool.Name] = tool
 	}
 
-	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(nil, true))
+	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(nil))
 	if err != nil {
 		t.Fatalf("actionSpecGroupsByTool() error = %v", err)
 	}
@@ -550,7 +550,7 @@ func TestIndividualToolProjection_GoldenSnapshotParity(t *testing.T) {
 	for _, snapshot := range golden {
 		goldenByName[snapshot.Name] = snapshot
 	}
-	specsByIndividualName := individualSpecsByToolNameMap(CollectActionSpecs(nil, true))
+	specsByIndividualName := individualSpecsByToolNameMap(CollectActionSpecs(nil))
 
 	var projectedTools []*mcp.Tool
 	missingSpecs := make([]string, 0)
@@ -622,7 +622,7 @@ func collectCatalogBackedIndividualToolNames(t *testing.T, toolsByName map[strin
 	t.Helper()
 	specNames := make(map[string]string)
 	duplicateSpecNames := make([]string, 0)
-	for _, group := range CollectActionSpecs(nil, true) {
+	for _, group := range CollectActionSpecs(nil) {
 		duplicates := recordCatalogBackedGroupSpecs(t, specNames, toolsByName, group)
 		duplicateSpecNames = append(duplicateSpecNames, duplicates...)
 	}
@@ -1099,7 +1099,7 @@ var premiumGatingExempt = map[string]string{
 func TestPremiumDescribedActionsAreEditionGated(t *testing.T) {
 	var leaks []string
 	excused := make(map[string]bool, len(premiumGatingExempt))
-	for _, group := range CollectActionSpecs(nil, true) {
+	for _, group := range CollectActionSpecs(nil) {
 		for _, spec := range group.Actions {
 			if spec.Edition != "" {
 				continue

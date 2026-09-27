@@ -353,6 +353,7 @@ func TestSiblingMatches_AcceptsPrefixedAndUnderscoreForms(t *testing.T) {
 		"pages_domain_list":    true,  // exact lowercase
 		"pages.domain_list":    true,  // head + "_" + tail -> "pages_domain_list"
 		"PAGES.DOMAIN_LIST":    true,  // normalized lowercase + head/tail form
+		".pages_domain_list":   true,  // a dot at offset 0 still splits: the tail is the sibling
 		"pages.domain_unknown": false, // no match
 		"totally_unrelated":    false, // no match
 	}
@@ -1798,6 +1799,47 @@ func TestMain_Scenarios_WritesTheReportOrGatesOnIt(t *testing.T) {
 	}
 }
 
+// TestMain_Failures_ExitOneAndSayWhy drives the two ways the command line can
+// fail rather than answer: a -severity it cannot read, refused before any
+// catalog is built, and a report it could not write, because the directory
+// -output names is a regular file. Each asks the process to exit 1, says on
+// stderr which of the two it was, and leaves no report behind.
+func TestMain_Failures_ExitOneAndSayWhy(t *testing.T) {
+	tests := []struct {
+		name       string
+		severity   string
+		underFile  bool
+		wantStderr string
+	}{
+		{name: "an unreadable severity", severity: "fatal", wantStderr: "invalid -severity: must be error, warning, or info"},
+		{name: "an unwritable output", severity: "error", underFile: true, wantStderr: "write report:"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			reportPath := filepath.Join(dir, "discovery-backlog.json")
+			if tt.underFile {
+				blocker := filepath.Join(dir, "blocker")
+				if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+					t.Fatalf("create the file standing in for a directory: %v", err)
+				}
+				reportPath = filepath.Join(blocker, "discovery-backlog.json")
+			}
+			args := []string{"audit_discovery_completeness", "-gaps-only", "-severity", tt.severity, "-output", reportPath}
+
+			exited, logged := runMain(t, dir, args)
+
+			if exited != 1 {
+				t.Errorf("main() asked to exit %d, want 1", exited)
+			}
+			if !strings.Contains(logged, tt.wantStderr) {
+				t.Errorf("stderr = %q, want it to contain %q", logged, tt.wantStderr)
+			}
+			assertReportWritten(t, reportPath, false)
+		})
+	}
+}
+
 // notExited is the code runMain reports when main returned without asking the
 // process to exit at all, which no real exit status can be.
 const notExited = -1
@@ -1857,5 +1899,169 @@ func assertReportWritten(t *testing.T, path string, want bool) {
 	if got.SchemaVersion != schemaVersion || len(got.Packages) == 0 {
 		t.Errorf("written report = schema %d over %d packages, want schema %d and a non-empty backlog",
 			got.SchemaVersion, len(got.Packages), schemaVersion)
+	}
+}
+
+// TestEnumCandidates_Scenarios_NamesTheFieldsProseEnumerates verifies the
+// walk answers with the path of every scalar whose description lists a closed
+// set and no enum, and with nothing for a schema that has no properties. The
+// candidate test itself is TestIsEnumCandidate's; this one holds the walk to
+// reporting what that test accepts, which nothing else asserted: a walk that
+// returned nothing for every schema passed the whole suite.
+func TestEnumCandidates_Scenarios_NamesTheFieldsProseEnumerates(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema map[string]any
+		want   []string
+	}{
+		{name: "no schema", schema: nil, want: nil},
+		{name: "an empty schema", schema: map[string]any{}, want: nil},
+		{
+			name: "one candidate beside a field that is not one",
+			schema: map[string]any{"properties": map[string]any{
+				"sort":  map[string]any{"type": "string", "description": "Sort direction (asc, desc)"},
+				"title": map[string]any{"type": "string", "description": "The title of the widget."},
+			}},
+			want: []string{"sort"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := enumCandidates(tt.schema); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("enumCandidates() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBuildPackageReports_UnorderedInput_OrdersPackagesAndFindingsByName
+// verifies the report is ordered whatever order the catalog handed it: the
+// packages by name, and the findings inside a package by action. Both used to
+// be sorted and neither order was asserted, so reversing either comparison
+// passed the whole suite and would have reshuffled every committed report.
+func TestBuildPackageReports_UnorderedInput_OrdersPackagesAndFindingsByName(t *testing.T) {
+	flagged := func(owner, name string) toolutil.ActionSpec {
+		return toolutil.ActionSpec{
+			Name:           name,
+			OwnerPackage:   owner,
+			Usage:          "Use to execute " + owner + " domain action.",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_" + name},
+		}
+	}
+	groups := []tools.ActionSpecGroup{
+		{ToolName: "gitlab_widget", OwnerPackage: "widgets", Actions: []toolutil.ActionSpec{
+			flagged("widgets", "widget_update"), flagged("widgets", "widget_get"),
+		}},
+		{ToolName: "gitlab_gadget", OwnerPackage: "gadgets", Actions: []toolutil.ActionSpec{flagged("gadgets", "gadget_get")}},
+	}
+
+	got := buildPackageReports(groups, nil, map[string]string{}, 3, false)
+
+	var packages, widgetActions []string
+	for _, pr := range got {
+		packages = append(packages, pr.Package)
+		if pr.Package == "widgets" {
+			for _, finding := range pr.Findings {
+				widgetActions = append(widgetActions, finding.Action)
+			}
+		}
+	}
+	if !slices.Equal(packages, []string{"gadgets", "widgets"}) {
+		t.Errorf("packages = %v, want [gadgets widgets]", packages)
+	}
+	if !slices.Equal(widgetActions, []string{"widget_get", "widget_update"}) {
+		t.Errorf("widgets findings = %v, want [widget_get widget_update]", widgetActions)
+	}
+}
+
+// TestSortClusters_UnorderedInput_OrdersByPackageThenStem verifies the
+// clusters are ordered by package first and by stem inside a package, and
+// that the input slice is left as it was: sortClusters sorts a copy.
+func TestSortClusters_UnorderedInput_OrdersByPackageThenStem(t *testing.T) {
+	input := []clusterRecord{
+		{Package: "widgets", Stem: "b"},
+		{Package: "gadgets", Stem: "z"},
+		{Package: "widgets", Stem: "a"},
+	}
+	original := slices.Clone(input)
+
+	got := sortClusters(input)
+
+	want := []clusterRecord{
+		{Package: "gadgets", Stem: "z"},
+		{Package: "widgets", Stem: "a"},
+		{Package: "widgets", Stem: "b"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sortClusters() = %+v, want %+v", got, want)
+	}
+	if !reflect.DeepEqual(input, original) {
+		t.Errorf("sortClusters() reordered its input to %+v", input)
+	}
+}
+
+// TestAnalyzeSpec_NoInputSchema_RecordsNoSchema verifies HasSchema is false
+// for a spec whose route carries no input schema. The synthetic-spec test
+// covers only the true side, so a check that always answered true passed.
+func TestAnalyzeSpec_NoInputSchema_RecordsNoSchema(t *testing.T) {
+	spec := toolutil.ActionSpec{
+		Name:           "widget_ping",
+		Usage:          "Use to execute widgets domain action.",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_ping"},
+	}
+
+	if finding := analyzeSpec(spec, map[string]string{}, nil, 3); finding.HasSchema {
+		t.Error("HasSchema = true, want false for a spec with no input schema")
+	}
+}
+
+// TestSummarize_TwoMemberCluster_EscalatesItsFlags verifies a cluster of two,
+// the smallest there is, counts as a cluster in the summary's severities: a
+// weak_aliases flag on a member of a cluster holding a non-CRUD variant is an
+// error, while the same flag on an action in no cluster is a warning. The
+// lone action carries no cluster at all rather than a one-member one, so a
+// threshold turned the other way cannot trade the two verdicts and leave the
+// counts as they were.
+func TestSummarize_TwoMemberCluster_EscalatesItsFlags(t *testing.T) {
+	summary := summarize([]packageReport{{Package: "widgets", Actions: 2, Findings: []actionFinding{
+		{Action: "widget_get", Flags: []string{"weak_aliases"}, Cluster: []string{"widget_get", "widget_get_batch"}},
+		{Action: "widget_ping", Flags: []string{"weak_aliases"}},
+	}}})
+
+	if summary.Errors != 1 || summary.Warnings != 1 {
+		t.Errorf("errors = %d, warnings = %d; want 1 and 1", summary.Errors, summary.Warnings)
+	}
+}
+
+// TestSameParameterGuidance_EachField_DecidesAlone verifies the comparison
+// reads every field: two entries agree only when all four do, and any one of
+// them differing on its own makes them different.
+func TestSameParameterGuidance_EachField_DecidesAlone(t *testing.T) {
+	base := toolutil.ParameterGuidance{
+		SemanticRole:     "scope_project",
+		ValueSource:      "The project the task names.",
+		ExampleBinding:   `params.project_id:"group/project"`,
+		CommonConfusions: []string{"A group path is not a project."},
+	}
+	tests := []struct {
+		name   string
+		mutate func(*toolutil.ParameterGuidance)
+		want   bool
+	}{
+		{name: "identical", mutate: func(*toolutil.ParameterGuidance) {}, want: true},
+		{name: "semantic role", mutate: func(g *toolutil.ParameterGuidance) { g.SemanticRole = "scope_group" }, want: false},
+		{name: "value source", mutate: func(g *toolutil.ParameterGuidance) { g.ValueSource = "Anything." }, want: false},
+		{name: "example binding", mutate: func(g *toolutil.ParameterGuidance) { g.ExampleBinding = `params.project_id:1` }, want: false},
+		{name: "common confusions", mutate: func(g *toolutil.ParameterGuidance) { g.CommonConfusions = nil }, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			other := base
+			other.CommonConfusions = slices.Clone(base.CommonConfusions)
+			tt.mutate(&other)
+			if got := sameParameterGuidance(base, other); got != tt.want {
+				t.Errorf("sameParameterGuidance() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

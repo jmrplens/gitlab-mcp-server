@@ -54,11 +54,15 @@ var projectionCache struct {
 	descriptions map[string]string
 }
 
-// specsCache memoizes CachedActionSpecs per enterprise flag, same contract:
-// the returned groups are shared and must be treated as read-only.
-var specsCache sync.Map // enterprise bool -> *specsResult
-
-type specsResult struct {
+// specsCache memoizes CachedActionSpecs, same contract: the returned groups
+// are shared and must be treated as read-only.
+//
+// It holds one collection rather than one per tier, because the collection is
+// the same at every tier: each spec carries its minimum tier in its Edition
+// and nothing is removed until a catalog is built from them. A per-tier key
+// used to sit here, over a flag the collection ignored, so a caller asking at
+// a second tier paid for an identical collection twice.
+var specsCache struct {
 	once   sync.Once
 	groups []tools.ActionSpecGroup
 }
@@ -72,16 +76,14 @@ func CachedIndividualDescriptions(client *gitlabclient.Client) map[string]string
 	return projectionCache.descriptions
 }
 
-// CachedActionSpecs returns the collected action specs for the given tier
-// selector, computed once per process and per flag. The slice and everything
-// it references are shared: read-only.
-func CachedActionSpecs(client *gitlabclient.Client, enterprise bool) []tools.ActionSpecGroup {
-	entry, _ := specsCache.LoadOrStore(enterprise, &specsResult{})
-	result, _ := entry.(*specsResult)
-	result.once.Do(func() {
-		result.groups = tools.CollectActionSpecs(client, enterprise)
+// CachedActionSpecs returns the collected action specs of every tier, each
+// tagged with its minimum tier, computed once per process. The slice and
+// everything it references are shared: read-only.
+func CachedActionSpecs(client *gitlabclient.Client) []tools.ActionSpecGroup {
+	specsCache.once.Do(func() {
+		specsCache.groups = tools.CollectActionSpecs(client)
 	})
-	return result.groups
+	return specsCache.groups
 }
 
 // ProjectIndividualDescriptions returns the projected description per

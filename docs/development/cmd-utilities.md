@@ -1219,6 +1219,8 @@ Pass one or more positional directory arguments after the flags; with none the c
 
 CSV to stdout (`file,current_name,pattern,suggested_name`), with a summary printed to stderr. `-check-files` prints the offending file names instead.
 
+The report judges no name, so a non-compliant one leaves the exit code at `0`. A root it could not walk or a test file that does not parse is named on stderr and makes it exit `1` once the report and the summary are printed, since a report that stops short of a tree would otherwise read as a clean one to anything checking the status; `-check-files` and `-apply` already fail on a tree they could not read.
+
 #### Make targets
 
 - `make audit-test-names` — runs with `cmd internal test`.
