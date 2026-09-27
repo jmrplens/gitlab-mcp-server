@@ -10,6 +10,7 @@
 package ee
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicdiscussions"
@@ -137,7 +138,9 @@ func epicNoteIDs(notes []epicnotes.Output) []int64 {
 
 // TestEpicNotes_Lifecycle_CreateListGetUpdateDelete writes one note on the
 // fixture epic per surface, finds it in the listing, reads it back, edits
-// it, deletes it and checks the listing no longer holds it.
+// it, deletes it and checks the listing no longer holds it. Neither the note
+// nor its edit names a command, so neither answer carries a quick actions
+// status.
 //
 // Replaces: TestMeta_EpicNotes
 func TestEpicNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
@@ -151,6 +154,11 @@ func TestEpicNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 		created := harness.Do[epicnotes.Output](s, actionEpicNoteCreate, withParams(params, map[string]any{"body": body}))
 		if created.ID == 0 || created.Body != body {
 			e.T.Fatalf("epic_note_create answered %+v, want a note with an ID carrying %q", created, body)
+		}
+		// GitLab answers a body without a command with an empty quick actions
+		// status rather than none, which must not reach the output.
+		if created.QuickActionsStatus != nil {
+			e.T.Errorf("epic_note_create answered a body without a quick action with the status %+v, want none", *created.QuickActionsStatus)
 		}
 		note := withParams(params, map[string]any{"note_id": created.ID})
 
@@ -166,11 +174,62 @@ func TestEpicNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 		if updated.Body != "updated "+body {
 			e.T.Errorf("epic_note_update answered the body %q, want the one just written", updated.Body)
 		}
+		if updated.QuickActionsStatus != nil {
+			e.T.Errorf("epic_note_update answered a body without a quick action with the status %+v, want none", *updated.QuickActionsStatus)
+		}
 
 		harness.DoVoid(s, actionEpicNoteDelete, note)
 		after := harness.Do[epicnotes.ListOutput](s, actionEpicNoteList, params)
 		if containsID(epicNoteIDs(after.Notes), created.ID) {
 			e.T.Errorf("the epic's notes still hold note %d after its delete", created.ID)
+		}
+	})
+}
+
+// TestEpicNotes_QuickActions_TheStatusReachesTheOutput writes two notes on an
+// epic of its own per surface, one mixing text with a /label quick action and
+// one holding a quick action alone, and checks that what GitLab reports about
+// each reaches the output: the note kept beside the command it ran and what
+// the command did, then no note at all beside a status saying the body held
+// only commands. The epic is read back between the two, so the label the first
+// note put on it is GitLab's own evidence that the reported command ran.
+//
+// Before the note mutations selected the status, the first note came back
+// with no word about its command and the second failed as a missing note
+// although GitLab had run the command.
+func TestEpicNotes_QuickActions_TheStatusReachesTheOutput(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, buildEpicLabelFixture, func(e *harness.Env, surface harness.Surface, f epicLabelFixture) {
+		s := e.On(surface)
+		epic := fixture.NewEpic(e, f.group, e.Name("epic"))
+		params := epicParams(epic)
+		label := `~"` + f.label.Name + `"`
+
+		mixed := harness.Do[epicnotes.Output](s, actionEpicNoteCreate, withParams(params, map[string]any{
+			"body": "triaged from the " + string(surface) + " surface\n/label " + label,
+		}))
+		if mixed.ID == 0 {
+			e.T.Fatalf("epic_note_create answered %+v, want the note GitLab kept beside the command", mixed)
+		}
+		status := mixed.QuickActionsStatus
+		if status == nil {
+			e.T.Fatalf("epic_note_create answered note %d with no quick actions status, want the status of the /label it carried", mixed.ID)
+		}
+		if !slices.Contains(status.CommandNames, "label") || status.CommandsOnly || len(status.Messages) == 0 || len(status.ErrorMessages) != 0 {
+			e.T.Errorf("the quick actions status is %+v, want the label command applied, a message, no failure and the note kept", *status)
+		}
+		afterLabel := harness.Do[epics.Output](s, actionEpicGet, params)
+		if !slices.Contains(afterLabel.Labels, f.label.Name) {
+			e.T.Errorf("the epic carries the labels %v after the /label, want %q among them", afterLabel.Labels, f.label.Name)
+		}
+
+		only := harness.Do[epicnotes.Output](s, actionEpicNoteCreate, withParams(params, map[string]any{"body": "/unlabel " + label}))
+		if only.ID != 0 {
+			e.T.Errorf("epic_note_create kept note %d for a body of quick actions alone, want none", only.ID)
+		}
+		if only.QuickActionsStatus == nil || !only.QuickActionsStatus.CommandsOnly || !slices.Contains(only.QuickActionsStatus.CommandNames, "unlabel") {
+			e.T.Errorf("the quick actions status of a body of commands alone is %+v, want the unlabel command reported as the whole body", only.QuickActionsStatus)
 		}
 	})
 }

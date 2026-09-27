@@ -665,6 +665,9 @@ func NewDiscussionNoteMarkdown(id int64, body, author, createdAt string) NoteMar
 type DiscussionMarkdown struct {
 	ID    string
 	Notes []NoteMarkdown
+	// QuickActions is what the mutation that opened the thread reported about
+	// the quick actions its first note carried, nil otherwise.
+	QuickActions *QuickActionsStatusOutput
 }
 
 // DiscussionRenderer stores stable labels and hints for a discussion family so
@@ -823,6 +826,7 @@ func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) st
 	var b strings.Builder
 	c := NewCard(&b, "Discussion "+discussion.ID)
 	writeDiscussionNotes(&b, discussion.Notes)
+	writeQuickActionsSection(c, discussion.QuickActions)
 	c.End(hints...)
 	return b.String()
 }
@@ -997,6 +1001,9 @@ type NoteMarkdown struct {
 	Resolvable bool
 	Resolved   bool
 	ResolvedBy string
+	// QuickActions is what a note mutation reported about the quick actions
+	// the body carried, nil for a note read back or a body that carried none.
+	QuickActions *QuickActionsStatusOutput
 }
 
 // NoteMarkdownFlags groups boolean note attributes for Markdown view-model
@@ -1039,8 +1046,9 @@ type NoteMarkdownOptions struct {
 
 // FormatNoteMarkdown renders a single GitLab note as a card: the author as a
 // handle, the time, the flags that hold, the resolution state when the domain
-// has one, and the body as the card's long text, quoted under its label when
-// it spans more than one line.
+// has one, the body as the card's long text, quoted under its label when it
+// spans more than one line, and what the quick actions in the body did when
+// a mutation reported it.
 func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 	var b strings.Builder
 	c := NewCard(&b, fmt.Sprintf("%s #%d", opts.Title, note.ID))
@@ -1057,8 +1065,49 @@ func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 		c.Markdown("Resolved By", MdUserHandle(note.ResolvedBy))
 	}
 	c.Text("Body", note.Body)
+	writeQuickActionsSection(c, note.QuickActions)
 	c.End(opts.Hints...)
 	return b.String()
+}
+
+// quickActionsOnlyNote is the sentence a card opens with when a body held
+// nothing but quick actions and GitLab therefore kept no note.
+const quickActionsOnlyNote = "The body held only quick actions, so GitLab ran them and kept no note."
+
+// FormatQuickActionsOnlyMarkdown renders the answer to a note mutation whose
+// body held nothing but quick actions: GitLab ran them and kept no note, so
+// there is no note to show, only what the commands did. title names the kind
+// of note the caller asked for ("Epic Note").
+func FormatQuickActionsOnlyMarkdown(title string, status QuickActionsStatusOutput, hints ...string) string {
+	var b strings.Builder
+	c := NewCard(&b, title+": quick actions only")
+	c.Note(quickActionsOnlyNote)
+	writeQuickActionsRows(c, status)
+	c.End(hints...)
+	return b.String()
+}
+
+// writeQuickActionsSection writes the quick actions a mutation reported as a
+// section of the card, after the object's own rows, or nothing when it
+// reported none.
+func writeQuickActionsSection(c *Card, status *QuickActionsStatusOutput) {
+	if status == nil {
+		return
+	}
+	writeQuickActionsRows(c.Section("Quick Actions"), *status)
+}
+
+// writeQuickActionsRows writes the rows of a quick actions status: the
+// commands GitLab recognized, what they did, and what they failed to do, each
+// under a label of its own so a failure cannot read as applied.
+func writeQuickActionsRows(c *Card, status QuickActionsStatusOutput) {
+	commands := make([]string, 0, len(status.CommandNames))
+	for _, name := range status.CommandNames {
+		commands = append(commands, "/"+name)
+	}
+	c.Field("Commands", strings.Join(commands, ", "))
+	c.Text("Applied", strings.Join(status.Messages, "\n"))
+	c.Text("Failed", strings.Join(status.ErrorMessages, "\n"))
 }
 
 // NoteListMarkdownOptions configures shared note list rendering.

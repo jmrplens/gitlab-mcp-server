@@ -10,10 +10,12 @@ import (
 // FormatListMarkdown renders the issues of one epic as a Markdown table: a
 // collection of objects that share columns.
 //
-// The ID column carries the GraphQL global id, which is what the assign and
-// remove actions take; the reference is linked to the issue, which is what the
+// The ID column carries the GraphQL global id, which is what the reorder
+// action takes; the reference is linked to the issue, which is what the
 // preserve-links hint is for and what the table used to promise without
-// carrying a single link.
+// carrying a single link. The full reference names the project the child
+// lives in, which is what the assign and remove actions take as
+// child_project_path; a row GitLab sent without one falls back to #iid.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Issues) == 0 {
 		return toolutil.EmptyMessage("issues in this epic")
@@ -23,11 +25,12 @@ func FormatListMarkdown(out ListOutput) string {
 	// carries the count shown and the cursor line at the bottom says whether
 	// more follow.
 	toolutil.WriteListHeading(&b, "Epic Issues", len(out.Issues), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Title", "State", "Author", "Labels", "Created"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Reference", "Type", "Title", "State", "Author", "Labels", "Created"))
 	for _, issue := range out.Issues {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdCodeSpanCell(issue.ID),
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
+			toolutil.MdTitleLink(childReference(issue), issue.WebURL),
+			toolutil.EscapeMdTableCell(issue.Type),
 			toolutil.EscapeMdTableCell(issue.Title),
 			issueStateCell(issue.State),
 			toolutil.MdUserHandle(issue.Author),
@@ -41,6 +44,15 @@ func FormatListMarkdown(out ListOutput) string {
 		toolutil.HintAction(actionEpicIssueRemove, "unlink an issue from this epic"),
 	)...)
 	return b.String()
+}
+
+// childReference is the text a child's row links: its full reference, or
+// #iid when GitLab sent none.
+func childReference(issue ChildOutput) string {
+	if issue.Reference != "" {
+		return issue.Reference
+	}
+	return fmt.Sprintf("#%d", issue.IID)
 }
 
 // issueStateCell renders an issue state with the emoji every issue row in the

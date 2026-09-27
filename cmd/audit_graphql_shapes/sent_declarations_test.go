@@ -155,6 +155,10 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 		categoryAffordance:         true,
 		categoryUnusedIdentifier:   true,
 		categoryRecursiveShape:     true,
+		categoryWebRendering:       true,
+		categoryViewer:             true,
+		categoryNeverSentHere:      true,
+		categoryOutsideSurface:     true,
 	}
 	seen := map[string]bool{}
 
@@ -164,7 +168,7 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 				t.Errorf("the declaration leaves part of its key empty: %+v", declaration)
 			}
 			if !strings.HasPrefix(declaration.Package, toolsDir+"/") && declaration.Package != toolutilDir {
-				t.Errorf("package = %q, want a package under %s or %s itself", declaration.Package, toolsDir, toolutilDir)
+				t.Errorf("package = %q, want a package under %s or %s itself, whose shared note wrapper and shared shapes decode a payload", declaration.Package, toolsDir, toolutilDir)
 			}
 			if !categories[declaration.Category] {
 				t.Errorf("category = %q, want one of the %d this table defines", declaration.Category, len(categories))

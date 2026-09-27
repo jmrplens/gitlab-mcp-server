@@ -139,7 +139,7 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 			"full_path": fullPathGuidance(),
 			"epic_iid":  epicIIDGuidance(),
 		}
-		options.IndividualTool.Description = "List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion."
+		options.IndividualTool.Description = "List all notes (comments) on an epic. Returns: notes with author, body, system and internal flags, resolution state, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion."
 	case "gitlab_epic_note_get":
 		options.Usage = "Get one epic note by params.note_id. Use when the task references a specific comment or note ID on an epic."
 		options.Aliases = []string{"get epic comment", "show epic note", "fetch epic note"}
@@ -149,9 +149,9 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 			"epic_iid":  epicIIDGuidance(),
 			"note_id":   noteIDGuidance(),
 		}
-		options.IndividualTool.Description = "Get a single epic note by its ID. Returns: the note with author, body, timestamps, and system flag. See also: gitlab_epic_note_list, gitlab_epic_note_update, gitlab_epic_note_delete."
+		options.IndividualTool.Description = "Get a single epic note by its ID. Returns: the note with author, body, timestamps, system and internal flags, and resolution state. See also: gitlab_epic_note_list, gitlab_epic_note_update, gitlab_epic_note_delete."
 	case "gitlab_epic_note_create":
-		options.Usage = "Add a comment (note) to an epic. Use when the task asks to comment on, reply to, or annotate an existing epic. The body is rendered as GitLab Flavored Markdown."
+		options.Usage = "Add a comment (note) to an epic. Use when the task asks to comment on, reply to, or annotate an existing epic. The body is rendered as GitLab Flavored Markdown. Quick actions in the body (for example /label ~bug) are run against the epic and quick_actions_status reports what they did. A body of quick actions alone is run and kept as no note."
 		options.Aliases = []string{"comment on epic", "add epic comment", "reply to epic", "post epic note"}
 		options.RelatedActions = []string{actionEpicGet, actionEpicNoteList, actionEpicDiscussionGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -163,9 +163,9 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 				CommonConfusions: []string{"body is the comment content, not a description update. Updating the epic body is group.epic_update."},
 			},
 		}
-		options.IndividualTool.Description = "Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion."
+		options.IndividualTool.Description = "Add a comment (note) to an epic. Returns: the created note with id, author, body, internal flag and timestamps, plus the status of any quick actions the body carried (a body of quick actions alone returns the status and no note). See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion."
 	case "gitlab_epic_note_update":
-		options.Usage = "Replace the body of an existing epic note. Only the original author or a Maintainer/Owner can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
+		options.Usage = "Replace the body of an existing epic note. Only the original author or a Maintainer/Owner can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment. Quick actions in the new body are run against the epic and quick_actions_status reports what they did. A new body of quick actions alone makes GitLab run them and delete the note."
 		options.Aliases = []string{"edit epic comment", "update epic note", "amend epic comment"}
 		options.RelatedActions = []string{actionEpicNoteGet, actionEpicNoteList, actionEpicNoteDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -178,7 +178,7 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 				CommonConfusions: []string{"This replaces the whole note body. It does not append to it."},
 			},
 		}
-		options.IndividualTool.Description = "Update an epic note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_epic_note_get, gitlab_epic_note_list, gitlab_epic_note_delete."
+		options.IndividualTool.Description = "Update an epic note's body. Returns: the updated note with new body and updated_at timestamp, plus the status of any quick actions the new body carried. See also: gitlab_epic_note_get, gitlab_epic_note_list, gitlab_epic_note_delete."
 	case "gitlab_epic_note_delete":
 		options.Usage = "Permanently delete an epic note. Destructive and irreversible. Only the note author or a group Maintainer/Owner can delete a note. System notes cannot be deleted. Requires explicit confirmation."
 		options.Aliases = []string{"delete epic comment", "remove epic note", "delete epic note"}

@@ -4,6 +4,7 @@ package epicnotes
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -133,15 +134,47 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	t.Error("expected text content in cancellation result")
 }
 
+// TestEpicNoteOptions_UnknownTool_KeepsTheGenericDefaults states what a tool
+// name decorateEpicNoteMeta does not name is left with.
+//
+// Its switch is keyed on five string literals and nothing ties them to the
+// names ActionSpecs hands it, so a name renamed in one place and not the other
+// reaches none of the cases. What that leaves is pinned here: the generic
+// placeholder Usage, the bare name as the only alias, the epic as the one
+// related action, and no guidance or individual-tool description, which is
+// the shape cmd/audit_discovery_completeness reports as an undecorated action,
+// rather than whatever a case would have set. It is also the one input that
+// takes the last case the other way, which no published name can.
+func TestEpicNoteOptions_UnknownTool_KeepsTheGenericDefaults(t *testing.T) {
+	const renamed = "gitlab_epic_note_renamed"
+
+	options := epicNoteOptions(renamed)
+
+	if options.Usage != "Use to execute epicnotes domain action." {
+		t.Errorf("Usage = %q, want the generic placeholder", options.Usage)
+	}
+	if !slices.Equal(options.Aliases, []string{renamed}) {
+		t.Errorf("Aliases = %v, want only %q", options.Aliases, renamed)
+	}
+	if !slices.Equal(options.RelatedActions, []string{actionEpicGet}) {
+		t.Errorf("RelatedActions = %v, want only %q", options.RelatedActions, actionEpicGet)
+	}
+	if options.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none", options.ParameterGuidance)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty", options.IndividualTool.Description)
+	}
+}
+
 // TestActionSpecs_EveryActionCarriesItsOwnMetadata pins the five individual
 // tool names this package publishes and holds each spec to metadata of its own.
 //
-// Those five names are what makes decorateEpicNoteMeta's last case
-// unfalsifiable, since it is reached only when the four before it missed, which
-// is exactly the delete tool. The property worth holding is the one behind
-// that: a sixth action added here without a case of its own would ship the
-// placeholder usage, an empty description and no related actions, and fails
-// here rather than reaching a model.
+// Those five names reach decorateEpicNoteMeta's last case only as the delete
+// tool, which is why the unknown-name test above exists. The property worth
+// holding here is the one behind it: a sixth action added without a case of
+// its own would ship the placeholder usage, an empty description and no
+// related actions of its own, and fails here rather than reaching a model.
 func TestActionSpecs_EveryActionCarriesItsOwnMetadata(t *testing.T) {
 	const placeholderUsage = "Use to execute epicnotes domain action."
 
