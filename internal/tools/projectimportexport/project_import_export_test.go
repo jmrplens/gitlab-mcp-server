@@ -127,7 +127,6 @@ func TestGetExportStatus_Success(t *testing.T) {
 				"path_with_namespace": "export-group/export-path",
 				"created_at": "2026-01-01T00:00:00Z",
 				"export_status": "finished",
-				"message": "after export action failed",
 				"_links": {
 					"api_url": "https://gitlab.example.com/api/v4/projects/7/export/download",
 					"web_url": "https://gitlab.example.com/export-group/export-path/export"
@@ -154,7 +153,6 @@ func TestGetExportStatus_Success(t *testing.T) {
 		{"PathWithNamespace", out.PathWithNamespace, "export-group/export-path"},
 		{"CreatedAt", out.CreatedAt, "2026-01-01T00:00:00Z"},
 		{"ExportStatus", out.ExportStatus, "finished"},
-		{"Message", out.Message, "after export action failed"},
 		{"APIURL", out.APIURL, "https://gitlab.example.com/api/v4/projects/7/export/download"},
 		{"WebURL", out.WebURL, "https://gitlab.example.com/export-group/export-path/export"},
 	} {
@@ -645,7 +643,6 @@ func TestFormatExportStatusMarkdown_AllFields(t *testing.T) {
 		Name:              "project",
 		PathWithNamespace: "group/project",
 		ExportStatus:      "finished",
-		Message:           "Export complete",
 		APIURL:            "https://api.example.com",
 		WebURL:            "https://web.example.com",
 	}))
@@ -653,7 +650,6 @@ func TestFormatExportStatusMarkdown_AllFields(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Path**: group/project\n" +
 		"- **Status**: finished\n" +
-		"- **Message**: Export complete\n" +
 		"- **API URL**: [https://api.example.com](https://api.example.com)\n" +
 		"- **Web URL**: [https://web.example.com](https://web.example.com)\n\n" +
 		"---\n💡 **Next steps:**\n" +

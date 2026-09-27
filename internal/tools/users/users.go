@@ -455,7 +455,6 @@ func ListEmails(ctx context.Context, client *gitlabclient.Client, _ ListEmailsIn
 // ContributionEventOutput represents a user contribution event.
 type ContributionEventOutput struct {
 	ID          int64  `json:"id"`
-	Title       string `json:"title,omitempty"`
 	ProjectID   int64  `json:"project_id"`
 	ActionName  string `json:"action_name"`
 	TargetID    int64  `json:"target_id,omitempty"`
@@ -535,7 +534,6 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 	for _, e := range events {
 		o := ContributionEventOutput{
 			ID:          e.ID,
-			Title:       e.Title,
 			ProjectID:   e.ProjectID,
 			ActionName:  e.ActionName,
 			TargetID:    e.TargetID,
