@@ -26,15 +26,18 @@ func row(change func(d *Decision)) Decision {
 
 // ruleContext is the register a cross-row rule consults: one constant ceiling
 // on the process, one configurable one, one ceiling on the entry, one budget
-// on an address, one on the entry and one rule.
+// on an address, one on the entry, one rule, and one rate on the entry whose
+// process partner is the row a case puts to the rule.
 func ruleContext() map[string]Decision {
 	return map[string]Decision{
-		"PROC":   {ID: "PROC", Kind: Ceiling, Key: KeyProcess, Source: Constant},
-		"CONF":   {ID: "CONF", Kind: Ceiling, Key: KeyProcess, Source: Configurable},
-		"ENTRY":  {ID: "ENTRY", Kind: Ceiling, Key: KeyEntry, Source: Constant},
-		"BUDGET": {ID: "BUDGET", Kind: Budget, Key: KeyAddress},
-		"OWNBGT": {ID: "OWNBGT", Kind: Budget, Key: KeyEntry},
-		"RULE":   {ID: "RULE", Kind: Rule, Key: KeyAddress},
+		"PROC":    {ID: "PROC", Kind: Ceiling, Key: KeyProcess, Source: Constant},
+		"CONF":    {ID: "CONF", Kind: Ceiling, Key: KeyProcess, Source: Configurable},
+		"ENTRY":   {ID: "ENTRY", Kind: Ceiling, Key: KeyEntry, Source: Constant},
+		"BUDGET":  {ID: "BUDGET", Kind: Budget, Key: KeyAddress},
+		"OWNBGT":  {ID: "OWNBGT", Kind: Budget, Key: KeyEntry},
+		"RULE":    {ID: "RULE", Kind: Rule, Key: KeyAddress},
+		"PAIRED":  {ID: "PAIRED", Kind: Rate, Key: KeyEntry, Partner: "TST-001"},
+		"UNPAIRD": {ID: "UNPAIRD", Kind: Rate, Key: KeyEntry, Partner: "PROC"},
 	}
 }
 
@@ -171,9 +174,19 @@ func TestValidate_CodeRanges(t *testing.T) {
 }
 
 // TestValidate_ZeroStated holds a valued row to a zero meaning, and a zero
-// that is not "off" to a finding.
+// that is not "off" to a finding. A process partner that a recorded decision
+// switches off with the row it stands beside passes without one, and nothing
+// else that follows another row does: not a partner nobody decided, not a
+// decided row following a row it does not partner, and not one following a
+// row that names another partner.
 func TestValidate_ZeroStated(t *testing.T) {
 	valued := func(d *Decision) { d.Disposition, d.Values = Valued, []string{"V"} }
+	follows := func(offWith string, decided ...string) func(d *Decision) {
+		return func(d *Decision) {
+			valued(d)
+			d.Key, d.Zero, d.OffWith, d.Decided = KeyProcess, ZeroNotApplicable, offWith, decided
+		}
+	}
 	runRule(t, checkZeroStated, []ruleCase{
 		{"a valued row with no zero meaning", row(valued), "does not say what zero means"},
 		{"zero switches it off", row(func(d *Decision) { valued(d); d.Zero = ZeroOff }), ""},
@@ -182,6 +195,10 @@ func TestValidate_ZeroStated(t *testing.T) {
 		{"another row's zero", row(func(d *Decision) { valued(d); d.Zero, d.OffWith = ZeroOff, "PROC" }), "does not mean off"},
 		{"recorded", row(func(d *Decision) { valued(d); d.Zero, d.Findings = ZeroRefused, []string{"F-34"} }), ""},
 		{"a ruled row", row(nil), ""},
+		{"a partner following its row, decided", row(follows("PAIRED", "issue 951")), ""},
+		{"a partner following its row, undecided", row(follows("PAIRED")), "does not mean off"},
+		{"a decided row following a row it does not partner", row(follows("PROC", "issue 951")), "does not mean off"},
+		{"a decided row following a row partnered elsewhere", row(follows("UNPAIRD", "issue 951")), "does not mean off"},
 	})
 }
 

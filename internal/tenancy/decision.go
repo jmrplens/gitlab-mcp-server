@@ -468,8 +468,9 @@ type Decision struct {
 	Malformed Malformed
 	// Zero is what a value of zero means.
 	Zero Zero
-	// OffWith is the ID of another row whose zero also switches this one off
-	// (AUB-003's step is AUB-001's window, F-34, issue 958).
+	// OffWith is the ID of another row which, switched off, switches this one
+	// off too: AUB-003's step is AUB-001's window (F-34, issue 958), and
+	// RTC-007 follows the row it is the process partner of (issue 951).
 	OffWith string
 	// AtCapacity is what happens when it is full.
 	AtCapacity Capacity
