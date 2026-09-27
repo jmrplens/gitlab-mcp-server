@@ -168,17 +168,24 @@ func isLoopbackHost(host string) bool {
 // address. A request whose context carries no local address (a handler driven
 // directly rather than through net/http) is not treated as local, which is the
 // SDK's answer for the same case.
+// The assertion is the whole check, since it succeeds only for a non-nil
+// net.Addr.
 func arrivedOnLoopback(r *http.Request) bool {
 	local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	if !ok || local == nil {
+	if !ok {
 		return false
 	}
 	return isLoopbackHost(normalizedHost(local.String()))
 }
 
-// allowedHosts computes the set of valid Host header values based on the
-// listen address. Returns nil when binding to all interfaces (0.0.0.0/::),
-// which leaves the deployment naming no host of its own.
+// allowedHosts computes the Host the listen address names, as the set
+// [newHostGuard] adds to what it declares. Returns nil when binding to all
+// interfaces (0.0.0.0/::), which leaves the deployment naming no host of its
+// own.
+//
+// The loopback names are not listed here: newHostGuard declares them for every
+// deployment, bound or not, so a second copy would change no answer the guard
+// gives.
 //
 // A unix socket gets nil as well, and explicitly. The check exists against
 // DNS rebinding, which needs a browser to reach the listener by name, and no
@@ -195,12 +202,7 @@ func allowedHosts(addr string) map[string]bool {
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		return nil
 	}
-	return map[string]bool{
-		strings.ToLower(host): true,
-		"localhost":           true,
-		"127.0.0.1":           true,
-		"::1":                 true,
-	}
+	return map[string]bool{strings.ToLower(host): true}
 }
 
 // hostValidationMiddleware refuses requests whose Host header names a host

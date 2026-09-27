@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -603,17 +604,29 @@ func TestArrivedOnLoopback_ReadsTheListenerAddress(t *testing.T) {
 	}
 }
 
-// TestArrivedOnLoopback_ANilListenerAddressIsNotLocal covers the value a
-// context can carry that is a net.Addr and holds nothing. net/http never
-// stores one, so this is the unreachable half of the check that keeps a
-// handler driven directly from panicking on it.
+// TestArrivedOnLoopback_ANilListenerAddressIsNotLocal covers the values a
+// context can carry that are a net.Addr and name nothing: one whose String is
+// empty, and a nil *net.TCPAddr, which the assertion accepts because the
+// interface holding it is not nil. net/http never stores either; a handler
+// driven directly might, and neither is read as loopback or panics.
 func TestArrivedOnLoopback_ANilListenerAddressIsNotLocal(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.WithValue(t.Context(), http.LocalAddrContextKey, net.Addr(nilAddr{}))
-	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.invalid/health", http.NoBody)
-	if arrivedOnLoopback(req) {
-		t.Error("a listener address that names nothing was read as loopback")
+	for _, tc := range []struct {
+		name string
+		addr net.Addr
+	}{
+		{name: "an address that names nothing", addr: nilAddr{}},
+		{name: "a nil TCP address", addr: (*net.TCPAddr)(nil)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.WithValue(t.Context(), http.LocalAddrContextKey, tc.addr)
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.invalid/health", http.NoBody)
+			if arrivedOnLoopback(req) {
+				t.Error("a listener address that names nothing was read as loopback")
+			}
+		})
 	}
 }
 
@@ -624,20 +637,27 @@ type nilAddr struct{}
 func (nilAddr) Network() string { return "" }
 func (nilAddr) String() string  { return "" }
 
-// TestAllowedHosts_Localhost verifies that allowedHosts returns the expected
-// set for a localhost binding.
+// TestAllowedHosts_Localhost verifies that allowedHosts returns the host the
+// binding names, spelled the way the guard compares it, and nothing else: the
+// loopback names are the guard's own, declared whether or not a host is bound
+// (see TestNewHostGuard_DeclaresTheLoopbackNamesAndTheAdvertisedHost).
 func TestAllowedHosts_Localhost(t *testing.T) {
 	t.Parallel()
 
-	hosts := allowedHosts("127.0.0.1:8080")
-	if hosts == nil {
-		t.Fatal("expected non-nil hosts for localhost binding")
-	}
-	if !hosts["127.0.0.1"] {
-		t.Error("missing 127.0.0.1")
-	}
-	if !hosts["localhost"] {
-		t.Error("missing localhost")
+	for _, tt := range []struct {
+		addr string
+		want map[string]bool
+	}{
+		{addr: "127.0.0.1:8080", want: map[string]bool{"127.0.0.1": true}},
+		{addr: "LocalHost:8080", want: map[string]bool{"localhost": true}},
+		{addr: "[::1]:8080", want: map[string]bool{"::1": true}},
+	} {
+		t.Run(tt.addr, func(t *testing.T) {
+			t.Parallel()
+			if got := allowedHosts(tt.addr); !maps.Equal(got, tt.want) {
+				t.Errorf("allowedHosts(%q) = %v, want %v", tt.addr, got, tt.want)
+			}
+		})
 	}
 }
 
