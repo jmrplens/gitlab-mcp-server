@@ -44,6 +44,22 @@ func TestClientIP_NoTrustedHeader_ChargesThePeer(t *testing.T) {
 	}
 }
 
+// TestClientIP_NoTrustedHeader_ReadsNoHeaderEvenFromATrustedPeer is the case
+// the test above cannot reach, since its peer is not trusted: a deployment
+// that named no header believes none, even on a connection from a proxy it
+// lists. The request carries an entry under the empty name, which is exactly
+// what looking up the unnamed header would find.
+func TestClientIP_NoTrustedHeader_ReadsNoHeaderEvenFromATrustedPeer(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "127.0.0.1:12345",
+		Header:     http.Header{"": {"198.51.100.7"}},
+	}
+	if got := clientIP(r, "", loopbackProxies(t)); got != "127.0.0.1" {
+		t.Errorf("clientIP() = %q, want the peer 127.0.0.1: no header was named, so none is believed", got)
+	}
+}
+
 // TestClientIP_UntrustedPeer_IgnoresTheHeader verifies that a header from a
 // peer that is not a trusted proxy is ignored, which is what stops a caller
 // reaching the listener directly from choosing the address their failures are
@@ -108,8 +124,10 @@ func TestClientIP_XForwardedFor_TakesTheFirstUntrustedHopFromTheRight(t *testing
 		{name: "trailing comma and spaces are ignored", value: "203.0.113.6, ", want: "203.0.113.6"},
 		{name: "an IPv6 client behind an IPv6 proxy", value: "2001:db8:1::5, 2001:db8::1", want: "2001:db8:1::5"},
 		{name: "a bracketed IPv6 hop with a port", value: "[2001:db8:1::6]:443, 10.0.0.77", want: "2001:db8:1::6"},
+		{name: "a bracketed IPv6 hop without a port", value: "[2001:db8:1::7], 10.0.0.77", want: "2001:db8:1::7"},
 		{name: "an IPv4 hop with a port", value: "203.0.113.7:51000, 10.0.0.77", want: "203.0.113.7"},
 		{name: "an IPv4-mapped hop compares as IPv4", value: "::ffff:203.0.113.8, ::ffff:10.0.0.77", want: "203.0.113.8"},
+		{name: "an IPv4-mapped hop with a port is charged as IPv4", value: "[::ffff:203.0.113.9]:4711, 10.0.0.77", want: "203.0.113.9"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -193,6 +211,8 @@ func TestParseTrustedProxies_ReadsAddressesAndRanges(t *testing.T) {
 	}{
 		{name: "addresses and ranges", entries: []string{" 127.0.0.1 ", "10.0.0.0/8", "", "fd00::/8"}, wantIn: []string{"127.0.0.1", "10.1.2.3", "fd00::1"}, wantOut: []string{"127.0.0.2", "192.0.2.1", "2001:db8::1"}},
 		{name: "a range not on its boundary still covers the block", entries: []string{"192.0.2.77/24"}, wantIn: []string{"192.0.2.1"}, wantOut: []string{"192.0.3.1"}},
+		{name: "a plain address trusts that address alone, on either family", entries: []string{"192.0.2.10", "2001:db8::10"}, wantIn: []string{"192.0.2.10", "2001:db8::10"}, wantOut: []string{"192.0.2.11", "2001:db8::11"}},
+		{name: "an IPv4-mapped address is trusted as the IPv4 peer it names", entries: []string{"::ffff:192.0.2.20"}, wantIn: []string{"192.0.2.20", "::ffff:192.0.2.20"}, wantOut: []string{"192.0.2.21"}},
 		{name: "nothing", entries: nil, wantOut: []string{"127.0.0.1"}},
 		{name: "a hostname", entries: []string{"proxy.example.com"}, wantErr: "proxy.example.com"},
 		{name: "a malformed range", entries: []string{"10.0.0.0/33"}, wantErr: "10.0.0.0/33"},

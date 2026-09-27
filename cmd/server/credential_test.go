@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -341,6 +342,53 @@ func BenchmarkCredentialState_Busy(b *testing.B) {
 	}
 }
 
+// TestCredentialStates_Remove_EndsOnlyTheSessionsNoStreamEnded covers the
+// half of eviction the test above does not reach: the sessions the credential
+// held, handed over as orphaned.
+//
+// Of two orphaned sessions, one has an open listen stream and one holds only a
+// session-era subscribe. Eviction ends the first through its stream, whose
+// completion result is the graceful ending, and must leave the session alone
+// so as not to race that write; the second has no stream to end, so the
+// session itself is terminated, which is the only ending its client can still
+// be given. Waiting for the second first is what orders the check: the
+// orphans are ended in the order they are handed over, so by the time the
+// second has ended, a first that was going to be ended has been.
+func TestCredentialStates_Remove_EndsOnlyTheSessionsNoStreamEnded(t *testing.T) {
+	streams := newListenStreams()
+	withStream, withStreamClient := connectedSessions(t)
+	withoutStream, _ := connectedSessions(t)
+
+	streamEnded := make(chan struct{}, 1)
+	_, release := streams.arm([]string{"gitlab://project/42/pipeline/99"}, "owner-evicted", withStream, func() {
+		select {
+		case streamEnded <- struct{}{}:
+		default:
+		}
+	})
+	t.Cleanup(release)
+
+	states := &credentialStates{}
+	state := credentialTestState(t, "owner-evicted")
+	state.streams = streams
+	state.sessions = newSessionOwners(false)
+	states.add(state)
+
+	states.remove("owner-evicted", []*mcp.ServerSession{withStream, withoutStream}, endOfCredentialEviction)
+
+	if !sessionEnded(t, withoutStream, 5*time.Second) {
+		t.Fatal("the session holding no stream was left open; its client is never told its credential is gone")
+	}
+	select {
+	case <-streamEnded:
+	case <-time.After(5 * time.Second):
+		t.Error("the evicted credential's listen stream was not ended")
+	}
+	if err := pingWithin(t, withStreamClient, 5*time.Second); err != nil {
+		t.Errorf("the session whose stream was ended was terminated as well (%v), racing the completion it was being sent", err)
+	}
+}
+
 // TestCredentialState_Close_WithNothingToRelease_IsANoOp covers the two shapes
 // close is called on that own no watchers: the nil state a registry hands back
 // for an owner it never held, and the state of a capability surface that offers
@@ -534,10 +582,12 @@ func TestServerShell_NewCredentialState_TakesWhatTheEntryDecides(t *testing.T) {
 	}, okFactory)
 	entry := gateTestEntry(t, pool, gateTestToken, gitlab)
 
+	// Shared, as every shell the pool builds for is, so the shape carries a
+	// session table of its own for the state to be handed.
 	shell, err := newServerShell(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
 		ToolSurface:       config.ToolSurfaceDynamic,
 		CapabilitySurface: config.CapabilitySurfaceFull,
-	}, withSubscriptionOptions(fastOptions()))
+	}, withSubscriptionOptions(fastOptions()), withSharedCredentials(&credentialStates{}, newSessionOwners(false)))
 	if err != nil {
 		t.Fatalf("newServerShell: %v", err)
 	}
@@ -569,6 +619,18 @@ func TestServerShell_NewCredentialState_TakesWhatTheEntryDecides(t *testing.T) {
 	}
 	if state.subs.reader.client != entry.Client() {
 		t.Error("the watcher polls with a client other than the entry's; the authorization check would be somebody else's")
+	}
+	// The shape's half: the server the watchers notify through, and the two
+	// registries eviction reads to end what the credential held. A notifier
+	// attached to no server drops every update it is handed.
+	if state.subs.notifier.server.Load() != shell.server {
+		t.Error("the notifier is attached to no server, or another; the credential's updates would reach nobody")
+	}
+	if state.streams != shell.streams {
+		t.Error("the state carries another listen-stream registry than the shell's; eviction could not end its streams")
+	}
+	if shell.sessions == nil || state.sessions != shell.sessions {
+		t.Error("the state carries another session table than the shell's; eviction could not end its sessions")
 	}
 }
 

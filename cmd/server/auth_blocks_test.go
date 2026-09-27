@@ -1,11 +1,13 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // TestAuthBlockCounters_Record_CountsEachReasonApart checks that the three
@@ -226,26 +228,61 @@ func TestValidateAuthBudgetBounds_RefusesWhatIsOutOfRange(t *testing.T) {
 		}
 	})
 
+	// Each refusal must name the flag the operator typed wrong: the four share
+	// one loop, so a refusal reading the right value under another row's name
+	// would send the operator to a setting that is fine.
 	cases := []struct {
 		name   string
+		flag   string
 		mutate func(*config.Config)
 	}{
-		{name: "negative failure limit", mutate: func(c *config.Config) { c.AuthFailureLimit = -1 }},
-		{name: "failure limit over the maximum", mutate: func(c *config.Config) { c.AuthFailureLimit = config.MaxAuthFailureLimit + 1 }},
-		{name: "negative distinct limit", mutate: func(c *config.Config) { c.AuthDistinctTokenLimit = -1 }},
-		{name: "distinct limit over the maximum", mutate: func(c *config.Config) { c.AuthDistinctTokenLimit = config.MaxAuthDistinctTokenLimit + 1 }},
-		{name: "negative failure window", mutate: func(c *config.Config) { c.AuthFailureWindow = -time.Second }},
-		{name: "failure window over the maximum", mutate: func(c *config.Config) { c.AuthFailureWindow = config.MaxAuthFailureWindow + time.Second }},
-		{name: "negative distinct window", mutate: func(c *config.Config) { c.AuthDistinctWindow = -time.Second }},
-		{name: "distinct window over the maximum", mutate: func(c *config.Config) { c.AuthDistinctWindow = config.MaxAuthDistinctWindow + time.Second }},
+		{name: "negative failure limit", flag: "--auth-failure-limit", mutate: func(c *config.Config) { c.AuthFailureLimit = -1 }},
+		{name: "failure limit over the maximum", flag: "--auth-failure-limit", mutate: func(c *config.Config) { c.AuthFailureLimit = config.MaxAuthFailureLimit + 1 }},
+		{name: "negative distinct limit", flag: "--auth-distinct-token-limit", mutate: func(c *config.Config) { c.AuthDistinctTokenLimit = -1 }},
+		{name: "distinct limit over the maximum", flag: "--auth-distinct-token-limit", mutate: func(c *config.Config) { c.AuthDistinctTokenLimit = config.MaxAuthDistinctTokenLimit + 1 }},
+		{name: "negative failure window", flag: "--auth-failure-window", mutate: func(c *config.Config) { c.AuthFailureWindow = -time.Second }},
+		{name: "failure window over the maximum", flag: "--auth-failure-window", mutate: func(c *config.Config) { c.AuthFailureWindow = config.MaxAuthFailureWindow + time.Second }},
+		{name: "negative distinct window", flag: "--auth-distinct-token-window", mutate: func(c *config.Config) { c.AuthDistinctWindow = -time.Second }},
+		{name: "distinct window over the maximum", flag: "--auth-distinct-token-window", mutate: func(c *config.Config) { c.AuthDistinctWindow = config.MaxAuthDistinctWindow + time.Second }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := valid
 			tc.mutate(&cfg)
-			if err := validateAuthBudgetBounds(&cfg); err == nil {
-				t.Errorf("validateAuthBudgetBounds(%s) = nil, want a refusal", tc.name)
+			err := validateAuthBudgetBounds(&cfg)
+			if err == nil {
+				t.Fatalf("validateAuthBudgetBounds(%s) = nil, want a refusal", tc.name)
+			}
+			if !strings.HasPrefix(err.Error(), tc.flag+" ") {
+				t.Errorf("validateAuthBudgetBounds(%s) = %q, want it to name %s", tc.name, err, tc.flag)
+			}
+		})
+	}
+}
+
+// TestValidateAuthBudgetBounds_AcceptsEachMaximum is the other side of the
+// maxima above. The documented bound is the largest value accepted, so a
+// setting at exactly its maximum is a legal configuration, and refusing it
+// would stop a deployment that did what the help text says.
+func TestValidateAuthBudgetBounds_AcceptsEachMaximum(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		mutate func(*config.Config)
+	}{
+		{name: "failure limit", mutate: func(c *config.Config) { c.AuthFailureLimit = config.MaxAuthFailureLimit }},
+		{name: "distinct limit", mutate: func(c *config.Config) { c.AuthDistinctTokenLimit = config.MaxAuthDistinctTokenLimit }},
+		{name: "failure window", mutate: func(c *config.Config) { c.AuthFailureWindow = config.MaxAuthFailureWindow }},
+		{name: "distinct window", mutate: func(c *config.Config) { c.AuthDistinctWindow = config.MaxAuthDistinctWindow }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := config.Config{}
+			tc.mutate(&cfg)
+			if err := validateAuthBudgetBounds(&cfg); err != nil {
+				t.Errorf("validateAuthBudgetBounds(%s at its maximum) = %v, want nil", tc.name, err)
 			}
 		})
 	}
@@ -254,7 +291,13 @@ func TestValidateAuthBudgetBounds_RefusesWhatIsOutOfRange(t *testing.T) {
 // TestObserveAuthBlocks_RegistersWithoutTelemetry checks that the registration
 // is safe to make unconditionally, which is how both handlers call it: with
 // telemetry off the global meter is a no-op and nothing should fail or panic.
+// Nor should it warn: a registration that succeeded and still says the metrics
+// are not exported sends an operator looking for a fault that is not there.
 func TestObserveAuthBlocks_RegistersWithoutTelemetry(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
 	var c authBlockCounters
 	observeAuthBlocks(&c)
+	if strings.Contains(logged.String(), "not being exported") {
+		t.Errorf("a registration that succeeded logged a failure: %s", logged.String())
+	}
 }
