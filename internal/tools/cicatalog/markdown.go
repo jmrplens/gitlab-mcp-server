@@ -13,6 +13,10 @@ import (
 // carries before it is cut.
 const descriptionCellRunes = 60
 
+// usage30dLabel names the thirty-day usage count wherever a resource, a version
+// or a component shows it, so the list column and the card rows read alike.
+const usage30dLabel = "Usage (30d)"
+
 // FormatListMarkdown renders a page of catalog resources as a Markdown table.
 //
 // The name is not linked. GitLab's catalog query answers with webPath, a path
@@ -27,7 +31,7 @@ func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "CI/CD Catalog Resources", len(out.Resources), toolutil.PaginationOutput{})
 	b.WriteString(toolutil.MarkdownTableHeader(
-		"Name", "Path", "Description", "Stars", "Usage (30d)", "Verification", "Latest Version", "Released",
+		"Name", "Path", "Description", "Stars", usage30dLabel, "Verification", "Latest Version", "Released",
 	))
 	for _, r := range out.Resources {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -97,7 +101,7 @@ func writeCatalogResourceSummary(c *toolutil.Card, r ResourceDetail) {
 	c.Count("Stars", int64(r.StarCount))
 	// A relative path too, for the same reason as the web path.
 	c.Code("Starrers Path", r.StarrersPath)
-	c.Count("Usage (30d)", int64(r.Last30DayUsageCount))
+	c.Count(usage30dLabel, int64(r.Last30DayUsageCount))
 	c.Field("Verification", r.VerificationLevel)
 	c.Field("Visibility", r.VisibilityLevel)
 	c.Field("Topics", strings.Join(r.Topics, ", "))
@@ -126,7 +130,7 @@ func writeCatalogResourceComponent(section *toolutil.Card, component ComponentIt
 	card.Code("Include", component.IncludePath)
 	// Nil is a count GitLab did not send; zero is a component nobody used.
 	if component.Last30DayUsageCount != nil {
-		card.Int("Usage (30d)", int64(*component.Last30DayUsageCount))
+		card.Int(usage30dLabel, int64(*component.Last30DayUsageCount))
 	}
 	if len(component.Inputs) == 0 {
 		return
