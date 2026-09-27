@@ -191,7 +191,8 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux
 - The runtime a test needs is decided by its **package**, not by a build tag or a name: `common` runs anywhere, `ce` holds what only holds without a license, `ee` needs Premium or Ultimate. A package pointed at the wrong runtime refuses before writing anything
 - Every scenario names its actions by canonical catalog ID as typed `harness.ActionID` constants and runs on the dynamic, meta and individual surfaces as subtests. `make check-e2e-static` fails on a catalog action no scenario names and on an ID written as a bare string
 - The suite records what the server actually dispatched; `make audit-e2e-coverage` reports it and `make audit-e2e-gaps` prints the work list
-- Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies. Tests that call public URLs are opt-in behind `E2E_EXTERNAL_NETWORK=true`
+- Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies. Tests that call public URLs are opt-in behind `E2E_EXTERNAL_NETWORK=true`, which `make test-e2e-ce` and `make test-e2e-ee` set unless the caller did
+- `make test-e2e-ce` and `make test-e2e-ee` are the complete runs: they pull a GitLab or runner image only when the registry has a newer one than the daemon holds, and they fail on a skip `cmd/audit_e2e_coverage/skip_declarations.go` does not declare for their runtime (`audit_e2e_coverage -check-skips`), so a scenario that cannot run asserts what the runtime does instead of skipping
 
 ### Model Evaluation (Docker)
 

@@ -590,6 +590,9 @@ go run ./cmd/audit_e2e_coverage/ -check-record-page
 
 # Redraw the page from the committed record alone
 go run ./cmd/audit_e2e_coverage/ -render-record
+
+# Hold the skips of one Docker run to the ones declared for its runtime
+go run ./cmd/audit_e2e_coverage/ -check-skips -runtime ce -results dist/e2e-reports/e2e-ce-log.json
 ```
 
 #### Flags
@@ -614,6 +617,7 @@ go run ./cmd/audit_e2e_coverage/ -render-record
 | `-render-record`     | `bool`   | `false`           | Redraw the record's Markdown page from the record itself                                                                                                                                                                                              |
 | `-record-path`       | `string` |                   | The record to write, check or render; the repository's `docs/development/e2e-coverage.json` when empty                                                                                                                                                |
 | `-record-page`       | `string` |                   | The page rendered from it; the repository's `docs/development/testing/e2e-coverage.md` when empty                                                                                                                                                     |
+| `-check-skips`       | `bool`   | `false`           | Fail on a skip in the `-results` stream that no entry of `skip_declarations.go` covers for `-runtime`, which must be `ce` or `ee`, and on an entry for that runtime no skip of the run matched                                                        |
 | `-dir`               | `string` |                   | Repository root; found from the working directory when empty                                                                                                                                                                                          |
 
 #### The static gate
@@ -634,14 +638,23 @@ Two things are reported and do not fail. A catalog that has moved under the reco
 
 A third note names an entry recorded before the capability grain, which carries no `capability_surfaces` rows and whose histograms count every capability item once per surface x mode; the page states the older grain in that entry's section. The schema version did not move for the rows: they are optional and omitted when empty, both versions of the command read a document holding them or not, and a refresh folds one runtime at a time, so which grain an entry was measured at is said by the entry rather than by the document. Re-recording the half with `make e2e-coverage-record-ce` or `make e2e-coverage-record-ee` clears the note.
 
+#### The skips of a complete run
+
+A skip is the one verdict that says nothing about the server, so a run can pass while leaving out whatever it likes, and the two complete Docker runs of `de1ab3b49` left out eleven scenarios on CE and ten on EE without anything failing or warning (issue 1014). `-check-skips` reads the `go test -json` stream of one run and fails on every test whose last run ended skipped that no entry of `skip_declarations.go` covers for the run's runtime, and on every entry for that runtime no skip of the run matched. It reads the stream rather than the harness's skip lines because the stream holds every skip, a bare `t.Skip` included, while the harness records only the skips it was told about; the reason is read back out of the stream as the last message the test logged before the frame that reports the skip.
+
+An entry names the runtime (`ce` or `ee`, each run being judged on its own), the package, the test or a test whose every subtest it covers, a fragment the printed reason must contain, a category and a reason. The fragment is what keeps an entry from excusing the same test when it starts skipping for another reason, which is also why the table's test refuses an empty one: every reason contains the empty string. A second entry for one skip covers nothing and is reported stale like an entry whose skip went. Two categories exist: `fixture-on-other-runtime`, a scenario whose fixture a complete run starts only on the other runtime, where it runs, and `gitlab-defect`, GitLab answering wrongly on the release the run tested, which goes stale on the first release that answers. The table holds the Bitbucket Server import on EE, whose fixture `run-docker-e2e.sh` starts under CE only, and the saved view lifecycle on both runtimes, whose create GitLab answered with a 500 on 19.3.0 and 19.3.1-ee.
+
+`make test-e2e-ce` and `make test-e2e-ee` apply it through `run-docker-e2e.sh`, which runs it after the tests whenever `E2E_GATE_SKIPS=true` and lets it decide the status only of a run whose tests passed, so a failing run is never reported as a skip finding while its undeclared skips are still printed. The `e2e-gitlab` job of `e2e.yml` does not set it: that run leaves the Bitbucket fixture out and holds none of the importers' credentials by design, so it is not a complete run, and it keeps the `-check` floors. The fixtures under `testdata/skips` are the two recorded runs themselves, cut down to what the gate reads.
+
 #### Output
 
-The JSON report is a list with one entry per runtime: the run and session rows, the summary and levels, one row per catalog action with its default-mode state per surface, every non-absent cell with the tests behind it, the capability surface rows, the capability cells (each carrying only the coordinates its kind is counted at), the dispatch mismatches, the tools no session served, the served tools no test called, and the diagnostics about the record itself. Exit `0` when nothing failed, `1` on a finding (a check floor, a baseline loss, an incomplete port map, a static finding, a committed record that does not hold), `2` when the audit could not run.
+The JSON report is a list with one entry per runtime: the run and session rows, the summary and levels, one row per catalog action with its default-mode state per surface, every non-absent cell with the tests behind it, the capability surface rows, the capability cells (each carrying only the coordinates its kind is counted at), the dispatch mismatches, the tools no session served, the served tools no test called, and the diagnostics about the record itself. `-check-skips` prints each declared skip with its category and a summary line on stdout, and each undeclared skip with its reason and each stale entry on stderr. Exit `0` when nothing failed, `1` on a finding (a check floor, a baseline loss, an incomplete port map, a static finding, a committed record that does not hold, an undeclared skip or a stale skip declaration), `2` when the audit could not run.
 
 #### Make targets
 
 - `make audit-e2e-coverage`
 - `make check-e2e-static`
+- `make test-e2e-ce` and `make test-e2e-ee`, which hold their skips to the declared ones through `run-docker-e2e.sh`
 - `make e2e-coverage-record` (both halves), `make e2e-coverage-record-ce`, `make e2e-coverage-record-ee`
 - `make e2e-coverage-record-render`
 - `make check-e2e-coverage-record`, `make check-e2e-coverage-page`
