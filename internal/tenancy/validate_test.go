@@ -176,15 +176,16 @@ func TestValidate_CodeRanges(t *testing.T) {
 // TestValidate_ZeroStated holds a valued row to a zero meaning, and a zero
 // that is not "off" to a finding. A process partner that a recorded decision
 // switches off with the row it stands beside passes without one, and nothing
-// else that follows another row does: not a partner nobody decided, not a
-// decided row following a row it does not partner, and not one following a
-// row that names another partner.
+// else that follows another row does: not a partner nobody decided, not one
+// whose decisions are about something else, not one naming a decision it does
+// not record, not a decided row following a row it does not partner, and not
+// one following a row that names another partner.
 func TestValidate_ZeroStated(t *testing.T) {
 	valued := func(d *Decision) { d.Disposition, d.Values = Valued, []string{"V"} }
-	follows := func(offWith string, decided ...string) func(d *Decision) {
+	follows := func(offWith, by string, decided ...string) func(d *Decision) {
 		return func(d *Decision) {
 			valued(d)
-			d.Key, d.Zero, d.OffWith, d.Decided = KeyProcess, ZeroNotApplicable, offWith, decided
+			d.Key, d.Zero, d.OffWith, d.OffWithBy, d.Decided = KeyProcess, ZeroNotApplicable, offWith, by, decided
 		}
 	}
 	runRule(t, checkZeroStated, []ruleCase{
@@ -195,10 +196,21 @@ func TestValidate_ZeroStated(t *testing.T) {
 		{"another row's zero", row(func(d *Decision) { valued(d); d.Zero, d.OffWith = ZeroOff, "PROC" }), "does not mean off"},
 		{"recorded", row(func(d *Decision) { valued(d); d.Zero, d.Findings = ZeroRefused, []string{"F-34"} }), ""},
 		{"a ruled row", row(nil), ""},
-		{"a partner following its row, decided", row(follows("PAIRED", "issue 951")), ""},
-		{"a partner following its row, undecided", row(follows("PAIRED")), "does not mean off"},
-		{"a decided row following a row it does not partner", row(follows("PROC", "issue 951")), "does not mean off"},
-		{"a decided row following a row partnered elsewhere", row(follows("UNPAIRD", "issue 951")), "does not mean off"},
+		{"a partner following its row, decided", row(follows("PAIRED", "issue 951", "issue 951")), ""},
+		{"a partner following its row, undecided", row(follows("PAIRED", "")), "does not mean off"},
+		{
+			"a partner following its row, decided about something else",
+			row(follows("PAIRED", "", "ADR-0020")), "does not mean off",
+		},
+		{
+			"a partner naming a decision it does not record",
+			row(follows("PAIRED", "issue 951", "ADR-0020")), "does not mean off",
+		},
+		{"a decided row following a row it does not partner", row(follows("PROC", "issue 951", "issue 951")), "does not mean off"},
+		{
+			"a decided row following a row partnered elsewhere",
+			row(follows("UNPAIRD", "issue 951", "issue 951")), "does not mean off",
+		},
 	})
 }
 

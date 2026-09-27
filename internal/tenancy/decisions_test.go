@@ -134,13 +134,15 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 	}
 }
 
-// TestDecisions_TheListingBucketHasAProcessPartner pins what issue 951 decided
-// for tools/list: the per-entry bucket has a partner keyed on the process that
-// no operator can change, the partner follows the row it partners, so it is
-// off where that row is, and neither row carries F-03 any longer, since the
-// departure it recorded is answered. The finding itself stays in the register's
-// list, where issue 951 still holds F-31.
-func TestDecisions_TheListingBucketHasAProcessPartner(t *testing.T) {
+// TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt pins what issue
+// 951 decided for tools/list: the per-entry bucket has a partner keyed on the
+// process that no operator can change, the partner follows the row it
+// partners, so it is off where that row is, by the decision that says so, and
+// it refuses with that row's own refusal, so no caller is told that other
+// callers are listing (INV-019). Neither row carries F-03 any longer, since
+// the departure it recorded is answered. The finding itself stays in the
+// register's list, where issue 951 still holds F-31.
+func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 	entry, _ := Lookup("RTC-003")
 	process, _ := Lookup("RTC-007")
 	if entry.Partner != "RTC-007" || entry.Carries("F-03") {
@@ -150,9 +152,14 @@ func TestDecisions_TheListingBucketHasAProcessPartner(t *testing.T) {
 		t.Errorf("RTC-007: key %s, source %d, protects the process %v; want a constant on the process",
 			process.Key, process.Source, process.ProtectsProcess)
 	}
-	if process.OffWith != "RTC-003" || !slices.Contains(process.Decided, "issue 951") || process.Carries("F-03") {
-		t.Errorf("RTC-007: off with %q, decided %v, carries F-03 %v; want it off with RTC-003 by issue 951's decision",
-			process.OffWith, process.Decided, process.Carries("F-03"))
+	if process.OffWith != "RTC-003" || process.OffWithBy != "issue 951" || !slices.Contains(process.Decided, "issue 951") ||
+		process.Carries("F-03") {
+		t.Errorf("RTC-007: off with %q by %q, decided %v, carries F-03 %v; want it off with RTC-003 by issue 951's decision",
+			process.OffWith, process.OffWithBy, process.Decided, process.Carries("F-03"))
+	}
+	if refusal := process.Refusals[0]; refusal.At != entry.Refusals[0].At {
+		t.Errorf("RTC-007 refuses at %v, RTC-003 at %v; want the same refusal, so a caller is not told others are listing",
+			refusal.At, entry.Refusals[0].At)
 	}
 	if process.AtCapacity != RefuseNewcomer {
 		t.Errorf("RTC-007 at capacity: %d, want it to refuse the newcomer and take nothing across keys", process.AtCapacity)

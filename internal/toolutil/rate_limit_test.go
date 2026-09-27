@@ -79,6 +79,68 @@ func TestRateLimiter_NilSafe(t *testing.T) {
 	if !l.allow() {
 		t.Error("(*RateLimiter)(nil).allow() = false, want true")
 	}
+	if !(&RateLimiter{}).allow() {
+		t.Error("a limiter with no bucket refused; want it to allow, as a nil one does")
+	}
+}
+
+// TestRateLimiterDerive_NoBucketOrFactorBelowOne_DerivesNothing pins the guards
+// of the two derivations: a limiter with no bucket and a divisor or factor
+// below one derive no bucket of their own. slowed answers nil, which the
+// middleware reads as disabled, and scaled hands back its receiver.
+func TestRateLimiterDerive_NoBucketOrFactorBelowOne_DerivesNothing(t *testing.T) {
+	t.Parallel()
+	bucketless := &RateLimiter{}
+	configured := NewRateLimiter(10, 40)
+	if got := bucketless.slowed(10); got != nil {
+		t.Errorf("a bucketless limiter slowed = %p, want nil", got)
+	}
+	if got := configured.slowed(0); got != nil {
+		t.Errorf("slowed(0) = %p, want nil", got)
+	}
+	if got := bucketless.scaled(10); got != bucketless {
+		t.Errorf("a bucketless limiter scaled = %p, want its receiver %p", got, bucketless)
+	}
+	if got := configured.scaled(0); got != configured {
+		t.Errorf("scaled(0) = %p, want its receiver %p", got, configured)
+	}
+}
+
+// TestRateLimitedResult_UnnamedTool_NamesTheMethod verifies that a refused
+// tools/call whose tool name cannot be read still says what was refused: the
+// method, since the tool is unknown.
+func TestRateLimitedResult_UnnamedTool_NamesTheMethod(t *testing.T) {
+	t.Parallel()
+	result := rateLimitedResult(&mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "  "}})
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || !result.IsError || text.Text != RateLimitRefusalPrefix+methodToolsCall+rateLimitRetrySuffix {
+		t.Errorf("refusal = %+v, want an error result naming tools/call", result)
+	}
+}
+
+// TestAttachArgumentLimits_NothingToJudge_LeavesTheRequestAlone verifies the
+// two ways the argument guard has nothing to judge: no server to install on,
+// and a tools/call that carries no raw arguments, which is handed on as it
+// came.
+func TestAttachArgumentLimits_NothingToJudge_LeavesTheRequestAlone(t *testing.T) {
+	t.Parallel()
+	AttachArgumentLimits(nil, DefaultMaxArgumentDepth)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	served := &mcp.CallToolResult{}
+	server.AddReceivingMiddleware(func(mcp.MethodHandler) mcp.MethodHandler {
+		return func(context.Context, string, mcp.Request) (mcp.Result, error) { return served, nil }
+	})
+	AttachArgumentLimits(server, DefaultMaxArgumentDepth)
+	var handler mcp.MethodHandler
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		handler = next
+		return next
+	})
+	result, err := handler(t.Context(), methodToolsCall, &mcp.CallToolRequest{})
+	if err != nil || result != served {
+		t.Errorf("a tools/call with no raw arguments was answered (%v, %v), want it handed on", result, err)
+	}
 }
 
 // TestAttachRateLimit_NoLimiter verifies that a nil limiter does not register
@@ -663,6 +725,16 @@ func TestExtractToolName(t *testing.T) {
 			req:  &mcp.ClientRequest[*mcp.ListToolsParams]{Params: &mcp.ListToolsParams{}},
 			want: "",
 		},
+		{
+			name: "no raw params",
+			req:  &mcp.ClientRequest[*mcp.CallToolParamsRaw]{},
+			want: "",
+		},
+		{
+			name: "no typed params",
+			req:  &mcp.ClientRequest[*mcp.CallToolParams]{},
+			want: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -841,6 +913,8 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 		wantLines int
 		// wantContains are substrings the output must carry.
 		wantContains []string
+		// wantAbsent are substrings the output must not carry.
+		wantAbsent []string
 	}{
 		{
 			name:      "the first refusal in a window is reported",
@@ -859,18 +933,22 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 		},
 		{
 			// The bucket the whole process shares says so, and carries its own
-			// figures, which are tools rather than requests: an operator
-			// reading the line must not go looking for a credential's limit.
+			// figures named for what they count, which is tools rather than
+			// requests: an operator reading the line must not take 3000 for a
+			// request rate, or go looking for a flag that raises it.
 			name:      "the process's listing bucket names itself",
 			build:     newProcessCatalog,
 			refuse:    func(r *RateLimiter) { r.reportRefusal(context.Background(), methodToolsList) },
 			wantLines: 1,
 			wantContains: []string{
-				`"tool":"tools/list"`,
+				`"msg":"listing refused: rate limit exceeded across the process"`,
+				`"method":"tools/list"`,
 				`"scope":"process"`,
-				`"limit_rps":3000`,
-				`"burst":48000`,
+				`"limit_tools_per_second":3000`,
+				`"burst_tools":48000`,
+				`"also_refused_since_last_report":0`,
 			},
+			wantAbsent: []string{`"limit_rps"`, `"burst":`, `"tool":`},
 		},
 		{
 			// A bucket derived from a credential's is still the credential's.
@@ -993,6 +1071,9 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 				}
 				for _, want := range tt.wantContains {
 					assertContains(t, out, want)
+				}
+				for _, unwanted := range tt.wantAbsent {
+					assertNotContains(t, out, unwanted)
 				}
 			})
 		})
@@ -1747,11 +1828,11 @@ func listingOf(n int) *mcp.ListToolsResult {
 	return listed
 }
 
-// TestProcessCatalog_IsTheRegistersBucket holds the bucket the whole process
-// shares to the register's row RTC-007: its refill and burst are the values
-// the row names, counted in tools, and it names itself as the process's when
-// it refuses.
-func TestProcessCatalog_IsTheRegistersBucket(t *testing.T) {
+// TestProcessCatalog_Values_AreTheRegistersRTC007 holds the bucket the whole
+// process shares to the register's row RTC-007: its refill and burst are the
+// values the row names, counted in tools, and it names itself as the process's
+// in the line a refusal writes.
+func TestProcessCatalog_Values_AreTheRegistersRTC007(t *testing.T) {
 	t.Parallel()
 	if got, want := processCatalog.limiter.Limit(), rate.Limit(tenancy.CatalogProcessRate); got != want {
 		t.Errorf("refill = %v tools a second, want %v", got, want)
@@ -1764,11 +1845,11 @@ func TestProcessCatalog_IsTheRegistersBucket(t *testing.T) {
 	}
 }
 
-// TestRateLimiterTake_SpendsOnlyWhatTheBucketHolds pins the charge a listing
-// makes before it is answered: granted when the bucket holds the whole of it,
-// refused without spending anything when it does not, and cut to the burst when
-// it asks for more than the bucket could ever hold.
-func TestRateLimiterTake_SpendsOnlyWhatTheBucketHolds(t *testing.T) {
+// TestRateLimiterTake_ChargeOverWhatIsHeld_IsRefusedAndSpendsNothing pins the
+// charge a listing makes before it is answered: granted when the bucket holds
+// the whole of it, refused without spending anything when it does not, and cut
+// to the burst when it asks for more than the bucket could ever hold.
+func TestRateLimiterTake_ChargeOverWhatIsHeld_IsRefusedAndSpendsNothing(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
@@ -1800,10 +1881,11 @@ func TestRateLimiterTake_SpendsOnlyWhatTheBucketHolds(t *testing.T) {
 	}
 }
 
-// TestCatalogCharge_RefundHandsTheToolsBack verifies that the tools a listing
-// took are returned whole when the entry's own bucket refuses it, which is
-// what makes that refusal cost the process bucket nothing (PAT-003).
-func TestCatalogCharge_RefundHandsTheToolsBack(t *testing.T) {
+// TestCatalogChargeRefund_EntryRefusal_HandsTheToolsBack verifies that the
+// tools a listing took are returned whole when the entry's own bucket refuses
+// it, which is what makes that refusal cost the process bucket nothing
+// (PAT-003).
+func TestCatalogChargeRefund_EntryRefusal_HandsTheToolsBack(t *testing.T) {
 	t.Parallel()
 	bucket := testProcessBucket(10)
 	charge, ok := bucket.take(7)
@@ -1816,29 +1898,37 @@ func TestCatalogCharge_RefundHandsTheToolsBack(t *testing.T) {
 	}
 }
 
-// TestRateLimiterDebit_SettlesIntoDebt verifies the settlement of a listing
-// that carried more tools than it was charged for: it is spent whether the
-// bucket holds it or not, so the listings after it wait it out, a debit of
-// nothing spends nothing, and one above the burst is cut to it.
-func TestRateLimiterDebit_SettlesIntoDebt(t *testing.T) {
+// TestRateLimiterDebit_SettlementOverTheBucket_WaitsItOutUpToOneBurstOwed
+// verifies the settlement of a listing that carried more tools than it was
+// charged for: it is spent whether the bucket holds it or not, so the listings
+// after it wait it out, a debit of nothing spends nothing, one above the burst
+// is cut to it, and the debt stops at one burst however many settlements land,
+// which is what keeps a wave of listings admitted before anyone knew their
+// size from locking every listing in the process out for as long as their sum
+// takes to refill.
+func TestRateLimiterDebit_SettlementOverTheBucket_WaitsItOutUpToOneBurstOwed(t *testing.T) {
 	t.Parallel()
-	// Every case starts from a bucket of ten with four already spent, so a
-	// debit cut to the burst is told apart from one spent whole.
+	// Every case is a run of debits against a bucket of ten, the first of
+	// four, so a debit cut to the burst is told apart from one spent whole.
 	for _, tc := range []struct {
-		name  string
-		debit int
-		left  int
+		name   string
+		debits []int
+		left   int
 	}{
-		{name: "nothing", debit: 0, left: 6},
-		{name: "less than the bucket holds", debit: 4, left: 2},
-		{name: "more than the bucket holds", debit: 7, left: -1},
-		{name: "more than the bucket could ever hold", debit: 40, left: -4},
+		{name: "nothing", debits: []int{4, 0}, left: 6},
+		{name: "less than the bucket holds", debits: []int{4, 4}, left: 2},
+		{name: "more than the bucket holds", debits: []int{4, 7}, left: -1},
+		{name: "more than the bucket could ever hold", debits: []int{4, 40}, left: -4},
+		{name: "a settlement stops at one burst owed", debits: []int{4, 10, 10}, left: -10},
+		{name: "once a burst is owed nothing more is spent", debits: []int{4, 10, 10, 1}, left: -10},
+		{name: "a wave of settlements owes one burst", debits: []int{10, 10, 10, 10, 10}, left: -10},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			bucket := testProcessBucket(10)
-			bucket.debit(4)
-			bucket.debit(tc.debit)
+			for _, n := range tc.debits {
+				bucket.debit(n)
+			}
 			if got := heldTools(bucket); got != tc.left {
 				t.Errorf("%d tools left, want %d", got, tc.left)
 			}
@@ -1846,11 +1936,10 @@ func TestRateLimiterDebit_SettlesIntoDebt(t *testing.T) {
 	}
 }
 
-// The two refusals a listing can meet, as a client reads them.
-var (
-	processListingRefusal = RateLimitRefusalPrefix + methodToolsList + RateLimitProcessScope + rateLimitRetrySuffix
-	entryListingRefusal   = RateLimitRefusalPrefix + methodToolsList + rateLimitRetrySuffix
-)
+// listingRefusal is the refusal a listing meets from either bucket, as a client
+// reads it: the words are the same, so the cases below tell the two apart by
+// what each bucket holds afterwards and by the line the refusal writes.
+const listingRefusal = RateLimitRefusalPrefix + methodToolsList + rateLimitRetrySuffix
 
 // errListingFailed is what the handler behind a failed listing answers.
 var errListingFailed = errors.New("the listing failed")
@@ -1920,7 +2009,7 @@ func (tc serveCase) check(t *testing.T, got serveOutcome) {
 	if gotErr != tc.wantErr {
 		t.Fatalf("serve: %q, want %q", gotErr, tc.wantErr)
 	}
-	refused := tc.wantErr == processListingRefusal || tc.wantErr == entryListingRefusal
+	refused := tc.wantErr == listingRefusal
 	if got.answered == refused {
 		t.Errorf("the handler answered = %v, want %v", got.answered, !refused)
 	}
@@ -1939,17 +2028,19 @@ func (tc serveCase) check(t *testing.T, got serveOutcome) {
 	}
 }
 
-// TestCatalogListing_Serve pins how one server's listings are charged to the
-// bucket the whole process shares and to the entry's own.
+// TestCatalogListing_Serve_ChargesTheProcessFirstAndInTools pins how one
+// server's listings are charged to the bucket the whole process shares and to
+// the entry's own.
 //
 // The process bucket is charged first and in tools: before a listing is
 // answered with what the server's last listing carried, and afterwards with
 // whatever this one carried beyond that, which is how a server's first listing
-// comes to cost what it is. A listing the process bucket cannot cover is
-// refused before the entry's bucket is touched, and one the entry's bucket
-// refuses gets its tools back, so neither refusal costs the other bucket
-// anything (PAT-003). An answer that is not a listing settles nothing.
-func TestCatalogListing_Serve(t *testing.T) {
+// comes to cost what it is when nothing taught the bucket first. A listing the
+// process bucket cannot cover is refused before the entry's bucket is touched,
+// and one the entry's bucket refuses gets its tools back, so neither refusal
+// costs the other bucket anything (PAT-003). An answer that is not a listing
+// settles nothing.
+func TestCatalogListing_Serve_ChargesTheProcessFirstAndInTools(t *testing.T) {
 	t.Parallel()
 	listing := func(n int) func() (mcp.Result, error) {
 		return func() (mcp.Result, error) { return listingOf(n), nil }
@@ -1969,11 +2060,11 @@ func TestCatalogListing_Serve(t *testing.T) {
 		},
 		{
 			name: "a listing the process bucket cannot cover is refused before the entry's bucket", processBurst: 10, spent: 8,
-			remembered: 5, answer: listing(5), wantErr: processListingRefusal, wantLeft: 2, wantRemembered: 5, wantEntryLeft: 5,
+			remembered: 5, answer: listing(5), wantErr: listingRefusal, wantLeft: 2, wantRemembered: 5, wantEntryLeft: 5,
 		},
 		{
 			name: "a listing the entry's bucket refuses gets its tools back", processBurst: 100, remembered: 7, entryDrained: true,
-			answer: listing(7), wantErr: entryListingRefusal, wantLeft: 100, wantRemembered: 7, wantEntryLeft: 0,
+			answer: listing(7), wantErr: listingRefusal, wantLeft: 100, wantRemembered: 7, wantEntryLeft: 0,
 		},
 		{
 			name: "a failed listing settles nothing and is not remembered", processBurst: 100,
@@ -1999,54 +2090,140 @@ func TestCatalogListing_Serve(t *testing.T) {
 	}
 }
 
-// TestCatalogListing_RefusalsCarryTheCodeThatMirrors429 verifies what a client
-// meets from each bucket: the same code and the same advice, and a sentence
-// that says which of the two refused, so a caller refused by the process's
-// bucket is not told its own credential is spent.
-func TestCatalogListing_RefusalsCarryTheCodeThatMirrors429(t *testing.T) {
+// TestCatalogListing_Learn_RemembersWhatTheServersOwnListingCarried pins what
+// a listing the server makes of itself does to the process bucket's charge:
+// the size of the listing is remembered, so a client's first listing is
+// charged what it carries, the answer and its error are handed back as they
+// were, and an answer that is not a listing teaches nothing. The bucket itself
+// is never touched.
+func TestCatalogListing_Learn_RemembersWhatTheServersOwnListingCarried(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name string
-		err  error
-		want string
+		name           string
+		result         mcp.Result
+		err            error
+		wantRemembered int64
 	}{
-		{"the process's bucket", processRateLimitedError(methodToolsList), processListingRefusal},
-		{"the entry's bucket", rateLimitedError(methodToolsList), entryListingRefusal},
+		{name: "a listing", result: listingOf(30), wantRemembered: 30},
+		{name: "a failed listing", err: errListingFailed, wantRemembered: 7},
+		{name: "a typed nil listing", result: (*mcp.ListToolsResult)(nil), wantRemembered: 7},
+		{name: "an answer that is not a listing", result: &mcp.CallToolResult{}, wantRemembered: 7},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			var rpcErr *jsonrpc.Error
-			if !errors.As(tc.err, &rpcErr) {
-				t.Fatalf("%T is not a JSON-RPC error", tc.err)
+			process := testProcessBucket(10)
+			listings := &catalogListing{process: process}
+			listings.tools.Store(7)
+			result, err := listings.learn(tc.result, tc.err)
+			if result != tc.result || !errors.Is(err, tc.err) {
+				t.Errorf("learn handed back (%v, %v), want (%v, %v) unchanged", result, err, tc.result, tc.err)
 			}
-			if rpcErr.Code != tenancy.CodeTooManyRequests || rpcErr.Message != tc.want {
-				t.Errorf("code %d, message %q; want %d, %q", rpcErr.Code, rpcErr.Message, tenancy.CodeTooManyRequests, tc.want)
+			if got := listings.tools.Load(); got != tc.wantRemembered {
+				t.Errorf("the server is remembered to list %d tools, want %d", got, tc.wantRemembered)
 			}
-			if !strings.HasPrefix(rpcErr.Message, RateLimitRefusalPrefix) {
-				t.Errorf("%q does not begin with the text a client recognizes a rate-limit refusal by", rpcErr.Message)
+			if got := heldTools(process); got != 10 {
+				t.Errorf("the process bucket holds %d tools, want the 10 it held: the server's own listing is charged nothing", got)
 			}
 		})
 	}
 }
 
-// TestAttachRateLimitFunc_ChargesListingsToTheProcessBucket drives the process's
-// listing bucket through the middleware over a session: an empty one refuses a
-// listing the entry's own bucket would allow, and it is consulted only where the
-// entry's is, so a request no entry's bucket meters, and the server's own
-// listings, are charged to neither. That is issue 951's decision that the
-// process bucket follows RTC-003, and so is off when --rate-limit-rps is 0.
-func TestAttachRateLimitFunc_ChargesListingsToTheProcessBucket(t *testing.T) {
+// refusedListing is one listing refused by one of the two buckets, with what
+// the client was answered and what the log said.
+type refusedListing struct {
+	err  error
+	logs string
+}
+
+// refuseListing puts one listing through serve against a process bucket that
+// is spent when processSpent and an entry bucket that is spent otherwise, and
+// captures the log it writes. It swaps the default logger, so its callers do
+// not run in parallel.
+func refuseListing(t *testing.T, processSpent bool) refusedListing {
+	t.Helper()
+	logs := captureSlog(t)
+	process := testProcessBucket(10)
+	entry := &RateLimiter{limiter: rate.NewLimiter(1e-6, 1), scope: scopeCredential, throttleWindow: defaultThrottleWindow}
+	if processSpent {
+		process.debit(10)
+	} else {
+		entry.limiter.AllowN(time.Now(), 1)
+	}
+	listings := &catalogListing{process: process}
+	listings.tools.Store(5)
+	next := func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		t.Error("a listing both buckets were to refuse between them was answered")
+		return listingOf(5), nil
+	}
+	_, err := listings.serve(t.Context(), methodToolsList, &mcp.ListToolsRequest{Params: &mcp.ListToolsParams{}}, next, entry)
+	return refusedListing{err: err, logs: logs.String()}
+}
+
+// TestCatalogListing_EitherBucketRefusing_AnswersTheSameAndLogsWhichRefused
+// verifies what each side of a refused listing is told. A client meets the
+// same code and the same words from either bucket, since the next action is
+// the same and a sentence naming the process would tell it that other callers
+// are listing (INV-019). The operator is told which: the line the refusal
+// writes names the bucket's scope, and the process's carries its own figures,
+// counted in tools. That line is the one place the two refusals differ, so it
+// is what this pins, through serve rather than by calling the reporter.
+func TestCatalogListing_EitherBucketRefusing_AnswersTheSameAndLogsWhichRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		processSpent bool
+		wantLine     []string
+		wantAbsent   []string
+	}{
+		{
+			name: "the process's bucket", processSpent: true,
+			wantLine: []string{
+				`"msg":"listing refused: rate limit exceeded across the process"`,
+				`"scope":"process"`, `"limit_tools_per_second":`, `"burst_tools":10`,
+			},
+			wantAbsent: []string{`"scope":"credential"`},
+		},
+		{
+			name: "the entry's bucket", processSpent: false,
+			wantLine:   []string{`"msg":"tool call refused: rate limit exceeded"`, `"scope":"credential"`, `"burst":1`},
+			wantAbsent: []string{`"scope":"process"`},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := refuseListing(t, tc.processSpent)
+			var rpcErr *jsonrpc.Error
+			if !errors.As(got.err, &rpcErr) {
+				t.Fatalf("serve = %v, want a JSON-RPC error", got.err)
+			}
+			if rpcErr.Code != tenancy.CodeTooManyRequests || rpcErr.Message != listingRefusal {
+				t.Errorf("code %d, message %q; want %d, %q", rpcErr.Code, rpcErr.Message, tenancy.CodeTooManyRequests, listingRefusal)
+			}
+			if lines := strings.Count(got.logs, "rate limit exceeded"); lines != 1 {
+				t.Errorf("%d refusal lines, want 1:\n%s", lines, got.logs)
+			}
+			for _, want := range tc.wantLine {
+				assertContains(t, got.logs, want)
+			}
+			for _, unwanted := range tc.wantAbsent {
+				assertNotContains(t, got.logs, unwanted)
+			}
+		})
+	}
+}
+
+// TestAttachRateLimitFunc_ListingOverASession_IsChargedToTheProcessBucket drives
+// the process's listing bucket through the middleware over a session: an empty
+// one refuses a listing the entry's own bucket would allow, and it is consulted
+// only where the entry's is, so a request no entry's bucket meters, and the
+// server's own listings, are charged to neither. That is issue 951's decision
+// that the process bucket follows RTC-003, and so is off when --rate-limit-rps
+// is 0. The server's own listings are not charged, and they are what tells the
+// bucket what a client's listing will cost before the first one arrives.
+func TestAttachRateLimitFunc_ListingOverASession_IsChargedToTheProcessBucket(t *testing.T) {
 	t.Parallel()
 	emptied := func() *RateLimiter {
 		process := testProcessBucket(1)
 		process.debit(1)
 		return process
-	}
-	serverWith := func(process *RateLimiter, entry func() *RateLimiter) *mcp.Server {
-		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-		registerEchoTool(server)
-		attachRateLimitFunc(server, func(context.Context) *RateLimiter { return entry() }, process)
-		return server
 	}
 
 	t.Run("an empty process bucket refuses a listing the entry's would allow", func(t *testing.T) {
@@ -2055,8 +2232,8 @@ func TestAttachRateLimitFunc_ChargesListingsToTheProcessBucket(t *testing.T) {
 		session, ctx := connectClient(t, serverWith(emptied(), func() *RateLimiter { return entry }))
 		_, err := session.ListTools(ctx, nil)
 		var rpcErr *jsonrpc.Error
-		if !errors.As(err, &rpcErr) || rpcErr.Code != rateLimitedErrorCode || rpcErr.Message != processListingRefusal {
-			t.Fatalf("ListTools = %v, want the process's refusal %q", err, processListingRefusal)
+		if !errors.As(err, &rpcErr) || rpcErr.Code != rateLimitedErrorCode || rpcErr.Message != listingRefusal {
+			t.Fatalf("ListTools = %v, want the refusal %q", err, listingRefusal)
 		}
 		if got := heldTools(entry.forCatalog()); got != 40 {
 			t.Errorf("the entry's listing bucket holds %d, want the 40 the process's refusal left it", got)
@@ -2082,13 +2259,7 @@ func TestAttachRateLimitFunc_ChargesListingsToTheProcessBucket(t *testing.T) {
 	t.Run("a served listing costs the tools the server lists", func(t *testing.T) {
 		t.Parallel()
 		process := testProcessBucket(100)
-		server := serverWith(process, func() *RateLimiter { return NewRateLimiter(10, 40) })
-		for _, name := range []string{"second", "third"} {
-			mcp.AddTool(server, &mcp.Tool{Name: name, Description: "Another tool to list."},
-				func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
-					return &mcp.CallToolResult{}, nil, nil
-				})
-		}
+		server := withTwoMore(serverWith(process, func() *RateLimiter { return NewRateLimiter(10, 40) }))
 		session, ctx := connectClient(t, server)
 		for range 2 {
 			if _, err := session.ListTools(ctx, nil); err != nil {
@@ -2099,4 +2270,68 @@ func TestAttachRateLimitFunc_ChargesListingsToTheProcessBucket(t *testing.T) {
 			t.Errorf("the process bucket holds %d tools after two listings of three, want 94", got)
 		}
 	})
+}
+
+// serverWith is a server of one tool whose rate-limit middleware resolves every
+// request to entry's bucket and charges listings to process.
+func serverWith(process *RateLimiter, entry func() *RateLimiter) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	registerEchoTool(server)
+	attachRateLimitFunc(server, func(context.Context) *RateLimiter { return entry() }, process)
+	return server
+}
+
+// withTwoMore adds two tools to a server, so a listing of it carries three.
+func withTwoMore(server *mcp.Server) *mcp.Server {
+	for _, name := range []string{"second", "third"} {
+		mcp.AddTool(server, &mcp.Tool{Name: name, Description: "Another tool to list."},
+			func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+				return &mcp.CallToolResult{}, nil, nil
+			})
+	}
+	return server
+}
+
+// TestAttachRateLimitFunc_ServersOwnListing_ChargesTheFirstClientListingItsSize
+// pins what the server's own listing is for, beside being charged nothing: it
+// tells the process's bucket how many tools this server lists before any
+// client asks, so a client's first listing is charged what it carries up front
+// rather than one tool settled afterwards. A bucket of five holding two cannot
+// cover a listing of three and can cover the one tool a listing is charged
+// when nothing taught it the size, so the first client listing is refused only
+// if the server's own listing taught the bucket, and served into debt if it
+// did not.
+func TestAttachRateLimitFunc_ServersOwnListing_ChargesTheFirstClientListingItsSize(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		inspected bool
+		wantErr   bool
+		wantLeft  int
+	}{
+		{name: "after the server listed itself a client's first listing is charged what it carries", inspected: true, wantErr: true, wantLeft: 2},
+		{name: "with nothing learned a client's first listing is charged one and settled", inspected: false, wantLeft: -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			process := testProcessBucket(5)
+			process.debit(3)
+			server := withTwoMore(serverWith(process, func() *RateLimiter { return NewRateLimiter(10, 40) }))
+			if tc.inspected {
+				if _, err := ListRegisteredTools(t.Context(), server, "inspection"); err != nil {
+					t.Fatalf("the server's own listing: %v", err)
+				}
+				if got := heldTools(process); got != 2 {
+					t.Fatalf("the server's own listing left the bucket %d tools, want the 2 it held", got)
+				}
+			}
+			session, ctx := connectClient(t, server)
+			if _, err := session.ListTools(ctx, nil); (err != nil) != tc.wantErr {
+				t.Errorf("the first client listing: %v, want refused %v", err, tc.wantErr)
+			}
+			if got := heldTools(process); got != tc.wantLeft {
+				t.Errorf("the process bucket holds %d tools, want %d", got, tc.wantLeft)
+			}
+		})
+	}
 }

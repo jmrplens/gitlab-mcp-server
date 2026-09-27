@@ -247,12 +247,14 @@ func inLegacyRange(code int) bool {
 // so. It is still switching one limit off with another, but the other is the
 // per-key limit the partner exists for, and following it is a policy choice
 // the register records rather than a defect it carries (RTC-007, issue 951).
+// The decision is the one OffWithBy names, and it must be among the row's
+// Decided: a row carrying a decision about something else does not pass.
 func checkZeroStated(d Decision, rows map[string]Decision) []string {
 	var out []string
 	if d.Disposition == Valued && d.Zero == ZeroUnset {
 		out = append(out, "a valued decision that does not say what zero means")
 	}
-	followsPartnered := rows[d.OffWith].Partner == d.ID && len(d.Decided) > 0
+	followsPartnered := rows[d.OffWith].Partner == d.ID && has(d.Decided, d.OffWithBy)
 	departs := d.Zero == ZeroRefused || d.Zero == ZeroSelectsDefault || (d.OffWith != "" && !followsPartnered)
 	if departs && !d.RecordsDeparture("INV-015") {
 		out = append(out, "a zero that does not mean off, with no finding")

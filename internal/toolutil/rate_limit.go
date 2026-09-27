@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -128,15 +129,6 @@ const (
 	rateLimitRetrySuffix   = "; retry after a short backoff"
 )
 
-// RateLimitProcessScope is what a refusal by the listing bucket the whole
-// process shares says after the method it names (register row RTC-007), so
-// that neither a client nor an operator reads it as the credential's own
-// bucket being empty. It keeps [RateLimitRefusalPrefix] in front of it, which
-// is the text a client recognizes a rate-limit refusal by, and is exported for
-// the reason that prefix is: cmd/bench_resources tells this bucket's refusals
-// from the credential's by it.
-const RateLimitProcessScope = " across this server"
-
 // The two keys a refusal line names a bucket by.
 const (
 	scopeCredential = "credential"
@@ -165,6 +157,13 @@ func NewRateLimiter(rps float64, burst int) *RateLimiter {
 // WARN rather than INFO: unlike the other refusals, this one is not the
 // caller's doing. The call was well formed and would have succeeded a moment
 // earlier or later, and an operator seeing it may need to raise the limit.
+//
+// The listing bucket the whole process shares writes a line of its own. What
+// it counts is tools rather than requests and no setting raises it, so its
+// figures are named for their unit, and the line says the process is listing
+// more than its bucket allows rather than pointing at a limit an operator
+// could change. It is also the one place that tells its refusals from a
+// credential's: a client is answered the same words by both.
 func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 	if r == nil {
 		return
@@ -195,6 +194,17 @@ func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 
 	if tool == "" {
 		tool = methodToolsCall
+	}
+	if r.scope == scopeProcess {
+		slog.WarnContext(ctx, "listing refused: rate limit exceeded across the process",
+			"method", tool,
+			"reason", RefusalRateLimited,
+			"scope", r.scope,
+			"limit_tools_per_second", float64(r.limiter.Limit()),
+			"burst_tools", r.limiter.Burst(),
+			"also_refused_since_last_report", alsoRefused,
+		)
+		return
 	}
 	slog.WarnContext(ctx, "tool call refused: rate limit exceeded",
 		"tool", tool,
@@ -271,14 +281,18 @@ func CatalogListingRPS(rps float64) float64 {
 //
 // Tools, because that is what a listing costs. Measured on the streamable HTTP
 // handler, stateless and answering with an event stream as the server does by
-// default, one listing costs about 0.9 ms of processor on the dynamic surface,
-// 13 to 16 ms on meta and 270 to 300 ms on individual, which is 0.28 to 0.47
-// ms for each tool listed on all three. A bucket counting listings would have
-// to choose a surface: sized for individual it refuses the default surface at
-// a fraction of a percent of a core, and sized for dynamic it leaves
-// individual unbounded. Counted in tools, the refill is about one core of
-// listing on every surface: some three listings a second on individual, sixty
-// to ninety on meta and fifteen hundred on dynamic.
+// default (BenchmarkServedListing_OverStreamableHTTP_ProcessorPerTool in
+// cmd/internal/mcpsurface), one listing costs about a third of a millisecond of
+// processor on the dynamic surface, 8 to 22 ms on meta across its three
+// parameter-schema modes and 170 to 230 ms on individual. That is a factor of
+// six hundred from the smallest listing to the largest, and between 0.16 and
+// 0.5 ms for each tool listed on every surface and mode, the full meta schema
+// the dearest. A bucket counting listings would have to choose a surface: sized
+// for individual it refuses the default surface at a fraction of a percent of
+// a core, and sized for dynamic it leaves individual unbounded. Counted in
+// tools, the refill is between half a core and a core and a half of listing,
+// whatever is served: some three listings a second on individual, sixty to
+// ninety on meta and fifteen hundred on dynamic.
 //
 // The burst holds one credential's whole default listing burst on the largest
 // surface served, forty listings of up to twelve hundred tools, so that at the
@@ -300,6 +314,14 @@ const (
 // share. It is not configurable, for the reason the listen and watcher
 // ceilings are not: an operator who can raise the shared number can undo the
 // bound.
+//
+// What it protects is the processor, and so every other request the process
+// answers, and not anybody's listings: it promises no caller a share of what
+// it allows (INV-003), so while one tenant keeps it spent another tenant's
+// listings are refused too, at once and with the advice to retry. Measured
+// with a hundred credentials listing on the individual surface, the tool calls
+// of eight quiet ones went from all of them timing out to all of them served
+// in single milliseconds, and their listings from timing out to being refused.
 //
 // It is consulted only beside an entry's listing bucket, and so follows it: a
 // request no entry's bucket meters, because --rate-limit-rps is 0 or nothing
@@ -339,13 +361,28 @@ func (r *RateLimiter) take(n int) (catalogCharge, bool) {
 
 // debit spends n tokens whether the bucket holds them or not, leaving it in
 // debt for the listings after it to wait out. It settles a listing that turned
-// out to carry more tools than it was charged for before it was answered,
-// which is every server's first; n is never negative, and zero spends
-// nothing.
+// out to carry more tools than it was charged for before it was answered; n is
+// never negative, and zero spends nothing.
+//
+// The debt stops at one burst. A server's listings are charged what its last
+// one carried, and a server lists itself while it starts ([catalogListing.learn]),
+// so a settlement is normally the growth of a catalog between two listings.
+// Where nothing was learned first, every listing admitted before the first is
+// answered is charged a single tool and settles the rest here, and their debts
+// would add up without a floor: a hundred credentials' default bursts on the
+// individual surface would leave the process owing four million tools and
+// refuse every listing on every server for twenty-four minutes. With it, a
+// settlement delays the next listing by at most what two bursts take to
+// refill, thirty-two seconds at the register's values.
 func (r *RateLimiter) debit(n int) {
 	r.takeMu.Lock()
 	defer r.takeMu.Unlock()
-	r.limiter.ReserveN(time.Now(), min(n, r.limiter.Burst()))
+	now := time.Now()
+	burst := r.limiter.Burst()
+	// What the bucket can still spend before it owes a whole burst, floored
+	// so that a fraction of a tool already owed is not spent a second time.
+	room := int(math.Floor(r.limiter.TokensAt(now))) + burst
+	r.limiter.ReserveN(now, min(n, burst, room))
 }
 
 // catalogCharge is the tools one listing took from the process bucket, held
@@ -359,6 +396,15 @@ type catalogCharge struct {
 // which is what makes [rate.Reservation.CancelAt] restore a reservation that
 // was granted at once; takeMu is not needed, since a refund only ever adds
 // tokens and [RateLimiter.take] cannot be granted less for it.
+//
+// What it restores is less whatever the bucket granted after the tools were
+// taken and before they come back, which is how the rate package keeps a
+// cancellation from handing out what a later reservation already counts on.
+// Between a take and its refund there is only the entry's own check, so that
+// is a few microseconds of refill, unless a settlement lands in the same
+// window and puts the bucket in debt, when the refund can be lost whole. The
+// error is one listing's tools at most, and in the direction of refusing
+// sooner rather than of granting more than the bucket holds.
 func (c *catalogCharge) refund() {
 	c.held.CancelAt(c.at)
 }
@@ -366,9 +412,35 @@ func (c *catalogCharge) refund() {
 // catalogListing meters one server's listings on the process bucket, and
 // remembers how many tools the server lists, which is what its next listing
 // is charged before it is answered.
+//
+// The count is learned from the server's own listings too ([catalogListing.learn]).
+// A server lists itself while it starts, to count what it registered, before
+// it answers anyone, so the first listing a client makes is charged what it
+// carries rather than a placeholder settled afterwards.
 type catalogListing struct {
 	process *RateLimiter
 	tools   atomic.Int64
+}
+
+// toolsCarried is how many tools an answer lists, and false when the answer is
+// not a listing at all.
+func toolsCarried(result mcp.Result) (int, bool) {
+	listed, _ := result.(*mcp.ListToolsResult)
+	if listed == nil {
+		return 0, false
+	}
+	return len(listed.Tools), true
+}
+
+// learn remembers how many tools a listing the server made of itself carried,
+// and hands its answer back unchanged. Such a listing is charged to no bucket:
+// it is the server counting what it registered, not a caller spending the
+// processor.
+func (l *catalogListing) learn(result mcp.Result, err error) (mcp.Result, error) {
+	if carried, isListing := toolsCarried(result); isListing {
+		l.tools.Store(int64(carried))
+	}
+	return result, err
 }
 
 // serve charges one listing to the process bucket and then to the entry's,
@@ -385,8 +457,12 @@ func (l *catalogListing) serve(
 	charged := max(1, int(l.tools.Load()))
 	charge, ok := l.process.take(charged)
 	if !ok {
+		// The client is answered what a credential's own refusal says: the
+		// next action is the same, and naming the process would tell it that
+		// other callers are listing (INV-019). Which bucket refused is the
+		// operator's to read, in the line this writes.
 		l.process.reportRefusal(ctx, method)
-		return nil, processRateLimitedError(method)
+		return nil, rateLimitedError(method)
 	}
 	if !entry.allow() {
 		charge.refund()
@@ -397,11 +473,11 @@ func (l *catalogListing) serve(
 		return nil, rateLimitedError(method)
 	}
 	result, err := next(ctx, method, req)
-	if listed, isListing := result.(*mcp.ListToolsResult); isListing && listed != nil {
+	if carried, isListing := toolsCarried(result); isListing {
 		// Settled whatever the difference, rather than when there is one: a
 		// listing charged exactly what it carried settles nothing.
-		l.process.debit(max(0, len(listed.Tools)-charged))
-		l.tools.Store(int64(len(listed.Tools)))
+		l.process.debit(max(0, carried-charged))
+		l.tools.Store(int64(carried))
 	}
 	return result, err
 }
@@ -440,7 +516,7 @@ func (l *catalogListing) serve(
 // charged first to a fourth bucket, the one the whole process shares and
 // counts in tools listed ([processCatalog]), because the entry's multiplies by
 // however many credentials a caller holds; that one refuses with the same code
-// and says it is the server's.
+// and the same words, and only the log line it writes says which refused.
 //
 // Every other method (initialize, resources/list, prompts/list) bypasses the
 // limiter: they reach no upstream and cost little to answer, and metering
@@ -499,10 +575,15 @@ func attachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 					return nil, rateLimitedError(method)
 				}
 			case tenancy.MeterCatalog:
+				// The server's own listings are charged to neither bucket, and
+				// they are how the process's learns what this server lists
+				// before any client's listing reaches it.
+				if isInternalInspection(ctx) {
+					return listings.learn(next(ctx, method, req))
+				}
 				// No entry bucket, no process one: the process bucket follows
-				// the entry's (issue 951), and the server's own listings are
-				// charged to neither.
-				if catalog != nil && !isInternalInspection(ctx) {
+				// the entry's (issue 951).
+				if catalog != nil {
 					return listings.serve(ctx, method, req, next, catalog)
 				}
 			case tenancy.MeterCompletion:
@@ -620,19 +701,6 @@ func rateLimitedError(method string) error {
 	return &jsonrpc.Error{
 		Code:    rateLimitedErrorCode,
 		Message: RateLimitRefusalPrefix + method + rateLimitRetrySuffix,
-	}
-}
-
-// processRateLimitedError is the refusal of the listing bucket the whole
-// process shares: the same code and the same advice as a credential's own
-// bucket, since the answer is the same, and a sentence that says the limit is
-// the server's. That discloses that other callers are listing, which every
-// process-wide ceiling does by refusing at all (the listen and watcher ceilings
-// say so in as many words).
-func processRateLimitedError(method string) error {
-	return &jsonrpc.Error{
-		Code:    rateLimitedErrorCode,
-		Message: RateLimitRefusalPrefix + method + RateLimitProcessScope + rateLimitRetrySuffix,
 	}
 }
 
@@ -786,8 +854,11 @@ func NewJSONDepthScanner(limit int) *JSONDepthScanner {
 // the limit has been passed. State carries across calls, so the chunk
 // boundaries an io.Reader happens to produce do not change the answer.
 func (s *JSONDepthScanner) Scan(chunk []byte) bool {
-	if s == nil || s.exceeded {
-		return s != nil && s.exceeded
+	if s == nil {
+		return false
+	}
+	if s.exceeded {
+		return true
 	}
 	for _, c := range chunk {
 		if s.inString {

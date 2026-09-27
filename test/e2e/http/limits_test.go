@@ -515,8 +515,14 @@ func TestLimit_RateLimitMetersTheCatalogListing(t *testing.T) {
 const (
 	processListingRate  = 3000
 	processListingBurst = 48000
-	// processListingScope is what the process's refusal says after the method.
-	processListingScope = "tools/list across this server"
+)
+
+// The two lines a refused listing can write, one per bucket. A client is
+// answered the same words by both, so that it is not told other callers are
+// listing (INV-019), and the log is the one place the two are told apart.
+const (
+	processListingRefusalLine    = "listing refused: rate limit exceeded across the process"
+	credentialListingRefusalLine = "tool call refused: rate limit exceeded"
 )
 
 // listingWorkers is how many listings are in flight at once while a test
@@ -529,8 +535,7 @@ type listingOutcome int
 
 const (
 	listingServed listingOutcome = iota
-	listingRefusedByProcess
-	listingRefusedByCredential
+	listingRefused
 	listingFailed
 )
 
@@ -558,10 +563,8 @@ func listAs(ctx context.Context, srv *server, token string) (outcome listingOutc
 	switch {
 	case err != nil:
 		return listingFailed, 0, err.Error()
-	case strings.Contains(body, "-42900") && strings.Contains(body, processListingScope):
-		return listingRefusedByProcess, 0, ""
-	case strings.Contains(body, "-42900") && strings.Contains(body, "rate limit exceeded for tools/list"):
-		return listingRefusedByCredential, 0, ""
+	case strings.Contains(body, "-42900") && strings.Contains(body, "rate limit exceeded for tools/list; retry after a short backoff"):
+		return listingRefused, 0, ""
 	case resp.StatusCode == http.StatusOK && countTools(body) > 0:
 		return listingServed, countTools(body), ""
 	}
@@ -570,8 +573,8 @@ func listAs(ctx context.Context, srv *server, token string) (outcome listingOutc
 
 // listingDrive is what a set of workers listing against one server saw.
 type listingDrive struct {
-	served, servedTools, refusedByProcess, refusedByCredential, failed atomic.Int64
-	firstFailure                                                       atomic.Value
+	served, servedTools, refused, failed atomic.Int64
+	firstFailure                         atomic.Value
 }
 
 // drive lists with listingWorkers workers spread over credentials tokens until
@@ -591,10 +594,8 @@ func drive(ctx context.Context, srv *server, credentials int, stop func(*listing
 				case listingServed:
 					d.served.Add(1)
 					d.servedTools.Add(int64(tools))
-				case listingRefusedByProcess:
-					d.refusedByProcess.Add(1)
-				case listingRefusedByCredential:
-					d.refusedByCredential.Add(1)
+				case listingRefused:
+					d.refused.Add(1)
 				case listingFailed:
 					if ctx.Err() == nil {
 						d.failed.Add(1)
@@ -612,11 +613,13 @@ func drive(ctx context.Context, srv *server, credentials int, stop func(*listing
 }
 
 // processBudget is how many tools the process's bucket can have granted by
-// elapsed: its burst, its refill since, and a server's first listings, each
-// of which is charged one tool before anyone knows how many it carries and is
-// settled afterwards, one per worker at most.
-func processBudget(elapsed time.Duration, toolsPerListing int64) float64 {
-	return processListingBurst + processListingRate*elapsed.Seconds() + float64(listingWorkers*toolsPerListing)
+// elapsed: its burst and its refill since, and nothing beside them. Every
+// listing is charged what it carries before it is answered, the first one
+// included, because the server lists itself while it starts and the bucket
+// learns the size from that listing, so no listing is admitted on a guess
+// and settled afterwards.
+func processBudget(elapsed time.Duration) float64 {
+	return processListingBurst + processListingRate*elapsed.Seconds()
 }
 
 // TestLimit_ProcessBoundsListingAcrossCredentials verifies on the wire that
@@ -630,11 +633,21 @@ func processBudget(elapsed time.Duration, toolsPerListing int64) float64 {
 // credential here is given a listing bucket of ten thousand that never
 // refills, so any refusal the drive meets can only be the process's, and a
 // credential that has never listed is refused while the others are listing,
-// which no bucket of its own could explain.
+// which no bucket of its own could explain. The server's log says the same
+// from its side: a refusal line naming the process and none naming a
+// credential, since the client is answered the same words by either.
 //
 // It is not parallel: what it measures is the server listing faster than the
-// bucket refills, which needs the runner's processors to itself.
+// bucket refills, which needs the runner's processors to itself. For the same
+// reason it does not run under the race detector, whose instrumented server
+// lists about nine times more slowly: a runner's cores then serve fewer tools
+// a second than the bucket refills, so neither arm could show anything. The
+// bucket's own code is held by internal/toolutil's tests, which do run under
+// the detector.
 func TestLimit_ProcessBoundsListingAcrossCredentials(t *testing.T) {
+	if raceDetector {
+		t.Skip("the race detector's server lists more slowly than the process's bucket refills, so neither arm can show anything on it")
+	}
 	gitlab := acceptingGitLab(t)
 	individual := []string{"--gitlab-url=" + gitlab.url, "--tool-surface=individual", "--tier=free"}
 
@@ -643,46 +656,27 @@ func TestLimit_ProcessBoundsListingAcrossCredentials(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 		defer cancel()
 
-		// Once the bucket is spent, and while the workers keep it spent, a
-		// credential that has never listed, and so holds its whole own bucket,
-		// lists too. It is asked beside the workers rather than by one of
-		// them, since a worker that stopped to ask would let the bucket refill
-		// under it; the drive ends once it has answered.
-		var fresh sync.WaitGroup
-		var freshAsked, freshAnswered, freshRefused atomic.Bool
 		started := time.Now()
-		d := drive(ctx, srv, 4, func(d *listingDrive) bool {
-			if d.refusedByProcess.Load() > 0 && freshAsked.CompareAndSwap(false, true) {
-				fresh.Go(func() {
-					freshRefused.Store(freshCredentialRefused(ctx, srv))
-					freshAnswered.Store(true)
-				})
-			}
-			return d.failed.Load() > 0 || freshAnswered.Load()
-		})
+		d, freshRefused := driveAskingAFreshCredential(ctx, srv)
 		elapsed := time.Since(started)
-		fresh.Wait()
-		t.Logf("%d listings served (%d tools) and %d refused by the process's bucket in %s",
-			d.served.Load(), d.servedTools.Load(), d.refusedByProcess.Load(), elapsed.Round(time.Millisecond))
+		t.Logf("%d listings served (%d tools) and %d refused in %s",
+			d.served.Load(), d.servedTools.Load(), d.refused.Load(), elapsed.Round(time.Millisecond))
 
 		if d.failed.Load() > 0 {
 			t.Fatalf("%d listings failed, the first with %v", d.failed.Load(), d.firstFailure.Load())
 		}
-		if d.refusedByProcess.Load() == 0 {
+		if d.refused.Load() == 0 {
 			t.Fatalf("%d listings of %d tools in %s were never refused: the process bounds nothing",
 				d.served.Load(), d.servedTools.Load(), elapsed)
 		}
-		if n := d.refusedByCredential.Load(); n > 0 {
-			t.Errorf("%d listings were refused by a credential's own bucket of ten thousand; the drive is not measuring the process's", n)
-		}
-		perListing := d.servedTools.Load() / max(1, d.served.Load())
-		if budget := processBudget(elapsed, perListing); float64(d.servedTools.Load()) > budget {
+		if budget := processBudget(elapsed); float64(d.servedTools.Load()) > budget {
 			t.Errorf("%d tools listed in %s, more than the %.0f the process's bucket grants in that time",
 				d.servedTools.Load(), elapsed, budget)
 		}
-		if !freshRefused.Load() {
+		if !freshRefused {
 			t.Error("a credential that had never listed was served while the process's bucket was spent: the bucket is not the process's")
 		}
+		assertOnlyTheProcessRefused(t, srv)
 	})
 
 	t.Run("off when --rate-limit-rps is 0", func(t *testing.T) {
@@ -696,9 +690,8 @@ func TestLimit_ProcessBoundsListingAcrossCredentials(t *testing.T) {
 		// time instead, and says so.
 		started := time.Now()
 		d := drive(ctx, srv, 4, func(d *listingDrive) bool {
-			perListing := d.servedTools.Load() / max(1, d.served.Load())
-			outlisted := float64(d.servedTools.Load()) > processBudget(time.Since(started), perListing)
-			return outlisted || d.failed.Load() > 0 || d.refusedByProcess.Load() > 0 || d.refusedByCredential.Load() > 0
+			outlisted := float64(d.servedTools.Load()) > processBudget(time.Since(started))
+			return outlisted || d.failed.Load() > 0 || d.refused.Load() > 0
 		})
 		elapsed := time.Since(started)
 		t.Logf("%d listings served (%d tools) in %s with nothing refused",
@@ -707,23 +700,65 @@ func TestLimit_ProcessBoundsListingAcrossCredentials(t *testing.T) {
 		if d.failed.Load() > 0 {
 			t.Fatalf("%d listings failed, the first with %v", d.failed.Load(), d.firstFailure.Load())
 		}
-		if refused := d.refusedByProcess.Load() + d.refusedByCredential.Load(); refused > 0 {
+		if refused := d.refused.Load(); refused > 0 {
 			t.Fatalf("%d listings were refused with the rate limit off", refused)
 		}
-		perListing := d.servedTools.Load() / max(1, d.served.Load())
-		if budget := processBudget(elapsed, perListing); float64(d.servedTools.Load()) <= budget {
+		if budget := processBudget(elapsed); float64(d.servedTools.Load()) <= budget {
 			t.Fatalf("only %d tools listed in %s, within the %.0f the process's bucket would have granted: "+
 				"this host cannot list fast enough for the test to show the bucket is off", d.servedTools.Load(), elapsed, budget)
 		}
 	})
 }
 
+// driveAskingAFreshCredential drives the process's bucket with four
+// credentials until it is spent, and then, while the workers keep it spent,
+// lists as a credential that has never listed and so holds its whole own
+// bucket. The fresh credential is asked beside the workers rather than by one
+// of them, since a worker that stopped to ask would let the bucket refill under
+// it, and the drive ends once it has answered. It reports what the workers met
+// and whether the fresh credential was refused.
+func driveAskingAFreshCredential(ctx context.Context, srv *server) (*listingDrive, bool) {
+	var fresh sync.WaitGroup
+	var freshAsked, freshAnswered, freshRefused atomic.Bool
+	d := drive(ctx, srv, 4, func(d *listingDrive) bool {
+		if d.refused.Load() > 0 && freshAsked.CompareAndSwap(false, true) {
+			fresh.Go(func() {
+				freshRefused.Store(freshCredentialRefused(ctx, srv))
+				freshAnswered.Store(true)
+			})
+		}
+		return d.failed.Load() > 0 || freshAnswered.Load()
+	})
+	fresh.Wait()
+	return d, freshRefused.Load()
+}
+
+// assertOnlyTheProcessRefused holds the server's log to what a drive whose
+// credentials' own buckets were never near empty must leave: the process's
+// refusal line, naming its scope, and no credential's. The log is the one
+// place the two are told apart, since a client is answered the same words by
+// either.
+func assertOnlyTheProcessRefused(t *testing.T, srv *server) {
+	t.Helper()
+	logs := awaitLog(t, srv, processListingRefusalLine)
+	if logs == "" {
+		t.Fatalf("the process's refusals left no line naming it:\n%s", srv.logs())
+	}
+	if !strings.Contains(logs, `"scope":"process"`) {
+		t.Errorf("the process's refusal line does not name its scope:\n%s", logs)
+	}
+	if strings.Contains(logs, credentialListingRefusalLine) {
+		t.Errorf("a credential's own listing bucket refused; the drive is not measuring the process's:\n%s", logs)
+	}
+}
+
 // freshCredentialRefused lists once as a credential nothing has listed with,
-// and reports whether the process's bucket refused it. A few tries, since the
-// bucket refills between the workers' listings and one may slip through.
+// and reports whether it was refused, which with its own bucket full only the
+// process's can do. A few tries, since the bucket refills between the workers'
+// listings and one may slip through.
 func freshCredentialRefused(ctx context.Context, srv *server) bool {
 	for range 5 {
-		if outcome, _, _ := listAs(ctx, srv, "glpat-never-listed"); outcome == listingRefusedByProcess {
+		if outcome, _, _ := listAs(ctx, srv, "glpat-never-listed"); outcome == listingRefused {
 			return true
 		}
 	}

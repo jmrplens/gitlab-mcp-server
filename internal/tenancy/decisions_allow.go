@@ -203,10 +203,16 @@ func allowDecisions() []Decision {
 			// the other nothing (PAT-003).
 			//
 			// It follows the row it partners: consulted only where an entry's
-			// listing bucket charges a request, and so off when RTC-001's rate
-			// is zero. That is switching one limit off with another (INV-015),
-			// and issue 951 decided it for a process partner, which is why the
-			// row records a decision where a departure would record a finding.
+			// listing bucket charges a request, and RTC-003's bucket is derived
+			// from RTC-001's, so it is off when RTC-001's rate is zero. That is
+			// switching one limit off with another (INV-015), and issue 951
+			// decided it for a process partner, which is why the row records a
+			// decision where a departure would record a finding.
+			//
+			// Its refusal is RTC-003's, word for word: the next action is the
+			// same, and a sentence naming the process would tell a caller that
+			// others are listing (INV-019). The log line it writes is where an
+			// operator tells the two apart.
 			ID: "RTC-007", Question: Allow, Kind: Rate, Class: ClassP, Disposition: Valued,
 			Resource: "tools/list across every credential, counted in the tools listed",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -216,18 +222,18 @@ func allowDecisions() []Decision {
 			Values:   []string{"CatalogProcessRate", "CatalogProcessBurst"},
 			// Which method draws on it is MeterFor's answer, as for RTC-003.
 			Functions: []string{"MeterFor"},
-			Source:    Constant, Zero: ZeroNotApplicable, OffWith: "RTC-003", AtCapacity: RefuseNewcomer,
-			Decided: []string{"issue 951"},
+			Source:    Constant, Zero: ZeroNotApplicable, OffWith: "RTC-003", OffWithBy: "issue 951",
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"issue 951"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/list"}, Channel: RPC, Code: CodeTooManyRequests,
-					Prefix: "rate limit exceeded for ", Answer: RetryLater,
-					At: refuse(pkgToolutil, "processRateLimitedError"),
+					Prefix: "rate limit exceeded for ", Answer: RetryLater, At: rateLimitedError,
 				},
 			},
-			// AttachRateLimitFunc hands the process's bucket to the middleware,
-			// and the listing's charge, refund and settlement are where the
-			// bucket is counted.
+			// AttachRateLimitFunc hands the process's bucket to the middleware;
+			// the server's own listings teach it what a listing costs, and the
+			// listing's charge, refund and settlement are where it is counted.
 			Sites: []Site{
 				alias(pkgToolutil, "catalogProcessRate", "CatalogProcessRate"),
 				alias(pkgToolutil, "catalogProcessBurst", "CatalogProcessBurst"),
@@ -235,12 +241,12 @@ func allowDecisions() []Decision {
 				enforce(pkgToolutil, "newProcessCatalog"),
 				enforce(pkgToolutil, "AttachRateLimitFunc"),
 				enforce(pkgToolutil, "attachRateLimitFunc"),
+				enforce(pkgToolutil, "catalogListing.learn"),
 				enforce(pkgToolutil, "catalogListing.serve"),
 				enforce(pkgToolutil, "RateLimiter.take"),
 				enforce(pkgToolutil, "RateLimiter.debit"),
 				enforce(pkgToolutil, "catalogCharge.refund"),
-				refuse(pkgToolutil, "RateLimitProcessScope"),
-				refuse(pkgToolutil, "processRateLimitedError"),
+				rateLimitedError,
 			},
 		},
 		{

@@ -302,8 +302,9 @@ const (
 // metered listing shares the first one's switch while refusing a different
 // method, which is why the refusal shape is per bound rather than one global
 // classifier; and the process's listing bucket shares that switch too while
-// counting the whole process rather than one credential, so it is told from
-// the credential's by the words its refusal ends with.
+// counting the whole process rather than one credential. It refuses in the
+// credential's own words, so what makes its refusals its own is the arm that
+// puts it in force, which leaves every credential's bucket out of reach.
 var fairnessBounds = []boundSpec{
 	{
 		ID:    "tools-call-rps",
@@ -351,8 +352,12 @@ var fairnessBounds = []boundSpec{
 		// bucket (register row RTC-007), put in force on its own: the on-arm
 		// gives each credential a listing bucket of a hundred a second and ten
 		// thousand in hand, which no noisy credential here reaches, so every
-		// listing refused is the process's. The off-arm turns the rate limit
-		// off, which turns this bucket off with it (issue 951). No Bucket,
+		// listing refused is the process's. That is the arm's doing and not
+		// the classifier's: the process refuses in the credential's words, so
+		// that a caller is not told other callers are listing (INV-019), and
+		// only the server's log line says which bucket refused. The off-arm
+		// turns the rate limit off, which turns this bucket off with it
+		// (issue 951). No Bucket,
 		// because it counts tools rather than requests: a listing on the
 		// individual surface is some nine hundred of them against a refill of
 		// three thousand a second, so the surface decides the rate a noisy
@@ -369,7 +374,7 @@ var fairnessBounds = []boundSpec{
 		Refusals: []refusalSpec{
 			{
 				Status: httpOK, Code: rateLimitCode, Method: methodToolsList,
-				TextPrefix: rateLimitRefusal + methodToolsList + toolutil.RateLimitProcessScope,
+				TextPrefix: rateLimitRefusal + methodToolsList,
 			},
 		},
 		NoisyVerbs: []string{verbList},
