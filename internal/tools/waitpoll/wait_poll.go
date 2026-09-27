@@ -74,7 +74,11 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 		if err := ctx.Err(); err != nil {
 			return Result[T]{}, err
 		}
-		if time.Until(deadlineAt) <= 0 {
+		// Spelled as the deadline test pollReachedDeadline uses rather than as
+		// time.Until(deadlineAt) <= 0: the two agree, and the comparison with
+		// zero offered a boundary (<= against <) that only a clock reading of
+		// exactly the deadline could tell apart, which no test can schedule.
+		if !time.Now().Before(deadlineAt) {
 			return timedOutPollResult(lastItem, startTime, pollCount, lastStatus), nil
 		}
 
