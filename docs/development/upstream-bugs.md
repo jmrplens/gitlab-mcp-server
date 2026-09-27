@@ -77,9 +77,9 @@ readable without opening the tracker:
 | 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | No | No | No | No | Yes |
 | 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes, v2.59.1** | Was yes | Retired |
 | 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, v3.0.0** | No | Retired |
-| 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
-| 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
-| 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
+| 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No, not reproduced | No | No | No | Yes |
+| 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours, [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293), open | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user | Yes, theirs, open | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
@@ -91,48 +91,53 @@ readable without opening the tracker:
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, unreleased** | Was yes | Yes, until a Codex built on the fix ships |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
-| 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
-| 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
+| 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), merged | **Yes, unreleased** | No | Yes |
-| 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
+| 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first | No | No | Yes |
 | 24 | gitlab-org/gitlab | [Approvals page documents the POST's response under the GET](#the-merge-request-approvals-page-documents-the-deprecated-posts-response-under-the-get) | No | No | No | No | Yes |
-| 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | No | No | No | No | Yes |
-| 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
-| 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | No | No | No | No | None possible |
-| 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | No | No | No | Was yes | Yes |
-| 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | No | No | No | No | Yes |
-| 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | No | No | No | No | Partial |
-| 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
-| 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
-| 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 1 open | **13 of 14; all 13 released, v3.1.0 to v3.14.0** | No | Retired for all 13 at the v3.14.0 pin; the open one keeps its own |
-| 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
-| 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Partial |
-| 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
+| 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
+| 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | Yes | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Was yes | Yes |
+| 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
+| 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 1 of the 14 open, and the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | **13 of 14; all 13 released, v3.1.0 to v3.14.0** | No | Retired for all 13 at the v3.14.0 pin; the open one keeps its own |
+| 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
+| 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
+| 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), merged | **Yes, 19.4.0** | No | No, retired when the live record was taken from 19.4.1-ee |
 | 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699), open and approved | No | No | Yes |
-| 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | No | No | No | No | Not needed |
-| 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
-| 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
-| 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
-| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) | No | No | No | Yes |
-| 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
+| 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Not needed |
+| 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), open; [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | No | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572) | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, unreleased** | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
-| 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
-| 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
+| 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None taken |
+| 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
-| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | No | No | No | Not measured | None |
+| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Not measured | None |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | No | No | No | No | Yes |
-| 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | No | No | No | No | Partial |
-| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | No | No | No | No | Partial |
-| 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | No | No | No | No | Yes |
+| 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
+| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
+| 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 61 | client-go | [`AwardEmoji` does not model the image URL of a custom emoji](#awardemoji-does-not-model-the-image-url-of-a-custom-emoji) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 62 | client-go | [`Diff` does not model why a file diff arrives without its text](#diff-does-not-model-why-a-file-diff-arrives-without-its-text) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 63 | client-go | [`ApproveOrRejectProjectDeployment` discards the approval GitLab records](#approveorrejectprojectdeployment-discards-the-approval-gitlab-records) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 64 | client-go | [`ShareProjectWithGroup` discards the link GitLab creates](#shareprojectwithgroup-discards-the-link-gitlab-creates) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 65 | client-go | [`GroupRelationStatus` misses the object count, and a relation's status does not decode](#grouprelationstatus-does-not-model-the-object-count-and-a-relations-status-does-not-decode) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -232,6 +237,32 @@ branch was rebuilt rather than on the route the router snapshot refresh added,
 and row 46's section says what clears it. Six merge requests are open, and no
 reviewer has commented on any of them since.
 
+Re-verified on 2026-09-27 against the trackers and the tags, the day the joint
+client-go merge request row 34's section describes was opened:
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+36 commits on v3.14.0, one per entry. Every client-go row it carries now
+reports it under Reported and In review, 6, 7, 19, 20, 22, 25 to 33, 35 to 37,
+40 to 45, 51, 52, 54 and 58 to 65, and row 34 counts the gaps it had held back.
+Rows 61 to 65 are new: those five entries were written for
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971) and had a
+section here and no row, the drift the first of these paragraphs describes.
+Row 5 moved the other way: it could not be reproduced, so the merge request
+leaves it out, and its section says what that means for the workaround here.
+Rows 22 and 43 each carry a correction the merge request's commits turned up,
+and row 7 one about this server's own workaround. Row 46 moved most: its merge
+request was approved and put on a merge train, the router job failed it, and
+the rebase asked for after that failed it again on routes `master` does not
+have yet, so what its section said would clear the job was wrong. Row 34's
+open merge request moved a step: a code owner ran its merged-results pipeline
+in the canonical project, which passed. Every other open merge request and
+pull request the file follows is where its section left it, except that row
+11's pull request is behind `main` and owes a comment rewrite promised on
+2026-09-15, and row 17's fix is in the release pull request for rmcp 3.5.0,
+which is not tagged. Two upstream indexes are behind, the umbrella's
+description and the go-sdk index, and row 34's section and the go-sdk section
+say where. go-sdk v1.8.0 is still that SDK's newest tag and gitlab-org/gitlab
+19.5 is not cut, so every merge here that was unreleased still is.
+
 ## GitLab (`gitlab-org/gitlab`)
 
 ### No endpoint reports the instance plan to a non-administrator
@@ -262,7 +293,13 @@ reviewer has commented on any of them since.
   "Applied in 83c6e83ebe63.", and the ready's thread was resolved; the four
   suggestion threads are left for the writer to resolve. As of 2026-09-24 it
   waits on the reviewers, the writer and the backend coach, and nothing is
-  pending on us.
+  pending on us. Read again on 2026-09-27 it is where that left it: head
+  `83c6e83e` with a green fork pipeline, none of the six rules' approvals yet,
+  the writer's four threads answered and hers to resolve, and the coach,
+  @narendran-kannan, not yet reviewing, though `gitlab-bot` nudged him on
+  2026-09-25. The issue carries only the bot's labelling note, and nobody has
+  asked us anything on either. The ready is not to be posted again, so
+  nothing is owed from here.
 - **Merged**: no.
 - **Blocking**: no. The tier can always be pinned with `--tier` or
   `GITLAB_MCP_TIER`, which skips detection entirely.
@@ -429,7 +466,13 @@ example needs to stay reachable for callers still using it.
   thread and so added a `DISCUSSIONS_NOT_RESOLVED` blocker to a merge request
   that had none, and we resolved the thread an hour later. It now fails only
   `CI_MUST_PASS`, and waits on @hustewart to start a pipeline in the canonical
-  project and set auto-merge again.
+  project and set auto-merge again. Read on 2026-09-27 nothing has moved: head
+  `1b339299`, the approvals of @hustewart for `/lib/` and @z_painter for
+  `/doc/` standing with none left to give, no unresolved thread, and one
+  working day since the note that asked. `cells-routes:router-in-sync`, which
+  holds up row 46's merge request, runs only on a change to the routes and so
+  not on this one, and the Danger warning about the commit body's 72 columns
+  stays, as the maintainer decided on 2026-09-15. Nothing is owed from here.
 - **Merged**: no. Its milestone still says 19.4, which was released without
   it, so 19.5 is the earliest release that can carry it.
 - **Blocking**: no. Our output type is already the right shape; only the audit
@@ -509,12 +552,24 @@ successful response. The project-level equivalent already returned
 
 ### GetNamespace cannot decode a path-based lookup
 
-- **Reported**: no.
+- **Reported**: no, and it will not be as it stands: the check this entry asked
+  for was made on 2026-09-27 and found nothing to report (below).
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  leaves it out and says why.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes. `internal/tools/namespaces.Get` issues the request
-  directly.
+- **Workaround**: yes, and no current GitLab reaches it.
+  `internal/tools/namespaces.Get` calls `GetNamespace` and, only when that
+  fails with `cannot unmarshal array`, asks again through `getFromArray` and
+  answers with the first element of the array. Read from the routes rather
+  than measured: against GitLab 19.4 and 19.5 one request alone can reach that
+  branch, an empty `id`, which the schema's `required` does not refuse and
+  which turns the path into `namespaces/`, the listing route, so the element it
+  would answer with is the first namespace of the caller's list rather than
+  one anybody asked for. It is therefore no longer needed, and removing it,
+  with an empty `id` refused before the call, is a change to that package
+  rather than to this register.
 
 **What**: `GetNamespace` expects a single JSON object, but some GitLab versions
 answer a path-based lookup with an array.
@@ -522,10 +577,31 @@ answer a path-based lookup with an array.
 **Before reporting**: establish which GitLab versions return the array, so the
 report names a reproduction rather than a symptom.
 
+**Not reproduced.** `lib/api/namespaces.rb` mounts `get ':id'` with
+`NAMESPACE_OR_PROJECT_REQUIREMENTS`, so a full path reaches it as well as a
+numeric id, and answers either with
+`present user_namespace, with: Entities::Namespace`, one object. That holds on
+the 19.5 development branch read on 2026-09-27 and in the live record taken
+from `19.4.1-ee` (`docs/development/gitlab-api-live.json`, `GET
+/api/:version/namespaces/:id`, entity `API::Entities::Namespace`, not an
+array), and client-go escapes the path into that route, so a path lookup
+decodes into `Namespace` with the struct as it is. The one request answered
+with an array is the empty `id` above, which is caller input rather than an
+SDK defect. No version that sent an array for a path has been named, and none
+is recorded anywhere this entry could cite.
+
 ### SetFeatureFlagOptions fields lack omitempty
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 34 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit gives the eight optional fields
+  (`key`, `feature_group`, `user`, `group`, `namespace`, `project`,
+  `repository` and `force`) `omitempty` on both halves of the tag and pins
+  that a field the caller set is still sent; `Value` keeps its tags, since
+  GitLab requires it.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes, in two places. `internal/tools/features.Set` builds the
@@ -547,12 +623,24 @@ suite failed on the flag it was setting rather than on its own subject.
 
 ### ApplicationStatistics assumes numeric JSON
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 1 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit gives `ApplicationStatistics` an
+  `UnmarshalJSON` that reads each count as a JSON number or as such a string,
+  and keeps the `int64` fields.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes. `internal/tools/appstatistics.Get` decodes the response
-  itself.
+- **Workaround**: yes, and it covers less than it was written for.
+  `internal/tools/appstatistics.Get` decodes the response itself, into
+  `json.Number` fields, and encoding/json refuses a string that is not a JSON
+  number literal: `"999"` decodes and `"1,234"` fails with `invalid syntax`,
+  checked on 2026-09-27. The whole answer therefore fails at the first count
+  of a thousand or more. Until a release carries the commit above, the
+  workaround has to drop the separator itself, as that commit's
+  `UnmarshalJSON` does.
 
 **What**: the struct uses `int64` fields, while some GitLab versions return the
 counts as JSON strings, so decoding fails.
@@ -560,10 +648,25 @@ counts as JSON strings, so decoding fails.
 **Before reporting**: as with `GetNamespace`, pin down which versions send
 strings.
 
+**Pinned down while writing the commit**: every version since at least 13.0.
+`lib/api/entities/application_statistics.rb` renders each count through
+`number_with_delimiter`, which returns a string, so
+`GET /application/statistics` answers `"issues": "1,234"`, and the separator
+is the one the caller's `preferred_language` uses, which is not always a
+comma.
+
 ### The security attribute and category mutations discard GraphQL errors
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 4 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit makes all eight return a
+  `*GraphQLResponseError` carrying the top-level errors, as the work item and
+  saved view methods already do. A caller matching `ErrNotFound` sees a
+  different error, which is one of the four decisions the merge request asks
+  the maintainers for.
 - **Merged**: no.
 - **Blocking**: no. It is why the eight mutations stay on raw GraphQL, not a
   fix we need to ship.
@@ -602,8 +705,18 @@ changes: every one of them already returns an `error`.
 
 ### The Dependency Firewall wrapper is missing an attribute and an endpoint
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 6 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds `Operation` to
+  `EvaluatePackageOptions`, with the two values as constants, and
+  `GetDependencyFirewallEnablement` for the enablement route, marked
+  experimental like the evaluation. While the feature flag is off that route
+  answers 404 with `{"enabled": false}`, and the SDK maps every 404 to
+  `ErrNotFound` without reading the body, so the method cannot tell that from a
+  project the caller may not read, which its doc comment says.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none. `internal/tools/dependencyfirewall` sends what the
@@ -629,8 +742,23 @@ endpoint is a new method with its own result type, and would let a tool answer
 
 ### Enum constants lag the documented value sets
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 19 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit reads each value set off the model the
+  route validates against rather than off the pages, and that corrects this
+  entry on one value: `EventTargetTypeValue` gains `wiki` and `design` and
+  **not** `epic`, because the events routes validate `target_type` against
+  `Event.target_types` (`app/models/event.rb`), which has no epic, so a
+  request filtering on it is refused whatever the page lists.
+  `EventTypeValue` gains `transferred` beside `approved`, `TodoAction` the
+  fourteen actions of the twenty it lacked, the seven Enterprise ones marked
+  so, and `DeploymentStatusValue` `skipped` beside `blocked`. The cancellation
+  role gets `CIRestrictPipelineCancellationRoleValue` with its three values,
+  declared as an alias of `AccessControlValue` so no caller breaks; a distinct
+  type is left for 4.0.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The handlers forward the string a caller passes, so the
@@ -638,7 +766,11 @@ endpoint is a new method with its own result type, and would let a tool answer
   and each such value is recorded in `acceptedEnumGaps` in
   `cmd/audit_1to1/internal/enums/exemptions.go` so the enum rule can tell a
   documented extra from an invented one. Each entry retires when the constant
-  lands upstream: the rule then reports the exemption as stale.
+  lands upstream: the rule then reports the exemption as stale. One of them is
+  wrong, which the commit above established: the three event listings offer
+  `target_type=epic`, which GitLab refuses, and offer neither `wiki` nor
+  `design`, which it accepts, so their schema enums and the `epic` exemptions
+  want correcting in this repository whatever happens upstream.
 
 **What**: four value types in `types.go` and `todos.go` declare fewer
 constants than the GitLab API documents for the parameters they type, and one
@@ -647,9 +779,11 @@ parameter is typed with the wrong value type altogether.
 - `EventTypeValue` lacks `approved`, which
   [the user contribution events](https://docs.gitlab.com/user/profile/contributions_calendar/#user-contribution-events)
   list among the action types the events API filters on.
-- `EventTargetTypeValue` lacks `epic`, which the
-  [events API](https://docs.gitlab.com/api/events/) lists as a `target_type`
-  since GitLab 17.3.
+- `EventTargetTypeValue` lacks `wiki` and `design`, which the events routes
+  accept. The [events API](https://docs.gitlab.com/api/events/) page also lists
+  `epic` as a `target_type` since GitLab 17.3, but the routes validate against
+  `Event.target_types`, which has no epic, so a request filtering on it is
+  refused; `epic` is not a value to add.
 - `TodoAction` lacks `unmergeable`, `merge_train_removed` and
   `member_access_requested`, all listed by the
   [to-do items API](https://docs.gitlab.com/api/todos/) as `action` filter
@@ -676,8 +810,16 @@ none of them changes a signature.
 
 ### CreateProjectForkRelation declares a response GitLab does not send
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 20 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit does the half that breaks nothing:
+  `CreateProjectForkRelationV2` sends the same request and returns
+  `*Project`, and `CreateProjectForkRelation` and `ProjectForkRelation` are
+  marked deprecated in its favour. The old name taking the `V2` signature is
+  left for 4.0, which the merge request lists.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `internal/tools/projects.CreateForkRelation` issues the
@@ -702,8 +844,13 @@ type retires with it; it is a signature change, so the v3 line is where it goes.
 
 ### The invitations wrapper is missing two parameters and a response field
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 28 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds `InviteSource` and `MemberRoleID`
+  to `InvitesOptions` and `QueuedUsers` to `InvitesResult`, all three.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `internal/tools/invites.postInvitation` issues the `POST`
@@ -728,8 +875,16 @@ three are additive.
 
 ### The achievements fragments select less than the schema offers
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 7 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit selects `awardMessageHtml`, the
+  namespace's name, paths, avatar and page, and the three users through the
+  shared user fragment, and adds them to the structs beside the numeric ids,
+  which stay. Measured anonymously against gitlab.com, the widest document
+  goes from a complexity of 96 to 188, under the unauthenticated limit of 200.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none possible. The selection is a private constant inside
@@ -765,8 +920,21 @@ is the same accretion the SDK already makes elsewhere.
 
 ### The epics wrapper is missing two filters and twelve response fields
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 11 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open, and in part. The commit gives `Epic` an
+  `UnmarshalJSON` that keeps the label names in `Labels` and puts the objects
+  in a new `LabelDetails`, as `Issue` and `MergeRequest` do, so `Labels` keeps
+  its type; adds ten of the twelve fields, `Subscribed` for the one route that
+  sends it, `public_email` and `locked` on the author, and the two list
+  filters; marks `UserNotesCount` deprecated; and adds `TextColor` to
+  `WorkItem`. `end_date` and `web_edit_url` are left out, since GitLab
+  deprecates both in favour of `due_date` and `web_url`, which `Epic` already
+  has, and `URL` is kept, because an issue embeds its epic through
+  `EpicBaseEntity`, which sends it, and `Issue.Epic` decodes into this struct.
 - **Merged**: no.
 - **Blocking**: was yes. `with_labels_details` is a parameter this server
   publishes, and through the wrapper it could not be answered at all.
@@ -839,8 +1007,17 @@ or a second `LabelDetails` field beside the names.
 
 ### The note and discussion structs miss what GitLab sends and declare what it does not
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 12 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds all eight missing fields,
+  `suggestions` with a new `Suggestion` type and `commands_changes` as a map,
+  and marks the four phantom `Note` fields and the author and resolver
+  `Email` deprecated rather than removing them, which is left for 4.0.
+  `Note` gaining a slice and a map stops it being comparable with `==`, one of
+  the four decisions the merge request asks the maintainers for.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The missing fields are read from the captured response
@@ -899,8 +1076,18 @@ them.
 
 ### The member structs, options and services miss what GitLab sends, accepts and serves
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 30 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit carries all three kinds: the member
+  fields on both structs and `public_email` and `locked` on
+  `MemberCreatedBy`; `SkipUsers` and `State` (a new `MemberStateValue`) on
+  both list options and `InviteSource` on both add options;
+  `DeleteProjectMemberWithOptions` beside `DeleteProjectMember`, until 4.0
+  folds the options in; and methods for all seven Enterprise routes listed
+  below.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial. The response fields are read from the captured
@@ -960,8 +1147,15 @@ types.
 
 ### Six response structs miss a field GitLab sends on every object
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 17 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds every field below, the lint jobs
+  as a new `ProjectLintJob` and the runner's creator as a `*BasicUser`, and
+  one more this entry's list leaves out and its workaround already reads:
+  `expires_at` on `PipelineTrigger`, exposed on every trigger token.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. Each field is read from the captured response beside
@@ -1011,8 +1205,16 @@ can reuse whichever basic-user struct the wrapper settles on.
 
 ### No token struct carries the granular fields, and the impersonation and resource ones carry less still
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 26 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds the three fields to
+  `PersonalAccessToken`, with a new type for a granular scope, `ResourceType`
+  and `ResourceID` to the resource token, and five fields to
+  `ImpersonationToken`: not `granular_scopes`, because the impersonation token
+  routes do not ask for them, so that key never arrives there.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The fields are read from the captured response beside
@@ -1066,8 +1268,15 @@ plus one type for the granular scope object. The `granular_scopes` field on
 
 ### The four Sidekiq routes carry a leading slash and send a double slash
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 3 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit drops the four slashes, and its test
+  records the path each method builds before anything can redirect it, since
+  the existing tests passed only because `http.ServeMux` redirects a double
+  slash the way gitlab.com does.
 - **Merged**: no.
 - **Blocking**: no. `gitlab.com` answers the malformed path with a redirect.
 - **Workaround**: none. There is nowhere to put one: the path is built inside
@@ -1106,8 +1315,9 @@ of change whose test is one assertion on the built URL.
   which publishes the method and the whole measurement and answers
   [issue 2269](https://gitlab.com/gitlab-org/api/client-go/-/issues/2269),
   where the maintainers had said there was no good way to detect this drift.
-  Every merge request references it with a non-closing `Related to`, so the
-  first merge does not close the umbrella.
+  Every one of those merge requests references it with a non-closing
+  `Related to`, so the first merge does not close the umbrella; the joint one
+  that follows them closes it.
 - **In review**: one is open, with a green pipeline and no conflicts.
   [gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
   (the seven `Hook` fields) is approved and mergeable: a reviewer approved it
@@ -1118,7 +1328,17 @@ of change whose test is one assertion on the built URL.
   not answered since. A note of 2026-09-24 in the reviewer's documentation
   thread records that the documentation half,
   [gitlab-org/gitlab!254538](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254538),
-  merged and is live, and asks @fforster for that review.
+  merged and is live, and asks @fforster for that review. A note of
+  2026-09-26 asked @PatrickRice to take it over instead, and on 2026-09-27 at
+  16:12 UTC @heidi.berry, a code owner, started the merged-results pipeline in
+  the canonical project on `934b97ac`, which passed at 16:22; a code owner
+  running that pipeline is usually the step before a merge. Its head is still
+  `fb2e5110`, it has no conflicts, and the project merges with a merge commit,
+  so being behind `main` needs no rebase. Nothing is owed on it from here.
+  The rest of this entry, the gaps held back below, went out on 2026-09-27 in
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  described further down, which does not touch `system_hooks.go` and so does
+  not overlap this one.
 - **Merged**: `gitlab-org/api/client-go!3042` (`BroadcastMessage.Color`) in
   **v3.1.0**, tagged on 2026-09-09 eighteen minutes after the merge; then
   `gitlab-org/api/client-go!3040` (`Appearance.SiteName`) and
@@ -1294,7 +1514,8 @@ written; the record has been re-pinned to 19.4.1-ee since.
   `internal/tools/groupserviceaccounts` reads it from the capture. Two gaps
   next to it are not covered by that merge request and are worth a second:
   `ProjectServiceAccount` and the instance-scope `ServiceAccount` are both
-  missing `public_email` still. The second half of that lead is closed:
+  missing `public_email` still, and both gain it in commit 29 of
+  `gitlab-org/api/client-go!3063`. The second half of that lead is closed:
   `GroupsService.GetServiceAccount` and
   `ProjectsService.GetProjectServiceAccount` wrap
   `GET /…/service_accounts/:user_id` as of **v3.12.0**
@@ -1338,10 +1559,12 @@ Eight are merged into `master`: `gitlab-org/gitlab!254507` on 2026-09-10,
 `gitlab-org/gitlab!254538`, `gitlab-org/gitlab!254543` and
 `gitlab-org/gitlab!254547` together on 2026-09-22, and
 `gitlab-org/gitlab!254552` (the snippet clone URLs) on 2026-09-23. Held to the
-tags that contain each merge commit, read on 2026-09-23 and again on
-2026-09-24, three of them have shipped: `gitlab-org/gitlab!254507`,
+tags that contain each merge commit, read on 2026-09-23, on 2026-09-24 and
+again on 2026-09-27, three of them have shipped: `gitlab-org/gitlab!254507`,
 `gitlab-org/gitlab!254511` and `gitlab-org/gitlab!254519` are in `v19.4.0-ee`
-and `v19.4.1-ee`, and the other five are in no tag yet. Until the first of
+and `v19.4.1-ee`, and the other five are in no tag yet, so 19.5 is the first
+release that can carry them; once it is cut, this paragraph and the umbrella's
+documentation paragraph can say they shipped. Until the first of
 those reads the paragraph said none had shipped, a claim that had not been
 checked against the tags. `gitlab-org/gitlab!254538` is the one whose merge had
 been blocked by a `pre-merge-checks` race rather than by anything in the
@@ -1371,7 +1594,10 @@ resolved the same day. The writer then asked GitLab Duo to check the change's
 technical accuracy, and its one finding, an `expires_at` older than the
 `last_used_at` beside it in another deploy key example, was applied in
 `b2b900f7271b` and answered in its thread, and every thread was resolved again.
-As of 2026-09-24 it needs no further approval and waits on the writer.
+As of 2026-09-24 it needs no further approval and waits on the writer. Read
+again on 2026-09-27 it is where that left it: head `b2b900f7`, its pipeline
+green, every thread resolved, and the writer still to approve and merge it.
+Nothing is owed on it from here.
 
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
@@ -1413,12 +1639,66 @@ a `Related to` line at the bottom where a reviewer never looks.
 They settled the chunks on the umbrella itself, on 2026-09-09 and 2026-09-10:
 no list maintained upstream and no generator, but one merge request carrying
 every remaining field this server consumes, after which contributions go back
-to being made on demand like anybody else's. That merge request is agreed and
-not yet opened, and it waits until release 3.1.0 of this server is published.
-The umbrella's description was brought up to date on 2026-09-24: its title now
-gives the distinct count, 897 fields, its table of merge requests reads as the
-tracker does, it counts the fields that have landed since the measurement, and
-it says the rest will follow as that one merge request without saying when.
+to being made on demand like anybody else's. @PatrickRice proposed that single
+merge request there on 2026-09-09 and @timofurrer agreed. The umbrella's
+description was brought up to date on 2026-09-24: its title now gives the
+distinct count, 897 fields, its table of merge requests reads as the tracker
+does, it counts the fields that have landed since the measurement, and it says
+the rest will follow as that one merge request without saying when.
+
+**That merge request is
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)**,
+opened on 2026-09-27 at 20:34 UTC from the community fork (branch
+`jmrp-recorded-defects`, head `a1a4b996`, 141 files): 36 commits on v3.14.0,
+one per recorded entry, each with its own tests and, in its message, the
+GitLab source it rests on, so it can be reviewed and bisected one commit at a
+time. It carries entries 6, 7, 19, 20, 22, 25 to 33, 35 to 37, 40 to 45, 51,
+52, 54 and 58 to 65, this entry's own held-back gaps below together with
+`public_email` on both service account structs, and the Orbit schema's
+`format` parameter, whose entry arrives with
+[issue 972](https://github.com/jmrplens/gitlab-mcp-server/issues/972). Three
+things are left out on purpose: the seven `Hook` fields, which are
+`gitlab-org/api/client-go!3048`; the `action` object and the illustration
+fields of `DetailedStatus` that
+[entry 43](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one)
+records one level inside the pipeline, which need a type of their own; and
+[entry 5](#getnamespace-cannot-decode-a-path-based-lookup), which could not be
+reproduced. No exported name is removed or renamed and no field type or method
+signature changes: where the right fix would, the commit adds a `V2` or
+`WithOptions` sibling, an `UnmarshalJSON` or a deprecation note instead, and
+the description lists the breaking halves for 4.0. It asks the maintainers for
+four decisions: that a nil options pointer now sends no body at all (entry
+51), that the eight security mutations return `*GraphQLResponseError` (entry
+19), that `Deployment`, `Note` and `PlanLimit` stop being comparable with
+`==`, and whether the work item documents' default selection should become
+safe for Community Edition (entry 45). Its last line is `Closes #2300`, so the
+umbrella closes when it merges.
+
+**Where it stands on 2026-09-27.** Its fork pipeline on `a1a4b996` passed and
+it has no conflicts. It has not been readied: it sits at `workflow::in dev`,
+with nobody but GitLab Duo on the reviewer field, which left its usual
+`DCR4003` note, and none of its one required approval. `prepared_at` is set
+and `changes_count` reads 141, so the bot commands are safe to post, and two
+are owed, in the order the upstream contribution skill gives. First the label:
+the triage bot copied `type::maintenance` onto it from the umbrella through
+the `Closes` line, a label that cuts no release, while the title is `feat:`,
+so it wants `type::feature`, asked for by comment. Then a ready naming a code
+owner: @PatrickRice, who proposed the single merge request, or @heidi.berry,
+the code owner who acted on `gitlab-org/api/client-go!3048` the same day.
+
+**The umbrella's description is behind again**, read on 2026-09-27, in four
+places: its table still reads `gitlab-org/api/client-go!3052` as in review,
+though it merged on 2026-09-24 and is in v3.14.0; it has no row for
+`gitlab-org/api/client-go!3063`; its count paragraph still says 22 fields
+released and ten more in `gitlab-org/api/client-go!3048` and
+`gitlab-org/api/client-go!3052`, where 25 are released and the seven left are
+in the one still open; and its documentation paragraph says
+`gitlab-org/gitlab!254540` is waiting for a reviewer, which it has had since
+2026-09-24. Its update paragraph promises the single merge request without
+naming it. No comment there waits on us, since the maintainers' last notes, of
+2026-09-10, were answered. The skill's rule is to rewrite the description
+rather than comment, the moment a merge request is published, so that rewrite
+is owed now.
 
 **Three findings from that batch that are not merge requests**, because sending
 them would have been wrong:
@@ -1434,9 +1714,13 @@ them would have been wrong:
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
 
-**Four more gaps are recorded and not yet sent**, held back by the batching
-the maintainer asked for above. Each is a field this server now reads from the
-captured response, so each carries a live workaround:
+**Four more gaps were recorded and held back** by the batching the maintainer
+asked for above, and went out on 2026-09-27 as commit 29 of
+`gitlab-org/api/client-go!3063`, which also deprecates
+`LicenseTemplate.Featured` rather than removing it, and leaves
+`BasicUser.CreatedAt`, the key `UserBasic` never sends, as it is. Each is a
+field this server now reads from the captured response, so each carries a
+live workaround until a release carries the commit:
 
 - `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
   keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
@@ -1496,8 +1780,21 @@ was opened from the community fork from the start.
 
 ### Ten modelled fields that no Grape entity exposes, removed from this server's output
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 32 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit removes nothing, since removing a field
+  is the breaking half and is listed for 4.0: it gives every phantom of the
+  three batches below a `Deprecated` note saying that GitLab does not send it
+  and what to read instead, and moves it to the deprecated block of its
+  struct. `BasicMergeRequest.LabelDetails` is the one it does not deprecate:
+  the methods that list merge requests fill it, since they decode through
+  `MergeRequest.UnmarshalJSON`, and it is empty on every other method, which
+  the type's comment now says. The `PendingInvite.id` half and the
+  `invite_token` gap it travels with are both in that merge request, in this
+  commit and in commit 29.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not needed. This server simply stopped publishing them. The
@@ -1610,11 +1907,21 @@ no longer offer is answered in `acceptedMissingInputs`.
   [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300),
   which names the site's four missing settings and explains the status matrix.
   `repositories_count`, `storage_shards`, the `namespaces` type and the
-  `RepairGeoSite` return type are not in it. No merge request of its own, held
-  back by the batching
+  `RepairGeoSite` return type are not in it. All four gaps are in commit 33 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes, after the batching that entry records had held them back.
+- **In review**: yes, open. The commit adds the site's four settings to
+  `GeoSite` and to both option structs, with `sync_object_storage` on the edit
+  options; gathers the per-replicable keys into a `Replicables` map, as this
+  server does, rather than some 400 more fields, and adds
+  `repositories_count` and `storage_shards`; decodes the namespace objects
+  into a new `NamespaceDetails` beside `Namespaces`, which keeps its type and
+  now holds the full paths; and adds `RepairGeoSiteV2`, returning
+  `*GeoSiteStatus`, with `RepairGeoSite` deprecated in its favour. Changing
+  `Namespaces`' type and the old repair method's signature is the half left
+  for 4.0.
 - **Merged**: no.
 - **Blocking**: no, except for the third item below, which makes two endpoints
   unusable on any site with selective sync by namespace.
@@ -1683,11 +1990,23 @@ they belong to a major version or to a new method beside the old one.
   which list the six keys and `blocked_merge_request`. Its `MergeRequest`
   block counts the keys of `ApprovalState` and `MergeRequestChanges` against
   that struct, which is the two return types below seen from the other side,
-  without naming them as return types. No merge request of its own, held back
-  by the batching
+  without naming them as return types. The whole entry is in
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes: the keys as commit 14, and the two return types in its
+  description.
+- **In review**: yes, open, and it closes less than this entry lists, for a
+  reason the entry did not weigh. The commit adds `title_html` and
+  `description_html` to `BasicMergeRequest` and `blocked_merge_request` to
+  `MergeRequestDependency`, as a `*BasicMergeRequest`. It does not add
+  `merge_status`, `reference`, `work_in_progress` or `approvals_before_merge`:
+  GitLab deprecates each in favour of `detailed_merge_status`, `references`,
+  `draft` and the approvals API, which the struct already models, and
+  client-go took them out of the merge request structs on purpose, so adding
+  them back would add fields deprecated from the day they land. The two return
+  types are left as they are, because GitLab deprecated both endpoints and
+  client-go both methods; the description says so.
 - **Merged**: no.
 - **Blocking**: no. Every gap is worked around, and the two return types cost
   this repository four declarations rather than a defect.
@@ -1756,10 +2075,17 @@ beside the old one.
   [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300),
   which lists sixteen keys, each marked as sent always or under a condition:
   the fifteen below and `avatar_path`, which, as **How we found it** below
-  says, no route sends. No merge request of its own, held back by the batching
+  says, no route sends. The fifteen are commit 27 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes, after the batching that entry records had held them back.
+- **In review**: yes, open. The commit adds fourteen fields to `User`, the
+  conditional ones as plain values like the conditional fields `User` already
+  has, and the fifteenth, `unconfirmed_email`, through
+  `CreateServiceAccountUserV2`, which returns the `*ServiceAccount` the route
+  answers with; `CreateServiceAccountUser` is deprecated in its favour.
+  Splitting `User` into one type per entity is left for 4.0.
 - **Merged**: no.
 - **Blocking**: no. Every gap is worked around.
 - **Workaround**: yes. The fifteen keys are read from the captured response
@@ -1836,10 +2162,19 @@ not read are different answers.
   [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300),
   which lists twenty-five keys: the twenty-four below and `subscribed`, which
   the listing route never sends, so the umbrella overstates this struct by
-  one. No merge request of its own, held back by the batching
+  one. The twenty-four are commit 13 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes, after the batching that entry records had held them back.
+- **In review**: yes, open, and in part. The commit adds twenty-three of the
+  keys, reusing the types `Issue` already has for them, and not `epic_iid`,
+  which GitLab deprecates in favour of `epic`. It embeds the epic as `Epic`,
+  as `Issue.Epic` already does, and adds the two human-readable date strings
+  to that struct, rather than the narrow type this entry recommends below;
+  `Epic` already carries `url` because an issue's epic is sent that way. It
+  adds `closed_as_duplicate_of` to `IssueLinks`, so `Issue` decodes it too, and
+  leaves `subscribed` out, as this entry does.
 - **Merged**: no.
 - **Blocking**: no. Every gap is worked around.
 - **Workaround**: yes. The twenty-four keys are read from the captured
@@ -1910,11 +2245,14 @@ a duplicate, which no struct in the SDK carries.
 
 - **Reported**: yes, as the `MemberRole` block of the umbrella issue
   [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300),
-  which lists all twenty-five permissions. No merge request of its own, held
-  back by the batching
+  which lists all twenty-five permissions, and as commit 8 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes, after the batching that entry records had held it back.
+- **In review**: yes, open. The commit adds the twenty-five fields to
+  `MemberRole` and leaves `CreateMemberRoleOptions` for a change of its own,
+  which is the caution below.
 - **Merged**: no.
 - **Blocking**: no. Every gap is worked around.
 - **Workaround**: yes. The twenty-five permissions are read from the captured
@@ -1980,11 +2318,19 @@ it denies, and a struct field decoding a body is under no such obligation.
 
 - **Reported**: yes, as the `PipelineInfo` block of the umbrella issue
   [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300),
-  which lists all twelve keys. No merge request of its own, held back by the
-  batching
+  which lists all twelve keys, and as commit 18 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes, after the batching that entry records had held it back.
+- **In review**: yes, open, and in part. The commit adds
+  `CreateMergeRequestPipelineV2`, which returns the `*Pipeline` the route
+  answers with and takes the route's `async` option (a 202 answers with no
+  pipeline), and deprecates `CreateMergeRequestPipeline` in its favour;
+  `PipelineInfo` is unchanged, since everything else it decodes is rendered
+  with the basic entity. The nested `DetailedStatus` gap below stays out,
+  because it needs a type of its own, and the merge request says so, so no
+  upstream change carries it yet.
 - **Merged**: no.
 - **Blocking**: no. Every gap is worked around.
 - **Workaround**: yes. The twelve keys are read from the captured response
@@ -2061,6 +2407,14 @@ neither acted on:
   phantom on this server's own output, where it is undeclared and part of that
   backlog. Removing an exported field is breaking, so it is recorded here the
   way `LicenseTemplate.Featured` and the two event `Title` fields are.
+  **That was wrong**, as writing the commit above found: `GET
+  /projects/:id/pipelines` presents `Ci::PipelineBasicWithMetadata`, and the
+  single pipeline, latest pipeline and metadata routes present
+  `Ci::PipelineWithMetadata`, both of which add `name`, so the field decodes
+  there and is empty only on the routes that present the two entities named
+  above. Neither struct carries a phantom, the merge request leaves both as
+  they are, and this server's pipeline outputs already publish `name` only
+  when it is sent.
 
 **Effort**: small for the eleven scalars and the timestamps. The two objects
 want the shapes above rather than the nearest existing struct, and the nested
@@ -2076,11 +2430,20 @@ want the shapes above rather than the nearest existing struct, and the nested
   Thirteen of that `Group` block's thirty-one are project keys the job token
   allowlist's wrong annotation put there, which
   [the job token entry](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send)
-  records, so the eighteen left are this entry's. No merge request of its own,
-  held back by the batching
+  records, so the eighteen left are this entry's. The keys are commit 22 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  records.
-- **In review**: no.
+  describes, after the batching that entry records had held them back, and
+  the point of the entry is in its description, among the breaking halves
+  left for 4.0.
+- **In review**: yes, open, and in part. The commit adds the keys of all six
+  structs as plain values, each conditional one with a comment saying when
+  GitLab sends it, and the two objects under `ai_settings` and the Duo
+  namespace access rules as new types. It leaves out `epic_iid`, which GitLab
+  deprecates in favour of the `epic` `Issue` already models, and it does not
+  split the three structs into one type per entity, since that would change
+  what the methods return.
 - **Merged**: no.
 - **Blocking**: no. Every key is worked around.
 - **Workaround**: yes. All of them are read from the captured response beside
@@ -2168,8 +2531,20 @@ entity before surfacing anything.
 
 ### The work item get, create and update documents select licensed fields
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 10 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit builds the three documents from the
+  listing's field registry and gives them the listing's `ReturnedFields`:
+  on `CreateWorkItemOptions` and `UpdateWorkItemOptions`, and through a new
+  `GetWorkItemWithOptions`, since `GetWorkItem` takes no options. Left unset,
+  it still selects every field, as before, so a caller on Community Edition
+  has to pass `WorkItemDefaultListFields()`; making the default safe there is
+  one of the four decisions the merge request asks the maintainers for. Once
+  a release carries it, the three actions here can pass the CE-safe set on a
+  Free instance.
 - **Merged**: no.
 - **Blocking**: yes, on Community Edition. `issue.work_item_get`,
   `issue.work_item_create` and `issue.work_item_update` cannot answer there:
@@ -2210,8 +2585,15 @@ tolerates their absence, since the listing runs without them today.
 
 ### UpdatePackageProtectionRulesOptions sends two explicit nulls on every partial update
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 35 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit gives both fields `omitempty` on both
+  halves of the tag and pins a body carrying the one field the caller set;
+  `CreatePackageProtectionRulesOptions` keeps its tags, since GitLab requires
+  both there.
 - **Merged**: no.
 - **Blocking**: partly. An update that names the pattern and the type works;
   an update that changes only an access level is refused by GitLab, and there
@@ -2270,8 +2652,14 @@ it.
 
 ### Five response keys and three parameters GitLab 19.4 added that v3.14.0 does not model
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 23 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds all five keys and all three
+  parameters, the hook one as a `*bool` so `false` can be sent, and the usage
+  as a `*NamespaceCIMinutesUsage` that is nil when GitLab leaves the key out.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes for the five keys, which are read from the captured
@@ -2322,8 +2710,16 @@ integers for the usage, and three option fields with `url` and `json` tags.
 
 ### PlanLimit models eight of the twenty-nine limits GitLab sends and accepts
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 31 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds the twenty-one limits and
+  `LimitsHistory` to `PlanLimit`, and the twenty-one limits to
+  `ChangePlanLimitOptions` as pointers, so a limit set to 0 is still sent.
+  `PlanLimit` gaining a map stops it being comparable with `==`, one of the
+  four decisions the merge request asks the maintainers for.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes for the response, whose twenty-one other limits and
@@ -2378,8 +2774,13 @@ on `PlanLimit`, and twenty-one pointer fields with `url` and `json` tags on
 
 ### JobPipeline models five of the ten keys a job's pipeline carries
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 24 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds all five keys, `Source` as the
+  `PipelineSource` type `Pipeline.Source` already uses.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `pipeline.resource_group_upcoming_jobs` reads the other
@@ -2409,8 +2810,13 @@ nested type only in the unpublished direction.
 
 ### AwardEmoji does not model the image URL of a custom emoji
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 25 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds `URL`, left empty when GitLab
+  sends null for a standard emoji.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. Every `internal/tools/awardemoji` handler returning
@@ -2433,8 +2839,14 @@ without it, and a custom emoji is a name with nothing to show.
 
 ### Diff does not model why a file diff arrives without its text
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 15 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds the three flags under the names
+  and in the order `MergeRequestDiff` uses, which reaches the commit diff, the
+  comparison and the merge request diff versions alike.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The commit diff and the comparison read the three flags
@@ -2456,8 +2868,19 @@ in `merge_requests.go` already carries all three.
 
 ### ApproveOrRejectProjectDeployment discards the approval GitLab records
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 16 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds
+  `ApproveOrRejectProjectDeploymentV2`, which sends the same request and
+  returns the approval as a new `DeploymentApproval`, deprecates the old
+  method in its favour, and gives `Deployment` the approval count, the
+  approvals and the approval summary the Enterprise Edition adds to the
+  single deployment routes. `Deployment` gaining a slice stops it being
+  comparable with `==`, one of the four decisions the merge request asks the
+  maintainers for.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `environment.deployment_approve_or_reject` reads the
@@ -2481,8 +2904,15 @@ own `approvals` list already decodes into) beside the response.
 
 ### ShareProjectWithGroup discards the link GitLab creates
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 21 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit adds `ShareProjectWithGroupV2`, which
+  sends the same request and returns the link as a new `ProjectGroupLink`,
+  and deprecates `ShareProjectWithGroup` in its favour, so the signature
+  change this entry calls for is left for 4.0.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `project.share_with_group` reads the link from the
@@ -2506,8 +2936,17 @@ the response, which changes the method's signature and so belongs in a major.
 
 ### GroupRelationStatus does not model the object count, and a relation's status does not decode
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 9 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open, by a different route than the one this entry
+  proposes. The commit adds `TotalObjectsCount`, and rather than a
+  `GetExportStatus` it makes `ListExportStatus` accept either answer and
+  return a single status as a list of one, so a caller that sets `Relation`
+  gets what it asked for and no signature changes; the method and its options
+  now say so, the 404 included.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes for both.
@@ -2553,6 +2992,24 @@ because a maintainer chooses their own API and a pull request that assumes the
 answer wastes both sides' time. The tenth, `Mcp-Name`, was fixed upstream by
 somebody else before we got to it.
 
+The index has not kept up. Its body, last edited on 2026-09-15, still reads
+every pull request it lists as open, while five of them have merged
+([modelcontextprotocol/go-sdk#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255),
+[#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268),
+[#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269),
+[#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273) and
+[#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274)); it does
+not name
+[modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293)
+as the pull request for
+[modelcontextprotocol/go-sdk#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262);
+and it does not list
+[modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299),
+filed on 2026-09-26, which does not link back to it either, so its last
+sentence, that every issue does, no longer holds. Nobody waits on it, so
+bringing it up to date is bookkeeping rather than something owed to a
+reviewer.
+
 ### No keep-alive interval for SSE streams on StreamableHTTPOptions
 
 - **Reported**: yes, in three pieces, two of them by other users.
@@ -2579,7 +3036,9 @@ somebody else before we got to it.
   means `subscriptions/listen`, moves `http.Server.WriteTimeout`'s deadline
   out by twice the keep-alive interval, extended rather than cleared so a
   peer that stopped reading still fails. Its test fails against `main` every
-  time and waits for review.
+  time and waits for review. Read on 2026-09-27 it is up to date with `main`,
+  its nine checks are green, it has had no review yet, and nothing is owed on
+  it from here.
 - **Merged**: in part, and by somebody else:
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
@@ -2614,7 +3073,11 @@ The test hung instead of failing, which is how the header-flush half surfaced.
   [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210),
   open with no maintainer response as of 2026-09-12. We open no second one;
   if it stalls, the evidence here (the e2e case and the stdio filter) goes on
-  that thread rather than into a new pull request.
+  that thread rather than into a new pull request. Still open on 2026-09-27,
+  untouched since 2026-08-29. The issue had a new comment that day from
+  another user, confirming the defect in v1.8.0-pre.2 and arguing that the
+  pull request at `3906b01` leaves part of it open; that is not ours to
+  answer, and nothing here waits on us.
 - **Merged**: no.
 - **Blocking**: it was, on stdio. One client lost its session and its
   accumulated context to a single unparseable line; there was no cross-tenant
@@ -2678,7 +3141,9 @@ passing if the SDK ever fixes this and the filter is removed.
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   conflicted in `deliverLocked`, and the 204 now keys on the `lastWrite`
   field that pull request added, which says the headers are still
-  uncommitted. It is mergeable and waits for review.
+  uncommitted. It is mergeable and waits for review. Read on 2026-09-27 it is
+  still up to date with `main`, its ten checks are green, and its one review
+  thread, answered on 2026-09-20, waits on the reviewer.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
@@ -2751,6 +3216,28 @@ the server's output.
   on purpose: the second has to decide what happens to a session that
   subscribed through the legacy method and is routed into the new branch, which
   is a judgement rather than a swap. The pull request says so and offers it.
+
+  **Where it stands on 2026-09-27, and what is owed on it.** It waits for
+  review with its nine checks green and no conflict, but it is sixteen commits
+  behind `main`, and branch protection needs it up to date before it can
+  merge; both of its
+  review threads were last answered by us, on 2026-09-15 and 2026-09-19. Two
+  things are owed from here, and the first is a promise. On 2026-09-15, in the
+  reviewer's thread, we wrote that once
+  [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274)
+  landed, the doc comment of `protocolVersion()` on this branch would stop
+  being true. It landed on 2026-09-21, and `main` now records
+  `NegotiatedProtocolVersion` on `server/discover`, on the first SEP-2575 call
+  and on the streamable handler's synthesized state, while the comment still
+  says the declared-version fallback is for SEP-2575 sessions and the
+  synthesized state of a stateless request. The second is the maintainers'
+  rule of 2026-09-20 that a comment is at most three lines, which the branch,
+  last pushed on 2026-09-19, predates: it adds seven comment blocks longer
+  than that, `protocolVersion` (13 lines) and `negotiatedLegacyProtocol` (12)
+  in `mcp/server.go`, four test comments in `mcp/server_test.go` (8, 7, 6 and
+  5 lines) and one in `mcp/mrtr_test.go` (6). Both go in one push that also
+  brings the branch up to date; the project squash-merges, so an extra commit
+  costs nothing.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
@@ -3159,7 +3646,20 @@ neither, and the ADR now says so.
 - **Merged**: yes, on 2026-09-27 (merge commit `e02efbfc`), and in no tag: rmcp
   3.4.1 was cut on 2026-09-23 and does not contain it. It reaches users through a
   chain of three: an rmcp release carrying it, a Codex release built on that rmcp,
-  and a ChatGPT.app that bundles that Codex.
+  and a ChatGPT.app that bundles that Codex. The merge closed
+  [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299)
+  as completed. The first link of the chain is queued: the release pull
+  request
+  [modelcontextprotocol/rust-sdk#1296](https://github.com/modelcontextprotocol/rust-sdk/pull/1296),
+  "chore: release v3.5.0", refreshed seven minutes after the merge, carries
+  the commit and lists the fix under Fixed, and is open and waiting for
+  review. Codex is further back: `codex-rs/Cargo.toml` on its `main` pins
+  `rmcp = "=3.2.0"`, and
+  [openai/codex#38979](https://github.com/openai/codex/issues/38979) has had no
+  reply since our comment of 2026-09-27. What is owed from here, once rmcp
+  3.5.0 is tagged, is one comment on the Codex issue naming the version that
+  carries the fix, and then this entry and
+  [issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959).
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
@@ -3330,9 +3830,45 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   each of the `/config/`, `/lib/` and `/spec/` code-owner rules. The one step
   that could come from here is that rebase, and it has not been taken, since
   the push would reset the approval it carries.
+
+  **What happened next showed the sentence above about what clears the job to
+  be wrong, both halves of it.** At 09:05 UTC on 2026-09-25 @egrieff approved
+  it, which satisfies the `/config/`, `/lib/` and `/spec/` rules and leaves no
+  approval to give, started the merged-results pipeline 2881689669 and set it
+  to join the merge train when its checks pass. That pipeline failed
+  `cells-routes:router-in-sync`, and he asked for a rebase. The branch was
+  rebased onto `820afbe6` as `c9a6d805` at 23:28 UTC; the push reset
+  @uchandran's approval and aborted the merge-train add, and our reply to the
+  rebase request did not mention the train. The fork pipeline on `c9a6d805`
+  failed the same job again, this time on four templates the HTTP Router's
+  snapshot carries and the branch does not: `/api/:version/orbit/context`,
+  `/api/:version/orbit/grep`,
+  `/api/:version/integrations/jira_forge/user_delegation` and
+  `/o/:organization_path/admin/users/invite_search`. Read against the route
+  list `master` commits under `config/routing/`, at `9f1632e2` on 2026-09-27,
+  all four are absent there too: they come from router refreshes of
+  2026-09-24 and 2026-09-25 (`0bba3aab`, `fee6d2da` and `cfa540bd`) for GitLab
+  changes `master` does not carry yet, and `cancel_auto_merge` itself matches.
+  No push from here can clear the job, then, and a merged-results pipeline
+  passes only once `master` has those routes.
+
+  **Where it stands on 2026-09-27.** Approved, with @egrieff's approval
+  covering every code-owner rule; one unresolved thread, his rebase request,
+  which we answered; its fork pipeline red on that job; and off the merge
+  train. His non-blocking suggestion, meant for a later merge request, is
+  resolved and needs nothing now. It waits on `master` gaining those routes,
+  and then on a maintainer starting a merged-results pipeline and adding it to
+  the train again.
+
   `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
   `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
-  section then.
+  section then. That is what was agreed with @marc_shaw in one of its threads.
+  Read on 2026-09-27 it sits at `workflow::in dev` on head `69752099`, its
+  fork pipeline green, with @uchandran's approval of the documentation half
+  and the `/lib/` and `/spec/` maintainer approvals still to come, and four
+  unresolved threads, GitLab Duo's style note and three of @marc_shaw's, each
+  last answered by us on 2026-09-16 and so the reviewers' to resolve. Nothing
+  is owed on it until `gitlab-org/gitlab!255702` merges.
 
   **The first attempt,
   [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), was
@@ -3430,7 +3966,11 @@ the disagreement.
   from the community fork, merged.
 - **Merged**: **yes**, on 2026-09-23 into `master` (milestone 19.5, merge
   commit `4033c4fa`). Held to the tags that contain that commit, read the same
-  day, it is in no release yet.
+  day and again on 2026-09-27, it is in no release yet; 19.5 is due on
+  2026-10-15. The issue it names is still open, since its `Closes` line
+  closed nothing, and nothing is owed until 19.5 is tagged. Then one comment
+  on the issue saying which release carries the fix lets someone with the
+  permission close it.
 - **Blocking**: no.
 - **Workaround**: none possible. The verdict is computed inside GitLab and
   served as one string; nothing on this side can tell a signature verified
@@ -3489,7 +4029,14 @@ a fix we carry upstream in our name.
   [creativeprojects/go-selfupdate#57](https://github.com/creativeprojects/go-selfupdate/issues/57).
 - **In review**: yes,
   [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58),
-  still open.
+  still open, mergeable, and unreviewed on 2026-09-27. Its last activity is
+  the maintainer's answer of 2026-08-05: the change is breaking by Go's
+  convention and needs a v2 of the module, which he has not had time to
+  prepare. It went unanswered, and deliberately: there is no form of it that
+  breaks nothing, since the type of `PGPValidator.KeyRing` is the import
+  itself and moving it to a subpackage is breaking too, and this server no
+  longer depends on the module, so a reply would only ask him again. Nothing
+  is owed on it.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: retired. It was the `GO-2026-5932` entry in the govulncheck
@@ -3572,8 +4119,16 @@ The fix is a nil-pointer check where the decision is made, in
 `NewRequestToURL`, rather than at each delegation, since the next one will be
 written the same way.
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 2 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit is that check: a nil pointer in the
+  options now means no options, in the query branch as well as the body
+  branch, so `CancelJob` and `PublishAllDraftNotes` send no body at all. It
+  changes what every caller passing a nil options pointer sends, so it is the
+  first of the four decisions the merge request asks the maintainers for.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: no longer reached from this repository, as a side effect
@@ -3591,8 +4146,18 @@ written the same way.
 
 ### Seven more option structs send an optional param on every call
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, as commit 36 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit gives each of the seven fields
+  `omitempty` on both halves of the tag, and its message records the one case
+  where the null changes what GitLab stores: the pipeline schedule variable
+  edit hands every declared param the request carries to the update service,
+  so an edit that changes only the variable type also sets the value to null.
+  The one merge request the **Effort** below asks for is that one, carrying
+  entries 6 and 52 as commits 34 and 35.
 - **Merged**: no.
 - **Blocking**: not measured. The tag defect is certain and read from the
   source below; whether GitLab minds the null is per endpoint and was measured
