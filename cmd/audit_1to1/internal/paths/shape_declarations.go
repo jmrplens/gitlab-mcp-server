@@ -204,11 +204,11 @@ var declaredShapeFields = []shapeDeclaration{
 	{Package: usersPkg, Type: "ContributionEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonUserEventTargetURL},
 
 	// Values this server echoes or derives rather than reads off a key.
-	{Package: toolsDir + "/groupanalytics", Type: "IssuesCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
-	{Package: toolsDir + "/groupanalytics", Type: "MRCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
-	{Package: toolsDir + "/groupanalytics", Type: "MembersCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
+	{Package: groupAnalyticsPkg, Type: "IssuesCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
+	{Package: groupAnalyticsPkg, Type: "MRCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
+	{Package: groupAnalyticsPkg, Type: "MembersCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
 	{
-		Package: toolsDir + "/projectdiscovery", Type: "ResolveOutput", Field: "extracted_path", Category: categoryServerDerived,
+		Package: projectDiscoveryPkg, Type: "ResolveOutput", Field: "extracted_path", Category: categoryServerDerived,
 		Reason: "the path this server reads off the git remote the caller passed, which is what it asks GET /projects/:id for; " +
 			"no route sends it, and it is published so a caller can see which part of the remote was taken as the project.",
 	},
@@ -263,6 +263,10 @@ const reasonUserEventTargetURL = "no events route sends it: lib/api/entities/eve
 // reasonAnalyticsGroupPath answers group_path on the three group counts.
 const reasonAnalyticsGroupPath = "the group_path the caller passed, echoed so the count says which group it counts: the " +
 	"analytics routes (ee/lib/api/analytics/group_activity_analytics.rb) answer with the count alone."
+
+// groupAnalyticsPkg is the package of those three counts, spelled once because
+// each of them is declared on its own.
+const groupAnalyticsPkg = toolsDir + "/groupanalytics"
 
 // reasonWikiAttachmentLink answers the two keys of an uploaded wiki attachment's link.
 const reasonWikiAttachmentLink = "lib/api/entities/wiki_attachment.rb sends url and markdown inside link " +

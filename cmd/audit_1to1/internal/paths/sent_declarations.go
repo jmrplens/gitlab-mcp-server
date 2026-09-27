@@ -642,8 +642,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// named one by one rather than with a splat: every other key of the same
 	// entity on that type is published, and a splat would swallow the next one
 	// GitLab adds.
-	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
-	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
 
 	// avatar_path on the four types that publish a user. The user entities
 	// inherit it from UserBasic, so it is the same option and the same answer
@@ -708,7 +708,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	},
 
 	{
-		Package: projectsPkg, Type: "BasicOutput", Entity: "API::Entities::Projects::WithAccessAndCatalogSetting", Field: declaredSegment,
+		Package: projectsPkg, Type: "BasicOutput", Entity: projectWithAccessEntity, Field: declaredSegment,
 		Category: categoryEntityPublishedElsewhere,
 		Reason: "GET /projects/:id answers with Project plus permissions and cicd_catalog_enabled, and projects.Output " +
 			"publishes both. BasicProjectDetails carries neither, which is what BasicOutput models.",
@@ -1002,7 +1002,7 @@ func declaredCompactRows() []sentDeclaration {
 		compactRow(toolsDir+"/resourcegroups", "JobItem", "API::Entities::Ci::JobBasic", reasonUpcomingJobRow,
 			"commit", "coverage", "duration", "erased_at", "failure_reason", "finished_at", "project", "queued_duration",
 			"started_at", "user"),
-		compactRow(groupsPkg, "ProjectItem", "API::Entities::Project", reasonGroupProjectRow,
+		compactRow(groupsPkg, "ProjectItem", projectEntity, reasonGroupProjectRow,
 			"_links", "allow_merge_on_skipped_pipeline", "allow_pipeline_trigger_approve_deployment",
 			"analytics_access_level", "approvals_before_merge", "auto_cancel_pending_pipelines",
 			"auto_devops_deploy_strategy", "auto_devops_enabled", "auto_duo_code_review_enabled",
@@ -1044,7 +1044,7 @@ func declaredCompactRows() []sentDeclaration {
 			"squash_option", "statistics", "suggestion_commit_message", "tag_list", "updated_at",
 			"warn_about_potentially_unwanted_characters", "web_based_commit_signing_enabled", "wiki_access_level",
 			"wiki_enabled"),
-		compactRow(toolsDir+"/projectdiscovery", "ResolveOutput", "API::Entities::Projects::WithAccessAndCatalogSetting", reasonResolvedProject,
+		compactRow(projectDiscoveryPkg, "ResolveOutput", projectWithAccessEntity, reasonResolvedProject,
 			"_links", "allow_merge_on_skipped_pipeline", "allow_pipeline_trigger_approve_deployment", "analytics_access_level",
 			"approvals_before_merge", "archived", "auto_cancel_pending_pipelines", "auto_devops_deploy_strategy",
 			"auto_devops_enabled", "auto_duo_code_review_enabled", "autoclose_referenced_issues", "automatic_rebase_enabled",
