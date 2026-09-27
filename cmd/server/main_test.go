@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -1717,6 +1718,38 @@ func TestResolveBuildVersion_Fallbacks(t *testing.T) {
 			version:     "dev",
 			commit:      "none",
 			readInfo:    func() (*debug.BuildInfo, bool) { return nil, true },
+			wantVersion: "dev",
+			wantCommit:  "none",
+		},
+		{
+			// A VCS build records several settings, and the revision is
+			// rarely the first: the commit is the revision's value, never
+			// whichever setting happens to carry one.
+			name:    "the revision is read from among the other VCS settings",
+			version: "dev",
+			commit:  "none",
+			readInfo: func() (*debug.BuildInfo, bool) {
+				info := &debug.BuildInfo{}
+				info.Settings = []debug.BuildSetting{
+					{Key: "vcs", Value: "git"},
+					{Key: "vcs.time", Value: "2026-09-27T01:00:00Z"},
+					{Key: "vcs.revision", Value: "c0ffee42"},
+					{Key: "vcs.modified", Value: "true"},
+				}
+				return info, true
+			},
+			wantVersion: "dev",
+			wantCommit:  "c0ffee42",
+		},
+		{
+			name:    "an empty revision is not a commit",
+			version: "dev",
+			commit:  "none",
+			readInfo: func() (*debug.BuildInfo, bool) {
+				info := &debug.BuildInfo{}
+				info.Settings = []debug.BuildSetting{{Key: "vcs.revision", Value: ""}}
+				return info, true
+			},
 			wantVersion: "dev",
 			wantCommit:  "none",
 		},
@@ -4267,6 +4300,11 @@ func TestResolveHTTPTier(t *testing.T) {
 		{name: "premium", tier: "premium", tierSet: true, wantTier: edition.Premium, wantExplicit: true},
 		{name: "ultimate", tier: "ultimate", tierSet: true, wantTier: edition.Ultimate, wantExplicit: true},
 		{name: "invalid", tier: "platinum", tierSet: true, wantErr: true},
+		// Each half of the guard decides alone: a value nobody marked as passed
+		// pins nothing, and a flag passed blank asks for detection rather than
+		// for a tier named by an empty string.
+		{name: "a tier never marked as set is detected", tier: "premium", tierSet: false, wantTier: edition.Free, wantExplicit: false},
+		{name: "a tier set blank is detected", tier: "  ", tierSet: true, wantTier: edition.Free, wantExplicit: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -6604,6 +6642,134 @@ func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 		t.Errorf("configFromHTTPFlags() defaults: Stateless=%v JSONResponse=%v, want false/false",
 			defaults.Stateless, defaults.JSONResponse)
 	}
+}
+
+// TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField holds the whole
+// flag-to-configuration mapping, not a sample of it. Every value that is not a
+// boolean differs from all of its siblings, so a field filled from its
+// neighbour (the two authentication budgets, the three metadata links, the
+// certificate and its key) is a mismatch here. The booleans cannot all
+// differ, so each is driven on its own and the whole struct compared, which is
+// what tells a swap between two of them from a correct mapping.
+func TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField(t *testing.T) {
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "7340033")
+
+	base := httpConfig{
+		gitlabURL:             "https://first.example.test",
+		gitlabURLs:            repeatedFlag{"https://first.example.test", "https://second.example.test"},
+		toolSurface:           "surface-flag-the-caller-already-parsed",
+		capabilitySurface:     "capability-surface-value",
+		tier:                  "ultimate",
+		excludeTools:          "tool.one, tool.two",
+		maxHTTPClients:        101,
+		sessionTimeout:        31 * time.Minute,
+		revalidateInterval:    16 * time.Minute,
+		poolIdleTimeout:       61 * time.Minute,
+		actionTimeout:         66 * time.Minute,
+		drainDelay:            7 * time.Second,
+		maxRequestBodyBytes:   4097,
+		authMode:              "auth-mode-value",
+		publicURL:             "https://public.example.test/prefix",
+		resourceDocumentation: "https://docs.example.test/app",
+		resourcePolicyURI:     "https://policy.example.test/data",
+		resourceTermsURI:      "https://terms.example.test/tos",
+		oauthCacheTTL:         17 * time.Minute,
+		oauthClientUID:        "uid-one,uid-two",
+		trustedProxyHeader:    "X-Proxy-Header-Value",
+		trustedProxies:        "10.0.0.1, 10.0.0.0/8",
+		trustedOrigins:        "https://origin.example.test",
+		rateLimitRPS:          7.5,
+		rateLimitBurst:        41,
+		authFailureLimit:      11,
+		authFailureWindow:     2 * time.Minute,
+		authDistinctLimit:     51,
+		authDistinctWindow:    11 * time.Minute,
+		metaParamSchema:       "meta-param-schema-value",
+		tlsCert:               "/etc/tls/cert.pem",
+		tlsKey:                "/etc/tls/key.pem",
+		socketModeParsed:      0o640,
+	}
+	want := config.Config{
+		GitLabURL:              "https://first.example.test",
+		GitLabURLs:             []string{"https://first.example.test", "https://second.example.test"},
+		ToolSurface:            "surface-argument",
+		CapabilitySurface:      "capability-surface-value",
+		Tier:                   edition.Premium,
+		ExcludeTools:           []string{"tool.one", "tool.two"},
+		MaxHTTPClients:         101,
+		SessionTimeout:         31 * time.Minute,
+		RevalidateInterval:     16 * time.Minute,
+		PoolIdleTimeout:        61 * time.Minute,
+		ActionTimeout:          66 * time.Minute,
+		DrainDelay:             7 * time.Second,
+		MaxRequestBodyBytes:    4097,
+		UploadMaxFileSize:      7340033,
+		AuthMode:               "auth-mode-value",
+		PublicURL:              "https://public.example.test/prefix",
+		ResourceDocumentation:  "https://docs.example.test/app",
+		ResourcePolicyURI:      "https://policy.example.test/data",
+		ResourceTermsURI:       "https://terms.example.test/tos",
+		OAuthCacheTTL:          17 * time.Minute,
+		OAuthClientUIDs:        []string{"uid-one", "uid-two"},
+		TrustedProxyHeader:     "X-Proxy-Header-Value",
+		TrustedProxies:         []string{"10.0.0.1", "10.0.0.0/8"},
+		TrustedOrigins:         []string{"https://origin.example.test", "https://public.example.test"},
+		RateLimitRPS:           7.5,
+		RateLimitBurst:         41,
+		AuthFailureLimit:       11,
+		AuthFailureWindow:      2 * time.Minute,
+		AuthDistinctTokenLimit: 51,
+		AuthDistinctWindow:     11 * time.Minute,
+		MetaParamSchema:        "meta-param-schema-value",
+		TLSCertFile:            "/etc/tls/cert.pem",
+		TLSKeyFile:             "/etc/tls/key.pem",
+		SocketMode:             0o640,
+	}
+
+	cases := []struct {
+		name         string
+		set          func(*httpConfig)
+		tierExplicit bool
+		mark         func(*config.Config)
+	}{
+		{name: "no switch on", set: func(*httpConfig) {}, mark: func(*config.Config) {}},
+		{name: "tier explicit", set: func(*httpConfig) {}, tierExplicit: true, mark: func(c *config.Config) { c.TierExplicit = true }},
+		{name: "skip-tls-verify", set: func(h *httpConfig) { h.skipTLSVerify = true }, mark: func(c *config.Config) { c.SkipTLSVerify = true }},
+		{name: "read-only", set: func(h *httpConfig) { h.readOnly = true }, mark: func(c *config.Config) { c.ReadOnly = true }},
+		{name: "safe-mode", set: func(h *httpConfig) { h.safeMode = true }, mark: func(c *config.Config) { c.SafeMode = true }},
+		{name: "embedded-resources", set: func(h *httpConfig) { h.embeddedResources = true }, mark: func(c *config.Config) { c.EmbeddedResources = true }},
+		{name: "ignore-scopes", set: func(h *httpConfig) { h.ignoreScopes = true }, mark: func(c *config.Config) { c.IgnoreScopes = true }},
+		{name: "stateless", set: func(h *httpConfig) { h.stateless = true }, mark: func(c *config.Config) { c.Stateless = true }},
+		{name: "json-response", set: func(h *httpConfig) { h.jsonResponse = true }, mark: func(c *config.Config) { c.JSONResponse = true }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hcfg := base
+			tc.set(&hcfg)
+			expected := want
+			tc.mark(&expected)
+
+			got := configFromHTTPFlags(&hcfg, "surface-argument", edition.Premium, tc.tierExplicit)
+			for _, field := range configFieldsThatDiffer(*got, expected) {
+				t.Errorf("configFromHTTPFlags() %s differs from the flag it maps", field)
+			}
+		})
+	}
+}
+
+// configFieldsThatDiffer names each field of two configurations that does not
+// hold the same value, with both values, so a failed mapping says which flag
+// went where instead of printing two structs of forty fields.
+func configFieldsThatDiffer(got, want config.Config) []string {
+	var differ []string
+	gotValue, wantValue := reflect.ValueOf(got), reflect.ValueOf(want)
+	for i := range gotValue.NumField() {
+		g, w := gotValue.Field(i).Interface(), wantValue.Field(i).Interface()
+		if !reflect.DeepEqual(g, w) {
+			differ = append(differ, fmt.Sprintf("%s = %v, want %v", gotValue.Type().Field(i).Name, g, w))
+		}
+	}
+	return differ
 }
 
 // TestStreamableHTTPOptions_MapsConfigFields verifies that the shared handler
@@ -9251,10 +9417,37 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			mutate:  func(c *config.Config) { c.RateLimitRPS, c.RateLimitBurst = 10, 0 },
 			wantErr: "rate-limit",
 		},
+		// The documented maximum is a value an operator may configure, so each
+		// ceiling is held at the maximum itself as well as one past it.
 		{
+			name:   "a rate at its maximum",
+			mutate: func(c *config.Config) { c.RateLimitRPS = config.MaxRateLimitRPS },
+		},
+		{
+			name:    "a rate past its maximum",
+			mutate:  func(c *config.Config) { c.RateLimitRPS = config.MaxRateLimitRPS + 1 },
+			wantErr: "--rate-limit-rps",
+		},
+		{
+			name:   "a burst at its maximum",
+			mutate: func(c *config.Config) { c.RateLimitBurst = config.MaxRateLimitBurst },
+		},
+		{
+			name:    "a burst past its maximum",
+			mutate:  func(c *config.Config) { c.RateLimitBurst = config.MaxRateLimitBurst + 1 },
+			wantErr: "--rate-limit-burst",
+		},
+		{
+			// Named by the entry, not only by the flag: a check that refused
+			// the wildcard or a well-formed origin would also say
+			// "trusted-origins", and be refusing the wrong thing.
 			name:    "a trusted origin that is not an origin",
 			mutate:  func(c *config.Config) { c.TrustedOrigins = []string{"*", "https://app.example.com", "not-an-origin"} },
-			wantErr: "trusted-origins",
+			wantErr: `--trusted-origins entry "not-an-origin"`,
+		},
+		{
+			name:   "trusted origins beside the wildcard",
+			mutate: func(c *config.Config) { c.TrustedOrigins = []string{"*", "https://app.example.com"} },
 		},
 		{
 			name:    "a documentation link that is not a URL",
@@ -9298,6 +9491,53 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			name:    "a drain delay past its maximum",
 			mutate:  func(c *config.Config) { c.DrainDelay = config.MaxDrainDelay + time.Second },
 			wantErr: "drain-delay",
+		},
+		// Each duration ceiling admits its maximum and refuses the next
+		// nanosecond, and the two whose zero means "off" admit that zero: a
+		// bound one step too tight refuses exactly the value the
+		// documentation names as allowed.
+		{
+			name:   "a session timeout at its maximum",
+			mutate: func(c *config.Config) { c.SessionTimeout = config.MaxSessionTimeout },
+		},
+		{
+			name:    "a session timeout past its maximum",
+			mutate:  func(c *config.Config) { c.SessionTimeout = config.MaxSessionTimeout + time.Nanosecond },
+			wantErr: "--session-timeout",
+		},
+		{
+			name:   "a revalidation interval at its maximum",
+			mutate: func(c *config.Config) { c.RevalidateInterval = config.MaxRevalidateInterval },
+		},
+		{
+			name:   "a pool idle timeout at its maximum",
+			mutate: func(c *config.Config) { c.PoolIdleTimeout = config.MaxPoolIdleTimeout },
+		},
+		{
+			name:    "a pool idle timeout past its maximum",
+			mutate:  func(c *config.Config) { c.PoolIdleTimeout = config.MaxPoolIdleTimeout + time.Nanosecond },
+			wantErr: "--pool-idle-timeout",
+		},
+		{
+			name:   "an action timeout at its maximum",
+			mutate: func(c *config.Config) { c.ActionTimeout = config.MaxActionTimeout },
+		},
+		{
+			name:   "an action timeout of zero, which disables it",
+			mutate: func(c *config.Config) { c.ActionTimeout = 0 },
+		},
+		{
+			name:   "a drain delay at its maximum",
+			mutate: func(c *config.Config) { c.DrainDelay = config.MaxDrainDelay },
+		},
+		{
+			name:   "a drain delay of zero, which closes at once",
+			mutate: func(c *config.Config) { c.DrainDelay = 0 },
+		},
+		{
+			name:    "a negative drain delay",
+			mutate:  func(c *config.Config) { c.DrainDelay = -time.Nanosecond },
+			wantErr: "--drain-delay",
 		},
 	}
 
@@ -9551,6 +9791,59 @@ func TestMain_VersionAndToolSearch_ExitBeforeAnythingIsStarted(t *testing.T) {
 	}
 }
 
+// TestMain_ToolSearch_TakesTheTierFromTheFlagOnlyWhenItWasPassed covers what
+// main records about --tier. The flag's default is empty, so whether it was
+// passed is read from the flags actually visited, and only a visit of --tier
+// itself may count: marking the tier as passed because some other flag was, as
+// --tool-search always is here, would search at the Free tier a blank flag
+// resolves to instead of the tier the environment configures.
+func TestMain_ToolSearch_TakesTheTierFromTheFlagOnlyWhenItWasPassed(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want edition.Tier
+	}{
+		{
+			name: "the environment's tier when --tier is not passed",
+			args: []string{"gitlab-mcp-server", "-tool-search", "issue"},
+			want: edition.Premium,
+		},
+		{
+			name: "the flag's tier when it is passed",
+			args: []string{"gitlab-mcp-server", "-tool-search", "issue", "-tier", "ultimate"},
+			want: edition.Ultimate,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			t.Setenv(config.EnvFileVar, "")
+			t.Setenv("GITLAB_MCP_TIER", "premium")
+
+			searched := false
+			var tier edition.Tier
+			originalRunner, originalExit, originalArgs := toolSearchRunner, exitProcess, os.Args
+			t.Cleanup(func() { toolSearchRunner, exitProcess, os.Args = originalRunner, originalExit, originalArgs })
+			toolSearchRunner = func(_, _ string, searchTier edition.Tier) error {
+				searched, tier = true, searchTier
+				return nil
+			}
+			var exits []int
+			exitProcess = func(code int) { exits = append(exits, code) }
+			os.Args = tc.args
+
+			main()
+
+			if !searched || len(exits) != 0 {
+				t.Fatalf("searched = %t, exit codes = %v, want one search and no exit", searched, exits)
+			}
+			if tier != tc.want {
+				t.Errorf("searched at tier %s, want %s", tier, tc.want)
+			}
+		})
+	}
+}
+
 // TestMain_ProcessLevelModes_ExitThroughTheSeam covers the argument forms
 // that end the process with a status code, every one of which now leaves
 // through exitProcess so the code can be read back here: a transport nobody
@@ -9648,6 +9941,46 @@ func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
 				tt.verify(t)
 			}
 		})
+	}
+}
+
+// TestMain_OnAPipe_MissingCredentials_NeverShowTheGuidanceScreen covers the
+// guard in front of the guidance screen from the side every MCP client is on:
+// a pipe. The screen waits for a line on stdin, and on a pipe that line would
+// be the client's first JSON-RPC message, so the screen is for a terminal
+// only, whatever is missing. A retired variable that refuses startup stands
+// in for the rest of startup, so the run ends at once with exit 1.
+func TestMain_OnAPipe_MissingCredentials_NeverShowTheGuidanceScreen(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv(config.EnvFileVar, "")
+	t.Setenv("GITLAB_READ_ONLY", "true")
+
+	stdin, client, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	// Closed at once: were the screen shown, its read would end on EOF rather
+	// than hang, and the missing exit is what fails the test.
+	_ = client.Close()
+	t.Cleanup(func() { _ = stdin.Close() })
+
+	var exits []int
+	originalStdin, originalArgs, originalExit := os.Stdin, os.Args, exitProcess
+	originalLogger, originalBase := slog.Default(), baseLogHandler
+	os.Stdin, os.Args = stdin, []string{"gitlab-mcp-server"}
+	exitProcess = func(code int) { exits = append(exits, code) }
+	t.Cleanup(func() {
+		os.Stdin, os.Args, exitProcess = originalStdin, originalArgs, originalExit
+		slog.SetDefault(originalLogger)
+		baseLogHandler = originalBase
+	})
+
+	main()
+
+	if !slices.Equal(exits, []int{1}) {
+		t.Errorf("exit codes = %v, want [1]: a piped stdin reached the guidance screen instead of startup", exits)
 	}
 }
 
@@ -10437,6 +10770,10 @@ func TestListenerIsHostLocal_AName_IsJudgedByWhatItResolvesTo(t *testing.T) {
 		{name: "a loopback literal", addr: "127.0.0.2:8080", resolveNo: true, want: true},
 		{name: "an ipv6 loopback literal", addr: "[::1]:8080", resolveNo: true, want: true},
 		{name: "a routable literal", addr: "10.0.0.7:8080", resolveNo: true},
+		// A wildcard bind names no host, and it is the container CMD's bind:
+		// it is refused on that emptiness alone, before any resolver is asked,
+		// so a resolver answering loopback for the empty name changes nothing.
+		{name: "a wildcard bind", addr: ":8080", resolveTo: []string{"127.0.0.1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			previous := lookupHost
