@@ -504,6 +504,19 @@ call because no model is in that loop to read the message and retry. The
 listings the server makes against itself while it starts, to count its tools and
 build the `gitlab://tools` manifest, are not charged to it.
 
+That bucket is a credential's, and a caller can mint credentials while the
+processor stays one, so a listing is charged first to a bucket the whole process
+shares. It counts tools rather than requests, because a listing costs what it
+carries: measured on the streamable HTTP handler, about 0.28 to 0.47 ms of
+processor per tool listed on every surface. Its refill of 3000 tools a second is
+about one core of listing, some three listings a second on individual and
+fifteen hundred on dynamic, and its 48000 in hand hold one credential's whole
+default listing burst on the largest surface. It is not configurable, since an
+operator who can raise a shared number can undo it, and it is off with the rest
+of the limiter when the rate is `0`. A listing it refuses never reaches the
+credential's bucket, and one the credential's bucket refuses gets its tools
+back, so neither refusal costs the other anything.
+
 Whether it is on out of the box depends on the transport. **HTTP mode enables it
 by default** (`--rate-limit-rps=10`), because that deployment is shared — every
 call it forwards is charged to its own egress address, so one looping client's
@@ -581,7 +594,14 @@ rate limit exceeded for resources/read; retry after a short backoff
 The first four draw on the same bucket as `tools/call`, since each reaches
 GitLab with the caller's credential; `tools/list` draws on its own, refilled at
 a tenth of that one's rate, since what it spends is the shared processor rather
-than the upstream. `resources/list`, `prompts/list`, `initialize` and the other methods
+than the upstream, and before that on the bucket the whole process shares,
+whose refusal says so:
+
+```text
+rate limit exceeded for tools/list across this server; retry after a short backoff
+```
+
+`resources/list`, `prompts/list`, `initialize` and the other methods
 the server answers from its own catalog are **not** gated: they are small, and
 metering something cheap buys nothing and costs a concept.
 
