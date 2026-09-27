@@ -77,7 +77,9 @@ to any issue in the project — most of them nothing the subscriber asked
 about — and cost a full page read on every poll. A subscription to a
 top-level collection is refused.
 
-A refused subscription starts no watcher and costs no API call. On protocol
+A refused subscription starts no watcher. One refused for its kind, like this
+one, costs no API call; one refused because the resource could not be read has
+spent that one authorization read. On protocol
 2026-07-28 the refusal is the JSON-RPC error that answers the
 `subscriptions/listen` request itself, sent before any acknowledgment, so a
 client that reads the listen's response sees it. The Go SDK's client (v1.8.0)
@@ -228,7 +230,11 @@ The message beside the code preserves the upstream failure detail
 verbatim; the retry behavior is defined by the code, per the table. On
 protocol 2026-07-28 a `subscriptions/listen` is refused with the same codes,
 as the JSON-RPC error that answers the listen itself, before any
-acknowledgment. This server's own per-credential rate limit
+acknowledgment, except the last row: stateless HTTP serves a listen. A listen
+also has two refusals of its own, which a legacy `resources/subscribe` never
+meets: the ceilings on open listen streams, `GITLAB_MCP_MAX_LISTEN_STREAMS` per
+credential (64 by default) and 512 per process, each answered `-32000` and
+transient. This server's own per-credential rate limit
 (`--rate-limit-rps`, or `GITLAB_MCP_RATE_LIMIT_RPS` on stdio), which is not
 the GitLab rate limit the table means, refuses either method earlier still,
 with `-42900`, before a watcher is asked. Any client that reads the listen's
