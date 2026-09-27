@@ -325,12 +325,9 @@ func writeGroupDetailRows(c *toolutil.Card, g DetailOutput) {
 
 // subGroupTransferQueuedNote is what the card of a group transfer the wait
 // did not see land says under the group's rows, which describe where it still
-// is.
-const subGroupTransferQueuedNote = "GitLab accepted this transfer and moves the group in the background, " +
-	"and the move had not been applied when this server stopped waiting for it: " +
-	"the rows above show where the group still is. " +
-	"Do not send the transfer again while it is queued, because GitLab refuses a second one until the first finishes. " +
-	"If the move fails, GitLab leaves a to-do item saying so for the user who asked for it."
+// is. It is one literal rather than a concatenation, whose operators a
+// mutation run reports as not covered, a constant carrying no statement.
+const subGroupTransferQueuedNote = "GitLab accepted this transfer and moves the group in the background, and the move had not been applied when this server stopped waiting for it: the rows above show where the group still is. Do not send the transfer again while it is queued, because GitLab refuses a second one until the first finishes. If the move fails, GitLab leaves a to-do item saying so for the user who asked for it."
 
 // FormatTransferSubGroupMarkdown renders what a group transfer answered. A
 // move that landed is the group's own card, under its new parent; one the wait

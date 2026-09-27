@@ -31,6 +31,12 @@ const (
 	groupUnderOtherParent = `{"id":99,"name":"child","path":"child","full_path":"other/child","visibility":"private","parent_id":7}`
 )
 
+// landingBound is the wait a test that expects the move to land gives it. The
+// move lands on the second or third read, a few milliseconds in, so the bound
+// is generous for a correct handler, and small enough that a broken one which
+// never sees the move land fails the test in seconds rather than hanging it.
+const landingBound = 2 * time.Second
+
 // fastTransferWait makes TransferSubGroup read back every millisecond for at
 // most bound, and restores the package's timing when the test ends.
 func fastTransferWait(t *testing.T, bound time.Duration) {
@@ -147,7 +153,7 @@ func jsonEqual(a, b string) bool {
 // the parent, not the transfer's own. The reads ask for no projects, which
 // the transfer's own answer never carries.
 func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	gitlab := &groupTransferGitLab{t: t, answer: groupAtTopLevel, reads: []string{
 		groupAtTopLevel, groupAtTopLevel, groupUnderParent,
 	}}
@@ -169,11 +175,40 @@ func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 	}
 }
 
+// TestTransferSubGroup_ReadByPath_ReadsBackByTheAnsweredID verifies that the
+// read back names the group by the id the transfer answered with, not by the
+// path the caller named, which is the path the move is taking away.
+func TestTransferSubGroup_ReadByPath_ReadsBackByTheAnsweredID(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	var readPath atomic.Value
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			testutil.RespondJSON(w, http.StatusOK, groupAtTopLevel)
+		default:
+			readPath.Store(r.URL.Path)
+			testutil.RespondJSON(w, http.StatusOK, groupUnderParent)
+		}
+	}))
+	parent := int64(42)
+
+	out, err := TransferSubGroup(context.Background(), nil, client, TransferSubGroupInput{GroupID: "child", ParentID: &parent})
+	if err != nil {
+		t.Fatalf("TransferSubGroup() error = %v", err)
+	}
+	if out.TransferQueued {
+		t.Error("TransferSubGroup() reported the move queued, want it applied")
+	}
+	if got, _ := readPath.Load().(string); got != pathGroup99 {
+		t.Errorf("read back %q, want %q", got, pathGroup99)
+	}
+}
+
 // TestTransferSubGroup_PromotionLandsLater_AnswersTheTopLevelGroup verifies
 // that a promotion waits for the group to report no parent, and that a group
 // still under a parent has not landed.
 func TestTransferSubGroup_PromotionLandsLater_AnswersTheTopLevelGroup(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	gitlab := &groupTransferGitLab{t: t, answer: groupUnderParent, reads: []string{groupUnderParent, groupAtTopLevel}}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
@@ -204,7 +239,7 @@ func TestTransferSubGroup_UnderAnotherParent_HasNotLanded(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fastTransferWait(t, 10*time.Second)
+			fastTransferWait(t, landingBound)
 			gitlab := &groupTransferGitLab{t: t, answer: groupUnderOtherParent, reads: []string{groupUnderOtherParent, tt.landed}}
 			client := testutil.NewTestClient(t, gitlab.handler())
 
@@ -244,7 +279,7 @@ func TestTransferSubGroup_MoveNeverLands_AnswersQueuedWithTheTransferAnswer(t *t
 // TestTransferSubGroup_CallerGoesAwayDuringTheWait_AnswersTheContextError
 // verifies that the wait honors the caller's context.
 func TestTransferSubGroup_CallerGoesAwayDuringTheWait_AnswersTheContextError(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	gitlab := &groupTransferGitLab{t: t, answer: groupAtTopLevel, reads: []string{groupAtTopLevel}, onRead: cancel}

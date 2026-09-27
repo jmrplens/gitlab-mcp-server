@@ -40,12 +40,10 @@ func FormatMarkdown(p Output) string {
 }
 
 // transferQueuedNote is what the card of a transfer the wait did not see land
-// says under the project's rows, which describe where it still is.
-const transferQueuedNote = "GitLab accepted this transfer and moves the project in the background, " +
-	"and the move had not been applied when this server stopped waiting for it: " +
-	"the rows above show where the project still is. " +
-	"Do not send the transfer again while it is queued, because GitLab refuses a second one until the first finishes. " +
-	"If the move fails, GitLab leaves a to-do item saying so for the user who asked for it."
+// says under the project's rows, which describe where it still is. It is one
+// literal rather than a concatenation, whose operators a mutation run reports
+// as not covered, a constant carrying no statement.
+const transferQueuedNote = "GitLab accepted this transfer and moves the project in the background, and the move had not been applied when this server stopped waiting for it: the rows above show where the project still is. Do not send the transfer again while it is queued, because GitLab refuses a second one until the first finishes. If the move fails, GitLab leaves a to-do item saying so for the user who asked for it."
 
 // FormatTransferMarkdown renders what a project transfer answered. A move
 // that landed is the project's own card, in its new namespace; one the wait

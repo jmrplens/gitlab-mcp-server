@@ -32,6 +32,12 @@ const (
 		`"namespace":{"id":7,"name":"newns","path":"newns","kind":"group","full_path":"newns"}}`
 )
 
+// landingBound is the wait a test that expects the move to land gives it. The
+// move lands on the second or third read, a few milliseconds in, so the bound
+// is generous for a correct handler, and small enough that a broken one which
+// never sees the move land fails the test in seconds rather than hanging it.
+const landingBound = 2 * time.Second
+
 // fastTransferWait makes Transfer read back every millisecond for at most
 // bound, and restores the package's timing when the test ends.
 func fastTransferWait(t *testing.T, bound time.Duration) {
@@ -137,7 +143,7 @@ func TestTransfer_AnswerAlreadyInTheDestination_IsReturnedWithoutReadingBack(t *
 // first reads find it there, and the answer is the read that found it in the
 // destination, not the transfer's own.
 func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	gitlab := &transferGitLab{t: t, answer: projectInUserNamespace, reads: []string{
 		projectInUserNamespace, projectInUserNamespace, projectInGroupNamespace,
 	}}
@@ -162,7 +168,7 @@ func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 // back names the project by the id the transfer answered with, not by the
 // path the caller named, which is the path the move is taking away.
 func TestTransfer_ReadByPath_ReadsBackByTheAnsweredID(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	var readPath atomic.Value
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -213,7 +219,7 @@ func TestTransfer_MoveNeverLands_AnswersQueuedWithTheTransferAnswer(t *testing.T
 // TestTransfer_ReadFails_KeepsWaiting verifies that a read GitLab fails to
 // serve does not end the wait: the next read finds the moved project.
 func TestTransfer_ReadFails_KeepsWaiting(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	var reads atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -243,7 +249,7 @@ func TestTransfer_ReadFails_KeepsWaiting(t *testing.T) {
 // that the wait honors the caller's context: once it ends, the handler
 // returns its error rather than a queued answer nobody is waiting for.
 func TestTransfer_CallerGoesAwayDuringTheWait_AnswersTheContextError(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	gitlab := &transferGitLab{t: t, answer: projectInUserNamespace, reads: []string{projectInUserNamespace}}
@@ -260,7 +266,7 @@ func TestTransfer_CallerGoesAwayDuringTheWait_AnswersTheContextError(t *testing.
 // carrying no namespace is not taken for the destination: nothing in it says
 // where the project is, so the handler reads it back.
 func TestTransfer_AnswerWithoutNamespace_IsReadBack(t *testing.T) {
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	gitlab := &transferGitLab{
 		t:      t,
 		answer: `{"id":42,"name":"moving","path":"moving","path_with_namespace":"alice/moving"}`,
@@ -283,7 +289,7 @@ func TestTransfer_AnswerWithoutNamespace_IsReadBack(t *testing.T) {
 func TestTransfer_NumericNamespace_MatchesByIDNotByPath(t *testing.T) {
 	pathSeven := `{"id":42,"name":"moving","path":"moving","path_with_namespace":"7/moving",` +
 		`"namespace":{"id":3,"name":"7","path":"7","kind":"group","full_path":"7"}}`
-	fastTransferWait(t, 10*time.Second)
+	fastTransferWait(t, landingBound)
 	gitlab := &transferGitLab{t: t, answer: pathSeven, reads: []string{pathSeven, projectInGroupNamespace}}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
