@@ -89,7 +89,7 @@ readable without opening the tracker:
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
-| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | No | No | Was yes | Yes |
+| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, unreleased** | Was yes | Yes, until a Codex built on the fix ships |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
@@ -2828,28 +2828,53 @@ neither, and the ADR now says so.
 
 ### A non-integer annotation priority breaks a tool call
 
-- **Reported**: yes,
-  [openai/codex#38979](https://github.com/openai/codex/issues/38979).
-- **In review**: no. The issue is open and labelled `bug`, `mcp`, `CLI`,
-  `tool-calls`, and no fix has been proposed upstream.
-- **Merged**: no.
+- **Reported**: yes, as the symptom in
+  [openai/codex#38979](https://github.com/openai/codex/issues/38979), and as its
+  cause in the library Codex builds on, in
+  [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299),
+  on 2026-09-26. The Codex issue carries a comment linking both, since
+  openai/codex takes no pull requests from outside.
+- **In review**: yes,
+  [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300),
+  merged.
+- **Merged**: yes, on 2026-09-27 (merge commit `e02efbfc`), and in no tag: rmcp
+  3.4.1 was cut on 2026-09-23 and does not contain it. It reaches users through a
+  chain of three: an rmcp release carrying it, a Codex release built on that rmcp,
+  and a ChatGPT.app that bundles that Codex.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
   Codex from `clientInfo` and rounds annotation priorities to 0 or 1, which is
   spec-legal and parseable by both. `GITLAB_MCP_CLIENT_COMPAT=off` disables it. Retire it
-  only once the fixed Codex is widely deployed, not merely released: the
-  affected build ships inside ChatGPT.app, so users do not choose their version.
+  only once a Codex built on an rmcp carrying the fix is widely deployed, not
+  merely released: the affected build ships inside ChatGPT.app, so users do not
+  choose their version.
 
 **What**: the Codex builds bundled with ChatGPT.app reject any MCP result whose
 `annotations.priority` is a non-integer float. `0.6` fails; `1` or an
 audience-only annotation passes. The specification places no such restriction,
-and crates.io `rmcp` 3.0.0 parses floats correctly (`Option<f32>`), so the defect
-is in the patched bundle rather than in the library.
+and rmcp reads the field as `Option<f32>`, which is right on its own: the defect
+appears only in a build where serde_json's `arbitrary_precision` feature is on.
+
+**Why it happens**: serde buffers a value whose type it does not know yet
+(untagged and internally tagged enums, `#[serde(flatten)]`), and every JSON-RPC
+message rmcp decodes takes that path. With `arbitrary_precision` on, a buffered
+decimal is replayed as serde_json's private number map, a plain `f32` or `f64`
+field refuses it
+([serde-rs/json#721](https://github.com/serde-rs/json/issues/721)), and the
+untagged result falls through to its catch-all variant, which is the "Unexpected
+response type". Cargo turns the feature on for every crate in a build once any
+crate enables it, and codex-cli enables it through `starlark` 0.14.2 and
+`codex-exec-server-protocol`, so the same rmcp is correct alone and wrong inside
+Codex. The fix reads rmcp's ten float fields through `serde_json::Number`, which
+accepts both forms, with a regression test that turns the feature on.
 
 **How we found it**: every tool call from Codex failed with "Unexpected response
 type" and nothing else. Bisected with a Python fake server replaying canned
-`CallToolResult` values until the float was the only variable left.
+`CallToolResult` values until the float was the only variable left. This entry
+first put the defect in a patched rmcp inside the bundle; reading codex-cli's
+dependency tree found the feature instead
+([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)).
 
 **Not the cause, though it looks like it**: unknown fields. Neither Codex
 generation used `deny_unknown_fields`, and that hypothesis cost a day before it
