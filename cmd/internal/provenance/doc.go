@@ -1,7 +1,10 @@
 // Package provenance holds the one age verdict the commands that pin an
 // external truth pass on their committed record.
 //
-// Three of them do it. [github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_api_live]
+// Three of them do it, and two more read only the arithmetic:
+// cmd/audit_e2e_coverage holds its coverage record to a window of its own, and
+// cmd/audit_graphql_documents says how old the pinned schema is when it
+// reports drift. [github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_api_live]
 // commits what a booted GitLab says its own REST API is, endpoint by endpoint
 // and field by field, cmd/gen_graphql_schema commits the GraphQL schema
 // this repository validates every raw document against, and

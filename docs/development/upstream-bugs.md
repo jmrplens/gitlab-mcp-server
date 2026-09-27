@@ -142,6 +142,7 @@ readable without opening the tracker:
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), open | No | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Yes, for `repository.commit_list` with `trailers` | Partial |
+| 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -3142,6 +3143,63 @@ the value's shape, so neither grain can see it.
 
 **Effort**: one field type, `map[string][]string`, which breaks exported API:
 a major version, or a second field beside the old one that decodes the lists.
+
+### The Orbit schema format is sent as `format`, and its llm answer is not modelled
+
+- **Reported**: yes, as commit 5 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit tags `GetOrbitSchemaOptions.Format`
+  `response_format`, so a caller that sets it gets the format it asked for
+  without changing any code, and adds `FormattedText` to `OrbitSchema`.
+- **Merged**: no.
+- **Blocking**: yes for the SDK's own callers, no here. Through client-go,
+  `GetSchema` with `Format` set is refused 406 by GitLab.com, and with
+  `response_format=llm` it would decode to an empty `OrbitSchema`.
+- **Workaround**: yes for both. `orbit.Schema`
+  (`internal/tools/orbit/orbit.go`) leaves `GetOrbitSchemaOptions.Format`
+  unset and sets `response_format` itself through a `gl.RequestOptionFunc`
+  (`responseFormatQuery`), which client-go applies after it has encoded the
+  options, and reads `formatted_text` from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  into `SchemaOutput.FormattedText`, which the R-OUTPUT tables declare in
+  `docAddedFields`. Both retire when the SDK sends the parameter under
+  GitLab's name and models the field.
+  `TestSchema_LLMFormat_PublishesTheFormattedText` holds the llm path, the
+  schema tests assert that no `format` parameter is sent, and the Orbit live
+  suite drives both formats under both input names.
+
+**What**: two gaps in client-go v3.14.0's `orbit.go`, the same on `main` when
+read on 2026-09-27. `GetOrbitSchemaOptions.Format` carries
+`url:"format,omitempty"`, and GitLab's route declares the parameter as
+`response_format` (`ee/lib/api/orbit/data.rb`, `get :schema`,
+`optional :response_format, type: String, values: %w[raw llm], default: 'raw'`),
+as it does on every Orbit route that takes a format. `format` is the parameter
+Grape reserves for the representation it renders, so `?format=llm` asks Grape
+for an `llm` representation and is answered
+`406 {"error":"The requested format 'llm' is not supported."}` before the route
+runs; `?format=raw` is refused the same way. With `response_format=llm` the
+route answers `{"formatted_text": "..."}` and nothing else (`get_graph_schema`
+in `ee/lib/analytics/knowledge_graph/grpc_client.rb`), a field `OrbitSchema`
+does not carry, while `OrbitGraphStatus` and `OrbitStatusSystem` already model
+the same key for their own llm answers.
+
+**How we found it**: the Orbit response record of
+[issue 972](https://github.com/jmrplens/gitlab-mcp-server/issues/972)
+records each Orbit call through the handlers against GitLab.com, and the
+schema's llm call was refused with 406. The unit tests had pinned
+`format` as the parameter name, so they passed against a request GitLab
+refuses. The handler fix is commit `7b2a5d3f0` on the issue 972 branch, to be
+replaced by the commit that lands on main.
+
+**Effort**: small. Retag the field as `url:"response_format,omitempty"`, or
+add a `ResponseFormat` field with that tag, as the other four Orbit option
+structs name it, and keep `Format` as a deprecated alias encoded under the
+right name; add `FormattedText string` with `json:"formatted_text,omitempty"`
+to `OrbitSchema`; correct the option's doc comment, which names `format` as
+the parameter.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
