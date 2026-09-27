@@ -296,12 +296,14 @@ const (
 
 // fairnessBounds are the bounds this scenario can be pointed at.
 //
-// Three are declared rather than one, because a shape fitted to a single
+// Several are declared rather than one, because a shape fitted to a single
 // instance is not a shape. The token bucket is a flag and refuses a rate; the
-// listen ceiling is an environment variable and refuses a held resource; and
-// the metered listing shares the first one's switch while refusing a different
+// listen ceiling is an environment variable and refuses a held resource; the
+// metered listing shares the first one's switch while refusing a different
 // method, which is why the refusal shape is per bound rather than one global
-// classifier.
+// classifier; and the process's listing bucket shares that switch too while
+// counting the whole process rather than one credential, so it is told from
+// the credential's by the words its refusal ends with.
 var fairnessBounds = []boundSpec{
 	{
 		ID:    "tools-call-rps",
@@ -341,6 +343,37 @@ var fairnessBounds = []boundSpec{
 		},
 		NoisyVerbs: []string{verbList},
 		QuietVerbs: []string{verbCall, verbList},
+	},
+	{
+		ID:    "tools-list-process",
+		Label: "the listing bucket the whole process shares",
+		// The bucket keyed on the process beside every credential's listing
+		// bucket (register row RTC-007), put in force on its own: the on-arm
+		// gives each credential a listing bucket of a hundred a second and ten
+		// thousand in hand, which no noisy credential here reaches, so every
+		// listing refused is the process's. The off-arm turns the rate limit
+		// off, which turns this bucket off with it (issue 951). No Bucket,
+		// because it counts tools rather than requests: a listing on the
+		// individual surface is some nine hundred of them against a refill of
+		// three thousand a second, so the surface decides the rate a noisy
+		// population must exceed, and only individual gives a population of
+		// this size something to exceed (-fairness-surface individual). On
+		// dynamic the positive control stops the run instead.
+		//
+		// The quiet population only calls tools, because what this bucket
+		// claims to protect is the processor its co-tenants' calls wait for,
+		// and it refuses newcomers whoever they are: a quiet tenant listing
+		// too would be refused by a bound that promises no one a share.
+		ArgsOff: []string{limiterOffArg},
+		ArgsOn:  []string{"--rate-limit-rps=1000", "--rate-limit-burst=10000"},
+		Refusals: []refusalSpec{
+			{
+				Status: httpOK, Code: rateLimitCode, Method: methodToolsList,
+				TextPrefix: rateLimitRefusal + methodToolsList + toolutil.RateLimitProcessScope,
+			},
+		},
+		NoisyVerbs: []string{verbList},
+		QuietVerbs: []string{verbCall},
 	},
 	{
 		ID:      "listen-streams",

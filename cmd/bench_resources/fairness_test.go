@@ -79,6 +79,10 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("boundByID: %v", err)
 	}
+	processListing, err := boundByID("tools-list-process")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
 
 	cases := []struct {
 		name     string
@@ -112,6 +116,23 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 				Code: -42900, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
 			}),
 			refusals: listing.Refusals, want: outcomeRefused,
+		},
+		{
+			// The bucket the whole process shares refuses with the same code
+			// and the same prefix as the credential's, and says it is the
+			// server's after the method, which is what tells the two apart.
+			name: "the process's listing refusal is its bound's", method: methodToolsList,
+			err: fmt.Errorf("tools/list: %w", rpcError{
+				Code: -42900, Message: toolutil.RateLimitRefusalPrefix + "tools/list across this server; retry after a short backoff",
+			}),
+			refusals: processListing.Refusals, want: outcomeRefused,
+		},
+		{
+			name: "a credential's listing refusal is not the process's", method: methodToolsList,
+			err: fmt.Errorf("tools/list: %w", rpcError{
+				Code: -42900, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
+			}),
+			refusals: processListing.Refusals, want: outcomeFailed,
 		},
 		{
 			// cmd/server's codeServerBusy, which the listen ceiling refuses
