@@ -1957,7 +1957,9 @@ func TestRepositoryTree_NodeFieldsComeFromTheirOwnKeys(t *testing.T) {
 // with_last_commit reaches GitLab only when the caller set it, and that each
 // entry's last commit is published whole when it did, read off the captured
 // answer since client-go's TreeNode has no field for it; an entry GitLab sent
-// none for keeps none.
+// none for keeps none. The commit carries trailers in the shape GitLab sends
+// them, extended_trailers mapping each to the list of its values, which
+// client-go's Commit cannot decode.
 func TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -1965,14 +1967,16 @@ func TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit(t *testing.T) {
 		wantSent string
 		// wantFirst is the last commit the first entry publishes; the second
 		// entry, which GitLab sends none for, always publishes none.
-		wantFirst *commits.Output
+		wantFirst *TreeCommitOutput
 	}{
-		{name: "asked", with: true, wantSent: "true", wantFirst: &commits.Output{
+		{name: "asked", with: true, wantSent: "true", wantFirst: &TreeCommitOutput{
 			ID: "c0ffee0000", ShortID: "c0ffee0", Title: "Touch the readme", Message: "Touch the readme",
 			AuthorName: "Ann", AuthorEmail: "ann@example.com", AuthoredDate: "2026-05-01T09:00:00Z",
-			CommitterName: "Cid", CommitterEmail: "cid@example.com", CommittedDate: "2026-05-02T10:00:00Z",
-			CreatedAt: "2026-05-02T10:00:00Z", ParentIDs: []string{"p1"},
-			WebURL: "https://gitlab.example.com/g/p/-/commit/c0ffee0000",
+			CommitterName: "Cid", CommitterEmail: "cid@example.com", CommittedDate: "2026-05-02T08:00:00Z",
+			CreatedAt: "2026-05-03T11:00:00Z", ParentIDs: []string{"p1"},
+			Trailers:         map[string]string{"Signed-off-by": "Dee", "Changelog": "fixed"},
+			ExtendedTrailers: map[string][]string{"Signed-off-by": {"Ann", "Dee"}, "Changelog": {"fixed"}},
+			WebURL:           "https://gitlab.example.com/g/p/-/commit/c0ffee0000",
 		}},
 		{name: "not asked", with: false, wantSent: "", wantFirst: nil},
 	}
@@ -2002,8 +2006,11 @@ func treeWithLastCommits(t *testing.T, with bool) (string, TreeOutput) {
 	t.Helper()
 	const lastCommit = `{"id":"c0ffee0000","short_id":"c0ffee0","title":"Touch the readme","message":"Touch the readme",` +
 		`"author_name":"Ann","author_email":"ann@example.com","authored_date":"2026-05-01T09:00:00Z",` +
-		`"committer_name":"Cid","committer_email":"cid@example.com","committed_date":"2026-05-02T10:00:00Z",` +
-		`"created_at":"2026-05-02T10:00:00Z","parent_ids":["p1"],"web_url":"https://gitlab.example.com/g/p/-/commit/c0ffee0000"}`
+		`"committer_name":"Cid","committer_email":"cid@example.com","committed_date":"2026-05-02T10:00:00+02:00",` +
+		`"created_at":"2026-05-03T11:00:00Z","parent_ids":["p1"],` +
+		`"trailers":{"Signed-off-by":"Dee","Changelog":"fixed"},` +
+		`"extended_trailers":{"Signed-off-by":["Ann","Dee"],"Changelog":["fixed"]},` +
+		`"web_url":"https://gitlab.example.com/g/p/-/commit/c0ffee0000"}`
 	var sent atomic.Pointer[string]
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked := r.URL.Query().Get("with_last_commit")
@@ -2054,7 +2061,7 @@ func TestRepositoryTree_UndecodableLastCommit_IsAnError(t *testing.T) {
 func TestFormatTreeMarkdown_WithLastCommit(t *testing.T) {
 	got := FormatTreeMarkdown(TreeOutput{
 		Tree: []TreeNodeOutput{
-			{ID: "a", Name: "README.md", Type: "blob", Path: "README.md", Mode: "100644", LastCommit: &commits.Output{
+			{ID: "a", Name: "README.md", Type: "blob", Path: "README.md", Mode: "100644", LastCommit: &TreeCommitOutput{
 				ShortID: "c0ffee0", Title: "Touch | the readme", CommittedDate: "2026-05-02T10:00:00Z",
 				WebURL: "https://gitlab.example.com/g/p/-/commit/c0ffee0000",
 			}},

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -36,19 +37,86 @@ type TreeInput struct {
 // which is the one condition under which lib/api/entities/tree_object.rb
 // renders it.
 type TreeNodeOutput struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Type       string          `json:"type"`
-	Path       string          `json:"path"`
-	Mode       string          `json:"mode"`
-	LastCommit *commits.Output `json:"last_commit,omitempty"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Type       string            `json:"type"`
+	Path       string            `json:"path"`
+	Mode       string            `json:"mode"`
+	LastCommit *TreeCommitOutput `json:"last_commit,omitempty"`
+}
+
+// TreeCommitOutput is the commit that last changed a tree entry, the keys of
+// lib/api/entities/commit.rb, which the tree entity renders last_commit with.
+// extended_trailers maps each trailer to the list of its values, which is how
+// Gitlab::Git::Commit#parse_commit_trailers builds it and how the entity
+// documents it.
+type TreeCommitOutput struct {
+	ID               string              `json:"id"`
+	ShortID          string              `json:"short_id"`
+	Title            string              `json:"title"`
+	Message          string              `json:"message,omitempty"`
+	AuthorName       string              `json:"author_name"`
+	AuthorEmail      string              `json:"author_email"`
+	AuthoredDate     string              `json:"authored_date,omitempty"`
+	CommitterName    string              `json:"committer_name,omitempty"`
+	CommitterEmail   string              `json:"committer_email,omitempty"`
+	CommittedDate    string              `json:"committed_date,omitempty"`
+	CreatedAt        string              `json:"created_at,omitempty"`
+	ParentIDs        []string            `json:"parent_ids,omitempty"`
+	Trailers         map[string]string   `json:"trailers,omitempty"`
+	ExtendedTrailers map[string][]string `json:"extended_trailers,omitempty"`
+	WebURL           string              `json:"web_url,omitempty"`
 }
 
 // treeObjectExtra is the key of lib/api/entities/tree_object.rb that
 // client-go's TreeNode does not model: the commit that last changed the entry,
 // rendered through the commit entity when the request passed with_last_commit.
 type treeObjectExtra struct {
-	LastCommit *gl.Commit `json:"last_commit"`
+	LastCommit *treeCommit `json:"last_commit"`
+}
+
+// treeCommit is a tree entry's last commit as GitLab sends it. It is decoded
+// here rather than into client-go's Commit, which declares extended_trailers a
+// map of strings and so cannot hold the map of lists GitLab sends: one entry
+// whose commit carried a trailer would fail the read of the whole page.
+type treeCommit struct {
+	ID               string              `json:"id"`
+	ShortID          string              `json:"short_id"`
+	Title            string              `json:"title"`
+	Message          string              `json:"message"`
+	AuthorName       string              `json:"author_name"`
+	AuthorEmail      string              `json:"author_email"`
+	AuthoredDate     *time.Time          `json:"authored_date"`
+	CommitterName    string              `json:"committer_name"`
+	CommitterEmail   string              `json:"committer_email"`
+	CommittedDate    *time.Time          `json:"committed_date"`
+	CreatedAt        *time.Time          `json:"created_at"`
+	ParentIDs        []string            `json:"parent_ids"`
+	Trailers         map[string]string   `json:"trailers"`
+	ExtendedTrailers map[string][]string `json:"extended_trailers"`
+	WebURL           string              `json:"web_url"`
+}
+
+// toTreeCommitOutput converts an entry's last commit, its three instants in
+// RFC 3339 as every other date here.
+func toTreeCommitOutput(c *treeCommit) *TreeCommitOutput {
+	return &TreeCommitOutput{
+		ID:               c.ID,
+		ShortID:          c.ShortID,
+		Title:            c.Title,
+		Message:          c.Message,
+		AuthorName:       c.AuthorName,
+		AuthorEmail:      c.AuthorEmail,
+		AuthoredDate:     toolutil.RFC3339Ptr(c.AuthoredDate),
+		CommitterName:    c.CommitterName,
+		CommitterEmail:   c.CommitterEmail,
+		CommittedDate:    toolutil.RFC3339Ptr(c.CommittedDate),
+		CreatedAt:        toolutil.RFC3339Ptr(c.CreatedAt),
+		ParentIDs:        c.ParentIDs,
+		Trailers:         c.Trailers,
+		ExtendedTrailers: c.ExtendedTrailers,
+		WebURL:           c.WebURL,
+	}
 }
 
 // withLastCommitParam asks the tree route for each entry's last commit when
@@ -132,8 +200,7 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 		}
 		for i, row := range rows {
 			if row.LastCommit != nil {
-				last := commits.ToOutput(row.LastCommit)
-				out[i].LastCommit = &last
+				out[i].LastCommit = toTreeCommitOutput(row.LastCommit)
 			}
 		}
 	}

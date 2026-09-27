@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -59,8 +60,8 @@ const fullScheduleJSON = `{
 // either converter: the SDK one formats the timestamps to RFC3339 and the
 // raw one passes them through, and the fixture spells them so both agree.
 // The raw path is the one that can see variables[].raw, so it is passed the
-// only value that tells it apart.
-func fullScheduleOutput(raw bool) Output {
+// only value that tells it apart; the SDK path, which cannot, passes nil.
+func fullScheduleOutput(raw *bool) Output {
 	return Output{
 		ID:           11,
 		Description:  "Nightly build",
@@ -111,7 +112,7 @@ func TestPipelineScheduleList_Success(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	want := ListOutput{
-		Schedules:  []Output{fullScheduleOutput(false)},
+		Schedules:  []Output{fullScheduleOutput(nil)},
 		Pagination: toolutil.PaginationOutput{Page: 2, PerPage: 5, TotalItems: 12, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true},
 	}
 	if !reflect.DeepEqual(out, want) {
@@ -238,7 +239,7 @@ func TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField(t *testing.T
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if want := fullScheduleOutput(true); !reflect.DeepEqual(out, want) {
+	if want := fullScheduleOutput(new(true)); !reflect.DeepEqual(out, want) {
 		t.Errorf("Get() =\n%#v\nwant\n%#v", out, want)
 	}
 }
@@ -285,40 +286,48 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 }
 
 // TestPipelineScheduleGet_RawVariableSurfaced verifies that the documented
-// variables[].raw boolean — which the SDK gl.PipelineVariable omits — is
-// surfaced through the raw REST superset fetch on the get-schedule handler.
+// variables[].raw boolean, which the SDK gl.PipelineVariable omits, is
+// surfaced through the raw REST superset fetch on the get-schedule handler,
+// and published as GitLab sent it whichever way it reads: a false that was
+// sent is a statement about the value, and used to be dropped as if GitLab had
+// said nothing.
 func TestPipelineScheduleGet_RawVariableSurfaced(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
-				"variables":[{"key":"TOKEN","value":"$secret","variable_type":"env_var","raw":true}]
-			}`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
-	}))
+	for _, raw := range []bool{true, false} {
+		t.Run(strconv.FormatBool(raw), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+					testutil.RespondJSON(w, http.StatusOK, `{
+						"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+						"variables":[{"key":"TOKEN","value":"$secret","variable_type":"env_var","raw":`+strconv.FormatBool(raw)+`}]
+					}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			}))
 
-	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if len(out.Variables) != 1 || !out.Variables[0].Raw {
-		t.Fatalf("variables = %+v, want one variable with raw=true", out.Variables)
-	}
-	blob, err := json.Marshal(out.Variables[0])
-	if err != nil {
-		t.Fatalf("marshal variable: %v", err)
-	}
-	if !strings.Contains(string(blob), `"raw":true`) {
-		t.Errorf("variable JSON missing raw=true: %s", blob)
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.Variables) != 1 || out.Variables[0].Raw == nil || *out.Variables[0].Raw != raw {
+				t.Fatalf("variables = %+v, want one variable with raw=%t", out.Variables, raw)
+			}
+			blob, err := json.Marshal(out.Variables[0])
+			if err != nil {
+				t.Fatalf("marshal variable: %v", err)
+			}
+			if want := `"raw":` + strconv.FormatBool(raw); !strings.Contains(string(blob), want) {
+				t.Errorf("variable JSON missing %s: %s", want, blob)
+			}
+		})
 	}
 }
 
 // TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance verifies that a
 // schedule whose variables[] entries omit the raw field (older GitLab versions)
-// still decodes successfully, leaving raw at its false zero value and omitting it
-// from the serialized output via the omitempty tag.
+// still decodes successfully, leaving raw unset and omitting it from the
+// serialized output, so that a flag GitLab never sent is not published as
+// false.
 func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
@@ -338,8 +347,8 @@ func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
 	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
 		t.Fatalf("variables = %+v, want one DEPLOY_ENV variable", out.Variables)
 	}
-	if out.Variables[0].Raw {
-		t.Errorf("raw = true, want false when field absent")
+	if out.Variables[0].Raw != nil {
+		t.Errorf("raw = %v, want none when the field is absent", *out.Variables[0].Raw)
 	}
 	blob, err := json.Marshal(out.Variables[0])
 	if err != nil {
@@ -735,8 +744,8 @@ func TestCreateVariable_Success(t *testing.T) {
 	if out.Value != "production" {
 		t.Errorf("Value = %q, want %q", out.Value, "production")
 	}
-	if !out.Raw {
-		t.Error("Raw = false, want true: GitLab said the value is not expanded")
+	if out.Raw == nil || !*out.Raw {
+		t.Errorf("Raw = %v, want true: GitLab said the value is not expanded", out.Raw)
 	}
 }
 
@@ -844,8 +853,8 @@ func TestEditVariable_Success(t *testing.T) {
 	if out.VariableType != "env_var" {
 		t.Errorf("VariableType = %q, want %q", out.VariableType, "env_var")
 	}
-	if out.Raw {
-		t.Error("Raw = true, want false: GitLab sent no raw flag")
+	if out.Raw != nil {
+		t.Errorf("Raw = %v, want none: GitLab sent no raw flag", *out.Raw)
 	}
 }
 
@@ -2284,7 +2293,7 @@ const variableCardHints = "\n---\n💡 **Next steps:**\n" +
 // TestFormatVariableMarkdown_WithType checks the whole card of one schedule
 // variable.
 func TestFormatVariableMarkdown_WithType(t *testing.T) {
-	md := FormatVariableMarkdown(VariableOutput{Key: "MY_VAR", Value: "hello", VariableType: "env_var", Raw: true})
+	md := FormatVariableMarkdown(VariableOutput{Key: "MY_VAR", Value: "hello", VariableType: "env_var", Raw: new(true)})
 	want := "## Pipeline Schedule Variable\n\n" +
 		"- **Key**: MY_VAR\n" +
 		"- **Value**: hello\n" +
@@ -2297,13 +2306,13 @@ func TestFormatVariableMarkdown_WithType(t *testing.T) {
 }
 
 // TestFormatVariableMarkdown_WithoutType checks that a variable GitLab sent no
-// type for shows no type row rather than a label with nothing after it.
+// type and no raw flag for shows neither row rather than a label with nothing
+// after it or a flag nobody sent.
 func TestFormatVariableMarkdown_WithoutType(t *testing.T) {
 	md := FormatVariableMarkdown(VariableOutput{Key: "K", Value: "V"})
 	want := "## Pipeline Schedule Variable\n\n" +
 		"- **Key**: K\n" +
 		"- **Value**: V\n" +
-		"- **Raw (not expanded)**: " + toolutil.BoolEmoji(false) + "\n" +
 		variableCardHints
 	if md != want {
 		t.Errorf("FormatVariableMarkdown(no type)\n got %q\nwant %q", md, want)

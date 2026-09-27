@@ -2135,6 +2135,26 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 		"| [@alice](https://gitlab.example.com/alice) | Alice A | active | ❌ |\n" +
 		"| @bob | Bob B | blocked | ✅ |\n" +
 		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.get' to view the issue details\n" +
+		"- Use action 'issue.note_create' to notify participants\n"
+	if md != want {
+		t.Errorf("FormatParticipantsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatParticipantsMarkdown_NoProfileLinks_NoPreserveHint verifies that
+// the instruction to keep links is left out when no participant carries a
+// profile URL, since no username in the table is then a link.
+func TestFormatParticipantsMarkdown_NoProfileLinks_NoPreserveHint(t *testing.T) {
+	md := FormatParticipantsMarkdown(ParticipantsOutput{
+		Participants: []ParticipantOutput{{ID: 2, Username: "bob", Name: "Bob B", State: "active"}},
+	})
+	want := "## Participants (1)\n\n" +
+		"| Username | Name | State | Locked |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| @bob | Bob B | active | ❌ |\n" +
+		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'issue.get' to view the issue details\n" +
 		"- Use action 'issue.note_create' to notify participants\n"
 	if md != want {

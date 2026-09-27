@@ -43,7 +43,7 @@ type Output struct {
 // KASOutput is the kas object of lib/api/entities/metadata.rb: whether the
 // instance runs the GitLab agent server for Kubernetes, where agents reach it
 // and where its Kubernetes API proxy listens, and its version. The two
-// addresses are spelled in snake case here, as metadata.get spells them.
+// addresses are spelled in snake case here, as admin.metadata_get spells them.
 type KASOutput struct {
 	Enabled             bool   `json:"enabled"`
 	ExternalURL         string `json:"external_url,omitempty"`
@@ -119,7 +119,9 @@ func withoutUserinfo(text string, user *url.Userinfo) string {
 // lib/api/metadata.rb serves both with the same entity and has marked the
 // second deprecated since GitLab 15.5, and client-go decodes the whole entity
 // only for the first: its Version struct carries the version and revision and
-// drops the edition and the agent server the same answer sends.
+// drops the edition and the agent server the same answer sends. The cost is a
+// floor: GET /metadata arrived in GitLab 15.2, so an instance older than that
+// answers 404 there and is reported unhealthy, with that refusal as the error.
 func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err

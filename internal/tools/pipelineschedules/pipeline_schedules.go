@@ -421,19 +421,20 @@ func TakeOwnership(ctx context.Context, client *gitlabclient.Client, input TakeO
 // it, so it is read off the captured response (ADR-0021). The entity's hidden,
 // protected, masked, environment_scope and description wait on the presented
 // object responding to them, which a schedule variable does not, so GitLab
-// never sends them here.
+// never sends them here. Raw is a pointer, omitted when the answer carried no
+// raw key, so that it says what GitLab said and nothing it did not.
 type VariableOutput struct {
 	toolutil.HintableOutput
 	Key          string `json:"key"`
 	Value        string `json:"value"`
 	VariableType string `json:"variable_type"`
-	Raw          bool   `json:"raw"`
+	Raw          *bool  `json:"raw,omitempty"`
 }
 
 // variableExtra is the key of lib/api/entities/ci/variable.rb that client-go's
 // PipelineVariable does not model.
 type variableExtra struct {
-	Raw bool `json:"raw"`
+	Raw *bool `json:"raw"`
 }
 
 // variableOutput converts the variable a create or an edit answered with, the

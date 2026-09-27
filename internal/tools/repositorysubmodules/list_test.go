@@ -6,6 +6,7 @@ package repositorysubmodules
 import (
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -690,6 +691,87 @@ func TestList_TreeListing_FollowsEveryPageOfTheDirectory(t *testing.T) {
 	defer mu.Unlock()
 	if want := []string{"", "2"}; !slices.Equal(pages, want) {
 		t.Errorf("tree pages asked = %q, want %q", pages, want)
+	}
+}
+
+// twoSubmodulesGitmodules is a .gitmodules naming two submodules in the
+// repository root, lib and vendor.
+const twoSubmodulesGitmodules = `{"file_name": ".gitmodules", "encoding": "text",
+	"content": "[submodule \"lib\"]\n\tpath = lib\n\turl = git@host:group/lib.git\n` +
+	`[submodule \"vendor\"]\n\tpath = vendor\n\turl = git@host:group/vendor.git\n", "ref": "main"}`
+
+// TestList_TreeListing_StopsAtThePageHoldingTheLastSubmodule verifies that a
+// directory is listed only until every submodule it holds has been matched: a
+// root of thousands of entries whose submodules sit on its first pages costs
+// those pages and not all of them. The first case holds the listing to the
+// one page its only submodule is on, although GitLab announces a second; the
+// second holds it to reading on while a submodule of the directory is still
+// unmatched, one on each page.
+func TestList_TreeListing_StopsAtThePageHoldingTheLastSubmodule(t *testing.T) {
+	const (
+		libNode    = `{"id": "c0ffee00", "name": "lib", "type": "commit", "path": "lib", "mode": "160000"}`
+		vendorNode = `{"id": "beef0000", "name": "vendor", "type": "commit", "path": "vendor", "mode": "160000"}`
+		blobNode   = `{"id": "b10bb10b", "name": "README", "type": "blob", "path": "README", "mode": "100644"}`
+	)
+	cases := []struct {
+		name       string
+		gitmodules string
+		firstPage  string
+		secondPage string
+		wantPages  []string
+		wantSHAs   map[string]string
+	}{
+		{
+			name: "one submodule, found on the first page", gitmodules: oneSubmoduleGitmodules,
+			firstPage: "[" + libNode + "," + blobNode + "]", secondPage: "[" + blobNode + "]",
+			wantPages: []string{""}, wantSHAs: map[string]string{"lib": "c0ffee00"},
+		},
+		{
+			name: "two submodules, one on each page", gitmodules: twoSubmodulesGitmodules,
+			firstPage: "[" + libNode + "," + blobNode + "]", secondPage: "[" + vendorNode + "]",
+			wantPages: []string{"", "2"}, wantSHAs: map[string]string{"lib": "c0ffee00", "vendor": "beef0000"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				mu    sync.Mutex
+				pages []string
+			)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/repository/files/") {
+					testutil.RespondJSON(w, http.StatusOK, tc.gitmodules)
+					return
+				}
+				page := r.URL.Query().Get("page")
+				mu.Lock()
+				pages = append(pages, page)
+				mu.Unlock()
+				if page == "" {
+					testutil.RespondJSONWithPagination(w, http.StatusOK, tc.firstPage,
+						testutil.PaginationHeaders{Page: "1", NextPage: "2"})
+					return
+				}
+				testutil.RespondJSONWithPagination(w, http.StatusOK, tc.secondPage, testutil.PaginationHeaders{Page: "2"})
+			}))
+
+			out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := map[string]string{}
+			for _, s := range out.Submodules {
+				got[s.Path] = s.CommitSHA
+			}
+			if !maps.Equal(got, tc.wantSHAs) {
+				t.Errorf("pinned commits = %v, want %v", got, tc.wantSHAs)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if !slices.Equal(pages, tc.wantPages) {
+				t.Errorf("tree pages asked = %q, want %q", pages, tc.wantPages)
+			}
+		})
 	}
 }
 

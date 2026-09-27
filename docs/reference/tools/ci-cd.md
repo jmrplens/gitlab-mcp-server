@@ -95,7 +95,7 @@ Permanently delete a pipeline and all its jobs. This action cannot be undone. Re
 
 ### `gitlab_pipeline_variables`
 
-Get the variables for a specific pipeline. Returns variable keys, values, types, and `raw` (whether GitLab leaves variable references in the value unexpanded). A pipeline variable carries no protected, masked, hidden, environment scope or description setting, so GitLab sends none of those here.
+Get the variables for a specific pipeline. Returns variable keys, values, types, and `raw` (whether GitLab leaves variable references in the value unexpanded, left out when GitLab sends none, as an instance older than the setting answers; the pipeline schedule variable actions follow the same rule). A pipeline variable carries no protected, masked, hidden, environment scope or description setting, so GitLab sends none of those here.
 
 | Annotation | **Read** |
 | ---------- | -------- |

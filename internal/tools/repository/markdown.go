@@ -7,7 +7,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -55,7 +54,7 @@ func treeNodeIcon(nodeType string) string {
 // lastCommitCells renders the two cells an entry's last commit fills: its
 // short id linked to the commit with the title beside it, and when it was
 // committed. An entry GitLab sent no last commit for fills neither.
-func lastCommitCells(c *commits.Output) []string {
+func lastCommitCells(c *TreeCommitOutput) []string {
 	if c == nil {
 		return []string{"", ""}
 	}

@@ -141,6 +141,7 @@ readable without opening the tracker:
 | 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No, but it breaks a MUST | None taken |
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), open | No | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
+| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Yes, for `repository.commit_list` with `trailers` | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1806,13 +1807,15 @@ carry them, and each is read from the captured response in the meantime.
   `trailers` and `extended_trailers`, from the `Commit` entity it extends, and
   `project_id` and `last_pipeline`, its own. `internal/tools/repositorysubmodules`
   reads the five off the captured answer, `extended_trailers` as the map of
-  lists GitLab sends rather than as client-go's `Commit` spells it.
+  lists GitLab sends rather than as client-go's `Commit` spells it, which is
+  [a defect of its own](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists).
 - `TreeNode` has no `last_commit` and `ListTreeOptions` no `with_last_commit`,
   the parameter GitLab 19.3 added to `GET /projects/:id/repository/tree` and
   the key `lib/api/entities/tree_object.rb` then exposes on each entry, a
   whole commit. `repository.tree` offers the parameter through a request
   option that adds it to the query client-go encoded, and reads the commit off
-  the captured answer.
+  the captured answer, into a type of its own rather than client-go's `Commit`
+  for the reason the entry on `extended_trailers` gives.
 - `JobTokenAccessSettings`, what `GetProjectJobTokenAccessSettings` returns,
   has no `outbound_enabled`, which `lib/api/entities/project_job_token_scope.rb`
   exposes with no condition beside `inbound_enabled`: the older outbound
@@ -3084,6 +3087,61 @@ had been mocking as an array.
 **Effort**: small. One `int64` field, and a `GetExportStatus(gid, relation)`
 returning one `*GroupRelationStatus`, with `Relation` dropped from the list's
 options or documented as answering an object.
+
+### Commit declares extended_trailers a map of strings, and GitLab sends lists
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, for `repository.commit_list` with `trailers` set: a page
+  holding one commit with a trailer fails as a whole.
+- **Workaround**: partial. The handlers that read a commit this server decodes
+  itself type the key as GitLab sends it: `repository.tree` with
+  `with_last_commit` (`repository.treeCommit`), the submodule update
+  (`repositorysubmodules.submoduleCommitExtra`), and both context commit
+  actions, which read the whole page from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  into `mrcontextcommits.commitRow` and pass over client-go's own decode
+  failure (`mrcontextcommits.misreadByClientGo`). Every handler that takes the
+  commit from client-go (`repository.commit_list`, `repository.commit_get`,
+  `repository.commit_create`, `repository.commit_cherry_pick` and
+  `repository.commit_revert` in `internal/tools/commits`, `repository.compare`
+  and `repository.merge_base`, a branch's commit in `internal/tools/branches`,
+  and a merge request's commits in `internal/tools/mrchanges`) still publishes
+  `extended_trailers` as a map of strings, and `repository.commit_list` with
+  `trailers` still fails; neither retires until the struct carries the lists.
+
+**What**: `lib/api/entities/commit.rb` at 19.4.1-ee exposes `extended_trailers`
+with no condition, documented as a hash of each trailer to the list of its
+values, and `Gitlab::Git::Commit#parse_commit_trailers`
+(`lib/gitlab/git/commit.rb`) builds it that way, `(hash[trailer.key] ||= []) <<
+value`. `Commit` in client-go v3.14.0's `commits.go` declares `ExtendedTrailers
+map[string]string`, unchanged on the community fork's main, so decoding a commit
+that carries a trailer fails with `json: cannot unmarshal array into Go struct
+field Commit.extended_trailers.Signed-off-by of type string`, and the SDK
+returns that error in place of the whole answer. Only one route fills the key
+today, which is why nothing else has failed: measured on gitlab.com on
+2026-09-27, `GET /projects/278964/repository/commits?trailers=true` answers
+commit `9f1632e2` with `"Reviewed-by"` mapped to four values, while the same
+commit read singly (`/repository/commits/9f1632e2...`) and as the last commit
+of a tree entry (`/repository/tree?with_last_commit=true`) answers `{}` for
+both trailer keys, as does the list without `trailers`. Only
+`FindCommitsRequest` passes Gitaly `trailers`; `call_find_commit`,
+`list_commits_by_oid` and the tree entries pass none. Every method answering
+with a `Commit` (`ListCommits`, `GetCommit`, `CreateCommit`, `CherryPickCommit`,
+`RevertCommit`, the comparison, the merge base, the context commits) fails the
+same way the day its route starts parsing trailers.
+
+**How we found it**: reading the entity while surfacing the context commit and
+submodule commit keys for
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971), then
+decoding GitLab's own request spec fixture (`spec/requests/api/commits_spec.rb`,
+`'Signed-off-by' => [...]`) into `gl.Commit`, and confirming the one route that
+fills the key against gitlab.com. The sent audits compare key names and not
+the value's shape, so neither grain can see it.
+
+**Effort**: one field type, `map[string][]string`, which breaks exported API:
+a major version, or a second field beside the old one that decodes the lists.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

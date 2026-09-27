@@ -75,7 +75,7 @@ var declaredServices = map[string]declaration{
 	"GroupClusters":    {supersededUpstream, certificateClusters},
 	"InstanceClusters": {supersededUpstream, certificateClusters},
 	"ProjectClusters":  {supersededUpstream, certificateClusters},
-	"Version":          {supersededUpstream, "GET /version is 'deprecated in 15.5. We recommend you instead use the Metadata API' (lib/api/metadata.rb), which serves the same Entities::Metadata on GET /metadata; client-go's Version struct decodes two of its four keys and Metadata all of them. internal/tools/health and internal/tools/metadata call Metadata.GetMetadata instead, and internal/gitlab's connectivity ping reads /version with a request of its own rather than through this service"},
+	"Version":          {supersededUpstream, "GET /version is 'deprecated in 15.5. We recommend you instead use the Metadata API' (lib/api/metadata.rb), which serves the same Entities::Metadata on GET /metadata; client-go's Version struct decodes two of its four keys and Metadata all of them. internal/tools/health and internal/tools/metadata call Metadata.GetMetadata instead. The decision covers the tool surface: outside it, internal/gitlab's Client.Ping, which only the e2e harness calls, still reads the version through Version.GetVersion, and the startup probe and the edition detection read /api/v4/version with requests of their own"},
 
 	// UNWRAPPED_TRACKED
 	// (none: SecurityDependencyFirewall was the last one, and

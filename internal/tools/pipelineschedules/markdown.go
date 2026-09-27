@@ -118,7 +118,7 @@ func FormatVariableMarkdown(v VariableOutput) string {
 	c.Field("Value", v.Value)
 	// A CI variable type is one of GitLab's fixed set (env_var, file).
 	c.Field("Type", v.VariableType)
-	c.Bool("Raw (not expanded)", v.Raw)
+	c.BoolPtr("Raw (not expanded)", v.Raw)
 	c.End(
 		toolutil.HintAction(actionScheduleEditVariable, "change this variable"),
 		toolutil.HintAction(actionScheduleDeleteVariable, "remove it"),

@@ -66,12 +66,16 @@ func lastPipelineOutput(p *gitlab.LastPipeline) *LastPipelineOutput {
 // embedded on a pipeline schedule payload (key, value, variable_type), plus the
 // documented `raw` boolean that gl.PipelineVariable does not expose. The `raw`
 // field is surfaced via a raw REST superset fetch (see rawScheduleAPI) rather
-// than the SDK wrapper, and is omitted when the instance does not report it.
+// than the SDK wrapper. It is a pointer so that it says what GitLab said, false
+// included, and is omitted where no answer carried it: an instance that sends
+// none, or a schedule read through the SDK wrapper, which cannot see it. Every
+// variable output of this package and of internal/tools/pipelines publishes
+// raw under the same rule.
 type VariableObject struct {
 	Key          string `json:"key"`
 	Value        string `json:"value"`
 	VariableType string `json:"variable_type"`
-	Raw          bool   `json:"raw,omitempty"`
+	Raw          *bool  `json:"raw,omitempty"`
 }
 
 // variableObjects converts a slice of gl.PipelineVariable, skipping nil
@@ -101,7 +105,7 @@ type scheduleVariableAPI struct {
 	Key          string `json:"key"`
 	Value        string `json:"value"`
 	VariableType string `json:"variable_type"`
-	Raw          bool   `json:"raw"`
+	Raw          *bool  `json:"raw"`
 }
 
 // variableObjectsAPI converts the raw-fetch schedule variables, preserving the

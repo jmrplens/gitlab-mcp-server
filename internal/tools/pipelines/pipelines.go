@@ -408,18 +408,20 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 // response (ADR-0021). The entity's hidden, protected, masked,
 // environment_scope and description wait on the presented object responding
 // to them, which a pipeline variable does not, so GitLab never sends them
-// here.
+// here. Raw is a pointer, omitted when the answer carried no raw key, so that
+// it says what GitLab said and nothing it did not; a pipeline schedule's
+// variables publish it under the same rule.
 type VariableOutput struct {
 	Key          string `json:"key"`
 	Value        string `json:"value"`
 	VariableType string `json:"variable_type"`
-	Raw          bool   `json:"raw"`
+	Raw          *bool  `json:"raw,omitempty"`
 }
 
 // variableExtra is the key of lib/api/entities/ci/variable.rb that client-go's
 // PipelineVariable does not model.
 type variableExtra struct {
-	Raw bool `json:"raw"`
+	Raw *bool `json:"raw"`
 }
 
 // VariablesOutput holds a list of pipeline variables.

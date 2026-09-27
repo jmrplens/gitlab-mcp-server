@@ -1041,8 +1041,12 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The instance metadata the health check reports under names of its own,
 	// one key at a time so a key GitLab adds to the entity is a finding. The
-	// version needs none: the package grain credits the agent server's own
-	// version key, published one level down, to the package.
+	// version needs none, and for a reason that is not about the version: the
+	// package grain joins on key names, and the agent server's own version key,
+	// published one level down as gitlab_kas.version, carries the same name.
+	// A declaration for it here would match nothing and fail as stale. Should
+	// KASOutput stop publishing that key, the entity's version becomes a
+	// finding, and it is answered with the reason the revision is.
 	{Package: healthPkg, Entity: metadataEntity, Field: "revision", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
 	{Package: healthPkg, Entity: metadataEntity, Field: "enterprise", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
 	{Package: healthPkg, Entity: metadataEntity, Field: "kas", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},

@@ -456,7 +456,8 @@ const (
 	pathPipeline10 = "/api/v4/projects/42/pipelines/10"
 
 	// variablesResponse identifies the variables response constant used by this package.
-	variablesResponse = `[{"key":"CI_VAR","value":"hello","variable_type":"env_var","raw":false},{"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file","raw":true}]`
+	variablesResponse = `[{"key":"CI_VAR","value":"hello","variable_type":"env_var","raw":false},{"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file","raw":true},` +
+		`{"key":"OLD_VAR","value":"legacy","variable_type":"env_var"}]`
 
 	// testReportResponse identifies the test report response constant used by this package.
 	testReportResponse = `{
@@ -500,11 +501,13 @@ func TestGetVariables_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVariables() unexpected error: %v", err)
 	}
-	// raw differs between the two, so a capture paired with the wrong
-	// variable, or not read at all, fails one of the rows.
+	// raw differs across the three, so a capture paired with the wrong
+	// variable, or not read at all, fails one of the rows; the third carries
+	// none, as an instance older than the column answers, and publishes none.
 	want := []VariableOutput{
-		{Key: "CI_VAR", Value: "hello", VariableType: "env_var"},
-		{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: true},
+		{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: new(false)},
+		{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: new(true)},
+		{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var"},
 	}
 	if !reflect.DeepEqual(out.Variables, want) {
 		t.Errorf("Variables = %+v, want %+v", out.Variables, want)
@@ -1811,15 +1814,17 @@ func TestFormatDetailMarkdown_DetailedStatusOnlyWhenItSaysMore(t *testing.T) {
 func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 	out := VariablesOutput{
 		Variables: []VariableOutput{
-			{Key: "CI_VAR", Value: "hello", VariableType: "env_var"},
-			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: true},
+			{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: new(false)},
+			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: new(true)},
+			{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var"},
 		},
 	}
-	want := "## Pipeline Variables (2)\n\n" +
+	want := "## Pipeline Variables (3)\n\n" +
 		"| Key | Value | Type | Raw |\n" +
 		"| --- | --- | --- | --- |\n" +
 		"| CI_VAR | hello | env_var | " + toolutil.BoolEmoji(false) + " |\n" +
 		"| SECRET_FILE | /tmp/secret | file | " + toolutil.BoolEmoji(true) + " |\n" +
+		"| OLD_VAR | legacy | env_var |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'pipeline.get' to see the pipeline these variables ran\n"
 	if got := FormatVariablesMarkdown(out); got != want {

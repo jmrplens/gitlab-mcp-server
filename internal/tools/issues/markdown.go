@@ -179,7 +179,11 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Participants", len(out.Participants), toolutil.PaginationOutput{})
 	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name", "State", "Locked"))
+	// The username links to the profile GitLab sent, and the instruction to
+	// keep links is written only when a row carries one.
+	linked := false
 	for _, p := range out.Participants {
+		linked = linked || p.WebURL != ""
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdUserLink(p.Username, p.WebURL),
 			toolutil.EscapeMdTableCell(p.Name),
@@ -187,7 +191,7 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 			toolutil.BoolEmoji(p.Locked),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, linked,
 		toolutil.HintAction(actionIssueGet, "view the issue details"),
 		toolutil.HintAction(actionIssueNoteCreate, "notify participants"),
 	)

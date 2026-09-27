@@ -312,7 +312,11 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case pathMetadata:
-			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
+			// A Community Edition without the agent server answers as
+			// lib/api/entities/metadata.rb renders it for one: enterprise
+			// false, and a kas object disabled with nothing else set.
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123",`+
+				`"kas":{"enabled":false,"externalUrl":null,"externalK8sProxyUrl":null,"version":null},"enterprise":false}`)
 		case pathCurrentUser:
 			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 		default:
@@ -330,8 +334,8 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	if out.GitLabVersion != testGitLabVersion {
 		t.Errorf("GitLabVersion = %q, want %q", out.GitLabVersion, testGitLabVersion)
 	}
-	// The answer named no edition, which is how a Community Edition answers,
-	// and no agent server: the check reports both as GitLab sent them.
+	// The answer said the Community Edition and a disabled agent server: the
+	// check reports both as GitLab sent them.
 	if out.GitLabEnterprise == nil || *out.GitLabEnterprise {
 		t.Errorf("GitLabEnterprise = %v, want a pointer to false", out.GitLabEnterprise)
 	}

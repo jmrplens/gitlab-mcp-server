@@ -129,7 +129,7 @@ Unsubscribe the authenticated user from an issue to stop receiving notifications
 
 ### `gitlab_issue_create_todo`
 
-Create a to-do item for the authenticated user on the specified issue. The to-do will appear in the user's GitLab to-do list. Returns the to-do's action, the issue's title and URL, the author (the whole GitLab user, locked flag and public email included), the body, the state, and when it was created and last updated. When a pending to-do already exists on the issue, GitLab answers 304 and the action says so rather than creating a second one.
+Create a to-do item for the authenticated user on the specified issue. The to-do will appear in the user's GitLab to-do list. Returns the to-do's action, the issue's title and URL, the author (the whole GitLab user, locked flag and public email included), the body, the state, and when it was created and last updated. When the caller already has a pending to-do they marked on the issue, GitLab answers 304 and the action says so rather than creating a second one; a pending to-do of another kind, such as an assignment, does not stop a new one.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

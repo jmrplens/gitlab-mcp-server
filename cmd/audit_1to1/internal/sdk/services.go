@@ -98,12 +98,16 @@ func staleServiceDeclarations(services []sdkService, declaredBy map[string]decla
 		byName[service.Service] = service
 	}
 	var stale []string
+	// Two ifs rather than a switch: a case expression carries no statement
+	// counter of its own, so a mutation tool counts it as never covered and
+	// leaves its mutant unrun however well the tests hold it.
 	for name := range declaredBy {
 		service, exists := byName[name]
-		switch {
-		case !exists:
+		if !exists {
 			stale = append(stale, "service "+name+" (no longer declared by client-go)")
-		case service.Status == statusCovered:
+			continue
+		}
+		if service.Status == statusCovered {
 			stale = append(stale, "service "+name+" (now called directly)")
 		}
 	}

@@ -897,7 +897,7 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 	}
 	var approvers []ApproverOutput
 	for _, approval := range extra.ApprovedBy {
-		approvers = append(approvers, ApproverOutput{User: approval.User, ApprovedAt: toolutil.FormatTimePtr(approval.ApprovedAt)})
+		approvers = append(approvers, ApproverOutput{User: approval.User, ApprovedAt: toolutil.RFC3339Ptr(approval.ApprovedAt)})
 	}
 	return ApproveOutput{
 		ApprovalsRequired: int(approvals.ApprovalsRequired),
@@ -2160,8 +2160,8 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		Author:     userBasicOutput(todo.Author, extra.Author),
 		Body:       todo.Body,
 		State:      todo.State,
-		CreatedAt:  toolutil.FormatTimePtr(todo.CreatedAt),
-		UpdatedAt:  toolutil.FormatTimePtr(extra.UpdatedAt),
+		CreatedAt:  toolutil.RFC3339Ptr(todo.CreatedAt),
+		UpdatedAt:  toolutil.RFC3339Ptr(extra.UpdatedAt),
 	}
 	if todo.Target != nil {
 		out.TargetTitle = todo.Target.Title
