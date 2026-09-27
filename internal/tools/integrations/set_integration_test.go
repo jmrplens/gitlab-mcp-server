@@ -236,12 +236,21 @@ func TestGetGroupIntegration_Error(t *testing.T) {
 }
 
 // TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped
-// asserts that the group id and the slug are percent-escaped into the path by
-// every raw-REST group handler, so that a value carrying a slash, a space or a
-// literal percent sign names one path segment rather than several. A dot
-// arrives literal: gl.PathEscape writes it "%2E" and this project's
-// dotUnescapeTransport puts it back, because instances behind some proxies
-// answer 403 to a %2E-encoded path.
+// asserts that the group id is percent-escaped into the path by every raw-REST
+// group handler, so that a value carrying a slash, a space or a literal percent
+// sign names one path segment rather than several. A dot arrives literal:
+// gl.PathEscape writes it "%2E" and this project's dotUnescapeTransport puts
+// it back, because instances behind some proxies answer 403 to a %2E-encoded
+// path.
+//
+// The slug is a real one on purpose. Every request a test sends is written into
+// the request inventory, whose endpoint check holds each row to GitLab's API
+// documentation, and a slug no integration has is a row naming an endpoint
+// GitLab does not have. The slug used to be "custom.issue-tracker" for that
+// reason and bought nothing for it: its only awkward character is the dot this
+// transport restores, so the request was the same whether or not the slug was
+// escaped, and removing the escaping left this suite green. The slug's escaping
+// is held where it is decided, by TestIntegrationPath_AwkwardSlug_StaysOneSegment.
 //
 // It is also what holds the property behind an error branch no test can enter.
 // Each of these handlers checks the error from client.GL().NewRequest, and for
@@ -250,13 +259,13 @@ func TestGetGroupIntegration_Error(t *testing.T) {
 // gl.PathEscape, which writes a raw "%" as "%25", no input produces one. The
 // branch stays because dropping a returned error is worse than keeping an
 // unreachable arm; what is asserted instead is the escaping that makes it
-// unreachable, which is a property worth holding on its own: without it a slug
-// could walk out of its endpoint.
+// unreachable, which is a property worth holding on its own: without it a
+// caller's value could walk out of its endpoint.
 func TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped(t *testing.T) {
 	const (
 		awkwardGroup = "100% my group/sub.group"
-		awkwardSlug  = "custom.issue-tracker"
-		wantSuffix   = "/groups/100%25%20my%20group%2Fsub.group/integrations/custom.issue-tracker"
+		awkwardSlug  = "custom-issue-tracker"
+		wantSuffix   = "/groups/100%25%20my%20group%2Fsub.group/integrations/custom-issue-tracker"
 	)
 
 	tests := []struct {

@@ -25,8 +25,20 @@ import (
 
 const (
 	groupsPathPrefix      = "groups/"
+	projectsPathPrefix    = "projects/"
 	integrationsPathInfix = "/integrations/"
 )
+
+// integrationPath builds the path of one integration under a project or a
+// group, the scope prefix naming which. Both caller-supplied values are
+// escaped into a segment each: the slug is free text a caller types, and one
+// carrying a slash would otherwise name another endpoint of the same scope.
+// It is one function for the four raw requests because the escaping is the
+// property, and a copy at each call site is a copy a later edit can drop
+// without any request a real integration makes changing shape.
+func integrationPath(scopePrefix string, id toolutil.StringOrInt, slug string) string {
+	return scopePrefix + gl.PathEscape(string(id)) + integrationsPathInfix + gl.PathEscape(slug)
+}
 
 // ListGroupIntegrations (read).
 
@@ -77,7 +89,7 @@ func GetGroupIntegration(ctx context.Context, client *gitlabclient.Client, input
 	if input.Slug == "" {
 		return GetGroupIntegrationOutput{}, toolutil.WrapErrWithMessage("get_group_integration", toolutil.ErrFieldRequired("slug"))
 	}
-	path := groupsPathPrefix + gl.PathEscape(string(input.GroupID)) + integrationsPathInfix + gl.PathEscape(input.Slug)
+	path := integrationPath(groupsPathPrefix, input.GroupID, input.Slug)
 	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return GetGroupIntegrationOutput{}, toolutil.WrapErrWithMessage("get_group_integration", err)
@@ -112,7 +124,7 @@ func SetGroupIntegration(ctx context.Context, client *gitlabclient.Client, input
 	if input.Slug == "" {
 		return SetGroupIntegrationOutput{}, toolutil.WrapErrWithMessage("set_group_integration", toolutil.ErrFieldRequired("slug"))
 	}
-	path := groupsPathPrefix + gl.PathEscape(string(input.GroupID)) + integrationsPathInfix + gl.PathEscape(input.Slug)
+	path := integrationPath(groupsPathPrefix, input.GroupID, input.Slug)
 	body := integrationConfigBody(input.Config)
 
 	req, err := client.GL().NewRequest(http.MethodPut, path, body, []gl.RequestOptionFunc{gl.WithContext(ctx)})
@@ -140,7 +152,7 @@ func DeleteGroupIntegration(ctx context.Context, client *gitlabclient.Client, in
 	if input.Slug == "" {
 		return toolutil.WrapErrWithMessage("delete_group_integration", toolutil.ErrFieldRequired("slug"))
 	}
-	path := groupsPathPrefix + gl.PathEscape(string(input.GroupID)) + integrationsPathInfix + gl.PathEscape(input.Slug)
+	path := integrationPath(groupsPathPrefix, input.GroupID, input.Slug)
 	req, err := client.GL().NewRequest(http.MethodDelete, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return toolutil.WrapErrWithMessage("delete_group_integration", err)
