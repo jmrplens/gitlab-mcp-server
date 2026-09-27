@@ -16,6 +16,8 @@ package common
 
 import (
 	"errors"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -40,6 +42,18 @@ const communitySchemaRefusal = "doesn't exist on type 'WorkItemFeatures'"
 // update documents select that Community Edition's schema does not define,
 // each named in the refusal as GitLab names it.
 var communityMissingWidgets = []string{"color", "healthStatus", "iteration", "status", "weight"}
+
+// gitLabMaxValidationErrors is how many validation errors GitLab reports for
+// one document before it stops (`validate_max_errors 5` in
+// app/graphql/gitlab_schema.rb, read at 19.4.1). The five widgets fill it
+// exactly, so a sixth licensed field client-go started selecting would push
+// one of them out of the refusal while client-go still selects it, and the
+// assertion has to say so rather than report the widget gone.
+const gitLabMaxValidationErrors = 5
+
+// communityRefusedField reads each field a Community Edition refusal names,
+// in graphql-ruby's wording.
+var communityRefusedField = regexp.MustCompile(`Field '([^']+)' ` + regexp.QuoteMeta(communitySchemaRefusal))
 
 // workItemTypeID finds the global ID of a type by name in a type listing.
 func workItemTypeID(types []workitems.WorkItemTypeOutput, name string) (string, bool) {
@@ -198,11 +212,36 @@ func assertCommunityWidgetRefusal(e *harness.Env, s *harness.Session, id harness
 		e.T.Fatalf("%s was refused, but not with GitLab's refusal of a field Community Edition's schema lacks (%q), "+
 			"which is the refusal entry 45 of docs/development/upstream-bugs.md describes: %s", id, communitySchemaRefusal, firstLine(refusal))
 	}
-	for _, widget := range communityMissingWidgets {
-		if !strings.Contains(refusal, "Field '"+widget+"' "+communitySchemaRefusal) {
-			e.T.Errorf("%s was refused without naming the %s widget, one of the five entry 45 of "+
-				"docs/development/upstream-bugs.md lists; if client-go stopped selecting it, the entry needs its "+
-				"list corrected: %s", id, widget, firstLine(refusal))
+	named := map[string]bool{}
+	for _, match := range communityRefusedField.FindAllStringSubmatch(refusal, -1) {
+		named[match[1]] = true
+	}
+	var unlisted []string
+	for field := range named {
+		if !slices.Contains(communityMissingWidgets, field) {
+			unlisted = append(unlisted, field)
 		}
+	}
+	slices.Sort(unlisted)
+	if len(unlisted) > 0 {
+		e.T.Errorf("%s was refused naming %s, which client-go's document now selects and entry 45 of "+
+			"docs/development/upstream-bugs.md does not list: add it there and to communityMissingWidgets. GitLab "+
+			"reports at most %d such errors, so a field past the five also pushes a listed one out of the refusal: %s",
+			id, strings.Join(unlisted, ", "), gitLabMaxValidationErrors, firstLine(refusal))
+	}
+	for _, widget := range communityMissingWidgets {
+		if named[widget] {
+			continue
+		}
+		if len(named) >= gitLabMaxValidationErrors {
+			e.T.Errorf("%s was refused without naming the %s widget, but the refusal already names %d fields, "+
+				"which is all GitLab reports for one document, so client-go may still select it; the field that "+
+				"took its place is the one to add to entry 45 of docs/development/upstream-bugs.md: %s",
+				id, widget, len(named), firstLine(refusal))
+			continue
+		}
+		e.T.Errorf("%s was refused without naming the %s widget, one of the five entry 45 of "+
+			"docs/development/upstream-bugs.md lists, while GitLab had room to report it; if client-go "+
+			"stopped selecting it, the entry needs its list corrected: %s", id, widget, firstLine(refusal))
 	}
 }
