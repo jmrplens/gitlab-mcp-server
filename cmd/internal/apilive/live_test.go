@@ -43,8 +43,9 @@ func fullRecord() Document {
 					// Spelled as a lambda rather than with the stabby arrow so the
 					// bytes compared below do not depend on whether the encoder
 					// escapes an angle bracket.
-					Text: "unless: lambda { |project, _| project.feature_available?(:merge_request_approvers) }",
-					Hash: "{scope: :all}",
+					Text:   "unless: lambda { |project, _| project.feature_available?(:merge_request_approvers) }",
+					Hash:   "{scope: :all}",
+					Symbol: "with_approvals",
 				}}},
 			}},
 			"API::Entities::Broken": {Error: "NoMethodError"},
@@ -88,6 +89,141 @@ func TestOpenAPIName_ARubyName_BecomesTheOpenAPISpelling(t *testing.T) {
 			t.Parallel()
 			if got := OpenAPIName(testCase.ruby); got != testCase.want {
 				t.Errorf("OpenAPIName(%q) = %q, want %q", testCase.ruby, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCondition_Readable_IsWhetherItSaysWhatItTests verifies the predicate the
+// generator refuses a record by.
+//
+// Each of the three carriers makes a condition readable on its own, and one
+// holding only blanks makes none: the version 2 record carried 41 conditions
+// with nothing in any of them, and a check that let a blank through would let
+// a record that says nothing more politely through as well.
+func TestCondition_Readable_IsWhetherItSaysWhatItTests(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name      string
+		condition Condition
+		want      bool
+	}{
+		{name: "a block condition's text", condition: Condition{Kind: "BlockCondition", Text: "->(p, _) { p.public? }"}, want: true},
+		{name: "a hash condition's data", condition: Condition{Kind: "HashCondition", Hash: "{:type=>:full}"}, want: true},
+		{name: "a symbol condition's option", condition: Condition{Kind: "SymbolCondition", Symbol: "statistics"}, want: true},
+		{name: "a kind and nothing else", condition: Condition{Kind: "SymbolCondition"}, want: false},
+		{name: "a location and no text", condition: Condition{Kind: "BlockCondition", File: "lib/api/entities/user.rb", Line: 7}, want: false},
+		{name: "a blank text", condition: Condition{Kind: "BlockCondition", Text: " \t "}, want: false},
+		{name: "a blank hash", condition: Condition{Kind: "HashCondition", Hash: " "}, want: false},
+		{name: "a blank symbol", condition: Condition{Kind: "SymbolCondition", Symbol: "\t"}, want: false},
+		{name: "nothing at all", condition: Condition{}, want: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := testCase.condition.Readable(); got != testCase.want {
+				t.Errorf("Readable(%+v) = %v, want %v", testCase.condition, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCondition_Describe_QuotesWhatItTestsAndNeverNothing verifies how a
+// condition reads in a finding.
+//
+// A block condition's text already reads as written; a symbol and a hash are
+// spelled the way Grape declares them, with the keyword the inverse flag
+// picks, since a bare option name reads as a field. When a condition carries
+// more than one, the text wins over the symbol and the symbol over the hash,
+// and every case here that carries several is built so the wrong precedence
+// reads differently. And none of them renders as nothing, which is what made
+// a gated field read as unconditional.
+func TestCondition_Describe_QuotesWhatItTestsAndNeverNothing(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name      string
+		condition Condition
+		want      string
+	}{
+		{
+			name:      "a block condition is its own text",
+			condition: Condition{Kind: "BlockCondition", Text: "expose :x, if: ->(p, _) { p.public? }"},
+			want:      "expose :x, if: ->(p, _) { p.public? }",
+		},
+		{
+			name:      "an inverse block condition is still its own text",
+			condition: Condition{Kind: "BlockCondition", Inverse: true, Text: "unless: ->(p, _) { p.archived? }"},
+			want:      "unless: ->(p, _) { p.archived? }",
+		},
+		{
+			name:      "a symbol condition is the option after if",
+			condition: Condition{Kind: "SymbolCondition", Symbol: "with_custom_attributes"},
+			want:      "if: :with_custom_attributes",
+		},
+		{
+			name:      "an inverse symbol condition is the option after unless",
+			condition: Condition{Kind: "SymbolCondition", Inverse: true, Symbol: "archived"},
+			want:      "unless: :archived",
+		},
+		{
+			name:      "a hash condition is its data after if",
+			condition: Condition{Kind: "HashCondition", Hash: "{:type=>:full}"},
+			want:      "if: {:type=>:full}",
+		},
+		{
+			name:      "an inverse hash condition is its data after unless",
+			condition: Condition{Kind: "HashCondition", Inverse: true, Hash: "{:type=>:basic}"},
+			want:      "unless: {:type=>:basic}",
+		},
+		{
+			name:      "text wins over a symbol and a hash",
+			condition: Condition{Kind: "BlockCondition", Text: "->(p, _) { p.public? }", Symbol: "statistics", Hash: "{:a=>1}"},
+			want:      "->(p, _) { p.public? }",
+		},
+		{
+			name:      "a symbol wins over a hash",
+			condition: Condition{Kind: "SymbolCondition", Symbol: "statistics", Hash: "{:a=>1}"},
+			want:      "if: :statistics",
+		},
+		{
+			name:      "a blank text gives way to the symbol",
+			condition: Condition{Kind: "SymbolCondition", Text: "  ", Symbol: "statistics"},
+			want:      "if: :statistics",
+		},
+		{
+			name:      "a blank symbol gives way to the hash",
+			condition: Condition{Kind: "HashCondition", Symbol: " ", Hash: "{:a=>1}"},
+			want:      "if: {:a=>1}",
+		},
+		{
+			name:      "a blank hash gives way to the kind",
+			condition: Condition{Kind: "HashCondition", Hash: " "},
+			want:      "if: (unreadable HashCondition)",
+		},
+		{
+			name:      "an unreadable condition is named by its kind",
+			condition: Condition{Kind: "SymbolCondition"},
+			want:      "if: (unreadable SymbolCondition)",
+		},
+		{
+			name:      "an unreadable inverse condition is named by its kind after unless",
+			condition: Condition{Kind: "BlockCondition", Inverse: true},
+			want:      "unless: (unreadable BlockCondition)",
+		},
+		{
+			name:      "a condition of no kind still says it gates",
+			condition: Condition{},
+			want:      "if: (unreadable condition)",
+		},
+		{
+			name:      "an inverse condition of no kind still says it gates",
+			condition: Condition{Inverse: true},
+			want:      "unless: (unreadable condition)",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := testCase.condition.Describe(); got != testCase.want {
+				t.Errorf("Describe(%+v) = %q, want %q", testCase.condition, got, testCase.want)
 			}
 		})
 	}
@@ -285,9 +421,11 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 	})
 
 	t.Run("a record from the version before this one is refused too", func(t *testing.T) {
-		// The older direction is the one the guard was written for: version 1
-		// spelled a merged exposure like a nested one, so a reader that let it
-		// through would resolve it into the wrong keys without a word.
+		// The older direction is the one the guard was written for: version 2
+		// recorded every hash and symbol condition as its kind alone, so a
+		// reader that let it through would take the fields they gate for
+		// unconditional without a word, as version 1's merged exposures would
+		// have been resolved into the wrong keys.
 		other := want
 		other.SchemaVersion = SchemaVersion - 1
 		if writeErr := Write(dir, other); writeErr != nil {
@@ -385,7 +523,7 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
 	}
 
 	want := `{
- "schema_version": 2,
+ "schema_version": 3,
  "note": "taken from a booted instance, not from its source",
  "source": {
   "image": "gitlab/gitlab-ee:19.3.1-ee.0",
@@ -423,7 +561,8 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
        "file": "ee/lib/ee/api/entities/project.rb",
        "line": 19,
        "text": "unless: lambda { |project, _| project.feature_available?(:merge_request_approvers) }",
-       "hash": "{scope: :all}"
+       "hash": "{scope: :all}",
+       "symbol": "with_approvals"
       }
      ]
     }

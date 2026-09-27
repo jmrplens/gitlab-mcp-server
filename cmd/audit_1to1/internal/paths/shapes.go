@@ -203,6 +203,7 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 	check.Typed = typedShapeCheck(root, index, conditions, published)
 	check.Sent = sentCheck(conditions, sources, published)
 	check.Sent.Unsurfaced, check.Typed.Unsurfaced, check.Sent.UnusedDeclarations = classifySentFindings(declaredUnsurfaced, check.Sent.Unsurfaced, check.Typed.Unsurfaced)
+	check.Sent.ContradictedDeclarations = newOptionEvidence(conditions, index, requests).contradictions(declaredUnsurfaced, check.Sent.Unsurfaced, check.Typed.Unsurfaced)
 	return check
 }
 

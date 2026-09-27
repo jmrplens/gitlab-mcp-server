@@ -152,7 +152,7 @@ func runCheck(dir string, now time.Time) error {
 		return err
 	}
 
-	problems := floorProblems(doc)
+	problems := append(floorProblems(doc), conditionProblems(doc)...)
 	problems = append(problems, provenance.Problems(provenance.Subject{
 		Noun: "live API record",
 		Consequence: "it can no longer say what a current GitLab sends, and the fields an audit " +
@@ -202,6 +202,43 @@ func floorProblems(doc apilive.Document) []string {
 		))
 	}
 	return problems
+}
+
+// conditionProblems reports the conditions that say nothing about what they
+// test, naming each by entity, field and kind in the order a reader would look
+// them up.
+//
+// A record of GitLab 19.3.1-ee held 41 of them, every hash and every symbol
+// condition, because the introspection read one out of an instance variable
+// grape-entity never sets and had nowhere to put the other. Each was the only
+// gate on its field, so 41 fields GitLab sends only when an option or a
+// license is present read downstream as sent on every response, and nothing
+// here looked inside a condition. A kind the script does not know produces the
+// same thing, which is why this refuses the shape rather than the two kinds
+// that happened to cause it.
+func conditionProblems(doc apilive.Document) []string {
+	var unreadable []string
+	for _, name := range doc.Names() {
+		for _, field := range doc.Entities[name].Fields {
+			for _, condition := range field.Conditions {
+				if !condition.Readable() {
+					unreadable = append(unreadable, fmt.Sprintf("%s.%s %s", name, field.Name, condition.Kind))
+				}
+			}
+		}
+	}
+	if len(unreadable) == 0 {
+		return nil
+	}
+	subject := "conditions carry"
+	if len(unreadable) == 1 {
+		subject = "condition carries"
+	}
+	return []string{fmt.Sprintf(
+		"%d %s neither text, hash nor symbol (%s): introspect.rb met a condition it does not read, "+
+			"and an audit can report the field it gates as gated but never by what",
+		len(unreadable), subject, strings.Join(unreadable, ", "),
+	)}
 }
 
 // dumpFrom is an introspection already taken, and where it was taken from.
@@ -261,6 +298,13 @@ func runGenerate(dir string, dump dumpFrom, image string, keep bool) error {
 
 	if problems := floorProblems(doc); len(problems) > 0 {
 		return fmt.Errorf("refusing to write a record that is not a GitLab:\n  %s", strings.Join(problems, "\n  "))
+	}
+	// Refused here as well as by -check, and after the floors: the record is a
+	// GitLab, it just says less than the script could have read, and the only
+	// fix is teaching the script and booting again. Written, it would be a
+	// record the gate refuses sitting in a checkout nobody meant to break.
+	if problems := conditionProblems(doc); len(problems) > 0 {
+		return fmt.Errorf("refusing to write a record whose conditions cannot be read:\n  %s", strings.Join(problems, "\n  "))
 	}
 
 	if writeErr := apilive.Write(dir, doc); writeErr != nil {

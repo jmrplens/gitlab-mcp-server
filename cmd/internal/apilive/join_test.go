@@ -519,27 +519,41 @@ func TestGateOf_WhatAConditionAmountsTo(t *testing.T) {
 			want: Gate{If: "->(p, _) { p.public? } && ->(_, o) { o[:with_stats] }"},
 		},
 		{
-			name:       "a hash condition speaks through its own data",
-			conditions: []Condition{{Kind: "HashCondition", Hash: ":with_approvers"}},
-			want:       Gate{If: ":with_approvers"},
+			name:       "a hash condition speaks through its own data, spelled as Grape declares it",
+			conditions: []Condition{{Kind: "HashCondition", Hash: "{:type=>:full}"}},
+			want:       Gate{If: "if: {:type=>:full}"},
 		},
 		{
-			name: "a condition carrying no text at all contributes none",
-			// Joining it would produce a leading or doubled separator, which
-			// reads as a condition somebody forgot to write down.
+			// The case issue 973 was filed on: custom_attributes on seventeen
+			// user, project and group entities, gated by an option no endpoint
+			// the audit reads passes, and reported as sent on every response.
+			name:       "a symbol condition is the option the presenter must be given",
+			conditions: []Condition{{Kind: "SymbolCondition", Symbol: "with_custom_attributes"}},
+			want:       Gate{If: "if: :with_custom_attributes"},
+		},
+		{
+			name:       "an inverse symbol condition is the unless",
+			conditions: []Condition{{Kind: "SymbolCondition", Inverse: true, Symbol: "archived"}},
+			want:       Gate{Unless: "unless: :archived"},
+		},
+		{
+			// A record that reads as unconditional where it holds a condition is
+			// the defect this guards against: a condition that says nothing
+			// still gates, and is named by its kind rather than dropped.
+			name: "a condition carrying nothing readable is named by its kind, never dropped",
 			conditions: []Condition{
-				{Kind: "HashCondition"},
+				{Kind: "SymbolCondition"},
 				{Kind: "BlockCondition", Text: "->(p, _) { p.public? }"},
 			},
-			want: Gate{If: "->(p, _) { p.public? }"},
+			want: Gate{If: "if: (unreadable SymbolCondition) && ->(p, _) { p.public? }"},
 		},
 		{
-			name: "a condition whose text is only blank contributes none",
+			name: "a condition whose data is only blank is unreadable, not absent",
 			conditions: []Condition{
 				{Kind: "HashCondition", Hash: " \t "},
 				{Kind: "BlockCondition", Text: "->(p, _) { p.public? }"},
 			},
-			want: Gate{If: "->(p, _) { p.public? }"},
+			want: Gate{If: "if: (unreadable HashCondition) && ->(p, _) { p.public? }"},
 		},
 		{
 			// The text is the condition as written and the hash only a hash
@@ -578,10 +592,10 @@ func TestGateOf_WhatAConditionAmountsTo(t *testing.T) {
 		{
 			// The unless side of every rule below, which is not the same code
 			// path reaching the same place: the license, the edition and the
-			// dropping of a condition with no text are each read once for both
+			// naming of a condition with no text are each read once for both
 			// halves, and moving any of them under the if would go unnoticed
 			// without a case that is gated the other way.
-			name: "an inverse condition carries its license, its edition and no empty text",
+			name: "an inverse condition carries its license, its edition and its unreadable sibling",
 			conditions: []Condition{
 				{Kind: "HashCondition", Inverse: true},
 				{
@@ -591,7 +605,7 @@ func TestGateOf_WhatAConditionAmountsTo(t *testing.T) {
 				},
 			},
 			want: Gate{
-				Unless:  "->(p, _) { p.licensed_feature_available?(:repository_mirrors) }",
+				Unless:  "unless: (unreadable HashCondition) && ->(p, _) { p.licensed_feature_available?(:repository_mirrors) }",
 				Tier:    TierPremium,
 				Edition: "ee",
 			},
@@ -672,6 +686,39 @@ func TestGate_Gated_IsWhetherAnythingGatesIt(t *testing.T) {
 			t.Parallel()
 			if got := testCase.gate.Gated(); got != testCase.want {
 				t.Errorf("Gated() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestGateOf_AnyConditionAtAll_MakesTheFieldGated verifies the property the
+// sent dimension triages on, for the conditions that say nothing about what
+// they test.
+//
+// Version 2 of the record held 41 of them, every hash and symbol condition of
+// 19.3.1-ee, each the only one on its field, and a gate that dropped them
+// reported those fields as sent on every response. Whatever kind a condition
+// is and whatever it failed to carry, a field that has one is gated; only a
+// field with none is sent always.
+func TestGateOf_AnyConditionAtAll_MakesTheFieldGated(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name       string
+		conditions []Condition
+		want       bool
+	}{
+		{name: "no condition", conditions: nil, want: false},
+		{name: "a symbol condition with no symbol", conditions: []Condition{{Kind: "SymbolCondition"}}, want: true},
+		{name: "a hash condition with no data", conditions: []Condition{{Kind: "HashCondition"}}, want: true},
+		{name: "a block condition with no text", conditions: []Condition{{Kind: "BlockCondition"}}, want: true},
+		{name: "a condition of no kind at all", conditions: []Condition{{}}, want: true},
+		{name: "an inverse one", conditions: []Condition{{Kind: "SymbolCondition", Inverse: true}}, want: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			gate := gated("field").GateOf(Field{Name: "field", Conditions: testCase.conditions})
+			if got := gate.Gated(); got != testCase.want {
+				t.Errorf("GateOf(%+v).Gated() = %v, want %v (gate %+v)", testCase.conditions, got, testCase.want, gate)
 			}
 		})
 	}

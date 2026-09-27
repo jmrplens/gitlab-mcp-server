@@ -18,9 +18,12 @@
 // an audit: an audit that needed a container could not be a gate.
 //
 // One thing evaluation does not give and the record therefore carries from
-// source: a Grape condition is a Proc, and a Proc knows where it was written
+// source: a block condition is a Proc, and a Proc knows where it was written
 // but not what it says. The generator reads those lines back from inside the
-// same image, so a condition arrives here both located and quoted.
+// same image, so a block condition arrives here both located and quoted. A
+// hash or a symbol condition is the other way round: it holds what it tests,
+// which the record keeps as its data or its option, and grape-entity keeps no
+// location for it, so it arrives quoted and never located.
 package apilive
 
 import (
@@ -41,7 +44,14 @@ import (
 // a merged exposure exactly like a nested one, so a reader of an old record
 // would resolve it into the wrong keys and never know, which is the one
 // failure a version guard exists to stop.
-const SchemaVersion = 2
+//
+// Version 3 records what a hash or a symbol condition tests, [Condition.Hash]
+// and [Condition.Symbol]. Version 2 had the hash key and never filled it, and
+// had no key for a symbol at all, so every such condition reached the record
+// as its kind alone: 41 of the 914 on 19.3.1-ee, each the only gate on its
+// field. A reader of that record would take those 41 fields for unconditional,
+// which is the same silent inversion version 2 was cut for.
+const SchemaVersion = 3
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -142,11 +152,14 @@ type Field struct {
 // Condition is one gate on an exposure.
 type Condition struct {
 	// Kind is Grape's own class name for it: BlockCondition for a lambda,
-	// HashCondition for `if: {…}`.
+	// HashCondition for `if: {…}`, SymbolCondition for `if: :option`.
 	Kind string `json:"kind"`
 	// Inverse is true for `unless:`.
 	Inverse bool `json:"inverse,omitempty"`
 	// File and Line locate a block condition's lambda, repository relative.
+	// A hash or a symbol condition carries neither: grape-entity keeps the
+	// options it tests and nothing about where the exposure declaring it was
+	// written, and the exposure records no location of its own either.
 	File string `json:"file,omitempty"`
 	Line int    `json:"line,omitempty"`
 	// Text is those lines read back from inside the image and squeezed onto
@@ -154,8 +167,55 @@ type Condition struct {
 	// the only way the condition arrives readable, and it is what a rule
 	// classifies on.
 	Text string `json:"text,omitempty"`
-	// Hash is a hash condition's own data.
+	// Hash is a hash condition's own data, as Ruby inspects it: the options
+	// the presenter must be given, and the values they must hold.
 	Hash string `json:"hash,omitempty"`
+	// Symbol is a symbol condition's option, without its colon: the field is
+	// sent when the presenter is given that option with a truthy value, which
+	// is a choice of the endpoint rendering it and never of the entity.
+	Symbol string `json:"symbol,omitempty"`
+}
+
+// Readable reports whether the condition says what it tests: a block
+// condition's text, a hash condition's data or a symbol condition's option.
+//
+// One that carries none of them still gates its field, since Grape skips the
+// exposure whenever it fails, but by something the record cannot name. That
+// is what an introspection produces when it meets a condition kind it does not
+// read, and it is what version 2 of the record did to every hash and symbol
+// condition it held.
+func (c Condition) Readable() bool {
+	return strings.TrimSpace(c.Text) != "" || strings.TrimSpace(c.Hash) != "" || strings.TrimSpace(c.Symbol) != ""
+}
+
+// Describe renders the condition the way a finding quotes it.
+//
+// A block condition is its own text, which already reads as written. A symbol
+// and a hash condition are spelled the way Grape declares them, `if: :option`
+// and `if: {…}`, or `unless:` for an inverse one, because the bare option name
+// reads as a field rather than as a gate. A condition carrying none of the
+// three is never rendered as nothing: it is named by its kind, so a field it
+// gates reads as gated by something unreadable rather than as gated by
+// nothing, which is the opposite of what the record holds.
+func (c Condition) Describe() string {
+	if strings.TrimSpace(c.Text) != "" {
+		return c.Text
+	}
+	keyword := "if:"
+	if c.Inverse {
+		keyword = "unless:"
+	}
+	if strings.TrimSpace(c.Symbol) != "" {
+		return keyword + " :" + c.Symbol
+	}
+	if strings.TrimSpace(c.Hash) != "" {
+		return keyword + " " + c.Hash
+	}
+	kind := c.Kind
+	if kind == "" {
+		kind = "condition"
+	}
+	return keyword + " (unreadable " + kind + ")"
 }
 
 // Route is one mounted endpoint.

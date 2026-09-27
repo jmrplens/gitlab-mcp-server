@@ -40,7 +40,12 @@ require "json"
 
 # Version 2 marks a merged exposure. Version 1 spelled it exactly like a nested
 # one, which read as the opposite of what GitLab sends.
-SCHEMA_VERSION = 2
+#
+# Version 3 records what a hash and a symbol condition test. Version 2 read a
+# hash out of an instance variable grape-entity never sets and had nowhere to
+# put a symbol, so both arrived as their kind alone and every field they gated
+# read as unconditional.
+SCHEMA_VERSION = 3
 
 # ---------------------------------------------------------------------------
 # Entities
@@ -113,11 +118,25 @@ end
 
 # conditions_of describes what gates an exposure.
 #
-# A hash condition (`if: { admin: true }`) carries its own data. A block
-# condition carries a Proc, whose source location is the only handle on what it
-# tests, so the location and the text read back from it are both recorded: the
-# location so a reader can go there, the text so a rule can classify without
-# opening the image.
+# grape-entity has three kinds, and each carries what it tests differently. A
+# symbol condition (`if: :with_custom_attributes`) carries the option the
+# presenter must be given, and a hash condition (`if: { type: :full }`) the
+# options and the values they must hold, both as data. A block condition
+# carries a Proc, whose source location is the only handle on what it tests, so
+# the location and the text read back from it are both recorded: the location
+# so a reader can go there, the text so a rule can classify without opening the
+# image.
+#
+# Each is read through the public reader its class declares (`inversed?`,
+# `block`, `cond_hash`, `symbol`) and never through an instance variable. An
+# instance variable that is not there reads as nil, which is how version 2 of
+# this script asked for a `@hash` grape-entity never sets and recorded all 41
+# hash and symbol conditions of 19.3.1-ee as their kind alone; a reader that
+# grape-entity renames raises instead, and the run fails where somebody sees it.
+#
+# A kind none of the three branches knows is recorded as its kind and nothing
+# else, and gen_api_live refuses to write a record holding one: the field it
+# gates would read as gated by something nobody can name.
 def conditions_of(exposure)
   conditions =
     begin
@@ -129,19 +148,28 @@ def conditions_of(exposure)
 
   conditions.map do |condition|
     entry = { "kind" => condition.class.name.split("::").last }
-    entry["inverse"] = true if condition.instance_variable_get(:@inverse)
+    entry["inverse"] = true if condition.inversed?
 
-    block = condition.instance_variable_get(:@block)
-    if block.respond_to?(:source_location) && block.source_location
-      file, line = block.source_location
-      entry["file"] = repo_relative(file)
-      entry["line"] = line
-      text = read_source(file, line)
-      entry["text"] = text if text
+    case condition
+    when Grape::Entity::Condition::BlockCondition
+      block = condition.block
+      if block.respond_to?(:source_location) && block.source_location
+        file, line = block.source_location
+        entry["file"] = repo_relative(file)
+        entry["line"] = line
+        text = read_source(file, line)
+        entry["text"] = text if text
+      end
+    when Grape::Entity::Condition::HashCondition
+      entry["hash"] = squeeze(condition.cond_hash.inspect)
+    when Grape::Entity::Condition::SymbolCondition
+      entry["symbol"] = condition.symbol.to_s
+    else
+      # A kind none of the branches above reads keeps its kind alone, which is
+      # what makes gen_api_live refuse the record rather than read the field
+      # it gates as always sent.
+      nil
     end
-
-    hash = condition.instance_variable_get(:@hash)
-    entry["hash"] = squeeze(hash.inspect) if hash
 
     entry
   end
