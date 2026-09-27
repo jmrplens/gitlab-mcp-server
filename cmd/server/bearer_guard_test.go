@@ -553,6 +553,32 @@ func assertRetryAfterWithin(t *testing.T, header string, low, high time.Duration
 	}
 }
 
+// sourceBlockWindow is the window the refusal tables build a transport budget
+// with. It differs from authFailureWindow on purpose: a source block announced
+// with the failure lockout's remaining time, or the reverse, must be a
+// different number for the swap to show.
+const sourceBlockWindow = 5 * time.Minute
+
+// assertRetryAfterIsTheBlock checks a Retry-After against the block that holds
+// the request: none where block is zero, and otherwise what is left of block,
+// rounded up.
+//
+// The floor is half the block rather than a second under it. What is left is
+// measured when the refusal is written, and a subtest stalled for a second
+// under -race would fail an exact value for being slow; half still tells the
+// failure lockout (one minute) and the source block (five) apart, and both
+// from the single second a zero duration renders as.
+func assertRetryAfterIsTheBlock(t *testing.T, header string, block time.Duration) {
+	t.Helper()
+	if block == 0 {
+		if header != "" {
+			t.Errorf("Retry-After = %q, want none", header)
+		}
+		return
+	}
+	assertRetryAfterWithin(t, header, block/2, block)
+}
+
 // TestBearerGuard_UpstreamFailure_IsNotBlamedOnTheToken verifies the
 // classification that keeps a GitLab outage from looking like a credential
 // problem: 503 rather than 401, GitLab's own Retry-After when it gave one,
@@ -1429,8 +1455,13 @@ type guardRefusal struct {
 	// challenge is the exact WWW-Authenticate value, or "" where the refusal
 	// must carry none because the credential was never judged.
 	challenge string
-	// retryAfter is the exact Retry-After value, or "" where there is none.
+	// retryAfter is the exact Retry-After value, or "" where there is none or
+	// where blockedFor holds it instead.
 	retryAfter string
+	// blockedFor is the length of the block that refused the request, for a
+	// refusal whose Retry-After is what is left of that block and so depends
+	// on when it was measured; see [assertRetryAfterIsTheBlock].
+	blockedFor time.Duration
 	// says are fragments the message must carry.
 	says []string
 }
@@ -1485,7 +1516,21 @@ func TestBearerGuard_EachRefusal_CarriesItsOwnStatusCodeAndChallenge(t *testing.
 				return g
 			},
 			token: "gloas-anything",
-			want:  guardRefusal{status: http.StatusTooManyRequests, code: errCodeTooManyRequests, retryAfter: "60", says: []string{"Too many failed authentication attempts"}},
+			want:  guardRefusal{status: http.StatusTooManyRequests, code: errCodeTooManyRequests, blockedFor: authFailureWindow, says: []string{"Too many failed authentication attempts"}},
+		},
+		{
+			// The failure limiter stays armed and unspent, so the one budget
+			// holding the request is the source's, and a Retry-After taken
+			// from the limiter's side reads as a second.
+			name: "a blocked transport source",
+			guard: func() *bearerGuard {
+				g := newTestGuard(okVerifier(oauth.ScopeAPI))
+				g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, sourceBlockWindow), sourceBlockWindow)
+				g.sourceBudget.charge("192.0.2.10", "198.51.100.1")
+				return g
+			},
+			token: "gloas-anything",
+			want:  guardRefusal{status: http.StatusTooManyRequests, code: errCodeTooManyRequests, blockedFor: sourceBlockWindow, says: []string{"Too many failed authentication attempts"}},
 		},
 		{
 			name: "no instance selected where several are published",
@@ -1585,7 +1630,10 @@ func TestBearerGuard_EachRefusal_CarriesItsOwnStatusCodeAndChallenge(t *testing.
 			if got := failure.header.Get(headerWWWAuthenticate); got != tc.want.challenge {
 				t.Errorf("WWW-Authenticate = %q\nwant              %q", got, tc.want.challenge)
 			}
-			if got := failure.header.Get(headerRetryAfter); got != tc.want.retryAfter {
+			switch got := failure.header.Get(headerRetryAfter); {
+			case tc.want.blockedFor > 0:
+				assertRetryAfterIsTheBlock(t, got, tc.want.blockedFor)
+			case got != tc.want.retryAfter:
 				t.Errorf("Retry-After = %q, want %q", got, tc.want.retryAfter)
 			}
 			for _, fragment := range tc.want.says {

@@ -2059,11 +2059,17 @@ func gateRequestCarrying(t *testing.T, headers map[string]string) *http.Request 
 
 // TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode drives every
 // refusal the legacy gate makes through its middleware and reads what a client
-// reads: the status, the JSON-RPC code, the challenge and the sentence.
+// reads: the status, the JSON-RPC code, the challenge, the Retry-After and the
+// sentence.
 //
 // The status and the code travel together and a client may act on either, so
 // each is asserted apart; a refusal whose code was taken from a neighboring
 // branch reads as a different condition to a client that routes on the code.
+// Only a block answers Retry-After. The failure lockout and the transport
+// source each have a row, with windows the other does not share, so a block
+// announced with its neighbor's remaining time is a different number; the
+// distinct-token block is held by
+// TestMCPServerGate_Blocked_RetryAfterIsTheBlockThatHoldsIt.
 func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 	stub := gateStubGitLab(t, false)
 	refusing := gateStubGitLab(t, true)
@@ -2082,7 +2088,11 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 		status    int
 		code      int
 		challenge string
-		says      string
+		// retryAfter is the length of the block that refused the request,
+		// or zero where the refusal must carry no Retry-After; see
+		// [assertRetryAfterIsTheBlock].
+		retryAfter time.Duration
+		says       string
 	}{
 		{
 			name: "no credential", instance: stub,
@@ -2097,7 +2107,20 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 			},
 			token:  gateTestToken,
 			status: http.StatusTooManyRequests, code: errCodeTooManyRequests,
-			says: "Too many failed authentication attempts",
+			retryAfter: authFailureWindow, says: "Too many failed authentication attempts",
+		},
+		{
+			// The gate's own failure limiter stays armed and unspent, so the
+			// one budget holding the request is the source's, and a
+			// Retry-After taken from the limiter's side reads as a second.
+			name: "a blocked transport source", instance: stub,
+			arm: func(g *mcpServerGate) {
+				g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, sourceBlockWindow), sourceBlockWindow)
+				g.sourceBudget.charge("192.0.2.1", "198.51.100.1")
+			},
+			token:  gateTestToken,
+			status: http.StatusTooManyRequests, code: errCodeTooManyRequests,
+			retryAfter: sourceBlockWindow, says: "Too many failed authentication attempts",
 		},
 		{
 			name: "no instance selected where several are published", instance: stub,
@@ -2168,6 +2191,7 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 			if got := rec.Header().Get("WWW-Authenticate"); got != tc.challenge {
 				t.Errorf("WWW-Authenticate = %q, want %q", got, tc.challenge)
 			}
+			assertRetryAfterIsTheBlock(t, rec.Header().Get("Retry-After"), tc.retryAfter)
 			if !strings.Contains(decoded.Error.Message, tc.says) {
 				t.Errorf("message = %q, want it to carry %q", decoded.Error.Message, tc.says)
 			}
