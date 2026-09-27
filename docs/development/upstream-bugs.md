@@ -2646,9 +2646,13 @@ entity before surfacing anything.
 - **Workaround**: none possible without replacing the SDK's documents. The
   selection set is built inside `GetWorkItem`, `CreateWorkItem` and
   `UpdateWorkItem` from one template, and nothing a caller passes changes it.
-  The e2e suite records the state instead: `test/e2e/gitlab/common`'s work
-  item lifecycle skips on a Free runtime naming this entry, and its type
-  listing runs on both.
+  The e2e suite pins the state instead of skipping it: on a Community image
+  `test/e2e/gitlab/common`'s work item lifecycle holds the create, the read
+  and the retitle to GitLab's refusal of the five fields, naming each, and
+  the listing and the delete to working, and its type listing runs on both.
+  The day a client-go release carrying the fix is taken here, the refused
+  calls answer and that scenario fails, saying to run the whole lifecycle on
+  Community Edition again and to record this entry as merged.
 
 **Where**: `workitems.go`, `workItemTemplate`, which `getWorkItemTemplate`,
 `createWorkItemTemplate` and `updateWorkItemTemplate` clone.
