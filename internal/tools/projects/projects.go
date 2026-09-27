@@ -2818,9 +2818,10 @@ func ListProjectGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.SharedVisibleOnly != nil {
 		opts.SharedVisibleOnly = input.SharedVisibleOnly
 	}
-	if len(input.SkipGroups) > 0 {
-		opts.SkipGroups = new(input.SkipGroups)
-	}
+	// Unguarded because an empty list sends nothing either way: go-querystring
+	// skips an empty slice, so a length check here was a branch no request
+	// could tell apart, and a mutation run left its boundary alive.
+	opts.SkipGroups = new(input.SkipGroups)
 	if input.SharedMinAccessLevel > 0 {
 		opts.SharedMinAccessLevel = new(gl.AccessLevelValue(input.SharedMinAccessLevel))
 	}
@@ -3043,9 +3044,9 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.MinAccessLevel > 0 {
 		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
 	}
-	if len(input.Relation) > 0 {
-		opts.Relation = &input.Relation
-	}
+	// Unguarded for the reason SkipGroups is in ListProjectGroups: an empty
+	// list is skipped by the query encoder and sends nothing either way.
+	opts.Relation = &input.Relation
 	if input.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
@@ -3284,9 +3285,10 @@ func applyUserProjectFilterPtrs(opts *gl.ListProjectsOptions, f userProjectFilte
 	if f.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = f.WithCustomAttributes
 	}
-	if len(f.CustomAttributes) > 0 {
-		opts.CustomAttributes = gl.CustomAttributesFilter(f.CustomAttributes)
-	}
+	// Unguarded because an empty filter sends nothing either way:
+	// CustomAttributesFilter encodes one key per entry, so a length check here
+	// was a branch no request could tell apart.
+	opts.CustomAttributes = gl.CustomAttributesFilter(f.CustomAttributes)
 }
 
 // ---------------------------------------------------------------------------

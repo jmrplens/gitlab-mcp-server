@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -9930,4 +9931,44 @@ func TestGetPushRules_EachKeyIsPublishedUnderItsOwnName(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	assertPublishedAsSent(t, fixture, out, nil)
+}
+
+// TestEmptyListFilters_SendNoKey holds the three list filters set without a
+// length guard (skip_groups, relation and custom_attributes) to what makes the
+// guard unnecessary: an empty list or map puts nothing on the wire, so a
+// caller who sent none gets the same request as before the guards went.
+func TestEmptyListFilters_SendNoKey(t *testing.T) {
+	var query atomic.Value
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query.Store(r.URL.RawQuery)
+		testutil.RespondJSON(w, http.StatusOK, "[]")
+	}))
+	tests := []struct {
+		name string
+		key  string
+		call func() error
+	}{
+		{name: "project groups", key: "skip_groups", call: func() error {
+			_, err := ListProjectGroups(context.Background(), client, ListProjectGroupsInput{ProjectID: "42", SkipGroups: []int64{}})
+			return err
+		}},
+		{name: "invited groups", key: "relation", call: func() error {
+			_, err := ListInvitedGroups(context.Background(), client, ListInvitedGroupsInput{ProjectID: "42", Relation: []string{}})
+			return err
+		}},
+		{name: "project list", key: "custom_attributes", call: func() error {
+			_, err := List(context.Background(), client, ListInput{CustomAttributes: map[string]string{}})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err != nil {
+				t.Fatalf("list error = %v", err)
+			}
+			if got, _ := query.Load().(string); strings.Contains(got, tt.key) {
+				t.Errorf("query = %q, want no %s key for an empty filter", got, tt.key)
+			}
+		})
+	}
 }
