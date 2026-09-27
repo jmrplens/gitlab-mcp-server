@@ -5,14 +5,17 @@
 // rather than the tool handler. It is the first item of issue 961 and row 61
 // of docs/development/upstream-bugs.md.
 //
-// 2026-07-28 puts resultType on every result, and go-sdk v1.8.0 sets it on a
-// tools/call result only inside its own tool dispatcher. The rate limiter
-// answers a refused tools/call with a tool-error result before that dispatcher
-// runs, so the refusal goes out without the field. A client MUST read an absent
-// resultType as complete, so nothing breaks, but a strict client rejects it.
-// Upstream fixed it in e40f35d, which no tag carried when this was written;
-// the bump that brings it fails here, in its own pull request, with a message
-// saying what to update.
+// 2026-07-28 says a server implementing it MUST include resultType on every
+// result, and go-sdk v1.8.0 sets it on a tools/call result only inside its own
+// tool dispatcher. The rate limiter answers a refused tools/call with a
+// tool-error result before that dispatcher runs, so the refusal goes out
+// without the field, and this server breaks that MUST on every rate-limited
+// tools/call at 2026-07-28. The schema's rule that a client reads an absent
+// resultType as complete covers only a result from a server implementing an
+// earlier revision, so a client that holds a 2026-07-28 server to the schema
+// is entitled to reject it. Upstream fixed it in e40f35d, which no tag carried
+// when this was written; the bump that brings it fails here, in its own pull
+// request, with a message saying what to update.
 package httpe2e
 
 import (
@@ -27,13 +30,6 @@ const resultTypeFix = "Update row 61 of docs/development/upstream-bugs.md and it
 	"in internal/tenancy/decisions_allow.go, and turn this test into the assertion that the refusal carries " +
 	"resultType \"complete\", in this same pull request."
 
-// toolCallAtModernRevision is a tools/call exactly as a 2026-07-28 client sends
-// it, on a tool that reaches no GitLab, so the only thing that can refuse it is
-// the rate limiter.
-const toolCallAtModernRevision = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action",` +
-	`"arguments":{"query":"list projects"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",` +
-	`"io.modelcontextprotocol/clientCapabilities":{}}}}`
-
 // toolCallResult is the part of a tools/call response this test reads. The
 // result is decoded as a map so an absent resultType can be told from an
 // empty one.
@@ -45,14 +41,13 @@ type toolCallResult struct {
 	} `json:"error"`
 }
 
-// callToolAtModernRevision makes one tools/call and decodes its JSON-RPC
-// response, SSE-framed or not.
+// callToolAtModernRevision makes one tools/call at 2026-07-28 through
+// rateLimitedCall, on a tool that reaches no GitLab so that the only thing
+// that can refuse it is the rate limiter, and decodes its JSON-RPC response,
+// SSE-framed or not.
 func callToolAtModernRevision(t *testing.T, srv *server) toolCallResult {
 	t.Helper()
-	got := srv.do(t, request{
-		method: http.MethodPost, path: "/mcp", body: toolCallAtModernRevision,
-		headers: map[string]string{"PRIVATE-TOKEN": "glpat-result-type"},
-	})
+	got := rateLimitedCall(t, srv)
 	if got.status != http.StatusOK {
 		t.Fatalf("tools/call answered %d, want 200 with the result in the body: %s", got.status, truncate(got.body))
 	}

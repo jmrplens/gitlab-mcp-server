@@ -95,6 +95,13 @@ func TestListenEnd_WatchedResourceGone_CompletesTheListenAndSendsNoCancellation(
 			acknowledged = true
 			gone.Store(true)
 		case method == "notifications/cancelled":
+			// A cancellation naming the listen says the result will not come,
+			// so waiting for it would end in a timeout that names nothing: this
+			// is the change the test exists to catch, and it fails here.
+			if params, _ := got["params"].(map[string]any); sameID(params["requestId"], listenID) {
+				t.Fatalf("the teardown sent notifications/cancelled for the listen (%v): the server now tells the client it ended the listen, which go-sdk#1263 asked go-sdk to make possible. %s",
+					got, listenEndFix)
+			}
 			cancellations = append(cancellations, got)
 		case sameID(got["id"], listenID):
 			ending = got
