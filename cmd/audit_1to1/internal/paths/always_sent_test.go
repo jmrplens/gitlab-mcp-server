@@ -214,6 +214,43 @@ func TestAlwaysSentCheck_MissingInputs_SayTheCheckDidNotRun(t *testing.T) {
 			t.Errorf("check = %+v, want ran=false when the source held nothing", check)
 		}
 	})
+
+	t.Run("a load that found no client-go module", func(t *testing.T) {
+		withSDKOptions(t, alwaysSentSource(t))
+		original := collectPairings
+		collectPairings = func(string) (structs.Pairings, error) { return structs.Pairings{}, nil }
+		readOptions = func(dir string) sdkOptions {
+			t.Errorf("readOptions(%q) was called, want no read of a module the load did not find", dir)
+			return sdkOptions{}
+		}
+		t.Cleanup(func() { collectPairings = original })
+
+		root := recordIn(t, map[string]response{"PATCH /projects/:id": {Params: []string{"name"}}})
+		if check := alwaysSentCheck(root, requests); check.Ran {
+			t.Errorf("check = %+v, want ran=false when the load named no client-go directory", check)
+		}
+	})
+}
+
+// TestAlwaysSentCheck_ARouteDeclaringNoParam_IsNotAskedAbout verifies that an
+// endpoint whose route the record matches and whose params it declares none of
+// is passed over rather than walked: every field of its option struct would
+// read as a comparison that could not be made, which is a count about the
+// record and not about the endpoint.
+func TestAlwaysSentCheck_ARouteDeclaringNoParam_IsNotAskedAbout(t *testing.T) {
+	withSDKOptions(t, alwaysSentSource(t))
+	root := recordIn(t, map[string]response{
+		"PATCH /projects/:id/packages/protection/rules/:package_protection_rule_id": {},
+	})
+
+	check := alwaysSentCheck(root, []requestinventory.Row{{
+		Package: "internal/tools/protectedpackages", Kind: "rest", Method: "PATCH",
+		Path: "/projects/:project_id/packages/protection/rules/:rule_id",
+	}})
+
+	if !check.Ran || check.Endpoints != 0 || check.Fields != 0 || check.Unmatched != 0 || check.OptionTypes != 0 {
+		t.Errorf("check = %+v, want it to run and ask nothing of a route that declares no param", check)
+	}
 }
 
 // TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage verifies the join's

@@ -229,7 +229,7 @@ func (d endpointDeclaration) covers(endpoint Endpoint) bool {
 
 // matchesDeclaredShape compares a declared shape with a recorded path segment
 // by segment, where "*" stands for one segment and a trailing "..." for the
-// rest.
+// rest, none included.
 func matchesDeclaredShape(shape, recorded []string) bool {
 	for i, want := range shape {
 		if want == declaredRest {

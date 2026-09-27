@@ -93,6 +93,8 @@ func TestPaginationStaleDeclarations_AClaimThatMatchesNothing_IsAFinding(t *test
 	})
 	check := PaginationCheck{Ran: true, Unpaginated: []UnpaginatedCollection{
 		{Package: toolsDir + "/issues", Action: "issue.participants"},
+		// A finding no declaration answers keeps no declaration alive.
+		{Package: toolsDir + "/widgets", Action: "widget.list"},
 	}}
 
 	stale := check.staleDeclarations()
