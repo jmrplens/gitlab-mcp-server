@@ -2,7 +2,7 @@
 	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
 	validate-http-stateless validate-http-stateless-docker \
-	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
+	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token gen-orbit-record check-orbit-record \
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
@@ -536,9 +536,11 @@ e2e-clean-orphans:
 ## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,
 ## provisions the kg-fixtures and security-fixtures projects in
 ## $(ORBIT_FIXTURES_NAMESPACE) (default: plens1), polls the indexer
-## until it has caught up, and runs the orbitlive-tagged live tests.
-## Idempotent: the setup script skips already-existing resources, so
-## re-running is safe.
+## until it has caught up, runs the orbitlive-tagged live tests, and
+## re-records what the six Orbit routes answer (gen-orbit-record), which
+## fails the run when the recorded key tree changed until the new record
+## is committed. Idempotent: the setup script skips already-existing
+## resources, so re-running is safe.
 ##
 ## Overridable variables (command line or .env):
 ##   ORBIT_FIXTURES_NAMESPACE      default: plens1
@@ -552,7 +554,7 @@ e2e-clean-orphans:
 ##   make test-e2e-gitlab-com                                # default plens1
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_MIRROR=true     # also mirror
-test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests check-graphql-documents-live
+test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests gen-orbit-record check-graphql-documents-live
 	@echo ""
 	@echo "=== test-e2e-gitlab-com complete ==="
 	@echo "Reports and timings printed above. To re-run later without"
@@ -655,6 +657,34 @@ orbit-run-live-tests: orbit-ensure-token
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
+
+## gen-orbit-record: record what GitLab.com's six Orbit routes answer the
+## requests the handlers build, and write the key tree of every answer, never
+## a value, to docs/development/orbit-responses.json. Reads only, through a
+## proxy on the loopback interface, with GITLAB_COM_TOKEN from .env and the
+## fixture namespace $(ORBIT_FIXTURES_NAMESPACE). It prints every key added,
+## dropped or changed since the committed record and exits 1 when the tree
+## changed, after writing it, so the run fails until the record is committed;
+## `make audit-1to1-paths` then says what the change means for the Orbit
+## output types (cmd/audit_1to1, shapes.orbit).
+gen-orbit-record: orbit-ensure-token
+	@. ./.env && { \
+		echo ""; \
+		echo "=== Recording the Orbit answers from GitLab.com ==="; \
+		export GITLAB_COM_TOKEN \
+			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
+		go run ./cmd/gen_orbit_record/; \
+	}
+
+## check-orbit-record: fail when the committed Orbit response record is not one
+## this build can read, was taken from anywhere but GitLab.com, names no Orbit
+## version or fixture namespace, lacks an expected call or holds one twice or
+## refused, carries a key tree that does not hang together or a path that is
+## not made of key names, is past the shared staleness window
+## (cmd/internal/provenance), or is not in the form the generator writes. No
+## token and no network, so it is a gate.
+check-orbit-record:
+	go run ./cmd/gen_orbit_record/ -check
 
 # A prompt that hands a case its own answer is refused by the unit suite now
 # rather than by a target nobody remembers to run: TestContract_NoStimulusNamesItsOwnAnswer

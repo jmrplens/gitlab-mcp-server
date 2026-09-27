@@ -164,7 +164,7 @@ ORBIT_FIXTURES_NAMESPACE=acme-research \
 
 ## Orchestrator: `make test-e2e-gitlab-com`
 
-The `make test-e2e-gitlab-com` target chains four sub-targets in order. The first three must succeed (in order) before the live tests run; `orbit-wait-indexer` proceeds with a warning if the indexer does not catch up in time, so the live tests are the source of truth for end-to-end readiness. A `sequenceDiagram` is the right tool here because the four sub-targets share a single `.env`-driven state, the make process is the actor that runs them, and the diagram clarifies that `orbit-ensure-token` is a prerequisite of every other step (it is listed as a dependency of all three, even though it only appears once in the visible top-level chain).
+The `make test-e2e-gitlab-com` target chains its sub-targets in order. The first three must succeed (in order) before the live tests run; `orbit-wait-indexer` proceeds with a warning if the indexer does not catch up in time, so the live tests are the source of truth for end-to-end readiness. A `sequenceDiagram` is the right tool here because the four sub-targets share a single `.env`-driven state, the make process is the actor that runs them, and the diagram clarifies that `orbit-ensure-token` is a prerequisite of every other step (it is listed as a dependency of all three, even though it only appears once in the visible top-level chain).
 
 ```mermaid
 sequenceDiagram
@@ -186,4 +186,23 @@ sequenceDiagram
         Make->>Go: proceed with warning<br/>(live tests are tolerant)
     end
     Go-->>Dev: PASS / FAIL with row_count assertions
+    Make->>GL: gen-orbit-record<br/>the six routes, through the handlers
+    GL-->>Make: answers, reduced to their key trees
+    Make-->>Dev: key tree unchanged, or every changed key and exit 1
+```
+
+After the live tests the target re-records the answers with `make gen-orbit-record`, described below, and ends with `check-graphql-documents-live`, which is not about Orbit.
+
+## Recording the answers: `make gen-orbit-record`
+
+The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `plens1` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
+
+The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. It never holds a value: a subtree whose keys are data (the DSL's JSON Schema, a tool's parameter schema, the rows a query returns) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
+
+A re-recording prints every key GitLab.com added, dropped or changed since the committed record. When the key tree changed it writes the new record and exits 1, so `make test-e2e-gitlab-com` fails until somebody has read the change, run the audit and committed the record. `make check-orbit-record` is the offline gate CI runs on the committed file.
+
+```bash
+make gen-orbit-record                                   # record, GITLAB_COM_TOKEN from .env
+make gen-orbit-record ORBIT_FIXTURES_NAMESPACE=acme     # against another fixture namespace
+make check-orbit-record                                 # the offline gate
 ```

@@ -1,10 +1,12 @@
 // Package provenance holds the one age verdict the commands that pin an
 // external truth pass on their committed record.
 //
-// Two of them do it. [github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_api_live]
+// Three of them do it. [github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_api_live]
 // commits what a booted GitLab says its own REST API is, endpoint by endpoint
-// and field by field, and cmd/gen_graphql_schema commits the GraphQL schema
-// this repository validates every raw document against. Each is a copy of
+// and field by field, cmd/gen_graphql_schema commits the GraphQL schema
+// this repository validates every raw document against, and
+// cmd/gen_orbit_record commits the key tree of what GitLab.com's Orbit routes
+// answered, through cmd/internal/orbitrecord. Each is a copy of
 // something that lives in gitlab-org/gitlab and keeps moving there; each is
 // written by a run needing a network or a container, which cannot gate, and
 // read by a --check that can precisely because it needs neither; and each
@@ -25,7 +27,8 @@
 // What stays with each command is everything that makes its record its own:
 // its Source type and the fields it records, the floor below which the
 // artifact is a truncated read rather than a whole one (gen_api_live's own
-// entity, field, route and feature minimums; graphqlintrospect.MinimumTypes),
+// entity, field, route and feature minimums; graphqlintrospect.MinimumTypes;
+// the Orbit record's expected calls),
 // the identity checks that ask what the record is a record of, its artifact
 // dialect, its make targets and its binary. [Subject] carries the two words
 // that differ between the messages, so the sentences stay each command's own
