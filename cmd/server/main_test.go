@@ -6215,6 +6215,60 @@ func assertServerCardToolMetadata(t *testing.T, toolsRaw []any) {
 	}
 }
 
+// TestBuildServerCard_CarriesSubscriptionsOnlyWhereTheyAreServed covers the
+// subscriptions block of the enumerating card, the one place a directory can
+// learn without connecting that this deployment accepts subscriptions and
+// for which URIs. The full surface carries the enforcement whitelist itself;
+// the minimal surface serves no subscribable resource and must not carry the
+// key at all, not even as null.
+func TestBuildServerCard_CarriesSubscriptionsOnlyWhereTheyAreServed(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		surface string
+		want    []string
+	}{
+		{name: "full", surface: config.CapabilitySurfaceFull, want: subscriptions.Templates()},
+		{name: "minimal", surface: config.CapabilitySurfaceMinimal},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := buildServerCard(t.Context(), &config.Config{
+				ToolSurface:       config.ToolSurfaceDynamic,
+				CapabilitySurface: tc.surface,
+				Stateless:         true,
+			})
+			if err != nil {
+				t.Fatalf("buildServerCard: %v", err)
+			}
+			var card struct {
+				Subscriptions *struct {
+					Templates []string `json:"subscribable_uri_templates"`
+				} `json:"subscriptions"`
+			}
+			var keys map[string]json.RawMessage
+			if decodeErr := json.Unmarshal(data, &keys); decodeErr != nil {
+				t.Fatalf("decode card: %v", decodeErr)
+			}
+			if decodeErr := json.Unmarshal(data, &card); decodeErr != nil {
+				t.Fatalf("decode card: %v", decodeErr)
+			}
+
+			_, present := keys["subscriptions"]
+			if present != (tc.want != nil) {
+				t.Errorf("subscriptions key present = %t, want %t", present, tc.want != nil)
+			}
+			var got []string
+			if card.Subscriptions != nil {
+				got = card.Subscriptions.Templates
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("subscribable templates = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildServerCard_IndividualMode verifies that [buildServerCard] returns
 // individual tools (not meta-tools) when MetaTools=false.
 func TestBuildServerCard_IndividualMode(t *testing.T) {
@@ -8655,6 +8709,40 @@ func TestCorsExposeHeaders_ARateLimitedBrowserClientCanReadRetryAfter(t *testing
 	}
 }
 
+// TestWriteServerCard_NamesTheValidatorWithoutReplacingALongerList covers the
+// one CORS header the card sets itself. A cross-origin script can read only
+// the response headers it is told about, so a card answering an origin the
+// operator did not name has to expose its ETag or the validator is useless to
+// the scanners it is published for; and a trusted origin already carries the
+// longer list corsMiddleware set, which the card must leave in place rather
+// than cut down to the ETag alone.
+func TestWriteServerCard_NamesTheValidatorWithoutReplacingALongerList(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		given string
+		want  string
+	}{
+		{name: "nothing exposed yet", want: hdrETag},
+		{name: "a trusted origin's list", given: corsExposeHeaders, want: corsExposeHeaders},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rec := httptest.NewRecorder()
+			if tc.given != "" {
+				rec.Header().Set(headerExposeHeaders, tc.given)
+			}
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, serverCardPath, http.NoBody)
+
+			writeServerCard(rec, req, `"card-tag"`, []byte(`{"name":"card"}`))
+
+			if got := rec.Header().Get(headerExposeHeaders); got != tc.want {
+				t.Errorf("%s = %q, want %q", headerExposeHeaders, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestTransportRejections_AreJSONRPCErrorsNotPlainText pins that the two
 // remaining transport-level refusals answer in the shape every other refusal in
 // this binary uses.
@@ -9587,6 +9675,23 @@ func TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart(t *testing.T
 				t.Errorf("uploadMaxFileSize() = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestUploadMaxFileSize_TheCeilingItselfIsNotAnOverflow covers the upload
+// limit at exactly the documented maximum. That is a value an operator may
+// set, so it is used as given and no warning claims it was clamped: a line
+// saying a limit exceeds the maximum when it equals it sends an operator to
+// fix a setting that is correct.
+func TestUploadMaxFileSize_TheCeilingItselfIsNotAnOverflow(t *testing.T) {
+	logged := captureLogMessages(t)
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", strconv.FormatInt(config.MaxFileSize, 10))
+
+	if got := uploadMaxFileSize(); got != config.MaxFileSize {
+		t.Errorf("uploadMaxFileSize() = %d, want %d", got, config.MaxFileSize)
+	}
+	if logged("exceeds the maximum") {
+		t.Error("a limit equal to the maximum was reported as exceeding it")
 	}
 }
 
