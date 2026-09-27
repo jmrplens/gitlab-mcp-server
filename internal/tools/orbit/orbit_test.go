@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -148,18 +149,20 @@ func TestStatus_NestedLLMShape_RendersThePromotedTextOnce(t *testing.T) {
 	}
 }
 
-// TestStatus_ResponseFormats_ForwardTheNormalizedValue verifies that the
-// explicit JSON alias reaches GitLab as "json", and that a value with case or
-// whitespace around it is forwarded trimmed and lowercased rather than refused
-// or sent verbatim.
+// TestStatus_ResponseFormats_ForwardTheNormalizedValue verifies that the json
+// synonym reaches GitLab as "raw", since GitLab answers 400 to "json" on every
+// Orbit route, and that a value with case or whitespace around it is forwarded
+// trimmed and lowercased rather than refused or sent verbatim.
 func TestStatus_ResponseFormats_ForwardTheNormalizedValue(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
 		want  string
 	}{
-		{name: "json alias", input: "json", want: "json"},
+		{name: "json synonym", input: "json", want: "raw"},
+		{name: "json synonym in capitals", input: " JSON ", want: "raw"},
 		{name: "mixed case with whitespace", input: " Raw ", want: "raw"},
+		{name: "llm", input: "llm", want: "llm"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -181,10 +184,12 @@ func TestStatus_ResponseFormats_ForwardTheNormalizedValue(t *testing.T) {
 }
 
 // TestSchema_WithExpandAndFormat_ForwardsQuery verifies that [Schema] forwards
-// expand as one comma-joined parameter and format as given, and mirrors the
-// ontology into [SchemaOutput] field for field: each domain's name, description
-// and node names, each edge's name, description and source/target variants,
-// and each node decoded from raw JSON into a value rather than dropped.
+// expand as one comma-joined parameter and the format as response_format, the
+// name GitLab's route declares, and never as format, which Grape reserves and
+// answers 406 to; and that it mirrors the ontology into [SchemaOutput] field
+// for field: each domain's name, description and node names, each edge's name,
+// description and source/target variants, and each node decoded from raw JSON
+// into a value rather than dropped.
 //
 // The decoded node is asserted as a value, not as a count: skipping the decoded
 // entries and keeping the nil one used to produce the same length.
@@ -193,7 +198,10 @@ func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
 		testutil.AssertQueryParam(t, r, "expand", "User,Project")
-		testutil.AssertQueryParam(t, r, "format", "llm")
+		testutil.AssertQueryParam(t, r, "response_format", "raw")
+		if r.URL.Query().Has("format") {
+			t.Errorf("format query parameter = %q, want it absent: GitLab answers 406 to it", r.URL.Query().Get("format"))
+		}
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"schema_version": "1.0",
 			"domains": [{"name": "core", "description": "Core entities", "node_names": ["User", "Project"]}],
@@ -202,7 +210,7 @@ func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 		}`)
 	}))
 
-	out, err := Schema(context.Background(), client, SchemaInput{Expand: []string{"User", "Project"}, Format: "llm"})
+	out, err := Schema(context.Background(), client, SchemaInput{Expand: []string{"User", "Project"}, Format: "raw"})
 	if err != nil {
 		t.Fatalf("Schema() error: %v", err)
 	}
@@ -222,53 +230,132 @@ func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 }
 
 // TestSchema_FormatAndAliasAgreeing_ForwardsOnce verifies that setting both
-// format and its response_format alias to the same value, whatever the case,
-// is accepted and forwarded as one lowercase format parameter, since the
-// mismatch refusal is for values that disagree and not for the alias being
-// present at all.
+// format and its response_format alias to the same format is accepted and
+// forwarded as one lowercase response_format parameter, whether the two agree
+// by spelling in another case or through the json synonym, since the mismatch
+// refusal is for formats that disagree and not for the alias being present at
+// all.
 func TestSchema_FormatAndAliasAgreeing_ForwardsOnce(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
-		testutil.AssertQueryParam(t, r, "format", "raw")
-		if got := r.URL.Query().Get("response_format"); got != "" {
-			t.Errorf("response_format query parameter = %q, want empty", got)
-		}
-		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
-	}))
-
-	out, err := Schema(context.Background(), client, SchemaInput{Format: "raw", ResponseFormat: "RAW"})
-	if err != nil {
-		t.Fatalf("Schema() error: %v", err)
+	tests := []struct {
+		name   string
+		format string
+		alias  string
+	}{
+		{name: "same value in another case", format: "raw", alias: "RAW"},
+		{name: "json synonym beside raw", format: "json", alias: "raw"},
+		{name: "raw beside the json synonym", format: "raw", alias: "json"},
 	}
-	if out.SchemaVersion != "1.0" {
-		t.Fatalf("Schema() = %+v, want schema version 1.0", out)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
+				if got := r.URL.Query()["response_format"]; len(got) != 1 || got[0] != "raw" {
+					t.Errorf("response_format query parameter = %q, want one raw", got)
+				}
+				if r.URL.Query().Has("format") {
+					t.Errorf("format query parameter = %q, want it absent", r.URL.Query().Get("format"))
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
+			}))
+
+			out, err := Schema(context.Background(), client, SchemaInput{Format: tt.format, ResponseFormat: tt.alias})
+			if err != nil {
+				t.Fatalf("Schema() error: %v", err)
+			}
+			if out.SchemaVersion != "1.0" {
+				t.Fatalf("Schema() = %+v, want schema version 1.0", out)
+			}
+		})
 	}
 }
 
-// TestSchema_ResponseFormatAlias_ForwardsFormat verifies that [Schema] accepts
-// response_format as a compatibility alias while forwarding GitLab's format query parameter.
-//
-// The test provides ResponseFormat in the input and asserts that only the format query param is sent.
-// It ensures backward compatibility and correct parameter mapping.
-func TestSchema_ResponseFormatAlias_ForwardsFormat(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestMethod(t, r, http.MethodGet)
-		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
-		testutil.AssertQueryParam(t, r, "format", "llm")
-		if got := r.URL.Query().Get("response_format"); got != "" {
-			t.Errorf("response_format query parameter = %q, want empty", got)
-			http.Error(w, "response_format query parameter, want empty", http.StatusInternalServerError)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
+// TestSchema_LLMFormat_PublishesTheFormattedText verifies the whole of the llm
+// path, which could not work before: the format reaches GitLab as
+// response_format under either input name, and the compact text GitLab then
+// answers with, as the only key of its body, is published as formatted_text
+// and rendered as the card's body. client-go's OrbitSchema models no such key,
+// so a handler reading only the SDK struct returned an empty ontology for it.
+func TestSchema_LLMFormat_PublishesTheFormattedText(t *testing.T) {
+	tests := []struct {
+		name  string
+		input SchemaInput
+	}{
+		{name: "through format", input: SchemaInput{Format: "llm"}},
+		{name: "through the response_format alias", input: SchemaInput{ResponseFormat: " LLM "}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
+				testutil.AssertQueryParam(t, r, "response_format", "llm")
+				if r.URL.Query().Has("format") {
+					t.Errorf("format query parameter = %q, want it absent", r.URL.Query().Get("format"))
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"formatted_text":"schema: 12.1\nnodes: User, Project"}`)
+			}))
+
+			out, err := Schema(context.Background(), client, tt.input)
+			if err != nil {
+				t.Fatalf("Schema() error: %v", err)
+			}
+			if !reflect.DeepEqual(out, SchemaOutput{FormattedText: "schema: 12.1\nnodes: User, Project", Domains: []SchemaDomain{}, Nodes: []any{}, Edges: []SchemaEdge{}}) {
+				t.Fatalf("Schema() = %+v, want the formatted text and nothing else", out)
+			}
+			md := FormatSchemaMarkdown(out)
+			if !strings.Contains(md, "```text\nschema: 12.1\nnodes: User, Project\n```") {
+				t.Errorf("FormatSchemaMarkdown() = %q, want the formatted text fenced as the body", md)
+			}
+			if strings.Contains(md, "Schema version") {
+				t.Errorf("FormatSchemaMarkdown() = %q, want no structured fields beside the text", md)
+			}
+		})
+	}
+}
+
+// TestSchema_CapturedBodyThatDoesNotDecode_ReturnsAnError verifies that a
+// body client-go accepted and the formatted_text reader cannot decode is an
+// error the handler returns rather than an ontology with the text silently
+// missing. The only way to reach it is a response whose formatted_text is not a
+// string, which the SDK does not read at all.
+func TestSchema_CapturedBodyThatDoesNotDecode_ReturnsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0","formatted_text":42}`)
 	}))
 
-	out, err := Schema(context.Background(), client, SchemaInput{ResponseFormat: "llm"})
-	if err != nil {
-		t.Fatalf("Schema() error: %v", err)
+	_, err := Schema(context.Background(), client, SchemaInput{})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Fatalf("Schema() error = %v, want the captured body's decode failure", err)
 	}
-	if out.SchemaVersion != "1.0" {
-		t.Fatalf("Schema() = %+v, want schema version 1.0", out)
+}
+
+// TestResponseFormatQuery_ReplacesAnExistingValue verifies that the request
+// option sets response_format rather than adding a second one beside a value
+// already on the query, and leaves every other parameter alone, and that with
+// no format it leaves the request untouched.
+func TestResponseFormatQuery_ReplacesAnExistingValue(t *testing.T) {
+	llm := gl.OrbitResponseFormatLLM
+	tests := []struct {
+		name   string
+		format *gl.OrbitResponseFormatValue
+		want   string
+	}{
+		{name: "a format replaces the value", format: &llm, want: "expand=User&response_format=llm"},
+		{name: "no format leaves the query as it was", format: nil, want: "expand=User&response_format=raw"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := retryablehttp.NewRequest(http.MethodGet, "https://gitlab.example.com/api/v4/orbit/schema?expand=User&response_format=raw", nil)
+			if err != nil {
+				t.Fatalf("NewRequest() error: %v", err)
+			}
+			if err = responseFormatQuery(tt.format)(req); err != nil {
+				t.Fatalf("responseFormatQuery() error: %v", err)
+			}
+			if req.URL.RawQuery != tt.want {
+				t.Errorf("query = %q, want %q", req.URL.RawQuery, tt.want)
+			}
+		})
 	}
 }
 
@@ -560,9 +647,8 @@ func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
 }
 
 // TestResponseFormatName_NilReturnsEmpty verifies that responseFormatName returns
-// an empty string for a nil format pointer, signaling "use the API server-side
-// default" (which differs per endpoint: "json" for status/schema/tools,
-// "raw" for dsl/query). The corresponding [responseFormat] helper also
+// an empty string for a nil format pointer, signaling "use GitLab's default"
+// ("raw" on every Orbit route). The corresponding [responseFormat] helper also
 // returns (nil, nil) for empty input so the SDK URL builder omits the
 // response_format parameter.
 func TestResponseFormatName_NilReturnsEmpty(t *testing.T) {
@@ -717,7 +803,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Status(context.Background(), client, StatusInput{ResponseFormat: "xml"})
 				return err
 			},
-			want: "use raw, llm, or json",
+			want: "use raw or llm",
 		},
 		{
 			name: "empty query",
@@ -753,7 +839,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Schema(context.Background(), client, SchemaInput{Format: "xml"})
 				return err
 			},
-			want: "use raw, llm, or json",
+			want: "use raw or llm",
 		},
 		{
 			name: "conflicting schema formats",
@@ -762,6 +848,30 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				return err
 			},
 			want: "must match",
+		},
+		{
+			name: "json synonym conflicting with llm",
+			call: func() error {
+				_, err := Schema(context.Background(), client, SchemaInput{Format: "json", ResponseFormat: "llm"})
+				return err
+			},
+			want: "must match",
+		},
+		{
+			name: "invalid schema response_format beside a valid format",
+			call: func() error {
+				_, err := Schema(context.Background(), client, SchemaInput{Format: "raw", ResponseFormat: "xml"})
+				return err
+			},
+			want: "invalid response_format: use raw or llm",
+		},
+		{
+			name: "invalid schema format beside a valid response_format",
+			call: func() error {
+				_, err := Schema(context.Background(), client, SchemaInput{Format: "xml", ResponseFormat: "raw"})
+				return err
+			},
+			want: "invalid format: use raw or llm",
 		},
 		{
 			name: "invalid query response format",
@@ -779,7 +889,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				})
 				return err
 			},
-			want: "use raw, llm, or json",
+			want: "use raw or llm",
 		},
 		{
 			name: "invalid dsl response format",
@@ -787,7 +897,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := DSL(context.Background(), client, DSLInput{ResponseFormat: "xml"})
 				return err
 			},
-			want: "use raw, llm, or json",
+			want: "use raw or llm",
 		},
 		{
 			name: "missing query_type",
@@ -1301,9 +1411,9 @@ func TestSchema_StatusError_WrapsOrbitHint(t *testing.T) {
 
 // TestSchema_ConflictingFormatAndResponseFormat_DetectsMismatch
 // verifies that [Schema] surfaces the "must match" error when the
-// caller sets both `format` and `response_format` to different values
-// (case-insensitive). This covers the `!strings.EqualFold(format,
-// responseFormatAlias)` branch in [schemaResponseFormat].
+// caller sets both `format` and `response_format` to different formats,
+// compared after each is normalized, which is the disagreement branch in
+// [schemaResponseFormat].
 func TestSchema_ConflictingFormatAndResponseFormat_DetectsMismatch(t *testing.T) {
 	_, err := Schema(context.Background(), nil, SchemaInput{Format: "raw", ResponseFormat: "LLM"})
 	if err == nil {
@@ -1316,15 +1426,19 @@ func TestSchema_ConflictingFormatAndResponseFormat_DetectsMismatch(t *testing.T)
 
 // TestSchema_ResponseFormatAliasEmptyString verifies that an empty
 // `response_format` alias is treated the same as an empty `format`:
-// the SDK options carry no format so the API applies its server-side
+// neither response_format nor format is sent, so GitLab applies its
 // default.
 func TestSchema_ResponseFormatAliasEmptyString(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
-		if got := r.URL.Query().Get("format"); got != "" {
-			t.Errorf("format query parameter = %q, want empty (server default)", got)
-			http.Error(w, "format query parameter, want empty (server default)", http.StatusInternalServerError)
-			return
+		if r.URL.Query().Has("format") {
+			t.Errorf("format query parameter = %q, want it absent (GitLab default)", r.URL.Query().Get("format"))
+		}
+		if r.URL.Query().Has("response_format") {
+			t.Errorf("response_format query parameter = %q, want it absent (GitLab default)", r.URL.Query().Get("response_format"))
+		}
+		if r.URL.Query().Has("expand") {
+			t.Errorf("expand query parameter = %q, want it absent when no node was named", r.URL.Query().Get("expand"))
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
 	}))

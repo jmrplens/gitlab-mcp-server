@@ -61,7 +61,7 @@ Get Orbit cluster health and component status. Optional `response_format` accept
 
 ### `gitlab_orbit_schema`
 
-Get the Orbit graph ontology, including schema version, domains, node summaries, and edges. Optional `expand` requests expanded node definitions for named node types, and optional `format` accepts `raw` or `llm`. The input also accepts `response_format` as an alias; if both are set, they must match.
+Get the Orbit graph ontology, including schema version, domains, node summaries, and edges. Optional `expand` requests expanded node definitions for named node types, and optional `format` accepts `raw` or `llm`. The input also accepts `response_format` as an alias; if both are set, they must match. Either way the value reaches GitLab as `response_format`, the name the route declares, and with `llm` the whole answer is compact text, published as `formatted_text`. Every Orbit action reads `json` as `raw`, since GitLab accepts only `raw` and `llm`.
 
 | Annotation | **Read** |
 | ---------- | -------- |
