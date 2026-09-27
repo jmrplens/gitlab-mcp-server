@@ -112,6 +112,8 @@ Unarchive a previously archived GitLab group, restoring write access. Idempotent
 
 Transfer a GitLab group under a new parent (or to top level by omitting `parent_id`). Requires Owner role on both the group being moved and the destination. Use `gitlab_group_transfer_locations` first to find valid destinations.
 
+Since GitLab 19.4 a group transfer is applied in the background: GitLab answers with the group where it still is and a worker moves it seconds later. The action reads the group back every 2 seconds until its parent is the one it was sent to, or it has none when promoted to the top level, for up to 45 seconds, and answers with what that read found. GitLab 19.3 and older answer after the move, and that answer is returned as it is. When the move has not landed within the wait, the answer is the group where it still is with `transfer_queued` set to `true`, never an error: read it back later with `group.get`, and do not send the transfer again, which GitLab refuses while one is under way. A transfer already in progress, a group already under that parent and a group already at the top level are answered with that same advice; only a path taken under the destination is told to change the group's path.
+
 | Annotation | **Update** |
 | ---------- | ---------- |
 
@@ -142,7 +144,7 @@ List projects belonging to a GitLab group. Supports filtering by search, archive
 
 ### `gitlab_group_transfer_project`
 
-Transfer a project into a group namespace. Moves the project to become a member of the specified group.
+Transfer a project into a group namespace, as an administrator: GitLab serves this route to administrators only, and a project's owner moves it with `project.transfer` instead. The move is made before GitLab answers, on 19.4 as before, and the answer is the destination group rather than the project, so read the project with `project.get` to see its new path.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

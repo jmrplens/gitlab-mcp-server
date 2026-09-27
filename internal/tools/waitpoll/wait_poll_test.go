@@ -405,6 +405,35 @@ func TestPoll_ContextCanceled(t *testing.T) {
 	}
 }
 
+// TestPoll_ContextCanceledWhileWaitingForTheNextPoll verifies the caller's
+// context ending while the loop sleeps between two polls ends the wait with
+// its error. [TestPoll_ContextCanceled] cancels inside the poll, which the
+// check before the sleep answers, so nothing reached the sleep's own
+// cancellation case: a wait whose client went away mid-interval would sit out
+// the rest of the interval if that case were lost.
+func TestPoll_ContextCanceledWhileWaitingForTheNextPoll(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	opts, _ := pollOptions("running")
+	opts.PollDuration = func(int) time.Duration { return time.Hour }
+	opts.Poll = func(context.Context) (pollItem, error) {
+		time.AfterFunc(10*time.Millisecond, cancel)
+		return pollItem{Status: "running"}, nil
+	}
+
+	start := time.Now()
+	result, err := Poll(ctx, opts)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Poll() error = %v, want context.Canceled", err)
+	}
+	if result != (Result[pollItem]{}) {
+		t.Fatalf("result = %#v, want zero result", result)
+	}
+	if elapsed := time.Since(start); elapsed > time.Minute {
+		t.Errorf("Poll() returned after %v, want it to end with the context rather than the hour-long interval", elapsed)
+	}
+}
+
 // TestPoll_DeadlineDuringALaterPollReturnsTheLastObservedItem verifies that when
 // the wait deadline expires while a later poll is in flight, the timed-out
 // result carries what the previous poll observed rather than a zero item.

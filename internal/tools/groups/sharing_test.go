@@ -1,6 +1,6 @@
-// sharing_test.go contains unit tests for the group sharing, shared-project
-// listing, and subgroup transfer MCP tool handlers. Tests use httptest to mock
-// GitLab API responses and verify request method/path/body and output parsing.
+// sharing_test.go contains unit tests for the group sharing and shared-project
+// listing MCP tool handlers. Tests use httptest to mock GitLab API responses
+// and verify request method/path/body and output parsing.
 package groups
 
 import (
@@ -19,7 +19,6 @@ import (
 const (
 	pathGroupShare         = "/api/v4/groups/99/share"
 	pathGroupSharedProj    = "/api/v4/groups/99/projects/shared"
-	pathGroupTransfer      = "/api/v4/groups/99/transfer"
 	sharingGroupJSON       = `{"id":99,"name":"infra","path":"infra","full_path":"org/infra","visibility":"private","web_url":"https://gitlab.example.com/groups/org/infra"}`
 	sharingProjectListJSON = `[{"id":42,"name":"shared-proj","path_with_namespace":"other/shared-proj","visibility":"private","web_url":"https://gitlab.example.com/other/shared-proj","archived":false}]`
 )
@@ -191,90 +190,6 @@ func TestListSharedProjects_NotFound(t *testing.T) {
 	}
 }
 
-// TestTransferSubGroup_Success verifies the POST /transfer request with parent_id.
-func TestTransferSubGroup_Success(t *testing.T) {
-	var gotBody string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathGroupTransfer {
-			body, _ := io.ReadAll(r.Body)
-			gotBody = string(body)
-			testutil.RespondJSON(w, http.StatusOK, sharingGroupJSON)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	parent := int64(42)
-	out, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
-	if err != nil {
-		t.Fatalf("TransferSubGroup() unexpected error: %v", err)
-	}
-	if out.ID != 99 {
-		t.Fatalf("unexpected output: %+v", out)
-	}
-	if !strings.Contains(gotBody, "42") {
-		t.Fatalf("request body missing parent group_id: %s", gotBody)
-	}
-}
-
-// TestTransferSubGroup_TopLevel verifies promotion to top level (no parent_id).
-func TestTransferSubGroup_TopLevel(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathGroupTransfer {
-			testutil.RespondJSON(w, http.StatusOK, sharingGroupJSON)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	if _, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{GroupID: "99"}); err != nil {
-		t.Fatalf("TransferSubGroup() unexpected error: %v", err)
-	}
-}
-
-// TestTransferSubGroup_RequiresGroupID verifies the group_id guard.
-func TestTransferSubGroup_RequiresGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	if _, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{}); err == nil {
-		t.Fatal("expected error for empty group_id")
-	}
-}
-
-// TestTransferSubGroup_Forbidden verifies a 403 produces an Owner-role hint.
-func TestTransferSubGroup_Forbidden(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-	_, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{GroupID: "99"})
-	if err == nil || !strings.Contains(err.Error(), "Owner role") {
-		t.Fatalf("expected Owner-role hint, got: %v", err)
-	}
-}
-
-// TestTransferSubGroup_NotFound verifies that a status which is neither 403
-// nor 400 (here, 404) falls through both dedicated hint branches to the
-// final group.get verification hint. Without this test the fallback
-// WrapErrWithStatusHint call at the end of TransferSubGroup's error handling
-// is never exercised, and a regression there (e.g. losing the hint) would go
-// unnoticed since only err != nil would be implicitly checked elsewhere.
-func TestTransferSubGroup_NotFound(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	_, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{GroupID: "99"})
-	if err == nil {
-		t.Fatal("expected error for 404 response")
-	}
-	if !strings.Contains(err.Error(), "groupTransferSubGroup") {
-		t.Errorf("expected operation name in error, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "group.get") {
-		t.Errorf("expected group.get verification hint, got: %v", err)
-	}
-	if strings.Contains(err.Error(), "Owner role") || strings.Contains(err.Error(), "destination") {
-		t.Errorf("404 should not use the 403/400 hints, got: %v", err)
-	}
-}
-
 // TestFormatShareGroupMarkdown verifies the share confirmation card byte for
 // byte: the confirmation is the heading, the share's own fields are list rows
 // rather than a two-column table, and the hints close the card.
@@ -357,17 +272,6 @@ func TestListSharedProjects_AllFilters(t *testing.T) {
 	}
 }
 
-// TestTransferSubGroup_BadRequest verifies a 400 produces a destination hint.
-func TestTransferSubGroup_BadRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	_, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{GroupID: "99"})
-	if err == nil || !strings.Contains(err.Error(), "destination") {
-		t.Fatalf("expected destination hint, got: %v", err)
-	}
-}
-
 // TestShareGroupWithGroup_NamesTheRoleFromTheSharedTable verifies the granted
 // role is read from toolutil's access-level table rather than a copy of it:
 // the package-local copy knew six levels, so a Planner share reported "Level
@@ -411,9 +315,6 @@ func TestSharing_CanceledContext(t *testing.T) {
 	if _, err := ListSharedProjects(ctx, client, ListSharedProjectsInput{GroupID: "99"}); err == nil {
 		t.Error("ListSharedProjects: expected context error")
 	}
-	if _, err := TransferSubGroup(ctx, client, TransferSubGroupInput{GroupID: "99"}); err == nil {
-		t.Error("TransferSubGroup: expected context error")
-	}
 }
 
 // TestShareGroupWithGroup_MemberRoleAndErrorFallthrough verifies the
@@ -439,20 +340,6 @@ func TestShareGroupWithGroup_MemberRoleAndErrorFallthrough(t *testing.T) {
 	_, err := ShareGroupWithGroup(t.Context(), failClient, ShareGroupInput{GroupID: "42", SharedGroupID: 7, GroupAccess: 30})
 	if err == nil || !strings.Contains(err.Error(), "groupShareWithGroup") {
 		t.Errorf("fallthrough err = %v, want groupShareWithGroup-wrapped error", err)
-	}
-}
-
-// TestTransferSubGroup_BadRequestHint verifies an HTTP 400 transfer failure
-// surfaces the invalid-destination hint branch instead of the generic
-// not-found wrap.
-func TestTransferSubGroup_BadRequestHint(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	parentID := int64(7)
-	_, err := TransferSubGroup(t.Context(), client, TransferSubGroupInput{GroupID: "42", ParentID: &parentID})
-	if err == nil || !strings.Contains(err.Error(), "group.transfer_locations") {
-		t.Errorf("TransferSubGroup 400 err = %v, want invalid-destination hint", err)
 	}
 }
 

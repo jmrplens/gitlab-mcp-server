@@ -786,7 +786,7 @@ func TestProjectHandlers_ContextCancelled(t *testing.T) {
 			return err
 		}},
 		{name: "transfer", call: func(ctx context.Context) error {
-			_, err := Transfer(ctx, client, TransferInput{ProjectID: "42", Namespace: "target"})
+			_, err := Transfer(ctx, nil, client, TransferInput{ProjectID: "42", Namespace: "target"})
 			return err
 		}},
 		{name: "list forks", call: func(ctx context.Context) error {
@@ -908,22 +908,6 @@ func TestProjectHandlers_StatusSpecificErrors(t *testing.T) {
 		}},
 		{name: "unarchive forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
 			_, err := Unarchive(context.Background(), client, UnarchiveInput{ProjectID: "42"})
-			return err
-		}},
-		{name: "transfer forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
-			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
-			return err
-		}},
-		{name: "transfer not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
-			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
-			return err
-		}},
-		{name: "transfer bad request", status: http.StatusBadRequest, call: func(client *gitlabclient.Client) error {
-			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
-			return err
-		}},
-		{name: "transfer unprocessable", status: http.StatusUnprocessableEntity, call: func(client *gitlabclient.Client) error {
-			_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "target"})
 			return err
 		}},
 		{name: "list forks not found", status: http.StatusNotFound, call: func(client *gitlabclient.Client) error {
@@ -1596,51 +1580,6 @@ func TestProjectUnarchive_EmptyProjectID(t *testing.T) {
 	_, err := Unarchive(context.Background(), client, UnarchiveInput{})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Transfer
-// ---------------------------------------------------------------------------.
-
-// TestProjectTransfer_Success verifies ProjectTransfer when success.
-func TestProjectTransfer_Success(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/transfer" {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"myproject","path":"myproject","path_with_namespace":"newns/myproject","visibility":"private","web_url":"https://gitlab.example.com/newns/myproject","default_branch":"main"}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42", Namespace: "newns"})
-	if err != nil {
-		t.Fatalf("Transfer() unexpected error: %v", err)
-	}
-	if out.PathWithNamespace != "newns/myproject" {
-		t.Errorf("PathWithNamespace = %q, want %q", out.PathWithNamespace, "newns/myproject")
-	}
-}
-
-// TestProjectTransfer_EmptyProjectID verifies ProjectTransfer when empty project ID.
-func TestProjectTransfer_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
-	_, err := Transfer(context.Background(), client, TransferInput{Namespace: "ns"})
-	if err == nil {
-		t.Fatal(errEmptyProjID)
-	}
-}
-
-// TestProjectTransfer_EmptyNamespace verifies ProjectTransfer when empty namespace.
-func TestProjectTransfer_EmptyNamespace(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
-	_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal("expected error for empty namespace, got nil")
 	}
 }
 
@@ -5430,24 +5369,6 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestTransfer_APIError verifies Transfer when API error.
-func TestTransfer_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, errMockHandler())
-	_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "1", Namespace: "ns"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
-
-// TestTransfer_EmptyNamespace verifies Transfer when empty namespace.
-func TestTransfer_EmptyNamespace(t *testing.T) {
-	client := testutil.NewTestClient(t, errMockHandler())
-	_, err := Transfer(context.Background(), client, TransferInput{ProjectID: "1"})
-	if err == nil {
-		t.Fatal("expected validation error for empty namespace")
-	}
-}
-
 // TestGetLanguages_APIError verifies GetLanguages when API error.
 func TestGetLanguages_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, errMockHandler())
@@ -5726,6 +5647,11 @@ func TestListInvitedGroups_APIError(t *testing.T) {
 // projectJSON identifies the project JSON constant used by this package.
 const projectJSON = `{"id":42,"name":"test","path_with_namespace":"g/test","visibility":"private","default_branch":"main","web_url":"https://example.com","description":"desc","merge_request_title_regex":"^(feat|fix):","merge_request_title_regex_description":"MR title must start with feat: or fix:"}`
 
+// transferredProjectJSON is project 42 already in namespace new-ns, which is
+// what a transfer answers on GitLab 19.3 and older: the route answers after
+// the move, and the handler reads nothing back.
+const transferredProjectJSON = `{"id":42,"name":"test","path_with_namespace":"new-ns/test","namespace":{"id":5,"full_path":"new-ns"}}`
+
 // hookJSON42 identifies the hook JSON 42 constant used by this package.
 const hookJSON42 = `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"created_at":"2026-01-01T00:00:00Z"}`
 
@@ -5795,7 +5721,7 @@ func mcpMockHandler() http.Handler {
 		"POST /api/v4/projects/42/unstar":    {http.StatusOK, projectJSON},
 		"POST /api/v4/projects/42/archive":   {http.StatusOK, projectJSON},
 		"POST /api/v4/projects/42/unarchive": {http.StatusOK, projectJSON},
-		"PUT /api/v4/projects/42/transfer":   {http.StatusOK, projectJSON},
+		"PUT /api/v4/projects/42/transfer":   {http.StatusOK, transferredProjectJSON},
 	}
 
 	// Path-only routes: matched when no method-specific route exists
@@ -9662,8 +9588,8 @@ func TestActionSpecs_PushRuleGuidance_NamesTheRegexOnAddAndEditOnly(t *testing.T
 // TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions pins the
 // property decorateProjectMeta relies on: every entry of the metadata table
 // carries at least one alias, one related action and a description, so the
-// table never overwrites the default alias a spec starts with. The copy
-// guards in decorateProjectMeta are unreachable at zero only while this holds.
+// table never overwrites the default alias a spec starts with with nothing.
+// decorateProjectMeta copies the three without a guard only while this holds.
 func TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions(t *testing.T) {
 	for tool, meta := range projectActionMeta {
 		if len(meta.aliases) == 0 || len(meta.related) == 0 || meta.description == "" {

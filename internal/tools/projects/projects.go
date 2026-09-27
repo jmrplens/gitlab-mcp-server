@@ -1947,50 +1947,6 @@ func Unarchive(ctx context.Context, client *gitlabclient.Client, input Unarchive
 }
 
 // ---------------------------------------------------------------------------
-// Transfer
-// ---------------------------------------------------------------------------.
-
-// TransferInput defines parameters for transferring a project to another namespace.
-type TransferInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Namespace string               `json:"namespace" jsonschema:"Target namespace ID or path,required"`
-}
-
-// Transfer moves a project to a different namespace.
-func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
-		return Output{}, err
-	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("projectTransfer: project_id is required. Use project.list to find the ID, then pass it as project_id")
-	}
-	if input.Namespace == "" {
-		return Output{}, errors.New("projectTransfer: namespace is required. Provide the target namespace ID or path (e.g. 'my-group' or '42')")
-	}
-	opts := &gl.TransferProjectOptions{
-		Namespace: input.Namespace,
-	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	p, _, err := client.GL().Projects.TransferProject(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		switch {
-		case toolutil.IsHTTPStatus(err, http.StatusForbidden):
-			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"transferring a project requires Owner role on the source AND permission to create projects in the target namespace")
-		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
-			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"verify the target namespace exists. Use group.list or user.get; namespace must be a numeric ID or full path")
-		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
-			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"target namespace may already contain a project with this name/path; consider renaming the project before transferring")
-		default:
-			return Output{}, toolutil.WrapErrWithMessage("projectTransfer", err)
-		}
-	}
-	return projectOutput("projectTransfer", p, captured)
-}
-
-// ---------------------------------------------------------------------------
 // List Forks
 // ---------------------------------------------------------------------------.
 

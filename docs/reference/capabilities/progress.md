@@ -139,7 +139,7 @@ frames, out of band on that stream rather than alongside its call.
 | `gitlab_interactive_release_create` |     4 | Details → Description → Confirm → Create             |
 | `gitlab_interactive_project_create` |     4 | Collect details → Settings → Confirm → Create        |
 
-Each wizard ends with `Done`, so the bar reaches 100% once the object exists rather than stopping one step short. Outside the wizards, the project upload action (`uploads`), the package publish actions (`packages`, byte-counted through `OnScale`) and the wait actions that poll GitLab until a pipeline or job settles (`waitpoll`) report progress as well.
+Each wizard ends with `Done`, so the bar reaches 100% once the object exists rather than stopping one step short. Outside the wizards, the project upload action (`uploads`), the package publish actions (`packages`, byte-counted through `OnScale`), the wait actions that poll GitLab until a pipeline or job settles (`waitpoll`) and the two transfers GitLab 19.4 applies in the background, `project.transfer` and `group.transfer`, which report each read back of the moved object while they wait for it (`waitpoll.Until`), report progress as well.
 
 Progress is most valuable for **file uploads** (which stream large payloads) and **elicitation tools** (which require multiple rounds of user interaction).
 
@@ -205,7 +205,7 @@ Five methods: `IsActive()`, `Update()`, `Step()`, `Done()` and `OnScale()`. The 
 
 ### Does every tool show progress?
 
-No. Only tools with multi-step, streaming or polling operations use progress: file uploads, package publishing, the wait actions, and the 4 elicitation tools. Simple tools (e.g., `gitlab_branch_list`) complete too quickly within a single API call to benefit from progress.
+No. Only tools with multi-step, streaming or polling operations use progress: file uploads, package publishing, the wait actions, the project and group transfers while they wait for GitLab to apply the move, and the 4 elicitation tools. Simple tools (e.g., `gitlab_branch_list`) complete too quickly within a single API call to benefit from progress.
 
 ### What if my MCP client doesn't send a progress token?
 

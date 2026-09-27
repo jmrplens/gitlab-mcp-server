@@ -198,47 +198,6 @@ func ListSharedProjects(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 // ---------------------------------------------------------------------------
-// TransferSubGroup
-// ---------------------------------------------------------------------------.
-
-// TransferSubGroupInput defines parameters for transferring a group under a new
-// parent group or to the top level.
-type TransferSubGroupInput struct {
-	GroupID  toolutil.StringOrInt `json:"group_id"  jsonschema:"Group ID or URL-encoded path of the group to move,required"`
-	ParentID *int64               `json:"parent_id,omitempty" jsonschema:"ID of the new parent group. Omit to turn the subgroup into a top-level group"`
-}
-
-// TransferSubGroup moves a group under a new parent group, or promotes a
-// subgroup to a top-level group when parent_id is omitted.
-func TransferSubGroup(ctx context.Context, client *gitlabclient.Client, input TransferSubGroupInput) (DetailOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return DetailOutput{}, err
-	}
-	if input.GroupID == "" {
-		return DetailOutput{}, errors.New("groupTransferSubGroup: group_id is required")
-	}
-	opts := &gl.TransferSubGroupOptions{}
-	if input.ParentID != nil {
-		opts.GroupID = input.ParentID
-	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	g, _, err := client.GL().Groups.TransferSubGroup(string(input.GroupID), opts, gl.WithContext(ctx))
-	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferSubGroup", err,
-				"transferring a group requires Owner role on both the group and the destination parent group; use group.transfer_locations to discover valid destinations")
-		}
-		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferSubGroup", err,
-				"the destination parent is invalid (e.g. it would create a cycle, a path collision, or a visibility mismatch); use group.transfer_locations to find valid parents")
-		}
-		return DetailOutput{}, toolutil.WrapErrWithStatusHint("groupTransferSubGroup", err, http.StatusNotFound,
-			"verify group_id (and parent_id) with group.get")
-	}
-	return groupDetail("TransferSubGroup", g, captured)
-}
-
-// ---------------------------------------------------------------------------
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 

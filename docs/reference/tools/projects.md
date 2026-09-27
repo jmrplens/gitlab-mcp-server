@@ -162,7 +162,11 @@ Unarchive a GitLab project, restoring it from read-only state. Returns updated p
 
 ### `gitlab_project_transfer`
 
-Transfer a GitLab project to a different namespace. Requires the namespace (ID or path) to transfer to. Returns updated project details with new path.
+Transfer a GitLab project to a different namespace. Requires the namespace (ID or path) to transfer to. Returns the project in its new namespace.
+
+Since GitLab 19.4 a transfer is applied in the background: GitLab answers with the project where it still is and a worker moves it seconds later. The action reads the project back every 2 seconds until it sits in the namespace it was sent to, for up to 45 seconds, and answers with what that read found. GitLab 19.3 and older answer after the move, and that answer is returned as it is with no read at all. When the move has not landed within the wait, the answer is the project where it still is with `transfer_queued` set to `true`, never an error: GitLab accepted the transfer, and sending it again is refused while one is under way. Read it back later with `project.get`. If the move fails, GitLab leaves a to-do item saying so for the user who asked for it (`user.todo_list`).
+
+A refusal is answered with the hint its message calls for. "The project may already have a transfer in progress" and "Project is already in this namespace" both mean the move is happening or has happened, so the hint is to wait and read the project back rather than to rename it. Only a name or path already taken in the target namespace, or taken by a project there still pending deletion, is told to rename the project with `project.update`.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

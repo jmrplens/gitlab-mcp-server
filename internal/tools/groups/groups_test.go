@@ -2177,6 +2177,27 @@ func TestTransferProject_BadRequest(t *testing.T) {
 	}
 }
 
+// TestTransferProject_NotAnAdministrator_PointsAtProjectTransfer verifies the
+// refusal of a caller who is not an administrator. The route calls
+// authenticated_as_admin!, so no role on the project or the group lets anyone
+// else through, and the hint names the action a project owner moves a project
+// with instead of a role nobody can be granted here.
+func TestTransferProject_NotAnAdministrator_PointsAtProjectTransfer(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := TransferProject(context.Background(), client, TransferInput{GroupID: "99", ProjectID: "42"})
+	if err == nil {
+		t.Fatal("TransferProject() error = nil, want the refusal")
+	}
+	if !strings.Contains(err.Error(), "administrator only") || !strings.Contains(err.Error(), "project.transfer") {
+		t.Errorf("error = %v, want the administrator hint naming project.transfer", err)
+	}
+	if strings.Contains(err.Error(), "Owner role") {
+		t.Errorf("error = %v, names a role that does not open this route", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ListProjects — canceled context, with optional filter fields
 // ---------------------------------------------------------------------------.
@@ -2700,7 +2721,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"share_with_group", "gitlab_group_share_with_group", map[string]any{"group_id": "99", "shared_group_id": 123, "group_access": 30}},
 		{"unshare_from_group", "gitlab_group_unshare_from_group", map[string]any{"group_id": "99", "shared_group_id": 123}},
 		{"shared_projects_list", "gitlab_group_shared_projects_list", map[string]any{"group_id": "99"}},
-		{"transfer", "gitlab_group_transfer", map[string]any{"group_id": "99", "parent_id": 42}},
+		// The group the transfer answers with already has parent 1, as GitLab
+		// 19.3 answers after the move, so the handler reads nothing back.
+		{"transfer", "gitlab_group_transfer", map[string]any{"group_id": "99", "parent_id": 1}},
 		{"push_rule_get", "gitlab_group_get_push_rules", map[string]any{"group_id": "99"}},
 		{"push_rule_add", "gitlab_group_add_push_rule", map[string]any{"group_id": "99", "commit_message_regex": "^JIRA-"}},
 		{"push_rule_edit", "gitlab_group_edit_push_rule", map[string]any{"group_id": "99", "prevent_secrets": true}},

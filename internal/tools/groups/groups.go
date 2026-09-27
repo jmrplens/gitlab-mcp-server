@@ -1552,7 +1552,11 @@ func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput)
 	return groupListOutput("groupSearch", groups, nil, captured)
 }
 
-// TransferProject transfers a project into the group namespace.
+// TransferProject transfers a project into the group namespace and answers
+// with the group. The route is for administrators (lib/api/groups.rb calls
+// authenticated_as_admin!), and unlike a project's own transfer it moves the
+// project before it answers, in GitLab 19.4 as before: it runs the transfer
+// service inline rather than queueing its worker.
 func TransferProject(ctx context.Context, client *gitlabclient.Client, input TransferInput) (DetailOutput, error) {
 	if input.GroupID == "" {
 		return DetailOutput{}, errors.New("groupTransferProject: group_id is required")
@@ -1564,9 +1568,9 @@ func TransferProject(ctx context.Context, client *gitlabclient.Client, input Tra
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.TransferGroup(string(input.GroupID), string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+		if toolutil.IsPermissionRefusal(err) {
 			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferProject", err,
-				"transferring projects requires Owner role on both source and target groups")
+				"this route moves a project for an administrator only, and GitLab refuses it to everyone else, the project's owner included. An owner moves a project with project.transfer")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferProject", err,
