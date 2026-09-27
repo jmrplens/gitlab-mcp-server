@@ -946,8 +946,8 @@ func TestCreate_WithPriority(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Priority != 5 {
-		t.Errorf("expected priority 5, got %d", out.Priority)
+	if out.Priority == nil || *out.Priority != 5 {
+		t.Errorf("priority = %v, want 5", out.Priority)
 	}
 }
 
@@ -993,8 +993,8 @@ func TestUpdate_WithDescAndPriority(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Priority != 5 {
-		t.Errorf("expected priority 5, got %d", out.Priority)
+	if out.Priority == nil || *out.Priority != 5 {
+		t.Errorf("priority = %v, want 5", out.Priority)
 	}
 }
 
@@ -1161,7 +1161,7 @@ func TestPromote_CancelledContext(t *testing.T) {
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	o := Output{
 		ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug report",
-		Priority: 3, IsProjectLabel: true, Subscribed: true, Archived: true,
+		Priority: new(int64(3)), IsProjectLabel: new(true), Subscribed: true, Archived: true,
 		OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1,
 	}
 
@@ -1188,7 +1188,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 // TestFormatMarkdown_Minimal pins the whole card of a label GitLab sent
 // nothing optional for: no priority, counter or archive row is written.
 func TestFormatMarkdown_Minimal(t *testing.T) {
-	md := FormatMarkdown(Output{ID: 2, Name: "wontfix", Color: "#000", IsProjectLabel: true})
+	md := FormatMarkdown(Output{ID: 2, Name: "wontfix", Color: "#000", IsProjectLabel: new(true)})
 
 	want := "## Label: wontfix\n\n" +
 		"- **ID**: 2\n" +
@@ -1240,7 +1240,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 func TestFormatListMarkdownString_WithLabels(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
-			{ID: 1, Name: "bug", Color: "#d9534f", IsProjectLabel: true, OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
+			{ID: 1, Name: "bug", Color: "#d9534f", IsProjectLabel: new(true), OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
 			{ID: 2, Name: "stale", Color: "#cccccc", Archived: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
