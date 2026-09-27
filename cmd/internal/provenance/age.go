@@ -91,23 +91,24 @@ type Subject struct {
 // It returns a slice rather than one string so a caller appends it to the
 // problems it found itself, and so a date that is merely fine adds nothing.
 func Problems(subject Subject, retrievedAt string, now time.Time) []string {
-	switch age, err := Age(retrievedAt, now); {
-	case err != nil:
+	age, err := Age(retrievedAt, now)
+	if err != nil {
 		return []string{fmt.Sprintf(
 			"the %s says it was taken on %q, which is not a date: nothing can then say how old the gate is",
 			subject.Noun, retrievedAt,
 		)}
-	case age < 0:
+	}
+	if age < 0 {
 		return []string{fmt.Sprintf(
 			"the %s says it was taken on %s, which has not happened yet: no regeneration writes a day in the future",
 			subject.Noun, retrievedAt,
 		)}
-	case age > MaxAge:
+	}
+	if age > MaxAge {
 		return []string{fmt.Sprintf(
 			"the %s is %d days old and the window is %d: %s",
 			subject.Noun, Days(age), Days(MaxAge), subject.Consequence,
 		)}
-	default:
-		return nil
 	}
+	return nil
 }
