@@ -52,21 +52,21 @@ func camelToSnake(s string) string {
 // therefore kept together, which is the only shape Go spells that way.
 func FieldNameTag(name string) string {
 	runes := []rune(name)
-	upper := func(i int) bool { return i >= 0 && i < len(runes) && runes[i] >= 'A' && runes[i] <= 'Z' }
+	// Every caller below hands upper an index inside the name: the loop's own,
+	// or the one before it once i > 0. lower is also asked about the rune after
+	// i, which is past the end on the last one, so it alone checks the bound.
+	upper := func(i int) bool { return runes[i] >= 'A' && runes[i] <= 'Z' }
 	lower := func(i int) bool {
-		return i >= 0 && i < len(runes) && ((runes[i] >= 'a' && runes[i] <= 'z') || (runes[i] >= '0' && runes[i] <= '9'))
+		return i < len(runes) && ((runes[i] >= 'a' && runes[i] <= 'z') || (runes[i] >= '0' && runes[i] <= '9'))
 	}
 
 	var b strings.Builder
 	for i, r := range runes {
 		if upper(i) && i > 0 {
-			switch {
-			case lower(i - 1):
-				// A capital after a lowercase letter always starts a word.
-				b.WriteByte('_')
-			case upper(i-1) && lower(i+1) && !pluralTail(runes, i+1):
-				// The last capital of an acronym run starts the next word,
-				// unless what follows is the acronym's own plural s.
+			// A capital after a lowercase letter always starts a word, and so
+			// does the last capital of an acronym run, unless what follows is
+			// the acronym's own plural s.
+			if lower(i-1) || (upper(i-1) && lower(i+1) && !pluralTail(runes, i+1)) {
 				b.WriteByte('_')
 			}
 			r += 'a' - 'A'

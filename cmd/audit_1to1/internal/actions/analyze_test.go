@@ -259,19 +259,19 @@ func endpointInterface(name string, methods ...string) *types.Named {
 // both count as covered, the rest are the sorted missing list, and the
 // referencing packages are listed sorted.
 func TestCoverageForService_Usage_AdjudicatesAcceptedMethods(t *testing.T) {
-	service := endpointInterface("SearchServiceInterface", "Commits", "Milestones", "Blobs", "Users")
+	service := endpointInterface("DraftNotesServiceInterface", "PublishAllDraftNotesWithOptions", "PublishAllDraftNotes", "ListDraftNotes", "GetDraftNote")
 	use := &shared.ServiceUsage{
 		Named:    service,
-		Called:   map[string]struct{}{"Commits": {}},
-		Packages: map[string]struct{}{"search": {}, "groups": {}},
+		Called:   map[string]struct{}{"PublishAllDraftNotesWithOptions": {}},
+		Packages: map[string]struct{}{"mrdraftnotes": {}, "groups": {}},
 	}
 	got := coverageForService(use)
 	want := serviceCoverage{
-		Service:        "SearchServiceInterface",
-		Packages:       []string{"groups", "search"},
+		Service:        "DraftNotesServiceInterface",
+		Packages:       []string{"groups", "mrdraftnotes"},
 		APIMethods:     4,
 		CoveredMethods: 2,
-		MissingMethods: []string{"Blobs", "Users"},
+		MissingMethods: []string{"GetDraftNote", "ListDraftNotes"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("coverageForService = %+v, want %+v", got, want)
@@ -287,10 +287,10 @@ func TestIsAcceptedMissingMethod_Keys_MatchServiceAndMethod(t *testing.T) {
 		method  string
 		want    bool
 	}{
-		{name: "adjudicated_generic_search", service: "Search", method: "Milestones", want: true},
+		{name: "adjudicated_variant", service: "DraftNotes", method: "PublishAllDraftNotes", want: true},
 		{name: "adjudicated_graphql_epic", service: "Epics", method: "GetEpic", want: true},
-		{name: "unlisted_method", service: "Search", method: "Blobs", want: false},
-		{name: "service_suffix_is_not_part_of_the_key", service: "SearchServiceInterface", method: "Milestones", want: false},
+		{name: "unlisted_method", service: "DraftNotes", method: "ListDraftNotes", want: false},
+		{name: "service_suffix_is_not_part_of_the_key", service: "DraftNotesServiceInterface", method: "PublishAllDraftNotes", want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

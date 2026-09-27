@@ -506,6 +506,43 @@ func TestCollectServiceUsage_SecondCallSite_AccumulatesOntoTheSameEntry(t *testi
 	}
 }
 
+// TestCollectServiceUsage_MethodValue_CountsAsReached verifies that a method
+// handed on as a value, for a helper to call, is recorded as reached exactly
+// like one called where it is written. Handlers pick one of two endpoints and
+// pass it to a shared helper (the merge request subscribe and unsubscribe pair,
+// the scoped searches, the note award emoji), and a scanner reading only call
+// expressions reported every such endpoint as uncovered, which is what an
+// adjudication entry per method had to answer. The selector on the Client
+// struct, which names a field rather than a method, is still passed over, and
+// so is a method of the interface nothing names.
+func TestCollectServiceUsage_MethodValue_CountsAsReached(t *testing.T) {
+	root := writeModule(t, map[string]string{
+		sdkPath: fixtureSDKSource,
+		"internal/tools/branches/branches.go": "package branches\n\nimport gl \"" + sdkImport + "\"\n\n" +
+			"// Create hands the endpoint to a helper instead of calling it.\nfunc Create(c *gl.Client) error { return run(c.Branches.CreateBranch) }\n\n" +
+			"func run(call func(...gl.RequestOptionFunc) error) error { return call() }\n",
+	})
+	pkgs, err := LoadToolPackages(root)
+	if err != nil {
+		t.Fatalf("LoadToolPackages: %v", err)
+	}
+
+	usage := CollectServiceUsage(pkgs)
+	use, ok := usage["BranchesServiceInterface"]
+	if !ok {
+		t.Fatalf("Branches not recorded although its method is handed on (got %v)", usage)
+	}
+	if got := SortedSet(use.Called); !reflect.DeepEqual(got, []string{"CreateBranch"}) {
+		t.Errorf("called = %v, want exactly the method handed on", got)
+	}
+	if got := SortedSet(use.Packages); !reflect.DeepEqual(got, []string{"branches"}) {
+		t.Errorf("packages = %v, want [branches]", got)
+	}
+	if len(usage) != 1 {
+		t.Errorf("recorded %d services, want only Branches: the Client struct selector names a field", len(usage))
+	}
+}
+
 // TestClientStruct_Package_RefusesANonStructClient verifies the struct lookup
 // itself, given a package whose Client is not a struct or is absent
 // altogether. The loader-backed cases above cannot reach these branches,

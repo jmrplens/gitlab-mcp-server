@@ -40,7 +40,9 @@ const (
 type ServiceUsage struct {
 	// Named is the client-go service interface itself.
 	Named *types.Named
-	// Called holds the method names our handlers invoke on it.
+	// Called holds the method names our handlers invoke on it, whether the
+	// selector is called where it is written or handed on as a method value
+	// for a helper to call.
 	Called map[string]struct{}
 	// Packages holds the short internal/tools package names that reference it.
 	Packages map[string]struct{}
@@ -57,12 +59,20 @@ func ServiceName(named *types.Named) string {
 	return strings.TrimSuffix(named.Obj().Name(), serviceInterfaceSuffix)
 }
 
-// CollectServiceUsage walks every call expression in pkgs and records calls
-// whose receiver type is a client-go service interface, keyed by interface
-// name. It is the call-site universe shared by the action-coverage scope
-// (which methods of a used service are uncovered) and the SDK scope (which of
-// the SDK's declared services are referenced at all), so the two cannot
-// disagree about what "we call this" means.
+// CollectServiceUsage walks every selector in pkgs and records each one that
+// names a method of a client-go service interface, keyed by interface name.
+// It is the call-site universe shared by the action-coverage scope (which
+// methods of a used service are uncovered) and the SDK scope (which of the
+// SDK's declared services are referenced at all), so the two cannot disagree
+// about what "we call this" means.
+//
+// A selector counts whether it is called where it is written or handed on as
+// a method value: a handler that picks SubscribeToMergeRequest or
+// UnsubscribeFromMergeRequest and passes it to one helper that calls it has
+// covered both endpoints, and reading only call expressions reported them as
+// uncovered and made the method-value entries of the actions scope's
+// adjudication table necessary. An interface has no fields, so every selector
+// on one names a method.
 func CollectServiceUsage(pkgs []*packages.Package) map[string]*ServiceUsage {
 	usage := map[string]*ServiceUsage{}
 	for _, pkg := range pkgs {
@@ -75,11 +85,7 @@ func collectPackageUsage(pkg *packages.Package, usage map[string]*ServiceUsage) 
 	pkgName := ShortPackage(pkg.PkgPath)
 	for _, file := range pkg.Syntax {
 		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
+			sel, ok := node.(*ast.SelectorExpr)
 			if !ok {
 				return true
 			}
@@ -142,7 +148,7 @@ func APIMethodNames(named *types.Named) []string {
 		if !method.Exported() {
 			continue
 		}
-		if sig, isSig := method.Type().(*types.Signature); isSig && SignatureIsAPICall(sig) {
+		if SignatureIsAPICall(method.Signature()) {
 			names = append(names, method.Name())
 		}
 	}
@@ -153,7 +159,9 @@ func APIMethodNames(named *types.Named) []string {
 // SignatureIsAPICall reports whether sig is a client-go endpoint call, i.e. a
 // variadic signature whose tail is a slice of a client-go RequestOptionFunc.
 func SignatureIsAPICall(sig *types.Signature) bool {
-	if !sig.Variadic() || sig.Params().Len() == 0 {
+	// A variadic signature has at least one parameter, the variadic one,
+	// which go/types enforces when it builds the signature.
+	if !sig.Variadic() {
 		return false
 	}
 	last := sig.Params().At(sig.Params().Len() - 1)
