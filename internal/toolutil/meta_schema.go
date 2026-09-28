@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,7 +129,7 @@ func BuildMetaSchemaIndex(routes map[string]ActionMap) MetaSchemaIndex {
 		names := sortedActionNames(actions)
 		tools = append(tools, MetaSchemaIndexEntry{Tool: tool, Actions: names})
 	}
-	sort.Slice(tools, func(i, j int) bool { return tools[i].Tool < tools[j].Tool })
+	slices.SortFunc(tools, func(a, b MetaSchemaIndexEntry) int { return strings.Compare(a.Tool, b.Tool) })
 	return MetaSchemaIndex{URITemplate: MetaSchemaTemplateURI, Tools: tools}
 }
 

@@ -166,6 +166,30 @@ func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
 	}
 }
 
+// TestLockdownSchemaNode_BooleanSchemas_AreLeftAsTheyAre verifies a property
+// schema or a combinator branch written as a bare boolean is kept as it is,
+// and that the walk goes on to lock down the object beside it.
+func TestLockdownSchemaNode_BooleanSchemas_AreLeftAsTheyAre(t *testing.T) {
+	t.Parallel()
+	sibling := map[string]any{"type": "object"}
+	node := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"anything": true},
+		"oneOf":      []any{false, sibling},
+	}
+	lockdownSchemaNode(node)
+
+	if node["properties"].(map[string]any)["anything"] != true {
+		t.Error("boolean property schema was rewritten")
+	}
+	if node["oneOf"].([]any)[0] != false {
+		t.Error("boolean oneOf branch was rewritten")
+	}
+	if sibling["additionalProperties"] != false {
+		t.Errorf("object branch after the boolean one = %v, want it locked down", sibling)
+	}
+}
+
 // TestSchemaMapCopy_Inputs_CopiedOrRejected verifies the copy accepts maps
 // and marshalable structs, that a map input yields a map the caller owns
 // rather than the input itself, and that malformed schema values are

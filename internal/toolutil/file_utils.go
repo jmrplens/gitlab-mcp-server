@@ -62,7 +62,15 @@ var (
 var localFilesystemAllowed atomic.Bool
 
 func init() {
-	localFilesystemAllowed.Store(!httpTransportConfigured(os.Args))
+	localFilesystemAllowed.Store(localFilesystemAllowedFor(os.Args))
+}
+
+// localFilesystemAllowedFor is the inference init makes from the process
+// arguments: local paths are honored unless those arguments start the HTTP
+// transport. It is a function of its own so both answers can be asked of it,
+// which init, run once per process, cannot be.
+func localFilesystemAllowedFor(args []string) bool {
+	return !httpTransportConfigured(args)
 }
 
 // SetLocalFilesystemAccess overrides the transport inference for this process:
@@ -402,7 +410,7 @@ func CanonicalImportArchivePath(path string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("archive %s is not a regular file", canonicalPath)
 	}
-	if archiveHasUnsafePermissions(info) {
+	if archiveHasUnsafePermissions(runtime.GOOS, info) {
 		return "", fmt.Errorf("archive %s must not be group/world-writable", canonicalPath)
 	}
 
@@ -412,8 +420,13 @@ func CanonicalImportArchivePath(path string) (string, error) {
 	return canonicalPath, nil
 }
 
-func archiveHasUnsafePermissions(info os.FileInfo) bool {
-	return runtime.GOOS != "windows" && info.Mode().Perm()&0o022 != 0
+// archiveHasUnsafePermissions reports whether an archive is group or world
+// writable, on an operating system whose permission bits say so. goos is
+// runtime.GOOS in the one caller, and a parameter so the Windows answer, where
+// the bits Go reports are synthesized and carry no such meaning, can be asked
+// on any host.
+func archiveHasUnsafePermissions(goos string, info os.FileInfo) bool {
+	return goos != "windows" && info.Mode().Perm()&0o022 != 0
 }
 
 func pathWithinAllowedImportDirs(canonicalPath string) bool {
@@ -558,7 +571,9 @@ func pathWithinBase(path, base string) bool {
 	if err != nil {
 		return false
 	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
+	// filepath.Rel answers a relative path or an error, never an absolute
+	// path, so escaping the base is spelled only by a leading "..".
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // ComputeSHA256 computes the SHA-256 checksum of a file at the given path
@@ -649,7 +664,7 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 	n, err := pr.inner.Read(p)
 	pr.read += int64(n)
 
-	if pr.onProgress != nil && (pr.read-pr.lastReport >= pr.interval || err == io.EOF) {
+	if pr.read-pr.lastReport >= pr.interval || err == io.EOF {
 		pr.onProgress(pr.read, pr.total)
 		pr.lastReport = pr.read
 	}
@@ -702,7 +717,7 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 	n, err := pw.inner.Write(p)
 	pw.written += int64(n)
 
-	if pw.onProgress != nil && (pw.written-pw.lastReport >= pw.interval || err != nil) {
+	if pw.written-pw.lastReport >= pw.interval || err != nil {
 		pw.onProgress(pw.written, pw.total)
 		pw.lastReport = pw.written
 	}

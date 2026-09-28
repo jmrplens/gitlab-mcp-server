@@ -552,6 +552,37 @@ func TestMarkdownForResult_PointerToRegisteredType_IsDereferenced(t *testing.T) 
 	}
 }
 
+// TestMarkdownForResult_FormatterForThePointerType_IsServedAsIs verifies a
+// formatter registered for the pointer type itself is the one a pointer is
+// rendered with: the lookup stops at the first type holding a formatter and
+// never dereferences past it.
+func TestMarkdownForResult_FormatterForThePointerType_IsServedAsIs(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+	RegisterMarkdown(func(v *mdPointerOutput) string { return "## pointer " + v.Name })
+
+	got := MarkdownForResult(&mdPointerOutput{Name: "p"})
+	if got == nil || string(extractText(got)) != "## pointer p" {
+		t.Errorf("MarkdownForResult(*mdPointerOutput) = %+v, want the pointer formatter's text", got)
+	}
+}
+
+// TestAnnotateContent_ImageKeepsItsOwnAnnotation verifies an image block that
+// already carries an annotation keeps it, while one carrying none is given the
+// user annotation.
+func TestAnnotateContent_ImageKeepsItsOwnAnnotation(t *testing.T) {
+	own := &mcp.Annotations{Priority: 0.25}
+	annotated := &mcp.ImageContent{Annotations: own}
+	bare := &mcp.ImageContent{}
+	annotateContent(&mcp.CallToolResult{Content: []mcp.Content{annotated, bare}}, ContentDetail)
+	if annotated.Annotations != own {
+		t.Errorf("annotated image = %+v, want its own annotation kept", annotated.Annotations)
+	}
+	if bare.Annotations != ContentUser {
+		t.Errorf("bare image = %+v, want the user annotation", bare.Annotations)
+	}
+}
+
 // TestRegisterMarkdown_Collisions_AreRecordedAndTheFirstIsKept verifies the
 // registration record: a second formatter for one type is refused and the
 // first keeps rendering, a string and a result formatter for one type are

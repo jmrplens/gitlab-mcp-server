@@ -490,6 +490,37 @@ func TestBuildPositionError_BothLineNumbers(t *testing.T) {
 	}
 }
 
+// TestBuildPositionError_DescendingLinesAndOldLineOnly verifies the ranges the
+// refusal names are the true minimum and maximum whatever order the lines come
+// in, and that a position giving only old_line names that line alone. The
+// lines descend, so a range that kept the first line seen as its minimum, or
+// the last as its maximum, would name 10-10 or 5-5.
+func TestBuildPositionError_DescendingLinesAndOldLineOnly(t *testing.T) {
+	diffLines := []DiffLine{
+		{OldLine: 12, NewLine: 10, Type: LineContext},
+		{OldLine: 7, NewLine: 5, Type: LineContext},
+	}
+	msg := buildPositionError(diffLines, 0, 99).Error()
+	for _, want := range []string{"position (old_line 99)", "valid new_line: 5-10", "valid old_line: 7-12"} {
+		t.Run(want, func(t *testing.T) {
+			if !contains(msg, want) {
+				t.Errorf("error = %q, want it to contain %q", msg, want)
+			}
+		})
+	}
+}
+
+// TestValidateDiffPosition_BothSet_OldLineMustMatchToo verifies a context line
+// matching the new line alone is not the position asked for when the old line
+// given differs from its own.
+func TestValidateDiffPosition_BothSet_OldLineMustMatchToo(t *testing.T) {
+	diffLines := []DiffLine{{OldLine: 4, NewLine: 5, Type: LineContext}}
+	err := ValidateDiffPosition(diffLines, 5, 3)
+	if err == nil || !contains(err.Error(), "outside the diff range") {
+		t.Errorf("ValidateDiffPosition(5, 3) = %v, want the outside-the-range refusal", err)
+	}
+}
+
 func searchSubstring(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

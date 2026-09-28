@@ -131,11 +131,12 @@ func WritePagination(b *strings.Builder, p PaginationOutput) {
 // follow. Nothing known renders as nothing.
 func formatPagination(p PaginationOutput) string {
 	var parts []string
-	switch {
-	case p.TotalPages > 0 && p.Page > 0:
-		parts = append(parts, fmt.Sprintf("Page %d of %d", p.Page, p.TotalPages))
-	case p.Page > 0:
-		parts = append(parts, fmt.Sprintf("Page %d", p.Page))
+	if p.Page > 0 {
+		page := fmt.Sprintf("Page %d", p.Page)
+		if p.TotalPages > 0 {
+			page = fmt.Sprintf("Page %d of %d", p.Page, p.TotalPages)
+		}
+		parts = append(parts, page)
 	}
 	if p.TotalItems > 0 {
 		parts = append(parts, fmt.Sprintf("%d items total", p.TotalItems))
@@ -179,11 +180,12 @@ func WriteListSummary(b *strings.Builder, shown int, p PaginationOutput) {
 // reader.
 func WriteListHeading(b *strings.Builder, title string, shown int, p PaginationOutput) {
 	count := strconv.Itoa(shown)
-	switch {
-	case p.TotalItems > 0:
-		count = strconv.FormatInt(p.TotalItems, 10)
-	case shown > 0 && (p.HasMore || p.NextPage > 0):
+	if shown > 0 && (p.HasMore || p.NextPage > 0) {
 		count = fmt.Sprintf("%d shown, more available", shown)
+	}
+	// A total GitLab sent outranks the count shown, so it is written last.
+	if p.TotalItems > 0 {
+		count = strconv.FormatInt(p.TotalItems, 10)
 	}
 	fmt.Fprintf(b, "## %s (%s)\n\n", EscapeMdHeading(title), count)
 	WriteListSummary(b, shown, p)
@@ -334,13 +336,14 @@ func mapSlice[T, U any](in []T, f func(T) U) []U {
 // continuing the last line as a lazy paragraph or a table row.
 func endBlock(b *strings.Builder) {
 	written := b.String()
-	switch {
-	case written == "" || strings.HasSuffix(written, "\n\n"):
-	case strings.HasSuffix(written, "\n"):
-		b.WriteString("\n")
-	default:
-		b.WriteString("\n\n")
+	if written == "" || strings.HasSuffix(written, "\n\n") {
+		return
 	}
+	if strings.HasSuffix(written, "\n") {
+		b.WriteString("\n")
+		return
+	}
+	b.WriteString("\n\n")
 }
 
 // MarkdownTableHeader returns a Markdown table header followed by a standard

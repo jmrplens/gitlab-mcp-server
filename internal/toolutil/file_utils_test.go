@@ -327,6 +327,9 @@ func TestPathWithinBase(t *testing.T) {
 	if pathWithinBase(sibling, base) {
 		t.Fatal("pathWithinBase(sibling, base) = true, want false")
 	}
+	if pathWithinBase(filepath.Dir(base), base) {
+		t.Fatal("pathWithinBase(parent, base) = true, want false")
+	}
 }
 
 // TestComputeSHA256_KnownHash verifies a known content produces the expected SHA-256.
@@ -960,6 +963,29 @@ func TestCanonicalImportArchivePath_DeletedCwd_ReturnsResolveError(t *testing.T)
 
 	if _, dirErr := canonicalDirPath("relative-allowlist-dir"); dirErr == nil {
 		t.Error("canonicalDirPath(relative, deleted cwd) error = nil, want error")
+	}
+}
+
+// TestAllowedLocalDirs_ImplicitRootsThatCannotBeResolved_AreSkipped verifies
+// the two implicit roots drop out of the allow-list when they cannot be
+// resolved, and silently, since the operator never named them: a working
+// directory that no longer exists, and a temp directory that does not.
+func TestAllowedLocalDirs_ImplicitRootsThatCannotBeResolved_AreSkipped(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("only Linux fails os.Getwd for a removed working directory, and reads TMPDIR for os.TempDir")
+	}
+	t.Setenv(UploadDirAllowlistEnv, "")
+	missingTemp := filepath.Join(t.TempDir(), "no-such-temp")
+	t.Setenv("TMPDIR", missingTemp)
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.Remove(dir); err != nil {
+		t.Skipf("cannot remove current working directory: %v", err)
+	}
+
+	if got := allowedLocalDirs(UploadDirAllowlistEnv); len(got) != 0 {
+		t.Errorf("allowedLocalDirs() = %v, want no directory once both implicit roots are unresolvable", got)
 	}
 }
 
@@ -1671,6 +1697,7 @@ func TestHTTPTransportConfigured(t *testing.T) {
 		{name: "double dash http", args: []string{"gitlab-mcp-server", "--http"}, want: true},
 		{name: "explicit true value", args: []string{"gitlab-mcp-server", "--http=true"}, want: true},
 		{name: "explicit false value", args: []string{"gitlab-mcp-server", "--http=false"}},
+		{name: "a value that is not a boolean is not http", args: []string{"gitlab-mcp-server", "--http=maybe"}},
 		{name: "http-addr alone does not enable http", args: []string{"gitlab-mcp-server", "--http-addr=:8080"}},
 		{name: "arguments after the terminator are not flags", args: []string{"gitlab-mcp-server", "--", "--http"}},
 		{name: "test binary flags are stdio", args: []string{"toolutil.test", "-test.timeout=10m", "-test.v=true"}},
@@ -1681,6 +1708,42 @@ func TestHTTPTransportConfigured(t *testing.T) {
 				t.Errorf("httpTransportConfigured(%q) = %t, want %t", tt.args, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestLocalFilesystemAllowedFor_FollowsTheTransport verifies the inference the
+// process makes at start: local paths are honored for a stdio start and
+// refused for an HTTP one.
+func TestLocalFilesystemAllowedFor_FollowsTheTransport(t *testing.T) {
+	if !localFilesystemAllowedFor([]string{"gitlab-mcp-server"}) {
+		t.Error("localFilesystemAllowedFor(stdio) = false, want true")
+	}
+	if localFilesystemAllowedFor([]string{"gitlab-mcp-server", "--http"}) {
+		t.Error("localFilesystemAllowedFor(--http) = true, want false")
+	}
+}
+
+// TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt verifies a
+// group- and world-writable archive is unsafe on an operating system whose
+// permission bits describe access, and not on Windows, where Go synthesizes
+// them from the read-only attribute.
+func TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "archive.tar.gz")
+	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	if err := os.Chmod(path, 0o666); err != nil { //nolint:gosec // The group- and world-writable mode is the fixture under judgement.
+		t.Fatalf("chmod archive: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat archive: %v", err)
+	}
+	if !archiveHasUnsafePermissions("linux", info) {
+		t.Error("archiveHasUnsafePermissions(linux, 0666) = false, want true")
+	}
+	if archiveHasUnsafePermissions("windows", info) {
+		t.Error("archiveHasUnsafePermissions(windows, 0666) = true, want false")
 	}
 }
 

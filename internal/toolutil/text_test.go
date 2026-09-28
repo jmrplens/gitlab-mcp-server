@@ -420,6 +420,28 @@ func TestIsBinaryFile(t *testing.T) {
 	}
 }
 
+// TestIsBinaryFile_EveryListedExtension verifies each extension the binary
+// list names is recognized on its own. The table above samples the list; a
+// case dropped from the switch, or one misspelled, is invisible to a sample,
+// so every entry is driven here.
+func TestIsBinaryFile_EveryListedExtension(t *testing.T) {
+	for _, ext := range []string{
+		".pdf", ".zip", ".gz", ".tar", ".bz2", ".xz", ".7z", ".rar",
+		".exe", ".dll", ".so", ".dylib", ".bin",
+		".woff", ".woff2", ".ttf", ".otf", ".eot",
+		".mp3", ".mp4", ".avi", ".mov", ".mkv", ".flac", ".wav", ".ogg",
+		".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+		".class", ".jar", ".pyc", ".o", ".a", ".lib",
+		".sqlite", ".db",
+	} {
+		t.Run(ext, func(t *testing.T) {
+			if !IsBinaryFile("file" + ext) {
+				t.Errorf("IsBinaryFile(%q) = false, want true", "file"+ext)
+			}
+		})
+	}
+}
+
 // TestBuildTargetURL verifies URL construction for various target types
 // including Issue, MergeRequest, Milestone, and edge cases (unknown type,
 // empty URL, zero IID).

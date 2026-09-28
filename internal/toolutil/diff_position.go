@@ -157,16 +157,20 @@ func ValidateDiffPosition(diffLines []DiffLine, newLine, oldLine int) error {
 }
 
 func validateDiffLinePosition(dl DiffLine, newLine, oldLine int) (bool, error) {
-	switch {
-	case newLine != 0 && oldLine != 0:
+	// The first test takes every call with both lines set, so each test after
+	// it already knows the other line is zero. Written as ifs rather than a
+	// tagless switch: a case expression carries no statement counter, so the
+	// mutation gate could not see these conditions.
+	if newLine != 0 && oldLine != 0 {
 		return dl.Type == LineContext && dl.NewLine == newLine && dl.OldLine == oldLine, nil
-	case newLine != 0 && oldLine == 0:
-		return validateNewLineOnlyPosition(dl, newLine)
-	case oldLine != 0 && newLine == 0:
-		return validateOldLineOnlyPosition(dl, oldLine)
-	default:
-		return false, nil
 	}
+	if newLine != 0 {
+		return validateNewLineOnlyPosition(dl, newLine)
+	}
+	if oldLine != 0 {
+		return validateOldLineOnlyPosition(dl, oldLine)
+	}
+	return false, nil
 }
 
 func validateNewLineOnlyPosition(dl DiffLine, newLine int) (bool, error) {
@@ -202,23 +206,23 @@ func validateOldLineOnlyPosition(dl DiffLine, oldLine int) (bool, error) {
 // buildPositionError constructs a descriptive error when a line is not found
 // in the diff at all, listing the valid line ranges.
 func buildPositionError(diffLines []DiffLine, newLine, oldLine int) error {
+	// Zero is "no such line" here, so a range starts at the first line that
+	// has a number rather than at zero.
 	var minNew, maxNew, minOld, maxOld int
 	for _, dl := range diffLines {
 		if dl.NewLine != 0 {
-			if minNew == 0 || dl.NewLine < minNew {
+			if minNew == 0 {
 				minNew = dl.NewLine
 			}
-			if dl.NewLine > maxNew {
-				maxNew = dl.NewLine
-			}
+			minNew = min(minNew, dl.NewLine)
+			maxNew = max(maxNew, dl.NewLine)
 		}
 		if dl.OldLine != 0 {
-			if minOld == 0 || dl.OldLine < minOld {
+			if minOld == 0 {
 				minOld = dl.OldLine
 			}
-			if dl.OldLine > maxOld {
-				maxOld = dl.OldLine
-			}
+			minOld = min(minOld, dl.OldLine)
+			maxOld = max(maxOld, dl.OldLine)
 		}
 	}
 

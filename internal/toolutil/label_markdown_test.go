@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -53,6 +54,16 @@ func TestFormatLabelMarkdown_ZeroPrioritySpecified(t *testing.T) {
 		"- **Subscribed**: " + EmojiCross + "\n"
 	if got != want {
 		t.Errorf("label card with an explicit zero priority:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatLabelMarkdown_NonZeroPriorityNotMarkedSpecified_IsRendered verifies
+// a priority GitLab sent is rendered even by a caller that did not mark it
+// specified: only zero is ambiguous, so only zero needs the mark.
+func TestFormatLabelMarkdown_NonZeroPriorityNotMarkedSpecified_IsRendered(t *testing.T) {
+	got := FormatLabelMarkdown(LabelMarkdown{ID: 1, Name: "p", Color: "#111111", Priority: 3}, LabelMarkdownOptions{DetailTitle: "Label"})
+	if !strings.Contains(got, "- **Priority**: 3\n") {
+		t.Errorf("label card = %q, want the priority row", got)
 	}
 }
 

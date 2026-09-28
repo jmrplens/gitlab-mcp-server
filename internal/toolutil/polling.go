@@ -31,10 +31,9 @@ func ClampPollInterval(v int) int {
 	if v < PollMinInterval {
 		return PollDefaultInterval
 	}
-	if v > PollMaxInterval {
-		return PollMaxInterval
-	}
-	return v
+	// min rather than a comparison: at the maximum both branches answer the
+	// maximum, so a comparison would carry a boundary no test can tell apart.
+	return min(v, PollMaxInterval)
 }
 
 // ClampPollTimeout constrains a polling timeout to [PollMinTimeout, PollMaxTimeout],
@@ -43,8 +42,5 @@ func ClampPollTimeout(v int) int {
 	if v < PollMinTimeout {
 		return PollDefaultTimeout
 	}
-	if v > PollMaxTimeout {
-		return PollMaxTimeout
-	}
-	return v
+	return min(v, PollMaxTimeout)
 }

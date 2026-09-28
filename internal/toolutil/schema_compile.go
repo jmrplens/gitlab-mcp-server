@@ -54,11 +54,11 @@ func compiledSchema(key string, schema map[string]any) any {
 	if json.Unmarshal(data, compiled) != nil {
 		return schema
 	}
-	actual, loaded := compiledSchemaCache.LoadOrStore(key, compiled)
-	if !loaded {
-		// Cached for the process, hence shared: the tools/list middlewares
-		// derive their rewrites of it once and serve them to every server.
-		ShareSchema(actual)
-	}
+	actual, _ := compiledSchemaCache.LoadOrStore(key, compiled)
+	// Cached for the process, hence shared: the tools/list middlewares derive
+	// their rewrites of it once and serve them to every server. A caller that
+	// lost the race to store it registers the winner's schema again, which
+	// ShareSchema answers as a no-op.
+	ShareSchema(actual)
 	return actual
 }

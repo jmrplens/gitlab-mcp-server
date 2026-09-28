@@ -115,14 +115,13 @@ func (p GraphQLCursorPaginationInput) Resolve() (GraphQLCursor, error) {
 // first, then from the default. A caller who names a size at all has named it
 // once, since Resolve refuses the pair.
 func (p GraphQLCursorPaginationInput) effectiveLast() int {
-	switch {
-	case p.Last != nil:
+	if p.Last != nil {
 		return clampGraphQLPageSize(*p.Last)
-	case p.First != nil:
-		return clampGraphQLPageSize(*p.First)
-	default:
-		return GraphQLDefaultFirst
 	}
+	if p.First != nil {
+		return clampGraphQLPageSize(*p.First)
+	}
+	return GraphQLDefaultFirst
 }
 
 // Variables returns the variable map for document, refusing a document that
@@ -153,15 +152,11 @@ func (p GraphQLCursorPaginationInput) Variables(document string) (map[string]any
 }
 
 // clampGraphQLPageSize bounds a requested page size to what GitLab accepts on
-// a connection.
+// a connection. Both bounds are inclusive and the answer at each is the bound
+// itself, which is why it is written with min and max: a comparison would
+// carry a boundary whose two sides agree.
 func clampGraphQLPageSize(n int) int {
-	if n < 1 {
-		return 1
-	}
-	if n > GraphQLMaxFirst {
-		return GraphQLMaxFirst
-	}
-	return n
+	return min(max(n, 1), GraphQLMaxFirst)
 }
 
 // graphQLVariable names one variable a pagination input can put on the wire.
@@ -363,25 +358,32 @@ func graphQLDefinitionEnd(block string, from int) int {
 func stripGraphQLComments(document string) string {
 	out := []byte(document)
 	inString, inComment := false, false
+	// This scanner and the two after it read the state they are in first and
+	// switch on the byte after, rather than folding both into a tagless
+	// switch, whose case expressions the mutation gate cannot run.
 	for i := 0; i < len(out); i++ {
 		c := out[i]
-		switch {
-		case inComment:
+		if inComment {
 			if c == '\n' {
 				inComment = false
 				continue
 			}
 			out[i] = ' '
-		case inString:
+			continue
+		}
+		if inString {
 			switch c {
 			case '\\':
 				i++
 			case '"':
 				inString = false
 			}
-		case c == '"':
+			continue
+		}
+		switch c {
+		case '"':
 			inString = true
-		case c == '#':
+		case '#':
 			inComment = true
 			out[i] = ' '
 		}
@@ -426,34 +428,41 @@ func graphQLVariableBlock(document string) (block, rest string, ok bool) {
 	inString := false
 	for i := from; i < len(document); i++ {
 		c := document[i]
-		switch {
-		case inString:
+		if inString {
 			switch c {
 			case '\\':
 				i++
 			case '"':
 				inString = false
 			}
-		case c == '"':
+			continue
+		}
+		switch c {
+		case '"':
 			inString = true
-		case c == '(':
+		case '(':
 			if depth == 0 {
 				start = i + 1
 			}
 			depth++
-		case c == ')':
+		case ')':
+			if depth == 0 {
+				// A closing parenthesis with none open: the document is not
+				// one whose definitions this scan can find.
+				return "", "", false
+			}
 			depth--
 			if depth == 0 {
 				// The newline keeps the two halves from splicing a name
 				// together across the seam the definitions left behind.
 				return document[start:i], document[:start-1] + "\n" + document[i+1:], true
 			}
-			if depth < 0 {
+		case '{':
+			if depth == 0 {
+				// The selection set began, so the operation declared no
+				// variables.
 				return "", "", false
 			}
-		case c == '{' && depth == 0:
-			// The selection set began, so the operation declared no variables.
-			return "", "", false
 		}
 	}
 	return "", "", false
@@ -477,21 +486,26 @@ func graphQLOperationStart(document string) (index int, ok bool) {
 	inString := false
 	for i := 0; i < len(document); i++ {
 		c := document[i]
-		switch {
-		case inString:
+		if inString {
 			switch c {
 			case '\\':
 				i++
 			case '"':
 				inString = false
 			}
-		case c == '"':
+			continue
+		}
+		switch c {
+		case '"':
 			inString = true
-		case c == '{':
+		case '{':
 			depth++
-		case c == '}':
+		case '}':
 			depth--
-		case depth == 0 && isGraphQLNameByte(c):
+		}
+		// None of the three bytes above is a name byte, so a name is only
+		// ever read at a byte the switch passed over.
+		if depth == 0 && isGraphQLNameByte(c) {
 			end := i + 1
 			for end < len(document) && isGraphQLNameByte(document[end]) {
 				end++

@@ -78,9 +78,7 @@ func (l *limitedFileReader) Read(p []byte) (int, error) {
 	if l.read > l.maxSize {
 		return 0, l.tooLarge()
 	}
-	if allowed := l.maxSize - l.read + 1; int64(len(p)) > allowed {
-		p = p[:allowed]
-	}
+	p = p[:min(int64(len(p)), l.maxSize-l.read+1)]
 	n, err := l.inner.Read(p)
 	l.read += int64(n)
 	if l.read > l.maxSize {

@@ -242,20 +242,20 @@ func ExtractHints(md string) []string {
 func parseHintBullets(section string, mustEndResponse bool) []string {
 	var hints []string
 	for line := range strings.SplitSeq(section, "\n") {
-		switch {
-		case strings.HasPrefix(line, "- "):
+		if strings.HasPrefix(line, "- ") {
 			hints = append(hints, line[2:])
-		case line == "":
 			continue
-		default:
-			if mustEndResponse {
-				return nil
-			}
-			if len(hints) == 0 {
-				return nil
-			}
-			return hints
 		}
+		if line == "" {
+			continue
+		}
+		if mustEndResponse {
+			return nil
+		}
+		if len(hints) == 0 {
+			return nil
+		}
+		return hints
 	}
 	if len(hints) == 0 {
 		return nil

@@ -102,6 +102,31 @@ func TestCompiledSchema_MarshalErrorFallsBackToOriginalMap(t *testing.T) {
 	}
 }
 
+// TestCompileToolSchemas_SchemaNotAMap_IsLeftAlone verifies a schema that is
+// not a map is kept as it is, on either side of a tool, while the map beside
+// it is compiled: no output schema at all, and an input schema a caller had
+// already compiled.
+func TestCompileToolSchemas_SchemaNotAMap_IsLeftAlone(t *testing.T) {
+	noOutput := &mcp.Tool{Name: "no_output", InputSchema: map[string]any{"type": "object"}}
+	CompileToolSchemas(noOutput, "test|no-output|"+t.Name())
+	if _, compiled := noOutput.InputSchema.(*jsonschema.Schema); !compiled {
+		t.Errorf("InputSchema = %T, want the compiled schema", noOutput.InputSchema)
+	}
+	if noOutput.OutputSchema != nil {
+		t.Errorf("OutputSchema = %#v, want it left nil", noOutput.OutputSchema)
+	}
+
+	precompiled := &jsonschema.Schema{Type: "object"}
+	compiledInput := &mcp.Tool{Name: "compiled_input", InputSchema: precompiled, OutputSchema: map[string]any{"type": "object"}}
+	CompileToolSchemas(compiledInput, "test|compiled-input|"+t.Name())
+	if compiledInput.InputSchema != precompiled {
+		t.Errorf("InputSchema = %#v, want the precompiled schema kept", compiledInput.InputSchema)
+	}
+	if _, compiled := compiledInput.OutputSchema.(*jsonschema.Schema); !compiled {
+		t.Errorf("OutputSchema = %T, want the compiled schema", compiledInput.OutputSchema)
+	}
+}
+
 // TestCompiledSchema_UnmarshalErrorFallsBackToOriginalMap verifies that when
 // the marshaled JSON is well-formed but does not fit the jsonschema.Schema
 // struct shape (here, "required" holding a string instead of the expected

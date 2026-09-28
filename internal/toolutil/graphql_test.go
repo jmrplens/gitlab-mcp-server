@@ -642,6 +642,18 @@ func TestGraphQLDeclarations(t *testing.T) {
 			want:     []string{"search", "first"},
 		},
 		{
+			// The comma inside the default list is nested, so it ends neither
+			// the definition nor the declaration list.
+			name:     "list default holding a comma",
+			document: `query($ids: [ID!] = ["a", "b"], $first: Int) { group(ids: $ids) { id } }`,
+			want:     []string{"ids", "first"},
+		},
+		{
+			name:     "subscription",
+			document: `subscription($id: ID!) { updated(id: $id) { id } }`,
+			want:     []string{"id"},
+		},
+		{
 			name:     "quoted default containing an escaped quote",
 			document: `query($search: String = "a\")b", $first: Int) { group(search: $search) { id } }`,
 			want:     []string{"search", "first"},

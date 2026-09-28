@@ -126,25 +126,27 @@ func resultIsError(result any) bool {
 // left one that could not say whether the call actually succeeded.
 func logToolCall(ctx context.Context, tool string, start time.Time, isError bool, err error) {
 	duration := time.Since(start)
-	switch {
-	case wasCancelled(err):
+	if wasCancelled(err) {
 		slog.InfoContext(ctx, "tool call canceled", "tool", tool, "duration", duration, "cause", err)
-	case err != nil:
-		slog.ErrorContext(ctx, "tool call failed", "tool", tool, "duration", duration, "error", err)
-	default:
-		slog.InfoContext(ctx, "tool call completed", "tool", tool, "duration", duration, "is_error", isError)
+		return
 	}
+	if err != nil {
+		slog.ErrorContext(ctx, "tool call failed", "tool", tool, "duration", duration, "error", err)
+		return
+	}
+	slog.InfoContext(ctx, "tool call completed", "tool", tool, "duration", duration, "is_error", isError)
 }
 
 // logToolCallWithUser logs a tool call including the authenticated user identity.
 func logToolCallWithUser(ctx context.Context, tool string, start time.Time, isError bool, err error, user UserIdentity) {
 	args := append([]any{"tool", tool, "duration", time.Since(start)}, identityAttrs(user)...)
-	switch {
-	case wasCancelled(err):
+	if wasCancelled(err) {
 		slog.InfoContext(ctx, "tool call canceled", append(args, "cause", err)...)
-	case err != nil:
-		slog.ErrorContext(ctx, "tool call failed", append(args, "error", err)...)
-	default:
-		slog.InfoContext(ctx, "tool call completed", append(args, "is_error", isError)...)
+		return
 	}
+	if err != nil {
+		slog.ErrorContext(ctx, "tool call failed", append(args, "error", err)...)
+		return
+	}
+	slog.InfoContext(ctx, "tool call completed", append(args, "is_error", isError)...)
 }
