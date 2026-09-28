@@ -50,6 +50,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otelloggl "go.opentelemetry.io/otel/log/global"
+	nooplog "go.opentelemetry.io/otel/log/noop"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -92,6 +94,22 @@ const (
 // the pool entry's full catalog alone can exceed ten seconds. A passing
 // test is never slowed by the larger value.
 var testHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+// TestMain spends, before any test runs, the one delegation each OpenTelemetry
+// global allows. The first provider a process installs becomes the permanent
+// delegate of the default provider, and the default is what otel.Get*Provider
+// returns until then, so a test that installs a provider and restores the one
+// it found hands every later test a default still forwarding to its own. When
+// that first test is one whose meter refuses instruments, every test after it
+// that reads the global meter is refused as well, and which test is first is
+// the shuffle's choice. With a no-op installed here, the provider each test
+// finds and restores is that no-op, whatever order the tests run in.
+func TestMain(m *testing.M) {
+	otel.SetTracerProvider(nooptrace.NewTracerProvider())
+	otel.SetMeterProvider(noopmetric.NewMeterProvider())
+	otelloggl.SetLoggerProvider(nooplog.NewLoggerProvider())
+	os.Exit(m.Run())
+}
 
 // closeMCPSession sends an HTTP DELETE to properly terminate an MCP session
 // on the server side, preventing goroutine leaks from StreamableHTTPHandler.
