@@ -770,9 +770,26 @@ modeleval-probe:
 	go test -tags e2e -count=1 -v -run TestProviderContract ./test/e2e/modeleval/
 
 ## coverage-conditions: report the boolean conditions of PKG never evaluated both ways (gobco). A line reported is a missing test case; `&&`, `||` and `!` operands count separately.
+# The recipe is scripts/coverage-conditions.sh. gobco parses and type-checks
+# every .go file of a directory together, whatever its build constraint says,
+# so a package declaring one function per platform (cmd/server,
+# internal/toolutil, test/e2e/internal/harness) died with a redeclaration
+# panic before measuring anything (issue 1017). The script stages such a
+# package in a copy of the module under the temporary directory, holding only
+# the files the go command builds here, and blanks the constraint lines of the
+# kept files whose constraint names more than the platform (a tag, a release,
+# cgo, the compiler), which gobco's own narrower build context would decline
+# to instrument; it runs gobco there, names the files it left out, whose
+# conditions this run does not measure, and removes the copy whatever
+# happens. The copy is of the module so that import paths, relative paths and
+# directory names stay the original's. A package gobco could already read, a
+# constraint on the platform alone included, is run where it is, as before.
+# TAGS names build tags for a package behind one (TAGS=e2e), passed to go list
+# and to gobco's go test alike, and a report that measured no condition (0/0)
+# is refused.
 coverage-conditions:
-	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_stats"; exit 2; }
-	cd $(PKG) && go run github.com/rillig/gobco@v1.3.4
+	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_stats [TAGS=e2e]"; exit 2; }
+	@scripts/coverage-conditions.sh $(PKG) $(TAGS)
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
 # The recipe itself is scripts/coverage-mutants.sh. It moved out of this file
