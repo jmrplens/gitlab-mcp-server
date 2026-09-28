@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,11 +58,7 @@ func streamDownloadPackageFile(
 		projectID, input.PackageName, input.PackageVersion, input.FileName,
 	)
 	if err != nil {
-		hint := ""
-		if errors.Is(err, gl.ErrInvalidFileName) {
-			hint = " (file_name segments between / separators must not be empty, \".\", or \"..\")"
-		}
-		return 0, "", fmt.Errorf("format package URL: %w%s", err, hint)
+		return 0, "", fmt.Errorf("format package URL: %w (%s)", err, hintFileNameSegments)
 	}
 
 	httpReq, err := newDownloadRequest(ctx, client, apiPath)

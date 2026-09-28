@@ -18,6 +18,11 @@ import (
 const (
 	fmtCtxCancelled = "context canceled: %w"
 	fmtPkgPublish   = "packagePublish: %w"
+	// hintFileNameSegments is what a caller is told when client-go refuses a
+	// file_name while formatting the package path. For the string project ID
+	// both handlers pass, the file name is the only thing FormatPackageURL can
+	// refuse (gl.ErrInvalidFileName), so the hint is the whole answer.
+	hintFileNameSegments = "file_name segments between / separators must not be empty, \".\", or \"..\""
 )
 
 // Publish.
@@ -105,6 +110,20 @@ func publishWithTracker(
 		return PublishOutput{}, err
 	}
 
+	// The path is formatted once, before the file is opened: a file_name
+	// client-go refuses is refused here without reading a byte of the file,
+	// and PublishPackageFile formats the same coordinates again, so once this
+	// succeeds neither the upload nor the URL below can fail on it.
+	pkgPath, err := client.GL().GenericPackages.FormatPackageURL(
+		string(input.ProjectID),
+		input.PackageName,
+		input.PackageVersion,
+		input.FileName,
+	)
+	if err != nil {
+		return PublishOutput{}, toolutil.WrapErrWithHint("packagePublish", err, hintFileNameSegments)
+	}
+
 	reader, fileSize, cleanup, err := toolutil.OpenFileOrBase64Source("packagePublish", input.FilePath, input.ContentBase64)
 	if err != nil {
 		return PublishOutput{}, err
@@ -136,25 +155,11 @@ func publishWithTracker(
 		gl.WithContext(ctx),
 	)
 	if err != nil {
-		if errors.Is(err, gl.ErrInvalidFileName) {
-			return PublishOutput{}, toolutil.WrapErrWithHint("packagePublish", err,
-				"file_name segments between / separators must not be empty, \".\", or \"..\"")
-		}
 		return PublishOutput{}, toolutil.WrapErrWithStatusHint("packagePublish", err, http.StatusBadRequest,
 			"package_name and package_version must match pattern [A-Za-z0-9.\\-_]+ with version following SemVer; verify file_name does not already exist in this package or use status=hidden to override")
 	}
 
-	var pkgURL string
-	pkgPath, err := client.GL().GenericPackages.FormatPackageURL(
-		string(input.ProjectID),
-		input.PackageName,
-		input.PackageVersion,
-		input.FileName,
-	)
-	if err == nil {
-		pkgURL = strings.TrimRight(client.GL().BaseURL().String(), "/") + "/" + pkgPath
-	}
-
+	pkgURL := strings.TrimRight(client.GL().BaseURL().String(), "/") + "/" + pkgPath
 	out := PublishOutput{
 		PackageFileID: published.ID,
 		PackageID:     published.PackageID,

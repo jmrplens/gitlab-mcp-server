@@ -453,25 +453,20 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 
 // ----- branch coverage -----
 
-// TestStreamDownload_DeadBranches documents the one condition inside
-// streamDownloadPackageFile that no public call path evaluates both ways,
-// which gobco reports:
-//
-//   - FormatPackageURL error: reached, by the invalid-file-name cases of
-//     TestDownload_FileNameShapes. What is unreachable is the arm below it
-//     that leaves the hint empty: for a string project id, parseID accepts
-//     whatever it is given, so ErrInvalidFileName is the only error the call
-//     can return and errors.Is is never false there.
-//
-// The request construction failure no input reaches is reached through the
-// newDownloadRequest seam instead, by
+// TestStreamDownload_DeadBranches records where the branches of
+// streamDownloadPackageFile that no ordinary download reaches are driven. The
+// FormatPackageURL failure is reached by the invalid-file-name cases of
+// TestDownload_FileNameShapes, and it carries the segment hint unconditionally:
+// for a string project id, parseID accepts whatever it is given, so
+// ErrInvalidFileName is the only error the call can return. The request
+// construction failure no input reaches is reached through the
+// newDownloadRequest seam, by
 // TestDownload_RequestCannotBeBuilt_NothingIsWritten. The branches that
-// prepare the destination, flush the file and put it in place used to be
-// listed here as unreachable too; they now live in
+// prepare the destination, flush the file and put it in place live in
 // toolutil.WriteDownloadOutputFile, whose own tests stage each of them.
 //
-// We assert the documented contract below: a happy-path download streams
-// the payload to disk and reports its size and checksum.
+// What it asserts is the contract those branches guard: a happy-path download
+// streams the payload to disk and reports its size and checksum.
 func TestStreamDownload_DeadBranches(t *testing.T) {
 	fileBody := "dead-branch-fixture"
 	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
