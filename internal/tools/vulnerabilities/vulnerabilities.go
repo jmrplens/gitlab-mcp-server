@@ -505,7 +505,7 @@ type ListInput struct {
 	Severity      []string `json:"severity,omitempty" jsonschema:"Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN"`
 	State         []string `json:"state,omitempty" jsonschema:"Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED"`
 	Scanner       []string `json:"scanner,omitempty" jsonschema:"Filter by scanner external IDs"`
-	ReportType    []string `json:"report_type,omitempty" jsonschema:"Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING"`
+	ReportType    []string `json:"report_type,omitempty" jsonschema:"Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, CONTAINER_SCANNING_FOR_REGISTRY, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF, GENERIC"`
 	HasIssues     *bool    `json:"has_issues,omitempty" jsonschema:"Filter by whether a linked issue exists"`
 	HasResolution *bool    `json:"has_resolution,omitempty" jsonschema:"Filter by whether a resolution exists"`
 	Sort          string   `json:"sort,omitempty" jsonschema:"Sort order: severity_desc, severity_asc, detected_desc, detected_asc"`

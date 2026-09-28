@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -274,6 +275,47 @@ func lowercased(values []string) []string {
 	return out
 }
 
+// findingSeverities are the severities the finding filter takes, spelled the
+// way every other severity in this server is. The argument is a plain String
+// on this field, and GitLab reads each value with
+// Security::Finding.severities.fetch_values, so a value outside the enum is a
+// KeyError that comes back as a 500 naming nothing. The package's tests hold
+// the list to VulnerabilitySeverity, the enum the finding's own severity is
+// typed with in the pinned schema.
+var findingSeverities = []string{"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "UNKNOWN"}
+
+// findingReportTypes are the report types the finding filter takes. GitLab
+// keeps the values Security::Scan has a scan type for and drops every other
+// one without a word (Security::Scan.sanitize_scan_types), so a value outside
+// this list does not fail: it filters out every finding, and the answer reads
+// as a pipeline that found nothing. The package's tests hold the list to
+// VulnerabilityReportType, the enum the finding's own report type is typed
+// with, less the two values that enum has and Security::Scan does not.
+//
+// SARIF is the one value with a floor of its own: Security::Scan's scan_type
+// enum gained it at 18.11 (18-10-stable-ee has no sarif, 18-11-stable-ee
+// does), while the findings list needs 18.5. On 18.5 to 18.10 it passes this
+// check and GitLab drops it the same way, which the handler cannot tell apart
+// without asking the instance its version, so the input's description says
+// so instead.
+var findingReportTypes = []string{
+	"SAST", "DAST", "DEPENDENCY_SCANNING", "CONTAINER_SCANNING", "SECRET_DETECTION",
+	"COVERAGE_FUZZING", "API_FUZZING", "CLUSTER_IMAGE_SCANNING", "SARIF",
+}
+
+// unknownFilterValue returns the first of values that is none of known, read
+// the way the handler sends it, trimmed and in any case, and reports whether
+// there was one. It is what turns a 500 and an empty page into a refusal that
+// names the values GitLab would have taken.
+func unknownFilterValue(values, known []string) (string, bool) {
+	for i, sent := range lowercased(values) {
+		if !slices.ContainsFunc(known, func(k string) bool { return strings.EqualFold(k, sent) }) {
+			return values[i], true
+		}
+	}
+	return "", false
+}
+
 // gqlVulnerabilityRef holds a reference to a vulnerability.
 type gqlVulnerabilityRef struct {
 	ID    string `json:"id"`
@@ -508,7 +550,7 @@ type ListInput struct {
 	PipelineIID string   `json:"pipeline_iid" jsonschema:"Pipeline IID within the project,required"`
 	Severity    []string `json:"severity,omitempty" jsonschema:"Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN"`
 	Scanner     []string `json:"scanner,omitempty" jsonschema:"Filter by scanner external IDs"`
-	ReportType  []string `json:"report_type,omitempty" jsonschema:"Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING"`
+	ReportType  []string `json:"report_type,omitempty" jsonschema:"Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF. SARIF needs GitLab 18.11, and an older GitLab drops it and answers with no findings"`
 	State       []string `json:"state,omitempty" jsonschema:"Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED"`
 	Sort        string   `json:"sort,omitempty" jsonschema:"Sort order: severity_desc (default) or severity_asc"`
 	toolutil.GraphQLCursorPaginationInput
@@ -528,6 +570,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	if input.PipelineIID == "" {
 		return ListOutput{}, toolutil.ErrRequiredString("list_security_findings", "pipeline_iid")
+	}
+	if value, unknown := unknownFilterValue(input.Severity, findingSeverities); unknown {
+		return ListOutput{}, fmt.Errorf("list_security_findings: %w", toolutil.ErrInvalidEnum("severity", value, findingSeverities))
+	}
+	if value, unknown := unknownFilterValue(input.ReportType, findingReportTypes); unknown {
+		return ListOutput{}, fmt.Errorf("list_security_findings: %w", toolutil.ErrInvalidEnum("report_type", value, findingReportTypes))
 	}
 
 	pageVars, err := input.Variables(queryListFindings)
