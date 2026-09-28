@@ -350,15 +350,18 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 }
 
 // publishDirHeading names what the run actually did.
+//
+// Written as ifs rather than a tagless switch: a case expression carries no
+// statement counter, so the mutation gate reports its mutants as not covered,
+// and the two zero tests are exactly the ones worth seeing killed.
 func publishDirHeading(published, failed int) string {
-	switch {
-	case failed == 0:
+	if failed == 0 {
 		return "Directory Published"
-	case published == 0:
-		return "Directory Publish Failed"
-	default:
-		return "Directory Partially Published"
 	}
+	if published == 0 {
+		return "Directory Publish Failed"
+	}
+	return "Directory Partially Published"
 }
 
 func init() {
