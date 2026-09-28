@@ -1470,7 +1470,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_mr_context_commits
 
-Attach existing repository commit SHAs to a merge request as context commits. Returns: the resulting context commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get.
+Attach existing repository commit SHAs to a merge request as context commits. Returns: each pinned commit's full and short SHA, title and message, author and committer with their dates, parents, trailers and web URL. See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get.
 
 **Parameters:**
 
@@ -3946,7 +3946,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_job_token_access_settings
 
-Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.
+Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist, and the deprecated outbound scope flag. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.
 
 **Parameters:**
 
@@ -4090,7 +4090,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_project_import_status
 
-Get the import status of a project. Returns: import id, name, path, status, type, correlation id, and import error. See also: gitlab_import_project_from_file.
+Get the import status of a project. Returns: import id, name, path, status, type, correlation id, import error, the relations that failed to import, and a GitHub import's fetched and imported counts. See also: gitlab_import_project_from_file.
 
 **Parameters:**
 
@@ -5970,7 +5970,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_share
 
-Share a group with another group at a chosen access level. Returns: the shared group's id, name, path, and web URL. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.
+Share a group with another group at a chosen access level. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level and expiry. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.
 
 **Parameters:**
 
@@ -6043,7 +6043,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_transfer
 
-Transfer a GitLab group under a new parent (or to top level). Returns: the updated group metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.
+Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.
 
 **Parameters:**
 
@@ -6071,7 +6071,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_transfer_project
 
-Transfer a project into a GitLab group namespace. Returns: the updated project metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.
+Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.
 
 **Parameters:**
 
@@ -6405,7 +6405,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_import_project_from_file
 
-Import a project from an export archive. Returns: the new project's import status, type, correlation id, and any import error. See also: gitlab_get_project_import_status, gitlab_download_project_export.
+Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.
 
 **Parameters:**
 
@@ -6556,7 +6556,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_issue_create_todo
 
-Create a to-do for an issue. Returns: the created to-do item with action, target, and state. See also: gitlab_issue_get.
+Create a to-do for an issue. Returns: the created to-do item with action, target title and URL, author, body, state and created and updated times. See also: gitlab_issue_get.
 
 **Parameters:**
 
@@ -7100,7 +7100,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_participants
 
-List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_note_list.
+List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL. See also: gitlab_issue_get, gitlab_issue_note_list.
 
 **Parameters:**
 
@@ -8357,7 +8357,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_job_token_group_allowlist
 
-List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name, full path, and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.
+List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.
 
 **Parameters:**
 
@@ -8373,7 +8373,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_job_token_inbound_allowlist
 
-List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with id, name, path, and web URL plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.
+List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with their names, paths, description, visibility, web and clone URLs, topics, counts and namespace, plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.
 
 **Parameters:**
 
@@ -8423,7 +8423,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_mr_context_commits
 
-List the context commits pinned to a merge request for review. Returns: commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.
+List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.
 
 **Parameters:**
 
@@ -8822,7 +8822,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_user_contribution_events
 
-List a user's contribution events. Returns: event entries with action, target type/title, project, and timestamp. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.
+List a user's contribution events. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.
 
 **Parameters:**
 
@@ -9250,7 +9250,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_approve
 
-Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.
+Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.
 
 **Parameters:**
 
@@ -9346,7 +9346,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_mr_create_todo
 
-Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target, and state. See also: gitlab_mr_get, gitlab_mr_subscribe.
+Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target title and URL, project name, author, body, state and created and updated times. See also: gitlab_mr_get, gitlab_mr_subscribe.
 
 **Parameters:**
 
@@ -10063,7 +10063,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_participants
 
-List the participants of a merge request. Returns: participating users with username, name, and state. See also: gitlab_mr_reviewers, gitlab_mr_get.
+List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email. See also: gitlab_mr_reviewers, gitlab_mr_get.
 
 **Parameters:**
 
@@ -10153,7 +10153,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_reviewers
 
-List the reviewers of a merge request. Returns: reviewer users with username, name, and review state. See also: gitlab_mr_participants, gitlab_mr_update.
+List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time. See also: gitlab_mr_participants, gitlab_mr_update.
 
 **Parameters:**
 
@@ -10460,7 +10460,7 @@ Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 
 **Parameters:**
 
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
+- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10473,7 +10473,7 @@ Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, projec
 - `full_path` (string): Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field.
 - `namespace_id` (integer): Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
 - `project_id` (integer): Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
+- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10484,7 +10484,7 @@ Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation
 **Parameters:**
 
 - `query` (object) (required): Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
+- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10495,7 +10495,7 @@ Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge t
 **Parameters:**
 
 - `expand` (array of strings): Node names to expand with full properties and relationships.
-- `format` (string): Schema response format: raw, llm, or json. When omitted, the API server-side default is used (json).
+- `format` (string): Schema response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 - `response_format` (string): Alias for format. Must match format when both are set.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -10506,7 +10506,7 @@ Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 
 **Parameters:**
 
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty.
+- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10559,7 +10559,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_package_file_list
 
-List the files within a single package. Returns: package files with name, size, checksums, creation time, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.
+List the files within a single package. Returns: package files with name, size, checksums, creation time, the pipelines that built each, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.
 
 **Parameters:**
 
@@ -10997,7 +10997,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_pipeline_schedule_create_variable
 
-Create a pipeline schedule variable. Returns: the created variable with key, value, and variable_type. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.
+Create a pipeline schedule variable. Returns: the created variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.
 
 **Parameters:**
 
@@ -11036,7 +11036,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_schedule_edit_variable
 
-Edit a pipeline schedule variable. Returns: the updated variable with key, value, and variable_type. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.
+Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.
 
 **Parameters:**
 
@@ -11255,7 +11255,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_variables
 
-List a pipeline's runtime variables. Returns: variable keys, values, and types. See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project.
+List a pipeline's runtime variables. Returns: variable keys, values, types, and whether each value is raw (not expanded). See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project.
 
 **Parameters:**
 
@@ -12829,7 +12829,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_transfer
 
-Transfer a project to another namespace. Returns: the project in its new namespace. See also: gitlab_project_get, gitlab_group_get.
+Transfer a project to another namespace, waiting up to 45 seconds for GitLab to apply the move. Returns: the project in its new namespace, or with transfer_queued set and its current namespace when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_project_get, gitlab_group_get.
 
 **Parameters:**
 
@@ -13804,7 +13804,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_repository_tree
 
-List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.
+List repository tree items. Returns: paths, object IDs, entry types (blob/tree/commit), modes, each entry's last commit when with_last_commit is set, and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.
 
 **Parameters:**
 
@@ -13815,9 +13815,10 @@ List repository tree items. Returns: paths, object IDs, entry types (blob/tree),
 - `path` (string): Path inside the repository to list (default: root)
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `recursive` (boolean): List files recursively through subdirectories
+- `recursive` (boolean): List files recursively through subdirectories. Cannot be combined with with_last_commit
 - `ref` (string): Branch name, tag, or commit SHA (default: default branch)
 - `sort` (string): Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')
+- `with_last_commit` (boolean): Include, as last_commit, the most recent commit that changed each entry (GitLab 19.3 or later, and an older instance ignores it). Cannot be combined with recursive
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14683,7 +14684,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_server_status
 
-Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.
+Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15338,7 +15339,7 @@ List the authenticated user's to-do items with optional filtering and pagination
 
 **Parameters:**
 
-- `action` (string): Filter by action: assigned, mentioned, build_failed, marked, approval_required, unmergeable, directly_addressed, merge_train_removed, member_access_requested
+- `action` (string): Filter by action, for example assigned, mentioned, review_requested, build_failed or transfer_failed (a project or group transfer GitLab failed in the background)
 - `author_id` (integer): Filter by author user ID
 - `group_id` (integer): Filter by group ID
 - `order_by` (string): Order results by field (e.g. id, created_at). Combine with sort.
@@ -15349,7 +15350,7 @@ List the authenticated user's to-do items with optional filtering and pagination
 - `project_id` (integer): Filter by project ID
 - `sort` (string): Sort direction: asc or desc.
 - `state` (string): Filter by state: pending or done (default: pending)
-- `type` (string): Filter by target type: Issue, MergeRequest, Commit, Epic, DesignManagement::Design, AlertManagement::Alert, Project, Namespace, Vulnerability, WikiPage::Meta
+- `type` (string): Filter by target type, for example Issue, MergeRequest, Commit, Epic, Project or Namespace (a group)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15688,7 +15689,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_update_repository_submodule
 
-Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.
+Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, status, project_id, trailers, last_pipeline, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.
 
 **Parameters:**
 

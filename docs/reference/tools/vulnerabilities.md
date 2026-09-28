@@ -106,6 +106,8 @@ GitLab refuses a whole document that names a field it does not have, so two kind
 
 The list, the get and the four state changes need GitLab 18.10 or later, the release that added the newest field they read (`removed_from_code`), and the security findings list needs 18.5 (`original_severity` and the token status's `last_verified_at`), each read from GitLab's versioned GraphQL reference.
 
+The list does not offer every filter GitLab's schema declares on `vulnerabilities`. GitLab 19.5 adds `securityAttributesFilters` there, and it cannot be used on this list: GitLab marks it an experiment and answers it on group queries only, behind the `vulnerability_report_security_attributes_filter` feature flag, refusing it on a project with "The security_attributes_filters filter is not available." (`VulnerabilityFilterable#validate_security_attributes_filters!` in GitLab's source), and this list reads a project's vulnerabilities.
+
 ---
 
 ## Vulnerability State Mutations

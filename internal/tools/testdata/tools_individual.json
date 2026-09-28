@@ -18065,7 +18065,7 @@
   },
   {
     "name": "gitlab_create_mr_context_commits",
-    "description": "Attach existing repository commit SHAs to a merge request as context commits. Returns: the resulting context commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get.",
+    "description": "Attach existing repository commit SHAs to a merge request as context commits. Returns: each pinned commit's full and short SHA, title and message, author and committer with their dates, parents, trailers and web URL. See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -18111,16 +18111,61 @@
               "author_name": {
                 "type": "string"
               },
+              "authored_date": {
+                "type": "string"
+              },
+              "committed_date": {
+                "type": "string"
+              },
+              "committer_email": {
+                "type": "string"
+              },
+              "committer_name": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
               },
+              "extended_trailers": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "type": "object"
+              },
               "id": {
                 "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "parent_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "short_id": {
                 "type": "string"
               },
               "title": {
+                "type": "string"
+              },
+              "trailers": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "web_url": {
                 "type": "string"
               }
             },
@@ -46071,7 +46116,7 @@
   },
   {
     "name": "gitlab_get_job_token_access_settings",
-    "description": "Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.",
+    "description": "Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist, and the deprecated outbound scope flag. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -46102,10 +46147,14 @@
             "null",
             "array"
           ]
+        },
+        "outbound_enabled": {
+          "type": "boolean"
         }
       },
       "required": [
-        "inbound_enabled"
+        "inbound_enabled",
+        "outbound_enabled"
       ],
       "type": "object"
     },
@@ -47807,7 +47856,7 @@
   },
   {
     "name": "gitlab_get_project_import_status",
-    "description": "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, and import error. See also: gitlab_import_project_from_file.",
+    "description": "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, import error, the relations that failed to import, and a GitHub import's fetched and imported counts. See also: gitlab_import_project_from_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -47835,6 +47884,43 @@
         },
         "description": {
           "type": "string"
+        },
+        "failed_relations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "exception_class": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "line_number": {
+                "type": "integer"
+              },
+              "relation_name": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "exception_class",
+              "source",
+              "relation_name",
+              "line_number"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "id": {
           "type": "integer"
@@ -47868,6 +47954,15 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "stats": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "type": "object"
         }
       },
       "required": [
@@ -47877,7 +47972,8 @@
         "name_with_namespace",
         "path",
         "path_with_namespace",
-        "import_status"
+        "import_status",
+        "failed_relations"
       ],
       "type": "object"
     },
@@ -74330,7 +74426,7 @@
   },
   {
     "name": "gitlab_group_share",
-    "description": "Share a group with another group at a chosen access level. Returns: the shared group's id, name, path, and web URL. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
+    "description": "Share a group with another group at a chosen access level. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level and expiry. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -74368,6 +74464,12 @@
         "description": {
           "type": "string"
         },
+        "full_name": {
+          "type": "string"
+        },
+        "full_path": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -74386,6 +74488,45 @@
         "path": {
           "type": "string"
         },
+        "shared_with_groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "expires_at": {
+                "type": "string"
+              },
+              "group_access_level": {
+                "type": "integer"
+              },
+              "group_full_path": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "group_name": {
+                "type": "string"
+              },
+              "member_role_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "group_id",
+              "group_name",
+              "group_full_path",
+              "group_access_level"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "visibility": {
+          "type": "string"
+        },
         "web_url": {
           "type": "string"
         }
@@ -74394,7 +74535,8 @@
         "id",
         "name",
         "path",
-        "web_url"
+        "web_url",
+        "shared_with_groups"
       ],
       "type": "object"
     },
@@ -75397,7 +75539,7 @@
   },
   {
     "name": "gitlab_group_transfer",
-    "description": "Transfer a GitLab group under a new parent (or to top level). Returns: the updated group metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.",
+    "description": "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76179,6 +76321,10 @@
         "subgroup_creation_level": {
           "type": "string"
         },
+        "transfer_queued": {
+          "description": "True when GitLab accepted the transfer but had neither applied it nor reported it failed when the wait ended. The group fields then show where it still is. Read it back with group.get before relying on its new path",
+          "type": "boolean"
+        },
         "two_factor_grace_period": {
           "type": "integer"
         },
@@ -76421,7 +76567,7 @@
   },
   {
     "name": "gitlab_group_transfer_project",
-    "description": "Transfer a project into a GitLab group namespace. Returns: the updated project metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
+    "description": "Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -81043,7 +81189,7 @@
   },
   {
     "name": "gitlab_import_project_from_file",
-    "description": "Import a project from an export archive. Returns: the new project's import status, type, correlation id, and any import error. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
+    "description": "Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -81185,6 +81331,43 @@
         "description": {
           "type": "string"
         },
+        "failed_relations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "exception_class": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "line_number": {
+                "type": "integer"
+              },
+              "relation_name": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "exception_class",
+              "source",
+              "relation_name",
+              "line_number"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -81217,6 +81400,15 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "stats": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "type": "object"
         }
       },
       "required": [
@@ -81226,7 +81418,8 @@
         "name_with_namespace",
         "path",
         "path_with_namespace",
-        "import_status"
+        "import_status",
+        "failed_relations"
       ],
       "type": "object"
     },
@@ -85638,7 +85831,7 @@
   },
   {
     "name": "gitlab_issue_create_todo",
-    "description": "Create a to-do for an issue. Returns: the created to-do item with action, target, and state. See also: gitlab_issue_get.",
+    "description": "Create a to-do for an issue. Returns: the created to-do item with action, target title and URL, author, body, state and created and updated times. See also: gitlab_issue_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85665,6 +85858,45 @@
       "properties": {
         "action_name": {
           "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "locked"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -85694,6 +85926,9 @@
           "type": "string"
         },
         "target_url": {
+          "type": "string"
+        },
+        "updated_at": {
           "type": "string"
         }
       },
@@ -98355,7 +98590,7 @@
   },
   {
     "name": "gitlab_issue_participants",
-    "description": "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_note_list.",
+    "description": "List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL. See also: gitlab_issue_get, gitlab_issue_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98393,10 +98628,22 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "state": {
                 "type": "string"
               },
               "username": {
@@ -98410,6 +98657,7 @@
               "id",
               "username",
               "name",
+              "locked",
               "web_url"
             ],
             "type": "object"
@@ -118849,7 +119097,7 @@
   },
   {
     "name": "gitlab_list_job_token_group_allowlist",
-    "description": "List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name, full path, and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.",
+    "description": "List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -118987,7 +119235,7 @@
   },
   {
     "name": "gitlab_list_job_token_inbound_allowlist",
-    "description": "List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with id, name, path, and web URL plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.",
+    "description": "List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with their names, paths, description, visibility, web and clone URLs, topics, counts and namespace, plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -119087,13 +119335,181 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "forks_count": {
+                "type": "integer"
+              },
+              "http_url_to_repo": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
+              },
+              "last_activity_at": {
+                "type": "string"
+              },
+              "license": {
+                "additionalProperties": false,
+                "properties": {
+                  "html_url": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "nickname",
+                  "html_url",
+                  "source_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "license_url": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
               },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "kind",
+                  "full_path",
+                  "parent_id",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
               "path_with_namespace": {
+                "type": "string"
+              },
+              "readme_url": {
+                "type": "string"
+              },
+              "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
+                "type": "string"
+              },
+              "star_count": {
+                "type": "integer"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "visibility": {
                 "type": "string"
               },
               "web_url": {
@@ -119103,8 +119519,14 @@
             "required": [
               "id",
               "name",
+              "path",
               "path_with_namespace",
-              "web_url"
+              "description",
+              "visibility",
+              "default_branch",
+              "web_url",
+              "topics",
+              "created_at"
             ],
             "type": "object"
           },
@@ -119741,7 +120163,7 @@
   },
   {
     "name": "gitlab_list_mr_context_commits",
-    "description": "List the context commits pinned to a merge request for review. Returns: commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.",
+    "description": "List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -119776,16 +120198,61 @@
               "author_name": {
                 "type": "string"
               },
+              "authored_date": {
+                "type": "string"
+              },
+              "committed_date": {
+                "type": "string"
+              },
+              "committer_email": {
+                "type": "string"
+              },
+              "committer_name": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
               },
+              "extended_trailers": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "type": "object"
+              },
               "id": {
                 "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "parent_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "short_id": {
                 "type": "string"
               },
               "title": {
+                "type": "string"
+              },
+              "trailers": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "web_url": {
                 "type": "string"
               }
             },
@@ -123686,6 +124153,9 @@
               "name": {
                 "type": "string"
               },
+              "public_email": {
+                "type": "string"
+              },
               "unconfirmed_email": {
                 "type": "string"
               },
@@ -125994,7 +126464,7 @@
   },
   {
     "name": "gitlab_list_user_contribution_events",
-    "description": "List a user's contribution events. Returns: event entries with action, target type/title, project, and timestamp. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
+    "description": "List a user's contribution events. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -126093,14 +126563,319 @@
               "action_name": {
                 "type": "string"
               },
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "author_id": {
+                "type": "integer"
+              },
+              "author_username": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
               },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
+              },
+              "note": {
+                "additionalProperties": false,
+                "properties": {
+                  "attachment": {
+                    "type": "string"
+                  },
+                  "author": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "commit_id": {
+                    "type": "string"
+                  },
+                  "confidential": {
+                    "type": "boolean"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "expires_at": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "internal": {
+                    "type": "boolean"
+                  },
+                  "noteable_id": {
+                    "type": "integer"
+                  },
+                  "noteable_iid": {
+                    "type": "integer"
+                  },
+                  "noteable_type": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "base_sha": {
+                        "type": "string"
+                      },
+                      "head_sha": {
+                        "type": "string"
+                      },
+                      "line_range": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "end": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "line_code": {
+                                "type": "string"
+                              },
+                              "new_line": {
+                                "type": "integer"
+                              },
+                              "old_line": {
+                                "type": "integer"
+                              },
+                              "type": {
+                                "type": "string"
+                              }
+                            },
+                            "type": [
+                              "null",
+                              "object"
+                            ]
+                          },
+                          "start": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "line_code": {
+                                "type": "string"
+                              },
+                              "new_line": {
+                                "type": "integer"
+                              },
+                              "old_line": {
+                                "type": "integer"
+                              },
+                              "type": {
+                                "type": "string"
+                              }
+                            },
+                            "type": [
+                              "null",
+                              "object"
+                            ]
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "new_line": {
+                        "type": "integer"
+                      },
+                      "new_path": {
+                        "type": "string"
+                      },
+                      "old_line": {
+                        "type": "integer"
+                      },
+                      "old_path": {
+                        "type": "string"
+                      },
+                      "position_type": {
+                        "type": "string"
+                      },
+                      "start_sha": {
+                        "type": "string"
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "resolvable": {
+                    "type": "boolean"
+                  },
+                  "resolved": {
+                    "type": "boolean"
+                  },
+                  "resolved_at": {
+                    "type": "string"
+                  },
+                  "resolved_by": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "system": {
+                    "type": "boolean"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "system",
+                  "resolvable",
+                  "resolved",
+                  "internal",
+                  "confidential"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "project_id": {
                 "type": "integer"
+              },
+              "push_data": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string"
+                  },
+                  "commit_count": {
+                    "type": "integer"
+                  },
+                  "commit_from": {
+                    "type": "string"
+                  },
+                  "commit_title": {
+                    "type": "string"
+                  },
+                  "commit_to": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "ref_type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "commit_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "target_id": {
                 "type": "integer"
@@ -126116,12 +126891,35 @@
               },
               "target_url": {
                 "type": "string"
+              },
+              "wiki_page": {
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "wiki_page_meta_id": {
+                    "type": "integer"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "project_id",
-              "action_name"
+              "action_name",
+              "author_id",
+              "imported"
             ],
             "type": "object"
           },
@@ -132248,7 +133046,7 @@
   },
   {
     "name": "gitlab_mr_approve",
-    "description": "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
+    "description": "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -132283,6 +133081,60 @@
         "approved": {
           "type": "boolean"
         },
+        "approved_by": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "approved_at": {
+                "type": "string"
+              },
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "approved_by_count": {
           "type": "integer"
         },
@@ -132294,12 +133146,20 @@
             "null",
             "array"
           ]
+        },
+        "user_can_approve": {
+          "type": "boolean"
+        },
+        "user_has_approved": {
+          "type": "boolean"
         }
       },
       "required": [
         "approvals_required",
         "approved_by_count",
-        "approved"
+        "approved",
+        "user_has_approved",
+        "user_can_approve"
       ],
       "type": "object"
     },
@@ -134972,7 +135832,7 @@
   },
   {
     "name": "gitlab_mr_create_todo",
-    "description": "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target, and state. See also: gitlab_mr_get, gitlab_mr_subscribe.",
+    "description": "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target title and URL, project name, author, body, state and created and updated times. See also: gitlab_mr_get, gitlab_mr_subscribe.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -134998,6 +135858,48 @@
       "additionalProperties": false,
       "properties": {
         "action_name": {
+          "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "locked"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "body": {
           "type": "string"
         },
         "created_at": {
@@ -135028,6 +135930,9 @@
           "type": "string"
         },
         "target_url": {
+          "type": "string"
+        },
+        "updated_at": {
           "type": "string"
         }
       },
@@ -151248,7 +152153,7 @@
   },
   {
     "name": "gitlab_mr_participants",
-    "description": "List the participants of a merge request. Returns: participating users with username, name, and state. See also: gitlab_mr_reviewers, gitlab_mr_get.",
+    "description": "List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email. See also: gitlab_mr_reviewers, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -151292,7 +152197,13 @@
               "id": {
                 "type": "integer"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
                 "type": "string"
               },
               "state": {
@@ -151309,7 +152220,8 @@
               "id",
               "username",
               "name",
-              "state"
+              "state",
+              "locked"
             ],
             "type": "object"
           },
@@ -152370,7 +153282,7 @@
   },
   {
     "name": "gitlab_mr_reviewers",
-    "description": "List the reviewers of a merge request. Returns: reviewer users with username, name, and review state. See also: gitlab_mr_participants, gitlab_mr_update.",
+    "description": "List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time. See also: gitlab_mr_participants, gitlab_mr_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -152417,7 +153329,13 @@
               "id": {
                 "type": "integer"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
                 "type": "string"
               },
               "review_state": {
@@ -152437,7 +153355,8 @@
               "id",
               "username",
               "name",
-              "state"
+              "state",
+              "locked"
             ],
             "type": "object"
           },
@@ -158104,7 +159023,7 @@
   },
   {
     "name": "gitlab_package_file_list",
-    "description": "List the files within a single package. Returns: package files with name, size, checksums, creation time, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
+    "description": "List the files within a single package. Returns: package files with name, size, checksums, creation time, the pipelines that built each, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -158192,6 +159111,98 @@
               },
               "package_id": {
                 "type": "integer"
+              },
+              "pipelines": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "iid": {
+                      "type": "integer"
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "locked": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "public_email": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name",
+                        "locked"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "iid",
+                    "project_id",
+                    "sha",
+                    "ref",
+                    "status",
+                    "source",
+                    "web_url",
+                    "user"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "size": {
                 "type": "integer"
@@ -163305,7 +164316,10 @@
                 "type": "string"
               },
               "raw": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "string"
@@ -163346,7 +164360,7 @@
   },
   {
     "name": "gitlab_pipeline_schedule_create_variable",
-    "description": "Create a pipeline schedule variable. Returns: the created variable with key, value, and variable_type. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.",
+    "description": "Create a pipeline schedule variable. Returns: the created variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163399,6 +164413,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "raw": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "value": {
@@ -163551,7 +164571,7 @@
   },
   {
     "name": "gitlab_pipeline_schedule_edit_variable",
-    "description": "Edit a pipeline schedule variable. Returns: the updated variable with key, value, and variable_type. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
+    "description": "Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163604,6 +164624,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "raw": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "value": {
@@ -163789,7 +164815,10 @@
                 "type": "string"
               },
               "raw": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "string"
@@ -164073,7 +165102,10 @@
                       "type": "string"
                     },
                     "raw": {
-                      "type": "boolean"
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
                     },
                     "value": {
                       "type": "string"
@@ -164455,7 +165487,10 @@
                 "type": "string"
               },
               "raw": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "string"
@@ -164656,7 +165691,10 @@
                 "type": "string"
               },
               "raw": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "string"
@@ -164910,7 +165948,10 @@
                 "type": "string"
               },
               "raw": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "string"
@@ -166969,7 +168010,7 @@
   },
   {
     "name": "gitlab_pipeline_variables",
-    "description": "List a pipeline's runtime variables. Returns: variable keys, values, and types. See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project.",
+    "description": "List a pipeline's runtime variables. Returns: variable keys, values, types, and whether each value is raw (not expanded). See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -167009,6 +168050,12 @@
             "properties": {
               "key": {
                 "type": "string"
+              },
+              "raw": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "string"
@@ -195591,7 +196638,7 @@
   },
   {
     "name": "gitlab_project_transfer",
-    "description": "Transfer a project to another namespace. Returns: the project in its new namespace. See also: gitlab_project_get, gitlab_group_get.",
+    "description": "Transfer a project to another namespace, waiting up to 45 seconds for GitLab to apply the move. Returns: the project in its new namespace, or with transfer_queued set and its current namespace when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_project_get, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -196549,6 +197596,10 @@
             "null",
             "array"
           ]
+        },
+        "transfer_queued": {
+          "description": "True when GitLab accepted the transfer but had neither applied it nor reported it failed when the wait ended. The project fields then show where it still is. Read it back with project.get before relying on its new path",
+          "type": "boolean"
         },
         "updated_at": {
           "type": "string"
@@ -210377,7 +211428,7 @@
   },
   {
     "name": "gitlab_repository_tree",
-    "description": "List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.",
+    "description": "List repository tree items. Returns: paths, object IDs, entry types (blob/tree/commit), modes, each entry's last commit when with_last_commit is set, and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -210416,7 +211467,7 @@
           ]
         },
         "recursive": {
-          "description": "List files recursively through subdirectories",
+          "description": "List files recursively through subdirectories. Cannot be combined with with_last_commit",
           "type": "boolean"
         },
         "ref": {
@@ -210430,6 +211481,10 @@
             "desc"
           ],
           "type": "string"
+        },
+        "with_last_commit": {
+          "description": "Include, as last_commit, the most recent commit that changed each entry (GitLab 19.3 or later, and an older instance ignores it). Cannot be combined with recursive",
+          "type": "boolean"
         }
       },
       "required": [
@@ -210491,6 +211546,85 @@
             "properties": {
               "id": {
                 "type": "string"
+              },
+              "last_commit": {
+                "additionalProperties": false,
+                "properties": {
+                  "author_email": {
+                    "type": "string"
+                  },
+                  "author_name": {
+                    "type": "string"
+                  },
+                  "authored_date": {
+                    "type": "string"
+                  },
+                  "committed_date": {
+                    "type": "string"
+                  },
+                  "committer_email": {
+                    "type": "string"
+                  },
+                  "committer_name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "extended_trailers": {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "parent_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "short_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "trailers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "short_id",
+                  "title",
+                  "author_name",
+                  "author_email"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "mode": {
                 "type": "string"
@@ -220793,7 +221927,7 @@
   },
   {
     "name": "gitlab_server_status",
-    "description": "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.",
+    "description": "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -220813,6 +221947,36 @@
         },
         "error": {
           "type": "string"
+        },
+        "gitlab_enterprise": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "gitlab_kas": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "external_k8s_proxy_url": {
+              "type": "string"
+            },
+            "external_url": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "gitlab_revision": {
           "type": "string"
@@ -228326,17 +229490,28 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Filter by action: assigned, mentioned, build_failed, marked, approval_required, unmergeable, directly_addressed, merge_train_removed, member_access_requested",
+          "description": "Filter by action, for example assigned, mentioned, review_requested, build_failed or transfer_failed (a project or group transfer GitLab failed in the background)",
           "enum": [
             "assigned",
+            "review_requested",
             "mentioned",
             "build_failed",
             "marked",
             "approval_required",
             "unmergeable",
             "directly_addressed",
+            "member_access_requested",
+            "review_submitted",
+            "ssh_key_expired",
+            "ssh_key_expiring_soon",
+            "transfer_failed",
             "merge_train_removed",
-            "member_access_requested"
+            "okr_checkin_requested",
+            "added_approver",
+            "duo_pro_access_granted",
+            "duo_enterprise_access_granted",
+            "duo_core_access_granted",
+            "duo_workflow_input_required"
           ],
           "type": "string"
         },
@@ -228392,18 +229567,23 @@
           "type": "string"
         },
         "type": {
-          "description": "Filter by target type: Issue, MergeRequest, Commit, Epic, DesignManagement::Design, AlertManagement::Alert, Project, Namespace, Vulnerability, WikiPage::Meta",
+          "description": "Filter by target type, for example Issue, MergeRequest, Commit, Epic, Project or Namespace (a group)",
           "enum": [
-            "Issue",
-            "MergeRequest",
             "Commit",
-            "Epic",
+            "Issue",
+            "WorkItem",
+            "MergeRequest",
             "DesignManagement::Design",
             "AlertManagement::Alert",
-            "Project",
             "Namespace",
+            "Project",
+            "Key",
+            "WikiPage::Meta",
+            "Epic",
             "Vulnerability",
-            "WikiPage::Meta"
+            "User",
+            "ComplianceManagement::Projects::ComplianceViolation",
+            "Ai::DuoWorkflows::Workflow"
           ],
           "type": "string"
         }
@@ -230892,6 +232072,9 @@
         "name": {
           "type": "string"
         },
+        "public_email": {
+          "type": "string"
+        },
         "unconfirmed_email": {
           "type": "string"
         },
@@ -231864,7 +233047,7 @@
   },
   {
     "name": "gitlab_update_repository_submodule",
-    "description": "Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.",
+    "description": "Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, status, project_id, trailers, last_pipeline, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -231924,8 +233107,65 @@
         "created_at": {
           "type": "string"
         },
+        "extended_trailers": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "type": "object"
+        },
         "id": {
           "type": "string"
+        },
+        "last_pipeline": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "message": {
           "type": "string"
@@ -231948,6 +233188,9 @@
             "array"
           ]
         },
+        "project_id": {
+          "type": "integer"
+        },
         "short_id": {
           "type": "string"
         },
@@ -231955,6 +233198,15 @@
           "type": "string"
         },
         "title": {
+          "type": "string"
+        },
+        "trailers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "web_url": {
           "type": "string"
         }
       },

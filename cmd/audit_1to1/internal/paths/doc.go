@@ -299,10 +299,11 @@
 // handler set, and the live record says which params GitLab declares optional
 // on the route receiving them. A key written unconditionally whose param GitLab
 // requires anyway is correct; one whose param GitLab lets a caller leave out is
-// a value nobody can decline to send. On the pinned record that separates 10
-// findings from 34 benign always-sent fields with no declaration table doing
-// any of the work, and the 10 include the case it was built against:
-// package_protection_rule.update sends "package_name_pattern": null on a PATCH
+// a value nobody can decline to send. On the pinned record that separates 11
+// findings from 37 always-sent fields GitLab requires (and 2 whose route
+// declares nothing about them) with no declaration table doing any of the
+// work, and the 11 include the case it was built against:
+// package.protection_rule_update sends "package_name_pattern": null on a PATCH
 // where GitLab marks it optional, while the POST beside it requires the same
 // field and is right to send it always.
 //

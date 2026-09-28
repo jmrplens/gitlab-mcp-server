@@ -7,7 +7,7 @@ import (
 )
 
 // SourceFileName is the provenance record's name on disk, written by
-// cmd/gen_graphql_schema beside the compressed schema.
+// cmd/gen_graphql_schema beside the schema text.
 const SourceFileName = "source.json"
 
 //go:embed source.json

@@ -2021,9 +2021,11 @@ audit-readonly-graphql:
 
 ## gen-graphql-schema: re-pin the GitLab GraphQL schema from a live instance.
 ## Needs the network, so it is not a gate: run it when GitLab has changed and
-## commit the result. Set GITLAB_TOKEN to a gitlab.com credential: GitLab
-## answers introspection to anyone but tells only an authenticated caller which
-## version it runs, and check-graphql-schema refuses a pin that records none.
+## commit the result. Set GITLAB_URL=https://gitlab.com and GITLAB_TOKEN to a
+## gitlab.com credential: GitLab answers introspection to anyone but tells only
+## an authenticated caller which version it runs, the token is sent only to the
+## instance GITLAB_URL names, and check-graphql-schema refuses a pin that
+## records no version.
 gen-graphql-schema:
 	go run ./cmd/gen_graphql_schema/
 

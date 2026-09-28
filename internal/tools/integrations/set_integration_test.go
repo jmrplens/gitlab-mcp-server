@@ -235,28 +235,31 @@ func TestGetGroupIntegration_Error(t *testing.T) {
 	}
 }
 
-// TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped
-// asserts that the group id and the slug are percent-escaped into the path by
-// every raw-REST group handler, so that a value carrying a slash, a space or a
-// literal percent sign names one path segment rather than several. A dot
+// TestGroupIntegration_AwkwardGroup_ReachesTheEndpointPercentEscaped asserts,
+// on the wire, that every raw-REST group handler sends the group id
+// percent-escaped, so that a value carrying a slash, a space or a literal
+// percent sign names one path segment rather than several, and that a dot
 // arrives literal: gl.PathEscape writes it "%2E" and this project's
 // dotUnescapeTransport puts it back, because instances behind some proxies
-// answer 403 to a %2E-encoded path.
+// answer 403 to a %2E-encoded path. The restored dot is the one thing here that
+// only a request which reaches the transport can show, which is why this test
+// sends one.
 //
-// It is also what holds the property behind an error branch no test can enter.
-// Each of these handlers checks the error from client.GL().NewRequest, and for
-// a request with no body that call can only fail on a path whose percent
-// escapes do not decode. Since every caller-supplied segment goes through
-// gl.PathEscape, which writes a raw "%" as "%25", no input produces one. The
-// branch stays because dropping a returned error is worse than keeping an
-// unreachable arm; what is asserted instead is the escaping that makes it
-// unreachable, which is a property worth holding on its own: without it a slug
-// could walk out of its endpoint.
-func TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped(t *testing.T) {
+// The slug is a real one on purpose. Every request a test sends is written into
+// the request inventory, whose endpoint check holds each row to GitLab's API
+// documentation, so a slug no integration has would be a row naming an
+// endpoint GitLab does not have. It used to be "custom.issue-tracker", which
+// bought nothing in exchange: its only awkward character is the dot the
+// transport restores, so the request was the same whether or not the slug was
+// escaped, and removing the escaping left this suite green. The slug's escaping
+// is held per handler by
+// TestIntegrationRequests_RefusedBeforeSending_CarryEachValueInOneSegment, which
+// refuses the request before it is sent and so records nothing.
+func TestGroupIntegration_AwkwardGroup_ReachesTheEndpointPercentEscaped(t *testing.T) {
 	const (
 		awkwardGroup = "100% my group/sub.group"
-		awkwardSlug  = "custom.issue-tracker"
-		wantSuffix   = "/groups/100%25%20my%20group%2Fsub.group/integrations/custom.issue-tracker"
+		realSlug     = "custom-issue-tracker"
+		wantSuffix   = "/groups/100%25%20my%20group%2Fsub.group/integrations/custom-issue-tracker"
 	)
 
 	tests := []struct {
@@ -265,19 +268,19 @@ func TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped(t *t
 	}{
 		{"get", func(t *testing.T, client *gitlabclient.Client) error {
 			t.Helper()
-			_, err := GetGroupIntegration(t.Context(), client, GetGroupIntegrationInput{GroupID: awkwardGroup, Slug: awkwardSlug})
+			_, err := GetGroupIntegration(t.Context(), client, GetGroupIntegrationInput{GroupID: awkwardGroup, Slug: realSlug})
 			return err
 		}},
 		{"set", func(t *testing.T, client *gitlabclient.Client) error {
 			t.Helper()
 			_, err := SetGroupIntegration(t.Context(), client, SetGroupIntegrationInput{
-				GroupID: awkwardGroup, Slug: awkwardSlug, Config: map[string]any{"webhook": testWebhook},
+				GroupID: awkwardGroup, Slug: realSlug, Config: map[string]any{"webhook": testWebhook},
 			})
 			return err
 		}},
 		{"delete", func(t *testing.T, client *gitlabclient.Client) error {
 			t.Helper()
-			return DeleteGroupIntegration(t.Context(), client, DeleteGroupIntegrationInput{GroupID: awkwardGroup, Slug: awkwardSlug})
+			return DeleteGroupIntegration(t.Context(), client, DeleteGroupIntegrationInput{GroupID: awkwardGroup, Slug: realSlug})
 		}},
 	}
 

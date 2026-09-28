@@ -54,7 +54,7 @@ func SetIntegration(ctx context.Context, client *gitlabclient.Client, input SetI
 			toolutil.ErrFieldRequired("slug"))
 	}
 
-	path := "projects/" + gl.PathEscape(string(input.ProjectID)) + "/integrations/" + gl.PathEscape(input.Slug)
+	path := integrationPath(projectsPathPrefix, input.ProjectID, input.Slug)
 	body := integrationConfigBody(input.Config)
 
 	req, err := client.GL().NewRequest(http.MethodPut, path, body, []gl.RequestOptionFunc{gl.WithContext(ctx)})

@@ -512,6 +512,11 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 			if !strings.Contains(errOut, "make gen-graphql-schema") {
 				t.Errorf("stderr does not say how to fix it:\n%s", errOut)
 			}
+			// The token is sent only to the instance GITLAB_URL names, so a
+			// fix that names the token alone reproduces the pin it refuses.
+			if !strings.Contains(errOut, "GITLAB_URL=https://gitlab.com") {
+				t.Errorf("stderr does not say that GITLAB_URL has to name gitlab.com:\n%s", errOut)
+			}
 		})
 	}
 }
@@ -525,7 +530,8 @@ func withSource(spoil func(*graphqlschema.Source)) graphqlschema.Source {
 }
 
 // noVersionRefusal is the sentence both ways of recording no version produce.
-const noVersionRefusal = "the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: " +
+const noVersionRefusal = "the pin records no GitLab version, which is what an introspection without a gitlab.com credential produces " +
+	"(GITLAB_TOKEN, sent only when GITLAB_URL names gitlab.com): " +
 	"nothing can then say which release the gate speaks for"
 
 // TestRun_Generation_WarnsWhenThePinIsNotOfGitLabCom verifies that the person

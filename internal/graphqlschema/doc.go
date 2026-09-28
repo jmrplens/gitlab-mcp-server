@@ -17,12 +17,37 @@
 // what GitLab changed; git stores two revisions of the text in about half the
 // space it needs for two gzip streams, which it can neither delta nor diff.
 //
+// # Which release the pin names
+//
+// The pin is always gitlab.com's, and that is a choice rather than a limit:
+// cmd/gen_graphql_schema --check refuses a pin of any other instance, because
+// the gate would then promise what that instance accepts rather than what this
+// server targets. An unlicensed gitlab-ee image serves the whole Enterprise
+// schema too, since GitLab builds it when the process boots, and
+// .github/workflows/ee-schema.yml introspects one every week; it is a check,
+// not the reference. gitlab.com runs the next minor's pre-release, so the
+// version source.json records is one no self-managed instance runs yet, and
+// one minor ahead of the released gitlab-ee image the REST record
+// (docs/development/gitlab-api-live.json) is taken from. The two name the same
+// minor only once the REST record is taken from the release the GraphQL pin
+// anticipates.
+//
+// Being ahead costs something in each direction. A field the pre-release adds
+// is accepted here and refused by every released instance: the weekly
+// ee-schema.yml re-probe judges every document against the release that
+// shipped last, and a domain whose document needs a recent field states the
+// oldest GitLab it works on. A field GitLab removes leaves gitlab.com first, so
+// the pin refuses a document that stopped working there while it still works
+// on every self-managed instance, and nothing lets a document declare why;
+// docs/concepts/graphql.md records that as deliberate.
+//
 // # Cost
 //
-// Parsing the schema takes around 200 ms for 4331 types, so it happens once
-// per process behind a [sync.Once] and never per call. Validating one document
-// against the loaded schema costs tens of microseconds, which is what makes
-// running it inside the shared test transport affordable.
+// Parsing the schema takes around 200 ms for the number of types source.json
+// records, so it happens once per process behind a [sync.Once] and never per
+// call. Validating one document against the loaded schema costs tens of
+// microseconds, which is what makes running it inside the shared test
+// transport affordable.
 //
 // # What it cannot see
 //
