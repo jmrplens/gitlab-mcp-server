@@ -79,11 +79,60 @@ a killed mutant costs only as long as the first test that notices it, not a
 whole suite run: 1194 mutants at 30 s each across four workers would be two and
 a half hours, and the pass takes a third of that.
 
-**gobco cannot analyse a package with build-constrained files at all.** It
-copies every `.go` file into its work directory ignoring `//go:build`, so
-`internal/toolutil` and `cmd/server` both fail with a redeclaration panic
-(`openLeafNoFollow`, `bindUnixSocket`). Those two are covered by mutation
-testing only.
+**gobco reads a package as every `.go` file in its directory, so the recipe
+stages a package with build-constrained files.** gobco v1.3.4, the latest
+release, hands the directory to `go/parser.ParseDir` and type-checks every
+file together, ignoring `//go:build` lines and `_windows.go` names alike (its
+default branch at 7a09995 does the same), so a function declared once per
+platform is a redeclaration panic before anything is measured. Three packages
+are in that shape: `cmd/server` (`peerStdinIsNull`, `bindUnixSocket` and
+`isConnRefused`), `internal/toolutil` (`syncDirectory`, `openLeafNoFollow` and
+`createNewLeafNoFollow`) and `test/e2e/internal/harness` (`serverBuildArgs`,
+split on the race detector). Until issue 1017 the first two were covered by
+mutation testing only.
+
+`scripts/coverage-conditions.sh`, which `make coverage-conditions` calls,
+copies the module into a temporary directory, leaving out `.git`,
+`.claude/worktrees`, `node_modules` and `dist`, removes from the package's
+copy every file the go command does not build here, runs gobco on the package
+there, names the files it left out and removes the copy whatever happens. The
+copy is of the module rather than of the package because gobco reaches an
+external test package through the import path those tests already name: a
+package copied under another path hands them the uninstrumented original, and
+`internal/toolutil` failed to build that way. Tests also read `docs/`, the
+root's `server.json` and their own directory's name, all of which a copy of
+the module keeps. gobco also chooses which parsed files to instrument with a
+context holding only `GOOS` and `GOARCH`. That context reads a constraint
+naming only operating systems, architectures and `unix` exactly as the go
+command does, and rejects one naming a tag, a release, cgo or the compiler,
+which would compile the file and leave its conditions out of a report that
+still reads complete. The constraint lines of those files, and only those, are
+blanked line for line, so positions stay the original's, and a package holding
+such a file is staged for that reason alone. A package with neither kind of
+file runs where it is, a constraint on the platform alone included
+(`internal/tools/packages`, whose `packages_stream_unix_test.go` sits behind
+`//go:build !windows`), and `internal/config` still reports 424/424 in 3 s.
+Measured on linux/amd64: `cmd/server` 1990/2032 (42 conditions left) and
+`internal/toolutil` 3604/3782 (178 left).
+
+**The platform halves the copy leaves out are not measured.** The Windows and
+non-Linux halves of `cmd/server` (five files) and the non-Unix halves of
+`internal/toolutil` (two files) build only on a platform other than the one
+running gobco, and nothing runs gobco on Windows or macOS today. Their
+conditions have never been measured, and they stay open under issue 1017,
+as do the 42 and 178 conditions above that no test evaluates both ways.
+
+**The e2e harness stays unmeasured until gobco honours build tags.**
+`TAGS=<tag>` reaches `go list` and gobco's `go test` alike, and under
+`TAGS=e2e` the harness compiles and its tests run. But every file of it sits
+behind `e2e`, so every constraint line is blanked, and its own
+`TestSources_EveryFile_CarriesExactlyTheE2EConstraint` fails on the blank
+lines. The run fails there, and the script says the figure it printed
+(863/1162) is not a measurement and names the blanked lines as the likely
+cause. Without the blanking gobco declines every file and reports
+`Condition coverage: 0/0`, which the script refuses: that is also what gobco
+prints when no test wrote its counts, and it reads like a package with nothing
+left to test.
 
 **Nor a package whose `export_test.go` hands a symbol to its external test
 package.** It resolves the `_test` package against the non-test files alone,
@@ -506,9 +555,11 @@ metadata is stated nowhere a reader can check.
 It is narrow on purpose. gobco costs 60 to 80 seconds per package and caches
 nothing, so the 169 packages carrying an `action_specs.go` would be about
 three hours; a condition anywhere else in a package stays the sweep's subject
-and is read with `make coverage-conditions`. A condition that genuinely
-cannot take the other value is declared on its own line, and a declaration
-that answers nothing fails:
+and is read with `make coverage-conditions`. It runs gobco through the same
+`scripts/coverage-conditions.sh`, so a package with a file per platform is
+staged and measured rather than reported as not measured. A condition that
+genuinely cannot take the other value is declared on its own line, and a
+declaration that answers nothing fails:
 
 ```go
 if meta.usage != "" { // gobco: always true because every entry sets it
