@@ -25,9 +25,15 @@ const (
 )
 
 // The wait for the bulk update's background job to assign the attribute.
+//
+// The drain comes first and is the longer of the two: the job waits for its
+// turn behind whatever the suite left in Sidekiq, which the licensed complete
+// run of the wave 1 stack measured past the minute the poll alone allowed,
+// while the job itself, once it runs, lands well inside that minute.
 const (
-	bulkUpdateInterval = 2 * time.Second
-	bulkUpdateWait     = 60 * time.Second
+	bulkUpdateDrainWait = 3 * time.Minute
+	bulkUpdateInterval  = 2 * time.Second
+	bulkUpdateWait      = 60 * time.Second
 )
 
 // classificationFixture is a top-level group with a project in it, which is
@@ -111,6 +117,10 @@ func TestSecurityAttributes_Lifecycle_AssignsToAProjectAndDeletes(t *testing.T) 
 		// assignment lands later. No action reads a project's attributes,
 		// so the removal is what observes it: retried until it finds the
 		// one the bulk add assigned, which is what proves the bulk add did.
+		// Sidekiq is drained first, so the poll measures the job rather than
+		// the queue in front of it, and the log says whether it got there.
+		drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), bulkUpdateDrainWait)
+		e.T.Logf("Sidekiq drained before the wait for the bulk add: %t", drained)
 		removed := harness.Eventually(s, actionSecurityAttributeProjectUpdate, map[string]any{
 			"project_id": f.project.ID, "remove_attribute_ids": []int64{attribute.ID},
 		}, bulkUpdateInterval, bulkUpdateWait, func(out securityattributes.ProjectUpdateOutput) bool { return out.RemovedCount >= 1 })
