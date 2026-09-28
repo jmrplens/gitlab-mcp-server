@@ -260,11 +260,11 @@ This means options that affect the size of MCP schemas, such as `--meta-param-sc
 
 The MCP specification requires a server to "Rate limit tool invocations" ([server/tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools), security considerations) and says nothing of the unit, the value or the refusal. In HTTP mode the server meets it by default:
 
-- **Unit**: a token bucket per pool entry, which is one token and GitLab URL pair, counted in requests and refilled each second. `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get` draw on it, since each reaches GitLab with the caller's credential.
+- **Unit**: a token bucket per pool entry, which is one token and GitLab URL pair, counted in requests and refilling at the configured rate per second. `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get` draw on it, since each reaches GitLab with the caller's credential.
 - **Default**: on, at `--rate-limit-rps=10` with `--rate-limit-burst=40`, because an HTTP deployment is shared: every call it forwards is charged to its own address, so one looping client's volume lands on the instance and on every other caller. `--rate-limit-rps=0` turns it off.
 - **Refusal**: a refused `tools/call` is a tool result flagged `isError` that begins `rate limit exceeded for <tool>`; the other four methods are refused in-band with JSON-RPC `-42900`.
 
-stdio is the other half of the position and is off by default, since one process serving one person has no co-tenant to protect; there `GITLAB_MCP_RATE_LIMIT_RPS` is the switch, because the flag exists in HTTP mode only. [Security, where the server stands on the MCP clause](../concepts/security.md#where-the-server-stands-on-the-mcp-clause) has both transports side by side.
+stdio is the other half of the position and is off by default, since one process serving one person has no co-tenant to protect; there `GITLAB_MCP_RATE_LIMIT_RPS` is the switch, because stdio accepts `--rate-limit-rps` and ignores it without a warning. [Security, where the server stands on the MCP clause](../concepts/security.md#where-the-server-stands-on-the-mcp-clause) has both transports side by side.
 
 ## Architecture
 

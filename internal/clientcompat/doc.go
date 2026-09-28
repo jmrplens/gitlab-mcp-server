@@ -16,6 +16,15 @@
 // audience, structuredContent, outputSchema, icons, and every other field are
 // preserved, and every other client keeps the exact float values.
 //
+// It reaches only a session that knows its client: stdio in either protocol
+// era, HTTP with --stateless=false, and any session at 2026-07-28, whose
+// requests each carry clientInfo in _meta. Over the default stateless HTTP
+// transport a client on 2025-11-25 or earlier reports clientInfo only in an
+// initialize no later POST's session saw, so it is sent the fraction. Whether
+// ChatGPT connector sessions, reported upstream to identify as openai-mcp,
+// escape the "codex" match is unverified, and is recorded with the rest in row
+// 17 until an initialize captured from one settles it.
+//
 // Choosing a response from clientInfo is a deliberate deviation from MCP
 // 2026-07-28, which says implementations SHOULD NOT use it "to change the
 // behavior of the client or server" (issue 959, register row IDN-013). It is

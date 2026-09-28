@@ -531,8 +531,9 @@ Whether it is on out of the box depends on the transport. **HTTP mode enables it
 by default** (`--rate-limit-rps=10`), because that deployment is shared — every
 call it forwards is charged to its own egress address, so one looping client's
 volume lands on every other tenant. **Stdio leaves it off** (`GITLAB_MCP_RATE_LIMIT_RPS=0`):
-a single-user local process has no co-tenant to protect, and a limiter there only
-costs latency. Setting `0` explicitly is the opt-out in either mode.
+a single-user local process has no co-tenant to protect, and a limiter there would
+only refuse its one user's own calls. Setting `0` explicitly is the opt-out in either
+mode.
 
 ### Where the server stands on the MCP clause
 
@@ -542,9 +543,9 @@ considerations: servers "MUST [...] Rate limit tool invocations"
 It names no unit, no value and no refusal shape, so this is what the server claims, as
 [issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) decided it:
 
-- **Unit.** A token bucket counted in requests and refilled each second, drawn on by
-  `tools/call` and by the four other methods that reach GitLab with the caller's
-  credential. Its key is the credential's pool entry (one token and GitLab URL pair) in
+- **Unit.** A token bucket counted in requests and refilling at the configured rate per
+  second, drawn on by `tools/call` and by the four other methods that reach GitLab with
+  the caller's credential. Its key is the credential's pool entry (one token and GitLab URL pair) in
   HTTP mode, and the process on stdio, where the process, the credential and the user
   are one.
 - **HTTP mode: met by default.** On at 10 a second with 40 in hand, because the
@@ -552,13 +553,14 @@ It names no unit, no value and no refusal shape, so this is what the server clai
   every other caller behind the deployment's address.
 - **stdio: off by default, and switchable.** A stdio process serves one person with
   their own token on their own machine, so there is no co-tenant to protect and a
-  limiter only adds latency, while GitLab's own per-user limits still apply to every
-  call it forwards. Turning a limiter on for every local user would be a change of
+  limiter there would only refuse its one user's own calls, while GitLab's own per-user
+  limits still apply to every call it forwards. Turning a limiter on for every local user would be a change of
   behavior with nothing to show for it.
 - **How to switch it on for stdio.** Set `GITLAB_MCP_RATE_LIMIT_RPS` above zero in the
   client's `env` block, and `GITLAB_MCP_RATE_LIMIT_BURST` if 40 in hand is not what you
-  want. `--rate-limit-rps` and `--rate-limit-burst` are flags of HTTP mode only, so on
-  stdio the variables are the whole switch. The bucket then belongs to the process and
+  want. `--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio
+  accepts them and ignores them without a warning, so on stdio the variables are the
+  whole switch. The bucket then belongs to the process and
   refuses in the shapes described under [Behavior on excess](#behavior-on-excess).
 
 ```json
@@ -586,7 +588,8 @@ requires a server exposing tools to rate limit their invocation, and an HTTP
 deployment is the shared one: every call it forwards is charged to its own
 egress address, so one looping client's volume lands on every other tenant and
 on the instance's own limits. A stdio process serves one user on their own
-machine, has no co-tenant to protect, and a limiter there only costs latency.
+machine, has no co-tenant to protect, and a limiter there would only refuse its one
+user's own calls.
 
 `10` is a judgement call rather than a specification value — far above any
 human-driven session, and still a bound on a retry loop. Setting `0` explicitly
@@ -684,8 +687,12 @@ meets the second half and departs from the first on purpose, in one place, as
 
 - **What it does.** A session whose `clientInfo` name or title contains `codex` gets
   the `priority` of its content and resource annotations written as 0 or 1 instead of
-  the fraction the server set. It applies in both protocol eras, since at 2026-07-28 the
-  SDK reads the client's identity from the first request's `_meta`.
+  the fraction the server set. It applies wherever the session knows its client: on
+  stdio in either protocol era, over HTTP with `--stateless=false`, and on any session
+  at 2026-07-28, whose requests each carry the client's identity in `_meta`. It does
+  not apply to a client on 2025-11-25 or earlier over the default stateless HTTP
+  transport, where each POST is a session of its own that never saw `initialize` and
+  so has no `clientInfo` to read; such a Codex client is sent the fraction.
 - **Why it stays.** The Codex builds bundled with ChatGPT.app fail every result that
   carries a fractional priority, which made every tool call fail. The defect is
   recorded, with its upstream fix, as

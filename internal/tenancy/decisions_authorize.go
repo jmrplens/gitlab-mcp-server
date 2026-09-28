@@ -184,7 +184,10 @@ func authorizeDecisions() []Decision {
 			// how a priority is written, never who a caller is or what it may
 			// do (INV-001), GITLAB_MCP_CLIENT_COMPAT=off removes it, and it
 			// retires with the Codex defect it works around (row 17 of
-			// docs/development/upstream-bugs.md).
+			// docs/development/upstream-bugs.md). Keyed on the session, it
+			// reaches only a session that knows its client: a request at
+			// 2025-11-25 or earlier over stateless HTTP belongs to a session
+			// that never saw initialize, so the profile does not apply to it.
 			Decided: []string{"issue 959"},
 			Sites: []Site{
 				enforce(pkgClientCompat, "profileFromClientInfo"),

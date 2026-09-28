@@ -57,7 +57,7 @@ func allowDecisions() []Decision {
 			// stands on it (F-19): on by default in HTTP mode, off by default
 			// on stdio, where the process serves one caller and has no
 			// co-tenant to protect, and switched on there by the variable,
-			// since the flag exists in HTTP mode alone.
+			// since stdio accepts the flag and ignores it.
 			Decided:  []string{"issue 959"},
 			Findings: []string{"F-01", "F-02", "F-20", "F-21", "F-32", "F-34"},
 			Refusals: []Refusal{

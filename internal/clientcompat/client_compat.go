@@ -62,8 +62,10 @@ func profileFromClientInfo(impl *mcp.Implementation) Profile {
 }
 
 // profileForRequest resolves the Profile for the session that issued req.
-// Sessions without initialize params (e.g. synthesized stateless-HTTP
-// sessions) fall back to ProfileDefault.
+// A session that knows no client falls back to ProfileDefault: over stateless
+// HTTP at protocol 2025-11-25 or earlier each POST is a session of its own,
+// whose initialize params the SDK synthesizes with a protocol version and no
+// clientInfo, so the profile never applies there.
 func profileForRequest(req mcp.Request) Profile {
 	if req == nil {
 		return ProfileDefault

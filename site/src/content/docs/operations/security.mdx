@@ -264,14 +264,14 @@ The MCP specification (revision 2026-07-28) has one mandatory limit and one note
 
 Servers "MUST [...] Rate limit tool invocations" ([server/tools](https://modelcontextprotocol.io/specification/2026-07-28/server/tools), security considerations). The clause names no unit, value or refusal, so this is the claim:
 
-| Transport | Default                              | Unit                                                              | Why                                                                                                                                            |
-| --------- | ------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP      | On: 10 requests a second, 40 in hand | A token bucket per pool entry, one token and GitLab URL pair      | The deployment is shared, so one looping client's volume lands on the instance and on every other caller                                       |
-| stdio     | Off (`GITLAB_MCP_RATE_LIMIT_RPS=0`)  | A token bucket for the process, which is one person and one token | There is no co-tenant to protect, a limiter only adds latency, and GitLab's own per-user limits still apply to every call the process forwards |
+| Transport | Default                              | Unit                                                              | Why                                                                                                                                                                     |
+| --------- | ------------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP      | On: 10 requests a second, 40 in hand | A token bucket per pool entry, one token and GitLab URL pair      | The deployment is shared, so one looping client's volume lands on the instance and on every other caller                                                                |
+| stdio     | Off (`GITLAB_MCP_RATE_LIMIT_RPS=0`)  | A token bucket for the process, which is one person and one token | There is no co-tenant to protect, a limiter would only refuse its one user's own calls, and GitLab's own per-user limits still apply to every call the process forwards |
 
-The bucket counts requests and is drawn on by `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get`. A refused tool call comes back as a tool result flagged `isError` that begins `rate limit exceeded for <tool>`; the other methods are refused in-band with JSON-RPC `-42900`.
+The bucket counts requests, refills at the configured rate per second, and is drawn on by `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get`. A refused tool call comes back as a tool result flagged `isError` that begins `rate limit exceeded for <tool>`; the other methods are refused in-band with JSON-RPC `-42900`.
 
-To rate limit tool invocations on stdio as well, set the variable in the client's `env` block. `--rate-limit-rps` is a flag of HTTP mode only, so on stdio the variables are the whole switch:
+To rate limit tool invocations on stdio as well, set the variable in the client's `env` block. `--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio accepts them and ignores them without a warning, so on stdio the variables are the whole switch:
 
 ```json
 "env": {
@@ -286,6 +286,7 @@ To rate limit tool invocations on stdio as well, set the variable in the client'
 
 The specification says the `clientInfo` a client reports is self-reported, and that implementations "SHOULD NOT use them to change the behavior of the client or server, and SHOULD NOT rely on them for security decisions" ([basic](https://modelcontextprotocol.io/specification/2026-07-28/basic)). The server meets the second half. It departs from the first on purpose, in one place: the [Codex profile](/gitlab-mcp-server/compatibility/), which writes annotation priorities as 0 or 1 for a session whose `clientInfo` names Codex, because the Codex builds bundled with ChatGPT.app fail every result that carries a fractional one.
 
+- It reaches every session that knows its client: stdio in either protocol era, HTTP with `--stateless=false`, and any session at 2026-07-28, whose requests each carry `clientInfo`. A Codex client on 2025-11-25 or earlier against the default stateless HTTP transport is sent the fraction, because each POST there is a session of its own that never saw `initialize`.
 - It changes how one number is written and nothing a model reads, and it never decides who a caller is or what it may do: identity comes from the credential on each request.
 - `GITLAB_MCP_CLIENT_COMPAT=off` turns it off, and every client then receives the same response.
 - It retires once a Codex built on an `rmcp` release carrying the fix is widely deployed, not merely released; the [upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call) tracks each step.

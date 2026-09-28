@@ -89,7 +89,7 @@ readable without opening the tracker:
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
-| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, unreleased** | Was yes | Yes, until a Codex built on the fix ships |
+| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, unreleased** | Was yes | Yes, until a Codex built on the fix is widely deployed, not merely released |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
@@ -4179,7 +4179,15 @@ three paths that was not kept.
   2026-07-28, which says it SHOULD NOT change behavior; that departure is kept
   on purpose and stated in the security concepts and client compatibility
   pages ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959),
-  register row `IDN-013`).
+  register row `IDN-013`). It reaches only a session that knows its client:
+  stdio in either protocol era, HTTP with `--stateless=false`, and any session
+  at 2026-07-28, whose requests each carry `clientInfo`. A Codex client on
+  2025-11-25 or earlier against the default stateless HTTP transport is sent
+  the fraction, because each POST there is a session of its own that never saw
+  `initialize`; `test/e2e/http` pins that limit. Open and unverified: ChatGPT
+  connector sessions are reported upstream to identify as `openai-mcp`, which
+  the `codex` match would miss, and the match changes only once an
+  `initialize` captured from such a session shows it.
 
 **What**: the Codex builds bundled with ChatGPT.app reject any MCP result whose
 `annotations.priority` is a non-integer float. `0.6` fails; `1` or an

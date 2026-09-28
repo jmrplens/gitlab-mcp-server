@@ -404,7 +404,7 @@ The limiter never returns HTTP 429, in either shape, because the limit is enforc
 
 ### The MCP clause it answers
 
-The MCP specification's one mandatory limit is "Rate limit tool invocations" ([server/tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)), with no unit, value or refusal shape. HTTP mode meets it out of the box with the bucket above: counted in requests, one per pool entry, 10 a second with 40 in hand. stdio leaves the same limiter off by default, since one process serving one person has no co-tenant to protect, and switches it on with `GITLAB_MCP_RATE_LIMIT_RPS`, the flag being HTTP mode's alone. [Security](/gitlab-mcp-server/operations/security/#two-mcp-clauses-the-server-meets-in-part) sets out both halves of that position ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)).
+The MCP specification's one mandatory limit is "Rate limit tool invocations" ([server/tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)), with no unit, value or refusal shape. HTTP mode meets it out of the box with the bucket above: counted in requests, one per pool entry, 10 a second with 40 in hand. stdio leaves the same limiter off by default, since one process serving one person has no co-tenant to protect, and switches it on with `GITLAB_MCP_RATE_LIMIT_RPS`, since stdio accepts `--rate-limit-rps` and ignores it without a warning. [Security](/gitlab-mcp-server/operations/security/#two-mcp-clauses-the-server-meets-in-part) sets out both halves of that position ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)).
 
 ### Sizing guidance
 

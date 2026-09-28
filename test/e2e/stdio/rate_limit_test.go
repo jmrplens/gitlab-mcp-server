@@ -44,8 +44,9 @@ func refusedAsToolError(got map[string]any) bool {
 // for: MCP's one mandatory limit ("Rate limit tool invocations") is switched
 // on for stdio by GITLAB_MCP_RATE_LIMIT_RPS, and a tool call beyond the bucket
 // is refused in the shape register row RTC-001 declares. The flag
-// --rate-limit-rps belongs to HTTP mode alone, so on stdio the variable is the
-// whole switch, and nothing drove it against a binary before this.
+// --rate-limit-rps is read in HTTP mode alone (stdio accepts it and ignores
+// it), so on stdio the variable is the whole switch, and nothing drove it
+// against a binary before this.
 //
 // A bucket of one that refills once every thousand seconds is spent by the
 // first call and stays empty for the rest of the test, so the second tool call
@@ -92,7 +93,8 @@ func TestRateLimit_VariableSet_RefusesAStdioToolCall(t *testing.T) {
 // TestRateLimit_VariableUnset_IsOffOnStdio pins the other half of issue 959's
 // position: with nothing set, stdio attaches no limiter. A process serving one
 // person with their own token has no co-tenant to protect, so a limiter there
-// only costs latency, and GitLab's own limits still apply to every call.
+// would only refuse its one user's own calls, and GitLab's own limits still
+// apply to every call.
 //
 // Calls served are not enough to show it, since a limiter that refills fast
 // enough serves them too. So the calls are made past the burst of 40 either
