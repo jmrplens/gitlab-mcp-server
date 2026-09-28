@@ -380,6 +380,12 @@ fi
 # copy of the package inside the module, which every tree-wide `go build ./...`
 # and every gate that loads ./... would then read as real. The baseline's
 # output and coverage profile go with it.
+#
+# An interrupt ends the run rather than returning to it. The cleanup used to be
+# the handler for INT and TERM as well, and a handler returns to the script:
+# a signal during the baseline removed the copy and then went on to time it and
+# start gremlins on a directory that was gone, and one during gremlins let the
+# run exit 0. Exiting from the handler runs the EXIT trap, which cleans up.
 staged=""
 out=""
 profile=""
@@ -394,7 +400,9 @@ cleanup() {
     rm -f "$profile"
   fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 target=$PKG
 # A package whose directory ends in its name is one gremlins resolves on its

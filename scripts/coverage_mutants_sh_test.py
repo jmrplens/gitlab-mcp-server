@@ -31,9 +31,11 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -173,6 +175,8 @@ elif args[:1] == ["test"]:
     else:
         with open(env["STUB_LOG"], encoding="utf-8") as fh:
             run = 1 + sum(1 for line in fh if json.loads(line)["argv"][:1] == ["test"])
+        if env.get("STUB_STARTED_ON") == "test":
+            open(env["STUB_STARTED"], "w", encoding="utf-8").close()
         time.sleep(float(env.get("STUB_TEST_SLEEP", "0")))
         if "-coverprofile" in args:
             with open(args[args.index("-coverprofile") + 1], "w", encoding="utf-8") as fh:
@@ -185,7 +189,10 @@ elif args[:1] == ["test"]:
             print(env.get("STUB_TEST_LAST_LINE",
                           "ok  \t%s\t0.912s\tcoverage: 71.4%% of statements" % pattern))
 elif args[:2] == ["run", "github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0"]:
-    pass
+    entry["target_exists"] = os.path.isdir(os.path.join(os.getcwd(), args[-1]))
+    if env.get("STUB_STARTED_ON") == "run":
+        open(env["STUB_STARTED"], "w", encoding="utf-8").close()
+    time.sleep(float(env.get("STUB_GREMLINS_SLEEP", "0")))
 else:
     sys.stderr.write("stub go: unexpected call %r\n" % (args,))
     status = 2
@@ -813,6 +820,55 @@ class CoverageMutantsTest(unittest.TestCase):
         self.assertEqual(self.gremlins(proc, calls)["argv"][-1], staged)
         self.assertFalse(os.path.exists(os.path.join(self.root, "cmd", "tool.mutants-main")))
         self.assertGreaterEqual(self.printed_base(proc), SLEEP)
+
+    def test_an_interrupt_ends_the_run_and_removes_the_staged_copy(self):
+        # `trap cleanup EXIT INT TERM` ran the cleanup and returned to the
+        # script, which carried on against the copy it had just removed: a
+        # signal during the baseline went on to start gremlins on a directory
+        # that was gone, and one during gremlins let the run exit 0. A signal
+        # sent to the script alone is what tells a returning handler from one
+        # that ends the run, since the child it waits for finishes normally.
+        cases = [
+            ("SIGTERM during the baseline", signal.SIGTERM, "test", 143),
+            ("SIGINT during gremlins", signal.SIGINT, "run", 130),
+        ]
+        staged = os.path.join(self.root, "cmd", "tool.mutants-main")
+        for name, signum, during, status in cases:
+            with self.subTest(name):
+                open(self.log, "w", encoding="utf-8").close()
+                started = os.path.join(self.scratch, "started")
+                if os.path.exists(started):
+                    os.remove(started)
+                run_env = {k: v for k, v in os.environ.items()
+                           if not k.startswith("GREMLINS_") and k != "GOFLAGS" and not k.startswith("STUB_")}
+                run_env.update({
+                    "PATH": self.bin + os.pathsep + os.environ.get("PATH", ""),
+                    "STUB_LOG": self.log,
+                    "STUB_ROOT": self.root,
+                    "STUB_PKG_NAME": "main",
+                    "STUB_STARTED": started,
+                    "STUB_STARTED_ON": during,
+                    "STUB_TEST_SLEEP" if during == "test" else "STUB_GREMLINS_SLEEP": "1",
+                })
+                proc = subprocess.Popen([SCRIPT, "./cmd/tool"], cwd=self.root, env=run_env,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                deadline = time.monotonic() + 60
+                while not os.path.exists(started) and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue(os.path.exists(started), "the stand-in was never reached")
+                self.assertTrue(os.path.isdir(staged))
+                proc.send_signal(signum)
+                out, err = proc.communicate(timeout=60)
+                self.assertEqual(proc.returncode, status, out + err)
+                self.assertFalse(os.path.exists(staged), "the staged copy was left behind")
+                with open(self.log, encoding="utf-8") as fh:
+                    calls = [json.loads(line) for line in fh]
+                runs = self.of(calls, "run")
+                if during == "test":
+                    self.assertEqual(runs, [], "gremlins was started after the signal")
+                else:
+                    self.assertEqual(len(runs), 1)
+                    self.assertTrue(runs[0]["target_exists"])
 
     @staticmethod
     def trimpath_hint(proc):
