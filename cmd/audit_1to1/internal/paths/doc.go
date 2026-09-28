@@ -232,7 +232,7 @@
 //     route's desc annotates one entity and its present call renders another,
 //     so the join reads the wrong one (the billable members, an
 //     administrator's view of a user, the project pipeline list, the group
-//     Datadog integration).
+//     Datadog integration, a merge request's context commits).
 //   - this-server-derives-the-value-from-what-gitlab-sends: a field this
 //     server computes, which no entity can carry (an event's target_url).
 //   - shared-type-field-only-another-package-fills: a field of a type shared

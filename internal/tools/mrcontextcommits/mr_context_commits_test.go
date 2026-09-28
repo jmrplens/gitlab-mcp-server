@@ -10,8 +10,11 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -423,25 +426,213 @@ func TestHandlers_PublishEveryCommitKey(t *testing.T) {
 	}))
 	cases := []struct {
 		name string
-		call func() (ListOutput, error)
+		call func() ([]CommitItem, error)
 	}{
-		{"list", func() (ListOutput, error) {
-			return List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10})
+		{"list", func() ([]CommitItem, error) {
+			out, err := List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10})
+			return out.Commits, err
 		}},
-		{"create", func() (ListOutput, error) {
-			return Create(t.Context(), client, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc123def"}})
+		{"create", func() ([]CommitItem, error) {
+			out, err := Create(t.Context(), client, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc123def"}})
+			return out.Commits, err
 		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := tc.call()
+			commits, err := tc.call()
 			if err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			if len(out.Commits) != 1 || !reflect.DeepEqual(out.Commits[0], fullCommitItem) {
-				t.Errorf("commits = %+v, want [%+v]", out.Commits, fullCommitItem)
+			if len(commits) != 1 || !reflect.DeepEqual(commits[0], fullCommitItem) {
+				t.Errorf("commits = %+v, want [%+v]", commits, fullCommitItem)
 			}
 		})
+	}
+}
+
+// TestCreateOutput_PublishesNoPagination holds the answer to
+// create_context_commits to what the route sends: the commits it pinned and
+// no page, since the route is not paged and sends no pagination headers. It
+// used to share the list's output, which published a pagination block that
+// was zero on every answer and told a model paging applied to a write.
+func TestCreateOutput_PublishesNoPagination(t *testing.T) {
+	encoded, err := json.Marshal(CreateOutput{Commits: []CommitItem{{ID: testCommitSHA}}})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var answer map[string]json.RawMessage
+	if err = json.Unmarshal(encoded, &answer); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := answer["pagination"]; ok {
+		t.Errorf("answer %s publishes a pagination block", encoded)
+	}
+	if _, ok := answer["commits"]; !ok {
+		t.Errorf("answer %s carries no commits", encoded)
+	}
+}
+
+// TestFormatCreateMarkdown_RendersThePinnedCommitsWithNoPage verifies that
+// the answer to create_context_commits renders as the list's table, headed by
+// the number of commits pinned and carrying no page line, since the answer is
+// every commit pinned rather than a page of a longer list.
+func TestFormatCreateMarkdown_RendersThePinnedCommitsWithNoPage(t *testing.T) {
+	result := FormatCreateMarkdown(CreateOutput{
+		Commits: []CommitItem{{ID: testCommitSHA, ShortID: "abc1", Title: "Fix bug", AuthorName: "Dev"}},
+	})
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content = %T, want text", result.Content[0])
+	}
+	want := "## MR Context Commits (1)\n\n" +
+		"| SHA | Title | Author | Created |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| `abc1` | Fix bug | Dev |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to read one of these commits in full\n" +
+		"- Use action 'merge_request.context_commits_create' to pin another commit to this review\n" +
+		"- Use action 'merge_request.context_commits_delete' to unpin one of these commits\n"
+	if text.Text != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", text.Text, want)
+	}
+}
+
+// TestFormatCreateMarkdown_NothingPinned_SaysSo verifies that an answer with
+// no commit renders the empty message rather than an empty table.
+func TestFormatCreateMarkdown_NothingPinned_SaysSo(t *testing.T) {
+	if got, want := FormatCreateMarkdownString(CreateOutput{}), toolutil.EmptyMessage("context commits"); got != want {
+		t.Errorf("rendered = %q, want %q", got, want)
+	}
+}
+
+// commitWithLinkKeys are the keys lib/api/entities/commit_with_link.rb adds
+// to a commit under `type: :full`, in the shape the context commit list sends
+// them: the author as a UserPath whose status association was not loaded
+// (so show_status is false and the status keys are absent), the rendered
+// title and description, and the six keys this server does not publish,
+// signature_html and the three the route never fills arriving null.
+const commitWithLinkKeys = `"author":{"id":7,"username":"ann","public_email":"ann@example.com","name":"Ann Example",` +
+	`"state":"active","locked":true,"avatar_url":"https://gitlab.example.com/uploads/-/system/user/avatar/7/a.png",` +
+	`"web_url":"https://gitlab.example.com/ann","show_status":false,"path":"/ann"},` +
+	`"author_gravatar_url":"https://www.gravatar.com/avatar/0bc83cb5?s=80&d=identicon",` +
+	`"commit_url":"https://gitlab.example.com/g/p/-/commit/abc123def","commit_path":"/g/p/-/commit/abc123def",` +
+	`"description_html":"<p dir=\"auto\">It read one byte too many.</p>","title_html":"Fix the parser",` +
+	`"signature_html":null,"prev_commit_id":null,"next_commit_id":null,"pipeline_status_path":null`
+
+// commitWithLinkJSON is fullCommitJSON as the context commit list sends it,
+// which presents CommitWithLink rather than the Commit its route annotates.
+var commitWithLinkJSON = strings.TrimSuffix(fullCommitJSON, "}") + "," + commitWithLinkKeys + "}"
+
+// listedCommitItem is commitWithLinkJSON as List publishes it: every key of
+// fullCommitItem, and the four CommitWithLink keys this server surfaces.
+var listedCommitItem = func() CommitItem {
+	item := fullCommitItem
+	item.Author = &CommitAuthor{
+		ID: 7, Username: "ann", PublicEmail: "ann@example.com", Name: "Ann Example",
+		State: "active", Locked: true,
+		AvatarURL: "https://gitlab.example.com/uploads/-/system/user/avatar/7/a.png",
+		WebURL:    "https://gitlab.example.com/ann",
+		Path:      "/ann",
+	}
+	item.AuthorGravatarURL = "https://www.gravatar.com/avatar/0bc83cb5?s=80&d=identicon"
+	item.DescriptionHTML = `<p dir="auto">It read one byte too many.</p>`
+	item.TitleHTML = "Fix the parser"
+	return item
+}()
+
+// TestList_CommitWithLink_PublishesTheAuthorAndTheRenderedText verifies that
+// the list publishes what CommitWithLink adds to a commit and this server
+// surfaces, each from its own key: the GitLab account the author email
+// belongs to, the Gravatar image of that email, and the title and
+// description rendered to HTML. The route's annotation names Commit, so
+// nothing but the handler's own reading of the capture can surface them, and
+// a value copied into the wrong key would make the item differ.
+func TestList_CommitWithLink_PublishesTheAuthorAndTheRenderedText(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "["+commitWithLinkJSON+"]")
+	}))
+
+	out, err := List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Commits) != 1 || !reflect.DeepEqual(out.Commits[0], listedCommitItem) {
+		t.Errorf("commits = %+v, want [%+v]", out.Commits, listedCommitItem)
+	}
+}
+
+// TestList_CommitWithLink_PublishesExactlyTheDecidedKeys holds the published
+// row to the keys decided for it, as a caller reads them on the wire.
+// commit_url and commit_path say web_url again, and signature_html,
+// prev_commit_id, next_commit_id and pipeline_status_path are null on every
+// commit this route sends, so none of the six is published; the author
+// carries the unconditional keys of a UserPath, show_status included although
+// it is false, and none of the conditional ones, which the route never fills.
+func TestList_CommitWithLink_PublishesExactlyTheDecidedKeys(t *testing.T) {
+	encoded, err := json.Marshal(listedCommitItem)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var row map[string]json.RawMessage
+	if err = json.Unmarshal(encoded, &row); err != nil {
+		t.Fatalf("unmarshal row: %v", err)
+	}
+	for _, key := range []string{"author", "author_gravatar_url", "description_html", "title_html"} {
+		t.Run("publishes "+key, func(t *testing.T) {
+			if _, ok := row[key]; !ok {
+				t.Errorf("row %s carries no %s", encoded, key)
+			}
+		})
+	}
+	for _, key := range []string{"commit_url", "commit_path", "signature_html", "prev_commit_id", "next_commit_id", "pipeline_status_path"} {
+		t.Run("leaves out "+key, func(t *testing.T) {
+			if _, ok := row[key]; ok {
+				t.Errorf("row %s carries %s", encoded, key)
+			}
+		})
+	}
+
+	var author map[string]json.RawMessage
+	if err = json.Unmarshal(row["author"], &author); err != nil {
+		t.Fatalf("unmarshal author: %v", err)
+	}
+	keys := make([]string, 0, len(author))
+	for key := range author {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	want := []string{"avatar_url", "id", "locked", "name", "path", "public_email", "show_status", "state", "username", "web_url"}
+	if !slices.Equal(keys, want) {
+		t.Errorf("author keys = %v, want %v", keys, want)
+	}
+}
+
+// TestList_AuthorNoAccountHolds_IsAbsent verifies that a commit whose author
+// email no confirmed account holds, which GitLab answers with a null author,
+// is published without one rather than with an empty account.
+func TestList_AuthorNoAccountHolds_IsAbsent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":"abc123","short_id":"abc1","title":"Unknown author",`+
+			`"author_name":"Ghost","author_email":"ghost@example.com","author":null,`+
+			`"author_gravatar_url":"https://www.gravatar.com/avatar/1?s=80&d=identicon","title_html":"Unknown author"}]`)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Commits) != 1 {
+		t.Fatalf("commits = %+v, want one", out.Commits)
+	}
+	if out.Commits[0].Author != nil {
+		t.Errorf("author = %+v, want none for an email no account holds", out.Commits[0].Author)
+	}
+	encoded, err := json.Marshal(out.Commits[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(encoded), `"author":`) {
+		t.Errorf("row %s publishes an author GitLab did not send", encoded)
 	}
 }
 
@@ -455,17 +646,20 @@ func TestHandlers_AnswerNoTypeReads_IsAnError(t *testing.T) {
 	cases := []struct {
 		name string
 		body string
-		call func(*gitlabclient.Client) (ListOutput, error)
+		call func(*gitlabclient.Client) ([]CommitItem, error)
 		want string
 	}{
-		{"list, id a number", `[{"id":5}]`, func(c *gitlabclient.Client) (ListOutput, error) {
-			return List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+		{"list, id a number", `[{"id":5}]`, func(c *gitlabclient.Client) ([]CommitItem, error) {
+			out, err := List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+			return out.Commits, err
 		}, "list_mr_context_commits: "},
-		{"create, id a number", `[{"id":5}]`, func(c *gitlabclient.Client) (ListOutput, error) {
-			return Create(t.Context(), c, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc"}})
+		{"create, id a number", `[{"id":5}]`, func(c *gitlabclient.Client) ([]CommitItem, error) {
+			out, err := Create(t.Context(), c, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc"}})
+			return out.Commits, err
 		}, "create_mr_context_commits: "},
-		{"list, not JSON", `[{`, func(c *gitlabclient.Client) (ListOutput, error) {
-			return List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+		{"list, not JSON", `[{`, func(c *gitlabclient.Client) ([]CommitItem, error) {
+			out, err := List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+			return out.Commits, err
 		}, "list_mr_context_commits: "},
 	}
 	for _, tc := range cases {
@@ -473,12 +667,12 @@ func TestHandlers_AnswerNoTypeReads_IsAnError(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusOK, tc.body)
 			}))
-			out, err := tc.call(client)
+			commits, err := tc.call(client)
 			if err == nil || !strings.HasPrefix(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want one naming %q", err, tc.want)
 			}
-			if out.Commits != nil {
-				t.Errorf("commits = %+v, want none beside the error", out.Commits)
+			if commits != nil {
+				t.Errorf("commits = %+v, want none beside the error", commits)
 			}
 		})
 	}
@@ -660,6 +854,62 @@ func TestFormatListMarkdown_LinksTheSHAToTheCommit(t *testing.T) {
 		"- Use action '" + actionContextCommitsDelete + "' to unpin one of these commits\n"
 	if got := FormatListMarkdownString(out); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatListMarkdown_LinksTheAuthorToTheAccount verifies the author cell
+// of each case the listing can hold: an author GitLab matched to an account is
+// linked to that account's profile under the name the commit was authored
+// under, or under the account's name when the commit carries none, which sets
+// the instruction to keep the links although no SHA is linked; an author with
+// no account, or with an account GitLab sent no profile URL for, is the
+// commit's author name as text.
+func TestFormatListMarkdown_LinksTheAuthorToTheAccount(t *testing.T) {
+	account := func(webURL string) *CommitAuthor {
+		return &CommitAuthor{ID: 7, Username: "ann", Name: "Ann Example", WebURL: webURL}
+	}
+	cases := []struct {
+		name   string
+		commit CommitItem
+		cell   string
+		linked bool
+	}{
+		{
+			"account with a profile",
+			CommitItem{ID: "a1", Title: "T", AuthorName: "Ann", Author: account("https://gitlab.example.com/ann")},
+			"[Ann](https://gitlab.example.com/ann)", true,
+		},
+		{
+			"account, blank author name",
+			CommitItem{ID: "a1", Title: "T", Author: account("https://gitlab.example.com/ann")},
+			"[Ann Example](https://gitlab.example.com/ann)", true,
+		},
+		{
+			"account without a profile URL",
+			CommitItem{ID: "a1", Title: "T", AuthorName: "Ann", Author: account("")},
+			"Ann", false,
+		},
+		{
+			"no account",
+			CommitItem{ID: "a1", Title: "T", AuthorName: "Ghost"},
+			"Ghost", false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hints := contextCommitHints
+			if tc.linked {
+				hints = "\n---\n💡 **Next steps:**\n- " + toolutil.HintPreserveLinks + "\n" +
+					strings.TrimPrefix(contextCommitHints, "\n---\n💡 **Next steps:**\n")
+			}
+			want := "## MR Context Commits (1)\n\n" +
+				"| SHA | Title | Author | Created |\n" +
+				"| --- | --- | --- | --- |\n" +
+				"| `a1` | T | " + tc.cell + " |  |\n" + hints
+			if got := FormatListMarkdownString(ListOutput{Commits: []CommitItem{tc.commit}}); got != want {
+				t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+			}
+		})
 	}
 }
 

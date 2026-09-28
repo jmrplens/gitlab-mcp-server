@@ -91,23 +91,59 @@ func buildMRExtrasFixture(e *harness.Env) mrExtrasFixture {
 	return mrExtrasFixture{mr: mr, issue: issue, context: context}
 }
 
-// contextCommitIDs lists the SHAs of a context commits listing.
-func contextCommitIDs(out mrcontextcommits.ListOutput) []string {
-	ids := make([]string, 0, len(out.Commits))
-	for _, commit := range out.Commits {
+// contextCommitIDs lists the SHAs of the context commits an answer carries.
+func contextCommitIDs(commits []mrcontextcommits.CommitItem) []string {
+	ids := make([]string, 0, len(commits))
+	for _, commit := range commits {
 		ids = append(ids, commit.ID)
 	}
 	return ids
 }
 
+// contextCommitBySHA finds one of the context commits an answer carries by
+// its SHA.
+func contextCommitBySHA(commits []mrcontextcommits.CommitItem, sha string) (mrcontextcommits.CommitItem, bool) {
+	for _, commit := range commits {
+		if commit.ID == sha {
+			return commit, true
+		}
+	}
+	return mrcontextcommits.CommitItem{}, false
+}
+
+// assertCommitWithLinkKeys holds the two context commit routes to the
+// entities their handlers present, which is what upstream-bugs row 77 reads
+// from GitLab's source: the list presents CommitWithLink, so the commit the
+// token's own user authored carries that user as its author and a rendered
+// title, and the create answer presents Commit and carries neither.
+func assertCommitWithLinkKeys(e *harness.Env, pinned mrcontextcommits.CreateOutput, listed mrcontextcommits.ListOutput, sha string) {
+	e.T.Helper()
+
+	if created, ok := contextCommitBySHA(pinned.Commits, sha); ok && (created.Author != nil || created.TitleHTML != "") {
+		e.T.Errorf("context_commits_create answered %s with the list's keys (author %+v, title_html %q), want the Commit entity alone",
+			sha, created.Author, created.TitleHTML)
+	}
+	row, ok := contextCommitBySHA(listed.Commits, sha)
+	if !ok {
+		return
+	}
+	if row.Author == nil || row.Author.Username != e.Runtime().Username {
+		e.T.Errorf("the listed context commit %s carries the author %+v, want the run's own %s", sha, row.Author, e.Runtime().Username)
+	}
+	if row.TitleHTML == "" {
+		e.T.Errorf("the listed context commit %s carries no title_html, which CommitWithLink renders under type: :full", sha)
+	}
+}
+
 // TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues drives, on
 // every surface and one shared request, the three things that hang off it
-// without consuming it: the unrelated commit is pinned as context, found
-// in the listing and unpinned; a to-do is raised for the caller, a second
-// one is refused as already pending and the first is marked done through
-// client-go so the next surface starts without one; and the closing
-// reference is written into the description, after which the issue it
-// names is waited for among the related issues.
+// without consuming it: the unrelated commit is pinned as context, found in
+// the listing with its author's account and its rendered title, which the
+// pin's own answer does not carry, and unpinned; a to-do is raised for the
+// caller, a second one is refused as already pending and the first is
+// marked done through client-go so the next surface starts without one; and
+// the closing reference is written into the description, after which the
+// issue it names is waited for among the related issues.
 //
 // Replaces: TestIndividual_MRExtras
 func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
@@ -118,18 +154,19 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 		params := f.mr.params()
 
 		commits := withParams(params, map[string]any{"commits": []string{f.context.SHA}})
-		pinned := harness.Do[mrcontextcommits.ListOutput](s, actionMergeRequestContextCommitsCreate, commits)
-		if !slices.Contains(contextCommitIDs(pinned), f.context.SHA) {
-			e.T.Fatalf("context_commits_create answered %v, want the pinned commit %s", contextCommitIDs(pinned), f.context.ShortID)
+		pinned := harness.Do[mrcontextcommits.CreateOutput](s, actionMergeRequestContextCommitsCreate, commits)
+		if !slices.Contains(contextCommitIDs(pinned.Commits), f.context.SHA) {
+			e.T.Fatalf("context_commits_create answered %v, want the pinned commit %s", contextCommitIDs(pinned.Commits), f.context.ShortID)
 		}
 		listed := harness.Do[mrcontextcommits.ListOutput](s, actionMergeRequestContextCommitsList, params)
-		if !slices.Contains(contextCommitIDs(listed), f.context.SHA) {
-			e.T.Errorf("the request's context commits do not hold %s: %v", f.context.ShortID, contextCommitIDs(listed))
+		if !slices.Contains(contextCommitIDs(listed.Commits), f.context.SHA) {
+			e.T.Errorf("the request's context commits do not hold %s: %v", f.context.ShortID, contextCommitIDs(listed.Commits))
 		}
+		assertCommitWithLinkKeys(e, pinned, listed, f.context.SHA)
 		harness.DoVoid(s, actionMergeRequestContextCommitsDelete, commits)
 		remaining := harness.Do[mrcontextcommits.ListOutput](s, actionMergeRequestContextCommitsList, params)
 		if len(remaining.Commits) != 0 {
-			e.T.Errorf("the request still lists %d context commit(s) after the unpin: %v", len(remaining.Commits), contextCommitIDs(remaining))
+			e.T.Errorf("the request still lists %d context commit(s) after the unpin: %v", len(remaining.Commits), contextCommitIDs(remaining.Commits))
 		}
 
 		todo := harness.Do[mergerequests.CreateTodoOutput](s, actionMergeRequestCreateTodo, params)
@@ -177,7 +214,7 @@ func TestMergeRequestContextCommits_List_PagesOneCommitAtATime(t *testing.T) {
 	}, func(e *harness.Env, surface harness.Surface, f mergeRequestFixture) {
 		assertPagesOneAtATime(e, e.On(surface), actionMergeRequestContextCommitsList, f.params(),
 			func(out mrcontextcommits.ListOutput) ([]string, toolutil.PaginationOutput) {
-				return contextCommitIDs(out), out.Pagination
+				return contextCommitIDs(out.Commits), out.Pagination
 			})
 	})
 }

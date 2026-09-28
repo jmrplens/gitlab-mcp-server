@@ -256,7 +256,32 @@ var declaredShapeFields = []shapeDeclaration{
 	// The two project-only keys of the label type the group labels share.
 	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "priority", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
 	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "is_project_label", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
+
+	// The keys the context commit list presents and its annotation does not
+	// name, named one by one: the rest of the type is judged against Commit,
+	// which is what the create route does present.
+	{Package: contextCommitsPkg, Type: "CommitItem", Field: "author", Category: categoryAnnotationNotPresented, Reason: reasonContextCommitWithLink},
+	{Package: contextCommitsPkg, Type: "CommitItem", Field: "author_gravatar_url", Category: categoryAnnotationNotPresented, Reason: reasonContextCommitWithLink},
+	{Package: contextCommitsPkg, Type: "CommitItem", Field: "description_html", Category: categoryAnnotationNotPresented, Reason: reasonContextCommitWithLink},
+	{Package: contextCommitsPkg, Type: "CommitItem", Field: "title_html", Category: categoryAnnotationNotPresented, Reason: reasonContextCommitWithLink},
 }
+
+// contextCommitsPkg is the package of the context commit row, spelled once
+// because each of its four keys is declared on its own.
+const contextCommitsPkg = toolsDir + "/mrcontextcommits"
+
+// reasonContextCommitWithLink answers the four keys of a context commit that
+// only the list sends.
+const reasonContextCommitWithLink = "lib/api/merge_requests.rb describes GET " +
+	"/projects/:id/merge_requests/:merge_request_iid/context_commits with `success Entities::Commit` and presents " +
+	"`with: Entities::CommitWithLink, type: :full, request: merge_request`. CommitWithLink " +
+	"(lib/api/entities/commit_with_link.rb) is Commit plus author (a UserPath), author_gravatar_url, commit_url and " +
+	"commit_path, and under type: :full description_html, title_html, signature_html, prev_commit_id, next_commit_id and " +
+	"pipeline_status_path; the record holds that entity with every one of those keys and the route under the annotated " +
+	"Commit, so the join holds this type against Commit. The POST at the same path presents Entities::Commit as annotated, " +
+	"so the fields are tagged omitempty and are absent from every row it filled rather than published empty. The keys not " +
+	"published are commit_url and commit_path, which say web_url again, and the four that are null on every commit of " +
+	"this route; mrcontextcommits.CommitItem says why each is null."
 
 // reasonAnalyticsGroupPath answers group_path on the three group counts.
 const reasonAnalyticsGroupPath = "the group_path the caller passed, echoed so the count says which group it counts: the " +
