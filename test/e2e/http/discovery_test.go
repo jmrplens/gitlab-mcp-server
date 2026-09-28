@@ -22,26 +22,43 @@ import (
 // https://host/mcp/server-card, because a public URL whose path is /mcp names
 // no prefix and the card was at /server-card alone. The public deployment
 // answered 404 at https://mcp.jmrp.io/gitlab/mcp/server-card for the same
-// reason, which is the card URL of its endpoint's /mcp form. Each row starts a
-// real binary with that --public-url and sends the request with the advertised
-// host in Host, since that is what arrives through the proxy the URL implies.
+// reason, which is the card URL of its endpoint's /mcp form, and that
+// deployment runs in oauth mode, so its row is repeated there: the bearer guard
+// wraps the endpoint the card sits after, and must not reach the card. A path
+// that only ends in /mcp is a prefix like any other, which the /gitlab/mcp row
+// holds. Each row starts a real binary with that --public-url and sends the
+// request with the advertised host in Host, since that is what arrives through
+// the proxy the URL implies.
 func TestServerCard_TheURLItAdvertisesServesTheCard(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 
 	tests := []struct {
+		name      string
 		publicURL string
+		authMode  string
 		// endpointForms are the other paths the MCP endpoint answers at under
 		// this URL, each of which has a card of its own by the same rule.
 		endpointForms []string
 	}{
-		{publicURL: "https://mcp.example.invalid", endpointForms: []string{"/mcp"}},
-		{publicURL: "https://mcp.example.invalid/mcp"},
-		{publicURL: "https://mcp.example.invalid/gitlab", endpointForms: []string{"/gitlab/mcp"}},
+		{name: "an origin", publicURL: "https://mcp.example.invalid", endpointForms: []string{"/mcp"}},
+		{name: "the endpoint at /mcp", publicURL: "https://mcp.example.invalid/mcp"},
+		{name: "a prefix", publicURL: "https://mcp.example.invalid/gitlab", endpointForms: []string{"/gitlab/mcp"}},
+		{name: "a prefix ending in /mcp", publicURL: "https://mcp.example.invalid/gitlab/mcp", endpointForms: []string{"/gitlab/mcp/mcp"}},
+		{
+			name:          "a prefix in oauth mode",
+			publicURL:     "https://mcp.example.invalid/gitlab",
+			authMode:      "oauth",
+			endpointForms: []string{"/gitlab/mcp"},
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.publicURL, func(t *testing.T) {
-			srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--public-url="+tt.publicURL)
+		t.Run(tt.name, func(t *testing.T) {
+			flags := []string{"--gitlab-url=" + gitlab.url, "--public-url=" + tt.publicURL}
+			if tt.authMode != "" {
+				flags = append(flags, "--auth-mode="+tt.authMode)
+			}
+			srv := startServer(t, nil, flags...)
 
 			root := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
 			if root.status != http.StatusOK {
@@ -56,6 +73,21 @@ func TestServerCard_TheURLItAdvertisesServesTheCard(t *testing.T) {
 				t.Run(endpoint+"/server-card", func(t *testing.T) {
 					assertCardServedAt(t, srv, advertised.Host, endpoint+"/server-card", root.body)
 				})
+			}
+
+			if tt.authMode == "oauth" {
+				// The guard is on the endpoint the card sits after, which is
+				// what makes the cards answering above worth anything.
+				got := srv.do(t, request{
+					method:  http.MethodPost,
+					path:    advertised.Path,
+					body:    toolsListBody,
+					headers: map[string]string{"Host": advertised.Host},
+				})
+				if got.status != http.StatusUnauthorized || !strings.HasPrefix(got.header.Get("WWW-Authenticate"), "Bearer") {
+					t.Errorf("POST %s without a token = %d with WWW-Authenticate %q, want 401 and a Bearer challenge",
+						advertised.Path, got.status, got.header.Get("WWW-Authenticate"))
+				}
 			}
 		})
 	}
@@ -87,7 +119,9 @@ func advertisedRemote(t *testing.T, card string) *url.URL {
 
 // assertCardServedAt fetches a card URL the way a client that followed the card
 // would, with the advertised host in Host and the card's media type in Accept,
-// and holds the answer to the card the root path serves.
+// and holds the answer to the card the root path serves and to what the
+// extension asks of any card response: readable from any origin, its validator
+// exposed to a script, cacheable, and no challenge.
 func assertCardServedAt(t *testing.T, srv *server, host, path, want string) {
 	t.Helper()
 
@@ -108,6 +142,21 @@ func assertCardServedAt(t *testing.T, srv *server, host, path, want string) {
 	}
 	if got.body != want {
 		t.Errorf("the card at %s differs from the one at /server-card", path)
+	}
+	if value := got.header.Get("Access-Control-Allow-Origin"); value != "*" {
+		t.Errorf("GET %s Access-Control-Allow-Origin = %q, want *", path, value)
+	}
+	if value := got.header.Get("Access-Control-Expose-Headers"); value != "ETag" {
+		t.Errorf("GET %s Access-Control-Expose-Headers = %q, want ETag", path, value)
+	}
+	if value := got.header.Get("Cache-Control"); value != "public, max-age=3600" {
+		t.Errorf("GET %s Cache-Control = %q, want public, max-age=3600", path, value)
+	}
+	if value := got.header.Get("WWW-Authenticate"); value != "" {
+		t.Errorf("GET %s WWW-Authenticate = %q, want none: the card is public", path, value)
+	}
+	if got.header.Get("ETag") == "" {
+		t.Errorf("GET %s carries no ETag", path)
 	}
 }
 

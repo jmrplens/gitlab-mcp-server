@@ -670,7 +670,7 @@ Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramienta
 
 ### Ficha del servidor
 
-Son dos documentos, en dos rutas, y ninguno necesita credenciales. No son el mismo documento.
+Son dos documentos, y ninguno necesita credenciales. No son el mismo documento.
 
 `GET /server-card` responde con la **ficha SEP-2127**: quién es este servidor y cómo conectarse. Identidad (`name`, `version`, `description`, `title`, `websiteUrl`, `repository`) y, cuando el despliegue declara `--public-url`, una entrada `remotes` con la cabecera de credencial que debe enviar el cliente. **No lleva herramientas, recursos, prompts ni capacidades**, y es una decisión de esa extensión: lo que un servidor expone varía según el usuario autenticado, la sesión, la configuración y los feature flags, así que un documento estático no puede responder a eso.
 
@@ -679,7 +679,7 @@ curl -s http://localhost:8080/server-card
 curl -s http://localhost:8080/mcp/server-card
 ```
 
-La respuesta lleva `Content-Type: application/mcp-server-card+json`. La extensión reserva `<streamable-http-url>/server-card`, un sufijo sobre la URL del endpoint y no sobre el host, y el endpoint MCP responde en la raíz y en `/mcp`, así que la ficha responde en `/server-card` y en `/mcp/server-card`. Un cliente configurado con `https://mcp.example.com/mcp` la encuentra en `https://mcp.example.com/mcp/server-card`, y `<--public-url>/server-card`, la URL que un cliente deduce del propio `remotes[0].url` de la ficha, es siempre una de las rutas servidas.
+La respuesta lleva `Content-Type: application/mcp-server-card+json`. La extensión reserva `<streamable-http-url>/server-card`, un sufijo sobre la URL del endpoint y no sobre el host, y el endpoint MCP responde en la raíz y en `/mcp`, así que la ficha responde en `/server-card` y en `/mcp/server-card`. Un cliente configurado con `https://mcp.example.com/mcp` la encuentra en `https://mcp.example.com/mcp/server-card`, y `<--public-url>/server-card`, la URL que un cliente deduce del propio `remotes[0].url` de la ficha, es siempre una de las rutas servidas, mientras `--public-url` no lleve query string: añadir el sufijo a una alarga la query en lugar de la ruta, así que publica el endpoint sin ella, como aconseja RFC 8707 para un identificador de recurso.
 
 `GET /.well-known/mcp/server-card.json` responde con el **documento SEP-1649 anterior**, que sí enumera: cada herramienta, recurso, plantilla de recurso y prompt que registra este despliegue, con sus esquemas, más las capacidades que anuncia y los bloques de autenticación, suscripciones y telemetría. Se sirve como `application/json`, y es lo que hay que pedir cuando quieres esa lista sin credencial.
 
@@ -687,7 +687,7 @@ La respuesta lleva `Content-Type: application/mcp-server-card+json`. La extensi�
 curl -s http://localhost:8080/.well-known/mcp/server-card.json
 ```
 
-Todas estas rutas se montan también bajo el prefijo de ruta de `--public-url`, para un proxy que reenvía su prefijo en lugar de quitarlo: con `--public-url=https://mcp.example.com/gitlab` la ficha SEP-2127 responde en `/server-card`, `/gitlab/server-card`, `/mcp/server-card` y `/gitlab/mcp/server-card`. Antes de la 3.1.0 las dos rutas respondían el documento enumerante y solo cambiaba el `Content-Type`, lo que dejaba la forma antigua en la ubicación que SEP-2127 reserva, y la ficha estaba solo en `/server-card`, así que un endpoint publicado como `https://mcp.example.com/mcp` respondía `404` en la URL de ficha que un cliente deduce de él.
+Todas estas rutas se montan también bajo el prefijo de ruta de `--public-url`, para un proxy que reenvía su prefijo en lugar de quitarlo: con `--public-url=https://mcp.example.com/gitlab` la ficha SEP-2127 responde en `/server-card`, `/gitlab/server-card`, `/mcp/server-card` y `/gitlab/mcp/server-card`, y el documento SEP-1649 y el health check en `/gitlab/.well-known/mcp/server-card.json` y `/gitlab/health` junto a sus rutas en la raíz. Una `--public-url` cuya ruta es exactamente `/mcp` nombra el endpoint y no un prefijo, así que no se monta nada bajo ella: la ficha responde en `/mcp/server-card` porque el endpoint responde en `/mcp`, mientras que `/health` y `/.well-known/mcp/server-card.json` siguen solo en la raíz, y un proxy que publica únicamente `/mcp` tiene que llevar esas dos a las rutas raíz del servidor si las expone. Una ruta que solo termina en `/mcp`, como `/gitlab/mcp`, es un prefijo como cualquier otro. Antes de la 3.1.0 las dos rutas respondían el documento enumerante y solo cambiaba el `Content-Type`, lo que dejaba la forma antigua en la ubicación que SEP-2127 reserva, y la ficha estaba solo en `/server-card`, así que un endpoint publicado como `https://mcp.example.com/mcp` respondía `404` en la URL de ficha que un cliente deduce de él.
 
 El documento enumerante es la vía sancionada para decirle a algo que no tiene credencial qué puede hacer el servidor: un directorio, un escáner, una compilación de documentación. `tools/list` sigue autenticado, porque la especificación de autorización de MCP exige que un servidor que requiere autorización valide el token antes de procesar la petición.
 
@@ -707,7 +707,7 @@ Importa sobre todo en el documento enumerante, que ronda los 137 KB en la superf
 El tag es un hash de los propios bytes del documento y no lleva nada del proceso, así que las réplicas que sirven la misma configuración publican el mismo. Un cliente que revalida contra una réplica distinta de la que le respondió la primera vez recibe igualmente un 304. No hay que configurar nada para eso, y nada por delante debería sustituir el tag por un valor propio de cada instancia.
 </Aside>
 
-Una CDN puede cachear las tres rutas apoyándose en esas cabeceras. Lo que no debe cachear es `/mcp`, que es un `POST` con credencial y lleva `Cache-Control: no-store`, ni `/health`, cuyo cuerpo cambia en cada sonda.
+Una CDN puede cachear las fichas y el documento RFC 9728 apoyándose en esas cabeceras. Lo que no debe cachear es `/mcp`, que es un `POST` con credencial y lleva `Cache-Control: no-store`, ni `/health`, cuyo cuerpo cambia en cada sonda.
 
 ### Publicar un AI Catalog
 
@@ -731,8 +731,8 @@ La entrada de este servidor tiene tres miembros:
 ```
 
 - **`url` es `<--public-url>/server-card`**, la misma URL que un cliente deduce del propio `remotes[0].url` de la ficha, y el servidor la responde con el tipo de medio propio de la ficha.
-- **`identifier`** sigue la forma `urn:air:{publisher}:{namespace}:{name}` que la especificación del catálogo exige en sistemas abiertos, con tu propio dominio como publicador.
-- **Sin `displayName` ni `description`.** La ficha ya lleva `title` y `description`, y la especificación del catálogo dice que una entrada que apunta a un artefacto que se nombra a sí mismo debe omitir ambos: una copia en el catálogo se desfasa de la ficha en la siguiente actualización, y cuando está presente prevalece sobre la de la ficha.
+- **`identifier`** sigue la forma `urn:air:{publisher}:{namespace}:{name}` que la especificación del catálogo exige en sistemas abiertos, donde `{publisher}` es "el nombre de dominio de la organización que publica el artefacto". El artefacto que lista esta entrada es la ficha de tu despliegue en su URL, que publicas tú, así que el publicador es tu dominio y no el de este proyecto. El propio ejemplo de la extensión de fichas de servidor lo deduce en cambio del `name` de la ficha (`com.example/weather` pasa a ser `urn:air:example.com:mcp:weather`); para esta ficha eso nombraría al proyecto, que publica el software y no tu despliegue, y dos despliegues que lo siguieran listarían el mismo identificador para dos endpoints distintos.
+- **Sin `displayName` ni `description`.** La ficha ya lleva `title` y `description`, y la especificación del catálogo dice que una entrada que apunta a un artefacto que se nombra a sí mismo debería omitir ambos: una copia en el catálogo se desfasa de la ficha en la siguiente actualización, y cuando está presente prevalece sobre la de la ficha.
 
 Sirve el fichero desde el proxy con su propio tipo de medio. En nginx eso necesita `types { }` además de `default_type`: nginx elige el tipo por la extensión del fichero primero, `mime.types` asocia `.json` a `application/json`, y `default_type` por sí solo nunca llega a aplicarse.
 

@@ -10,7 +10,7 @@ faq:
   - q: "¿Necesito un proxy inverso?"
     a: "No. El binario responde sus propios preflight de CORS, sus propios 404, sus propias cabeceras de seguridad, y termina TLS con `--tls-cert` y `--tls-key`. Cuando el proxy comparte máquina, `--http-addr=/run/gitlab-mcp/server.sock` elimina el salto en lugar de cifrarlo. Un proxy se gana su sitio por la renovación de certificados sin reinicio, por alojar otros servicios en el mismo nombre y por balancear varias instancias."
   - q: "Mis clientes OAuth reciben un 404 durante el descubrimiento. ¿Qué falla?"
-    a: "Casi seguro que el proxy solo enruta el prefijo de ruta. El documento de metadatos RFC 9728 vive en la **raíz del host**, no bajo la ruta de `--public-url`: arrancado con `--public-url=https://mcp.example.com/gitlab`, el servidor lo sirve en `/.well-known/oauth-protected-resource/gitlab` y responde 404 a `/gitlab/.well-known/oauth-protected-resource/gitlab`. `/health` y la tarjeta del servidor *sí* se montan además bajo el prefijo; los metadatos OAuth no. Enruta `/.well-known/oauth-protected-resource` al mismo upstream sin reescribirla."
+    a: "Casi seguro que el proxy solo enruta el prefijo de ruta. El documento de metadatos RFC 9728 vive en la **raíz del host**, no bajo la ruta de `--public-url`: arrancado con `--public-url=https://mcp.example.com/gitlab`, el servidor lo sirve en `/.well-known/oauth-protected-resource/gitlab` y responde 404 a `/gitlab/.well-known/oauth-protected-resource/gitlab`. `/health` y la ficha del servidor *sí* se montan además bajo el prefijo; los metadatos OAuth no. Enruta `/.well-known/oauth-protected-resource` al mismo upstream sin reescribirla."
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -409,17 +409,18 @@ responde:
 | `/gitlab/.well-known/oauth-protected-resource/gitlab` | `404`     |
 | `/.well-known/ai-catalog.json`                        | `404`     |
 
-`/health` y la tarjeta del servidor se montan bajo el prefijo además de en la
-raíz, y la tarjeta también tras la forma `/mcp` del endpoint, porque la
-extensión de tarjetas de servidor añade su sufijo a la URL del endpoint y no al
-host. El AI Catalog no le corresponde al servidor: lista lo que publica el host
-entero, y un despliegue que quiera uno lo sirve desde el proxy (consulta
+`/health` y la ficha del servidor se montan bajo el prefijo además de en la
+raíz, y la ficha también tras la forma `/mcp` del endpoint, porque la extensión
+de fichas de servidor añade su sufijo a la URL del endpoint y no al host. El AI
+Catalog no le corresponde al servidor: lista lo que publica el host entero, y
+un despliegue que quiera uno lo sirve desde el proxy (consulta
 [Publicar un AI Catalog](/gitlab-mcp-server/es/operations/http-server/#publicar-un-ai-catalog)).
-Los metadatos OAuth no se montan bajo el prefijo, y el desafío `401` apunta a la forma derivada. La
-forma escueta tampoco se sirve: es el documento del recurso que _es_ el origen,
-y un servidor que vive bajo una ruta no lo es. Un proxy que solo enruta
-`/gitlab` responde `404` al documento que todo cliente OAuth pide primero, y el
-descubrimiento falla antes de llegar siquiera al endpoint MCP.
+Los metadatos OAuth no se montan bajo el prefijo, y el desafío `401` apunta a
+la forma derivada. La forma escueta tampoco se sirve: es el documento del
+recurso que _es_ el origen, y un servidor que vive bajo una ruta no lo es. Un
+proxy que solo enruta `/gitlab` responde `404` al documento que todo cliente
+OAuth pide primero, y el descubrimiento falla antes de llegar siquiera al
+endpoint MCP.
 
 :::
 

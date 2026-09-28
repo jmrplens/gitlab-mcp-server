@@ -65,17 +65,18 @@ want to read.
 
 ## What the endpoint is
 
-| Property        | Value                                                                                                                                                                      |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| URL             | `https://mcp.jmrp.io/gitlab`                                                                                                                                               |
-| Transport       | Stateless streamable HTTP. `POST` is the transport; an authenticated `GET` or `DELETE` answers `405` by design.                                                            |
-| Tool surface    | The default `dynamic` surface: `gitlab_find_action` and `gitlab_execute_action`, reaching every catalog action by its canonical id.                                        |
-| Authentication  | OAuth mode. `Authorization: Bearer` per request, verified against GitLab.com, never stored server-side.                                                                    |
-| Health          | `GET https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",...}`.                                                                  |
-| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/): the whole catalog and per-client configuration, unauthenticated.                             |
-| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card`, unauthenticated: the SEP-2127 card, identity and how to connect, no tools. It is the `url` an AI Catalog entry points at.    |
-| SEP-1649 card   | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource.                |
-| Directory       | [mcp.jmrp.io](https://mcp.jmrp.io/) lists the MCP servers the author maintains; [`servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients. |
+| Property        | Value                                                                                                                                                                               |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| URL             | `https://mcp.jmrp.io/gitlab`                                                                                                                                                        |
+| Transport       | Stateless streamable HTTP. `POST` is the transport; an authenticated `GET` or `DELETE` answers `405` by design.                                                                     |
+| Tool surface    | The default `dynamic` surface: `gitlab_find_action` and `gitlab_execute_action`, reaching every catalog action by its canonical id.                                                 |
+| Authentication  | OAuth mode. `Authorization: Bearer` per request, verified against GitLab.com, never stored server-side.                                                                             |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",...}`.                                                                           |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/): the whole catalog and per-client configuration, unauthenticated.                                      |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card`, unauthenticated: the SEP-2127 card, identity and how to connect, no tools. It is the `url` an AI Catalog entry points at.             |
+| SEP-1649 card   | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource.                         |
+| AI Catalog      | `GET https://mcp.jmrp.io/.well-known/ai-catalog.json`, served by the host rather than the server: it lists this server as `urn:air:jmrp.io:mcp:gitlab`, pointing at the card above. |
+| Directory       | [mcp.jmrp.io](https://mcp.jmrp.io/) lists the MCP servers the author maintains; [`servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.          |
 
 A bare `curl` that gets `401` is the endpoint working, not failing. The
 health URL is the one to probe when you want a `200`.

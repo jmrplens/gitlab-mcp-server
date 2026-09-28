@@ -31,10 +31,10 @@ import (
 //	/.well-known/mcp/server-card.json     the enumerating SEP-1649 document
 //	/.well-known/ai-catalog.json          nothing: the catch-all's 404
 //
-// Each of the first three is mounted under --public-url's path prefix as
-// well. The SEP-2127 card is at two paths because the extension reserves
-// `<streamable-http-url>/server-card`, and the endpoint answers at the root
-// and at /mcp. The AI Catalog that would list it belongs to the deployment
+// The three paths above the catalog are each mounted under --public-url's
+// path prefix as well. The SEP-2127 card is at two paths because the
+// extension reserves `<streamable-http-url>/server-card`, and the endpoint
+// answers at the root and at /mcp. The AI Catalog that would list it belongs to the deployment
 // rather than the binary: it describes everything a host publishes, which is
 // something only whoever runs the host knows.
 //

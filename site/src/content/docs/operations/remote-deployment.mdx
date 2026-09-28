@@ -406,11 +406,12 @@ extension appends its suffix to the endpoint's URL rather than to the host. The
 AI Catalog is not the server's to answer: it lists what the whole host
 publishes, and a deployment that wants one serves it from the proxy (see
 [Publishing an AI Catalog](/gitlab-mcp-server/operations/http-server/#publishing-an-ai-catalog)).
-The OAuth metadata is not mounted under the prefix, and the `401` challenge points at the derived
-form. The path-less form is not served either: it is the document of the
-resource that _is_ the origin, which a server living under a path is not. A proxy that routes only `/gitlab` answers `404` for the document every
-OAuth client fetches first, and discovery fails before the MCP endpoint is ever
-reached.
+The OAuth metadata is not mounted under the prefix, and the `401` challenge
+points at the derived form. The path-less form is not served either: it is the
+document of the resource that _is_ the origin, which a server living under a
+path is not. A proxy that routes only `/gitlab` answers `404` for the document
+every OAuth client fetches first, and discovery fails before the MCP endpoint is
+ever reached.
 
 :::
 

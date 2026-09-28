@@ -671,7 +671,7 @@ A successful response returns a JSON-RPC result with the list of available tools
 
 ### Server card
 
-Two documents, at two paths, and neither needs a credential. They are not the same document.
+Two documents, and neither needs a credential. They are not the same document.
 
 `GET /server-card` answers the **SEP-2127 Server Card**: who this server is and how to connect to it. Identity (`name`, `version`, `description`, `title`, `websiteUrl`, `repository`) and, when the deployment names a `--public-url`, a `remotes` entry with the credential header a client must send. It carries **no tools, resources, prompts or capabilities**, which is that extension's own decision: what a server exposes varies by authenticated user, session, configuration and feature flags, so a static document cannot answer it.
 
@@ -680,7 +680,7 @@ curl -s http://localhost:8080/server-card
 curl -s http://localhost:8080/mcp/server-card
 ```
 
-The response carries `Content-Type: application/mcp-server-card+json`. The extension reserves `<streamable-http-url>/server-card`, a suffix on the endpoint's URL rather than on the host, and the MCP endpoint answers at the root and at `/mcp`, so the card answers at `/server-card` and at `/mcp/server-card`. A client configured with `https://mcp.example.com/mcp` finds it at `https://mcp.example.com/mcp/server-card`, and `<--public-url>/server-card`, the URL a client derives from the card's own `remotes[0].url`, is always one of the paths served.
+The response carries `Content-Type: application/mcp-server-card+json`. The extension reserves `<streamable-http-url>/server-card`, a suffix on the endpoint's URL rather than on the host, and the MCP endpoint answers at the root and at `/mcp`, so the card answers at `/server-card` and at `/mcp/server-card`. A client configured with `https://mcp.example.com/mcp` finds it at `https://mcp.example.com/mcp/server-card`, and `<--public-url>/server-card`, the URL a client derives from the card's own `remotes[0].url`, is always one of the paths served, as long as `--public-url` carries no query string: appending the suffix to one extends the query rather than the path, so publish the endpoint without one, as RFC 8707 advises for a resource identifier.
 
 `GET /.well-known/mcp/server-card.json` answers the **earlier SEP-1649 document**, which does enumerate: every tool, resource, resource template and prompt this deployment registers, with its schemas, plus the capabilities it advertises and blocks describing authentication, subscriptions and telemetry. It is served as `application/json`, and it is what to fetch when you want that list without a credential.
 
@@ -688,7 +688,7 @@ The response carries `Content-Type: application/mcp-server-card+json`. The exten
 curl -s http://localhost:8080/.well-known/mcp/server-card.json
 ```
 
-Every one of these paths is mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it: with `--public-url=https://mcp.example.com/gitlab` the SEP-2127 card answers at `/server-card`, `/gitlab/server-card`, `/mcp/server-card` and `/gitlab/mcp/server-card`. Before 3.1.0 both paths answered the enumerating document and differed only in `Content-Type`, which left the older shape at the location SEP-2127 reserves, and the card was at `/server-card` alone, so an endpoint published as `https://mcp.example.com/mcp` answered `404` at the card URL a client derives from it.
+Every one of these paths is mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it: with `--public-url=https://mcp.example.com/gitlab` the SEP-2127 card answers at `/server-card`, `/gitlab/server-card`, `/mcp/server-card` and `/gitlab/mcp/server-card`, and the SEP-1649 document and the health check at `/gitlab/.well-known/mcp/server-card.json` and `/gitlab/health` beside their root paths. A `--public-url` whose path is exactly `/mcp` names the endpoint rather than a prefix, so nothing is mounted under it: the card answers at `/mcp/server-card` because the endpoint answers at `/mcp`, while `/health` and `/.well-known/mcp/server-card.json` stay at the root only, and a proxy that publishes nothing but `/mcp` has to route those two to the server's root paths if it exposes them. A path that only ends in `/mcp`, such as `/gitlab/mcp`, is a prefix like any other. Before 3.1.0 both paths answered the enumerating document and differed only in `Content-Type`, which left the older shape at the location SEP-2127 reserves, and the card was at `/server-card` alone, so an endpoint published as `https://mcp.example.com/mcp` answered `404` at the card URL a client derives from it.
 
 The enumerating document is the sanctioned way to tell something holding no credential what the server can do: a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request.
 
@@ -708,7 +708,7 @@ It matters most for the enumerating document, which is around 137 KB on the defa
 The tag is a hash of the document's own bytes and carries nothing about the process, so replicas serving the same configuration publish the same one. A client that revalidates against a different replica than the one that answered it first is still told 304. Nothing needs configuring for that, and nothing in front should replace the tag with a per-instance value.
 </Aside>
 
-A CDN can cache all three routes on the strength of those headers. It must not cache `/mcp`, which is a credentialed `POST` carrying `Cache-Control: no-store`, nor `/health`, whose body changes on every probe.
+A CDN can cache the cards and the RFC 9728 document on the strength of those headers. It must not cache `/mcp`, which is a credentialed `POST` carrying `Cache-Control: no-store`, nor `/health`, whose body changes on every probe.
 
 ### Publishing an AI Catalog
 
@@ -732,7 +732,7 @@ The entry for this server is three members:
 ```
 
 - **`url` is `<--public-url>/server-card`**, the same URL a client derives from the card's own `remotes[0].url`, and the server answers it with the card's own media type.
-- **`identifier`** follows the `urn:air:{publisher}:{namespace}:{name}` form the catalog specification requires for open systems, with your own domain as the publisher.
+- **`identifier`** follows the `urn:air:{publisher}:{namespace}:{name}` form the catalog specification requires for open systems, where `{publisher}` is "the domain name of the organization publishing the artifact". The artifact this entry lists is your deployment's card at its URL, which you publish, so the publisher is your domain rather than this project's. The server-card extension's own example derives it from the card's `name` instead (`com.example/weather` becomes `urn:air:example.com:mcp:weather`); for this card that would name the project, which publishes the software and not your deployment of it, and two deployments following it would list the same identifier for two different endpoints.
 - **No `displayName` and no `description`.** The card carries `title` and `description` itself, and the catalog specification says an entry pointing at an artifact that names itself should omit both: a copy in the catalog drifts out of step with the card at the next upgrade, and when present it wins over the card's.
 
 Serve the file from the proxy under its own media type. With nginx that needs `types { }` as well as `default_type`: nginx picks the type from the file's extension first, `mime.types` maps `.json` to `application/json`, and `default_type` alone is never reached.

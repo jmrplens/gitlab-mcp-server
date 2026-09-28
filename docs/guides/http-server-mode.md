@@ -1099,8 +1099,8 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ### Server Card
 
-Two documents, at two paths, and neither needs a credential. They are not the
-same document, and which one you want depends on the question you are asking.
+Two documents, and neither needs a credential. They are not the same document,
+and which one you want depends on the question you are asking.
 
 `GET /server-card` answers the **SEP-2127 Server Card**: who this server is and
 how to connect to it. Identity (`name`, `version`, `description`, `title`,
@@ -1122,9 +1122,12 @@ The extension reserves `<streamable-http-url>/server-card`: the suffix goes on
 the endpoint's URL, not on the host. The MCP endpoint answers at the root and
 at `/mcp`, so the card answers at `/server-card` and at `/mcp/server-card`, and
 a client configured with `https://mcp.example.com/mcp` finds it at
-`https://mcp.example.com/mcp/server-card` without being told. Whatever
+`https://mcp.example.com/mcp/server-card` without being told. Whatever path
 `--public-url` names, `<--public-url>/server-card` is one of those paths, which
-is the URL a client derives from the card's own `remotes[0].url`.
+is the URL a client derives from the card's own `remotes[0].url`. A
+`--public-url` carrying a query string is the exception, because appending the
+suffix extends the query rather than the path; publish the endpoint without
+one, as RFC 8707 advises for a resource identifier.
 
 `GET /.well-known/mcp/server-card.json` answers the **earlier SEP-1649
 document**, which does enumerate: every tool, resource, resource template and
@@ -1148,13 +1151,21 @@ Every one of these paths is mounted under `--public-url`'s path prefix as well,
 for a proxy that forwards its prefix rather than stripping it: started with
 `--public-url=https://mcp.example.com/gitlab`, the SEP-2127 card answers at
 `/server-card`, `/gitlab/server-card`, `/mcp/server-card` and
-`/gitlab/mcp/server-card`. Before 3.1.0 both documents answered the enumerating
-one and differed only in `Content-Type`, which left the older shape at the
-location SEP-2127 reserves; a deployment that wanted to be conformant had to
-shadow `/server-card` with a static file in its proxy, and that workaround can
-now be removed. The card was also mounted at `/server-card` alone, so an
-endpoint published as `https://mcp.example.com/mcp` answered `404` at the one
-card URL a client would derive from it.
+`/gitlab/mcp/server-card`, and the SEP-1649 document at
+`/gitlab/.well-known/mcp/server-card.json` beside its root path, as the health
+check is at `/gitlab/health`. A `--public-url` whose path is exactly `/mcp`
+names the endpoint rather than a prefix, so nothing is mounted under it: the
+card answers at `/mcp/server-card` because the endpoint answers at `/mcp`, while
+`/health` and `/.well-known/mcp/server-card.json` stay at the root only, and a
+proxy that publishes nothing but `/mcp` has to route those two to the server's
+root paths if it exposes them. A path that only ends in `/mcp`, such as
+`/gitlab/mcp`, is a prefix like any other. Before 3.1.0 both paths answered the
+enumerating document and differed only in `Content-Type`, which left the older
+shape at the location SEP-2127 reserves; a deployment that wanted to be
+conformant had to shadow `/server-card` with a static file in its proxy, and
+that workaround can now be removed. The card was also mounted at `/server-card`
+alone, so an endpoint published as `https://mcp.example.com/mcp` answered `404`
+at the one card URL a client would derive from it.
 
 ### Caching the cards
 
@@ -1191,8 +1202,8 @@ it first is still told 304. Nothing has to be configured for that to hold, and
 nothing should be added in front that replaces the tag with a per-instance
 value.
 
-A CDN in front of the deployment can cache all three routes on the strength of
-those headers. It must not cache `/mcp` itself, which is a credentialed
+A CDN in front of the deployment can cache the cards and the RFC 9728 document
+on the strength of those headers. It must not cache `/mcp` itself, which is a credentialed
 `POST` and carries `Cache-Control: no-store`, nor `/health`, whose body changes
 on every probe.
 
@@ -1236,8 +1247,15 @@ The entry for this server is three members:
   the card's own `remotes[0].url`, and the server answers it with the card's own
   media type.
 - **`identifier`** follows the `urn:air:{publisher}:{namespace}:{name}` form the
-  catalog specification requires for open systems: `{publisher}` is the domain of
-  whoever publishes the catalog, which is you rather than this project.
+  catalog specification requires for open systems, where `{publisher}` is "the
+  domain name of the organization publishing the artifact". The artifact this
+  entry lists is your deployment's card at its URL, which you publish, so
+  `{publisher}` is your domain rather than this project's. The server-card
+  extension's own example derives the publisher from the card's `name` instead
+  (`com.example/weather` becomes `urn:air:example.com:mcp:weather`); for this
+  card that would name the project, which publishes the software and not your
+  deployment of it, and two deployments following it would list the same
+  identifier for two different endpoints.
 - **No `displayName` and no `description`.** The card carries `title` and
   `description` itself, and the catalog specification says an entry pointing at an
   artifact that names itself should omit both: a copy in the catalog is a second

@@ -7892,12 +7892,22 @@ func TestServeHTTP_DiscoveryCard_IsServedFromTheReservedPath(t *testing.T) {
 // (ServeMux panics at startup, which the /mcp row exists to rule out), or a
 // preflight left on the old path only. Every form answers the same document
 // under the same validator, so a client revalidating at one form with a tag
-// another form gave it is told 304.
+// another form gave it is told 304, and every form carries what the extension
+// asks of a card response wherever it is served: readable from any origin,
+// with its validator exposed to a script, cacheable, and never behind a
+// challenge.
+//
+// The oauth row is the deployment #533 was filed from: published under a
+// prefix, in oauth mode, where the bearer guard wraps the MCP endpoint's own
+// patterns. The card paths sit beside those patterns rather than under the
+// guard, so none of them may answer 401, and the AI Catalog path answers the
+// same unauthenticated 404 there as in legacy mode.
 func TestServeHTTP_DiscoveryCard_AnswersAtEveryFormOfTheEndpointURL(t *testing.T) {
 	mockGL := newMockGitLabServer(t)
 
 	tests := []struct {
 		name      string
+		authMode  string
 		publicURL string
 		paths     []string
 	}{
@@ -7909,28 +7919,34 @@ func TestServeHTTP_DiscoveryCard_AnswersAtEveryFormOfTheEndpointURL(t *testing.T
 			publicURL: "https://mcp.example.com/gitlab",
 			paths:     []string{"/server-card", "/gitlab/server-card", "/mcp/server-card", "/gitlab/mcp/server-card"},
 		},
+		{
+			name:      "an endpoint published under a prefix that ends in /mcp",
+			publicURL: "https://mcp.example.com/gitlab/mcp",
+			paths:     []string{"/server-card", "/gitlab/mcp/server-card", "/mcp/server-card", "/gitlab/mcp/mcp/server-card"},
+		},
+		{
+			name:      "oauth mode under a prefix",
+			authMode:  "oauth",
+			publicURL: "https://mcp.example.com/gitlab",
+			paths:     []string{"/server-card", "/gitlab/server-card", "/mcp/server-card", "/gitlab/mcp/server-card"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := statelessTestConfig(mockGL.URL, false)
 			cfg.PublicURL = tt.publicURL
+			if tt.authMode != "" {
+				cfg.AuthMode = tt.authMode
+				cfg.OAuthCacheTTL = config.DefaultOAuthCacheTTL
+			}
 			addr, shutdown := startStatelessServeHTTP(t, cfg)
 			defer shutdown()
 
 			var document []byte
 			for _, path := range tt.paths {
 				t.Run(path, func(t *testing.T) {
-					body, status, header := getDiscoveryCardAt(t, addr, path)
-					if status != http.StatusOK {
-						t.Fatalf("GET %s = %d, want 200: %s", path, status, body)
-					}
-					if got := header.Get(hdrContentType); got != mimeServerCard {
-						t.Errorf("Content-Type = %q, want %q", got, mimeServerCard)
-					}
-					if got, want := header.Get(hdrETag), entityTagFor(body); got != want {
-						t.Errorf("ETag = %q, want %q", got, want)
-					}
+					body := assertDiscoveryCardServed(t, addr, path)
 					if document == nil {
 						document = body
 					} else if !bytes.Equal(body, document) {
@@ -7940,7 +7956,85 @@ func TestServeHTTP_DiscoveryCard_AnswersAtEveryFormOfTheEndpointURL(t *testing.T
 					assertCardPreflight(t, "http://"+addr+path)
 				})
 			}
+
+			assertAICatalogNotServed(t, addr)
+			if tt.authMode == "oauth" {
+				// The guard is there, on the endpoint beside the card: a
+				// row whose cards answered only because oauth mode never
+				// engaged would prove nothing about the guard.
+				assertBearerChallengeAt(t, addr, "/gitlab/mcp")
+			}
 		})
+	}
+}
+
+// assertDiscoveryCardServed fetches the SEP-2127 card at path and holds the
+// response to what the extension asks of a card wherever it is served: 200
+// under the card's media type with a validator for exactly those bytes,
+// readable from any origin, the validator exposed to a script, cacheable, and
+// no challenge. It returns the body so the caller can compare the forms.
+func assertDiscoveryCardServed(t *testing.T, addr, path string) []byte {
+	t.Helper()
+	body, status, header := getDiscoveryCardAt(t, addr, path)
+	if status != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200: %s", path, status, body)
+	}
+	if got := header.Get(hdrContentType); got != mimeServerCard {
+		t.Errorf("GET %s Content-Type = %q, want %q", path, got, mimeServerCard)
+	}
+	if got, want := header.Get(hdrETag), entityTagFor(body); got != want {
+		t.Errorf("GET %s ETag = %q, want %q", path, got, want)
+	}
+	if got := header.Get(headerAllowOrigin); got != "*" {
+		t.Errorf("GET %s %s = %q, want *", path, headerAllowOrigin, got)
+	}
+	if got := header.Get(headerExposeHeaders); got != hdrETag {
+		t.Errorf("GET %s %s = %q, want %q so a script can read the validator", path, headerExposeHeaders, got, hdrETag)
+	}
+	if got := header.Get(hdrCacheControl); got != cacheControlPublic1h {
+		t.Errorf("GET %s %s = %q, want %q", path, hdrCacheControl, got, cacheControlPublic1h)
+	}
+	if got := header.Get("WWW-Authenticate"); got != "" {
+		t.Errorf("GET %s WWW-Authenticate = %q, want none: the card is public in every auth mode", path, got)
+	}
+	return body
+}
+
+// assertAICatalogNotServed holds /.well-known/ai-catalog.json to the
+// catch-all's unauthenticated 404: the catalog lists what a whole host
+// publishes, so it belongs to the deployment rather than this process.
+func assertAICatalogNotServed(t *testing.T, addr string) {
+	t.Helper()
+	body, status, header := getDiscoveryCardAt(t, addr, "/.well-known/ai-catalog.json")
+	if status != http.StatusNotFound {
+		t.Errorf("GET /.well-known/ai-catalog.json = %d, want 404: the catalog belongs to the deployment: %s", status, body)
+	}
+	if got := header.Get("WWW-Authenticate"); got != "" {
+		t.Errorf("the AI Catalog 404 carries WWW-Authenticate %q, want none", got)
+	}
+}
+
+// assertBearerChallengeAt posts an unauthenticated MCP request to path and
+// expects the bearer guard's 401 with its challenge.
+func assertBearerChallengeAt(t *testing.T, addr, path string) {
+	t.Helper()
+	req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+path,
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	if reqErr != nil {
+		t.Fatalf("build the endpoint request: %v", reqErr)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	resp, doErr := testHTTPClient.Do(req)
+	if doErr != nil {
+		t.Fatalf("POST %s: %v", path, doErr)
+	}
+	readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("POST %s without a token = %d, want 401", path, resp.StatusCode)
+	}
+	if got := resp.Header.Get("WWW-Authenticate"); !strings.HasPrefix(got, "Bearer") {
+		t.Errorf("POST %s WWW-Authenticate = %q, want a Bearer challenge", path, got)
 	}
 }
 
@@ -11044,9 +11138,11 @@ func TestCreateServer_ClientCompatKillSwitch(t *testing.T) {
 //
 // Such a deployment reaches this server at /prefix/health rather than /health,
 // and mounting only the bare paths left it answering 404 for its own health
-// check, server card and RFC 9728 document — the three things an operator and a
-// scanner reach for first. The prefix is not new configuration: --public-url
-// already states the path the deployment is published under.
+// check and server card, the things an operator and a scanner reach for first.
+// The prefix is not new configuration: --public-url already states the path
+// the deployment is published under. A path that is exactly /mcp names the
+// endpoint rather than a prefix; one that only ends in /mcp is a prefix like
+// any other.
 func TestPublicPaths_MountEveryPublicRouteUnderTheForwardedPrefix(t *testing.T) {
 	t.Parallel()
 
@@ -11064,6 +11160,11 @@ func TestPublicPaths_MountEveryPublicRouteUnderTheForwardedPrefix(t *testing.T) 
 			name:      "a path prefix is mounted alongside the bare path",
 			publicURL: "https://mcp.example.com/gitlab",
 			want:      []string{"/health", "/gitlab/health"},
+		},
+		{
+			name:      "a prefix that ends in /mcp is still a prefix",
+			publicURL: "https://mcp.example.com/gitlab/mcp",
+			want:      []string{"/health", "/gitlab/mcp/health"},
 		},
 	}
 
@@ -11089,9 +11190,17 @@ func TestPublicPaths_MountEveryPublicRouteUnderTheForwardedPrefix(t *testing.T) 
 // at each of those plus the suffix. The row that motivated it is a deployment
 // published as https://host/mcp: its card URL is https://host/mcp/server-card,
 // and while the card was mounted at /server-card alone that answered 404,
-// because a public URL whose path is /mcp names no prefix. The last column is
-// the card URL a client derives from the card's own `remotes[0].url`, which
-// has to be one of the mounted paths or the card points at a 404.
+// because a public URL whose path is exactly /mcp names no prefix. A path that
+// only ends in /mcp is a prefix like any other, and its row is where that rule
+// and the prefix rule meet.
+//
+// Each row also renders the card for its configuration and derives the card
+// URL a client would from the card's own `remotes[0].url`, by appending the
+// suffix, and holds that path to be one of the mounted ones: a card that points
+// at a 404 is the defect this exists to prevent, and a column typed by hand
+// would only restate the expectation. With no --public-url the card carries no
+// remote, which the row holds too, since a client then has only the URL it
+// already connected to.
 func TestPublicPaths_TheServerCardFollowsEveryFormOfTheEndpoint(t *testing.T) {
 	t.Parallel()
 
@@ -11099,30 +11208,30 @@ func TestPublicPaths_TheServerCardFollowsEveryFormOfTheEndpoint(t *testing.T) {
 		name      string
 		publicURL string
 		want      []string
-		derived   string
 	}{
 		{
-			name:    "no public url",
-			want:    []string{"/server-card", "/mcp/server-card"},
-			derived: "/server-card",
+			name: "no public url",
+			want: []string{"/server-card", "/mcp/server-card"},
 		},
 		{
 			name:      "an origin with no path",
 			publicURL: "https://mcp.example.com",
 			want:      []string{"/server-card", "/mcp/server-card"},
-			derived:   "/server-card",
 		},
 		{
 			name:      "an endpoint published at /mcp",
 			publicURL: "https://mcp.example.com/mcp",
 			want:      []string{"/server-card", "/mcp/server-card"},
-			derived:   "/mcp/server-card",
 		},
 		{
 			name:      "an endpoint published under a prefix",
 			publicURL: "https://mcp.example.com/gitlab",
 			want:      []string{"/server-card", "/gitlab/server-card", "/mcp/server-card", "/gitlab/mcp/server-card"},
-			derived:   "/gitlab/server-card",
+		},
+		{
+			name:      "an endpoint published under a prefix that ends in /mcp",
+			publicURL: "https://mcp.example.com/gitlab/mcp",
+			want:      []string{"/server-card", "/gitlab/mcp/server-card", "/mcp/server-card", "/gitlab/mcp/mcp/server-card"},
 		},
 	}
 
@@ -11130,16 +11239,54 @@ func TestPublicPaths_TheServerCardFollowsEveryFormOfTheEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := publicPaths(&config.Config{PublicURL: tt.publicURL}, serverCardPath, mcpEndpointPath+serverCardPath)
+			cfg := &config.Config{PublicURL: tt.publicURL}
+			got := publicPaths(cfg, serverCardPath, mcpEndpointPath+serverCardPath)
 
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("publicPaths = %v, want %v", got, tt.want)
 			}
-			if !slices.Contains(got, tt.derived) {
-				t.Errorf("the card URL a client derives from remotes[0].url, %s, is not among %v", tt.derived, got)
+
+			derived, advertised := derivedCardPath(t, cfg)
+			if advertised != (tt.publicURL != "") {
+				t.Fatalf("the card advertises a remote: %v, want %v for --public-url %q", advertised, tt.publicURL != "", tt.publicURL)
+			}
+			if advertised && !slices.Contains(got, derived) {
+				t.Errorf("the card URL a client derives from remotes[0].url, %s, is not among %v", derived, got)
 			}
 		})
 	}
+}
+
+// derivedCardPath renders the SEP-2127 card for cfg and returns the path of the
+// card URL a client derives from it: the card's own `remotes[0].url` with the
+// suffix the extension reserves appended. The second result is false when the
+// card advertises no remote, which is the deployment with no --public-url.
+func derivedCardPath(t *testing.T, cfg *config.Config) (string, bool) {
+	t.Helper()
+	body, err := buildDiscoveryCard(cfg)
+	if err != nil {
+		t.Fatalf("buildDiscoveryCard: %v", err)
+	}
+	var card struct {
+		Remotes []struct {
+			URL string `json:"url"`
+		} `json:"remotes"`
+	}
+	if err = json.Unmarshal(body, &card); err != nil {
+		t.Fatalf("decoding the card: %v", err)
+	}
+	switch len(card.Remotes) {
+	case 0:
+		return "", false
+	case 1:
+	default:
+		t.Fatalf("remotes = %+v, want at most one", card.Remotes)
+	}
+	derived, err := url.Parse(card.Remotes[0].URL + serverCardPath)
+	if err != nil {
+		t.Fatalf("parsing the derived card URL: %v", err)
+	}
+	return derived.Path, true
 }
 
 // TestMCPEndpointPatterns_CoverTheRootTheEndpointAndThePrefix pins the routes
