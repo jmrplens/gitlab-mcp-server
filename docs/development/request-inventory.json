@@ -2278,7 +2278,11 @@
       "package": "internal/tools/attestations",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/attestations/:attestation_id/download",
+      "path": "/projects/:project_id/attestations/:attestation_id",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":attestation_id": 1,
         ":project_id": 2
@@ -2288,18 +2292,10 @@
       "package": "internal/tools/attestations",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/attestations/sha256:abc123",
+      "path": "/projects/:project_id/attestations/:attestation_id/download",
       "identifiers": {
+        ":attestation_id": 1,
         ":project_id": 2
-      }
-    },
-    {
-      "package": "internal/tools/attestations",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/attestations/sha256:empty",
-      "identifiers": {
-        ":project_id": 1
       }
     },
     {
@@ -3972,6 +3968,39 @@
         "start_project",
         "start_sha",
         "stats"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/commits",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/a1b2c3",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/commits",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/repository/commits/a1b2c3/cherry_pick",
+      "body": [
+        "branch"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/commits",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/repository/commits/a1b2c3/revert",
+      "body": [
+        "branch"
       ],
       "identifiers": {
         ":project_id": 1
@@ -7797,7 +7826,8 @@
       "body": [
         "expires_at",
         "group_access",
-        "group_id"
+        "group_id",
+        "member_role_id"
       ],
       "identifiers": {
         ":group_id": 1
@@ -10910,6 +10940,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/issues/:issue_id/participants",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":issue_id": 1,
         ":project_id": 1
@@ -12225,6 +12259,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/participants",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 1,
         ":project_id": 1
@@ -12235,6 +12273,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/pipelines",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 1,
         ":project_id": 1
@@ -12306,6 +12348,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/reviewers",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 1,
         ":project_id": 1
@@ -12821,6 +12867,10 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/context_commits",
+      "query": [
+        "page",
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 2,
         ":project_id": 1
@@ -13225,6 +13275,12 @@
       "package": "internal/tools/namespaces",
       "kind": "rest",
       "method": "GET",
+      "path": "/namespaces/acme"
+    },
+    {
+      "package": "internal/tools/namespaces",
+      "kind": "rest",
+      "method": "GET",
       "path": "/namespaces/bad/exists"
     },
     {
@@ -13246,12 +13302,6 @@
       "package": "internal/tools/namespaces",
       "kind": "rest",
       "method": "GET",
-      "path": "/namespaces/missing"
-    },
-    {
-      "package": "internal/tools/namespaces",
-      "kind": "rest",
-      "method": "GET",
       "path": "/namespaces/new-path/exists"
     },
     {
@@ -13259,12 +13309,6 @@
       "kind": "rest",
       "method": "GET",
       "path": "/namespaces/nonexistent"
-    },
-    {
-      "package": "internal/tools/namespaces",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/namespaces/root"
     },
     {
       "package": "internal/tools/namespaces",
