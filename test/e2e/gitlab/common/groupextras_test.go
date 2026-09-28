@@ -119,11 +119,14 @@ func TestGroupReads_IssuesAndAvatar_AnswerTheGroup(t *testing.T) {
 // differently. group.transfer_project runs the transfer inline and answers
 // after it, on 19.4 as before, so the project is read back once. group.transfer
 // is applied in the background since 19.4 and the action waits for it, so its
-// answer must show the move landed: an empty group moves in seconds, well
-// inside the wait, and a queued answer here means the handler never saw a move
-// GitLab applied, which accepting it would leave green. The group is then read
-// back with group.get, independently of the action's own read, until GitLab
-// holds it under the parent.
+// answer must show the move landed, since a queued answer would leave green a
+// handler that never sees a move GitLab applied. That holds only when the move
+// can land inside the action's 45 seconds, and a busy instance does not let
+// it: on the licensed run of 19.4.1 the worker waited 99 seconds for its turn
+// and then took 22. Sidekiq's queues are therefore drained before the
+// transfer, so the move is the next job to run, and the failure says whether
+// they drained. The group is then read back with group.get, independently of
+// the action's own read, until GitLab holds it under the parent.
 //
 // Replaces: TestMeta_GroupExtrasLifecycle
 func TestGroupTransfers_ProjectAndSubgroup_MoveUnderTheParent(t *testing.T) {
@@ -151,9 +154,10 @@ func TestGroupTransfers_ProjectAndSubgroup_MoveUnderTheParent(t *testing.T) {
 			e.T.Errorf("GitLab holds project %d at %q after the transfer, want it under %q", project.ID, stored.PathWithNamespace, parent.Path)
 		}
 
+		drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), transferDrainWait)
 		nested := harness.Do[groups.TransferSubGroupOutput](s, actionGroupTransfer, map[string]any{"group_id": child.IDParam(), "parent_id": parent.ID})
 		if nested.ID != child.ID || nested.TransferQueued || nested.ParentID != parent.ID || !strings.HasPrefix(nested.FullPath, parent.Path+"/") {
-			e.T.Errorf("transfer answered %+v, want group %d applied under %d at %q", nested, child.ID, parent.ID, parent.Path)
+			e.T.Errorf("transfer answered %+v, want group %d applied under %d at %q (Sidekiq drained before it: %t)", nested, child.ID, parent.ID, parent.Path, drained)
 		}
 		stored := harness.Eventually[groups.DetailOutput](s, actionGroupGet, map[string]any{"group_id": child.IDParam()}, 2*time.Second, 90*time.Second,
 			func(out groups.DetailOutput) bool { return strings.HasPrefix(out.FullPath, parent.Path+"/") })

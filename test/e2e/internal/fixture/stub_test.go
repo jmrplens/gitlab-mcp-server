@@ -103,6 +103,9 @@ type stubGitLab struct {
 	pipelineFailures int
 	// enqueued is what the Sidekiq stats report, decremented per read.
 	enqueued int64
+	// sidekiqRefused makes the stats answer 403, as they do for a token
+	// that is not an administrator's.
+	sidekiqRefused bool
 	// runners is what the runner listing answers.
 	runners []*gl.Runner
 	// state is what the World's readers see, keyed by the request path.
@@ -547,6 +550,10 @@ func (s *stubGitLab) object(w http.ResponseWriter, r *http.Request, kind string,
 func (s *stubGitLab) sidekiq(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.sidekiqRefused {
+		writeError(w, http.StatusForbidden, "403 Forbidden")
+		return
+	}
 	enqueued := s.enqueued
 	if s.enqueued > 0 {
 		s.enqueued--

@@ -392,6 +392,67 @@ func TestDrainSidekiq_ContextEnded_ReturnsAtOnce(t *testing.T) {
 	}
 }
 
+// TestDrainSidekiqWithin_QueueEmpties_ReportsDrained checks that a drain
+// which saw the queues empty says so, which is what lets a transfer scenario
+// hold the action to a move landing inside its wait.
+func TestDrainSidekiqWithin_QueueEmpties_ReportsDrained(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.configure(func() { stub.enqueued = 3 })
+
+	if !DrainSidekiqWithin(context.Background(), client, 5*time.Second) {
+		t.Error("DrainSidekiqWithin() = false for queues that emptied, want true")
+	}
+}
+
+// TestDrainSidekiqWithin_QueueNeverEmpties_ReportsNotDrainedAtTheBound checks
+// that a queue that stays busy ends the drain at the caller's bound, and is
+// reported as not drained rather than passed off as empty.
+func TestDrainSidekiqWithin_QueueNeverEmpties_ReportsNotDrainedAtTheBound(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.configure(func() { stub.enqueued = 1 << 20 })
+
+	const bound = 600 * time.Millisecond
+	start := time.Now()
+	drained := DrainSidekiqWithin(context.Background(), client, bound)
+	elapsed := time.Since(start)
+	if drained {
+		t.Error("DrainSidekiqWithin() = true for queues that never emptied, want false")
+	}
+	if elapsed < bound || elapsed > bound+5*time.Second {
+		t.Errorf("DrainSidekiqWithin() returned after %s, want the %s bound", elapsed, bound)
+	}
+}
+
+// TestDrainSidekiqWithin_ContextEnded_ReportsNotDrained checks that a read
+// refused because the context ended is not mistaken for a token that cannot
+// read the metrics: the queues were never seen, so they are not drained.
+func TestDrainSidekiqWithin_ContextEnded_ReportsNotDrained(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.configure(func() { stub.enqueued = 1 << 20 })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if DrainSidekiqWithin(ctx, client, 5*time.Second) {
+		t.Error("DrainSidekiqWithin() = true with a cancelled context, want false")
+	}
+}
+
+// TestDrainSidekiqWithin_MetricsRefused_ReportsDrained pins the behavior a
+// token that is not an administrator's has always had: nothing is known to be
+// waiting, so the drain returns at once and reports nothing to wait for.
+func TestDrainSidekiqWithin_MetricsRefused_ReportsDrained(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.configure(func() { stub.sidekiqRefused = true })
+
+	start := time.Now()
+	if !DrainSidekiqWithin(context.Background(), client, 5*time.Second) {
+		t.Error("DrainSidekiqWithin() = false when the metrics are refused, want true")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("DrainSidekiqWithin() took %s when the metrics are refused, want an immediate return", elapsed)
+	}
+}
+
 // TestProjectOf_Namespace_ReadsTheNamespaceID checks the one field that is
 // read through a pointer and would be silently zero if it were not.
 func TestProjectOf_Namespace_ReadsTheNamespaceID(t *testing.T) {

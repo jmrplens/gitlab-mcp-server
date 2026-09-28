@@ -449,17 +449,33 @@ const (
 // it. It is best effort: the metrics API needs an administrator, and a token
 // that cannot read it simply returns at once.
 func DrainSidekiq(ctx context.Context, client *gitlabclient.Client) {
-	deadline := time.Now().Add(sidekiqDrainWait)
+	if !DrainSidekiqWithin(ctx, client, sidekiqDrainWait) && ctx.Err() == nil {
+		log.Printf("e2e: Sidekiq still had jobs enqueued after %s; continuing", sidekiqDrainWait)
+	}
+}
+
+// DrainSidekiqWithin is DrainSidekiq with the bound named by the caller, for
+// a scenario that needs the queues empty rather than merely quieter: it
+// reports whether they were seen empty before the bound or the context ran
+// out. A token that cannot read the metrics API counts as drained, as it
+// always has for DrainSidekiq, since nothing is known to be waiting; a read
+// that failed because the context ended does not, since the queues were
+// never seen.
+func DrainSidekiqWithin(ctx context.Context, client *gitlabclient.Client, wait time.Duration) bool {
+	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
 		stats, _, err := client.GL().Sidekiq.GetJobStats(gl.WithContext(ctx))
-		if err != nil || stats == nil || stats.Jobs.Enqueued == 0 {
-			return
+		if err != nil {
+			return ctx.Err() == nil
+		}
+		if stats == nil || stats.Jobs.Enqueued == 0 {
+			return true
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(sidekiqDrainInterval):
 		}
 	}
-	log.Printf("e2e: Sidekiq still had jobs enqueued after %s; continuing", sidekiqDrainWait)
+	return false
 }
