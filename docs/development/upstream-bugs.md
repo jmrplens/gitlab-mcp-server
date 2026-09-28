@@ -2652,9 +2652,12 @@ entity before surfacing anything.
   `test/e2e/gitlab/common`'s work item lifecycle holds the create, the read
   and the retitle to GitLab's refusal of the five fields, naming each, and
   the listing and the delete to working, and its type listing runs on both.
-  The day a client-go release carrying the fix is taken here, the refused
-  calls answer and that scenario fails, saying to run the whole lifecycle on
-  Community Edition again and to record this entry as merged.
+  Taking a client-go release that carries the fix does not change that by
+  itself, since the commit leaves the default selecting every field: the
+  refused calls answer, and that scenario fails saying to run the whole
+  lifecycle on Community Edition again and to record this entry as merged,
+  the day the three actions here also pass `WorkItemDefaultListFields()` on
+  a Free instance, or a release makes the default safe there.
 
 **Where**: `workitems.go`, `workItemTemplate`, which `getWorkItemTemplate`,
 `createWorkItemTemplate` and `updateWorkItemTemplate` clone.

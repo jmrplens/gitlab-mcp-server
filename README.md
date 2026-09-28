@@ -476,8 +476,8 @@ and the workaround this server carries until it ships.
 | ------------------------ | --------: | ------------: |
 | Source (`.go`, non-test) |     1,373 |       315,565 |
 | Unit tests (`_test.go`)  |       946 |       626,857 |
-| End-to-end tests         |       500 |       105,538 |
-| **Total**                | **2,819** | **1,047,960** |
+| End-to-end tests         |       500 |       105,543 |
+| **Total**                | **2,819** | **1,047,965** |
 
 ### Functions
 
