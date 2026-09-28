@@ -714,16 +714,19 @@ func TestJSONTags_ATagThatIsNotAQuotedString_PublishesNothing(t *testing.T) {
 		},
 	}}}
 
-	tags, fieldTypes, embeds := jsonTags(structType)
-	if strings.Join(tags, ",") != "read" || len(embeds) != 0 {
-		t.Errorf("jsonTags() = %v, embeds %v, want only the field whose tag is a quoted string", tags, embeds)
+	tagged := jsonTags(structType)
+	if strings.Join(tagged.Fields, ",") != "read" || len(tagged.Embeds) != 0 {
+		t.Errorf("jsonTags() = %v, embeds %v, want only the field whose tag is a quoted string", tagged.Fields, tagged.Embeds)
 	}
 	// The field type is recorded for the same field and no other. What it names
 	// here is a predeclared type, which the parser writes as the same Ident a
 	// local type is written as; nestedTypes is what tells them apart, by finding
 	// no output type of that name.
-	if !reflect.DeepEqual(fieldTypes, map[string]string{"read": "string"}) {
-		t.Errorf("jsonTags() field types = %v, want the tagged field alone", fieldTypes)
+	if !reflect.DeepEqual(tagged.FieldTypes, map[string]string{"read": "string"}) {
+		t.Errorf("jsonTags() field types = %v, want the tagged field alone", tagged.FieldTypes)
+	}
+	if want := map[string]goShape{"read": {Core: "string", Spelled: "string"}}; !reflect.DeepEqual(tagged.FieldShapes, want) {
+		t.Errorf("jsonTags() field shapes = %+v, want %+v", tagged.FieldShapes, want)
 	}
 }
 
@@ -752,18 +755,27 @@ func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
 		{Type: &ast.SelectorExpr{X: &ast.Ident{Name: "toolutil"}, Sel: &ast.Ident{Name: "HintableOutput"}}},
 	}}}
 
-	tags, fieldTypes, embeds := jsonTags(structType)
-	if strings.Join(tags, ",") != "Kept,embedded,renamed" {
-		t.Errorf("jsonTags() = %v, want Kept,embedded,renamed", tags)
+	tagged := jsonTags(structType)
+	if strings.Join(tagged.Fields, ",") != "Kept,embedded,renamed" {
+		t.Errorf("jsonTags() = %v, want Kept,embedded,renamed", tagged.Fields)
 	}
 	// The type is recorded under the key the name resolved to, so a field kept
 	// under its Go name and an embed kept under its tag both stay comparable.
 	want := map[string]string{"Kept": "string", "embedded": "Embedded", "renamed": "string"}
-	if !reflect.DeepEqual(fieldTypes, want) {
-		t.Errorf("jsonTags() field types = %v, want %v", fieldTypes, want)
+	if !reflect.DeepEqual(tagged.FieldTypes, want) {
+		t.Errorf("jsonTags() field types = %v, want %v", tagged.FieldTypes, want)
 	}
-	if !reflect.DeepEqual(embeds, []string{"Promoted", "PromotedToo", "toolutil.HintableOutput"}) {
-		t.Errorf("jsonTags() embeds = %v, want the two local embeds and the shared one, none carrying a json name", embeds)
+	// Each shape carries the options its own tag wrote and no other's.
+	wantShapes := map[string]goShape{
+		"Kept":     {Core: "string", OmitEmpty: true, Spelled: "string"},
+		"embedded": {Core: "Embedded", Spelled: "Embedded"},
+		"renamed":  {Core: "string", Spelled: "string"},
+	}
+	if !reflect.DeepEqual(tagged.FieldShapes, wantShapes) {
+		t.Errorf("jsonTags() field shapes = %+v, want %+v", tagged.FieldShapes, wantShapes)
+	}
+	if !reflect.DeepEqual(tagged.Embeds, []string{"Promoted", "PromotedToo", "toolutil.HintableOutput"}) {
+		t.Errorf("jsonTags() embeds = %v, want the two local embeds and the shared one, none carrying a json name", tagged.Embeds)
 	}
 }
 

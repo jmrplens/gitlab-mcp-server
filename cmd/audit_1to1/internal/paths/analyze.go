@@ -151,17 +151,25 @@ type Summary struct {
 	// the Orbit response record did, which are listed there instead of in its
 	// skip lists. See [TypedShapeCheck.OrbitRecord].
 	TypedJudgedByOrbit int `json:"typed_types_compared_against_orbit_record"`
-	// The Orbit counts are both shape questions asked of the Orbit output
-	// types against the recording of what GitLab.com answered their handlers:
-	// the calls read, the output and nested types compared, the findings in
-	// each direction, and the half of them no declaration answers. See
-	// [OrbitCheck].
-	OrbitCalls       int `json:"orbit_record_calls"`
-	OrbitCompared    int `json:"orbit_types_compared"`
-	OrbitNested      int `json:"orbit_nested_types_compared"`
-	OrbitUnpublished int `json:"orbit_unpublished_fields"`
-	OrbitUnsurfaced  int `json:"orbit_unsurfaced_fields"`
-	OrbitUndeclared  int `json:"orbit_undeclared_fields"`
+	// The Orbit counts are the three shape questions asked of the Orbit
+	// output types against the recording of what GitLab.com answered their
+	// handlers: the calls read, the output and nested types compared, the
+	// places each half of the kinds question was put (the published type,
+	// and the client-go struct the handler decodes into), the findings of
+	// each question, the part of them no declaration answers, and the fields
+	// whose Go type the kinds question could not judge. See [OrbitCheck].
+	OrbitCalls                int `json:"orbit_record_calls"`
+	OrbitCompared             int `json:"orbit_types_compared"`
+	OrbitNested               int `json:"orbit_nested_types_compared"`
+	OrbitKindsCompared        int `json:"orbit_kinds_compared"`
+	OrbitDecoderKindsCompared int `json:"orbit_decoder_kinds_compared"`
+	OrbitUnpublished          int `json:"orbit_unpublished_fields"`
+	OrbitUnsurfaced           int `json:"orbit_unsurfaced_fields"`
+	OrbitMismatched           int `json:"orbit_mismatched_kinds"`
+	OrbitDecoderMismatched    int `json:"orbit_decoder_mismatched_kinds"`
+	OrbitKindsUnjudged        int `json:"orbit_kinds_unjudged"`
+	OrbitDecoderKindsUnjudged int `json:"orbit_decoder_kinds_unjudged"`
+	OrbitUndeclared           int `json:"orbit_undeclared_fields"`
 	// The pagination counts are R-PAGE, the one question here that is about a
 	// response header rather than a field: PaginatedRoutes and KeysetRoutes are
 	// what the record says GitLab pages at all, and the collection counts are
@@ -352,65 +360,71 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 		Identifiers:       identifiers,
 		E2E:               e2e,
 		Summary: Summary{
-			InventoryRows:           len(inventory.Requests),
-			GraphQLDocuments:        len(documents.Documents),
-			GraphQLRefused:          len(documents.Refusals),
-			CatalogActions:          coverage.Total,
-			ActionsObserved:         coverage.Covered,
-			Grain:                   observedGrain,
-			ActionsSilent:           coverage.Silent,
-			ActionsUnmapped:         coverage.Unmapped,
-			SilentPackages:          len(coverage.SilentOwners),
-			UndeclaredSilent:        undeclaredPackages,
-			UndeclaredActions:       undeclaredActions,
-			StaleDeclarations:       len(stale),
-			UndocumentedEndpoints:   len(endpoints.Undocumented),
-			UndeclaredEndpoints:     endpoints.undeclared(),
-			UntemplatedSegments:     len(shapes.Untemplated),
-			UnpublishedFields:       len(shapes.Unpublished),
-			UnsurfacedFields:        len(shapes.Sent.Unsurfaced),
-			UnsurfacedAlways:        sentAlways,
-			UnsurfacedWhen:          sentWhen,
-			UnsurfacedDeclared:      sentDeclared,
-			TypedUnsurfacedFields:   len(shapes.Typed.Unsurfaced),
-			TypedUnsurfacedAlways:   typedSentAlways,
-			TypedUnsurfacedWhen:     typedSentWhen,
-			TypedUnsurfacedDeclared: typedSentDeclared,
-			TypedUnsurfacedNotInSDK: notModelledBySDK(shapes.Typed.Unsurfaced),
-			TypedCompared:           shapes.Typed.Compared,
-			TypedProjections:        len(shapes.Typed.Projections),
-			TypedEnvelopes:          len(shapes.Typed.Envelopes),
-			TypedNoPairing:          shapes.Typed.SkippedNoPairing,
-			TypedNoRoute:            shapes.Typed.SkippedNoRoute,
-			TypedNoSchema:           shapes.Typed.SkippedNoSchema,
-			TypedUnpublishedField:   len(shapes.Typed.Unpublished),
-			TypedUndeclaredFields:   shapes.Typed.undeclared(),
-			TypedNestedCompared:     shapes.Typed.NestedCompared,
-			TypedNestedUnpublished:  len(shapes.Typed.Nested),
-			TypedJudgedByOrbit:      len(shapes.Typed.OrbitRecord),
-			OrbitCalls:              shapes.Orbit.Calls,
-			OrbitCompared:           len(shapes.Orbit.Compared),
-			OrbitNested:             len(shapes.Orbit.Nested),
-			OrbitUnpublished:        len(shapes.Orbit.Unpublished),
-			OrbitUnsurfaced:         len(shapes.Orbit.Unsurfaced),
-			OrbitUndeclared:         shapes.Orbit.undeclared(),
-			PaginatedRoutes:         pagination.Routes.Offset,
-			KeysetRoutes:            pagination.Routes.Keyset,
-			CollectionActions:       pagination.Collections.Actions,
-			CollectionsPaginated:    pagination.Collections.Paginated,
-			CollectionsUnasked:      pagination.Collections.Unasked,
-			CollectionsUnpaginated:  pagination.Collections.Unpaginated,
-			CollectionsUndeclared:   pagination.Collections.Undeclared,
-			PaginationGrain:         paginationGrain,
-			SDKGraphQLDocuments:     sdkGraphQL.Documents,
-			SDKGraphQLRefused:       len(sdkGraphQL.Refusals),
-			E2EActionsObserved:      len(e2e.Issuing),
-			E2EActionsSilent:        len(e2e.Silent),
-			AlwaysSentFields:        alwaysSent.Fields,
-			AlwaysSentRequired:      alwaysSent.Required,
-			AlwaysSentOptional:      len(alwaysSent.Optional),
-			IdentifierPlaceholders:  identifiers.Placeholders,
-			IdentifierSingleValued:  identifiers.Single,
+			InventoryRows:             len(inventory.Requests),
+			GraphQLDocuments:          len(documents.Documents),
+			GraphQLRefused:            len(documents.Refusals),
+			CatalogActions:            coverage.Total,
+			ActionsObserved:           coverage.Covered,
+			Grain:                     observedGrain,
+			ActionsSilent:             coverage.Silent,
+			ActionsUnmapped:           coverage.Unmapped,
+			SilentPackages:            len(coverage.SilentOwners),
+			UndeclaredSilent:          undeclaredPackages,
+			UndeclaredActions:         undeclaredActions,
+			StaleDeclarations:         len(stale),
+			UndocumentedEndpoints:     len(endpoints.Undocumented),
+			UndeclaredEndpoints:       endpoints.undeclared(),
+			UntemplatedSegments:       len(shapes.Untemplated),
+			UnpublishedFields:         len(shapes.Unpublished),
+			UnsurfacedFields:          len(shapes.Sent.Unsurfaced),
+			UnsurfacedAlways:          sentAlways,
+			UnsurfacedWhen:            sentWhen,
+			UnsurfacedDeclared:        sentDeclared,
+			TypedUnsurfacedFields:     len(shapes.Typed.Unsurfaced),
+			TypedUnsurfacedAlways:     typedSentAlways,
+			TypedUnsurfacedWhen:       typedSentWhen,
+			TypedUnsurfacedDeclared:   typedSentDeclared,
+			TypedUnsurfacedNotInSDK:   notModelledBySDK(shapes.Typed.Unsurfaced),
+			TypedCompared:             shapes.Typed.Compared,
+			TypedProjections:          len(shapes.Typed.Projections),
+			TypedEnvelopes:            len(shapes.Typed.Envelopes),
+			TypedNoPairing:            shapes.Typed.SkippedNoPairing,
+			TypedNoRoute:              shapes.Typed.SkippedNoRoute,
+			TypedNoSchema:             shapes.Typed.SkippedNoSchema,
+			TypedUnpublishedField:     len(shapes.Typed.Unpublished),
+			TypedUndeclaredFields:     shapes.Typed.undeclared(),
+			TypedNestedCompared:       shapes.Typed.NestedCompared,
+			TypedNestedUnpublished:    len(shapes.Typed.Nested),
+			TypedJudgedByOrbit:        len(shapes.Typed.OrbitRecord),
+			OrbitCalls:                shapes.Orbit.Calls,
+			OrbitCompared:             len(shapes.Orbit.Compared),
+			OrbitNested:               len(shapes.Orbit.Nested),
+			OrbitKindsCompared:        shapes.Orbit.KindsCompared,
+			OrbitDecoderKindsCompared: shapes.Orbit.DecoderKindsCompared,
+			OrbitUnpublished:          len(shapes.Orbit.Unpublished),
+			OrbitUnsurfaced:           len(shapes.Orbit.Unsurfaced),
+			OrbitMismatched:           len(shapes.Orbit.Mismatched),
+			OrbitDecoderMismatched:    len(shapes.Orbit.DecoderMismatched),
+			OrbitKindsUnjudged:        len(shapes.Orbit.KindsUnjudged),
+			OrbitDecoderKindsUnjudged: len(shapes.Orbit.DecoderKindsUnjudged),
+			OrbitUndeclared:           shapes.Orbit.undeclared(),
+			PaginatedRoutes:           pagination.Routes.Offset,
+			KeysetRoutes:              pagination.Routes.Keyset,
+			CollectionActions:         pagination.Collections.Actions,
+			CollectionsPaginated:      pagination.Collections.Paginated,
+			CollectionsUnasked:        pagination.Collections.Unasked,
+			CollectionsUnpaginated:    pagination.Collections.Unpaginated,
+			CollectionsUndeclared:     pagination.Collections.Undeclared,
+			PaginationGrain:           paginationGrain,
+			SDKGraphQLDocuments:       sdkGraphQL.Documents,
+			SDKGraphQLRefused:         len(sdkGraphQL.Refusals),
+			E2EActionsObserved:        len(e2e.Issuing),
+			E2EActionsSilent:          len(e2e.Silent),
+			AlwaysSentFields:          alwaysSent.Fields,
+			AlwaysSentRequired:        alwaysSent.Required,
+			AlwaysSentOptional:        len(alwaysSent.Optional),
+			IdentifierPlaceholders:    identifiers.Placeholders,
+			IdentifierSingleValued:    identifiers.Single,
 		},
 	}
 	if opts.GapsOnly {

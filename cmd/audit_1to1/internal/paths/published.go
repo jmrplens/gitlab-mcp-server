@@ -324,6 +324,17 @@ type parsedPackage struct {
 	alternatives map[string][]string
 	// scalars holds every type it declares as something other than a struct.
 	scalars map[string]bool
+	// named maps each of those types, and every alias the package declares,
+	// to the Go type it is declared as, so that a field of one is held to
+	// the JSON kinds of what it stands for.
+	named map[string]goShape
+	// decoders holds every type the package gives an UnmarshalJSON or an
+	// UnmarshalText method, which decodes whatever that method decides
+	// rather than what the type's shape would.
+	decoders map[string]bool
+	// encoders holds every type the package gives a MarshalJSON or a
+	// MarshalText method, which is written as whatever that method decides.
+	encoders map[string]bool
 	// aliases maps every type it declares as, or from, a shared shape to that
 	// shape's key.
 	aliases map[string]string
@@ -355,6 +366,7 @@ func parsePackage(dir string) parsedPackage {
 		alternatives: map[string][]string{},
 		scalars:      map[string]bool{}, aliases: map[string]string{}, qualified: map[string]string{},
 		returned: map[string]bool{}, borrowed: map[string]bool{},
+		named: map[string]goShape{}, decoders: map[string]bool{}, encoders: map[string]bool{},
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -497,6 +509,15 @@ func sharedShapes(dir, prefix string) (shapes map[string]declaredStruct, nested 
 				whole.FieldTypes[tag] = prefix + typeName
 			}
 		}
+		// A shape's core is rekeyed the same way, a type the package declares
+		// as something other than a struct included, so that a domain package
+		// reading it never resolves the name against a type of its own.
+		for tag, shape := range whole.FieldShapes {
+			if _, local := byName[shape.Core]; local || parsed.scalars[shape.Core] {
+				shape.Core = prefix + shape.Core
+				whole.FieldShapes[tag] = shape
+			}
+		}
 		shapes[key] = whole
 	}
 	// Only the package's own shapes are named, since what one package nests
@@ -518,6 +539,10 @@ type declaredStruct struct {
 	// FieldTypes maps a json tag to the locally declared type its field
 	// carries, for the fields whose type is one.
 	FieldTypes map[string]string
+	// FieldShapes maps every json tag to its field's Go type as encoding/json
+	// decodes into it, which is what holds a field to the JSON kinds an
+	// answer carried (see [goShape]).
+	FieldShapes map[string]goShape
 	// Embeds names the locally declared types embedded under no json name,
 	// whose fields encoding/json promotes into this struct's.
 	Embeds []string
@@ -542,7 +567,11 @@ func flatten(candidate declaredStruct, byName map[string]declaredStruct, scalars
 	walking[candidate.Name] = true
 	defer delete(walking, candidate.Name)
 
-	whole := declaredStruct{Name: candidate.Name, Fields: slices.Clone(candidate.Fields), FieldTypes: maps.Clone(candidate.FieldTypes)}
+	whole := declaredStruct{
+		Name: candidate.Name, Fields: slices.Clone(candidate.Fields),
+		FieldTypes: maps.Clone(candidate.FieldTypes), FieldShapes: map[string]goShape{},
+	}
+	maps.Copy(whole.FieldShapes, candidate.FieldShapes)
 	seen := make(map[string]bool, len(whole.Fields))
 	for _, field := range whole.Fields {
 		seen[field] = true
@@ -563,6 +592,10 @@ func flatten(candidate declaredStruct, byName map[string]declaredStruct, scalars
 			}
 			seen[field] = true
 			whole.Fields = append(whole.Fields, field)
+			// A field the embed promotes without a shape, a scalar embed of
+			// its own, is carried as the zero shape, which is a type this
+			// reader cannot judge, and so it is said to be.
+			whole.FieldShapes[field] = embedded.FieldShapes[field]
 			if typeName, has := embedded.FieldTypes[field]; has {
 				if whole.FieldTypes == nil {
 					whole.FieldTypes = map[string]string{}
@@ -624,10 +657,12 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 			// A type declared inside a function is nobody's response; what an
 			// exported function returns is one.
 			noteReturned(typed, parsed.returned)
+			noteCodec(typed, parsed.decoders, parsed.encoders)
 			return false
 		case *ast.TypeSpec:
 			structType, isStruct := typed.Type.(*ast.StructType)
 			if !isStruct {
+				parsed.named[typed.Name.Name] = shapeOf(typed.Type, "")
 				if target := namedType(typed.Type); strings.HasPrefix(target, sharedPrefix) {
 					parsed.aliases[typed.Name.Name] = target
 				} else {
@@ -638,11 +673,12 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 				}
 				return false
 			}
-			fields, fieldTypes, embeds := jsonTags(structType)
-			noteNamedTypes(structType, fieldTypes, parsed)
-			payloads := envelopePayloads(fields, fieldTypes)
-			if len(fields) == 0 {
-				payloads = embeddedPayload(embeds)
+			declared := jsonTags(structType)
+			declared.Name = typed.Name.Name
+			noteNamedTypes(structType, declared.FieldTypes, parsed)
+			payloads := envelopePayloads(declared.Fields, declared.FieldTypes)
+			if len(declared.Fields) == 0 {
+				payloads = embeddedPayload(declared.Embeds)
 			}
 			switch len(payloads) {
 			case 0:
@@ -655,7 +691,7 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 			// A struct with neither fields nor embeds is kept too: it
 			// publishes nothing, so it is never compared, and a struct naming
 			// it resolves it to nothing either way.
-			found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
+			found = append(found, declared)
 			return false
 		default:
 			return true
@@ -692,6 +728,24 @@ func noteReturned(fn *ast.FuncDecl, returned map[string]bool) {
 	}
 }
 
+// noteCodec records the type a method named UnmarshalJSON or UnmarshalText is
+// declared on among the decoders, and one named MarshalJSON or MarshalText
+// among the encoders, through a pointer receiver or not. encoding/json hands
+// such a type the value to decode, or to write, itself, so which kinds it
+// takes or writes is decided in that method and not by its shape.
+func noteCodec(fn *ast.FuncDecl, decoders, encoders map[string]bool) {
+	if fn.Recv == nil {
+		return
+	}
+	receiver := namedType(fn.Recv.List[0].Type)
+	switch fn.Name.Name {
+	case "UnmarshalJSON", "UnmarshalText":
+		decoders[receiver] = true
+	case "MarshalJSON", "MarshalText":
+		encoders[receiver] = true
+	}
+}
+
 // borrowedTypes names the types of other packages a struct publishes a field
 // of or embeds, under the rules [jsonTags] reads a struct by: a field tagged
 // "-", an unexported field and an untagged named field publish nothing, and an
@@ -699,7 +753,7 @@ func noteReturned(fn *ast.FuncDecl, returned map[string]bool) {
 func borrowedTypes(structType *ast.StructType) []string {
 	var names []string
 	for _, field := range structType.Fields.List {
-		name, tagged := jsonName(field)
+		name, _, tagged := jsonName(field)
 		if name == "-" || (len(field.Names) > 0 && (!tagged || !anyExported(field.Names))) {
 			continue
 		}
@@ -860,41 +914,45 @@ func embeddedPayload(embeds []string) []string {
 	return payload
 }
 
-// jsonTags returns the json names a struct publishes, sorted, the locally
-// declared type each of those names carries where it carries one, and the
-// locally declared types it embeds under no name. The names follow the rules
-// encoding/json applies to a tag: a field tagged "-" publishes nothing, an
-// unexported field publishes nothing whatever its tag says, a tag that names
-// no key (`json:",omitempty"`) publishes the Go field name, and an embed
-// tagged with a name is published under that name while one tagged with none,
-// or not tagged at all, has its fields promoted (see [flatten]). An untagged
-// named field is left out rather than guessed at: this repository tags every
-// field it means a client to see, so an untagged one is an oversight, and an
-// oversight should not become a finding about GitLab.
-func jsonTags(structType *ast.StructType) (names []string, fieldTypes map[string]string, embeds []string) {
-	publish := func(key string, fieldType ast.Expr) {
-		names = append(names, key)
+// jsonTags returns, as a struct with no name, the json names a struct
+// publishes, sorted, the locally declared type each of those names carries
+// where it carries one, the Go type of every one of them with its tag
+// options (see [goShape]), and the locally declared types it embeds under no
+// name. The names follow the rules encoding/json applies to a tag: a field
+// tagged "-" publishes nothing, an unexported field publishes nothing
+// whatever its tag says, a tag that names no key (`json:",omitempty"`)
+// publishes the Go field name, and an embed tagged with a name is published
+// under that name while one tagged with none, or not tagged at all, has its
+// fields promoted (see [flatten]). An untagged named field is left out rather
+// than guessed at: this repository tags every field it means a client to see,
+// so an untagged one is an oversight, and an oversight should not become a
+// finding about GitLab.
+func jsonTags(structType *ast.StructType) declaredStruct {
+	tagged := declaredStruct{FieldShapes: map[string]goShape{}}
+	publish := func(key, options string, fieldType ast.Expr) {
+		tagged.Fields = append(tagged.Fields, key)
+		tagged.FieldShapes[key] = shapeOf(fieldType, options)
 		if typeName := namedType(fieldType); typeName != "" {
-			if fieldTypes == nil {
-				fieldTypes = map[string]string{}
+			if tagged.FieldTypes == nil {
+				tagged.FieldTypes = map[string]string{}
 			}
-			fieldTypes[key] = typeName
+			tagged.FieldTypes[key] = typeName
 		}
 	}
 	embed := func(fieldType ast.Expr) {
 		if typeName := namedType(fieldType); typeName != "" {
-			embeds = append(embeds, typeName)
+			tagged.Embeds = append(tagged.Embeds, typeName)
 		}
 	}
 	for _, field := range structType.Fields.List {
-		name, tagged := jsonName(field)
+		name, options, isTagged := jsonName(field)
 		switch {
 		case name == "-":
 		case len(field.Names) == 0 && name != "":
-			publish(name, field.Type)
+			publish(name, options, field.Type)
 		case len(field.Names) == 0:
 			embed(field.Type)
-		case tagged:
+		case isTagged:
 			for _, ident := range field.Names {
 				if !ident.IsExported() {
 					continue
@@ -903,24 +961,25 @@ func jsonTags(structType *ast.StructType) (names []string, fieldTypes map[string
 				if key == "" {
 					key = ident.Name
 				}
-				publish(key, field.Type)
+				publish(key, options, field.Type)
 			}
 		}
 	}
-	sort.Strings(names)
-	return names, fieldTypes, embeds
+	sort.Strings(tagged.Fields)
+	return tagged
 }
 
 // jsonName reads the key a field's json tag names, "" for a tag naming none,
-// and reports whether the field carries a tag that could be read at all.
-func jsonName(field *ast.Field) (name string, tagged bool) {
+// the options written after it, and reports whether the field carries a tag
+// that could be read at all.
+func jsonName(field *ast.Field) (name, options string, tagged bool) {
 	if field.Tag == nil {
-		return "", false
+		return "", "", false
 	}
 	raw, err := strconv.Unquote(field.Tag.Value)
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
-	name, _, _ = strings.Cut(reflect.StructTag(raw).Get("json"), ",")
-	return name, true
+	name, options, _ = strings.Cut(reflect.StructTag(raw).Get("json"), ",")
+	return name, options, true
 }
