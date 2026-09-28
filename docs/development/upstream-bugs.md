@@ -144,7 +144,7 @@ readable without opening the tracker:
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Yes, for `repository.commit_list` with `trailers` | Partial |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
-| 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | No | No | No | No | Yes |
+| 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), open | No | Yes | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -4649,8 +4649,12 @@ being refused; and completing the `action` and `type` lists of
 
 ### A saved view create or subscribe from a token answers 500, and the create has already saved the view
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, by the merge request below; the fix was clear, so no
+  issue was opened first.
+- **In review**: yes,
+  [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074),
+  opened 2026-09-28 from the community fork and ready for review, with a
+  reviewer assigned.
 - **Merged**: no.
 - **Blocking**: yes, for `issue.work_item_saved_view_create` and
   `issue.work_item_saved_view_subscribe` from any client authenticated with a
@@ -4699,13 +4703,26 @@ class of failure was fixed in other places before (issues
 [gitlab-org/gitlab#384337](https://gitlab.com/gitlab-org/gitlab/-/issues/384337)
 and [gitlab-org/gitlab#419343](https://gitlab.com/gitlab-org/gitlab/-/issues/419343)).
 
-**Proposal**: an issue with the reproduction, and a merge request that locks a
-fresh row rather than `current_user` in `UserSavedView.subscribe` (for
-example `User.lock.find(user.id)` inside a transaction), or that has
-`update_tracked_fields!` discard the tracked attributes it did not write
-(`restore_attributes`), which would close the class for every other
-`current_user.with_lock` too; and running `auto_subscribe_creator` inside the
-transaction that saves the view, so a failed create leaves nothing behind.
+**The same lock breaks a second caller.** `MergeRequests::SavedViews::CreateService#persist`
+saves the view inside `current_user.with_lock`, so `mergeRequestSavedViewCreate`
+(behind the `mr_dashboard_saved_views` flag) answers the same 500 for the same
+reason; it fails before the save and leaves nothing behind. This server does
+not expose it.
+
+**Fix in review**: [!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074)
+fixes it where the state is left rather than in either caller:
+`update_tracked_fields!` restores the tracked attributes after the throttled
+block (`restore_attributes` over
+`Devise::Models::Trackable.required_fields`), which is a no-op when the write
+ran and puts the record back in step with its row when the throttle skipped
+it, so any later `current_user.with_lock` works. Three new examples in
+`spec/models/user_spec.rb` pass with it and fail without it, the lockable one
+with the `RuntimeError` above. On `gitlab/gitlab-ee:19.4.1-ee.0` with the
+change copied into the running container and Puma restarted, both mutations
+went from 500 to 200, the work item view created subscribed. Not in the merge
+request: `WorkItems::SavedViews::CreateService#execute` still saves the view
+and subscribes its creator in two steps, so a failure of the second for any
+other reason would still leave a view nobody follows.
 
 ## Other
 
