@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 19,841 |
-| Unit test functions                                   | 18,463 |
-| E2E test functions                                    |  1,378 |
-| cmd test functions                                    |  4,124 |
+| Total test functions                                  | 19,844 |
+| Unit test functions                                   | 18,465 |
+| E2E test functions                                    |  1,379 |
+| cmd test functions                                    |  4,126 |
 | Test files (internal/)                                |    679 |
 | Test files (cmd/)                                     |    258 |
 | Test files (test/e2e/)                                |    393 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,850 | 64.8% |
+| `TestFunc_Scenario` (2-part)           | 12,852 | 64.8% |
 | `TestFunc` (no underscore)             |    913 |  4.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,078 | 30.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,079 | 30.6% |
 
 ## Test Distribution
 
@@ -50,9 +50,9 @@
 | Core packages           |          3,527 |        208 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            379 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |         10,433 |        455 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,378 |        393 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,124 |        258 | server entry point and developer command utilities                                              |
-| **Total**               |     **19,841** |  **1,330** |                                                                                                 |
+| E2E integration         |          1,379 |        393 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,126 |        258 | server entry point and developer command utilities                                              |
+| **Total**               |     **19,844** |  **1,330** |                                                                                                 |
 
 ### Core Packages
 
@@ -112,13 +112,13 @@
 | containerregistry |   119 |   100.0% |    16 |
 | snippets          |   112 |   100.0% |    15 |
 | accesstokens      |   108 |   100.0% |    18 |
-| pipelineschedules |   108 |    99.0% |    11 |
+| pipelineschedules |   108 |   100.0% |    11 |
 | branches          |   106 |   100.0% |    10 |
 | groupmilestones   |   105 |   100.0% |     8 |
 | groupmembers      |   101 |   100.0% |    10 |
 | mrapprovals       |    99 |   100.0% |     7 |
 | files             |    97 |   100.0% |     8 |
-| integrations      |    90 |    99.5% |    12 |
+| integrations      |    90 |   100.0% |    12 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -215,7 +215,7 @@
 | impersonationtokens     |         61 |          3 |   100.0% |         5 |
 | importservice           |         33 |          1 |   100.0% |         5 |
 | instancevariables       |         55 |          3 |   100.0% |         5 |
-| integrations            |         90 |          6 |    99.5% |        12 |
+| integrations            |         90 |          6 |   100.0% |        12 |
 | invites                 |         55 |          1 |   100.0% |         4 |
 | issuediscussions        |         34 |          2 |   100.0% |         6 |
 | issuelinks              |         77 |          4 |   100.0% |         4 |
@@ -251,12 +251,12 @@
 | packages                |        175 |          6 |   100.0% |        10 |
 | pages                   |         64 |          2 |   100.0% |         9 |
 | pipelines               |        130 |          4 |   100.0% |        12 |
-| pipelineschedules       |        108 |          4 |    99.0% |        11 |
+| pipelineschedules       |        108 |          4 |   100.0% |        11 |
 | pipelinetriggers        |         70 |          2 |   100.0% |         6 |
 | planlimits              |         16 |          1 |   100.0% |         2 |
 | projectaliases          |         34 |          2 |   100.0% |         4 |
 | projectdiscovery        |         22 |          1 |   100.0% |         1 |
-| projectimportexport     |         50 |          2 |    99.5% |         5 |
+| projectimportexport     |         50 |          2 |    99.6% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
 | projects                |        478 |          9 |   100.0% |        57 |
@@ -293,7 +293,7 @@
 | systemhooks             |         43 |          2 |   100.0% |         8 |
 | tags                    |         83 |          2 |   100.0% |         9 |
 | terraformstates         |         30 |          1 |   100.0% |         6 |
-| todos                   |         48 |          4 |    98.8% |         3 |
+| todos                   |         48 |          4 |   100.0% |         3 |
 | toolvisibility          |         13 |          1 |   100.0% |         0 |
 | topics                  |         23 |          2 |   100.0% |         5 |
 | uploads                 |         56 |          3 |   100.0% |         4 |
@@ -302,7 +302,7 @@
 | usergpgkeys             |         56 |          2 |   100.0% |         8 |
 | users                   |        262 |          7 |   100.0% |        38 |
 | vulnerabilities         |         88 |          3 |   100.0% |         8 |
-| waitpoll                |         34 |          3 |    99.2% |         0 |
+| waitpoll                |         34 |          3 |   100.0% |         0 |
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
@@ -361,7 +361,7 @@
 | cmd/gen_llms                     |    99.7% |
 | cmd/gen_model_corpus             |    99.4% |
 | cmd/gen_model_results            |    96.8% |
-| cmd/gen_orbit_record             |      n/a |
+| cmd/gen_orbit_record             |   100.0% |
 | cmd/gen_request_inventory        |   100.0% |
 | cmd/gen_stats                    |   100.0% |
 | cmd/gen_testing_docs             |   100.0% |
@@ -376,7 +376,7 @@
 | cmd/internal/graphqldocs         |   100.0% |
 | cmd/internal/graphqlintrospect   |   100.0% |
 | cmd/internal/mcpsurface          |   100.0% |
-| cmd/internal/orbitrecord         |      n/a |
+| cmd/internal/orbitrecord         |   100.0% |
 | cmd/internal/provenance          |   100.0% |
 | cmd/internal/requestinventory    |   100.0% |
 | cmd/internal/testsource          |   100.0% |
@@ -510,7 +510,7 @@
 | impersonationtokens     |   100.0% |
 | importservice           |   100.0% |
 | instancevariables       |   100.0% |
-| integrations            |    99.5% |
+| integrations            |   100.0% |
 | invites                 |   100.0% |
 | issuediscussions        |   100.0% |
 | issuelinks              |   100.0% |
@@ -546,12 +546,12 @@
 | packages                |   100.0% |
 | pages                   |   100.0% |
 | pipelines               |   100.0% |
-| pipelineschedules       |    99.0% |
+| pipelineschedules       |   100.0% |
 | pipelinetriggers        |   100.0% |
 | planlimits              |   100.0% |
 | projectaliases          |   100.0% |
 | projectdiscovery        |   100.0% |
-| projectimportexport     |    99.5% |
+| projectimportexport     |    99.6% |
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
 | projects                |   100.0% |
@@ -588,7 +588,7 @@
 | systemhooks             |   100.0% |
 | tags                    |   100.0% |
 | terraformstates         |   100.0% |
-| todos                   |    98.8% |
+| todos                   |   100.0% |
 | toolvisibility          |   100.0% |
 | topics                  |   100.0% |
 | uploads                 |   100.0% |
@@ -597,7 +597,7 @@
 | usergpgkeys             |   100.0% |
 | users                   |   100.0% |
 | vulnerabilities         |   100.0% |
-| waitpoll                |    99.2% |
+| waitpoll                |   100.0% |
 | wikis                   |   100.0% |
 | workitems               |    99.8% |
 | workitemsavedviews      |   100.0% |
