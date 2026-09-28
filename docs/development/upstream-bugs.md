@@ -144,6 +144,7 @@ readable without opening the tracker:
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Yes, for `repository.commit_list` with `trailers` | Partial |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
+| 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -4630,6 +4631,66 @@ item for the caller (and which checks run only in the worker), and that a
 resend before the first transfer lands runs a second transfer rather than
 being refused; and completing the `action` and `type` lists of
 `doc/api/todos.md` from `Todo.action_names` and `TodosFinder.todo_types`.
+
+### A saved view create or subscribe from a token answers 500, and the create has already saved the view
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, for `issue.work_item_saved_view_create` and
+  `issue.work_item_saved_view_subscribe` from any client authenticated with a
+  token, which is every client of this server. The other five saved view
+  actions work.
+- **Workaround**: partial. Nothing on the client side avoids the failure, so
+  the handlers only make it readable: `workitemsavedviews.Create` answers the
+  500 with a hint that the view may exist already and names
+  `issue.work_item_saved_view_list` to look for it before creating it again,
+  since a second create adds a duplicate, and `workitemsavedviews.Subscribe`
+  answers it with a hint that nothing was recorded. The e2e lifecycle
+  (`TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete`) holds
+  both answers and finds the saved view through the listing, so it runs on
+  every GitLab rather than skipping. What retires the workaround is the fix
+  below.
+
+**Where**: `WorkItems::SavedViews::UserSavedView.subscribe`
+(`app/models/work_items/saved_views/user_saved_view.rb`), which wraps the
+subscription in `with_lock` on the user it is given; it is reached from
+`WorkItems::SavedViews::CreateService#auto_subscribe_creator` and from
+`Mutations::WorkItems::SavedViews::Subscribe#resolve`. The user it locks is
+`current_user`, on which `User#update_tracked_fields!` (`app/models/user.rb`)
+has set `sign_in_count`, `current_sign_in_at` and `last_sign_in_at` and saved
+them only inside `Gitlab::ExclusiveLease.throttle(id)`, whose period is an
+hour. Read in the `gitlab/gitlab-ee:19.4.1` image (revision `26212baacad`) on
+2026-09-28; the create mutation is an experiment since 18.7.
+
+**What**: a GraphQL request authenticated with a token signs the user in
+without a session (`SessionlessAuthentication#sessionless_sign_in`), and
+Devise's trackable hook calls `update_tracked_fields!` on it. That method
+assigns the tracked fields on every such request and writes them at most once
+an hour, so on every request but the first in the hour `current_user` carries
+unsaved changes to those three attributes. Rails 7.2 refuses to lock a record
+with unsaved changes (`ActiveRecord::Locking::Pessimistic#lock!`: "Locking a
+record with unpersisted changes is not supported"), so `with_lock` raises and
+the mutation answers `500 Internal server error`. `workItemSavedViewSubscribe`
+changes nothing. `workItemSavedViewCreate` has already saved the view
+(`saved_view.save` runs before `auto_subscribe_creator`, in no transaction
+with it), so the view exists, its creator is not subscribed to it, and a
+client told only that the create failed creates it again. Reproduced on the
+licensed complete run of the wave 1 stack: three creates, three 500s, three
+`saved_views` rows and no `user_saved_views` row, and a subscribe to one of
+those views answered 500 twice in a row. The exception log carries the
+`RuntimeError` with the backtrace through `user_saved_view.rb:25`. The same
+class of failure was fixed in other places before (issues
+[gitlab-org/gitlab#384337](https://gitlab.com/gitlab-org/gitlab/-/issues/384337)
+and [gitlab-org/gitlab#419343](https://gitlab.com/gitlab-org/gitlab/-/issues/419343)).
+
+**Proposal**: an issue with the reproduction, and a merge request that locks a
+fresh row rather than `current_user` in `UserSavedView.subscribe` (for
+example `User.lock.find(user.id)` inside a transaction), or that has
+`update_tracked_fields!` discard the tracked attributes it did not write
+(`restore_attributes`), which would close the class for every other
+`current_user.with_lock` too; and running `auto_subscribe_creator` inside the
+transaction that saves the view, so a failed create leaves nothing behind.
 
 ## Other
 

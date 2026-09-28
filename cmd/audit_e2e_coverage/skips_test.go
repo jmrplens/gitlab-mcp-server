@@ -28,6 +28,12 @@ const (
 		"is a WorkItemSort enum value such as CREATED_DESC: POST http://localhost:8929/api/graphql: 500 (GraphQL " +
 		"errors: Internal server error)"
 	savedViewLifecycle = "TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete"
+	// savedViewCreateRefusal is the start of the reason the saved view
+	// lifecycle printed when it skipped on the create's 500, which it did in
+	// both recorded runs. It lived beside the live declarations while they
+	// excused that skip; the scenario no longer skips, so it is a fact about
+	// these two runs and nothing else.
+	savedViewCreateRefusal = "the saved view create answered the experiment's 500"
 )
 
 // needsRelease is the reason a scenario gated on GitLab 19.4 printed on the
