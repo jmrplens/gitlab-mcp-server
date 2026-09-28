@@ -124,8 +124,9 @@ func cancelRunningJob(e *harness.Env, s *harness.Session, byJob map[string]any) 
 }
 
 // retriedJobSettledStatuses are the states in which a retried job can no
-// longer hold the runner.
-var retriedJobSettledStatuses = []string{"manual", "canceled", "canceling", "skipped", "success", "failed", "created"}
+// longer hold the runner. canceling is not one of them: the runner is still
+// finishing the job then, which is the state the forced cancel ends.
+var retriedJobSettledStatuses = []string{"manual", "canceled", "skipped", "success", "failed", "created"}
 
 // stopRetriedJob makes sure the job a retry created cannot hold the runner,
 // by canceling it until it reads as one of retriedJobSettledStatuses.

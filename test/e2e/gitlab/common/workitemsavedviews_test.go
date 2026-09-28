@@ -102,7 +102,7 @@ func TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete(t *testing.
 		subscribed, err := harness.Try[workitemsavedviews.MutateOutput](s, actionSavedViewSubscribe, view)
 		switch {
 		case err != nil:
-			assertSubscribeRecordedNothing(e, s, withParams(namespace, view), err)
+			assertSubscribeRecordedNothing(e, s, withParams(namespace, view), got.SavedView.Subscribed, err)
 		case !subscribed.SavedView.Subscribed:
 			e.T.Errorf("work_item_saved_view_subscribe answered %+v, want the view subscribed", subscribed.SavedView)
 		}
@@ -156,9 +156,12 @@ func savedViewLeftByAFailedCreate(e *harness.Env, s *harness.Session, namespace 
 }
 
 // assertSubscribeRecordedNothing holds a subscribe GitLab answered with the
-// 500 of upstream-bugs entry 72 to its hint and to the view still not being
-// followed, which is what the hint tells the caller.
-func assertSubscribeRecordedNothing(e *harness.Env, s *harness.Session, viewInNamespace map[string]any, err error) {
+// 500 of upstream-bugs entry 72 to its hint and to the view's subscription
+// being what it was before the call, which is what the hint tells the caller.
+// The state before is passed in rather than assumed unfollowed: a create that
+// succeeded subscribed its creator, and a subscribe failing after it leaves
+// the view followed without having recorded anything.
+func assertSubscribeRecordedNothing(e *harness.Env, s *harness.Session, viewInNamespace map[string]any, subscribedBefore bool, err error) {
 	e.T.Helper()
 	text := err.Error()
 	if !strings.Contains(text, "500") {
@@ -167,8 +170,9 @@ func assertSubscribeRecordedNothing(e *harness.Env, s *harness.Session, viewInNa
 	assertMentions(e, "the subscribe's server error", text, "before recording the subscription")
 
 	after := harness.Do[workitemsavedviews.GetOutput](s, actionSavedViewGet, viewInNamespace)
-	if after.SavedView.Subscribed {
-		e.T.Errorf("the view reads as followed after a subscribe that answered a server error, so the hint that nothing changed is false: %+v", after.SavedView)
+	if after.SavedView.Subscribed != subscribedBefore {
+		e.T.Errorf("the view's subscription went from %t to %t across a subscribe that answered a server error, so the hint that nothing changed is false: %+v",
+			subscribedBefore, after.SavedView.Subscribed, after.SavedView)
 	}
-	e.T.Logf("the subscribe answered GitLab's 500 and left the view unfollowed: %s", firstLine(text))
+	e.T.Logf("the subscribe answered GitLab's 500 and left the view's subscription at %t: %s", subscribedBefore, firstLine(text))
 }

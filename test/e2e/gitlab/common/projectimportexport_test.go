@@ -142,7 +142,8 @@ func TestProjectImport_FromFile_RefusedWhileTheSourceIsDisabled(t *testing.T) {
 // the relation jobs up to 100 each, which put two of three surfaces past the
 // five minutes the export is given. Sidekiq's queues are therefore drained
 // before each export is scheduled, so the wait measures the export and not the
-// queue, and the failure says whether they drained.
+// queue, and the failure says what the drain returned: true when it saw the
+// queues empty, and also when it could not read them.
 //
 // Replaces: TestMeta_ProjectExportDownloadImport
 func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
@@ -162,7 +163,7 @@ func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
 		finished := harness.Eventually(s, actionProjectExportStatus, params, exportPollInterval, exportWait,
 			func(status projectimportexport.ExportStatusOutput) bool { return status.ExportStatus == "finished" })
 		if finished.ID != project.ID {
-			e.T.Errorf("export_status answered %+v, want project %d (Sidekiq drained before it: %t)", finished, project.ID, drained)
+			e.T.Errorf("export_status answered %+v, want project %d (the Sidekiq drain before it returned %t: queues seen empty, or unreadable)", finished, project.ID, drained)
 		}
 
 		archive := harness.Do[projectimportexport.ExportDownloadOutput](s, actionProjectExportDownload, params)

@@ -118,9 +118,11 @@ func TestSecurityAttributes_Lifecycle_AssignsToAProjectAndDeletes(t *testing.T) 
 		// so the removal is what observes it: retried until it finds the
 		// one the bulk add assigned, which is what proves the bulk add did.
 		// Sidekiq is drained first, so the poll measures the job rather than
-		// the queue in front of it, and the log says whether it got there.
+		// the queue in front of it, and the log says what the drain returned:
+		// true when it saw the queues empty, and also when it could not read
+		// them.
 		drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), bulkUpdateDrainWait)
-		e.T.Logf("Sidekiq drained before the wait for the bulk add: %t", drained)
+		e.T.Logf("the Sidekiq drain before the wait for the bulk add returned %t (queues seen empty, or unreadable)", drained)
 		removed := harness.Eventually(s, actionSecurityAttributeProjectUpdate, map[string]any{
 			"project_id": f.project.ID, "remove_attribute_ids": []int64{attribute.ID},
 		}, bulkUpdateInterval, bulkUpdateWait, func(out securityattributes.ProjectUpdateOutput) bool { return out.RemovedCount >= 1 })
