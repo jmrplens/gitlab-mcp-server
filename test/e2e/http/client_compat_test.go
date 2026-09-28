@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -399,4 +400,123 @@ func TestClient_DistinctCredentialsGetDistinctServers(t *testing.T) {
 	if calls := gitlab.calls(); calls < 3 {
 		t.Errorf("%d upstream /user calls for 3 distinct credentials; entries are being shared across tokens", calls)
 	}
+}
+
+// codexClientInfo is how Codex has named itself since v0.20, in initialize and
+// in a 2026-07-28 request's _meta alike.
+const codexClientInfo = `{"name":"codex-mcp-client","title":"Codex","version":"0.148.0"}`
+
+// codexCurrentUserArguments asks for the caller's own user, a tool call whose
+// result carries annotated content for the profile to act on.
+const codexCurrentUserArguments = `{"name":"gitlab_execute_action","arguments":{"action":"user.current","params":{}}`
+
+// priorityOnTheWire captures every annotation priority exactly as the server
+// wrote it, so 1 and 1.0 stay two different answers.
+var priorityOnTheWire = regexp.MustCompile(`"priority":([^,}\]]+)`)
+
+// TestClient_CodexProfile_AppliesWhereTheSessionKnowsTheClient pins how far the
+// Codex profile reaches over HTTP, which is less far than on stdio.
+//
+// The profile reads the clientInfo of the session a request belongs to. At
+// protocol 2026-07-28 every request carries it in its _meta, so the default
+// stateless transport knows it on each call. At 2025-11-25 and before, a
+// client reports it once, in initialize: a stateful session keeps it for the
+// calls that follow, but the stateless transport gives each later POST a
+// session of its own that never saw initialize, so there is nothing for the
+// profile to read and a Codex client on that protocol is sent the fraction the
+// profile exists to round. That last case is pinned as it stands, because the
+// client compatibility guide and the security page state it as the profile's
+// limit: the day it changes, this fails and the statement goes with it.
+func TestClient_CodexProfile_AppliesWhereTheSessionKnowsTheClient(t *testing.T) {
+	gitlab := toolResultsProbeGitLab(t, `{"id":7,"username":"someone"}`, nil)
+
+	for _, tc := range []struct {
+		name     string
+		stateful bool
+		legacy   bool
+		rounded  bool
+	}{
+		{name: "stateless at 2026-07-28 reads the clientInfo each request carries", rounded: true},
+		{name: "stateful at 2025-11-25 keeps the clientInfo of initialize", stateful: true, legacy: true, rounded: true},
+		{name: "stateless at 2025-11-25 has no clientInfo to read", legacy: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flags := []string{"--gitlab-url=" + gitlab}
+			if tc.stateful {
+				flags = append(flags, "--stateless=false")
+			}
+			srv := startServer(t, nil, flags...)
+
+			payload := codexToolCall(t, srv, tc.stateful, tc.legacy)
+			priorities := priorityOnTheWire.FindAllStringSubmatch(payload, -1)
+			if len(priorities) == 0 {
+				t.Fatalf("the result carries no priority, so it cannot show the profile either way: %s", toolResultsTruncate(payload))
+			}
+			for _, p := range priorities {
+				fractional := strings.ContainsAny(p[1], ".eE")
+				if tc.rounded && fractional {
+					t.Errorf("a Codex session was sent priority %s, which Codex refuses; want an integer", p[1])
+				}
+				if !tc.rounded && !fractional {
+					t.Errorf("priority %s was rounded on a transport where the session cannot know its client; the documented limit no longer holds", p[1])
+				}
+			}
+		})
+	}
+}
+
+// codexToolCall identifies a session as Codex the way a client of that
+// protocol does and returns the JSON-RPC answer to a served tool call. A
+// 2026-07-28 call carries the clientInfo in its own _meta; an older client
+// sends initialize first, and carries the session it was given, if any, on the
+// calls after it. It fails the test unless the call was served, since a
+// refused or unknown call proves nothing about a result.
+func codexToolCall(t *testing.T, srv *server, stateful, legacy bool) string {
+	t.Helper()
+
+	headers := map[string]string{"PRIVATE-TOKEN": "glpat-whatever", "Mcp-Param-Action": "user.current"}
+	call := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":` + codexCurrentUserArguments + `,"_meta":{` +
+		`"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `",` +
+		`"io.modelcontextprotocol/clientCapabilities":{},` +
+		`"io.modelcontextprotocol/clientInfo":` + codexClientInfo + `}}}`
+	if legacy {
+		const legacyVersion = "2025-11-25"
+		headers["MCP-Protocol-Version"] = legacyVersion
+		initialized := srv.do(t, request{
+			method: http.MethodPost, path: "/mcp", headers: headers,
+			body: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"` + legacyVersion +
+				`","capabilities":{},"clientInfo":` + codexClientInfo + `}}`,
+		})
+		if initialized.status != http.StatusOK {
+			t.Fatalf("initialize = %d, want %d: %s", initialized.status, http.StatusOK, toolResultsTruncate(initialized.body))
+		}
+		session := initialized.header.Get("Mcp-Session-Id")
+		if stateful == (session == "") {
+			t.Fatalf("stateful %v, yet initialize was answered with session %q", stateful, session)
+		}
+		headers["Mcp-Session-Id"] = session
+		if got := srv.do(t, request{
+			method: http.MethodPost, path: "/mcp", headers: headers,
+			body: `{"jsonrpc":"2.0","method":"notifications/initialized"}`,
+		}); got.status != http.StatusAccepted {
+			t.Fatalf("notifications/initialized = %d, want %d: %s", got.status, http.StatusAccepted, toolResultsTruncate(got.body))
+		}
+		call = `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":` + codexCurrentUserArguments + `}}`
+	}
+
+	got := srv.do(t, request{method: http.MethodPost, path: "/mcp", headers: headers, body: call})
+	if got.status != http.StatusOK {
+		t.Fatalf("tools/call = %d, want %d: %s", got.status, http.StatusOK, toolResultsTruncate(got.body))
+	}
+	payload := jsonRPCPayload(t, got.body)
+	var answer struct {
+		Result *struct {
+			IsError bool `json:"isError"`
+		} `json:"result"`
+		Error json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(payload), &answer); err != nil || answer.Result == nil || answer.Error != nil || answer.Result.IsError {
+		t.Fatalf("the tool call was not served (%v): %s", err, toolResultsTruncate(payload))
+	}
+	return payload
 }
