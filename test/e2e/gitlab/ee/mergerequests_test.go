@@ -141,7 +141,12 @@ func TestMRApprovalRules_Lifecycle_ReadsStateAndManagesARule(t *testing.T) {
 		// per page. The request is this scenario's own and its surfaces run
 		// one after another, so nothing else writes to its rules between the
 		// two reads; the second rule goes again before the next surface runs.
-		second := harness.Do[mrapprovals.RuleOutput](s, actionMRApprovalRuleCreate, withParams(params, map[string]any{"name": e.Name("rule-page"), "approvals_required": 1}))
+		// It names the run's user as its approver: GitLab types a rule that
+		// names nobody as any_approver and allows one per request, so a
+		// second rule without approvers is refused with 400.
+		second := harness.Do[mrapprovals.RuleOutput](s, actionMRApprovalRuleCreate, withParams(params, map[string]any{
+			"name": e.Name("rule-page"), "approvals_required": 1, "user_ids": []int64{e.Runtime().UserID},
+		}))
 		assertPagesOneAtATime(e, s, actionMRApprovalRules, params, func(out mrapprovals.RulesOutput) ([]string, toolutil.PaginationOutput) {
 			return idKeys(mrApprovalRuleIDs(out.Rules)), out.Pagination
 		})
