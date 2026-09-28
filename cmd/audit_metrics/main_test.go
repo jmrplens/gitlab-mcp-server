@@ -158,18 +158,73 @@ func TestCountToolPackages_ReportsCatalogFirstPackages(t *testing.T) {
 	}
 }
 
-// TestRepositoryRoot_FromItsOwnSourcePath_NamesThisModulesRoot verifies the
+// TestRepositoryRoot_FromThePackageDirectory_NamesThisModulesRoot verifies the
 // root every published count and the VERSION read are taken under is this
-// module's own. The "." fallback beside it is never what a run reads, since
-// runtime.Caller cannot fail for the frame asking about itself, so the path it
-// derives is the one property of that function a test can hold.
-func TestRepositoryRoot_FromItsOwnSourcePath_NamesThisModulesRoot(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(repositoryRoot(), "go.mod")) //#nosec G304 -- fixed in-repo path
+// module's own when the command runs where its tests do, and that it is a
+// directory rather than a path relative to nothing: under -trimpath the path
+// the root used to be derived from was "github.com/jmrplens/...", which no
+// read could find (issue 1029).
+func TestRepositoryRoot_FromThePackageDirectory_NamesThisModulesRoot(t *testing.T) {
+	root := repositoryRoot()
+	if !filepath.IsAbs(root) {
+		t.Fatalf("repositoryRoot() = %q, want an absolute directory", root)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "go.mod")) //#nosec G304 -- fixed in-repo path
 	if err != nil {
 		t.Fatalf("read go.mod under repositoryRoot(): %v", err)
 	}
 	if !strings.HasPrefix(string(data), "module github.com/jmrplens/gitlab-mcp-server/v3\n") {
-		t.Fatalf("go.mod under %s is not this module's:\n%s", repositoryRoot(), data)
+		t.Fatalf("go.mod under %s is not this module's:\n%s", root, data)
+	}
+}
+
+// TestRepositoryRoot_WorkingDirectory_NamesTheNearestModuleAboveIt verifies
+// the root is found by walking up from wherever the command runs, so a run
+// from a directory below the root reads the same tree as one from the root,
+// and that the reads stay relative to the working directory where no go.mod
+// is found at all.
+func TestRepositoryRoot_WorkingDirectory_NamesTheNearestModuleAboveIt(t *testing.T) {
+	module := t.TempDir()
+	if err := os.WriteFile(filepath.Join(module, "go.mod"), []byte("module example.com/m\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	below := filepath.Join(module, "cmd", "tool")
+	if err := os.MkdirAll(below, 0o750); err != nil {
+		t.Fatalf("create %s: %v", below, err)
+	}
+	outside := t.TempDir()
+
+	cases := []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "at the module root", dir: module, want: module},
+		{name: "below the module root", dir: below, want: module},
+		{name: "outside any module", dir: outside, want: "."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(tc.dir)
+			got := repositoryRoot()
+			if tc.want == "." {
+				if got != "." {
+					t.Fatalf("repositoryRoot() from %s = %q, want %q", tc.dir, got, ".")
+				}
+				return
+			}
+			gotInfo, err := os.Stat(got)
+			if err != nil {
+				t.Fatalf("repositoryRoot() from %s = %q, which cannot be read: %v", tc.dir, got, err)
+			}
+			wantInfo, err := os.Stat(tc.want)
+			if err != nil {
+				t.Fatalf("stat %s: %v", tc.want, err)
+			}
+			if !os.SameFile(gotInfo, wantInfo) {
+				t.Fatalf("repositoryRoot() from %s = %q, want %q", tc.dir, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -251,6 +306,44 @@ func markNestedCheckout(t *testing.T, dir string) {
 func TestDirectoryHasGoFile_MissingDirectory_ReturnsFalse(t *testing.T) {
 	if directoryHasGoFile(filepath.Join(t.TempDir(), "missing")) {
 		t.Fatal("directoryHasGoFile(missing) = true, want false")
+	}
+}
+
+// TestDirectoryHasGoFile_Entries_CountOnlyAFileNamedGo verifies a directory
+// counts as a package only when a file in it, and not a subdirectory, carries
+// the .go suffix: a directory of documentation, or one whose only entry is a
+// directory named like a Go file, is not a package and must not be counted as
+// one in the published tool-package figure.
+func TestDirectoryHasGoFile_Entries_CountOnlyAFileNamedGo(t *testing.T) {
+	cases := []struct {
+		name  string
+		files []string
+		dirs  []string
+		want  bool
+	}{
+		{name: "a Go file", files: []string{"tool.go"}, want: true},
+		{name: "a Go file beside other files", files: []string{"README.md", "tool.go"}, want: true},
+		{name: "only other files", files: []string{"README.md", "fixture.json"}, want: false},
+		{name: "only a directory named like a Go file", dirs: []string{"generated.go"}, want: false},
+		{name: "empty", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, name := range tc.files {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte("x\n"), 0o600); err != nil {
+					t.Fatalf("write %s: %v", name, err)
+				}
+			}
+			for _, name := range tc.dirs {
+				if err := os.Mkdir(filepath.Join(dir, name), 0o750); err != nil {
+					t.Fatalf("create %s: %v", name, err)
+				}
+			}
+			if got := directoryHasGoFile(dir); got != tc.want {
+				t.Errorf("directoryHasGoFile(%v files, %v dirs) = %t, want %t", tc.files, tc.dirs, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -1483,6 +1576,92 @@ func TestRun_RejectsNegativeTopDomains(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want nothing written before the guard fires", stdout.String())
+	}
+}
+
+// TestParseOptions_Flags_ReachTheirOwnOption verifies each flag of the command
+// line sets its own option and no other, and that an empty command line leaves
+// the defaults the report runs with.
+func TestParseOptions_Flags_ReachTheirOwnOption(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want auditOptions
+	}{
+		{name: "no arguments", want: auditOptions{topDomains: defaultTopDomains}},
+		{name: "top domains", args: []string{"-top-domains", "7"}, want: auditOptions{topDomains: 7}},
+		{name: "json", args: []string{"-json"}, want: auditOptions{topDomains: defaultTopDomains, jsonOut: true}},
+		{
+			name: "site stats and check",
+			args: []string{"-site-stats", "stats.json", "-check"},
+			want: auditOptions{topDomains: defaultTopDomains, siteStatsPath: "stats.json", checkOnly: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			got, err := parseOptions(tc.args, &stderr)
+			if err != nil {
+				t.Fatalf("parseOptions(%q) error = %v", tc.args, err)
+			}
+			if got != tc.want {
+				t.Errorf("parseOptions(%q) = %+v, want %+v", tc.args, got, tc.want)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("stderr = %q, want nothing for a command line that parses", stderr.String())
+			}
+		})
+	}
+}
+
+// TestRunMain_CommandLine_ExitsWithTheCodeItsParseDecides verifies the codes
+// the flag package's ExitOnError handling gave before the parse moved into
+// runMain: 0 for -h, 2 for a command line that does not parse, and otherwise
+// the code run returns for the options parsed, with every complaint on stderr.
+func TestRunMain_CommandLine_ExitsWithTheCodeItsParseDecides(t *testing.T) {
+	cases := []struct {
+		name   string
+		args   []string
+		code   int
+		stderr string
+	}{
+		{name: "help", args: []string{"-h"}, code: 0, stderr: "Usage of audit_metrics:"},
+		{name: "unknown flag", args: []string{"-nope"}, code: 2, stderr: "flag provided but not defined: -nope"},
+		{name: "count that is not a number", args: []string{"-top-domains", "many"}, code: 2, stderr: `invalid value "many" for flag -top-domains`},
+		{name: "options run refuses", args: []string{"-top-domains", "-1"}, code: 1, stderr: "-top-domains must be >= 0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := runMain(tc.args, &stdout, &stderr); code != tc.code {
+				t.Errorf("runMain(%q) = %d, want %d", tc.args, code, tc.code)
+			}
+			if !strings.Contains(stderr.String(), tc.stderr) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tc.stderr)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want nothing", stdout.String())
+			}
+		})
+	}
+}
+
+// TestMain_ExitsWithTheCodeRunMainDecided verifies main reads the process's
+// own command line and hands the process the code runMain returns, once.
+func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
+	previousExit, previousArgs := exitProcess, os.Args
+	t.Cleanup(func() { exitProcess, os.Args = previousExit, previousArgs })
+	var codes []int
+	exitProcess = func(code int) { codes = append(codes, code) }
+	os.Args = []string{"audit_metrics", "-top-domains", "-1"}
+
+	stderr := captureStderr(t, main)
+
+	if len(codes) != 1 || codes[0] != 1 {
+		t.Errorf("exit codes = %v, want exactly [1]", codes)
+	}
+	if !strings.Contains(stderr, "-top-domains must be >= 0") {
+		t.Errorf("stderr = %q, want the refusal of the parsed count", stderr)
 	}
 }
 

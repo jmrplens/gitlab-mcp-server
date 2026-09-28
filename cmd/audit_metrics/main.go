@@ -1,13 +1,15 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,16 +54,42 @@ type auditOptions struct {
 	checkOnly     bool
 }
 
-// main parses flags and hands the work to run, whose exit code it returns.
-func main() {
-	opts := auditOptions{}
-	flag.IntVar(&opts.topDomains, "top-domains", defaultTopDomains, "number of domains to list by tool count")
-	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
-	flag.StringVar(&opts.siteStatsPath, "site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
-	flag.BoolVar(&opts.checkOnly, "check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
-	flag.Parse()
+// exitProcess is os.Exit behind a variable, so a test can drive main and read
+// the status it hands the process rather than end the test binary.
+var exitProcess = os.Exit
 
-	os.Exit(run(opts, os.Stdout, os.Stderr))
+// main hands the command line to runMain and exits with the code it returns.
+func main() {
+	exitProcess(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// runMain parses the command line and hands the options to run, returning the
+// process exit code: 0 for -h, 2 for arguments it cannot parse, which are the
+// codes the flag package's own ExitOnError handling gave before the parse
+// moved here, and otherwise what run decides.
+func runMain(args []string, stdout, stderr io.Writer) int {
+	opts, err := parseOptions(args, stderr)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	return run(opts, stdout, stderr)
+}
+
+// parseOptions reads the command line into auditOptions, writing the flag
+// package's usage and complaints to stderr.
+func parseOptions(args []string, stderr io.Writer) (auditOptions, error) {
+	flags := flag.NewFlagSet("audit_metrics", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	opts := auditOptions{}
+	flags.IntVar(&opts.topDomains, "top-domains", defaultTopDomains, "number of domains to list by tool count")
+	flags.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
+	flags.StringVar(&opts.siteStatsPath, "site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
+	flags.BoolVar(&opts.checkOnly, "check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
+	err := flags.Parse(args)
+	return opts, err
 }
 
 // run builds the audit clients, dispatches to the selected mode, and returns
@@ -321,17 +349,35 @@ func countToolPackages() int {
 	return countToolPackageDirsAt(filepath.Join(repositoryRoot(), "internal", "tools"))
 }
 
+// repositoryRoot returns the directory every published count and the VERSION
+// read are taken under: the nearest one at or above the working directory that
+// holds a go.mod. That is the repository root for every `go run
+// ./cmd/audit_metrics/` the Makefile makes, for this package's own tests, which
+// run in its directory, and for the staged copy `make coverage-mutants`
+// measures it through.
+//
+// It used to be the directory two levels above the path runtime.Caller reports
+// for this file, which is a directory only while the build keeps source paths:
+// under -trimpath, which `make coverage-mutants` compiles with (issue 1029), the
+// path is the module-relative "github.com/jmrplens/gitlab-mcp-server/v3/cmd/..."
+// and every count was read under a directory that does not exist. Where no
+// go.mod is found, the reads stay relative to the working directory.
 func repositoryRoot() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
 		return "."
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	return root
 }
 
+// countToolPackageDirsAt counts the directories at or below toolsDir that hold
+// a Go file, leaving out a checkout nested below it. A directory the walk
+// cannot read is named on stderr and counted as none; the walk function
+// handles every error it is handed that way and never returns one, so the
+// error filepath.WalkDir returns is always nil and is not consulted.
 func countToolPackageDirsAt(toolsDir string) int {
 	count := 0
-	err := filepath.WalkDir(toolsDir, func(path string, entry os.DirEntry, walkErr error) error {
+	_ = filepath.WalkDir(toolsDir, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			fmt.Fprintf(os.Stderr, "WalkDir %s: %v\n", path, walkErr)
 			return nil
@@ -352,9 +398,6 @@ func countToolPackageDirsAt(toolsDir string) int {
 		}
 		return nil
 	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "WalkDir %s: %v\n", toolsDir, err)
-	}
 	return count
 }
 
@@ -651,11 +694,12 @@ func printDomainTable(domains map[string]int, topDomains int) {
 	for k, v := range domains {
 		sorted = append(sorted, kv{k, v})
 	}
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].val != sorted[j].val {
-			return sorted[i].val > sorted[j].val
-		}
-		return sorted[i].key < sorted[j].key
+	// Written as comparisons rather than as a guarded `>` and a `<`: under the
+	// `!=` guard that pair decided the same order as `>=` and `<=`, and the keys
+	// of a map are never equal, so two mutants of it survived that no input
+	// could kill.
+	slices.SortFunc(sorted, func(a, b kv) int {
+		return cmp.Or(cmp.Compare(b.val, a.val), strings.Compare(a.key, b.key))
 	})
 	limit := min(topDomains, len(sorted))
 	fmt.Printf("  %-25s %s\n", "Domain", "Tools")
