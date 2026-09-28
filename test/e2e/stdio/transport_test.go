@@ -31,13 +31,16 @@ func TestStdout_CarriesNothingButJSONRPC(t *testing.T) {
 	// A handshake and a call that reaches GitLab, which is where a stray write
 	// is most likely: startup probes, the client wrapper, and tool execution
 	// all run on this path.
-	for i, msg := range []string{
-		request(1, "initialize", `{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"c","version":"1"}}`),
-		request(2, "tools/list", ""),
-		request(3, "tools/call", `{"name":"gitlab_execute_action","arguments":{"action":"user.get_current"}}`),
+	for i, tc := range []struct {
+		msg      string
+		toGitLab bool
+	}{
+		{msg: request(1, "initialize", `{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"c","version":"1"}}`)},
+		{msg: request(2, "tools/list", "")},
+		{msg: currentUserCall(3), toGitLab: true},
 	} {
-		t.Run(msg, func(t *testing.T) {
-			got := s.call(t, msg)
+		t.Run(tc.msg, func(t *testing.T) {
+			got := s.call(t, tc.msg)
 			// readMessage already fails on anything that is not JSON. What is left
 			// to check is that it is JSON-RPC, and that it answers what was asked.
 			if got["jsonrpc"] != "2.0" {
@@ -45,6 +48,13 @@ func TestStdout_CarriesNothingButJSONRPC(t *testing.T) {
 			}
 			if got["id"] == nil {
 				t.Errorf("message %d carries no id, so a client cannot match it to a request: %v", i+1, got)
+			}
+			// The call has to be served for the path it claims to walk to have
+			// been walked: an action the catalog does not know is answered
+			// before any request is made, and so was this one, for as long as
+			// it named user.get_current.
+			if tc.toGitLab && !served(got) {
+				t.Errorf("message %d did not reach GitLab: %v", i+1, got)
 			}
 		})
 	}
@@ -550,7 +560,7 @@ func TestTransportAuto_WithAPipeOnStdin_SpeaksStdio(t *testing.T) {
 		// make the server refuse it.
 		{name: "initialize", request: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"c","version":"1"}}}`},
 		{name: "tools/list", request: request(2, "tools/list", "")},
-		{name: "tools/call", request: request(3, "tools/call", `{"name":"gitlab_execute_action","arguments":{"action":"user.get_current"}}`)},
+		{name: "tools/call", request: currentUserCall(3)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := s.call(t, tc.request)
@@ -559,6 +569,9 @@ func TestTransportAuto_WithAPipeOnStdin_SpeaksStdio(t *testing.T) {
 			}
 			if got["error"] != nil {
 				t.Errorf("%s failed: %v", tc.name, got["error"])
+			}
+			if tc.name == "tools/call" && !served(got) {
+				t.Errorf("the tool call did not reach GitLab: %v", got)
 			}
 		})
 	}
