@@ -1066,6 +1066,10 @@ var premiumGatingExempt = map[string]string{
 	// Adding a project member is CE; only the optional member_role_id custom role
 	// is Premium/Ultimate. The tool itself works on Free.
 	"gitlab_project_member_add": "CE feature; only the optional member_role_id custom role is Premium/Ultimate.",
+	// Sharing a group with a group is CE; only the optional member_role_id
+	// custom role (Ultimate) and the Minimal access level (a Premium or
+	// Ultimate top-level group) need a license. The tool itself works on Free.
+	"gitlab_group_share": "CE feature; only the optional member_role_id custom role and the Minimal access level need a license.",
 	// Feature flags are available on Free, Premium, and Ultimate per current
 	// GitLab docs (docs.gitlab.com/operations/feature_flags). The
 	// "Requires Premium/Ultimate" wording in the spec is legacy/over-conservative.

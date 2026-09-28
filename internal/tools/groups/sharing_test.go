@@ -85,16 +85,80 @@ func TestShareGroupWithGroup_BadExpiresAt(t *testing.T) {
 	}
 }
 
-// TestShareGroupWithGroup_Conflict verifies a 409/422 produces a hint.
-func TestShareGroupWithGroup_Conflict(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	_, err := ShareGroupWithGroup(context.Background(), client, ShareGroupInput{
-		GroupID: "99", SharedGroupID: 1, GroupAccess: 30,
-	})
-	if err == nil || !strings.Contains(err.Error(), "group_access") {
-		t.Fatalf("expected access-level hint, got: %v", err)
+// TestShareGroupWithGroup_StatusHints verifies each status POST
+// /groups/:id/share answers with gets the hint for what GitLab means by it,
+// and nothing else: 400 is a parameter Grape refused, 409 every link the model
+// would not save (an existing share among them, which the 400 hint used to
+// claim), a plain 401 or 403 a credential refused a permission, and 404 a
+// caller who may not link either group or a hierarchy that keeps shares
+// inside it. A 403 naming an RFC 6750 error code refuses the token's scope,
+// and a status the route never uses (422, 500) carries no hint at all.
+func TestShareGroupWithGroup_StatusHints(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		want    []string
+		notWant []string
+	}{
+		{
+			name: "400", status: http.StatusBadRequest, body: `{"error":"group_access does not have a valid value"}`,
+			want:    []string{"group_access must be 10/15/20/25/30/40/50", "5 (Minimal access) on a Premium or Ultimate top-level group", "does not have a valid value"},
+			notWant: []string{"already shared"},
+		},
+		{
+			name: "409", status: http.StatusConflict, body: `{"message":"Shared group has already been taken"}`,
+			want: []string{
+				"already be shared with this group", "group.shared_with", "group.unshare_from_group",
+				"must belong to this group's top-level group", "base access level must equal group_access",
+				"5 (Minimal access) needs a Premium or Ultimate license", "allowed domains must be a subset", "has already been taken",
+			},
+		},
+		{
+			name: "plain 403", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`,
+			want: []string{"needs the share_group permission", "answered 404 rather than 403"},
+		},
+		{
+			name: "plain 401", status: http.StatusUnauthorized, body: `{"message":"401 Unauthorized"}`,
+			want: []string{"needs the share_group permission"},
+		},
+		{
+			name: "403 insufficient scope", status: http.StatusForbidden, body: `{"error":"insufficient_scope"}`,
+			notWant: []string{"share_group permission", "Suggestion"},
+		},
+		{
+			name: "404", status: http.StatusNotFound, body: `{"message":"404 Not Found"}`,
+			want: []string{"verify group_id and shared_group_id with group.get", "the Owner role grants that", "prevents sharing outside its hierarchy"},
+		},
+		{
+			name: "422", status: http.StatusUnprocessableEntity, body: `{"message":"unprocessable"}`,
+			want: []string{"groupShareWithGroup"}, notWant: []string{"Suggestion"},
+		},
+		{
+			name: "500", status: http.StatusInternalServerError, body: `{"message":"boom"}`,
+			want: []string{"groupShareWithGroup"}, notWant: []string{"Suggestion"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := ShareGroupWithGroup(t.Context(), client, ShareGroupInput{GroupID: "99", SharedGroupID: 1, GroupAccess: 30})
+			if err == nil {
+				t.Fatalf("ShareGroupWithGroup() = nil error on %d", tt.status)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not carry %q", err, want)
+				}
+			}
+			for _, notWant := range tt.notWant {
+				if strings.Contains(err.Error(), notWant) {
+					t.Errorf("error %q carries %q", err, notWant)
+				}
+			}
+		})
 	}
 }
 
@@ -317,29 +381,39 @@ func TestSharing_CanceledContext(t *testing.T) {
 	}
 }
 
-// TestShareGroupWithGroup_MemberRoleAndErrorFallthrough verifies the
-// member_role_id option is forwarded when set and that non-422/400 API
-// failures take the NotFound-hint fallthrough branch.
-func TestShareGroupWithGroup_MemberRoleAndErrorFallthrough(t *testing.T) {
-	roleID := int64(9)
-
-	okClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(body), "member_role_id") {
-			t.Errorf("request body missing member_role_id: %s", body)
-		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id": 42}`)
-	}))
-	if _, err := ShareGroupWithGroup(t.Context(), okClient, ShareGroupInput{GroupID: "42", SharedGroupID: 7, GroupAccess: 30, MemberRoleID: &roleID}); err != nil {
-		t.Fatalf("ShareGroupWithGroup with member role error = %v", err)
+// TestShareGroupWithGroup_MemberRoleID_SentOnlyWhenGiven verifies the
+// member_role_id option reaches the body with its value when set, and that a
+// share without one carries no member_role_id key at all: the zero value is
+// "no custom role", as it is on group.group_member_share, and sending 0 would
+// ask GitLab for a role that does not exist.
+func TestShareGroupWithGroup_MemberRoleID_SentOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name     string
+		roleID   int64
+		wantBody string
+		wantKey  bool
+	}{
+		{name: "given", roleID: 9, wantBody: `"member_role_id":9`, wantKey: true},
+		{name: "zero", roleID: 0, wantKey: false},
 	}
-
-	failClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	_, err := ShareGroupWithGroup(t.Context(), failClient, ShareGroupInput{GroupID: "42", SharedGroupID: 7, GroupAccess: 30})
-	if err == nil || !strings.Contains(err.Error(), "groupShareWithGroup") {
-		t.Errorf("fallthrough err = %v, want groupShareWithGroup-wrapped error", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				gotBody = string(body)
+				testutil.RespondJSON(w, http.StatusOK, `{"id": 42}`)
+			}))
+			if _, err := ShareGroupWithGroup(t.Context(), client, ShareGroupInput{GroupID: "42", SharedGroupID: 7, GroupAccess: 30, MemberRoleID: tt.roleID}); err != nil {
+				t.Fatalf("ShareGroupWithGroup() error = %v", err)
+			}
+			if got := strings.Contains(gotBody, `"member_role_id"`); got != tt.wantKey {
+				t.Errorf("body %s carries member_role_id = %v, want %v", gotBody, got, tt.wantKey)
+			}
+			if tt.wantBody != "" && !strings.Contains(gotBody, tt.wantBody) {
+				t.Errorf("body %s does not carry %s", gotBody, tt.wantBody)
+			}
+		})
 	}
 }
 
@@ -417,26 +491,6 @@ func TestSharingMarkdown_OptionalPartsAppearOnlyWhenPresent(t *testing.T) {
 	}
 	if !strings.Contains(plain, "| proj |") {
 		t.Errorf("markdown lost the name of a project with no URL:\n%s", plain)
-	}
-}
-
-// TestShareGroup_BadRequestCarriesTheSameHintAsUnprocessable verifies the
-// second status the share handler answers with the parameter hint. GitLab
-// returns 400 for some of the same rejections it returns 422 for, and the
-// caller needs the hint either way.
-func TestShareGroup_BadRequestCarriesTheSameHintAsUnprocessable(t *testing.T) {
-	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, status, `{"message":"rejected"}`)
-			}))
-			_, err := ShareGroupWithGroup(context.Background(), client, ShareGroupInput{
-				GroupID: "99", SharedGroupID: 7, GroupAccess: 30,
-			})
-			if err == nil || !strings.Contains(err.Error(), "group_access must be") {
-				t.Errorf("ShareGroupWithGroup on a %d = %v, want the parameter hint", status, err)
-			}
-		})
 	}
 }
 

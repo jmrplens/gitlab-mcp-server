@@ -6,11 +6,14 @@ package groupmembers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -409,43 +412,105 @@ func TestShareGroup_MissingGroupAccess(t *testing.T) {
 	}
 }
 
-// TestShareGroup_InvalidGroupAccess verifies ShareGroup rejects access levels
-// that the project-group share API does not accept. The pre-flight validation
-// surfaces a precise message listing the valid range and the values that are
-// NOT valid for project group shares (Minimal access 5, Planner 15,
-// Security Manager 25, Admin 60).
+// TestShareGroup_InvalidGroupAccess verifies ShareGroup refuses, before any
+// request leaves, a level no group share can carry: 60 (Admin), which is not
+// a membership level, and numbers that name no level at all, just below and
+// above the ones GitLab accepts. The refusal names every level it would take,
+// so a caller can correct the value without reading the API page. The client
+// answers every request with a failure the test would report, so a refusal
+// that let the request through would not pass.
 func TestShareGroup_InvalidGroupAccess(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	// 60=Admin is one of the new levels that the validation explicitly rejects.
-	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 60})
-	if err == nil {
-		t.Fatal("expected error for invalid group_access=60")
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("ShareGroup sent %s %s for a level it must refuse locally", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	for _, level := range []int{4, 11, 35, 51, 60} {
+		t.Run(strconv.Itoa(level), func(t *testing.T) {
+			_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: level})
+			if !errors.Is(err, errShareGroupAccess) {
+				t.Errorf("ShareGroup(group_access=%d) error = %v, want the level refusal", level, err)
+			}
+		})
 	}
-	if !strings.Contains(err.Error(), "10/20/30/40") {
-		t.Errorf("expected error to mention valid 10/20/30/40 range, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "not valid for project group shares") {
-		t.Errorf("expected error to mention non-shareable levels, got: %v", err)
+	for _, named := range []string{"5 (Minimal access)", "15 (Planner)", "25 (Security Manager)", "50 (Owner)", "60 (Admin) is not valid for group shares"} {
+		t.Run("names "+named, func(t *testing.T) {
+			if !strings.Contains(errShareGroupAccess.Error(), named) {
+				t.Errorf("the refusal %q does not name %q", errShareGroupAccess, named)
+			}
+		})
 	}
 }
 
-// TestShareGroup_BadRequestHint verifies the 400 status hint surfaced when
-// the GitLab API rejects the share payload. The hint must list the valid
-// 10/20/30/40 range so callers can correct their input without having to
-// consult the API docs.
+// TestShareGroup_BadRequestHint verifies the hint a 400 carries. GitLab
+// answers 400 when Grape refuses a parameter: 5 (Minimal access) on a build
+// without the Enterprise levels, or an expiry that is not a date. The hint
+// names the levels every build accepts and the one it depends on, so the
+// caller can tell which of its values was refused.
 func TestShareGroup_BadRequestHint(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"message": "400 Bad request - invalid group_access"}`))
+		_, _ = w.Write([]byte(`{"error": "group_access does not have a valid value"}`))
 	})
 	client := testutil.NewTestClient(t, mux)
-	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 5})
 	if err == nil {
 		t.Fatal("expected error for 400 response")
 	}
-	if !strings.Contains(err.Error(), "group_access must be one of 10/20/30/40") {
-		t.Errorf("expected 400 hint to mention valid 10/20/30/40 range, got: %v", err)
+	for _, want := range []string{"group_access must be one of 10/15/20/25/30/40/50", "5 (Minimal access) on a Premium or Ultimate instance", "expires_at must be YYYY-MM-DD", "does not have a valid value"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("400 error %q does not carry %q", err, want)
+			}
+		})
+	}
+}
+
+// TestShareGroup_NotFoundHint verifies the hint a 404 carries. GitLab answers
+// 404 for a group it cannot find and, from Groups::GroupLinks::CreateService,
+// whenever the link may not be created: the caller cannot link the group or
+// read the target, or the top-level group keeps shares inside its hierarchy.
+// The hint names all of them, since the status alone cannot tell them apart.
+func TestShareGroup_NotFoundHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"Not Found"}`)
+	}))
+	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+	if err == nil {
+		t.Fatal("expected error for 404 response")
+	}
+	for _, want := range []string{"verify group_id and share_group_id with group.get", "may not link this group or read the target group", "prevents sharing outside its hierarchy"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("404 error %q does not carry %q", err, want)
+			}
+		})
+	}
+}
+
+// TestShareGroup_MalformedExpiresAt verifies an expiry that is not a date in
+// the form GitLab takes is refused before the request leaves, naming the form,
+// rather than sent for Grape to refuse: the options this handler sends carry
+// the expiry as a date, so a value that does not parse as one cannot be
+// written into them at all.
+func TestShareGroup_MalformedExpiresAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("ShareGroup sent %s %s with an expiry it must refuse locally", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	for _, expiresAt := range []string{"31/12/2027", "2027-12-31T00:00:00Z", "tomorrow"} {
+		t.Run(expiresAt, func(t *testing.T) {
+			_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30, ExpiresAt: expiresAt})
+			if err == nil {
+				t.Fatalf("ShareGroup(expires_at=%q) = nil error, want a refusal", expiresAt)
+			}
+			if !strings.Contains(err.Error(), "expires_at must be a date in YYYY-MM-DD form") {
+				t.Errorf("the refusal %q does not name the date form", err)
+			}
+			if _, wrapped := errors.AsType[*time.ParseError](err); !wrapped {
+				t.Errorf("the refusal %q does not wrap the parse error", err)
+			}
+		})
 	}
 }
 
@@ -920,19 +985,66 @@ func TestShareGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestShareGroup_Conflict verifies the ShareGroup_Conflict handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestShareGroup_PermissionRefusalHint verifies the hint a permission refusal
+// carries, and that it is keyed on the refusal rather than on the status: a
+// plain 403 or 401 is one (a fine-grained token without share_group is
+// refused that way), while a 403 naming an RFC 6750 error code refuses the
+// token's scope and is told nothing about roles. The hint also says that a
+// missing Owner role is answered 404, since that is where a caller who reads
+// "permission" would otherwise look.
+func TestShareGroup_PermissionRefusalHint(t *testing.T) {
+	const hint = "a fine-grained personal access token needs the share_group permission"
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+		{"plain 401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+		{"403 insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := ShareGroup(t.Context(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if got := strings.Contains(err.Error(), hint); got != tt.wantHint {
+				t.Errorf("error %q carries the permission hint = %v, want %v", err, got, tt.wantHint)
+			}
+			if tt.wantHint && !strings.Contains(err.Error(), "answered 404 rather than 403") {
+				t.Errorf("error %q does not say a missing role is answered 404", err)
+			}
+		})
+	}
+}
+
+// TestShareGroup_Conflict verifies the hint a 409 carries. GitLab answers 409
+// whenever the link it builds fails validation (Groups::GroupLinks::
+// CreateService renders the model's errors with that status), which is a share
+// that already exists, a custom role from another top-level group or whose
+// base access level is not group_access, Minimal access where the license or
+// the group does not allow it, and a target group whose allowed email domains
+// are not a subset of this one's. The hint covers all of them, and GitLab's
+// own message says which.
 func TestShareGroup_Conflict(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusConflict, `{"message":"conflict"}`)
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"Member role the custom role's base access level does not match the current access level"}`)
 	}))
-	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30, MemberRoleID: 7})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "already shared") {
-		t.Fatalf("error = %v, want already-shared hint", err)
+	for _, want := range []string{"already shared", "group.group_member_unshare", "must belong to this group's top-level group", "base access level must equal group_access", "5 (Minimal access) needs a Premium or Ultimate license", "allowed domains must be a subset", "does not match the current access level"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("409 error %q does not carry %q", err, want)
+			}
+		})
 	}
 }
 
@@ -1752,9 +1864,10 @@ func recordGroupMemberBody(t *testing.T, send func(*gitlabclient.Client) error) 
 // would add nobody, and an expiry silently lost would make a temporary
 // membership permanent.
 //
-// The fragments carry values rather than bare keys because two of the SDK's
-// options structs write expires_at as null when it is unset, so the key is on
-// the wire either way and only the value says whether the handler filled it.
+// The add's fragments carry values rather than bare keys because the SDK's
+// options struct for it writes expires_at as null when it is unset, so the key
+// is on the wire either way and only the value says whether the handler
+// filled it.
 func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
 	for _, testCase := range []struct {
 		name    string
@@ -1795,10 +1908,14 @@ func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *tes
 			absent:  []string{`"access_level"`, `"expires_at":"`, `"member_role_id"`},
 		},
 		{
+			// The share sends the one options struct GitLab's route and this
+			// input agree on, which leaves out every field the caller left out:
+			// a share without an expiry carries no expires_at key at all, where
+			// the struct it used to send wrote "expires_at": null on every call.
 			name: "share",
 			full: func(client *gitlabclient.Client) error {
 				_, err := ShareGroup(context.Background(), client, ShareInput{
-					GroupID: "5", ShareGroupID: 9, GroupAccess: 30, ExpiresAt: "2027-01-31",
+					GroupID: "5", ShareGroupID: 9, GroupAccess: 30, ExpiresAt: "2027-01-31", MemberRoleID: 3,
 				})
 				return err
 			},
@@ -1806,8 +1923,8 @@ func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *tes
 				_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 9, GroupAccess: 30})
 				return err
 			},
-			present: []string{`"expires_at":"2027-01-31"`},
-			absent:  []string{`"expires_at":"`},
+			present: []string{`"group_id":9`, `"group_access":30`, `"expires_at":"2027-01-31"`, `"member_role_id":3`},
+			absent:  []string{`"expires_at"`, `"member_role_id"`},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -1831,12 +1948,15 @@ func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *tes
 	}
 }
 
-// TestShareGroup_AcceptsEveryValidGroupAccess verifies each of the four levels
-// GitLab accepts for a group share is let through, not only the one the rest
-// of the tests happen to use. The switch names them as one case, so a level
-// dropped from that list would refuse a share the endpoint supports.
+// TestShareGroup_AcceptsEveryValidGroupAccess verifies each of the eight
+// levels GitLab accepts for a group share is let through, not only the one the
+// rest of the tests happen to use. lib/api/groups.rb validates group_access
+// against Gitlab::Access.values_with_minimal_access: Guest, Planner, Reporter,
+// Security Manager, Developer, Maintainer and Owner on every build, and
+// Minimal access on an Enterprise one. The switch names them as one case, so a
+// level dropped from that list would refuse a share the endpoint supports.
 func TestShareGroup_AcceptsEveryValidGroupAccess(t *testing.T) {
-	for _, level := range []int{10, 20, 30, 40} {
+	for _, level := range []int{5, 10, 15, 20, 25, 30, 40, 50} {
 		t.Run(toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), func(t *testing.T) {
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, _ *http.Request) {

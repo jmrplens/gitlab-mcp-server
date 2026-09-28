@@ -180,7 +180,7 @@ List the candidate parent groups available for transferring a group (groups you 
 
 ### `gitlab_group_share_with_group`
 
-Share a GitLab group with another group via the Groups API (distinct from `gitlab_group_share`, which uses the Group Members API). Requires `group_id`, `shared_group_id`, and `group_access` (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optionally set `expires_at` (YYYY-MM-DD) and `member_role_id` (Ultimate custom role). Requires Owner role.
+Share a GitLab group with another group via the Groups API. [`gitlab_group_share`](#gitlab_group_share) reaches the same route and names the group shared with `share_group_id`; this action names it `shared_group_id` and answers with a confirmation rather than the group. Requires `group_id`, `shared_group_id`, and `group_access` (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, and 5=Minimal access on Premium or Ultimate). Optionally set `expires_at` (YYYY-MM-DD) and `member_role_id` (Ultimate custom role, whose base access level must equal `group_access`; a Free or Premium schema does not offer it, and `0` means no custom role). Requires Owner role. A refused share is told what GitLab means by its status: 400 is a parameter it refused, 409 a link it would not save (a share that already exists, a custom role from another top-level group or with another base level, Minimal access where the license or a subgroup does not allow it, email domains the other group does not share), and 404 includes a caller without the Owner role here or read access there, and a top-level group that keeps shares inside its hierarchy.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -360,7 +360,9 @@ Remove a member from a GitLab group. Optionally skip subresource removal and una
 
 ### `gitlab_group_share`
 
-Share a GitLab group with another group, granting the shared group a specified access level. Optionally set an expiration date. Returns the shared group's ID, name, path, full name and full path, description, visibility and web URL, and `shared_with_groups`: every group it is now shared with, the new share among them, each with its group ID, name and full path, access level, expiry and, on an instance with custom roles, `member_role_id`. The rest of the group GitLab sends with the answer (its settings, limits and links) is `group.get`'s.
+Share a GitLab group with another group, granting the members of the group shared with (`share_group_id`) a specified access level. `group_access` takes 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer) or 50 (Owner), and 5 (Minimal access) on a Premium or Ultimate instance; 60 (Admin) and any other number are refused before the request is sent. Optionally set an expiration date (`expires_at`, YYYY-MM-DD) and, on Ultimate, a custom role the share grants (`member_role_id`), whose base access level must equal `group_access`. GitLab records the share without the role where custom roles are not available. Returns the shared group's ID, name, path, full name and full path, description, visibility and web URL, and `shared_with_groups`: every group it is now shared with, the new share among them, each with its group ID, name and full path, access level, expiry and, on an instance with custom roles, `member_role_id`. The rest of the group GitLab sends with the answer (its settings, limits and links) is `group.get`'s.
+
+This action and [`gitlab_group_share_with_group`](#gitlab_group_share_with_group) reach the same route (`POST /groups/:id/share`) and accept the same values; they differ only in what they call the group shared with (`share_group_id` here, `shared_group_id` there) and in what they answer with.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
