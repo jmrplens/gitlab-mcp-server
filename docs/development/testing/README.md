@@ -177,9 +177,10 @@ which gathers coverage the same way. Measured on `cmd/server`, whose tests take
 44 s, the cached coverage run reported 0.65 s and derived a five-second budget
 from it; the pass reported 0 killed and every mutant timed out, which reads
 exactly like a package nothing tests. `make coverage-mutants` therefore runs
-gremlins under `GOFLAGS=-count=1`, so what it multiplies is always a real
-measurement. `go build` ignores a flag it does not know, so the same setting is
-harmless for the compile around each mutant.
+gremlins, and every go command before it, under `GOFLAGS=-count=1` (beside
+`-trimpath`, for the reason below), so what it multiplies is always a real
+measurement. A go command ignores a `GOFLAGS` entry it does not know, so the
+same setting is harmless for `go list` and `go mod download`.
 
 **The baseline is a run of the same command gremlins times, and it is timed by
 the clock.** The recipe used to read the duration off the last line `go test`
@@ -219,9 +220,11 @@ the command twice: once untimed, which is the pass/fail gate and leaves the
 build cache as warm as gremlins' run will find it, and once under bash's
 `time` in the C locale (under a comma-decimal locale `time` writes `0,940`,
 which the script's positive-number check refuses, so every run there would
-stop). Measured after a content edit, the
-timed base and gremlins' own figure now agree: 1.017 s against 1.045 s on
-`elicitationtools`, 1.026 s against 1.038 s on `cmd/audit_dynamic_aliases`. A
+stop). Between the two it runs the command gremlins runs against each mutant,
+once, for the reason the compile paragraph below gives. Measured after a
+content edit, the timed base and gremlins' own figure now agree: 1.017 s
+against 1.045 s on `elicitationtools`, 1.026 s against 1.038 s on
+`cmd/audit_dynamic_aliases`. A
 package with no test file under the tags it was given is refused, naming them,
 since each mutant runs only that package's tests and none could be killed; the
 exception is an integration run with a `-coverpkg` that names the package
@@ -250,34 +253,93 @@ days, and TIMED OUT is not part of the gate: it is a reading to explain, as the
 paragraphs below do. The three knobs are seconds written as a plain number,
 and anything else (`2h`) is refused rather than read as its leading digits.
 
-**The budget has to cover a compile, not only a run.** gremlins copies the
-module into a directory per worker, and Go keys a compile on the package's
-directory, so the first mutant on each of the four workers recompiles every
-package of this module its test imports, inside its own deadline. The inflated
-deadlines of the parsed baseline absorbed that without anyone noticing; a
-timed baseline does not. `cmd/audit_dynamic_aliases` runs its tests in half a
-second and imports all of `internal/tools`: four workers compiling it at once
-took 110 s each on five cores, and 2 s for every run after. At a 30 s budget it
-reported 2 killed and 8 timed out; at 300 s it reports all 10 killed, as
-before, and `elicitationtools` keeps its 133 killed and none timed out. That is
-why the default is 300 s. A timeout figure taken before this change is not
-comparable with one taken after it, since the deadlines themselves moved.
+A coefficient fixed in `GREMLINS_FLAGS` (`--timeout-coefficient 20`) is the one
+gremlins applies, so it is the one the script passes and announces, with the
+deadline it gives, and neither the budget nor the ceiling bounds it. The script
+used to announce its own derived coefficient beside it, a deadline that was not
+in force (on `internal/config`, about 300 s per mutant printed while gremlins
+used 20). A value the script cannot read the way pflag and gremlins do is
+refused before the suite runs: pflag reads a leading zero as octal, and gremlins
+reads `0` as its own default of 3, which is what the script announces for it.
 
-A run held to a fixed coefficient (`GREMLINS_FLAGS='--workers 2
---timeout-coefficient 20'`, which overrides the derived one) keeps that first
-compile inside a deadline of twenty coverage runs, and a package whose tests
-import `internal/tools` does not fit: in issue 971, `issues`,
-`mergerequests`, `pipelineschedules`, `repositorysubmodules`,
-`mrcontextcommits` and `cmd/audit_1to1/internal/sdk` reported between two and
-four timeouts each, every one among the first mutants a worker compiled.
-The directory is in the key only while `-trimpath` is off: under that flag Go
-leaves a package's directory out of its compile key (`buildActionID` in
-`cmd/go/internal/work/exec.go`), so a copy of the module finds what the
-original compiled. `GOFLAGS=-trimpath` for both the
-run and a warm-up `go test -count=1 -failfast <pkg>` beforehand (the command
-gremlins runs per mutant) turned all twenty-one into kills under the same
-flags, with nothing else moving: 27, 59, 112, 206, 318 and 49 killed, each the
-earlier killed count plus the mutants that had timed out.
+**A mutant's deadline pays for its run, not for a compile of the module.**
+gremlins copies the module into a directory per worker and runs each mutant's
+tests in that copy, and while `-trimpath` is off Go puts a package's directory
+into its compile key (`buildActionID` in `cmd/go/internal/work/exec.go`, Go
+1.27.1). Nothing compiled in the original tree was then of use to a worker, so
+the first mutant on each of them recompiled every package of this module its
+test imports, inside its own deadline. The inflated deadlines of the parsed
+baseline absorbed that without anyone noticing, and a timed baseline did not:
+`cmd/audit_dynamic_aliases` runs its tests in half a second and imports all of
+`internal/tools`, four workers compiling it at once took 110 s each on five
+cores and 2 s for every run after, and at a 30 s budget it reported 2 killed
+and 8 timed out. The 300 s default budget was chosen to absorb that compile. A
+run held to a fixed coefficient (`GREMLINS_FLAGS='--workers 2
+--timeout-coefficient 20'`, which overrides the derived one) was not protected
+by it: in issue 971, `issues`, `mergerequests`, `pipelineschedules`,
+`repositorysubmodules`, `mrcontextcommits` and `cmd/audit_1to1/internal/sdk`
+reported between two and four timeouts each, every one among the first mutants
+a worker compiled.
+
+`scripts/coverage-mutants.sh` therefore exports `GOFLAGS=-trimpath` (with
+`-count=1`) to every go command it runs and to gremlins, which leaves the
+directory out of the key, and runs the command gremlins runs against each
+mutant (`go test -failfast [-tags T] <package>`, or `./...` under
+`--integration`) once against the unmutated package, between the gate and the
+timed run. The coverage runs cannot leave that behind by themselves: they
+compile the packages their pattern or `-coverpkg` names with coverage counters,
+which a mutant's plain `go test` does not share. That run is a gate as well,
+since gremlins reads a failing run of that command as a killed mutant and a test
+can pass under `-cover` and fail without it. A caller who states their own
+`--exclude-files` may leave packages below the target to be mutated, each run
+as its own `go test <package>`, so the run then covers the target's whole
+subtree (`./<pkg>/...`). Under `--integration` it is a whole-module
+`go test ./...`, untimed, on top of the two coverage runs of the whole module
+the baseline already makes: the module's unit suite took 470 s on three cores
+under `-trimpath` (below), so an integration run spends about that much more
+before gremlins starts. Issue 1029 measured it on three
+cores of a Linux build host (the `golang:1.27.1` image), on
+`internal/tools/mrcontextcommits`:
+
+| What                                                               | Without `-trimpath`          | With `-trimpath` and the warm-up run |
+| ------------------------------------------------------------------ | ---------------------------- | ------------------------------------ |
+| First mutant in a fresh copy of the module (two copies)            | 190 compiles, 28.4 s, 27.7 s | 1 compile, 1.36 s, 1.40 s            |
+| `--workers 2 --timeout-coefficient 20`: killed / lived / timed out | 23 / 0 / 4                   | 27 / 0 / 0                           |
+| the same: gremlins' own run, and the script end to end             | 92 s, 98 s                   | 30 s, 41 s                           |
+| `--workers 2`, derived coefficient: killed / lived / timed out     | 27 / 0 / 0                   | 27 / 0 / 0                           |
+| the same: gremlins' own run, and the script end to end             | 84 s, 89 s                   | 15 s, 19 s                           |
+
+The four timeouts were the first four mutants to finish, and nothing else
+moved: every figure after is the one before with the timeouts read as the
+kills they are, as the issue's own six packages showed (27, 59, 112, 206, 318
+and 49 killed). Under the derived coefficient no verdict moved at all, and the
+run took a fifth of the time. The 300 s default stays: it is no longer paying
+for a compile, but it is still what a slow mutant is given, and lowering it is
+a separate decision. A timeout figure taken before issue 915 is not comparable
+with one taken after it, since the deadlines themselves moved; one taken
+before issue 1029 under a fixed coefficient counts first compiles as timeouts.
+
+**`-trimpath` changes what two kinds of test see, and both were measured.** A
+binary built under it records neither the directories of its sources nor the
+root the toolchain is installed at. The second is where `runtime.GOROOT`, and
+`go/build`'s `Default.GOROOT` after it, fall back when `GOROOT` is not set, and
+a test binary starts with the environment the go command was given, so
+`cmd/internal/golist`, `cmd/godoc_tool` and `cmd/gen_testing_docs`, which run
+the go command out of that root, exec'd `bin/go` and failed. The script exports
+`GOROOT` as `go env GOROOT` names it, which is the value an untrimmed build
+records. The first has no such variable: `cmd/audit_metrics` found the
+repository two directories above the path `runtime.Caller` reported for its own
+source, which under `-trimpath` is the module-relative
+`github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_metrics/main.go`, and now
+walks up from its working directory to the `go.mod` instead. With both, the
+whole module's unit suite passes under `-trimpath` (274 packages, 10 without
+tests, 470 s on three cores), and so do `test/e2e/internal/fixture` and
+`test/e2e/internal/harness` under `-tags e2e`. A test that reads its own
+compiled source path again would fail the script's gate rather than be
+measured, and the refusal names `-trimpath` as a cause to check, with the
+command that reproduces the run: the `GOROOT`, `GOFLAGS` and tags it ran
+under, over the package where it is rather than a staged copy that is gone by
+then.
 
 A timeout that survives the 300 s budget is a finding rather than a setting:
 the mutant made the package pathologically slow instead of wrong. Eight of

@@ -30,13 +30,22 @@
 # so rather than falling back to the unstaged run, because that run is the one
 # that reports a clean package without measuring it. See issue 872.
 #
-# The other thing it decides is how long each mutant may run. gremlins has no
+# The second thing it decides is how long each mutant may run. gremlins has no
 # setting for that: it multiplies --timeout-coefficient by the wall time of its
 # own coverage run, `go test [-tags T] [-coverpkg P] -cover -coverprofile F
 # ./<pkg>/...` from the module root. So the coefficient is derived here from a
 # run of that same command under the same tags, timed by the clock, and held
 # under a ceiling. Deriving it from anything else is how a package behind a
 # build tag came to give each mutant a deadline of 95 hours. See issue 915.
+#
+# The third is what that deadline has to pay for. gremlins runs each
+# mutant's tests in its own copy of the module, one per worker, and Go keys a
+# compile on the package's directory unless -trimpath is set, so the first
+# mutant on every worker used to recompile every package of this module its
+# test imports inside that mutant's own deadline. Every go command here and in
+# gremlins therefore runs under -trimpath, and the command gremlins runs per
+# mutant is run once beforehand, so a worker's copy finds everything it needs
+# already compiled. See issue 1029.
 set -euo pipefail
 
 # bash writes the figure `time` reports with the locale's decimal separator,
@@ -117,6 +126,12 @@ excluded=${GREMLINS_UNLEASH_EXCLUDE_FILES:+yes}
 # does pass that assertion, and that reaches gremlins and not this baseline,
 # so an integration run is asked for with -i in GREMLINS_FLAGS.
 integration=false
+# A coefficient the caller fixes in GREMLINS_FLAGS, which gremlins reads after
+# the one this script derives and so uses instead of it. It has no
+# environment binding to read here: a flag beats gremlins' own variable, and
+# the script always passes one.
+fixed=""
+fixed_given=""
 unreadable() {
   echo "gremlins: GREMLINS_FLAGS: cannot read $1 the way gremlins would, so the baseline could run under other build tags than gremlins does; refusing to measure" >&2
   exit 1
@@ -156,6 +171,7 @@ while [ "$i" -lt "${#gremlins_flags[@]}" ]; do
         coverpkg) coverpkg=$value ;;
         integration) integration=$value ;;
         exclude-files) excluded=yes ;;
+        timeout-coefficient) fixed=$value fixed_given=yes ;;
       esac
       ;;
     -?*)
@@ -204,6 +220,19 @@ case "$integration" in
   1 | t | T | TRUE | true | True) integration=yes ;;
   *) integration="" ;;
 esac
+# The deadline gremlins will apply is announced below, so a fixed coefficient
+# has to be read as gremlins reads it. pflag parses an int with base 0, so a
+# leading zero makes it octal, and gremlins reads 0 as its own default of 3
+# (DefaultTimeoutCoefficient, internal/engine/executor.go, v0.6.0). A plain
+# whole number without a leading zero is the one spelling both agree on, and
+# anything else is refused before the suite runs rather than announced wrong.
+if [ -n "$fixed_given" ]; then
+  if ! [[ $fixed =~ ^(0|[1-9][0-9]*)$ ]]; then
+    echo "gremlins: GREMLINS_FLAGS: --timeout-coefficient '$fixed' is not a whole number written without a leading zero, so the deadline gremlins would apply cannot be told; refusing to measure" >&2
+    exit 1
+  fi
+  [ "$fixed" != 0 ] || fixed=3
+fi
 # Said once the flags are read, so the notice can say what decided the run.
 if [ -n "${GREMLINS_UNLEASH_INTEGRATION:-}" ]; then
   if [ -n "$integration" ]; then
@@ -216,6 +245,38 @@ tag_args=()
 [ -z "$tags" ] || tag_args=(-tags "$tags")
 cover_args=()
 [ -z "$coverpkg" ] || cover_args=(-coverpkg "$coverpkg")
+
+# Every go command from here on, and gremlins with every command it runs,
+# inherits these two, so what the script measures and warms is what gremlins
+# will find.
+#
+# -trimpath because gremlins copies the module into a directory per worker and
+# runs each mutant's tests there, and without it cmd/go puts the package's
+# directory into its compile key (buildActionID in cmd/go/internal/work/exec.go,
+# Go 1.27.1). No compile done here was then of any use to a worker, and the
+# first mutant on each one recompiled every package of this module its test
+# imports inside its own deadline. That is what the 300 s default budget was
+# sized to absorb, and a fixed coefficient passed through GREMLINS_FLAGS does
+# not absorb it: under `--workers 2 --timeout-coefficient 20` six packages of
+# issue 971 reported twenty-one mutants TIMED OUT, every one among the first a
+# worker compiled. Under -trimpath the directory is left out of the key.
+#
+# -count=1 because gremlins multiplies the coefficient by the wall time of its
+# own coverage run, which Go's test cache would otherwise answer instantly for
+# a package whose files have not changed since it last ran. A go command
+# ignores a flag in GOFLAGS that it does not know, so the same setting reaches
+# go list and go mod download harmlessly.
+export GOFLAGS="${GOFLAGS:-} -trimpath -count=1"
+# -trimpath also drops the root the toolchain was installed at from the
+# binaries it builds, and that root is where runtime.GOROOT, and go/build's
+# Default.GOROOT after it, fall back to when GOROOT is not set. A test binary is
+# started with the environment the go command was given, so without this a
+# test that runs the go command out of cmd/internal/golist would exec "bin/go"
+# and fail: cmd/gen_testing_docs, cmd/godoc_tool and cmd/internal/golist did.
+# Setting the root the go command itself uses restores exactly the value an
+# untrimmed build records.
+GOROOT=$(go env GOROOT)
+export GOROOT
 root=$(go list -m -f '{{.Dir}}')
 # go list prints native paths, which carry backslashes on Windows. Every path
 # below is cut against the root and written into a pattern or a target, and a
@@ -359,20 +420,42 @@ if [ -n "$stage" ]; then
   target="./${staged#"$root"/}"
 fi
 
-# The run gremlins times: its coverage step, from the module root, over the
-# target's subtree, or over the whole module under --integration.
+# patterns_for sets the two patterns a run over the directory it is given
+# names, both from the module root. scan is the run gremlins times, its
+# coverage step, over the directory's subtree or over the whole module under
+# --integration. each is the command gremlins runs against each mutant (see
+# the run of it below): the package itself, since the default exclusion keeps
+# every mutant in it, or the whole subtree when the caller's own exclusion may
+# leave packages below it to be mutated, or the whole module under
+# --integration.
+#
+# The root and the package directory were written with slashes when they were
+# read, so the cut after the root works on Windows as well; a strip expecting a
+# slash on a native path used to strip nothing there and leave a pattern naming
+# a directory that does not exist, which go test fails and this script would
+# then report as a failing suite.
+patterns_for() {
+  if [ -n "$integration" ] || [ "$1" = "$root" ]; then
+    scan=./...
+  else
+    scan="./${1#"$root"/}/..."
+  fi
+  if [ -n "$integration" ] || [ -n "$excluded" ]; then
+    each=$scan
+  elif [ "$1" = "$root" ]; then
+    each=.
+  else
+    each="./${1#"$root"/}"
+  fi
+}
+# The patterns naming the package where it is, which is what a reader
+# reproducing a failure runs: a staged copy is gone by the time they read it.
+patterns_for "$pkgdir"
+shown_scan=$scan
+shown_each=$each
 dir=$pkgdir
 [ -z "$staged" ] || dir=$staged
-if [ -n "$integration" ] || [ "$dir" = "$root" ]; then
-  scan=./...
-else
-  # The root and the package directory were written with slashes when they
-  # were read, so the cut after the root works on Windows as well; a strip
-  # expecting a slash on a native path used to strip nothing there and leave a
-  # pattern naming a directory that does not exist, which go test fails and
-  # this script would then report as a failing suite.
-  scan="./${dir#"$root"/}/..."
-fi
+patterns_for "$dir"
 out=$(mktemp)
 profile=$(mktemp)
 baseline() {
@@ -389,6 +472,18 @@ baseline() {
 # build instead makes the base too long on a package just edited, and the
 # per-mutant deadline too short to run a mutant in.
 (cd "$root" && go mod download)
+# Said after either refusal of a suite that fails here, since -trimpath is a
+# cause the output above cannot name: a test that finds its files through its
+# own compiled source path (runtime.Caller) is handed a module-relative path
+# under it rather than a directory, and fails here while passing a plain run.
+# The command it offers is the one the script ran, with the GOFLAGS, GOROOT and
+# tags it ran under, over the package where it is rather than over a staged
+# copy the EXIT trap removes before anyone reads this. Without GOROOT a test
+# that runs the go command fails for another reason (see above).
+trimpath_hint() {
+  local flags=${GOFLAGS# }
+  echo "gremlins: every go command here runs under -trimpath (issue 1029), which hands a test that locates files through runtime.Caller a module-relative path; GOROOT=$GOROOT GOFLAGS='$flags' go test${tags:+ -tags $tags} $1, run from the module root, shows whether that is the cause" >&2
+}
 if ! baseline; then
   cat "$out" >&2
   if [ -n "$staged" ]; then
@@ -397,10 +492,42 @@ if ! baseline; then
   else
     echo "gremlins: $PKG does not pass its own tests, or a package below it does not (the output above says which), so every mutant would read as killed; refusing to measure" >&2
   fi
+  trimpath_hint "$shown_scan"
   exit 1
 fi
 
-# The second run is timed by the clock, because `go test`'s own summary line
+# The command gremlins runs against each mutant, run once against the
+# unmutated package: `go test [-tags T] -failfast <package>`, or `./...` from
+# the root under --integration (getTestArgs in internal/engine/executor.go,
+# v0.6.0; gremlins adds a -timeout, which decides nothing about a compile).
+# gremlins names the package by its import path and runs it from the worker's
+# copy of the target directory; the relative path from the root names the same
+# package, and under -trimpath neither the working directory nor the copy's own
+# location is part of any compile key, so this run leaves in the build cache
+# every package the first mutant on each worker would otherwise compile. A
+# caller who states their own --exclude-files may leave packages below the
+# target to be mutated, each run as its own `go test <package>`, so the run
+# covers the target's whole subtree then (patterns_for, above).
+#
+# The coverage run above does not: it compiles the packages its pattern or its
+# -coverpkg names with coverage counters, which a mutant's plain `go test` does
+# not share, so a package below the target that the target imports would still
+# be compiled inside the first mutant's deadline. Measured on six packages of issue 971
+# under `--workers 2 --timeout-coefficient 20`, -trimpath and this run together
+# turned all twenty-one first-compile timeouts into kills with no other verdict
+# moving.
+#
+# It is also a gate. gremlins reads a failing run of this command as a killed
+# mutant, and it is not the command the coverage run is: a test that behaves
+# differently when coverage is on passes one and fails the other.
+if ! (cd "$root" && go test -count=1 ${tag_args[@]+"${tag_args[@]}"} -failfast "$each") >"$out" 2>&1; then
+  cat "$out" >&2
+  echo "gremlins: $PKG passes its tests under -cover and fails go test -failfast $each, the command gremlins runs against each mutant, so every mutant would read as killed; refusing to measure" >&2
+  trimpath_hint "$shown_each"
+  exit 1
+fi
+
+# The last run is timed by the clock, because `go test`'s own summary line
 # says nothing reliable about it: it reports the test binary's run without the
 # build gremlins' figure includes, a -cover run ends in a coverage figure
 # rather than a duration, and a package with no tests under the tags given
@@ -412,7 +539,7 @@ status=0
 base=$({ time baseline; } 2>&1) || status=$?
 if [ "$status" != 0 ]; then
   cat "$out" >&2
-  echo "gremlins: $PKG passed its tests and then failed them on the timed second run, so a mutant's verdict would depend on which way the suite fell; refusing to measure" >&2
+  echo "gremlins: $PKG passed its tests and then failed them on the timed run, so a mutant's verdict would depend on which way the suite fell; refusing to measure" >&2
   exit 1
 fi
 if ! awk -v b="$base" 'BEGIN{exit !(b ~ /^[0-9]+\.[0-9]+$/ && b + 0 > 0)}'; then
@@ -425,32 +552,44 @@ fi
 # and then no larger than the ceiling's multiple. A ceiling that does not hold
 # two runs would time out every mutant, so it is refused rather than applied.
 # gremlins multiplies its OWN coverage run rather than this one, and Go's test
-# cache answers that instantly for an unchanged package, so GOFLAGS carries
-# -count=1 below to make what it multiplies a real measurement. The ceiling's
-# multiple is clamped at 6000 too, although no comparison below can tell 6000
-# from more, because older mawk builds (1.3.4 20200120, the awk Debian 12
-# installs) print an integer past 2^31 in exponent form (3.33333e+09 for a
-# ceiling of 1e9 s over a base of 0.3 s), which bash's -lt cannot compare.
-# gawk, BWK awk, busybox awk and current mawk print the integer.
-read -r coeff cap <<<"$(awk -v b="$base" -v f="$budget" -v m="$ceiling" 'BEGIN{
-  c = int(f / b) + 1; if (c < 8) c = 8; if (c > 6000) c = 6000
-  k = int(m / b); if (k > 6000) k = 6000
-  print c, k
-}')"
-if [ "$cap" -lt 2 ]; then
-  echo "gremlins: $PKG's coverage run takes ${base}s by the clock, and a ${ceiling}s ceiling does not hold two of them, so every mutant would be reported TIMED OUT; raise MUTANT_DEADLINE_MAX (the fourth argument) to measure it" >&2
-  exit 1
-fi
-if [ "$coeff" -gt "$cap" ]; then
-  if [ "$cap" -lt 8 ]; then
-    echo "gremlins: the ${ceiling}s ceiling holds the coefficient at $cap, under the floor of 8 a slow package is otherwise given, so a mutant that is only slow under four workers may be reported TIMED OUT"
-  else
-    echo "gremlins: the ${ceiling}s ceiling holds the coefficient at $cap rather than $coeff"
+# cache answers that instantly for an unchanged package, so the GOFLAGS it
+# inherits carries -count=1 to make what it multiplies a real measurement. The
+# ceiling's multiple is clamped at 6000 too, although no comparison below can
+# tell 6000 from more, because older mawk builds (1.3.4 20200120, the awk
+# Debian 12 installs) print an integer past 2^31 in exponent form (3.33333e+09
+# for a ceiling of 1e9 s over a base of 0.3 s), which bash's -lt cannot
+# compare. gawk, BWK awk, busybox awk and current mawk print the integer.
+#
+# A coefficient the caller fixed in GREMLINS_FLAGS is the one gremlins applies,
+# so it is the one announced, and neither the budget nor the ceiling bounds it.
+# Announcing the derived one beside it printed a deadline that was not in force,
+# which is exactly the mode issue 1029's timeouts were read in.
+coeff_args=()
+if [ -n "$fixed_given" ]; then
+  deadline=$(awk -v b="$base" -v c="$fixed" 'BEGIN{printf "%.1f", b * c}')
+  echo "gremlins: $PKG coverage run takes ${base}s by the clock, and GREMLINS_FLAGS fixes -timeout-coefficient $fixed: about ${deadline}s per mutant, which neither the ${budget}s budget nor the ${ceiling}s ceiling bounds"
+else
+  read -r coeff cap <<<"$(awk -v b="$base" -v f="$budget" -v m="$ceiling" 'BEGIN{
+    c = int(f / b) + 1; if (c < 8) c = 8; if (c > 6000) c = 6000
+    k = int(m / b); if (k > 6000) k = 6000
+    print c, k
+  }')"
+  if [ "$cap" -lt 2 ]; then
+    echo "gremlins: $PKG's coverage run takes ${base}s by the clock, and a ${ceiling}s ceiling does not hold two of them, so every mutant would be reported TIMED OUT; raise MUTANT_DEADLINE_MAX (the fourth argument) to measure it" >&2
+    exit 1
   fi
-  coeff=$cap
+  if [ "$coeff" -gt "$cap" ]; then
+    if [ "$cap" -lt 8 ]; then
+      echo "gremlins: the ${ceiling}s ceiling holds the coefficient at $cap, under the floor of 8 a slow package is otherwise given, so a mutant that is only slow under four workers may be reported TIMED OUT"
+    else
+      echo "gremlins: the ${ceiling}s ceiling holds the coefficient at $cap rather than $coeff"
+    fi
+    coeff=$cap
+  fi
+  deadline=$(awk -v b="$base" -v c="$coeff" 'BEGIN{printf "%.1f", b * c}')
+  echo "gremlins: $PKG coverage run takes ${base}s by the clock, so -timeout-coefficient $coeff: about ${deadline}s per mutant (budget ${budget}s, ceiling ${ceiling}s)"
+  coeff_args=(--timeout-coefficient "$coeff")
 fi
-deadline=$(awk -v b="$base" -v c="$coeff" 'BEGIN{printf "%.1f", b * c}')
-echo "gremlins: $PKG coverage run takes ${base}s by the clock, so -timeout-coefficient $coeff: about ${deadline}s per mutant (budget ${budget}s, ceiling ${ceiling}s)"
 
 # PKG names ONE package, which is what this target's usage line says and what
 # the sweep's per-package figures claim. gremlins does not read it that way: it
@@ -477,5 +616,5 @@ if [ -z "$excluded" ]; then
   gremlins_flags+=(--exclude-files=/)
 fi
 
-GOFLAGS="${GOFLAGS:-} -count=1" go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 \
-  unleash --invert-logical --workers 4 --timeout-coefficient "$coeff" ${gremlins_flags[@]+"${gremlins_flags[@]}"} "$target"
+go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 \
+  unleash --invert-logical --workers 4 ${coeff_args[@]+"${coeff_args[@]}"} ${gremlins_flags[@]+"${gremlins_flags[@]}"} "$target"
