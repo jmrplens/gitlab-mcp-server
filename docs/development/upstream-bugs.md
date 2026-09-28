@@ -1936,9 +1936,10 @@ live workaround until a release carries the commit:
   the author of the to-do an issue or a merge request answers `create_todo`
   with all decode into it. This server publishes both keys on every one of
   them, reading them off the captured answer (`toolutil.CapturedUserBasics`,
-  `toolutil.CapturedNestedUserBasics`, and the handlers' own reads in
-  `internal/tools/issues` and `internal/tools/mergerequests`); the package
-  pipeline's user below is the same gap met earlier.
+  `toolutil.CapturedNestedUserBasics`, and `toolutil.CapturedTodo` for the
+  to-do's author, whom `toolutil.UserBasicFrom` completes); the package
+  pipeline's user below is the same gap met earlier, completed by the same
+  helper.
 - `ServiceAccount` has no `public_email`, which the `UserSafe` that
   `lib/api/entities/service_account.rb` inherits exposes with no condition.
   The instance service account list and update in `internal/tools/users` read

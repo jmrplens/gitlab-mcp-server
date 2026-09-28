@@ -667,7 +667,7 @@ func filePipelinesToOutput(pipelines *[]gl.Pipeline, extra packageFileExtra) []t
 			CreatedAt: toolutil.RFC3339Ptr(p.CreatedAt),
 			UpdatedAt: toolutil.RFC3339Ptr(p.UpdatedAt),
 			WebURL:    p.WebURL,
-			User:      packagePipelineUserToOutput(p.User, extra.Pipelines[i].User),
+			User:      toolutil.UserBasicFrom(p.User, extra.Pipelines[i].User),
 		}
 	}
 	return out
@@ -690,38 +690,14 @@ func packagePipelineToOutput(pipeline *gl.PackagePipeline, extra *toolutil.Packa
 		UpdatedAt: toolutil.RFC3339Ptr(pipeline.UpdatedAt),
 		WebURL:    pipeline.WebURL,
 	}
-	var userExtra *toolutil.UserBasicExtra
+	var userExtra toolutil.UserBasicExtra
 	if extra != nil {
 		out.IID = extra.IID
 		out.ProjectID = extra.ProjectID
 		out.Source = extra.Source
 		userExtra = extra.User
 	}
-	out.User = packagePipelineUserToOutput(pipeline.User, userExtra)
-	return out
-}
-
-// packagePipelineUserToOutput converts the user who ran one of a package's
-// pipelines, or nil when GitLab sent none: the six keys client-go's BasicUser
-// decodes that the entity sends, and the two the capture read beside it. The
-// seventh key BasicUser decodes, created_at, is not one GitLab's UserBasic
-// sends, so it is not published.
-func packagePipelineUserToOutput(user *gl.BasicUser, extra *toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
-	if user == nil {
-		return nil
-	}
-	out := &toolutil.UserBasicOutput{
-		ID:        user.ID,
-		Username:  user.Username,
-		Name:      user.Name,
-		State:     user.State,
-		AvatarURL: user.AvatarURL,
-		WebURL:    user.WebURL,
-	}
-	if extra != nil {
-		out.PublicEmail = extra.PublicEmail
-		out.Locked = extra.Locked
-	}
+	out.User = toolutil.UserBasicFrom(pipeline.User, userExtra)
 	return out
 }
 
@@ -765,9 +741,9 @@ type packageFileExtra struct {
 }
 
 // packageFilePipelineExtra is one pipeline of a package file, reduced to what
-// client-go leaves out of it.
+// client-go leaves out of it, the zero value for a pipeline no user ran.
 type packageFilePipelineExtra struct {
-	User *toolutil.UserBasicExtra `json:"user"`
+	User toolutil.UserBasicExtra `json:"user"`
 }
 
 // FileListOutput contains the paginated list of package files.

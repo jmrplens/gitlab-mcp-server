@@ -1619,7 +1619,7 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 	extra := toolutil.PackageExtra{
 		Pipeline: &toolutil.PackagePipelineExtra{
 			IID: 8, ProjectID: 42, Source: "push",
-			User: &toolutil.UserBasicExtra{Locked: true, PublicEmail: "alice@example.com"},
+			User: toolutil.UserBasicExtra{Locked: true, PublicEmail: "alice@example.com"},
 		},
 	}
 
@@ -2071,10 +2071,6 @@ func TestPackagePipelineToOutput_WithoutTheCapturedKeys(t *testing.T) {
 	}
 	if got.User == nil || got.User.ID != 5 || got.User.Username != "alice" || got.User.Locked || got.User.PublicEmail != "" {
 		t.Errorf("user = %+v, want the decoded keys and no captured ones", got.User)
-	}
-	user := packagePipelineUserToOutput(&gl.BasicUser{ID: 6}, &toolutil.UserBasicExtra{Locked: true, PublicEmail: "bob@example.com"})
-	if user.ID != 6 || !user.Locked || user.PublicEmail != "bob@example.com" {
-		t.Errorf("user = %+v, want 6, locked, bob@example.com", user)
 	}
 }
 
