@@ -764,7 +764,16 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 	if len(p.cfg.InstanceURLs()) == 0 {
 		client.MarkInstanceCallerNamed()
 	}
-	client.SetTier(p.cfg.Tier)
+	// A tier named by --tier or GITLAB_MCP_TIER is pinned, so nothing the
+	// entry's client learns later can move it away from the catalog built for
+	// it. A pool client never re-initializes lazily today, which is the one
+	// path that overwrote a pin on stdio (issue 1016), and the pin keeps it
+	// that way if one ever does.
+	if p.cfg.TierExplicit {
+		client.PinTier(p.cfg.Tier)
+	} else {
+		client.SetTier(p.cfg.Tier)
+	}
 
 	if verifyErr := p.verifyUnderProbeBound(client); verifyErr != nil {
 		return nil, verifyErr

@@ -1546,12 +1546,18 @@ func prepareStdioCatalog(
 	}
 
 	// Resolve the licensing tier. When the operator pinned it explicitly via
-	// GITLAB_MCP_TIER, use it verbatim (no license check). Otherwise detect it from
-	// the instance license, falling back to Free.
-	if cfg.TierExplicit || !client.IsInitialized() {
+	// GITLAB_MCP_TIER, use it verbatim (no license check) and pin it on the
+	// client, so the lazy re-initialization of a degraded start cannot replace
+	// it with the edition /api/v4/version reports (issue 1016). Otherwise
+	// detect it from the instance license, falling back to Free.
+	switch {
+	case cfg.TierExplicit:
+		client.PinTier(cfg.Tier)
+		serverCfg.Tier = cfg.Tier
+	case !client.IsInitialized():
 		client.SetTier(cfg.Tier)
 		serverCfg.Tier = cfg.Tier
-	} else {
+	default:
 		serverCfg.Tier = client.DetectTier(ctx)
 	}
 

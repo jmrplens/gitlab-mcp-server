@@ -1013,6 +1013,9 @@ func TestGetOrCreate_DetectsTierPerEntry(t *testing.T) {
 		if entryCfg.Enterprise() != client.IsEnterprise() {
 			t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise(), client.IsEnterprise())
 		}
+		if client.TierPinned() {
+			t.Errorf("a detected tier was pinned on the entry's client; only an explicit one may be")
+		}
 		captured = append(captured, entryCfg.Enterprise())
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}
@@ -1072,6 +1075,12 @@ func TestGetOrCreate_TierConfigOverridesDetection(t *testing.T) {
 			factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
 				if entryCfg.Enterprise() != client.IsEnterprise() {
 					t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise(), client.IsEnterprise())
+				}
+				// An explicit tier is pinned on the entry's client, so no
+				// later edition probe can move it off the catalog built for
+				// it (issue 1016).
+				if !client.TierPinned() {
+					t.Errorf("the explicit tier %s was set but not pinned on the entry's client", tc.configured)
 				}
 				captured = entryCfg.Enterprise()
 				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
