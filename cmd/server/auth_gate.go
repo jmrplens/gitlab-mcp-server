@@ -443,9 +443,12 @@ const mcpSessionIDHeader = "Mcp-Session-Id"
 // guidance is explicit that a handle must be bound server-side to the
 // authenticated principal and refused when presented by any other.
 //
-// 404 is the prescribed answer: it is the terminated-session signal, and a
-// conforming client responds by starting a new session without an ID, so the
-// refusal self-heals rather than stranding the caller.
+// 404 is the prescribed answer: it is the terminated-session signal, and the
+// 2025-11-25 transport requires a client that receives it to start a new
+// session without an ID, so for a conforming client the refusal self-heals.
+// The go-sdk client does not yet (row 68 of docs/development/upstream-bugs.md,
+// pinned in test/e2e/http/session_not_found_test.go): it keeps the refused
+// session on a call and fails the connection on its stream or a notification.
 func (g *mcpServerGate) checkSessionOwnership(r *http.Request, entry *serverpool.Entry) *gateFailure {
 	sessionID := r.Header.Get(mcpSessionIDHeader)
 	if sessionID == "" || g.sessions == nil {

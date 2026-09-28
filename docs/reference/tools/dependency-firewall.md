@@ -24,6 +24,8 @@ The API is documented as `Tier: Premium, Ultimate` and `Offering: GitLab.com, Gi
 
 While that flag is off, every project on the instance answers `404`, which is the same status a project the token cannot read returns. The tool therefore answers a `404` with guidance that names the flag first, so a caller is not left retrying with different project references against an instance where the endpoint does not exist at all.
 
+With the flag on, GitLab evaluates a package only for a project the firewall is turned on for, and answers `422` with the code `dependency_firewall_not_enforced` for any other. On a self-managed instance the firewall is turned on for every project at once, by an administrator under **Admin > Settings > Security and compliance > Dependency firewall**, and no API sets it; on GitLab.com an Owner turns it on in the top-level group's security settings. The tool answers that `422` with guidance saying so rather than as invalid input, since the package coordinates are not what is wrong, and a `503` (`dependency_firewall_evaluation_failed`, GitLab could not look the package up) with a retry. Neither is a verdict: until one arrives, treat the package as not evaluated rather than as allowed.
+
 ### Common Questions
 
 > "Is lodash 4.17.15 blocked by the dependency firewall on group/project?"

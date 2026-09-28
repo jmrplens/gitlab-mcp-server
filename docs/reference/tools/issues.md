@@ -493,6 +493,8 @@ A saved view stores a named, reusable work item filter under a group or project 
 
 A saved view is available on every tier, but some of the conditions inside one are not, and each is advertised at the same tier `gitlab_list_work_items` advertises the filter of the same name: `iteration_id`, `iteration_cadence_id`, `iteration_wildcard_id`, `weight`, `weight_wildcard_id`, `status` and `custom_field` are Premium, and `health_status_filter` is Ultimate. The same applies to their counterparts inside `not` and `or`.
 
+On GitLab 19.4 a create and a subscribe made with a token nearly always answer `500 Internal server error`: subscribing a user to a view locks the user's row while GitLab's sign-in tracking has left unsaved changes on it, which it refuses ([upstream bugs, entry 72](../../development/upstream-bugs.md#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view)). The create meets it after the view is saved, so the view exists and its creator is not subscribed; the error says so and names `issue.work_item_saved_view_list`, since creating the view again adds a duplicate. The subscribe fails before recording anything. Get, list, update, unsubscribe and delete are not affected.
+
 ### `gitlab_work_item_saved_view_get`
 
 Get a single saved view by namespace path and numeric ID. This is the only action that returns the view's `filters`: GitLab resolves that field at most once per GraphQL request, so the list query does not ask for it. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.

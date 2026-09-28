@@ -123,22 +123,49 @@ func cancelRunningJob(e *harness.Env, s *harness.Session, byJob map[string]any) 
 	return canceled
 }
 
-// stopRetriedJob makes sure the job a retry created cannot hold the runner:
-// a retried manual job goes back to the manual state and refuses a plain
-// cancel, which the forced cancel absorbs; one the runner took is canceled
-// outright. Either way the job is then waited for to leave the states in
-// which it could still run.
+// retriedJobSettledStatuses are the states in which a retried job can no
+// longer hold the runner. canceling is not one of them: the runner is still
+// finishing the job then, which is the state the forced cancel ends.
+var retriedJobSettledStatuses = []string{"manual", "canceled", "skipped", "success", "failed", "created"}
+
+// stopRetriedJob makes sure the job a retry created cannot hold the runner,
+// by canceling it until it reads as one of retriedJobSettledStatuses.
+//
+// The cancel is repeated rather than sent once because the first one races
+// the runner: a retried job is pending at once, and a cancel that reaches
+// GitLab while the runner is picking it up answers 409, the optimistic lock
+// on the build. The final CE run of the wave 1 stack met exactly that on the
+// individual surface, and the forced cancel this used to fall back on
+// answered 201 and changed nothing, since GitLab's force_cancel moves only a
+// job already canceling; the job then ran its whole script past the wait. A
+// plain cancel sent again after the lock is released stops it, and the
+// forced one is kept for the one state it applies to.
 func stopRetriedJob(e *harness.Env, s *harness.Session, byJob map[string]any) {
 	e.T.Helper()
 
-	if _, err := harness.Try[jobs.Output](s, actionJobCancel, byJob); err != nil {
-		if _, forceErr := harness.Try[jobs.Output](s, actionJobCancel, withParams(byJob, map[string]any{"force": true})); forceErr != nil {
-			e.T.Logf("the retried job refused both cancels (plain: %v; forced: %v)", firstLine(err.Error()), firstLine(forceErr.Error()))
+	var last jobs.Output
+	err := harness.Poll(e.Ctx, jobStatusPollInterval, jobSettledWait, func() (bool, string, error) {
+		job, getErr := harness.Try[jobs.Output](s, actionJobGet, byJob)
+		if getErr != nil {
+			return false, "", getErr
 		}
+		last = job
+		if slices.Contains(retriedJobSettledStatuses, job.Status) {
+			return true, job.Status, nil
+		}
+		cancel := byJob
+		if job.Status == "canceling" {
+			cancel = withParams(byJob, map[string]any{"force": true})
+		}
+		if _, cancelErr := harness.Try[jobs.Output](s, actionJobCancel, cancel); cancelErr != nil && !isJobConflict(cancelErr) {
+			return false, "", cancelErr
+		}
+		return false, "the retried job is " + job.Status, nil
+	})
+	if err != nil {
+		e.T.Fatalf("stopping the retried job %d, last seen %q: %v", last.ID, last.Status, err)
 	}
-	settled := harness.Eventually(s, actionJobGet, byJob, jobStatusPollInterval, jobSettledWait,
-		jobStatusIn("manual", "canceled", "canceling", "skipped", "success", "failed", "created"))
-	e.T.Logf("the retried job %d settled as %q", settled.ID, settled.Status)
+	e.T.Logf("the retried job %d settled as %q", last.ID, last.Status)
 }
 
 // TestJob_Lifecycle_ArtifactsManualPlayCancelRetryAndErase runs one

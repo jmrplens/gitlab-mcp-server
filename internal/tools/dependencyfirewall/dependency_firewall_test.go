@@ -307,6 +307,71 @@ func TestEvaluatePackage_ForbiddenCarriesTierHint(t *testing.T) {
 	}
 }
 
+// TestEvaluatePackage_DocumentedRefusals_CarryTheirHints verifies that each
+// refusal the evaluate endpoint documents beside the 404 reaches the caller
+// with the hint for its cause, and never with another's.
+//
+// The 422 is the one that matters: GitLab 19.4 answers it, with the code
+// dependency_firewall_not_enforced, for every project the firewall is not
+// turned on for once the feature flag is on, which on a self-managed instance
+// is every project until an administrator enables the instance setting. The
+// generic classification reads a 422 as invalid input, and a caller told that
+// changes the package coordinates and asks again forever. The bodies are the
+// ones GitLab's render_structured_api_error! writes for the two codes.
+func TestEvaluatePackage_DocumentedRefusals_CarryTheirHints(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+		others []string
+	}{
+		{
+			name:   "422 not enforced names where the firewall is turned on",
+			status: http.StatusUnprocessableEntity,
+			body:   `{"message":"Dependency Firewall is not enabled for this project.","code":"dependency_firewall_not_enforced"}`,
+			want:   notEnforcedHint,
+			others: []string{evaluationFailedHint, forbiddenHint},
+		},
+		{
+			name:   "503 evaluation failed says to retry and not to read it as allowed",
+			status: http.StatusServiceUnavailable,
+			body:   `{"message":"Dependency Firewall evaluation could not be completed.","code":"dependency_firewall_evaluation_failed"}`,
+			want:   evaluationFailedHint,
+			others: []string{notEnforcedHint, forbiddenHint},
+		},
+		{
+			name:   "403 keeps the tier hint",
+			status: http.StatusForbidden,
+			body:   `{"message":"403 Forbidden"}`,
+			want:   forbiddenHint,
+			others: []string{notEnforcedHint, evaluationFailedHint},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, tc.body)
+			}))
+
+			_, err := EvaluatePackage(t.Context(), client, EvaluatePackageInput{
+				ProjectID: "group/project", Ecosystem: "npm", Name: "lodash", Version: "4.17.15",
+			})
+			if err == nil {
+				t.Fatalf("EvaluatePackage() error = nil, want the %d refusal", tc.status)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("EvaluatePackage() error = %q, want the hint %q", err, tc.want)
+			}
+			for _, other := range tc.others {
+				if strings.Contains(err.Error(), other) {
+					t.Errorf("EvaluatePackage() error = %q carries the hint %q, which answers another refusal", err, other)
+				}
+			}
+		})
+	}
+}
+
 // TestEvaluatePackage_NotFoundIsReturnedAsError verifies the handler itself
 // still fails on a 404. Turning that into guidance is the action route's job,
 // and doing it here as well would leave the typed handler unable to report a

@@ -14445,7 +14445,8 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // TestDependencies_TestSupport_NeverReachesTheServerBinary verifies that the
 // test-only packages stay out of what a user downloads.
 //
-// internal/graphqlschema embeds a 155 KB compressed GitLab schema and exists
+// internal/graphqlschema embeds the pinned GitLab schema, close to a megabyte of
+// SDL text, and exists
 // for two readers: the test transport, which judges every document a test
 // sends, and the audit that judges the ones no test reaches. Neither runs in
 // the server. internal/testutil carries that schema plus net/http/httptest and

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -28,6 +29,21 @@ var emptyDisplaySettings = json.RawMessage(`{}`)
 // "work_item_saved_view.list", which no surface resolves, because these
 // actions are routes on the issue domain and carry that prefix.
 const notFoundHint = "verify saved_view_id is the view's numeric ID (from " + actionList + ") and that namespace_path is the full group or project path"
+
+// Hints for the 500 GitLab 19.4 answers a caller authenticated with a token
+// from the step that subscribes a user to a view: it locks the user row while
+// the sign-in tracking has left unsaved changes on it, which Rails refuses
+// (docs/development/upstream-bugs.md, entry 72). Nothing on the client side
+// avoids it, so the answer has to say what state it left behind.
+const (
+	// createServerErrorHint answers a create's 500. The view is saved before
+	// the step that fails, so the create has usually happened, and a caller
+	// told only that it failed creates the view a second time.
+	createServerErrorHint = "GitLab answered a server error, and on GitLab 19.4 that comes after the view is saved, from subscribing its creator: list the namespace's views with " + actionList + " and look for this name before creating it again, since a second create adds a duplicate"
+	// subscribeServerErrorHint answers a subscribe's 500, which fails before
+	// anything is recorded.
+	subscribeServerErrorHint = "GitLab answered a server error before recording the subscription, which on GitLab 19.4 is what every subscribe made with a token meets: nothing changed, and the view can be followed from the web interface instead"
+)
 
 // Item is one work item saved view. It mirrors [gl.WorkItemSavedView].
 type Item struct {
@@ -265,6 +281,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	view, _, err := client.GL().WorkItemSavedViews.CreateWorkItemSavedView(namespacePath, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusInternalServerError) {
+			return MutateOutput{}, toolutil.WrapErrWithHint("create_work_item_saved_view", err, createServerErrorHint)
+		}
 		return MutateOutput{}, toolutil.WrapErrWithHint("create_work_item_saved_view", err,
 			"verify namespace_path is a full group or project path you can write to, and that sort is a WorkItemSort enum value such as CREATED_DESC")
 	}
@@ -330,6 +349,9 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	}
 	view, _, err := client.GL().WorkItemSavedViews.SubscribeWorkItemSavedView(input.SavedViewID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusInternalServerError) {
+			return MutateOutput{}, toolutil.WrapErrWithHint("subscribe_work_item_saved_view", err, subscribeServerErrorHint)
+		}
 		return MutateOutput{}, toolutil.WrapErrWithHint("subscribe_work_item_saved_view", err, notFoundHint)
 	}
 	return mutateOutput(fmt.Sprintf("Successfully subscribed to saved view %d.", input.SavedViewID), toItem(view)), nil

@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 19,795 |
-| Unit test functions                                   | 18,426 |
-| E2E test functions                                    |  1,369 |
-| cmd test functions                                    |  4,107 |
+| Total test functions                                  | 19,816 |
+| Unit test functions                                   | 18,443 |
+| E2E test functions                                    |  1,373 |
+| cmd test functions                                    |  4,122 |
 | Test files (internal/)                                |    679 |
-| Test files (cmd/)                                     |    256 |
+| Test files (cmd/)                                     |    258 |
 | Test files (test/e2e/)                                |    391 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     30 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,842 | 64.9% |
+| `TestFunc_Scenario` (2-part)           | 12,848 | 64.8% |
 | `TestFunc` (no underscore)             |    913 |  4.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,040 | 30.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,055 | 30.6% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,509 |        208 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            379 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |         10,431 |        455 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,369 |        391 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,107 |        256 | server entry point and developer command utilities                                              |
-| **Total**               |     **19,795** |  **1,326** |                                                                                                 |
+| Tool sub-packages (179) |         10,433 |        455 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,373 |        391 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,122 |        258 | server entry point and developer command utilities                                              |
+| **Total**               |     **19,816** |  **1,328** |                                                                                                 |
 
 ### Core Packages
 
@@ -160,7 +160,7 @@
 | customemoji             |         30 |          3 |   100.0% |         3 |
 | dbmigrations            |          7 |          1 |   100.0% |         1 |
 | dependencies            |         22 |          4 |   100.0% |         4 |
-| dependencyfirewall      |         22 |          3 |   100.0% |         1 |
+| dependencyfirewall      |         23 |          3 |   100.0% |         1 |
 | dependencyproxy         |          4 |          1 |   100.0% |         1 |
 | deploykeys              |         79 |          3 |    98.2% |         9 |
 | deploymentmergerequests |         38 |          3 |   100.0% |         1 |
@@ -305,8 +305,8 @@
 | waitpoll                |         34 |          3 |    99.2% |         0 |
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
-| workitemsavedviews      |         58 |          4 |   100.0% |         7 |
-| **Total**               | **10,431** |    **455** |          | **1,190** |
+| workitemsavedviews      |         59 |          4 |   100.0% |         7 |
+| **Total**               | **10,433** |    **455** |          | **1,190** |
 
 </details>
 
@@ -703,7 +703,7 @@ make test-e2e-ee                  # or its older name, make test-e2e-docker-ente
 
 The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every test file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one. The suite this replaced is deleted, along with the build tag that used to select its Enterprise half and the workflow input that used to run it.
 
-The two targets are the complete runs, and four things set them apart from the manual steps above ([A complete run](../../../test/e2e/README.md#a-complete-run) has the reasoning). Before compose starts anything, `test/e2e/scripts/run-docker-e2e.sh` asks the registry which image the GitLab and runner tags name today, without pulling, and pulls only when that is not the image the daemon holds, removing the image the pull replaced when no tag or container still holds it; a registry it cannot reach, or that does not answer within sixty seconds, keeps the local image with a warning, and the run prints the GitLab release it tested. Both runtimes start the Bitbucket fixture. The targets set `E2E_GATE_SKIPS=true` unless the caller did, which starts the run with `E2E_EXTERNAL_NETWORK=true` unless the caller set it in the environment, the file `E2E_ENV_FILE` names or the repository `.env`, so the importer scenarios that call a public URL run, and refuses to start a run whose external network or Bitbucket fixture the caller turned off; an offline host runs with `E2E_GATE_SKIPS=false`, which is not a complete run. And a skip fails the run unless `cmd/audit_e2e_coverage/skip_declarations.go` declares it for that runtime, with a declaration that matched no skip failing too: the script hands the `go test -json` stream to `audit_e2e_coverage -check-skips` after the tests, and the gate decides the status of a run whose tests passed. The runs of `de1ab3b49` ended with eleven skipped tests in seven test functions on CE and ten in five on EE with nothing noticing (issue 1014); the table holds the two that remain, the saved view lifecycle on each runtime, and the teardown keeps GitLab's exceptions log among the reports so the next run can name the exception behind that 500.
+The two targets are the complete runs, and four things set them apart from the manual steps above ([A complete run](../../../test/e2e/README.md#a-complete-run) has the reasoning). Before compose starts anything, `test/e2e/scripts/run-docker-e2e.sh` asks the registry which image the GitLab and runner tags name today, without pulling, and pulls only when that is not the image the daemon holds, removing the image the pull replaced when no tag or container still holds it; a registry it cannot reach, or that does not answer within sixty seconds, keeps the local image with a warning, and the run prints the GitLab release it tested. Both runtimes start the Bitbucket fixture. The targets set `E2E_GATE_SKIPS=true` unless the caller did, which starts the run with `E2E_EXTERNAL_NETWORK=true` unless the caller set it in the environment, the file `E2E_ENV_FILE` names or the repository `.env`, so the importer scenarios that call a public URL run, and refuses to start a run whose external network or Bitbucket fixture the caller turned off; an offline host runs with `E2E_GATE_SKIPS=false`, which is not a complete run. And a skip fails the run unless `cmd/audit_e2e_coverage/skip_declarations.go` declares it for that runtime, with a declaration that matched no skip failing too: the script hands the `go test -json` stream to `audit_e2e_coverage -check-skips` after the tests, and the gate decides the status of a run whose tests passed. The runs of `de1ab3b49` ended with eleven skipped tests in seven test functions on CE and ten in five on EE with nothing noticing (issue 1014); the table is empty since the teardown's copy of GitLab's exceptions log named the 500 that kept the saved view lifecycle skipping on each runtime ([upstream bugs, entry 72](../upstream-bugs.md#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view)), and the scenario now asserts what that answer leaves.
 
 The suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. Refusing rather than adapting is the point: a licensed package that quietly downgraded itself on a Free instance would report a pass for scenarios it never ran, which is how the old arrangement hid its Enterprise half for as long as it did.
 

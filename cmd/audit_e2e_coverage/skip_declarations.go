@@ -54,50 +54,28 @@ var skipRuntimes = map[string]bool{
 	"ee": true,
 }
 
-// savedViewCreateRefusal is what TestWorkItemSavedViews_Lifecycle prints when
-// GitLab's saved view create answers 500, which both runtimes do.
-const savedViewCreateRefusal = "the saved view create answered the experiment's 500"
-
 // declaredSkips holds every skip a complete run may end with.
 //
 // A skip nothing here declares fails the run, and so does a declaration that
 // matched no skip of the run it declares for: a declaration left behind after
 // its skip went is a claim a later reader would trust.
 //
-// The two complete runs of de1ab3b49 ended with eleven skipped tests in seven
-// test functions on CE and ten in five on EE, of which issue 1014 listed five
-// and three; the gate found the rest. Its fixes remove all but the saved view
-// lifecycle's: the images are held to their tags, so the two service account
-// reads that need GitLab 19.4 run; a complete run turns E2E_EXTERNAL_NETWORK
-// on, so the four importer tests that call a public URL run; both runtimes
-// start the Bitbucket fixture, so the Bitbucket Server import runs on EE too;
-// and on CE the tier pin and the work item lifecycle assert instead of
-// skipping. What remains is the saved view lifecycle on both runtimes, on each
-// of its three surfaces, declared below.
+// The table is empty, which is the state it exists to keep. The two complete
+// runs of de1ab3b49 ended with eleven skipped tests in seven test functions on
+// CE and ten in five on EE, of which issue 1014 listed five and three; the
+// gate found the rest. Its fixes removed all but the saved view lifecycle's:
+// the images are held to their tags, so the two service account reads that
+// need GitLab 19.4 run; a complete run turns E2E_EXTERNAL_NETWORK on, so the
+// four importer tests that call a public URL run; both runtimes start the
+// Bitbucket fixture, so the Bitbucket Server import runs on EE too; and on CE
+// the tier pin and the work item lifecycle assert instead of skipping.
 //
-// Those two entries are GitLab's in the sense the category means: a 500 is an
-// exception GitLab did not handle, and the create it answered is one the
-// pinned schema accepts. What is not established is which exception, and so
-// whether client-go's document or this server's input sets it off and whether
-// another input GitLab accepts would avoid it; run-docker-e2e.sh now keeps
-// GitLab's exceptions log among the reports, which is where the next complete
-// run answers that. The entries go stale, and fail the gate, the first run the
-// create answers.
-var declaredSkips = []skipDeclaration{
-	{
-		Runtime:  "ce",
-		Package:  "common",
-		Test:     "TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete",
-		Because:  savedViewCreateRefusal,
-		Category: skipCategoryGitLabDefect,
-		Reason:   "GitLab's workItemSavedViewCreate mutation, an experiment since 18.7, answered a create the pinned schema accepts with 500 Internal server error on every surface on 19.3.0 (the CE run of de1ab3b49); the listing is held either way. The exception behind it was not read: the next run's e2e-ce-gitlab-exceptions.json names it, and says whether the input sets it off. Unmeasured on 19.4, where this entry goes stale if the create answers.",
-	},
-	{
-		Runtime:  "ee",
-		Package:  "common",
-		Test:     "TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete",
-		Because:  savedViewCreateRefusal,
-		Category: skipCategoryGitLabDefect,
-		Reason:   "GitLab's workItemSavedViewCreate mutation, an experiment since 18.7, answered a create the pinned schema accepts with 500 Internal server error on every surface on 19.3.1-ee (the EE run of de1ab3b49); the listing is held either way. The exception behind it was not read: the next run's e2e-ee-gitlab-exceptions.json names it, and says whether the input sets it off. Unmeasured on 19.4, where this entry goes stale if the create answers.",
-	},
-}
+// The saved view lifecycle was declared on both runtimes until the complete
+// runs of the wave 1 stack read GitLab's exceptions log: the 500 comes from a
+// lock on the caller's user row that every token-authenticated create and
+// subscribe meets on 19.4, after the create has saved the view
+// (docs/development/upstream-bugs.md, entry 72). Nothing a client sends avoids
+// it, so the scenario now asserts what GitLab does, the view the create left
+// in the listing and a subscribe that recorded nothing, and runs on every
+// release instead of skipping on the one that has the defect.
+var declaredSkips = []skipDeclaration{}

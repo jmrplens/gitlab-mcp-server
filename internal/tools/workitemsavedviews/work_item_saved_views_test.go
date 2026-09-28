@@ -564,6 +564,71 @@ func TestCreate_ServerError(t *testing.T) {
 	}
 }
 
+// TestMutations_InternalServerError_SayWhatTheFailureLeftBehind verifies that
+// the 500 GitLab 19.4 answers a create or a subscribe made with a token
+// reaches the caller with the hint for the state it left, and not with the
+// hint for a bad input.
+//
+// The two differ on purpose. A create's 500 comes from subscribing the
+// creator, after the view is saved, so the caller has to look for the view
+// before creating it again or it holds two; a subscribe's fails before
+// anything is recorded. The input hint each used to carry named a sort enum
+// and an ID, and sent the caller to change values that were never wrong. The
+// body is the one GitLab's GraphQL controller writes for an unhandled
+// exception (docs/development/upstream-bugs.md, entry 72).
+func TestMutations_InternalServerError_SayWhatTheFailureLeftBehind(t *testing.T) {
+	internalError := func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"errors":[{"message":"Internal server error"}]}`)
+	}
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"workItemSavedViewCreate":    internalError,
+		"workItemSavedViewSubscribe": internalError,
+	}))
+
+	tests := []struct {
+		name string
+		call func() error
+		want string
+		not  string
+	}{
+		{
+			name: "create says the view may exist and names the listing",
+			call: func() error {
+				_, err := Create(t.Context(), client, CreateInput{NamespacePath: "g", Name: "n", Sort: "CREATED_DESC"})
+				return err
+			},
+			want: createServerErrorHint,
+			not:  "WorkItemSort",
+		},
+		{
+			name: "subscribe says nothing was recorded",
+			call: func() error {
+				_, err := Subscribe(t.Context(), client, SubscribeInput{SavedViewID: 7})
+				return err
+			},
+			want: subscribeServerErrorHint,
+			not:  notFoundHint,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("error = nil, want the 500")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want the hint %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), tc.not) {
+				t.Errorf("error = %q still carries %q, which answers a bad input", err, tc.not)
+			}
+		})
+	}
+	if !strings.Contains(createServerErrorHint, actionList) {
+		t.Errorf("the create hint %q does not name %s, the action that finds the view it may have left", createServerErrorHint, actionList)
+	}
+}
+
 // TestUpdate_Success verifies that Update sends the saved view's global ID and
 // only the fields the caller supplied.
 func TestUpdate_Success(t *testing.T) {
