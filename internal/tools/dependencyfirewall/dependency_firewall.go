@@ -131,10 +131,40 @@ func EvaluatePackage(ctx context.Context, client *gitlabclient.Client, input Eva
 
 	evaluation, _, err := client.GL().SecurityDependencyFirewall.EvaluatePackage(input.ProjectID.String(), opts, gitlab.WithContext(ctx))
 	if err != nil {
-		return EvaluatePackageOutput{}, toolutil.WrapErrWithStatusHint(evaluateOperation, err, http.StatusForbidden,
-			"the Dependency Firewall API requires GitLab Premium or Ultimate and a token allowed to read the project")
+		return EvaluatePackageOutput{}, wrapEvaluateErr(err)
 	}
 	return toEvaluatePackageOutput(evaluation), nil
+}
+
+// Hints for the refusals the evaluate endpoint documents beside the 404 the
+// action route turns into a card.
+const (
+	// notEnforcedHint answers the 422 (dependency_firewall_not_enforced) GitLab
+	// sends once the flag is on for a project the firewall is not turned on
+	// for. On a self-managed instance that switch is an instance setting only
+	// the Admin area writes, so the hint says where it is rather than naming an
+	// action no surface offers.
+	notEnforcedHint = "the Dependency Firewall is not turned on for this project, and GitLab evaluates a package only where it is: on a self-managed instance an administrator enables it under Admin > Settings > Security and compliance > Dependency firewall, which no API sets, and on GitLab.com an Owner enables it in the top-level group's security settings. Until then treat the package as not evaluated rather than as allowed"
+	// evaluationFailedHint answers the 503 (dependency_firewall_evaluation_failed)
+	// GitLab sends when it could not look the package up.
+	evaluationFailedHint = "GitLab could not complete the evaluation. Retry after a short backoff, and until one answers treat the package as not evaluated rather than as allowed"
+	// forbiddenHint answers a 403, whose likeliest cause here is the license.
+	forbiddenHint = "the Dependency Firewall API requires GitLab Premium or Ultimate and a token allowed to read the project"
+)
+
+// wrapEvaluateErr adds the hint for the refusal the evaluate endpoint
+// answered with. GitLab 19.4 answers 422 for a project the firewall is not
+// turned on for, which the generic classification reads as invalid input and
+// so sends a caller to change a coordinate that was never the problem.
+func wrapEvaluateErr(err error) error {
+	switch {
+	case toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity):
+		return toolutil.WrapErrWithHint(evaluateOperation, err, notEnforcedHint)
+	case toolutil.IsHTTPStatus(err, http.StatusServiceUnavailable):
+		return toolutil.WrapErrWithHint(evaluateOperation, err, evaluationFailedHint)
+	default:
+		return toolutil.WrapErrWithStatusHint(evaluateOperation, err, http.StatusForbidden, forbiddenHint)
+	}
 }
 
 // coordinate validates one required package coordinate field and returns it

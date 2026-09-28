@@ -11,7 +11,9 @@
 // the flag off it is an informational card that names the flag, written for
 // exactly this case because a bare not-found reads as "the project is wrong"
 // and sends a model round the same retry forever; with the flag on it is a
-// verdict.
+// verdict for a project the firewall is turned on for, and a refusal saying
+// where it is turned on for any other, which on a Docker instance is every
+// project, since no API turns it on there.
 //
 // Both halves run in one test, in that order, because the second changes the
 // instance and the first is the only chance to see the default state. The
@@ -61,16 +63,18 @@ func TestDependencyFirewall_Evaluate_RefusesWithTheFlagOffAndAnswersWithItOn(t *
 		"version":    dependencyFirewallVersion,
 	}
 
+	// The two halves run in order on this test rather than as subtests: every
+	// harness helper fails through the Env's own T, and a subtest failing the
+	// test above it panics the run instead of reporting, which is how the flag
+	// on half's first refusal on GitLab 19.4 surfaced.
 	before := fixture.ReadFeature(e, dependencyfirewall.FeatureFlag)
 	if before.On() {
 		e.T.Logf("the instance already holds %s on, so the refusal half has nothing to observe",
 			dependencyfirewall.FeatureFlag)
 	} else {
-		t.Run("with the flag off the refusal names the flag", func(t *testing.T) {
-			text := harness.Refused(s, actionDependencyFirewallEvaluate, params, harness.FailureNotFound)
-			assertMentions(e, "the Dependency Firewall refusal", text,
-				dependencyfirewall.FeatureFlag, "Premium", "project.get")
-		})
+		text := harness.Refused(s, actionDependencyFirewallEvaluate, params, harness.FailureNotFound)
+		assertMentions(e, "the Dependency Firewall refusal", text,
+			dependencyfirewall.FeatureFlag, "Premium", "project.get")
 	}
 
 	if !fixture.FeatureDefined(e, dependencyfirewall.FeatureFlag) {
@@ -86,36 +90,55 @@ func TestDependencyFirewall_Evaluate_RefusesWithTheFlagOffAndAnswersWithItOn(t *
 
 	fixture.PinFeature(e, dependencyfirewall.FeatureFlag, true)
 
-	t.Run("with the flag on the evaluation answers a verdict", func(t *testing.T) {
-		out, err := harness.Try[dependencyfirewall.EvaluatePackageOutput](s, actionDependencyFirewallEvaluate, params)
-		if err != nil {
-			// One refusal is a fact about the instance rather than about the
-			// action, and only one: the endpoint is an experiment, so a
-			// release that defines the flag and still answers not-found for a
-			// project with no firewall configured says nothing about this
-			// handler. Everything else is a finding, and accepting it here is
-			// how a transport failure, a credential refused or a decoder that
-			// stopped matching would pass as a verdict nobody read.
-			if !mentionsAny(err.Error(), dependencyfirewall.FeatureFlag, "not found") {
-				e.T.Fatalf("the evaluation failed for a reason that is not the documented not-found: %v", err)
-			}
-			e.T.Logf("the evaluation answered the not-found card with %s on, so this release serves no firewall for a "+
-				"project without one: %v", dependencyfirewall.FeatureFlag, err)
-			return
-		}
-		if !containsOutcome(out.Outcome) {
-			e.T.Errorf("the verdict is %q, want one of %s", out.Outcome, strings.Join(dependencyFirewallOutcomes, ", "))
-		}
-		// The reason is GitLab's account of a policy that matched, so it is
-		// null exactly when nothing did. A blocked package with no reason
-		// leaves a caller with a refusal it cannot act on.
-		switch {
-		case out.Outcome == "allowed" && out.Reason != nil && *out.Reason != "":
-			e.T.Errorf("an allowed verdict carries the reason %q, and no policy matched it", *out.Reason)
-		case out.Outcome != "allowed" && (out.Reason == nil || *out.Reason == ""):
-			e.T.Errorf("the %s verdict names no policy, so the caller cannot tell what matched", out.Outcome)
-		}
-	})
+	out, err := harness.Try[dependencyfirewall.EvaluatePackageOutput](s, actionDependencyFirewallEvaluate, params)
+	if err != nil {
+		assertFirewallOffRefusal(e, err)
+		return
+	}
+	if !containsOutcome(out.Outcome) {
+		e.T.Errorf("the verdict is %q, want one of %s", out.Outcome, strings.Join(dependencyFirewallOutcomes, ", "))
+	}
+	// The reason is GitLab's account of a policy that matched, so it is
+	// null exactly when nothing did. A blocked package with no reason
+	// leaves a caller with a refusal it cannot act on.
+	switch {
+	case out.Outcome == "allowed" && out.Reason != nil && *out.Reason != "":
+		e.T.Errorf("an allowed verdict carries the reason %q, and no policy matched it", *out.Reason)
+	case out.Outcome != "allowed" && (out.Reason == nil || *out.Reason == ""):
+		e.T.Errorf("the %s verdict names no policy, so the caller cannot tell what matched", out.Outcome)
+	}
+}
+
+// assertFirewallOffRefusal holds an evaluation refused with the flag on to
+// the one answer that is a fact about the instance rather than about the
+// action: the firewall is not turned on for the project.
+//
+// With the flag on, GitLab 19.4 evaluates a package only for a project the
+// firewall is turned on for, and on a self-managed instance that is an
+// instance setting only the Admin area writes, so a Docker instance answers
+// 422 dependency_firewall_not_enforced to every project and a verdict is out
+// of this suite's reach. What is held is that the refusal says where the
+// firewall is turned on, since the generic reading of a 422 is invalid input
+// and sends a caller to change a package coordinate that was never wrong. A
+// release that defines the flag and still answers not-found for such a
+// project is accepted too, being the same fact in the shape older releases
+// gave it. Everything else is a finding, and accepting it here is how a
+// transport failure, a credential refused or a decoder that stopped matching
+// would pass as a refusal nobody read.
+func assertFirewallOffRefusal(e *harness.Env, err error) {
+	e.T.Helper()
+	text := err.Error()
+	switch {
+	case mentionsAny(text, "422"):
+		assertMentions(e, "the refusal of a project the firewall is off for", text,
+			"not turned on for this project", "Admin > Settings > Security and compliance", "not evaluated")
+		e.T.Logf("the evaluation answered that the firewall is off for the project, which no API turns on: %s", firstLine(text))
+	case mentionsAny(text, dependencyfirewall.FeatureFlag, "not found"):
+		e.T.Logf("the evaluation answered the not-found card with %s on, so this release serves no firewall for a "+
+			"project without one: %v", dependencyfirewall.FeatureFlag, err)
+	default:
+		e.T.Fatalf("the evaluation failed for a reason that is not the firewall being off for the project: %v", err)
+	}
 }
 
 // containsOutcome reports whether a verdict is one of the documented three.
