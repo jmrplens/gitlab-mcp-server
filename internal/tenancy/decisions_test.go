@@ -2,6 +2,7 @@ package tenancy
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -199,6 +200,55 @@ func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
 				t.Errorf("%s is filed as issue %d, want it kept as issue 959's", tc.finding, FindingIssue(tc.finding))
 			}
 		})
+	}
+}
+
+// findingsOfNoRow are the findings that record no row's departure, so no row
+// has carried them since the register landed: F-18 is a budget GitLab.com
+// keeps that nothing in the process accounts for, F-24 a message the SDK
+// gives the server no way to send, and F-23 and F-27 are stale statements in
+// comments and documents. Each is closed in its issue without a row changing.
+var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
+
+// TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue holds the rule the
+// package comment states: a finding stops being carried only when its issue
+// answers it, and the answer is recorded in the Decided of a row. A finding
+// dropped from a row by mistake is carried by nothing and answered by nothing,
+// and fails its subtest unless it is one of findingsOfNoRow, which a row must
+// then not carry either. The answered set is named as well, because a row
+// records the issue that decided and not the finding it answered, so a finding
+// whose issue answered another one elsewhere (F-31, whose issue 951 answered
+// F-03 on RTC-007) would pass its subtest if it were dropped; the next finding
+// answered joins that list in the change that answers it.
+func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
+	carried := map[string]bool{}
+	decided := map[string]bool{}
+	for _, d := range Decisions() {
+		for _, f := range d.Findings {
+			carried[f] = true
+		}
+		for _, by := range d.Decided {
+			decided[by] = true
+		}
+	}
+	var answered []string
+	for _, f := range AllFindings() {
+		ofNoRow := slices.Contains(findingsOfNoRow, f.ID)
+		if !carried[f.ID] && !ofNoRow {
+			answered = append(answered, f.ID)
+		}
+		t.Run(f.ID, func(t *testing.T) {
+			by := "issue " + strconv.Itoa(f.Issue)
+			switch {
+			case carried[f.ID] && ofNoRow:
+				t.Errorf("%s is declared to record no row's departure, yet a row carries it", f.ID)
+			case !carried[f.ID] && !ofNoRow && !decided[by]:
+				t.Errorf("%s is carried by no row and no row records %s's decision; restore it to the rows it describes, or record the issue that answered it in their Decided", f.ID, by)
+			}
+		})
+	}
+	if got, want := strings.Join(answered, ","), "F-03,F-19,F-33"; got != want {
+		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
 
