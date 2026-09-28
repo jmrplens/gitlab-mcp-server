@@ -9,11 +9,13 @@ package securityscanprofiles
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -140,6 +142,43 @@ func TestAttach_MutationError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "attach security scan profile") {
 		t.Errorf("Attach() error = %v, want wrapped op prefix", err)
+	}
+}
+
+// TestAttach_ScanTypeWithoutDefaultProfile_HintOffersTheDefaultProfiles
+// verifies what a caller learns when it names a scan type GitLab defines no
+// default profile for. GitLab's FindOrCreateService finds nothing for
+// container_scanning and the mutation answers with the generic
+// resource-not-available error, which names neither the value at fault nor
+// the ones that would have worked. The name still reaches GitLab untouched,
+// since whether a scan type has a default profile is GitLab's to say and can
+// change in a release; what the handler adds is the list of names that do,
+// the release each needs, and the three that are refused by name.
+func TestAttach_ScanTypeWithoutDefaultProfile_HintOffersTheDefaultProfiles(t *testing.T) {
+	var sent string
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"securityScanProfileAttach": func(w http.ResponseWriter, r *http.Request) {
+			if input := scanProfileInput(t, r); input != nil {
+				sent, _ = input["securityScanProfileId"].(string)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}],"data":{"securityScanProfileAttach":null}}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := Attach(context.Background(), client, AttachInput{SecurityScanProfileID: "container_scanning", ProjectIDs: []int64{1}})
+	if err == nil {
+		t.Fatal("Attach() error = nil, want GitLab's refusal of a scan type with no default profile")
+	}
+	if sent != "gid://gitlab/Security::ScanProfile/container_scanning" {
+		t.Errorf("securityScanProfileId = %q, want the scan type wrapped as a global ID and left to GitLab to judge", sent)
+	}
+	for _, want := range []string{DefaultProfileNames, DefaultProfileFloors, RefusedByName} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Attach() error = %q, want it to carry %q", err.Error(), want)
+			}
+		})
 	}
 }
 
@@ -569,6 +608,197 @@ func TestActionSpecs_ActionIDs_NameActionsThatExist(t *testing.T) {
 				t.Errorf("action %q relates to %q, which is neither ours nor a declared neighbor", s.Name, rel)
 			}
 		}
+	}
+}
+
+// scanTypesRefusedByName are the SecurityScanProfileType values GitLab defines
+// no default profile for, each with the evidence, read from GitLab's source at
+// the pinned 19.5.0-pre (5041f73d695) and at every stable branch from 18-7 to
+// 19-4. Attach refuses them by name, so [DefaultProfileNames] leaves them out
+// and the description names them instead. A value added here that the enum no
+// longer holds fails the test below, so the table cannot outlive its reason.
+var scanTypesRefusedByName = map[string]string{
+	"container_scanning": "Security::DefaultScanProfilesHelper builds no container scanning profile at any release from 18.7 to 19.5",
+	"business_logic":     "added to the enum at 19.5 as a scan run by an AI flow (Enums::Security::FLOW_BACKED_SCAN_TYPES), with no default profile",
+}
+
+// presetsOfScanType are the scan types whose default profiles are named by
+// preset key rather than by scan type: GitLab 19.4 builds one Triage and
+// Remediation profile per entry of
+// Security::ScanProfiles::Configuration::Defaults::TriageAndRemediation::PRESETS
+// and keys each as triage_and_remediation_<preset>, so the bare scan type
+// matches none of them.
+var presetsOfScanType = map[string][]string{
+	"triage_and_remediation": {"conservative", "standard", "proactive"},
+}
+
+// listedValues splits a sentence fragment listing values, "a, b, or c", into
+// the values it names, sorted.
+func listedValues(fragment string) []string {
+	fragment = strings.ReplaceAll(fragment, ", or ", ", ")
+	values := strings.Split(fragment, ", ")
+	slices.Sort(values)
+	return values
+}
+
+// pinnedEnum returns the values the pinned GitLab schema declares for the enum
+// named typeName, sorted.
+func pinnedEnum(t *testing.T, typeName string) []string {
+	t.Helper()
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("graphqlschema.Schema() error: %v", err)
+	}
+	definition, ok := schema.Types[typeName]
+	if !ok || len(definition.EnumValues) == 0 {
+		t.Fatalf("the pinned schema declares no enum %s", typeName)
+	}
+	values := make([]string, 0, len(definition.EnumValues))
+	for _, value := range definition.EnumValues {
+		values = append(values, value.Name)
+	}
+	slices.Sort(values)
+	return values
+}
+
+// TestDefaultProfileNames_AreTheSchemaScanTypesThatHaveADefaultProfile holds
+// the names attach is described as taking to the SecurityScanProfileType enum
+// of the pinned schema. The two differ on purpose, by the scan types GitLab
+// builds no default profile for and by the presets one scan type is offered
+// through, and both differences are declared in the tables above. What the
+// test catches is everything else: a scan type GitLab adds at a re-pin, which
+// fails here until someone decides whether attach takes it by name, and a
+// name the list offers that the enum never had. The list used to offer
+// container_scanning, which no GitLab release builds a default profile for,
+// and it left out the three names GitLab 19.2 and 19.4 added.
+func TestDefaultProfileNames_AreTheSchemaScanTypesThatHaveADefaultProfile(t *testing.T) {
+	enum := pinnedEnum(t, "SecurityScanProfileType")
+	var want []string
+	for _, value := range enum {
+		scanType := strings.ToLower(value)
+		if _, refused := scanTypesRefusedByName[scanType]; refused {
+			continue
+		}
+		presets, byPreset := presetsOfScanType[scanType]
+		if !byPreset {
+			want = append(want, scanType)
+			continue
+		}
+		for _, preset := range presets {
+			want = append(want, scanType+"_"+preset)
+		}
+	}
+	slices.Sort(want)
+	if got := listedValues(DefaultProfileNames); !slices.Equal(got, want) {
+		t.Errorf("DefaultProfileNames lists %v, want the pinned SecurityScanProfileType %v less the declared refusals, with the declared presets: %v", got, enum, want)
+	}
+
+	declared := slices.Concat(slices.Collect(maps.Keys(scanTypesRefusedByName)), slices.Collect(maps.Keys(presetsOfScanType)))
+	for _, scanType := range declared {
+		t.Run(scanType, func(t *testing.T) {
+			if !slices.Contains(enum, strings.ToUpper(scanType)) {
+				t.Errorf("%q is declared, but the pinned SecurityScanProfileType %v no longer has it", scanType, enum)
+			}
+		})
+	}
+}
+
+// TestAttach_ServedText_OffersTheDefaultProfilesAndNamesTheRefusals verifies
+// that the two texts a model reads before an attach, the input's description
+// as the built schema serves it and the usage line, offer the list the test
+// above holds to the schema, the release each name needs, and the scan types
+// attach refuses by name; the hint a refused attach carries is held by
+// TestAttach_ScanTypeWithoutDefaultProfile_HintOffersTheDefaultProfiles, and
+// the meta group description by a test in internal/tools. The description is
+// a struct tag and cannot be built from the constants, so it is the text that
+// could drift on its own.
+func TestAttach_ServedText_OffersTheDefaultProfilesAndNamesTheRefusals(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	var attach toolutil.ActionSpec
+	for _, spec := range ActionSpecs(client) {
+		if spec.Name == "attach" {
+			attach = spec
+		}
+	}
+	properties, _ := attach.Route.InputSchema["properties"].(map[string]any)
+	property, _ := properties["security_scan_profile_id"].(map[string]any)
+	description, _ := property["description"].(string)
+
+	texts := map[string]string{"description": description, "usage": attach.Usage}
+	for name, text := range texts {
+		t.Run(name, func(t *testing.T) {
+			for _, want := range []string{DefaultProfileNames, DefaultProfileFloors, RefusedByName} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s = %q, want it to carry %q", name, text, want)
+				}
+			}
+		})
+	}
+}
+
+// TestDefaultProfileSentences_HeldToTheScanTypeTables holds the two sentences
+// every text offering the default profile names adds to the tables the test
+// of the names reads: every scan type refused, and the bare type of every
+// preset family, is named in the refusal, and every name offered past
+// secret_detection, which is as old as scan profiles, is given its release,
+// so a name added to the list without a floor fails here.
+func TestDefaultProfileSentences_HeldToTheScanTypeTables(t *testing.T) {
+	for scanType := range scanTypesRefusedByName {
+		t.Run("refused "+scanType, func(t *testing.T) {
+			if !strings.Contains(RefusedByName, scanType+" ") {
+				t.Errorf("RefusedByName = %q, want it to name %s", RefusedByName, scanType)
+			}
+		})
+	}
+	for scanType := range presetsOfScanType {
+		t.Run("bare "+scanType, func(t *testing.T) {
+			if !strings.Contains(RefusedByName, "bare "+scanType+" ") {
+				t.Errorf("RefusedByName = %q, want it to name the bare %s", RefusedByName, scanType)
+			}
+			if !strings.Contains(DefaultProfileFloors, scanType+" presets need ") {
+				t.Errorf("DefaultProfileFloors = %q, want it to give the %s presets their release", DefaultProfileFloors, scanType)
+			}
+		})
+	}
+	for _, name := range listedValues(DefaultProfileNames) {
+		if name == "secret_detection" || presetFamily(name) != "" {
+			continue
+		}
+		t.Run("floor "+name, func(t *testing.T) {
+			if !strings.Contains(DefaultProfileFloors, name+" needs ") {
+				t.Errorf("DefaultProfileFloors = %q, want it to say which release %s needs", DefaultProfileFloors, name)
+			}
+		})
+	}
+}
+
+// presetFamily returns the scan type a default profile name is a preset of,
+// or "" for a name that is a scan type itself.
+func presetFamily(name string) string {
+	for scanType, presets := range presetsOfScanType {
+		for _, preset := range presets {
+			if name == scanType+"_"+preset {
+				return scanType
+			}
+		}
+	}
+	return ""
+}
+
+// TestDescriptionList_StatusesAreTheSchemaEnum holds the statuses the list
+// tool's description names to the ScanProfileStatus enum client-go's statuses
+// query decodes, so a status GitLab adds is a failure here rather than a
+// value the description never mentions.
+func TestDescriptionList_StatusesAreTheSchemaEnum(t *testing.T) {
+	_, rest, found := strings.Cut(descriptionList, "profile status (")
+	listed, _, closed := strings.Cut(rest, ")")
+	if !found || !closed {
+		t.Fatalf("descriptionList = %q, want it to list the statuses in parentheses after %q", descriptionList, "profile status")
+	}
+	if got, want := listedValues(listed), pinnedEnum(t, "ScanProfileStatus"); !slices.Equal(got, want) {
+		t.Errorf("descriptionList names the statuses %v, want the pinned ScanProfileStatus %v", got, want)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityscanprofiles"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -267,6 +268,32 @@ func TestEnterpriseGroupBuilders_CarryTheirOwnDescription(t *testing.T) {
 			}
 			if !strings.HasPrefix(groups[0].Description, tc.wantPrefix) {
 				t.Errorf("description = %q, want it to start with %q", groups[0].Description, tc.wantPrefix)
+			}
+		})
+	}
+}
+
+// TestSecurityScanProfileGroup_Description_OffersTheNamesTheirReleasesAndTheRefusals
+// verifies that the meta group description, which a model on the meta surface
+// reads where the individual surface reads the attach usage line, carries the
+// same three sentences: the default profile names attach takes, the release
+// each needs, and the scan types attach refuses by name. It used to offer the
+// names alone, so a meta caller was never told container_scanning would be
+// refused.
+func TestSecurityScanProfileGroup_Description_OffersTheNamesTheirReleasesAndTheRefusals(t *testing.T) {
+	groups := buildSecurityScanProfileActionSpecs(nil)
+	if len(groups) != 1 {
+		t.Fatalf("builder returned %d groups, want exactly one", len(groups))
+	}
+	sentences := map[string]string{
+		"names":    securityscanprofiles.DefaultProfileNames,
+		"releases": securityscanprofiles.DefaultProfileFloors,
+		"refusals": securityscanprofiles.RefusedByName,
+	}
+	for name, want := range sentences {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(groups[0].Description, want) {
+				t.Errorf("description = %q, want it to carry %q", groups[0].Description, want)
 			}
 		})
 	}

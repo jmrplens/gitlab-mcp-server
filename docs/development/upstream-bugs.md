@@ -152,6 +152,7 @@ readable without opening the tracker:
 | 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | No | No | No | No | Yes |
 | 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | No | No | No | No | Yes |
 | 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | No | No | No | No | Yes |
+| 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -5140,6 +5141,49 @@ newer GitLab added all read the same way, as a clean pipeline.
 **Proposal**: type the argument with an enum of the scan types
 `Security::Scan` has, or refuse in the finder a value `sanitize_scan_types`
 would drop, so the caller is told which value GitLab does not know.
+
+### The scan profile attach mutation drops the reason it refused a name
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. A name GitLab builds a default profile for attaches; one
+  it does not fails with an error that says the resource does not exist or
+  the caller may not act on it, which reads as a permission problem.
+- **Workaround**: yes. `securityscanprofiles.Attach`
+  (`internal/tools/securityscanprofiles/security_scan_profiles.go`) answers a
+  failed attach with a hint naming the default profile names attach takes
+  (`DefaultProfileNames`), the GitLab release each needs
+  (`DefaultProfileFloors`) and the scan types refused by name
+  (`RefusedByName`), and the input's description, the usage line and the meta
+  group description say the same before the call. The package's tests hold
+  the names to `SecurityScanProfileType` in the pinned schema, and the EE
+  scenario attaches by `container_scanning` and asserts the hint. What
+  retires the hint's guesswork is GitLab passing its own message on.
+
+**Where**: `Mutations::Security::ScanProfiles::Attach#resolve_profile!`
+(`ee/app/graphql/mutations/security/scan_profiles/attach.rb`) calls
+`Security::ScanProfiles::FindOrCreateService.execute`
+(`ee/app/services/security/scan_profiles/find_or_create_service.rb`) and, when
+the result is not a success, calls `raise_resource_not_available_error!`. Read
+at 19.5.0-pre (`5041f73d695`) on 2026-09-28 and on every stable branch from
+18-7 to 19-4.
+
+**What**: the service answers a name that is not a preset key of
+`Security::DefaultScanProfilesHelper.default_scan_profiles` with
+"Could not find a default scan profile for this type" (and a namespace that is
+not a root with "Namespace must be a root namespace"), and the mutation throws
+that message away for the generic "The resource that you are attempting to
+access does not exist or you don't have permission to perform this action".
+`container_scanning` and `business_logic` are values of
+`SecurityScanProfileType` no release builds a default profile for, and the
+bare `triage_and_remediation` names none of the three presets its profiles are
+keyed by, so all three are refused this way, as is any name on an instance
+older than the release that added it.
+
+**Proposal**: return the service's message, as an argument error or in the
+payload's `errors`, the way the mutation already returns the attach
+service's own errors.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

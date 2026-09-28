@@ -1,15 +1,17 @@
 //go:build e2e
 
 // securityscanprofiles_test.go covers the scan profile lifecycle on a
-// project in a group: attach the built-in dependency scanning profile by
-// its scan type, read the project's statuses to learn the persisted
-// profile's ID, and detach it by that ID.
+// project in a group: attach by a scan type with no default profile and
+// read the refusal, attach the built-in dependency scanning profile by its
+// name, read the project's statuses to learn the persisted profile's ID,
+// and detach it by that ID.
 //
 // Three facts of GitLab's shape it: a profile attaches only to a project
 // under a group namespace, since a personal namespace has no shared root
-// for it; attach takes a scan type and finds or creates the namespace's
-// default profile; and detach takes the persisted profile's numeric ID,
-// which only the status listing reveals.
+// for it; attach takes the name of a default profile and finds or creates
+// the namespace's copy of it, which not every scan type has; and detach
+// takes the persisted profile's numeric ID, which only the status listing
+// reveals.
 
 package ee
 
@@ -26,6 +28,10 @@ import (
 // dependencyScanning is the scan type whose default profile the test
 // attaches, and the one the provisioning script's feature flags enable.
 const dependencyScanning = "dependency_scanning"
+
+// scanTypeWithoutDefaultProfile is a scan type GitLab defines and builds no
+// default profile for, so attach refuses it by name.
+const scanTypeWithoutDefaultProfile = "container_scanning"
 
 // scanProfileNotConfigured is the status GitLab lists a profile with while
 // no project holds it attached: the listing enumerates every profile of the
@@ -49,6 +55,8 @@ func TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches(t *testing
 		if !strings.HasPrefix(project.Path, group.Path+"/") {
 			e.T.Fatalf("project %s is not under group %s, which a scan profile needs", project.Path, group.Path)
 		}
+
+		assertAttachRefusesScanTypeWithoutDefaultProfile(e, s, project.ID)
 
 		attached := harness.Do[securityscanprofiles.MutationOutput](s, actionScanProfileAttach, map[string]any{
 			"security_scan_profile_id": dependencyScanning, "project_ids": []int64{project.ID},
@@ -100,4 +108,22 @@ func TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches(t *testing
 				profileID, detachedStatus, scanProfileNotConfigured, attachedStatus, after.Statuses)
 		}
 	})
+}
+
+// assertAttachRefusesScanTypeWithoutDefaultProfile attaches by
+// container_scanning, a scan type GitLab builds no default profile for, and
+// holds the refusal to naming the default profiles that attach does take:
+// GitLab's own answer is a generic resource-not-available error, and the
+// action used to offer this very name.
+func assertAttachRefusesScanTypeWithoutDefaultProfile(e *harness.Env, s *harness.Session, projectID int64) {
+	e.T.Helper()
+	refused, refusal := harness.Try[securityscanprofiles.MutationOutput](s, actionScanProfileAttach, map[string]any{
+		"security_scan_profile_id": scanTypeWithoutDefaultProfile, "project_ids": []int64{projectID},
+	})
+	if refusal == nil {
+		e.T.Errorf("attach by %s answered %+v, want GitLab's refusal of a scan type with no default profile", scanTypeWithoutDefaultProfile, refused)
+		return
+	}
+	assertMentions(e, "attach by "+scanTypeWithoutDefaultProfile, refusal.Error(),
+		securityscanprofiles.DefaultProfileNames, "have no default profile")
 }
