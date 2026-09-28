@@ -530,8 +530,13 @@ const reasonGroupPackageVersionsOnACollection = "lib/api/entities/package.rb exp
 	"other versions."
 
 // ciVariableEntity is the variable entity the pipeline and schedule variable
-// routes present.
-const ciVariableEntity = "API::Entities::Ci::Variable"
+// routes present, and the two packages that publish those variables, spelled
+// once because each is named on every row below.
+const (
+	ciVariableEntity     = "API::Entities::Ci::Variable"
+	pipelinesPkg         = toolsDir + "/pipelines"
+	pipelineSchedulesPkg = toolsDir + "/pipelineschedules"
+)
 
 // The two variable models' answers: each key of lib/api/entities/ci/variable.rb
 // that waits on respond_to?, which neither model does.
@@ -551,11 +556,13 @@ const (
 		"description the package publishes is the schedule's own."
 )
 
-// The entities the fields below were read on that no constant above names.
+// The entities the fields below were read on that no constant above names, and
+// the LDAP package, which three rows hold against the group detail entity.
 const (
 	projectWithAccessEntity = "API::Entities::Projects::WithAccessAndCatalogSetting"
 	groupDetailEntity       = "API::Entities::GroupDetail"
 	projectEntity           = "API::Entities::Project"
+	groupLDAPPkg            = toolsDir + "/groupldap"
 )
 
 // The packages whose project presenter-option rows below answer the same
@@ -842,16 +849,16 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The variable keys a pipeline variable and a schedule variable cannot
 	// answer to.
-	{Package: toolsDir + "/pipelines", Entity: ciVariableEntity, Field: "hidden", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
-	{Package: toolsDir + "/pipelines", Entity: ciVariableEntity, Field: "protected", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
-	{Package: toolsDir + "/pipelines", Entity: ciVariableEntity, Field: "masked", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
-	{Package: toolsDir + "/pipelines", Entity: ciVariableEntity, Field: "environment_scope", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
-	{Package: toolsDir + "/pipelines", Entity: ciVariableEntity, Field: "description", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
-	{Package: toolsDir + "/pipelineschedules", Entity: ciVariableEntity, Field: "hidden", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
-	{Package: toolsDir + "/pipelineschedules", Entity: ciVariableEntity, Field: "protected", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
-	{Package: toolsDir + "/pipelineschedules", Entity: ciVariableEntity, Field: "masked", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
-	{Package: toolsDir + "/pipelineschedules", Entity: ciVariableEntity, Field: "environment_scope", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
-	{Package: toolsDir + "/pipelineschedules", Type: "VariableOutput", Entity: ciVariableEntity, Field: "description", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "hidden", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "protected", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "masked", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "environment_scope", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "description", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "hidden", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "protected", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "masked", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "environment_scope", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Type: "VariableOutput", Entity: ciVariableEntity, Field: "description", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
 
 	// pipelines, on every package item and at the package grain alike, since
 	// no route renders it with anything in it.
@@ -911,8 +918,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// A group's statistics, which no route presenting one group sets, and its
 	// custom attributes, which the one route that can is never asked for.
-	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
-	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonGroupCustomAttributesNeverRequested},
+	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
+	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonGroupCustomAttributesNeverRequested},
 	{Package: groupMembersPkg, Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
 
 	// The commit a submodule update answers with, and an epic's deprecated
@@ -1032,7 +1039,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: attestationsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonAttestationProjectProbe},
 	{Package: securityFindingsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonGraphQLProjectProbe},
 	{Package: vulnerabilitiesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonGraphQLProjectProbe},
-	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLDAPGroupProbe},
+	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLDAPGroupProbe},
 
 	// The current user, which one package reads for the caller's id and the
 	// other to prove the credential.

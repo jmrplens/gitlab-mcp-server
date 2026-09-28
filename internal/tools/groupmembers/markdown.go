@@ -10,6 +10,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// accessLevelLabel names the access level on the member card and heads its
+// column in the share and inherited-membership tables.
+const accessLevelLabel = "Access Level"
+
 // accessLevel renders a membership's numeric access level as the name GitLab
 // gives it with the number beside it, "Maintainer (40)": the number is what
 // every write endpoint takes, the name is what a reader can act on.
@@ -41,7 +45,7 @@ func FormatMemberMarkdown(out Output) string {
 	// half.
 	c.Field("Membership State", out.MembershipState)
 	c.Warn("Locked", out.Locked)
-	c.Field("Access Level", accessLevel(out.AccessLevel))
+	c.Field(accessLevelLabel, accessLevel(out.AccessLevel))
 	if out.MemberRole != nil {
 		c.Field("Member Role", out.MemberRole.Name)
 	}
@@ -72,7 +76,7 @@ func FormatShareMarkdown(out ShareOutput) string {
 	c.Text("Description", out.Description)
 	c.URL(out.WebURL)
 	if len(out.SharedWithGroups) > 0 {
-		t := c.Table("Shared With", "Group", "Group ID", "Access Level", "Expires")
+		t := c.Table("Shared With", "Group", "Group ID", accessLevelLabel, "Expires")
 		for _, link := range out.SharedWithGroups {
 			t.Row(
 				toolutil.EscapeMdTableCell(link.GroupFullPath),
@@ -127,7 +131,7 @@ func FormatBillableMembershipsMarkdown(out BillableMembershipsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Billable Member Memberships", len(out.Memberships), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Source", "Access Level", "Expires"))
+	b.WriteString(toolutil.MarkdownTableHeader("Source", accessLevelLabel, "Expires"))
 	linked := false
 	for _, m := range out.Memberships {
 		linked = linked || m.SourceMembersURL != ""
