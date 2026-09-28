@@ -69,11 +69,11 @@ make install-tools
 
 This installs:
 
-| Tool          | Install command                                                             | Version                                                                                                                                  |
-| ------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1` | v2.13.1 is what CI runs (`GOLANGCI_LINT_VERSION` in the Makefile); a newer release may report findings CI does not, or miss ones it does |
-| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck@<version>`                    | the version the `tool` directive in `go.mod` names is what CI runs; install that one, or run `go tool govulncheck` and let Go resolve it |
-| gotestsum     | `go install gotest.tools/gotestsum@latest`                                  | latest                                                                                                                                   |
+| Tool          | Install command                                                             | Version                                                                                                                                        |
+| ------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2` | v2.13.2 is what CI runs (`GOLANGCI_LINT_VERSION` in the Makefile); a newer release may report findings CI does not, or miss ones it does       |
+| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck`                              | run inside this module, the version the `tool` directive in `go.mod` names, which is what CI runs; `go tool govulncheck` resolves the same one |
+| gotestsum     | `go install gotest.tools/gotestsum`                                         | run inside this module, the version the `tool` directive in `go.mod` names                                                                     |
 
 Verify installation:
 

@@ -299,7 +299,7 @@ GOTESTSUM = $(or $(shell command -v gotestsum 2>/dev/null),$(GOTESTSUM_INSTALL_D
 ensure-gotestsum:
 	@command -v gotestsum >/dev/null 2>&1 || test -x "$(GOTESTSUM_INSTALL_DIR)/gotestsum" || { \
 		echo "gotestsum not found; installing with go install..."; \
-		go install gotest.tools/gotestsum@latest; \
+		go install gotest.tools/gotestsum; \
 	}
 
 ## test-e2e-harness: run the e2e harness library's own tests (no GitLab needed).
@@ -1083,9 +1083,9 @@ analyze-report:
 ## install-tools: install all Go static analysis tools to $GOBIN
 install-tools:
 	@echo Installing static analysis tools...
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install gotest.tools/gotestsum@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	go install golang.org/x/vuln/cmd/govulncheck
+	go install gotest.tools/gotestsum
 	@echo All tools installed.
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
@@ -1288,7 +1288,7 @@ MCPB_CLI_VERSION := 2.1.2
 ## tree would land in go.sum for every job that runs `go mod download`. Keep it
 ## equal to what developers run locally, so `make golangci-lint` means the same
 ## on both sides of a push.
-GOLANGCI_LINT_VERSION := v2.13.1
+GOLANGCI_LINT_VERSION := v2.13.2
 
 ## check-mcpb: validate the Claude Desktop extension manifest (mcpb/manifest.json).
 check-mcpb:
