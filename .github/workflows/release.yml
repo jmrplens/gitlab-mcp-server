@@ -97,8 +97,8 @@ env:
   # Pinned exactly, not by range: goreleaser-action and sbom-action download
   # these binaries at run time into a job that holds the signing identity, so
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
-  GORELEASER_VERSION: "v2.18.0"
-  SYFT_VERSION: "v1.51.1"
+  GORELEASER_VERSION: "v2.18.2"
+  SYFT_VERSION: "v1.52.0"
 
 jobs:
   # The one check that has to run before anything else spends a runner. The
@@ -439,7 +439,7 @@ jobs:
       # after the image was already pushed.
       - name: Install syft
         env:
-          SYFT_SHA256: "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
+          SYFT_SHA256: "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1014,7 +1014,7 @@ jobs:
       # from main rather than from the tag, and the asset is base64-wrapped.
       - name: Install syft
         env:
-          SYFT_SHA256: "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
+          SYFT_SHA256: "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1200,7 +1200,7 @@ jobs:
       - name: Publish to npm
         run: |
           set -euo pipefail
-          npm install -g npm@11.5.1
+          npm install -g npm@11.19.1
           if [ "$REHEARSAL" = "true" ]; then
             # npm publish --dry-run packs every tarball and validates it
             # against the registry without uploading, so the rehearsal runs
