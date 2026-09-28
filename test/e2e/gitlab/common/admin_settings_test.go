@@ -226,7 +226,15 @@ func TestAdmin_InstanceMetadata(t *testing.T) {
 		e.T.Errorf("metadata_get answered an empty version")
 	}
 
+	// GitLab sends every count as a string grouped in the caller's language,
+	// and a count the handler stopped reading would come back as zero, which
+	// reads like an empty instance. active_users is the one count GitLab takes
+	// exactly rather than approximating, and the administrator making this call
+	// is one of them, so it is the one count a floor can be put on.
 	stats := harness.Do[appstatistics.GetOutput](s, actionAdminAppStatsGet, nil)
+	if stats.ActiveUsers < 1 {
+		e.T.Errorf("app_statistics_get answered %d active users, want at least the administrator calling it", stats.ActiveUsers)
+	}
 	e.T.Logf("application statistics: %d users, %d projects", stats.Users, stats.Projects)
 
 	const planName = "default"
