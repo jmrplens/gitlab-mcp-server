@@ -161,12 +161,21 @@ Hard delete a user:
 Build attestations provide SLSA (Supply-chain Levels for Software Artifacts) provenance
 information for CI/CD builds. They are scoped to a project and identified by subject digest.
 
+GitLab serves both attestation routes behind the `slsa_provenance_statement` feature flag,
+which ships disabled (`default_enabled: false`), and answers 404 for every project the flag
+is off for. An instance where nobody enabled it therefore answers every call here with a 404
+whatever the digest or IID. `attestation.list` reads such a 404 on a project that exists as
+the API being unavailable and says so, naming the flag and `admin.feature_set` as the way an
+administrator enables it; it never answers it with an empty list, since a well-formed digest
+nothing was attested under answers 200 and an empty array. `attestation.download` names the
+flag in its 404 hint beside the missing IID it cannot tell it from.
+
 ### Tools
 
-| Tool                          | Description                                   | Annotations |
-| ----------------------------- | --------------------------------------------- | ----------- |
-| `gitlab_list_attestations`    | List attestations matching a subject digest   | Read-only   |
-| `gitlab_download_attestation` | Download attestation content (base64-encoded) | Read-only   |
+| Tool                          | Description                                                                                                    | Annotations |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------- |
+| `gitlab_list_attestations`    | List attestations matching a subject digest, one page at a time (`page`, `per_page`), with pagination metadata | Read-only   |
+| `gitlab_download_attestation` | Download attestation content (base64-encoded)                                                                  | Read-only   |
 
 ### Meta-tool
 
@@ -183,7 +192,7 @@ List attestations by digest:
   "action": "list",
   "params": {
     "project_id": "my-project",
-    "subject_digest": "sha256:abc123def456"
+    "subject_digest": "5db1fee4b5703808c48078a76768b155b421b210c0761cd6a5d223f4d99f1eaa"
   }
 }
 ```
@@ -193,10 +202,12 @@ List attestations by digest:
   "action": "attestation.list",
   "params": {
     "project_id": "my-project",
-    "subject_digest": "sha256:abc123def456"
+    "subject_digest": "5db1fee4b5703808c48078a76768b155b421b210c0761cd6a5d223f4d99f1eaa"
   }
 }
 ```
+
+GitLab's route takes the digest as the 64 hex characters of the artifact's SHA-256 hash and answers 404 to any other form. An OCI-style `sha256:` prefix is removed before the request, and a value that is still not 64 hex characters is refused with the expected form named, rather than read as a digest nothing was attested under. The hex is sent in lower case: the route admits upper case, but the lookup behind it is an exact comparison against digests GitLab stores in lower case, so an upper-case digest would answer an empty list for an artifact that has attestations.
 
 Download an attestation:
 
@@ -224,10 +235,12 @@ Download an attestation:
 
 #### List
 
-| Parameter        | Type       | Required | Description                                |
-| ---------------- | ---------- | -------- | ------------------------------------------ |
-| `project_id`     | string/int | Yes      | Project ID or URL-encoded path             |
-| `subject_digest` | string     | Yes      | Subject digest hash to filter attestations |
+| Parameter        | Type       | Required | Description                                                                                          |
+| ---------------- | ---------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `project_id`     | string/int | Yes      | Project ID or URL-encoded path                                                                       |
+| `subject_digest` | string     | Yes      | SHA-256 digest of the artifact, 64 hex characters in either case, with or without a `sha256:` prefix |
+| `page`           | int        | No       | Page number, 1-based                                                                                 |
+| `per_page`       | int        | No       | Items per page, 1 to 100 (GitLab's default is 20)                                                    |
 
 #### Download
 

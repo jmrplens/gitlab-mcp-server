@@ -35,16 +35,15 @@ func FormatOutputMarkdown(o Output) string {
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of attestations as a Markdown table.
-//
-// The endpoint sends no pagination headers, so the heading counts what is
-// shown; the empty pagination is what says so rather than a zero total.
+// FormatListMarkdown renders one page of attestations as a Markdown table,
+// with the total in the heading and the page before the next steps when the
+// page is not the whole list.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Attestations) == 0 {
 		return toolutil.EmptyMessage("attestations")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Attestations", len(out.Attestations), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "Attestations", len(out.Attestations), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Build", "Status", "Predicate Kind", "Created"))
 	for _, a := range out.Attestations {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -58,7 +57,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		"Use `attestation.download` with an IID from the table to fetch one attestation's bundle")
 	return b.String()
 }

@@ -222,6 +222,21 @@ func TestFormatListMarkdown(t *testing.T) {
 				"\n---\n💡 **Next steps:**\n" +
 				"- Use `attestation.download` with an IID from the table to fetch one attestation's bundle\n",
 		},
+		{
+			name: "a page of a longer list says so",
+			input: ListOutput{
+				Attestations: []Output{{ID: 1, IID: 1, BuildID: 100, Status: "success", CreatedAt: "2026-01-01T00:00:00Z"}},
+				Pagination:   toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+			},
+			want: "## Attestations (2)\n\n" +
+				"Showing 1 of 2 results (page 1 of 2)\n\n" +
+				"| ID | IID | Build | Status | Predicate Kind | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | 1 | 100 | success |  | 1 Jan 2026 00:00 UTC |\n" +
+				"\nPage 1 of 2 | 2 items total | 1 per page\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use `attestation.download` with an IID from the table to fetch one attestation's bundle\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -276,11 +291,13 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 // --- List ---.
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
-// The mock GitLab API at /api/v4/projects/10/attestations/sha256:abc123 (GET) responds with HTTP OK.
+// The mock answers only the digest's route in the lower case GitLab stores
+// digests in, so the call reaches it only with the OCI sha256: prefix the
+// caller wrote removed and the upper-case hex they wrote lowered.
 // It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
+		if r.Method == http.MethodGet && r.URL.Path == testDigestPath {
 			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":1,"iid":1,"project_id":10,"build_id":100,"status":"success","predicate_kind":"slsa_provenance","predicate_type":"https://slsa.dev/provenance/v0.2","subject_digest":"sha256:abc123","created_at":"2026-01-01T00:00:00Z"},
 				{"id":2,"iid":2,"project_id":10,"build_id":101,"status":"success","predicate_kind":"slsa_provenance","subject_digest":"sha256:abc123","created_at":"2026-02-01T00:00:00Z","expire_at":"2026-02-01T00:00:00Z"}
@@ -292,7 +309,7 @@ func TestList_Success(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
-		SubjectDigest: "sha256:abc123",
+		SubjectDigest: "sha256:" + strings.ToUpper(testDigest),
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -308,6 +325,137 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Attestations[1].ExpireAt == "" {
 		t.Error("expected expire_at to be set for second attestation")
+	}
+}
+
+// testDigest is a digest in the form GitLab documents for the route: the 64
+// hex characters of the artifact's SHA-256 hash, the example of
+// doc/api/attestations.md.
+const testDigest = "5db1fee4b5703808c48078a76768b155b421b210c0761cd6a5d223f4d99f1eaa"
+
+// testDigestPath is the route the list tests answer on. A request carrying
+// the digest in any other form does not reach it, which is how a test here
+// tells a digest sent as GitLab takes it from one sent as the caller wrote it.
+const testDigestPath = "/api/v4/projects/10/attestations/" + testDigest
+
+// TestList_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for. GitLab pages the attestations of a
+// digest although the route declares neither page nor per_page, and
+// client-go's ListAttestations takes no options struct, so until the input
+// carried the two this action could only ever read the first twenty.
+func TestList_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, testDigestPath)
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"iid":2,"project_id":10,"build_id":101,"status":"success"}]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID: toolutil.StringOrInt("10"), SubjectDigest: testDigest,
+		Page: 2, PerPage: 1,
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Attestations) != 1 || out.Attestations[0].IID != 2 {
+		t.Errorf("attestations = %+v, want the one of page 2", out.Attestations)
+	}
+}
+
+// TestList_NoPageAsked_SendsNeither holds that a caller who asks for no page
+// leaves the choice to GitLab rather than sending a zero.
+func TestList_NoPageAsked_SendsNeither(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("page") || r.URL.Query().Has("per_page") {
+			t.Errorf("query = %q, want neither page nor per_page", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	if _, err := List(context.Background(), client, ListInput{ProjectID: toolutil.StringOrInt("10"), SubjectDigest: testDigest}); err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+}
+
+// TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page, so a caller holding the first page
+// of attestations can tell more exist and which page to ask for.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, testDigestPath)
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":10,"build_id":100,"status":"success"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: toolutil.StringOrInt("10"), SubjectDigest: testDigest})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
+// TestSubjectDigest_TheFormGitLabsRouteAccepts pins the one form the digest
+// reaches GitLab in: 64 lower-case hex characters and no algorithm prefix.
+// GitLab's route declares the hex pattern as a requirement and answers 404 to
+// any other form, so a digest this cannot bring to that form is refused before
+// a request is sent. Upper case passes the route and matches nothing behind
+// it, since the lookup is an exact comparison against digests stored in lower
+// case, so it is lowered rather than sent as written.
+func TestSubjectDigest_TheFormGitLabsRouteAccepts(t *testing.T) {
+	upper := strings.ToUpper(testDigest)
+	mixed := strings.ToUpper(testDigest[:32]) + testDigest[32:]
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "the bare hex digest", raw: testDigest, want: testDigest},
+		{name: "the OCI prefix removed", raw: "sha256:" + testDigest, want: testDigest},
+		{name: "upper-case hex lowered", raw: upper, want: testDigest},
+		{name: "mixed-case hex lowered", raw: mixed, want: testDigest},
+		{name: "upper-case hex after the prefix lowered", raw: "sha256:" + upper, want: testDigest},
+		{name: "surrounding space trimmed", raw: "  sha256:" + testDigest + "\n", want: testDigest},
+		{name: "a digest one character short", raw: testDigest[1:]},
+		{name: "a digest one character long", raw: testDigest + "0"},
+		{name: "a non-hex character in place", raw: "g" + testDigest[1:]},
+		{name: "the prefix alone", raw: "sha256:"},
+		{name: "another algorithm's prefix", raw: "sha512:" + testDigest},
+		{name: "the prefix in upper case", raw: "SHA256:" + testDigest},
+		{name: "a Git commit SHA", raw: "0123456789abcdef0123456789abcdef01234567"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := subjectDigest(tc.raw)
+			if tc.want == "" {
+				if err == nil || !strings.Contains(err.Error(), "64 hex characters") {
+					t.Fatalf("subjectDigest(%q) = %q, %v, want a refusal naming the form", tc.raw, got, err)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("subjectDigest(%q) = %q, %v, want %q", tc.raw, got, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestList_ADigestGitLabWouldNotRoute_IsRefusedWithoutARequest verifies that
+// a digest that is not a SHA-256 in any spelling is refused by name rather
+// than sent, since GitLab's 404 for it would read as an artifact with no
+// attestations.
+func TestList_ADigestGitLabWouldNotRoute_IsRefusedWithoutARequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("request %s %s sent for a digest GitLab would not route", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{ProjectID: toolutil.StringOrInt("10"), SubjectDigest: "sha256:abc123"})
+	if err == nil || !strings.Contains(err.Error(), `subject_digest "sha256:abc123" is not a SHA-256 digest`) {
+		t.Fatalf("List() error = %v, want the refusal naming the digest as written", err)
 	}
 }
 
@@ -351,7 +499,7 @@ func TestList_CancelledContext(t *testing.T) {
 
 	_, err := List(ctx, client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
-		SubjectDigest: "sha256:abc123",
+		SubjectDigest: "sha256:" + testDigest,
 	})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -359,7 +507,7 @@ func TestList_CancelledContext(t *testing.T) {
 }
 
 // TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
-// The mock GitLab API at /api/v4/projects/10/attestations/sha256:abc123 (GET) responds with HTTP Forbidden.
+// The mock answers the digest's route with HTTP Forbidden.
 // It asserts that the returned error is wrapped and, unlike the
 // missing-project 404 below, carries no hint about the project id.
 //
@@ -369,7 +517,7 @@ func TestList_CancelledContext(t *testing.T) {
 // id would send them after the wrong thing.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
+		if r.URL.Path == testDigestPath {
 			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 			return
 		}
@@ -378,7 +526,7 @@ func TestList_APIError(t *testing.T) {
 
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
-		SubjectDigest: "sha256:abc123",
+		SubjectDigest: "sha256:" + testDigest,
 	})
 	if err == nil {
 		t.Fatal("expected error for 403 response, got nil")
@@ -388,13 +536,23 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_NotFoundForExistingProject verifies that List_NotFoundForExistingProject returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestList_NotFoundForExistingProject(t *testing.T) {
+// TestList_NotFoundForExistingProject_NamesTheFeatureFlag holds what a 404
+// on a project that reads back is: the attestations API refused, not a digest
+// with nothing under it.
+//
+// A well-formed digest nothing was attested under answers 200 and an empty
+// array, and List only ever sends a well-formed one, so on a project the
+// caller can read the one 404 left is the routes' before block, which answers
+// it for every project the slsa_provenance_statement flag is off for. The flag
+// ships disabled, so this is what every self-managed instance answers by
+// default, and reading it as an empty list told a model that an attested
+// artifact had no attestations. The assertion is on the refusal naming the
+// flag and the action that turns it on, since those are what the caller can
+// act on, and on no list being returned in its place.
+func TestList_NotFoundForExistingProject_NamesTheFeatureFlag(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/v4/projects/10/attestations/sha256:abc123":
+		case testDigestPath:
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 		case "/api/v4/projects/10":
 			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"path_with_namespace":"group/project"}`)
@@ -405,33 +563,51 @@ func TestList_NotFoundForExistingProject(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
-		SubjectDigest: "sha256:abc123",
+		SubjectDigest: "sha256:" + testDigest,
 	})
-	if err != nil {
-		t.Fatalf("List() error: %v", err)
+	if err == nil {
+		t.Fatalf("List() answered %+v for a route GitLab refused, want the refusal naming the feature flag", out)
 	}
-	if len(out.Attestations) != 0 {
-		t.Fatalf("expected empty attestation list, got %d", len(out.Attestations))
+	if out.Attestations != nil {
+		t.Errorf("List() returned a list beside the refusal: %+v", out.Attestations)
+	}
+	errText := err.Error()
+	for _, want := range []string{"list attestations", FeatureFlag, "admin.feature_set", "ships disabled"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Errorf("error missing %q: %v", want, err)
+			}
+		})
+	}
+	if strings.Contains(errText, "project.get") {
+		t.Errorf("the refusal sends the caller to verify a project that read back: %v", err)
+	}
+}
+
+// TestFeatureFlag_NamesTheFlagGitLabServesTheRoutesBehind pins the flag's
+// name to the one lib/api/supply_chain/attestations.rb checks, since every
+// other assertion about it reads the constant and would agree with a
+// misspelling.
+func TestFeatureFlag_NamesTheFlagGitLabServesTheRoutesBehind(t *testing.T) {
+	if FeatureFlag != "slsa_provenance_statement" {
+		t.Errorf("FeatureFlag = %q, want %q (gitlab_com_derisk, default_enabled: false)", FeatureFlag, "slsa_provenance_statement")
 	}
 }
 
 // TestList_NotFoundForMissingProject_ReturnsTheHintedError holds the other
-// side of the 404 fork that TestList_NotFoundForExistingProject opens. There
-// the project reads back, so a 404 from the attestations endpoint means the
-// digest matched nothing and an empty list is the honest answer. Here the
-// project lookup answers 404 too, so the caller either named a project that
-// does not exist or cannot see the one they named, and an empty list would
-// tell them the project is fine and merely unattested.
+// side of the 404 fork that TestList_NotFoundForExistingProject_NamesTheFeatureFlag
+// opens. There the project reads back, so the 404 is the attestations API
+// refused by its feature flag. Here the project lookup answers 404 too, so the
+// caller either named a project that does not exist or cannot see the one
+// they named, and the hint sends them to verify it.
 //
-// It matters because nothing held that branch before: the guard could be
-// deleted outright — every 404 answered with an empty list — and the whole
-// suite still passed. The assertion is on the hint rather than on the error
-// being non-nil, since the hint is the part that names what to check and it is
-// attached only when the status is 404.
+// The assertion is on the hint rather than on the error being non-nil, since
+// the hint is the part that names what to check, it is attached only when the
+// status is 404, and it is the part that tells this branch from the other.
 func TestList_NotFoundForMissingProject_ReturnsTheHintedError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/v4/projects/10/attestations/sha256:abc123", "/api/v4/projects/10":
+		case testDigestPath, "/api/v4/projects/10":
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
 		default:
 			http.NotFound(w, r)
@@ -440,7 +616,7 @@ func TestList_NotFoundForMissingProject_ReturnsTheHintedError(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
-		SubjectDigest: "sha256:abc123",
+		SubjectDigest: "sha256:" + testDigest,
 	})
 	if err == nil {
 		t.Fatalf("expected an error for a project that does not read back, got %+v", out)
@@ -453,14 +629,17 @@ func TestList_NotFoundForMissingProject_ReturnsTheHintedError(t *testing.T) {
 			}
 		})
 	}
+	if strings.Contains(errText, FeatureFlag) {
+		t.Errorf("a project that does not read back is blamed on the feature flag: %v", err)
+	}
 }
 
 // TestList_EmptyResult verifies the List_EmptyResult handler.
-// The mock GitLab API at /api/v4/projects/10/attestations/sha256:empty (GET) responds with HTTP OK.
+// The mock answers the digest's route with an empty array.
 // It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:empty" {
+		if r.URL.Path == testDigestPath {
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -469,7 +648,7 @@ func TestList_EmptyResult(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
-		SubjectDigest: "sha256:empty",
+		SubjectDigest: testDigest,
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -587,8 +766,9 @@ func TestDownload_APIError(t *testing.T) {
 	errText := err.Error()
 	// The hint names the capability once, by the canonical ID: it used to name
 	// the meta tool beside it, which is a spelling the dynamic and individual
-	// surfaces cannot resolve.
-	for _, want := range []string{"attestation_iid", "attestation.list"} {
+	// surfaces cannot resolve. It names the feature flag too, since the routes
+	// answer 404 for every IID while it is off and that is the default.
+	for _, want := range []string{"attestation_iid", "attestation.list", FeatureFlag} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errText, want) {
 				t.Fatalf("error missing %q: %v", want, err)

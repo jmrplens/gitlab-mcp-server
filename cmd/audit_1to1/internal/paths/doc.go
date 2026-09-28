@@ -296,9 +296,23 @@
 // were that case (an issue's participants, a merge request's participants,
 // reviewers and pipelines), and so was a fifth list the rule never asked about
 // because its package records no route declaring per_page (a merge request's
-// context commits). All five page now, and a declaration in the
-// endpoint-declares-no-page category is held to the handler's source as well
-// as to the record (issue 1024).
+// context commits). Reading the rest of the not-asked-about lists against
+// their handlers found a sixth, a digest's attestations, whose handler pages
+// although GitLab keeps a digest unique per project and predicate kind, so the
+// list holds at most two and never lost a row. All six page now. A declaration
+// in the endpoint-declares-no-page category has to cite the handler's body as
+// well as the record, and that is an obligation on its author rather than a
+// check: nothing in R-PAGE reads GitLab's source, so the rule holds a
+// declaration to the record alone (issue 1024).
+//
+// The same reading found the class over GraphQL, where the params say nothing
+// at all: admin.terraform_state_list is answered from client-go's document
+// for a project's terraformStates connection, which asks for no first, no
+// after and no pageInfo, and GitLab caps every connection at 100 nodes
+// (the default_max_page_size its GitlabSchema class sets), so a project with
+// more than 100 states is answered with the first 100 as the whole list. No
+// rule here sees it, since R-PAGE joins REST routes only, and it is not fixed
+// by issue 1024.
 //
 // # Is a param sent that the caller never asked to send
 //
