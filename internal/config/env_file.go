@@ -245,10 +245,12 @@ func (r EnvFileReport) announce() {
 }
 
 // announcedKeys bounds the untrusted key names before they are logged.
+//
+// The count is cut with min rather than behind a comparison: at exactly the
+// limit, cutting and not cutting keep the same keys, so a comparison there has
+// a boundary no input can observe.
 func announcedKeys(keys []string) []string {
-	if len(keys) > maxAnnouncedKeys {
-		keys = keys[:maxAnnouncedKeys]
-	}
+	keys = keys[:min(len(keys), maxAnnouncedKeys)]
 	out := make([]string, len(keys))
 	for i, key := range keys {
 		if runes := []rune(key); len(runes) > maxAnnouncedKeyRunes {

@@ -2150,6 +2150,62 @@ func TestLoad_ActionTimeoutAndDrainDelayInvalid(t *testing.T) {
 	}
 }
 
+// TestLoad_AuthBudgets_ReachTheirOwnFields verifies that each of the four
+// authentication-budget settings lands in its own Config field.
+//
+// loadAuthBudgetEnv is tested on its own, but Load copies its four answers
+// into four fields of two types, two of each, and nothing else read them
+// back: a limit copied into the other budget's field, or a window into the
+// other window, would compile and pass. Four different values make any such
+// crossing visible.
+func TestLoad_AuthBudgets_ReachTheirOwnFields(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv(EnvPrefix+"AUTH_FAILURE_LIMIT", "4")
+	t.Setenv(EnvPrefix+"AUTH_FAILURE_WINDOW", "30s")
+	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_LIMIT", "9")
+	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_WINDOW", "5m")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.AuthFailureLimit != 4 {
+		t.Errorf("AuthFailureLimit = %d, want 4", cfg.AuthFailureLimit)
+	}
+	if cfg.AuthFailureWindow != 30*time.Second {
+		t.Errorf("AuthFailureWindow = %s, want 30s", cfg.AuthFailureWindow)
+	}
+	if cfg.AuthDistinctTokenLimit != 9 {
+		t.Errorf("AuthDistinctTokenLimit = %d, want 9", cfg.AuthDistinctTokenLimit)
+	}
+	if cfg.AuthDistinctWindow != 5*time.Minute {
+		t.Errorf("AuthDistinctWindow = %s, want 5m", cfg.AuthDistinctWindow)
+	}
+}
+
+// TestLoad_InvalidAuthBudget_RefusesToLoad verifies that Load stops on an
+// authentication-budget value it cannot use instead of starting with the
+// default, which is what the setting's malformed-value policy (refuse
+// startup) promises. The reader's own test covers every refusal; this one
+// covers Load passing the refusal on.
+func TestLoad_InvalidAuthBudget_RefusesToLoad(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_LIMIT", "many")
+
+	cfg, err := Load()
+	if err == nil {
+		t.Fatalf("Load() = %+v, want a refusal of AUTH_DISTINCT_TOKEN_LIMIT=many", cfg)
+	}
+	if cfg != nil {
+		t.Errorf("Load() returned a Config alongside its error: %+v", cfg)
+	}
+	if !strings.Contains(err.Error(), "AUTH_DISTINCT_TOKEN_LIMIT") {
+		t.Errorf("error = %q, want it to name AUTH_DISTINCT_TOKEN_LIMIT", err)
+	}
+}
+
 // TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames states what the
 // two upload-size constants are, which nothing else in this package does.
 //

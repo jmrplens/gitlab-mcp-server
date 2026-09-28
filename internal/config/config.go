@@ -41,8 +41,11 @@ const (
 	// DefaultDrainDelay is zero: on SIGTERM the listener closes at once, as
 	// it always has. A deployment behind a balancer that polls /health sets
 	// it to at least one probe interval, so the 503 the endpoint answers
-	// while draining is seen before the close is.
-	DefaultDrainDelay     = 0 * time.Second
+	// while draining is seen before the close is. It is declared as a typed
+	// zero rather than as zero seconds: a product with zero in it is zero
+	// whatever the operator, so that spelling carried an operation no test
+	// could hold to anything.
+	DefaultDrainDelay     = time.Duration(0)
 	MaxHTTPClients        = tenancy.PoolSizeMax           // register row POL-001
 	MaxSessionTimeout     = tenancy.SessionIdleTimeoutMax // register row END-005
 	MaxRevalidateInterval = tenancy.RevalidateIntervalMax // register row ADM-009
@@ -68,10 +71,13 @@ const (
 // tools to rate limit their invocation, and an HTTP deployment is the shared
 // one: every call it forwards is charged to its own egress address, so one
 // looping client's volume lands on every other tenant and on the instance's
-// limits. The number itself is a judgement call, not a spec value — far above
-// any human-driven session, and still a bound on a retry loop. Stdio keeps 0:
-// a single-user local process has no co-tenant to protect, so a limiter there
-// only costs latency. Explicit 0 remains the opt-out in both.
+// limits. The number itself is a judgement call, not a spec value: far above
+// any human-driven session, and still a bound on a retry loop. Stdio keeps 0,
+// the position issue 959 decided: a process serving one person with their own
+// token has no co-tenant to protect, so a limiter there would only refuse its
+// one user's own calls, and GitLab's own per-user limits still apply to every
+// call it forwards. Explicit 0 remains the opt-out in both, and RATE_LIMIT_RPS
+// above zero is how a stdio deployment turns the limiter on.
 const (
 	DefaultRateLimitBurst   = tenancy.ToolCallBurst    // register row RTC-001
 	DefaultHTTPRateLimitRPS = tenancy.ToolCallRateHTTP // register row RTC-001

@@ -3,7 +3,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +52,11 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"OAuthClientUID":     overlay.OAuthClientUID == nil,
 		"RateLimitRPS":       overlay.RateLimitRPS == nil,
 		"RateLimitBurst":     overlay.RateLimitBurst == nil,
+
+		"AuthFailureLimit":       overlay.AuthFailureLimit == nil,
+		"AuthFailureWindow":      overlay.AuthFailureWindow == nil,
+		"AuthDistinctTokenLimit": overlay.AuthDistinctTokenLimit == nil,
+		"AuthDistinctWindow":     overlay.AuthDistinctWindow == nil,
 	}
 	for field, isNil := range nilFields {
 		t.Run(field, func(t *testing.T) {
@@ -92,7 +99,7 @@ type presentVariableCase struct {
 // presentVariableCases holds the table separately from the test body so the
 // runner stays small enough to read at a glance.
 func presentVariableCases() []presentVariableCase {
-	return []presentVariableCase{
+	cases := []presentVariableCase{
 		{
 			name: "gitlab url loses its trailing slash",
 			env:  map[string]string{"GITLAB_URL": "https://gitlab.example.com/"},
@@ -272,6 +279,70 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 	}
+	return append(cases, authBudgetPresentCases()...)
+}
+
+// authBudgetPresentCases are the authentication budgets' rows of the table
+// above, kept apart so neither list grows past what a reader takes in at once.
+// Each value and bound of one setting is held by
+// TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader; these rows are
+// about the four settings together.
+func authBudgetPresentCases() []presentVariableCase {
+	return []presentVariableCase{
+		{
+			// Four different values, so a budget read from its neighbor's
+			// variable, or reported in its neighbor's field, cannot pass.
+			name: "authentication budgets",
+			env: map[string]string{
+				"GITLAB_MCP_AUTH_FAILURE_LIMIT":         "4",
+				"GITLAB_MCP_AUTH_FAILURE_WINDOW":        "30s",
+				"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT":  "9",
+				"GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW": "5m",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertInt(t, "AuthFailureLimit", o.AuthFailureLimit, 4)
+				assertDur(t, "AuthFailureWindow", o.AuthFailureWindow, 30*time.Second)
+				assertInt(t, "AuthDistinctTokenLimit", o.AuthDistinctTokenLimit, 9)
+				assertDur(t, "AuthDistinctWindow", o.AuthDistinctWindow, 5*time.Minute)
+			},
+		},
+		{
+			// The struct's promise: each half of a budget is overlaid on its
+			// own, so a window exported alone leaves the limit beside it to the
+			// flag or its default instead of reporting one nobody set.
+			name: "an authentication budget's window is overlaid without its limit",
+			env: map[string]string{
+				"GITLAB_MCP_AUTH_FAILURE_WINDOW":        "2m",
+				"GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW": "20m",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertDur(t, "AuthFailureWindow", o.AuthFailureWindow, 2*time.Minute)
+				assertDur(t, "AuthDistinctWindow", o.AuthDistinctWindow, 20*time.Minute)
+				if o.AuthFailureLimit != nil || o.AuthDistinctTokenLimit != nil {
+					t.Errorf("limits = %v and %v, want both unreported when only the windows were set",
+						o.AuthFailureLimit, o.AuthDistinctTokenLimit)
+				}
+			},
+		},
+		{
+			name: "an authentication budget's limit is overlaid without its window",
+			env: map[string]string{
+				"GITLAB_MCP_AUTH_FAILURE_LIMIT":        "3",
+				"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT": "70",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertInt(t, "AuthFailureLimit", o.AuthFailureLimit, 3)
+				assertInt(t, "AuthDistinctTokenLimit", o.AuthDistinctTokenLimit, 70)
+				if o.AuthFailureWindow != nil || o.AuthDistinctWindow != nil {
+					t.Errorf("windows = %v and %v, want both unreported when only the limits were set",
+						o.AuthFailureWindow, o.AuthDistinctWindow)
+				}
+			},
+		},
+	}
 }
 
 // TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly verifies that a malformed
@@ -310,6 +381,18 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_ACTION_TIMEOUT", "48h", "exceeds maximum"},
 		{"GITLAB_MCP_DRAIN_DELAY", "bogus", "DRAIN_DELAY"},
 		{"GITLAB_MCP_DRAIN_DELAY", "10m", "exceeds maximum"},
+		// The four authentication budgets, each refused both ways: a value
+		// that does not parse, and one past the bound the stdio path holds it
+		// to. Until these rows no case here set any of the four, so the
+		// overlay's refusals of them ran in no test at all.
+		{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "bogus", "AUTH_FAILURE_LIMIT"},
+		{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "100001", "AUTH_FAILURE_LIMIT exceeds maximum"},
+		{"GITLAB_MCP_AUTH_FAILURE_WINDOW", "bogus", "AUTH_FAILURE_WINDOW"},
+		{"GITLAB_MCP_AUTH_FAILURE_WINDOW", "25h", "AUTH_FAILURE_WINDOW 25h0m0s exceeds maximum"},
+		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", "bogus", "AUTH_DISTINCT_TOKEN_LIMIT"},
+		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", "100001", "AUTH_DISTINCT_TOKEN_LIMIT exceeds maximum"},
+		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", "bogus", "AUTH_DISTINCT_TOKEN_WINDOW"},
+		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", "25h", "AUTH_DISTINCT_TOKEN_WINDOW 25h0m0s exceeds maximum"},
 	}
 
 	for _, tt := range tests {
@@ -363,6 +446,164 @@ func TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors(t *testing.T) {
 	}
 }
 
+// TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader holds the promise
+// readAuthBudgetEnv makes: every authentication-budget variable is read with
+// the parser and the bound the stdio path applies, so one exported value with
+// something in it starts both transports or refuses both, with the same words.
+//
+// A value of only whitespace is outside that promise and outside this table.
+// The overlay counts it as absent (envPresent trims first, which
+// TestLoadHTTPEnvOverlay_PresentVariablesAreParsed pins), while the stdio
+// parsers test for the empty string before they trim and so refuse it. Every
+// typed setting of the package shares that divergence, and which of the two
+// readings is right is a decision still to be made, so nothing here asserts
+// either reading for the stdio half.
+//
+// The two readers are written out separately, which is how the HTTP half came
+// to be read by code no test ran. Each case sets one variable and asks both,
+// so a bound that drifts in either copy fails here, including one that starts
+// refusing the published maximum itself: every limit is tried at exactly its
+// maximum and one above, and every window at its maximum and one second over.
+func TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader(t *testing.T) {
+	for _, tc := range authBudgetAgreementCases() {
+		t.Run(tc.setting.env+"="+tc.value, func(t *testing.T) {
+			clearOverlayEnv(t)
+			t.Setenv(EnvPrefix+tc.setting.env, tc.value)
+
+			stdio, stdioErr := loadAuthBudgetEnv()
+			overlay, httpErr := LoadHTTPEnvOverlay()
+			if tc.refuse {
+				assertRefusedAlike(t, tc.setting.env, stdioErr, httpErr)
+				return
+			}
+			if stdioErr != nil || httpErr != nil {
+				t.Fatalf("stdio error = %v, HTTP error = %v; want both to accept %s=%q",
+					stdioErr, httpErr, EnvPrefix+tc.setting.env, tc.value)
+			}
+			if got := tc.setting.stdio(stdio); got != tc.want {
+				t.Errorf("stdio read %s, want %s", got, tc.want)
+			}
+			if got := tc.setting.http(overlay); got != tc.want {
+				t.Errorf("HTTP read %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// authBudgetSetting is one authentication-budget variable and where each
+// reader reports it, rendered as text so a limit and a window compare alike.
+type authBudgetSetting struct {
+	env   string
+	stdio func(authBudgetEnv) string
+	http  func(*HTTPEnvOverlay) string
+}
+
+// authBudgetAgreementCase is one value of one setting, and what both readers
+// have to make of it.
+type authBudgetAgreementCase struct {
+	setting authBudgetSetting
+	value   string
+	want    string
+	refuse  bool
+}
+
+// authBudgetAgreementCases tries each setting on both sides of its own bound:
+// zero, an ordinary value and the maximum are accepted, and one step past the
+// maximum, a negative value and a value that does not parse are refused.
+func authBudgetAgreementCases() []authBudgetAgreementCase {
+	limits := []struct {
+		setting  authBudgetSetting
+		maxValue int
+	}{
+		{
+			setting: authBudgetSetting{
+				env:   "AUTH_FAILURE_LIMIT",
+				stdio: func(b authBudgetEnv) string { return strconv.Itoa(b.failureLimit) },
+				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthFailureLimit) },
+			},
+			maxValue: MaxAuthFailureLimit,
+		},
+		{
+			setting: authBudgetSetting{
+				env:   "AUTH_DISTINCT_TOKEN_LIMIT",
+				stdio: func(b authBudgetEnv) string { return strconv.Itoa(b.distinctLimit) },
+				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthDistinctTokenLimit) },
+			},
+			maxValue: MaxAuthDistinctTokenLimit,
+		},
+	}
+	windows := []struct {
+		setting  authBudgetSetting
+		maxValue time.Duration
+	}{
+		{
+			setting: authBudgetSetting{
+				env:   "AUTH_FAILURE_WINDOW",
+				stdio: func(b authBudgetEnv) string { return fmt.Sprint(b.failureWindow) },
+				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthFailureWindow) },
+			},
+			maxValue: MaxAuthFailureWindow,
+		},
+		{
+			setting: authBudgetSetting{
+				env:   "AUTH_DISTINCT_TOKEN_WINDOW",
+				stdio: func(b authBudgetEnv) string { return fmt.Sprint(b.distinctWindow) },
+				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthDistinctWindow) },
+			},
+			maxValue: MaxAuthDistinctWindow,
+		},
+	}
+
+	var cases []authBudgetAgreementCase
+	for _, l := range limits {
+		top := strconv.Itoa(l.maxValue)
+		cases = append(cases,
+			authBudgetAgreementCase{setting: l.setting, value: "0", want: "0"},
+			authBudgetAgreementCase{setting: l.setting, value: "7", want: "7"},
+			authBudgetAgreementCase{setting: l.setting, value: top, want: top},
+			authBudgetAgreementCase{setting: l.setting, value: strconv.Itoa(l.maxValue + 1), refuse: true},
+			authBudgetAgreementCase{setting: l.setting, value: "-1", refuse: true},
+			authBudgetAgreementCase{setting: l.setting, value: "ten", refuse: true},
+		)
+	}
+	for _, w := range windows {
+		top := w.maxValue.String()
+		cases = append(cases,
+			authBudgetAgreementCase{setting: w.setting, value: "0", want: "0s"},
+			authBudgetAgreementCase{setting: w.setting, value: "45s", want: "45s"},
+			authBudgetAgreementCase{setting: w.setting, value: top, want: top},
+			authBudgetAgreementCase{setting: w.setting, value: (w.maxValue + time.Second).String(), refuse: true},
+			authBudgetAgreementCase{setting: w.setting, value: "-1s", refuse: true},
+			authBudgetAgreementCase{setting: w.setting, value: "soon", refuse: true},
+		)
+	}
+	return cases
+}
+
+// overlayReading renders an overlay field the way the stdio reader's value is
+// rendered, and an unreported one as a marker no reading can equal.
+func overlayReading[T int | time.Duration](v *T) string {
+	if v == nil {
+		return "<unset>"
+	}
+	return fmt.Sprint(*v)
+}
+
+// assertRefusedAlike holds the two readers to one refusal of name: both
+// refuse, in the same words, and the words name the variable.
+func assertRefusedAlike(t *testing.T, name string, stdioErr, httpErr error) {
+	t.Helper()
+	if stdioErr == nil || httpErr == nil {
+		t.Fatalf("stdio error = %v, HTTP error = %v; want both to refuse %s", stdioErr, httpErr, name)
+	}
+	if stdioErr.Error() != httpErr.Error() {
+		t.Errorf("the two transports refuse in different words:\n stdio: %s\n HTTP:  %s", stdioErr, httpErr)
+	}
+	if !strings.Contains(httpErr.Error(), name) {
+		t.Errorf("error = %q, want it to name %s", httpErr, name)
+	}
+}
+
 // clearOverlayEnv unsets every variable the overlay reads, so a case only sees
 // what it sets and the developer's own environment cannot leak into a result.
 func clearOverlayEnv(t *testing.T) {
@@ -405,6 +646,16 @@ func assertBool(t *testing.T, field string, got *bool, want bool) {
 	}
 	if *got != want {
 		t.Errorf("%s = %v, want %v", field, *got, want)
+	}
+}
+
+func assertInt(t *testing.T, field string, got *int, want int) {
+	t.Helper()
+	if got == nil {
+		t.Fatalf("%s = nil, want %d", field, want)
+	}
+	if *got != want {
+		t.Errorf("%s = %d, want %d", field, *got, want)
 	}
 }
 
