@@ -13,10 +13,13 @@ import (
 
 // Input types.
 
-// ListContributionEventsInput contains parameters for listing current user contribution events.
+// ListContributionEventsInput contains parameters for listing current user
+// contribution events. The served schema's enum and description for Action and
+// TargetType come from [FilterSchemaOverrides], which replaces these tags'
+// descriptions, so the values are listed in one place.
 type ListContributionEventsInput struct {
-	Action     string `json:"action,omitempty" jsonschema:"Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)"`
-	TargetType string `json:"target_type,omitempty" jsonschema:"Filter by target type (issue, milestone, merge_request, note, project, snippet, user)"`
+	Action     string `json:"action,omitempty" jsonschema:"Filter by event action"`
+	TargetType string `json:"target_type,omitempty" jsonschema:"Filter by event target type"`
 	Before     string `json:"before,omitempty" jsonschema:"Return events before this date (YYYY-MM-DD)"`
 	After      string `json:"after,omitempty" jsonschema:"Return events after this date (YYYY-MM-DD)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order (asc or desc)"`
@@ -168,6 +171,9 @@ type ListContributionEventsOutput struct {
 
 // ListCurrentUserContributionEvents returns contribution events for the authenticated user.
 func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient.Client, input ListContributionEventsInput) (ListContributionEventsOutput, error) {
+	if err := CheckActionFilter(input.Action); err != nil {
+		return ListContributionEventsOutput{}, toolutil.WrapErrWithMessage("user_contribution_event_list", err)
+	}
 	opts := &gl.ListContributionEventsOptions{}
 	filters := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
 	opts.Action = filters.Action
@@ -352,11 +358,13 @@ func toLinePositionOutput(p *gl.LinePosition) *LinePositionOutput {
 	return &LinePositionOutput{LineCode: p.LineCode, Type: p.Type, OldLine: p.OldLine, NewLine: p.NewLine}
 }
 
-// ListProjectEventsInput contains parameters for listing project visible events.
+// ListProjectEventsInput contains parameters for listing project visible
+// events. As on [ListContributionEventsInput], the served enum and description
+// of Action and TargetType come from [FilterSchemaOverrides].
 type ListProjectEventsInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Action     string               `json:"action,omitempty" jsonschema:"Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)"`
-	TargetType string               `json:"target_type,omitempty" jsonschema:"Filter by target type (issue, milestone, merge_request, note, project, snippet, user)"`
+	Action     string               `json:"action,omitempty" jsonschema:"Filter by event action"`
+	TargetType string               `json:"target_type,omitempty" jsonschema:"Filter by event target type"`
 	Before     string               `json:"before,omitempty" jsonschema:"Return events before this date (YYYY-MM-DD)"`
 	After      string               `json:"after,omitempty" jsonschema:"Return events after this date (YYYY-MM-DD)"`
 	Sort       string               `json:"sort,omitempty" jsonschema:"Sort order (asc or desc, default desc)"`
@@ -425,6 +433,9 @@ type ListProjectEventsOutput struct {
 func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input ListProjectEventsInput) (ListProjectEventsOutput, error) {
 	if input.ProjectID == "" {
 		return ListProjectEventsOutput{}, toolutil.WrapErrWithMessage("project_event_list", toolutil.ErrFieldRequired("project_id"))
+	}
+	if err := CheckActionFilter(input.Action); err != nil {
+		return ListProjectEventsOutput{}, toolutil.WrapErrWithMessage("project_event_list", err)
 	}
 
 	opts := &gl.ListProjectVisibleEventsOptions{}

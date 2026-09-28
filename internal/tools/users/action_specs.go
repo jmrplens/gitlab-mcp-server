@@ -2,6 +2,7 @@ package users
 
 import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -507,18 +508,15 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 		// Docs: https://docs.gitlab.com/api/events/#list-a-users-contribution-events
 		// SDK: ListContributionEventsOptions.Action *EventTypeValue,
 		// ListContributionEventsOptions.TargetType *EventTargetTypeValue (types.go).
-		// The filter takes the lower-case snake_case spellings the doc lists
-		// (issue, merge_request, ...), which are also client-go's constants;
-		// the CamelCase forms are how the RESPONSE spells target_type, and a
-		// filter written that way matches nothing. epic (GitLab 17.3) and
-		// approved are documented but have no client-go constant yet.
-		return []toolutil.InputSchemaOverride{
-			toolutil.SchemaEnumOverride("action",
-				"created", "updated", "closed", "reopened", "pushed", "commented",
-				"merged", "joined", "left", "destroyed", "expired", "approved"),
-			toolutil.SchemaEnumOverride("target_type",
-				"issue", "milestone", "merge_request", "note", "project", "snippet", "user", "epic"),
-		}
+		// GET /users/:id/events declares the same event_filter_params as the
+		// two listings of the events package, so it serves their value sets:
+		// the keys of Event.actions and Event.target_types, which is not the
+		// doc's list (no epic, with wiki, design and transferred). The filter
+		// takes those lower-case names; the CamelCase forms are how the
+		// RESPONSE spells target_type, and GitLab refuses a filter written
+		// that way. approved, transferred, wiki and design have no client-go
+		// constant yet.
+		return events.FilterSchemaOverrides()
 	case "gitlab_list_service_accounts":
 		// Docs: https://docs.gitlab.com/api/service_accounts/#list-all-instance-service-accounts
 		// SDK: ListServiceAccountsOptions.OrderBy *string (no consts, string param);

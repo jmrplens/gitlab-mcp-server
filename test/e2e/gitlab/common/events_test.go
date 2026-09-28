@@ -5,7 +5,10 @@
 // against a project of the test's own with one issue the run user opened
 // in it, because that is the newest thing the run user did and so the one
 // event certain to be on the first page of a feed a long run fills with
-// hundreds of others.
+// hundreds of others. It also filters all three event listings, those two and
+// a named user's contribution events, on target_type=wiki: GitLab validates
+// that filter against Event.target_types rather than the events API page,
+// which omits wiki, so only a real instance can say the value is accepted.
 
 package common
 
@@ -14,9 +17,15 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
+
+// wikiEventTargetType is how GitLab spells a wiki event's target_type in a
+// response: the model class behind the wiki key of Event::TARGET_TYPES, which
+// is the value the filter takes.
+const wikiEventTargetType = "WikiPage::Meta"
 
 // The polling an event feed is given: GitLab writes some events from a
 // background job, so the feed can lag the action by a moment.
@@ -60,6 +69,103 @@ func TestEvents_OwnIssue_ListsTheRunUsersAndTheProjects(t *testing.T) {
 			})
 		e.T.Logf("the activity of project %d holds %d event(s), one of them the run user opening issue #%d", f.project.ID, len(activity.Events), f.issue.IID)
 	})
+}
+
+// wikiEventFixture is what the wiki filter is read against: a project and one
+// wiki page the run user created in it, which records a wiki event.
+type wikiEventFixture struct {
+	project fixture.Project
+	page    fixture.WikiPage
+}
+
+// TestEvents_TargetTypeWiki_EveryListingAcceptsTheFilter creates one wiki page
+// in a project of its own, then on every surface filters each of the three
+// event listings on target_type=wiki: the project's activity, the run user's
+// own contribution feed and user.contribution_events for the run user. Each
+// is read until it holds the page's event, and every event it answers must be
+// a wiki event, which is what shows GitLab applied the filter rather than
+// ignoring it. A refusal of the value would leave the wait on GitLab's 400.
+func TestEvents_TargetTypeWiki_EveryListingAcceptsTheFilter(t *testing.T) {
+	e := harness.New(t)
+	rt := e.Runtime()
+
+	harness.SurfacesWith(e, func(e *harness.Env) wikiEventFixture {
+		project := fixture.NewProject(e, fixture.WithNamePrefix("wiki-events"))
+		return wikiEventFixture{project: project, page: fixture.NewWikiPage(e, project)}
+	}, func(e *harness.Env, surface harness.Surface, f wikiEventFixture) {
+		s := e.On(surface)
+
+		activity := harness.Eventually(s, actionUserEventListProject,
+			map[string]any{"project_id": f.project.IDParam(), "target_type": "wiki", "per_page": 100},
+			eventFeedInterval, eventFeedWait, func(out events.ListProjectEventsOutput) bool {
+				return hasWikiEventFor(projectEventWikis(out.Events), f.page.Slug)
+			})
+		assertOnlyWikiEvents(e, "project activity", projectEventWikis(activity.Events))
+
+		own := harness.Eventually(s, actionUserEventListContributions,
+			map[string]any{"target_type": "wiki", "per_page": 100},
+			eventFeedInterval, eventFeedWait, func(out events.ListContributionEventsOutput) bool {
+				return hasWikiEventFor(contributionEventWikis(out.Events), f.page.Slug)
+			})
+		assertOnlyWikiEvents(e, "the run user's contribution feed", contributionEventWikis(own.Events))
+
+		named := harness.Eventually(s, actionUserContributionEvents,
+			map[string]any{"user_id": rt.UserID, "target_type": "wiki", "per_page": 100},
+			eventFeedInterval, eventFeedWait, func(out users.ContributionEventsOutput) bool {
+				return hasWikiEventFor(contributionEventWikis(out.Events), f.page.Slug)
+			})
+		assertOnlyWikiEvents(e, "user.contribution_events", contributionEventWikis(named.Events))
+	})
+}
+
+// wikiEventView is the part of an event the wiki filter is judged on: the
+// target type GitLab answered and the wiki page it names, if any.
+type wikiEventView struct {
+	id         int64
+	targetType string
+	page       *events.WikiPageOutput
+}
+
+// projectEventWikis reduces a project's activity to what the wiki filter is
+// judged on.
+func projectEventWikis(listed []events.ProjectEventOutput) []wikiEventView {
+	views := make([]wikiEventView, len(listed))
+	for i, event := range listed {
+		views[i] = wikiEventView{id: event.ID, targetType: event.TargetType, page: event.WikiPage}
+	}
+	return views
+}
+
+// contributionEventWikis reduces a contribution feed to what the wiki filter
+// is judged on.
+func contributionEventWikis(listed []events.ContributionEventOutput) []wikiEventView {
+	views := make([]wikiEventView, len(listed))
+	for i, event := range listed {
+		views[i] = wikiEventView{id: event.ID, targetType: event.TargetType, page: event.WikiPage}
+	}
+	return views
+}
+
+// hasWikiEventFor reports whether a listing holds an event on the wiki page
+// with the given slug.
+func hasWikiEventFor(listed []wikiEventView, slug string) bool {
+	for _, event := range listed {
+		if event.page != nil && event.page.Slug == slug {
+			return true
+		}
+	}
+	return false
+}
+
+// assertOnlyWikiEvents fails for every event of a listing filtered on
+// target_type=wiki that is not a wiki event.
+func assertOnlyWikiEvents(e *harness.Env, listing string, listed []wikiEventView) {
+	e.T.Helper()
+	for _, event := range listed {
+		if event.targetType != wikiEventTargetType {
+			e.T.Errorf("%s filtered on target_type=wiki answered event %d with target_type %q, want %q", listing, event.id, event.targetType, wikiEventTargetType)
+		}
+	}
 }
 
 // hasContributionIn reports whether a contribution feed holds an event in

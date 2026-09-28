@@ -904,6 +904,27 @@ func TestListContributionEvents_Validation(t *testing.T) {
 	}
 }
 
+// TestListContributionEvents_UnknownAction_RefusedBeforeTheRequest verifies
+// that an action outside the set GitLab filters on is refused before any
+// request, as the two listings of the events package refuse it: GitLab would
+// ignore the filter and answer with every event of the user. The mock fails
+// the test if a request reaches it.
+func TestListContributionEvents_UnknownAction_RefusedBeforeTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := ListContributionEvents(t.Context(), client, ListContributionEventsInput{UserID: 42, Action: "approve"})
+	if err == nil {
+		t.Fatal("error = nil, want the refusal of action approve")
+	}
+	for _, want := range []string{"list_contribution_events:", `invalid action "approve"`, "transferred"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to contain %q", err, want)
+			}
+		})
+	}
+}
+
 // TestListContributionEvents_APIError verifies ListContributionEvents when API error.
 func TestListContributionEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
