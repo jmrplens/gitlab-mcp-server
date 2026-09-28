@@ -507,14 +507,14 @@ Get details of a single namespace by ID or path. An empty or blank `id` is refus
 
 ### `gitlab_namespace_exists`
 
-Check whether a namespace path exists (is taken). Returns availability and suggested alternatives if the path is taken.
+Check whether a namespace path exists (is taken). Returns availability and suggested alternatives if the path is taken. An empty or blank `id` is refused before anything is sent: no namespace can take a path of whitespace, so GitLab's answer would read as the path being free.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_namespace_search`
 
-Search namespaces by query string. Returns matching namespaces with pagination.
+Search namespaces by query string. Returns matching namespaces with pagination. An empty or blank `query` is refused before anything is sent, since GitLab would answer it with every namespace the caller can see.
 
 | Annotation | **Read** |
 | ---------- | -------- |

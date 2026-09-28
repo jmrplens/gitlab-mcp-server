@@ -702,32 +702,83 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // that list and answered with its first element as though it had been asked
 // for.
 func TestGet_BlankID_IsRefusedBeforeAnyRequest(t *testing.T) {
-	for _, testCase := range []struct {
-		name string
-		id   string
-	}{
-		{name: "empty", id: ""},
-		{name: "spaces", id: "   "},
-		{name: "tab and newline", id: "\t\n"},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, blank := range blankValues {
+		t.Run(blank.name, func(t *testing.T) {
 			var requests atomic.Int32
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				requests.Add(1)
 				testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
 			}))
 
-			out, err := Get(t.Context(), client, GetInput{ID: testCase.id})
+			out, err := Get(t.Context(), client, GetInput{ID: blank.value})
 			if err == nil || err.Error() != "id is required" {
-				t.Fatalf("Get(%q) error = %v, want %q", testCase.id, err, "id is required")
+				t.Fatalf("Get(%q) error = %v, want %q", blank.value, err, "id is required")
 			}
 			if !reflect.DeepEqual(out, Output{}) {
-				t.Errorf("Get(%q) answered %+v, want no namespace", testCase.id, out)
+				t.Errorf("Get(%q) answered %+v, want no namespace", blank.value, out)
 			}
 			if got := requests.Load(); got != 0 {
-				t.Errorf("Get(%q) sent %d requests, want none", testCase.id, got)
+				t.Errorf("Get(%q) sent %d requests, want none", blank.value, got)
 			}
 		})
+	}
+}
+
+// blankValues are the identifiers and queries a handler must refuse as
+// missing: the empty string the schema's required lets through, and strings
+// holding nothing but whitespace, which name nothing either.
+var blankValues = []struct {
+	name  string
+	value string
+}{
+	{name: "empty", value: ""},
+	{name: "spaces", value: "   "},
+	{name: "tab and newline", value: "\t\n"},
+}
+
+// TestExistsAndSearch_BlankInput_IsRefusedBeforeAnyRequest verifies the
+// existence check refuses a blank id and the search a blank query, each with
+// the required-parameter error naming its field, and that neither sends
+// GitLab anything. An empty id leaves an empty segment where the path belongs
+// in namespaces/:id/exists and a path of whitespace is one no namespace can
+// take, so the answer that nothing holds it would read as the path being free;
+// and a search with no query is the unfiltered listing, whose every namespace
+// would read as a match.
+func TestExistsAndSearch_BlankInput_IsRefusedBeforeAnyRequest(t *testing.T) {
+	handlers := []struct {
+		name  string
+		field string
+		call  func(ctx context.Context, client *gitlabclient.Client, value string) (any, error)
+	}{
+		{name: "exists", field: "id", call: func(ctx context.Context, client *gitlabclient.Client, value string) (any, error) {
+			return Exists(ctx, client, ExistsInput{ID: value, ParentID: 9})
+		}},
+		{name: "search", field: "query", call: func(ctx context.Context, client *gitlabclient.Client, value string) (any, error) {
+			return Search(ctx, client, SearchInput{Query: value})
+		}},
+	}
+	for _, handler := range handlers {
+		for _, blank := range blankValues {
+			t.Run(handler.name+"/"+blank.name, func(t *testing.T) {
+				var requests atomic.Int32
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					requests.Add(1)
+					testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
+				}))
+
+				out, err := handler.call(t.Context(), client, blank.value)
+				want := handler.field + " is required"
+				if err == nil || err.Error() != want {
+					t.Fatalf("%s(%q) error = %v, want %q", handler.name, blank.value, err, want)
+				}
+				if !reflect.ValueOf(out).IsZero() {
+					t.Errorf("%s(%q) answered %+v, want nothing", handler.name, blank.value, out)
+				}
+				if got := requests.Load(); got != 0 {
+					t.Errorf("%s(%q) sent %d requests, want none", handler.name, blank.value, got)
+				}
+			})
+		}
 	}
 }
 

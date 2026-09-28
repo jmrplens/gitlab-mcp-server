@@ -162,7 +162,15 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 }
 
 // Exists checks whether a namespace path is available.
+//
+// A blank id is refused before any request, as Get refuses one. An empty id
+// leaves an empty segment where the path belongs in namespaces/:id/exists,
+// and a path of whitespace is one no namespace can take, so GitLab's answer
+// for it, that nothing holds the path, would read as the path being free.
 func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput) (ExistsOutput, error) {
+	if strings.TrimSpace(input.ID) == "" {
+		return ExistsOutput{}, toolutil.ErrFieldRequired("id")
+	}
 	opts := &gl.NamespaceExistsOptions{}
 	if input.ParentID > 0 {
 		opts.ParentID = new(input.ParentID)
@@ -180,12 +188,20 @@ func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput)
 }
 
 // Search searches namespaces by query string.
+//
+// A blank query is refused before any request. client-go leaves an empty
+// search parameter off the request, and GitLab filters by one only when it
+// is present, so either would be answered with every namespace the caller can
+// see, presented as the ones matching a search.
 func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput) (ListOutput, error) {
+	if strings.TrimSpace(input.Query) == "" {
+		return ListOutput{}, toolutil.ErrFieldRequired("query")
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	nss, resp, err := client.GL().Namespaces.SearchNamespace(input.Query, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("namespace_search", err, http.StatusForbidden,
-			"query is required; only namespaces visible to the authenticated user are returned")
+			"the credential was refused the namespace listing: a fine-grained personal access token needs the read_namespace permission, and the search only returns namespaces the authenticated user can see")
 	}
 	extras, err := toolutil.CapturedNamespaces(captured, len(nss))
 	if err != nil {
